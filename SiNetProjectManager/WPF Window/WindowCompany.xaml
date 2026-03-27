@@ -1,0 +1,79 @@
+﻿<Window x:Class="WpfSiData.WPF_Window.WindowCompany"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+           xmlns:local="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+             FlowDirection="RightToLeft"
+        Title="WindowCompany" Height="520" Width="800"
+        FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="{DynamicResource AppFontSize}"
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource AppForeground}">
+    <!-- DataContext is set from code-behind via DI (CompanyViewModel requires IDbContextFactory) -->
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30" />
+            <RowDefinition Height="200" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="200" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+
+        <!-- Company Filter -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <Label  Content="סנן חברה:" />
+            <TextBox Width="200"    Text="{Binding CompanyFilterText, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <!-- Companies DataGrid -->
+        <DataGrid Grid.Row="1" Height="200" ItemsSource="{Binding Companies}" SelectedItem="{Binding SelectedCompany}" AutoGenerateColumns="True" VerticalAlignment="Bottom" 
+                       />
+        <!-- Contact Filter -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" >
+            <Label Content="סנן איש קשר:"/>
+            <TextBox Width="200"    Text="{Binding ContactFilterText, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <!-- Contacts DataGrid -->
+        <DataGrid Grid.Row="3" ItemsSource="{Binding SelectedCompanyContacts}"
+          SelectedItem="{Binding SelectedContact, Mode=TwoWay}"
+          AutoGenerateColumns="True" />
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Left" Margin="620,0,0,0" Width="170">
+             <Button Content="ביטול" Width="75" Margin="5" Click="Cancel_Click" />
+     <Button Content="אישור" Width="75" Margin="5" Click="OK_Click"/>
+              </StackPanel>
+    </Grid>
+  
+</Window>
+  <!--<Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Margin="10">
+            <Label Content="בחר חברה:" />
+            <TextBox Text="{Binding CompanyFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Label Content="איש קשר:" />
+            <TextBox Text="{Binding CompanyFilterText, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+        -->
+    <!-- Master DataGrid -->
+    <!--
+             <DataGrid Grid.Row="1" Height="200" ItemsSource="{Binding Companies}" SelectedItem="{Binding SelectedCompany}" AutoGenerateColumns="True" 
+                       />
+             <DataGrid Grid.Row="2" Height="220" ItemsSource="{Binding SelectedCompany.Contacts}" AutoGenerateColumns="True" />
+    
+       
+       
+        -->
+    <!-- Buttons -->
+    <!--
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
+             <Button Content="Cancel" Width="75" Margin="5" Click="Cancel_Click" />
+          <Button Content="OK" Width="75" Margin="5" Click="OK_Click" />
+         </StackPanel>
+    </Grid>-->

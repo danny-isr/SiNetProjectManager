@@ -1,0 +1,14 @@
+{
+  "EntityName": "Tasks",
+  "EndpointUrl": "https://mpwebe.master-plan.co.il/MPWebAPI/api/Tasks/",
+  "RequestParams": null,
+  "CaptureTimestamp": "2026-02-12T23:09:49.3014087Z",
+  "StatusCode": 200,
+  "ContentType": "application/json",
+  "ResponseSizeBytes": 292484,
+  "RecordCount": 690,
+  "FilterUsed": null,
+  "WasWrappedResponse": true,
+  "WrapperPropertyName": "data",
+  "ErrorMessage": null
+}

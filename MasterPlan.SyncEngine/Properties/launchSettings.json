@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MasterPlan.SyncEngine": {
+      "commandName": "Project",
+      "commandLineArgs": "MasterPlan.SyncEngine.exe --daily --skip-validation --no-capture\r\n"
+    }
+  }
+}

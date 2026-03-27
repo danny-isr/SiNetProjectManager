@@ -1,0 +1,92 @@
+<UserControl x:Class="WpfSiData.WPFUserControl.CreateProjectUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+             xmlns:controls="clr-namespace:SiNetProjectManager.Controls"
+             mc:Ignorable="d" 
+
+             d:DesignHeight="450" d:DesignWidth="800"
+             FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="{DynamicResource AppFontSize}"
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource AppForeground}">
+    <!-- DataContext is set from code-behind via DI (CreateProjectViewModel requires IDbContextFactory) -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="200" />
+        </Grid.ColumnDefinitions>
+
+        <Label Content="מספר פרויקט:" Grid.Row="0" Grid.Column="0" />
+        <Label Name="ProjectNumber" Content="{Binding ProjectNumber}" Grid.Row="0" Grid.Column="1" />
+
+        <Label Content="שם פרויקט:" Grid.Row="1" Grid.Column="0" />
+
+
+        <TextBox Margin="5" Grid.Row="1" Grid.Column="1">
+            <TextBox.Text>
+                <Binding Path="ProjectName" UpdateSourceTrigger="PropertyChanged">
+                    <Binding.ValidationRules>
+                        <local:ProjectNameValidationRule />
+                    </Binding.ValidationRules>
+                </Binding>
+            </TextBox.Text>
+            <TextBox.Style>
+                <Style TargetType="TextBox">
+                    <Style.Triggers>
+                        <Trigger Property="Validation.HasError" Value="true">
+                            <Setter Property="ToolTip"
+                            Value="{Binding RelativeSource={RelativeSource Self},
+                                            Path=(Validation.Errors)[0].ErrorContent}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBox.Style>
+        </TextBox>
+
+
+
+
+
+
+        <Label Content="מקום:" Grid.Row="2" Grid.Column="0" />
+        <ComboBox  x:Name="ComboSelectedPlace" Margin="5 5 5 5" ItemsSource="{Binding Places}"  SelectedItem="{Binding SelectedPlace, Mode=TwoWay}" DisplayMemberPath="Title" Grid.Row="2" Grid.Column="1" />
+
+        <Label Content="חברה:" Grid.Row="3" Grid.Column="0" />
+        <ComboBox Margin="5 5 5 5"  ItemsSource="{Binding Companies}" Style="{StaticResource ZebraComboBoxStyle}" DisplayMemberPath="Title" SelectedItem="{Binding SelectedCompany}" Grid.Row="3" Grid.Column="1" />
+
+        <Label Content="איש קשר:" Grid.Row="4" Grid.Column="0" />
+        <ComboBox Margin="5 5 5 5"  ItemsSource="{Binding SelectedCompany.Contacts}" DisplayMemberPath="Title" SelectedItem="{Binding SelectedContact}" Grid.Row="4" Grid.Column="1" />
+
+        <Label Content="שייך לפרויקט:" Grid.Row="5" Grid.Column="0" />
+        <controls:SearchableProjectSelector 
+            Margin="5 5 5 5"  
+            ItemsSource="{Binding Projects}" 
+            SelectedItem="{Binding SelectedParentProject, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+            SortPropertyPath="Number"
+            SortAscending="False"
+            Grid.Row="5" Grid.Column="1"
+            ToolTip="בחר פרויקט אב - הקלד לחיפוש לפי שם, עיר או לקוח"/>
+        <!-- Add more controls as needed -->
+        <StackPanel Grid.Row="7" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,0" Width="170">
+
+            <Button Content="אישור" Width="75" Margin="5" Click="OK_Click"/>
+        </StackPanel>
+        <Button Grid.Column="2" Content="..." HorizontalAlignment="Left" Margin="10,0,0,0" Grid.Row="2" VerticalAlignment="Center" Click="Button_Click" RenderTransformOrigin="-8.051,0.756" Width="35"/>
+        <Button Grid.Column="2" Content="..." HorizontalAlignment="Left" Margin="10,0,0,0" Grid.Row="3" VerticalAlignment="Center" RenderTransformOrigin="0.328,-0.044" Click="Button_Click_1" Width="35"/>
+    </Grid>
+</UserControl>

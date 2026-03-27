@@ -1,0 +1,370 @@
+<Window x:Class="SiNetProjectManager.Dialogs.UserManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+        xmlns:models="clr-namespace:SiNetSQL.Models;assembly=SiNetSQL"
+        Title="ניהול משתמשים"
+        Width="1180" Height="700"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        MinWidth="750" MinHeight="500"
+        Closing="Window_Closing"
+        Background="{DynamicResource AppBackground}">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Active / Inactive dot colour -->
+        <Style x:Key="ActiveDot" TargetType="Ellipse">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Fill" Value="#4CAF50"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsActive}" Value="False">
+                    <Setter Property="Fill" Value="#EF5350"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SmallButton" TargetType="Button">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="MinWidth" Value="60"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- Search bar -->
+            <RowDefinition Height="*"/>     <!-- User grid -->
+            <RowDefinition Height="Auto"/>  <!-- Status bar -->
+            <RowDefinition Height="Auto"/>  <!-- Action buttons -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══ Search / Filter bar ═══ -->
+        <Border Grid.Row="0" Background="#E8F4FC" Padding="10" CornerRadius="4" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="🔍 חיפוש:" FontWeight="Bold"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                <TextBox Grid.Column="1"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center"
+                         Padding="4,3"/>
+
+                <Button Grid.Column="2" Content="🔄 רענן"
+                        Command="{Binding RefreshCommand}"
+                        Style="{StaticResource SmallButton}"
+                        Margin="10,0,0,0"/>
+
+                <ProgressBar Grid.Column="3"
+                             IsIndeterminate="True"
+                             Width="60" Height="8"
+                             Margin="10,0,0,0"
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+        </Border>
+
+        <!-- ═══ User DataGrid ═══ -->
+        <DataGrid Grid.Row="1"
+                  ItemsSource="{Binding FilteredUsers}"
+                  SelectedItem="{Binding SelectedUser}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  AlternatingRowBackground="#FAFAFA"
+                  RowHeight="36"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto">
+
+            <DataGrid.Columns>
+
+                <!-- Status Dot -->
+                <DataGridTemplateColumn Header="סטטוס" Width="60" CanUserSort="True" SortMemberPath="IsActive">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid HorizontalAlignment="Center" Cursor="Hand"
+                                  ToolTip="{Binding IsActive, Converter={x:Static vm:UserManagementConverters.ActiveTooltip}}">
+                                <Ellipse Style="{StaticResource ActiveDot}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Name (display / edit) -->
+                <DataGridTemplateColumn Header="שם" Width="180" CanUserSort="True" SortMemberPath="Name">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalContentAlignment="Center" Padding="2,1" Margin="2,0"
+                                         Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Email (display / edit) -->
+                <DataGridTemplateColumn Header="דוא״ל" Width="220" CanUserSort="True" SortMemberPath="Email">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <TextBlock Text="{Binding Email}" VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBox Text="{Binding EditEmail, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalContentAlignment="Center" Padding="2,1" Margin="2,0"
+                                         Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- LoginName (display / edit) -->
+                <DataGridTemplateColumn Header="שם משתמש" Width="150" CanUserSort="True" SortMemberPath="LoginName">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <TextBlock Text="{Binding LoginName}" VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBox Text="{Binding EditLoginName, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalContentAlignment="Center" Padding="2,1" Margin="2,0"
+                                         Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- AccUserType (display / edit) -->
+                <DataGridTemplateColumn Header="ACC הרשאת" Width="120" CanUserSort="True" SortMemberPath="AccUserType">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <TextBlock Text="{Binding AccUserType}" VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <ComboBox ItemsSource="{Binding DataContext.AccUserTypes, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedItem="{Binding EditAccUserType}"
+                                          VerticalContentAlignment="Center" Margin="2,0"
+                                          Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Role (display / edit) -->
+                <DataGridTemplateColumn Header="תפקיד" Width="120" CanUserSort="True" SortMemberPath="Role">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <TextBlock Text="{Binding Role, Converter={x:Static vm:UserManagementConverters.RoleToHebrew}}"
+                                           VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <ComboBox ItemsSource="{Binding DataContext.AppUserRoles, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedItem="{Binding EditRole}"
+                                          VerticalContentAlignment="Center" Margin="2,0"
+                                          Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={x:Static vm:UserManagementConverters.RoleToHebrew}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Open tasks count -->
+                <DataGridTemplateColumn Header="משימות פתוחות" Width="110" CanUserSort="True" SortMemberPath="OpenTaskCount">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding OpenTaskCount}"/>
+                                        <Setter Property="Foreground" Value="Gray"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasOpenTasks}" Value="True">
+                                                <Setter Property="Foreground" Value="#E65100"/>
+                                                <Setter Property="FontWeight" Value="Bold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Toggle Active button -->
+                <DataGridTemplateColumn Header="הפעל/השבת" Width="90">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Padding="4,2" Cursor="Hand"
+                                    Command="{Binding DataContext.ToggleActiveCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Content" Value="השבת"/>
+                                        <Setter Property="Background" Value="#FFEBEE"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                <Setter Property="Content" Value="הפעל"/>
+                                                <Setter Property="Background" Value="#E8F5E9"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Edit / Confirm / Cancel -->
+                <DataGridTemplateColumn Header="" Width="90">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <!-- Edit button (display mode) -->
+                                <Button Content="✏️ ערוך" Padding="4,2" Cursor="Hand"
+                                        Command="{Binding DataContext.BeginEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+
+                                <!-- Confirm / Cancel (edit mode) -->
+                                <StackPanel Orientation="Horizontal"
+                                            Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
+                                    <Button Content="✓" Padding="4,2" Margin="2,0"
+                                            FontWeight="Bold" Foreground="#2E7D32"
+                                            ToolTip="אשר שינוי"
+                                            Command="{Binding DataContext.ConfirmEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"/>
+                                    <Button Content="✗" Padding="4,2" Margin="2,0"
+                                            Foreground="#C62828"
+                                            ToolTip="בטל עריכה"
+                                            Command="{Binding DataContext.CancelEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Change indicator -->
+                <DataGridTemplateColumn Header="" Width="30">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="●" Foreground="Orange"
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"
+                                       Visibility="{Binding HasChanged, Converter={StaticResource BoolToVis}}"
+                                       ToolTip="שונה"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- ═══ Status Bar ═══ -->
+        <Border Grid.Row="2" Background="#F5F5F5" Padding="8,4" Margin="0,8,0,0" CornerRadius="3">
+            <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" TextTrimming="CharacterEllipsis"/>
+        </Border>
+
+        <!-- ═══ Save / Reset Buttons ═══ -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
+            <Button Content="💾  שמור שינויים"
+                    Command="{Binding SaveCommand}"
+                    Padding="14,6"
+                    MinWidth="120"
+                    FontWeight="Bold"
+                    Background="#4CAF50" Foreground="White"
+                    Margin="0,0,8,0">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasUnsavedChanges}" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="↩  בטל שינויים"
+                    Command="{Binding ResetCommand}"
+                    Padding="14,6"
+                    MinWidth="100"
+                    Margin="0,0,8,0"/>
+            <TextBlock Text="● שינויים שלא נשמרו"
+                       Foreground="Orange"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVis}}"/>
+        </StackPanel>
+    </Grid>
+</Window>

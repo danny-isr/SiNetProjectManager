@@ -1,0 +1,14 @@
+{
+  "EntityName": "Conversations",
+  "EndpointUrl": "https://mpwebe.master-plan.co.il/MPWebAPI/api/Conversations/?createdDate=2017-01-01T00:00:00",
+  "RequestParams": "createdDate=2017-01-01T00:00:00",
+  "CaptureTimestamp": "2026-02-12T23:09:49.8606495Z",
+  "StatusCode": 200,
+  "ContentType": "application/json",
+  "ResponseSizeBytes": 192,
+  "RecordCount": 1,
+  "FilterUsed": "createdDate=2017-01-01T00:00:00",
+  "WasWrappedResponse": false,
+  "WrapperPropertyName": "data",
+  "ErrorMessage": null
+}

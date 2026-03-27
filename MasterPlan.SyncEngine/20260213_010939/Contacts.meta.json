@@ -1,0 +1,14 @@
+{
+  "EntityName": "Contacts",
+  "EndpointUrl": "https://mpwebe.master-plan.co.il/MPWebAPI/api/Contact/?lastUpdated=2017-01-01T00:00:00",
+  "RequestParams": "lastUpdated=2017-01-01T00:00:00",
+  "CaptureTimestamp": "2026-02-12T23:09:45.7230969Z",
+  "StatusCode": 200,
+  "ContentType": "application/json",
+  "ResponseSizeBytes": 385826,
+  "RecordCount": 1742,
+  "FilterUsed": "lastUpdated=2017-01-01T00:00:00",
+  "WasWrappedResponse": true,
+  "WrapperPropertyName": "data",
+  "ErrorMessage": null
+}

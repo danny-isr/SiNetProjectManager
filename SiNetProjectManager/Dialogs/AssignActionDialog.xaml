@@ -1,0 +1,97 @@
+<Window x:Class="SiNetProjectManager.Dialogs.AssignActionDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="שיוך פעולה"
+        Height="260" Width="440"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        FlowDirection="RightToLeft"
+        FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="{DynamicResource AppFontSize}"
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource AppForeground}">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Action description -->
+        <Border Grid.Row="0" Background="#E3F2FD" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock Text="פעולה:" FontWeight="SemiBold" Foreground="#1565C0"
+                           FontSize="13"/>
+                <TextBlock x:Name="ActionDescriptionText" TextWrapping="Wrap"
+                           Foreground="#1565C0" FontSize="12" Margin="0,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Row 1: Employee picker -->
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="שייך ל:"
+                       FontWeight="SemiBold" VerticalAlignment="Center"
+                       Margin="0,0,8,0"/>
+
+            <ComboBox Grid.Column="1"
+                      x:Name="EmployeeComboBox"
+                      DisplayMemberPath="Name"
+                      SelectedValuePath="Id"
+                      SelectionChanged="EmployeeComboBox_SelectionChanged"/>
+        </Grid>
+
+        <!-- Row 2: Info text — changes based on selection -->
+        <TextBlock Grid.Row="2" x:Name="InfoText"
+                   Foreground="Gray" FontSize="11"
+                   TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+        <!-- Row 3: Optional note -->
+        <Grid Grid.Row="3" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="הערה:"
+                       VerticalAlignment="Top" Margin="0,2,8,0"/>
+
+            <TextBox Grid.Column="1" x:Name="NoteTextBox"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     Height="40" VerticalScrollBarVisibility="Auto"/>
+        </Grid>
+
+        <!-- Row 5: Action buttons -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal"
+                    HorizontalAlignment="Left" Margin="0,8,0,0">
+
+            <Button x:Name="ExecuteNowButton"
+                    Content="▶ בצע עכשיו"
+                    Padding="12,6" Margin="0,0,8,0"
+                    Background="#C8E6C9" BorderBrush="#66BB6A"
+                    FontWeight="Bold"
+                    Click="ExecuteNow_Click"
+                    ToolTip="בצע את הפעולה מיד (ללא יצירת משימה)"/>
+
+            <Button x:Name="CreateTaskButton"
+                    Content="📋 צור משימה"
+                    Padding="12,6" Margin="0,0,8,0"
+                    Background="#BBDEFB" BorderBrush="#64B5F6"
+                    FontWeight="Bold"
+                    Click="CreateTask_Click"
+                    ToolTip="צור משימה ושייך לעובד שנבחר"/>
+
+            <Button Content="ביטול" Padding="12,6"
+                    IsCancel="True"
+                    Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

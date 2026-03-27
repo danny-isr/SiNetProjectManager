@@ -1,0 +1,24 @@
+<Window x:Class="SiNetProjectManager.WPF_Window.RenameProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Rename Project" Height="180" Width="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource AppBackground}">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Enter new project name:" FontWeight="Bold"/>
+        <TextBox Grid.Row="1" Margin="0,6,0,0" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <TextBlock Foreground="Red" Text="{Binding ErrorMessage}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <Button Content="OK" Width="80" Margin="0,0,6,0" IsEnabled="{Binding CanOk}" Click="Ok_Click"/>
+            <Button Content="Cancel" Width="80" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,14 @@
+{
+  "EntityName": "ProjectHours",
+  "EndpointUrl": "https://mpwebe.master-plan.co.il/MPWebAPI/api/ProjectHours/?fromDate=2017-01-01T00:00:00",
+  "RequestParams": "fromDate=2017-01-01T00:00:00",
+  "CaptureTimestamp": "2026-02-12T23:09:50.6326681Z",
+  "StatusCode": 200,
+  "ContentType": "application/json",
+  "ResponseSizeBytes": 6182048,
+  "RecordCount": 20513,
+  "FilterUsed": "fromDate=2017-01-01T00:00:00",
+  "WasWrappedResponse": true,
+  "WrapperPropertyName": "data",
+  "ErrorMessage": null
+}

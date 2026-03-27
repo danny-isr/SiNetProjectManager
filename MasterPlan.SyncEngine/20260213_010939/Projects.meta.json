@@ -1,0 +1,14 @@
+{
+  "EntityName": "Projects",
+  "EndpointUrl": "https://mpwebe.master-plan.co.il/MPWebAPI/api/projects/?lastUpdated=2017-01-01T00:00:00",
+  "RequestParams": "lastUpdated=2017-01-01T00:00:00",
+  "CaptureTimestamp": "2026-02-12T23:09:42.8800705Z",
+  "StatusCode": 200,
+  "ContentType": "application/json",
+  "ResponseSizeBytes": 244184,
+  "RecordCount": 486,
+  "FilterUsed": "lastUpdated=2017-01-01T00:00:00",
+  "WasWrappedResponse": true,
+  "WrapperPropertyName": "data",
+  "ErrorMessage": null
+}
