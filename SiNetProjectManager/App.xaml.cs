@@ -226,6 +226,7 @@ namespace SiNetProjectManager
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();
             services.AddTransient<SiNetSQL.Services.EmailContext.ActionExecutor>();
+            services.AddTransient<SiNetSQL.Services.EmailContext.EmailActionExecutor>();
 
             // File Import Coordinator: Transient (orchestrates email attachment → project filesystem)
             services.AddTransient<SiNetSQL.Services.Coordinators.FileImportCoordinator>();

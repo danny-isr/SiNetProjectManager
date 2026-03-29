@@ -215,6 +215,20 @@
                                     Width="Auto"
                                     IsReadOnly="True"/>
 
+                <!-- Title - Read only (shows action description for email-sourced tasks) -->
+                <DataGridTextColumn Header="כותרת" 
+                                    Binding="{Binding Title}" 
+                                    Width="Auto"
+                                    IsReadOnly="True">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="MaxWidth" Value="250"/>
+                            <Setter Property="ToolTip" Value="{Binding Title}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
                 <!-- Status - Inline ComboBox with immediate save -->
                 <DataGridTemplateColumn Header="סטטוס" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
@@ -327,10 +341,27 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <!-- Event History - Compact Table -->
-                                <DataGrid Grid.Row="0"
+                                <!-- Row 0: Open Action Button (visible only for email-action tasks) -->
+                                <Border Grid.Row="0" Background="#E8F5E9" CornerRadius="4"
+                                        Padding="8,6" Margin="0,0,0,6"
+                                        Visibility="{Binding DataContext.SelectedTaskHasAction, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{Binding DataContext.SelectedTaskActionLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Command="{Binding DataContext.OpenActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Background="#C8E6C9" BorderBrush="#66BB6A"
+                                                FontWeight="Bold" Padding="12,6" Margin="0,0,8,0"
+                                                Cursor="Hand"/>
+                                        <TextBlock Text="לחץ לפתיחת הפעולה המקושרת"
+                                                   Foreground="#388E3C" FontSize="11"
+                                                   VerticalAlignment="Center" FontStyle="Italic"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Row 1: Event History -->
+                                <DataGrid Grid.Row="1"
                                           ItemsSource="{Binding DataContext.SelectedTaskEvents, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
@@ -380,7 +411,7 @@
                                 </DataGrid>
 
                                 <!-- Undo Last Event Button -->
-                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0"
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,6,0,0"
                                             Visibility="{Binding DataContext.CanUndoLastEvent, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
                                     <Button Content="↩ בטל פעולה אחרונה"
                                             Command="{Binding DataContext.UndoLastEventCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -390,7 +421,7 @@
                                 </StackPanel>
 
                                 <!-- Pending Emails to Tag (visible only when pending emails exist) -->
-                                <ItemsControl Grid.Row="2"
+                                <ItemsControl Grid.Row="3"
                                               ItemsSource="{Binding DataContext.PendingEmails, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                               Margin="0,8,0,0">
                                     <ItemsControl.Style>
@@ -446,7 +477,7 @@
                                 </ItemsControl>
 
                                 <!-- Task Links (visible only when links exist) -->
-                                <ItemsControl Grid.Row="3"
+                                <ItemsControl Grid.Row="4"
                                               ItemsSource="{Binding DataContext.SelectedTaskLinks, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                               Margin="0,6,0,0">
                                     <ItemsControl.Style>
@@ -495,7 +526,7 @@
                                 </ItemsControl>
 
                                 <!-- Add Note - Multi-line -->
-                                <StackPanel Grid.Row="4" Margin="0,8,0,0">
+                                <StackPanel Grid.Row="5" Margin="0,8,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>

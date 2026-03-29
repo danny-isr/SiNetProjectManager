@@ -26,6 +26,9 @@ public sealed class AssignActionResult
 
     /// <summary>Optional note the user entered.</summary>
     public string? Note { get; init; }
+
+    /// <summary>The follow-up action type — routes to the correct dialog when the task is opened later.</summary>
+    public ActionFollowUp? FollowUp { get; init; }
 }
 
 /// <summary>
@@ -38,6 +41,7 @@ public partial class AssignActionDialog : Window
 {
     private readonly int _currentUserId;
     private readonly bool _currentUserIsAuthorized;
+    private readonly ActionFollowUp _followUp;
     private ObservableCollection<Siuser> _employees = [];
 
     /// <summary>The dialog result containing the user's choice.</summary>
@@ -51,6 +55,7 @@ public partial class AssignActionDialog : Window
 
         ActionDescriptionText.Text = actionDescription;
         _currentUserId = CurrentUserContext.Instance.CurrentUserId ?? 0;
+        _followUp = followUp;
 
         LoadAuthorizedEmployees(followUp);
 
@@ -150,6 +155,7 @@ public partial class AssignActionDialog : Window
             ExecuteDirectly = true,
             SelectedEmployee = EmployeeComboBox.SelectedItem as Siuser,
             Note = string.IsNullOrWhiteSpace(NoteTextBox.Text) ? null : NoteTextBox.Text.Trim(),
+            FollowUp = _followUp,
         };
         DialogResult = true;
     }
@@ -168,6 +174,7 @@ public partial class AssignActionDialog : Window
             CreateTask = true,
             SelectedEmployee = selected,
             Note = string.IsNullOrWhiteSpace(NoteTextBox.Text) ? null : NoteTextBox.Text.Trim(),
+            FollowUp = _followUp,
         };
         DialogResult = true;
     }

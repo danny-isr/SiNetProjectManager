@@ -7,7 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNetSQL.MVVM;
+using SiNetSQL.Services.EmailContext;
 using SiNetProjectManager.Dialogs;
+using SiNetProjectManager.WPF_Window;
+using WpfSiData.WPFUserControl;
 
 namespace SiNetProjectManager.WPFUserControl;
 
@@ -33,6 +36,9 @@ public partial class TaskPanelView : UserControl
 
         // Subscribe to email navigation requests
         ViewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
+
+        // Subscribe to action dialog requests (tasks created from email actions)
+        ViewModel.OpenActionRequested += OnOpenActionRequested;
     }
 
     /// <summary>
@@ -224,5 +230,55 @@ public partial class TaskPanelView : UserControl
         if (mainWindow == null) return;
 
         mainWindow.NavigateToEmail(emailId);
+    }
+
+    /// <summary>
+    /// Handles opening the action dialog when the user clicks the action button on an action-sourced task.
+    /// Routes to the correct dialog based on the <see cref="ActionFollowUp"/> stored in the task Body.
+    /// </summary>
+    private void OnOpenActionRequested(ActionFollowUp followUp, int emailMessageId)
+    {
+        var owner = Window.GetWindow(this);
+
+        switch (followUp)
+        {
+            case ActionFollowUp.NewProjectDialog:
+            {
+                var mainWindow = owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
+                if (mainWindow?.DataContext is MainWindowViewModel vm)
+                {
+                    vm.CurrentView = new CreateProjectUserControl();
+                    mainWindow.Activate();
+                }
+                break;
+            }
+
+            case ActionFollowUp.TaskCreationDialog:
+            {
+                var tasksWindow = new FloatingProjectTasksView();
+                if (owner != null) tasksWindow.Owner = owner;
+                tasksWindow.Show();
+                break;
+            }
+
+            case ActionFollowUp.DecisionDialog:
+            {
+                var decisionsWindow = new ProjectDecisionsWindow();
+                if (owner != null) decisionsWindow.Owner = owner;
+                decisionsWindow.Show();
+                break;
+            }
+
+            default:
+            {
+                // For other action types, navigate to the linked email if available
+                if (emailMessageId > 0)
+                {
+                    var mainWindow = owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
+                    mainWindow?.NavigateToEmail(emailMessageId);
+                }
+                break;
+            }
+        }
     }
 }
