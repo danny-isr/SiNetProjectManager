@@ -209,6 +209,7 @@
 
                 <!-- WebView2 for ACC documents viewer -->
                 <wv2:WebView2 Grid.Row="1" x:Name="AccWebView"
+                              selectors:WebView2Helper.IsAccViewer="True"
                               selectors:WebView2Helper.NavigateUrl="{Binding AccViewerUrl}"/>
 
                 <!-- Placeholder when no ACC URL is available -->

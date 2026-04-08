@@ -194,6 +194,28 @@ namespace SiNetProjectManager.WPFUserControl
             obj.SetValue(NavigateUrlProperty, value);
         }
 
+        // ══════════════════════════════════════════════════════════════════
+        // ATTACHED PROPERTY: IsAccViewer (marks WebView2 as ACC document viewer)
+        // Disables Gmail navigation guard and keeps new-window requests in-place.
+        // ══════════════════════════════════════════════════════════════════
+
+        public static readonly DependencyProperty IsAccViewerProperty =
+            DependencyProperty.RegisterAttached(
+                "IsAccViewer",
+                typeof(bool),
+                typeof(WebView2Helper),
+                new PropertyMetadata(false));
+
+        public static bool GetIsAccViewer(DependencyObject obj)
+        {
+            return (bool)obj.GetValue(IsAccViewerProperty);
+        }
+
+        public static void SetIsAccViewer(DependencyObject obj, bool value)
+        {
+            obj.SetValue(IsAccViewerProperty, value);
+        }
+
         public static readonly DependencyProperty FallbackHtmlProperty =
             DependencyProperty.RegisterAttached(
                 "FallbackHtml",
@@ -334,10 +356,12 @@ namespace SiNetProjectManager.WPFUserControl
                 // Check if already initialized (can happen in race condition)
                 if (webView.CoreWebView2 == null)
                 {
-                    // Phase 1: Create environment with persistent UserDataFolder per user
-                    var environment = await CreateUserEnvironmentAsync();
+                    bool isAcc = GetIsAccViewer(webView);
+                    var environment = isAcc
+                        ? await CreateAccEnvironmentAsync()
+                        : await CreateUserEnvironmentAsync();
                     await webView.EnsureCoreWebView2Async(environment);
-                    System.Diagnostics.Debug.WriteLine("WebView2: Core initialization completed");
+                    System.Diagnostics.Debug.WriteLine($"WebView2: Core initialization completed (ACC={isAcc})");
                 }
 
                 // Phase 1.1: One-time browser configuration (UA masking, popup interception)
@@ -347,8 +371,8 @@ namespace SiNetProjectManager.WPFUserControl
                     state.BrowserConfigured = true;
                 }
 
-                // Configure virtual host for inline images (only once per instance)
-                if (!state.VirtualHostConfigured && webView.CoreWebView2 != null)
+                // Configure virtual host for inline images (only once per instance, Gmail only)
+                if (!state.VirtualHostConfigured && webView.CoreWebView2 != null && !GetIsAccViewer(webView))
                 {
                     ConfigureVirtualHostForImages(webView.CoreWebView2);
                     state.VirtualHostConfigured = true;
@@ -415,6 +439,7 @@ namespace SiNetProjectManager.WPFUserControl
         private static void ConfigureBrowserBehavior(WebView2 webView)
         {
             var coreWebView = webView.CoreWebView2;
+            bool isAccViewer = GetIsAccViewer(webView);
 
             // 0. Enable scroll wheel by auto-focusing on mouse enter
             EnableScrollWheelFocus(webView);
@@ -422,6 +447,23 @@ namespace SiNetProjectManager.WPFUserControl
             // 1. Spoof User-Agent to look like standalone Chrome
             coreWebView.Settings.UserAgent = ChromeUserAgent;
             System.Diagnostics.Debug.WriteLine("WebView2: User-Agent set to modern Chrome (prevents embedded-browser redirect)");
+
+            if (isAccViewer)
+            {
+                // ACC viewer mode: allow all navigations, keep new-window requests in-place
+                coreWebView.NewWindowRequested += (sender, e) =>
+                {
+                    e.Handled = true;
+                    if (!string.IsNullOrEmpty(e.Uri))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"WebView2 [ACC]: New-window → navigating in-place: {e.Uri}");
+                        coreWebView.Navigate(e.Uri);
+                    }
+                };
+
+                System.Diagnostics.Debug.WriteLine("WebView2: ACC viewer mode configured (UA + in-place navigation)");
+                return;
+            }
 
             // 2. Intercept new-window requests — ALL open in floating browser window
             //    NewWindowRequested fires for target="_blank" / window.open() — always external.
@@ -797,6 +839,19 @@ namespace SiNetProjectManager.WPFUserControl
         }
 
         /// <summary>
+        /// Creates a CoreWebView2Environment for the ACC document viewer.
+        /// Uses a separate UserDataFolder ('acc_viewer') to isolate the ACC
+        /// browser session from the Gmail session.
+        /// </summary>
+        private static async Task<CoreWebView2Environment> CreateAccEnvironmentAsync()
+        {
+            var userDataFolder = Path.Combine(AppConfiguration.WebView2UserDataBasePath, "acc_viewer");
+            Directory.CreateDirectory(userDataFolder);
+            System.Diagnostics.Debug.WriteLine($"WebView2: Using ACC UserDataFolder: {userDataFolder}");
+            return await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+        }
+
+        /// <summary>
         /// Sanitizes an email address for safe use as a file system directory name.
         /// Rules: '@' → '_at_', strip illegal chars, truncate to 100 characters.
         /// </summary>
@@ -924,7 +979,7 @@ namespace SiNetProjectManager.WPFUserControl
                 }
 
                 var targetUrl = url;
-                if (string.IsNullOrWhiteSpace(CurrentUserEmail))
+                if (!GetIsAccViewer(webView) && string.IsNullOrWhiteSpace(CurrentUserEmail))
                 {
                     System.Diagnostics.Debug.WriteLine(
                         "WebView2: No active session \u2014 landing on Gmail base login instead of deep-link");
