@@ -144,6 +144,12 @@
                         <DataGridCheckBoxColumn Header="Look" Binding="{Binding LookAtDes}" Width="0.5*" MinWidth="50"/>
                         <DataGridCheckBoxColumn Header="Out" Binding="{Binding OutSidData}" Width="0.5*" MinWidth="50"/>
 
+                        <!-- Storage Destination -->
+                        <DataGridComboBoxColumn Header="Storage"
+                                                SelectedItemBinding="{Binding StorageDestination}"
+                                                ItemsSource="{x:Static vm:ProjectFileViewModel.StorageDestinationOptions}"
+                                                Width="0.8*" MinWidth="90"/>
+
                         <!-- Template Location (2*) -->
                         <DataGridTemplateColumn Header="Template Location" Width="2*" MinWidth="200">
                             <DataGridTemplateColumn.CellTemplate>

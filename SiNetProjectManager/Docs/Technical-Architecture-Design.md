@@ -1168,6 +1168,8 @@ Phase 7: ACC Enhancement              ← WebView2 mapping
 | 7.1 | מיפוי ProjectAccMapping → AccViewerUrl | — |
 | 7.2 | הפעלת WebView2 viewer ב-ProjectWorkView | 7.1 |
 | 7.3 | `AccFileSyncService` — סנכרון קבצים ← ACC mapped folder | Phase 5 |
+| 7.4 | `ProjectFileInstance` — מעקב הצבת קבצים (FileServer / ACC) | Phase 5 |
+| 7.5 | `StorageDestination` routing — ניתוב קבצים לפי ProjectFile | 7.4 |
 
 **תוצר:** ACC viewer פעיל + סנכרון קבצים.
 

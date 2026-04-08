@@ -163,6 +163,11 @@
                     <DataTemplate DataType="{x:Type local:VersionNode}">
                         <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
                             <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,5,0" />
+                            <!-- ACC cloud badge -->
+                            <TextBlock Text="☁" Foreground="#1565C0" FontWeight="Bold" FontSize="14"
+                                       VerticalAlignment="Center" Margin="0,0,4,0"
+                                       ToolTip="קובץ שמור ב-ACC — לחץ פעמיים לצפייה"
+                                       Visibility="{Binding IsAccFile, Converter={StaticResource BoolToVis}}"/>
                             <TextBlock Text="{Binding Description}" Margin="5,0" />
                             <TextBlock Text=" Ver: " FontWeight="Bold" />
                             <TextBlock Text="{Binding VersionNumber}" Margin="5,0" />

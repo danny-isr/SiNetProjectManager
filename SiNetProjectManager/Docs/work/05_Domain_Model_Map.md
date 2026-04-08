@@ -96,21 +96,29 @@ Notes:
 ---
 
 ### 5. File Domain
-Responsible for project files and versions.
+Responsible for project files, versions, and physical file placement tracking.
 
 Entities:
 - ProjectFolder
 - ProjectFile
 - ProjectFileRef
+- ProjectFileInstance (physical file placement tracker)
+- ProjectAlternative
 - DocumentAlternative
 - DocumentVersion
+
+Enums:
+- FileStorageDestination (FileServer=0, Acc=1)
+- FileInstanceSourceType (Manual=0, EmailAttachment=1, Template=2)
 
 Runtime Objects:
 - BaseFileVersion
 
 Notes:
 - DB stores metadata.
-- Filesystem stores actual files.
+- Filesystem / ACC stores actual files.
+- ProjectFile.StorageDestination controls routing (FileServer vs ACC).
+- ProjectFileInstance records every physical file placement with source tracking.
 - Naming convention is central.
 
 ---
@@ -153,6 +161,7 @@ Notes:
 - Project -> many ProjectFolder
 - ProjectFolder -> many ProjectFile
 - ProjectFile -> many ProjectFileRef
+- ProjectFile -> many ProjectFileInstance
 - Project -> many ProjectAssignment
 - Project -> many WorkflowInstance
 - Project -> many ProjectDecision
@@ -160,6 +169,7 @@ Notes:
 
 ### Email relationships
 - EmailInboxMessage -> many EmailInboxAttachment
+- EmailInboxAttachment -> optional ProjectFileInstance (FK)
 - EmailInboxMessage -> may link to Project
 - EmailInboxMessage -> may trigger WorkflowInstance
 - EmailInboxMessage -> may create Task
@@ -195,8 +205,9 @@ Notes:
 2. Email must never become the root of the whole system.
 3. Workflow lifecycle must be modeled separately from task status.
 4. Files must remain separated into:
-   - metadata in DB
-   - physical files in filesystem / ACC
+   - metadata in DB (ProjectFile = definition, ProjectFileInstance = placement record)
+   - physical files in filesystem (FileServer) or ACC (Autodesk)
+   - StorageDestination on ProjectFile controls routing
 5. Review must remain an independent bounded area.
 6. Decisions must not be collapsed into tasks.
 7. ViewModels must not contain domain rules.

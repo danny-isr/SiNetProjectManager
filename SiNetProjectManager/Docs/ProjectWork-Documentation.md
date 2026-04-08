@@ -109,6 +109,7 @@ ProjectWorkView.xaml.cs                 (Code-behind — Drag events, DataContex
 │ TemplateLocation │ string?  │ נתיב תבנית מקור              │
 │ LookAtDes        │ bool?    │ האם להציג תיאור               │
 │ OutSidData       │ bool?    │ האם נתונים חיצוניים          │
+│ StorageDestination│ int (enum)│ יעד אחסון: FileServer=0, Acc=1│
 │ Modified         │ DateTime?│ תאריך עדכון                   │
 │ Created          │ DateTime?│ תאריך יצירה                   │
 │ AuthorId         │ int? FK  │ יוצר → Siuser                │
@@ -120,6 +121,7 @@ ProjectWorkView.xaml.cs                 (Code-behind — Drag events, DataContex
 │  • Author, Editor → Siuser                                 │
 │  • ProjectFileRefFiles → ICollection<ProjectFileRef>       │
 │  • ProjectFileRefXrefs → ICollection<ProjectFileRef>       │
+│  • ProjectFileInstances → ICollection<ProjectFileInstance>  │
 ├────────────────────────────────────────────────────────────┤
 │ Partial Class Extension (ProjectFile.TagDisplay.cs):       │
 │  • TagDisplayLabel → "FolderName / FileTitle" (for ComboBox)│
@@ -150,7 +152,55 @@ ProjectWorkView.xaml.cs                 (Code-behind — Drag events, DataContex
 
 **תפקיד:** קישור XRef בין קבצי CAD/BIM — קובץ אחד מפנה לקובץ אחר.
 
-### 3.4 `TypeOfProjectInProject` — שיוך סוג פרויקט
+### 3.4 `ProjectFileInstance` — מעקב הצבת קבצים פיזיים
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                  ProjectFileInstances                        │
+├──────────────────────┬──────────┬──────────────────────────┤
+│ Column               │ Type     │ Description              │
+├──────────────────────┼──────────┼──────────────────────────┤
+│ Id                   │ int PK   │ מזהה ייחודי              │
+│ ProjectFileId        │ int FK   │ הגדרת קובץ → ProjectFile │
+│ ProjectAlternativeId │ int? FK  │ אלטרנטיבה → ProjectAlt.  │
+│ Version              │ int      │ מספר גרסה (ברירת מחדל 1)│
+│ FileName             │ string   │ שם הקובץ המלא (max 500)  │
+│ FilePath             │ string?  │ נתיב מלא (FileServer בלבד)│
+│ StorageDestination   │ int (enum)│ FileServer=0, Acc=1     │
+│ SourceType           │ int (enum)│ Manual=0, Email=1, Tpl=2│
+│ AccItemId            │ string?  │ ACC Item ID (ACC בלבד)   │
+│ AccVersionId         │ string?  │ ACC Version ID (ACC בלבד)│
+│ CreatedAt            │ DateTime │ זמן יצירת הרשומה         │
+│ PlacedAt             │ DateTime?│ זמן הצבה בפועל           │
+├──────────────────────┴──────────┴──────────────────────────┤
+│ Navigation Properties:                                      │
+│  • ProjectFile → ProjectFile                               │
+│  • ProjectAlternative → ProjectAlternative                  │
+│  • EmailInboxAttachments → ICollection<EmailInboxAttachment>│
+├────────────────────────────────────────────────────────────┤
+│ Enums:                                                      │
+│  • FileStorageDestination: FileServer=0, Acc=1             │
+│  • FileInstanceSourceType: Manual=0, EmailAttachment=1,    │
+│                             Template=2                      │
+└────────────────────────────────────────────────────────────┘
+```
+
+**תפקיד:** `ProjectFileInstance` מתעד כל **הצבה פיזית** של קובץ —
+בין אם ל-FileServer (דיסק רשת) או ל-ACC (ענן Autodesk).
+נוצר אוטומטית ב-3 נתיבי הצבה:
+
+| נתיב הצבה | מקום ביצוע | SourceType |
+|---|---|---|
+| העברה ממייל (`MoveToProjectAsync`) | `EmailManagementViewModel` | EmailAttachment |
+| סנכרון אוטומטי (`AccFileSyncService`) | `AccFileSyncService` | EmailAttachment |
+| גרירת קובץ / תבנית (`GetAlternativeNode`) | `ProjectFileNode` | Manual / Template |
+
+**ניתוב לפי `StorageDestination`:**
+כאשר קובץ מועבר מהמייל, המערכת בודקת את `ProjectFile.StorageDestination`:
+- **FileServer** → מוריד לדיסק רשת (`ProjectFullPhate` + נתיב תיקייה)
+- **Acc** → מעלה ל-ACC דרך `Bim360Service`
+
+### 3.5 `TypeOfProjectInProject` — שיוך סוג פרויקט
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -174,7 +224,7 @@ ProjectWorkView.xaml.cs                 (Code-behind — Drag events, DataContex
 פרויקט אחד יכול להיות **כמה סוגים** (אדריכלות + קונסטרוקציה, למשל).
 כל שיוך כולל **עובד אחראי** (`AdminWorkerId`).
 
-### 3.5 תרשים יחסים
+### 3.6 תרשים יחסים
 
 ```
 Project ←──(1:N)──→ TypeOfProjectInProject ──(N:1)──→ JobType
@@ -185,7 +235,12 @@ Project ←──(1:N)──→ TypeOfProjectInProject ──(N:1)──→ JobT
    │                │
    │                └──(1:N)──→ ProjectFile ──→ JobType (TypeProjId)
    │                                │
-   │                                └──(1:N)──→ ProjectFileRef (XRef)
+   │                                ├──(1:N)──→ ProjectFileRef (XRef)
+   │                                └──(1:N)──→ ProjectFileInstance
+   │                                               │
+   │                                               ├── StorageDestination (FileServer / ACC)
+   │                                               ├── SourceType (Manual / Email / Template)
+   │                                               └── ← EmailInboxAttachment (optional FK)
    │
    └── ProjectPath (filesystem root for this project)
 ```
@@ -718,17 +773,20 @@ ViewModel לדיאלוג שם אלטרנטיבה, עם ולידציה:
 ┌─────────────────────────────────────────────────────────┐
 │                 ProjectWork Module                        │
 ├─────────────────────────────────────────────────────────┤
-│ DB Models (4):                                           │
+│ DB Models (5 + 2 enums):                                 │
 │  • ProjectFolder (self-ref tree)                        │
-│  • ProjectFile (metadata — not physical file)           │
+│  • ProjectFile (metadata + StorageDestination routing)  │
 │  • ProjectFileRef (XRef links)                          │
+│  • ProjectFileInstance (physical file placement tracker)│
 │  • TypeOfProjectInProject (Project ↔ JobType M:N)       │
+│  • FileStorageDestination enum (FileServer=0, Acc=1)    │
+│  • FileInstanceSourceType enum (Manual=0, Email=1, Tpl=2)│
 ├─────────────────────────────────────────────────────────┤
 │ Tree Nodes (4):                                          │
 │  • ProjectFolderNode (folder — DB + user-created)       │
 │  • ProjectFileNode (identified file + alternatives)     │
 │  • AlternativeNode (named copy variant)                 │
-│  • VersionNode (physical file instance)                 │
+│  • VersionNode (physical file — linked to FileInstance) │
 ├─────────────────────────────────────────────────────────┤
 │ ViewModel (1):                                           │
 │  • ProjectWorkViewModel (~683 lines)                    │

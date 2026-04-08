@@ -20,6 +20,13 @@ public partial class ProjectWorkView : UserControl
         var dialogs = App.DialogServiceLocator.Instance
                       ?? new SiNetProjectManager.Services.DialogService();
         DataContext = new ProjectWorkViewModel(dialogs);
+
+        // Wire VersionNode ACC callback → navigate the right-panel AccWebView
+        VersionNode.OnAccFileOpenRequested = url =>
+        {
+            if (DataContext is ProjectWorkViewModel vm)
+                vm.AccViewerUrl = url;
+        };
     }
 
     private void TreeViewItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -49,7 +56,23 @@ public partial class ProjectWorkView : UserControl
     {
         if (((FrameworkElement)e.OriginalSource).DataContext is VersionNode version)
         {
-            FileHelpers.OpenFile(version.FullPath);
+            if (version.IsAccFile && !string.IsNullOrEmpty(version.AccViewerUrl))
+            {
+                // Navigate ACC viewer panel
+                if (DataContext is ProjectWorkViewModel vm)
+                    vm.AccViewerUrl = version.AccViewerUrl;
+            }
+            else if (version.IsAccFile)
+            {
+                // ACC file but no viewer URL (project not mapped to ACC)
+                MessageBox.Show(
+                    "הקובץ שמור ב-ACC אך לא ניתן לפתוח אותו — חסר מיפוי פרויקט ב-ACC.",
+                    "קובץ ACC", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                FileHelpers.OpenFile(version.FullPath);
+            }
             e.Handled = true;
         }
     }
