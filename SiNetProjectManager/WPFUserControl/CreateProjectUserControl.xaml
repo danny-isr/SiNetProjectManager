@@ -13,6 +13,23 @@
         Background="{DynamicResource AppBackground}"
         Foreground="{DynamicResource AppForeground}">
     <!-- DataContext is set from code-behind via DI (CreateProjectViewModel requires IDbContextFactory) -->
+    <DockPanel>
+        <!-- Email context banner (visible only when creating from email) -->
+        <Border DockPanel.Dock="Top" Padding="10" Margin="5,5,5,0"
+                Background="#FFF3E0" BorderBrush="#FFB74D" BorderThickness="1" CornerRadius="4">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasEmailContext}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Text="{Binding EmailContextBanner}" FontSize="13" TextWrapping="Wrap"
+                       FlowDirection="RightToLeft"/>
+        </Border>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -89,4 +106,5 @@
         <Button Grid.Column="2" Content="..." HorizontalAlignment="Left" Margin="10,0,0,0" Grid.Row="2" VerticalAlignment="Center" Click="Button_Click" RenderTransformOrigin="-8.051,0.756" Width="35"/>
         <Button Grid.Column="2" Content="..." HorizontalAlignment="Left" Margin="10,0,0,0" Grid.Row="3" VerticalAlignment="Center" RenderTransformOrigin="0.328,-0.044" Click="Button_Click_1" Width="35"/>
     </Grid>
+    </DockPanel>
 </UserControl>

@@ -231,6 +231,12 @@ namespace SiNetProjectManager
             // File Import Coordinator: Transient (orchestrates email attachment → project filesystem)
             services.AddTransient<SiNetSQL.Services.Coordinators.FileImportCoordinator>();
 
+            // ACC File Sync: Transient (copies tagged attachments from ACC Inbox → ACC project folders)
+            services.AddTransient<SiNetSQL.Services.Coordinators.AccFileSyncService>();
+
+            // ACC Project Provisioning: Transient (ensures ACC project + folder structure exist)
+            services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
+
             // ═══════════════════════════════════════════════════════════════════
             // VIEWMODELS: Register all ViewModels that use IDbContextFactory
             // Transient lifetime ensures each request gets a fresh instance.

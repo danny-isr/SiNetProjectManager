@@ -831,6 +831,7 @@ public sealed class GoogleReportExportService : IReportExportService
             {
                 case "Failed":
                 case "Issue":       // legacy
+                case "ManagerReview":  // should not reach export, but treat as Failed if it does
                     hasFailed = true;
                     allNotRelevant = false;
                     break;
@@ -870,6 +871,7 @@ public sealed class GoogleReportExportService : IReportExportService
         "Failed" or "Issue" => new SheetsColor { Red = 0.95f, Green = 0.85f, Blue = 0.85f },
         "RecurringFailed" or "Recurring" => new SheetsColor { Red = 1f, Green = 0.93f, Blue = 0.8f },
         "NotApplicable" or "לא רלוונטי" => new SheetsColor { Red = 0.93f, Green = 0.93f, Blue = 0.93f },
+        "ManagerReview" => new SheetsColor { Red = 0.93f, Green = 0.85f, Blue = 0.95f },
         _ => new SheetsColor { Red = 1f, Green = 1f, Blue = 1f }
     };
 

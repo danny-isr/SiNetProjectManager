@@ -252,6 +252,32 @@
                             </Style>
                         </ComboBox.Style>
                     </ComboBox>
+                    <!-- Inline alternative selector (compact) -->
+                    <ComboBox Margin="3,0,0,0"
+                              MinWidth="80"
+                              MaxWidth="140"
+                              Height="20"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding ShowAlternativeSelector, Converter={StaticResource BoolToVis}}"
+                              ItemsSource="{Binding AvailableAlternatives}"
+                              SelectedValue="{Binding SelectedAlternativeId, Mode=TwoWay}"
+                              SelectedValuePath="Id"
+                              DisplayMemberPath="Name"
+                              ToolTip="בחר אלטרנטיבה"
+                              IsTextSearchEnabled="True"
+                              TextSearch.TextPath="Name">
+                        <ComboBox.Style>
+                            <Style TargetType="ComboBox">
+                                <Setter Property="FontSize" Value="10"/>
+                                <Setter Property="BorderBrush" Value="#CE93D8"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedAlternativeId}" Value="{x:Null}">
+                                        <Setter Property="BorderBrush" Value="#EF9A9A"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ComboBox.Style>
+                    </ComboBox>
                 </StackPanel>
             </Border>
         </DataTemplate>

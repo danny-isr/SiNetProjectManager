@@ -14,13 +14,18 @@ namespace WpfSiData.WPFUserControl
     {
         private readonly CreateProjectViewModel _viewModel;
 
-        public CreateProjectUserControl()
+        public CreateProjectUserControl(int? emailMessageId = null)
         {
             InitializeComponent();
 
             // Resolve ViewModel from DI container
             _viewModel = App.ServiceProvider.GetRequiredService<CreateProjectViewModel>();
             DataContext = _viewModel;
+
+            if (emailMessageId.HasValue)
+            {
+                _viewModel.SetEmailContext(emailMessageId.Value);
+            }
         }
         private void OK_Click(object sender, RoutedEventArgs e)
         {

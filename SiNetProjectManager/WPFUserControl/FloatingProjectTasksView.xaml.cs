@@ -1,11 +1,7 @@
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Animation;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNetSQL.MVVM;
 using SiNetProjectManager.Dialogs;
@@ -15,18 +11,11 @@ namespace SiNetProjectManager.WPFUserControl;
 /// <summary>
 /// Interaction logic for FloatingProjectTasksView.xaml
 /// Floating ToolWindow showing tasks for the currently active project.
-/// Persists window position via AppSettings/SettingsManager (JSON file).
+/// Inherits shared behavior (collapse, drag, opacity, position persistence) from <see cref="FloatingWindowBase"/>.
 /// </summary>
-public partial class FloatingProjectTasksView : Window
+public partial class FloatingProjectTasksView : FloatingWindowBase
 {
     private bool _isSaving;
-    private bool _isMouseOver;
-
-    // Collapse/expand: store previous dimensions
-    private double _expandedWidth;
-    private double _expandedHeight;
-    private double _expandedMinWidth;
-    private double _expandedMinHeight;
 
     public FloatingProjectTasksView()
     {
@@ -35,193 +24,65 @@ public partial class FloatingProjectTasksView : Window
         var viewModel = App.ServiceProvider.GetRequiredService<FloatingProjectTasksViewModel>();
         DataContext = viewModel;
 
-        // Subscribe to ViewModel property changes for collapse handling
-        viewModel.PropertyChanged += ViewModel_PropertyChanged;
-
-        // Subscribe to email navigation requests
+        // Derived-specific subscription
         viewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
 
-        // Apply opacity settings from AppSettings
-        var settings = App.AppSettings;
-        if (settings != null)
-        {
-            viewModel.ActiveOpacity = settings.FloatingWindowActiveOpacity;
-            viewModel.IdleOpacity = settings.FloatingWindowIdleOpacity;
-            settings.PropertyChanged += Settings_PropertyChanged;
-        }
-
-        ContentBorder.Opacity = viewModel.IdleOpacity;
+        // Initialize common floating behavior (opacity, settings, collapse)
+        InitializeFloatingBehavior();
     }
 
-    /// <summary>
-    /// Gets the ViewModel for external access.
-    /// </summary>
+    /// <summary>Gets the ViewModel for external access.</summary>
     public FloatingProjectTasksViewModel ViewModel => (FloatingProjectTasksViewModel)DataContext;
 
-    /// <summary>
-    /// Restores saved window position on load.
-    /// Falls back to CenterScreen if no saved position or if saved bounds are off-screen.
-    /// </summary>
-    private void Window_Loaded(object sender, RoutedEventArgs e)
+    #region FloatingWindowBase Overrides
+
+    protected override IFloatingWindowViewModel FloatingViewModel => ViewModel;
+    protected override FrameworkElement OpacityTarget => ContentBorder;
+    protected override string LogPrefix => "[FloatingTasks]";
+
+    protected override (double Top, double Left, double Width, double Height)
+        ReadWindowPosition(AppSettings settings) =>
+        (settings.FloatingTasksTop, settings.FloatingTasksLeft,
+         settings.FloatingTasksWidth, settings.FloatingTasksHeight);
+
+    protected override void WriteWindowPosition(
+        AppSettings settings, double top, double left, double width, double height)
     {
-        var settings = App.AppSettings;
-        if (settings == null)
-            return;
-
-        var top = settings.FloatingTasksTop;
-        var left = settings.FloatingTasksLeft;
-        var width = settings.FloatingTasksWidth;
-        var height = settings.FloatingTasksHeight;
-
-        // Validate that we have a saved position (not NaN) and dimensions are reasonable
-        if (!double.IsNaN(top) && !double.IsNaN(left) && width > 0 && height > 0)
-        {
-            // Ensure the window is at least partially visible on any monitor
-            var virtualLeft = SystemParameters.VirtualScreenLeft;
-            var virtualTop = SystemParameters.VirtualScreenTop;
-            var virtualWidth = SystemParameters.VirtualScreenWidth;
-            var virtualHeight = SystemParameters.VirtualScreenHeight;
-
-            if (left >= virtualLeft - width + 50 &&
-                left <= virtualLeft + virtualWidth - 50 &&
-                top >= virtualTop - height + 50 &&
-                top <= virtualTop + virtualHeight - 50)
-            {
-                Top = top;
-                Left = left;
-                Width = width;
-                Height = height;
-                return;
-            }
-        }
-
-        // Default: center on primary screen
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        settings.FloatingTasksTop = top;
+        settings.FloatingTasksLeft = left;
+        settings.FloatingTasksWidth = width;
+        settings.FloatingTasksHeight = height;
     }
 
-    /// <summary>
-    /// Saves window position and size on closing.
-    /// </summary>
-    private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+    protected override void OnBodyCollapsed()
     {
-        SaveWindowPosition();
-    }
-
-    /// <summary>
-    /// Disposes the ViewModel to unsubscribe from ActiveProjectContext.
-    /// </summary>
-    private void Window_Closed(object sender, EventArgs e)
-    {
-        // Unsubscribe from settings changes
-        var settings = App.AppSettings;
-        if (settings != null)
-        {
-            settings.PropertyChanged -= Settings_PropertyChanged;
-        }
-
-        if (DataContext is FloatingProjectTasksViewModel vm)
-        {
-            vm.PropertyChanged -= ViewModel_PropertyChanged;
-            vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
-            vm.Dispose();
-        }
-    }
-
-    /// <summary>
-    /// Reacts to ViewModel property changes — handles collapse/expand transitions.
-    /// </summary>
-    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(FloatingProjectTasksViewModel.IsCollapsed))
-            return;
-
-        if (ViewModel.IsCollapsed)
-            ApplyCollapsedState();
-        else
-            ApplyExpandedState();
-    }
-
-    /// <summary>
-    /// Collapses the window to header-only: stores current dimensions, hides body, shrinks.
-    /// </summary>
-    private void ApplyCollapsedState()
-    {
-        // Store current dimensions for restore
-        _expandedWidth = Width;
-        _expandedHeight = Height;
-        _expandedMinWidth = MinWidth;
-        _expandedMinHeight = MinHeight;
-
-        // Hide body rows
         FilterBar.Visibility = Visibility.Collapsed;
         QuickCreateBar.Visibility = Visibility.Collapsed;
         TaskListBox.Visibility = Visibility.Collapsed;
         DetailPanel.Visibility = Visibility.Collapsed;
         StatusBarPanel.Visibility = Visibility.Collapsed;
-
-        // Shrink to header-only compact size
-        MinWidth = 200;
-        MinHeight = 0;
-        SizeToContent = SizeToContent.Height;
-        Width = Math.Min(Width, 260);
-        ResizeMode = ResizeMode.NoResize;
     }
 
-    /// <summary>
-    /// Expands the window back to its previous full size and shows all body rows.
-    /// </summary>
-    private void ApplyExpandedState()
+    protected override void OnBodyExpanded()
     {
-        // Restore body rows
         FilterBar.Visibility = Visibility.Visible;
         QuickCreateBar.Visibility = Visibility.Visible;
         TaskListBox.Visibility = Visibility.Visible;
         DetailPanel.Visibility = Visibility.Visible;
         StatusBarPanel.Visibility = Visibility.Visible;
-
-        // Restore dimensions
-        SizeToContent = SizeToContent.Manual;
-        MinWidth = _expandedMinWidth;
-        MinHeight = _expandedMinHeight;
-        Width = _expandedWidth;
-        Height = _expandedHeight;
-        ResizeMode = ResizeMode.CanResizeWithGrip;
     }
 
-    /// <summary>
-    /// Persists current window bounds to AppSettings via SettingsManager.
-    /// </summary>
-    private void SaveWindowPosition()
+    protected override void OnClosed(EventArgs e)
     {
-        var settings = App.AppSettings;
-        if (settings == null)
-            return;
+        if (DataContext is FloatingProjectTasksViewModel vm)
+            vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
 
-        if (WindowState == WindowState.Normal && !ViewModel.IsCollapsed)
-        {
-            settings.FloatingTasksTop = Top;
-            settings.FloatingTasksLeft = Left;
-            settings.FloatingTasksWidth = Width;
-            settings.FloatingTasksHeight = Height;
-        }
-        else if (ViewModel.IsCollapsed)
-        {
-            // Save position only; use stored expanded dimensions for size
-            settings.FloatingTasksTop = Top;
-            settings.FloatingTasksLeft = Left;
-            if (_expandedWidth > 0) settings.FloatingTasksWidth = _expandedWidth;
-            if (_expandedHeight > 0) settings.FloatingTasksHeight = _expandedHeight;
-        }
-
-        try
-        {
-            SettingsManager.SaveSettings(settings);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[FloatingTasks] Failed to save window position: {ex.Message}");
-        }
+        base.OnClosed(e);
     }
+
+    #endregion
+
+    #region Domain-Specific Handlers
 
     /// <summary>
     /// Handles Status ComboBox selection change on task cards — saves immediately to DB.
@@ -288,78 +149,6 @@ public partial class FloatingProjectTasksView : Window
     }
 
     /// <summary>
-    /// Reacts to AppSettings changes (from SettingsWindow sliders) in real time.
-    /// Updates ViewModel opacity and animates the ContentBorder to the correct value.
-    /// </summary>
-    private void Settings_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is not (nameof(AppSettings.FloatingWindowActiveOpacity)
-                              or nameof(AppSettings.FloatingWindowIdleOpacity)))
-            return;
-
-        var settings = App.AppSettings;
-        if (settings == null) return;
-
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.Invoke(() => Settings_PropertyChanged(sender, e));
-            return;
-        }
-
-        ViewModel.ActiveOpacity = settings.FloatingWindowActiveOpacity;
-        ViewModel.IdleOpacity = settings.FloatingWindowIdleOpacity;
-        AnimateOpacity(_isMouseOver ? ViewModel.ActiveOpacity : ViewModel.IdleOpacity);
-    }
-
-    /// <summary>
-    /// Fades to active (fully visible) opacity when the mouse enters the window.
-    /// </summary>
-    private void Window_MouseEnter(object sender, MouseEventArgs e)
-    {
-        _isMouseOver = true;
-        AnimateOpacity(ViewModel.ActiveOpacity);
-    }
-
-    /// <summary>
-    /// Fades to idle (semi-transparent) opacity when the mouse leaves the window.
-    /// </summary>
-    private void Window_MouseLeave(object sender, MouseEventArgs e)
-    {
-        _isMouseOver = false;
-        AnimateOpacity(ViewModel.IdleOpacity);
-    }
-
-    /// <summary>
-    /// Smoothly animates the window opacity to the target value over 0.3 seconds.
-    /// </summary>
-    private void AnimateOpacity(double targetOpacity)
-    {
-        var animation = new DoubleAnimation
-        {
-            To = targetOpacity,
-            Duration = TimeSpan.FromSeconds(0.3),
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
-        };
-        ContentBorder.BeginAnimation(UIElement.OpacityProperty, animation);
-    }
-
-    /// <summary>
-    /// Enables dragging the window from the custom header.
-    /// </summary>
-    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        try { DragMove(); } catch { }
-    }
-
-    /// <summary>
-    /// Closes the floating window via the custom close button.
-    /// </summary>
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
-
-    /// <summary>
     /// Opens the Task Import window, passing the current active project context.
     /// </summary>
     private void ImportTsvButton_Click(object sender, RoutedEventArgs e)
@@ -385,6 +174,8 @@ public partial class FloatingProjectTasksView : Window
         mainWindow?.NavigateToEmail(emailId);
         mainWindow?.Activate();
     }
+
+    #endregion
 
     #region Priority Inline Editing
 

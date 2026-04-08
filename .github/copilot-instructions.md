@@ -39,3 +39,7 @@
   - Scan the TEMPLATE to get cell-position-to-section mapping.
   - Read the FINAL report at those positions to get actual text and background color.
   - Map colors to statuses.
+
+## 9. File Versioning Policy
+- **Version Naming Convention:** The `Version` segment in the file naming convention `(ProjectNumber)-ProjectType-FileNumber-Alternative-Version-Name.ext` is NOT used as an actual version tracker. New files always get Version=1. Existing files with Version=2+ keep their name as-is (it's part of their identity).
+- **Version Management:** No new versions are ever created through the system. ACC handles its own versioning natively — files are uploaded with their full original name, and ACC manages version history internally. The tree structure (Folder → File → Alternative → Version) remains unchanged.

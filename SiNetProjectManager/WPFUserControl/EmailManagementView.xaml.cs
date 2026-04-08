@@ -96,6 +96,9 @@ namespace SiNetProjectManager.WPFUserControl
                 // Wire up external download → ACC upload pipeline
                 WebView2Helper.ProjectFileDownloaded += OnProjectFileDownloaded;
 
+                // Wire up "create new alternative" input dialog
+                vm.CreateNewAlternativeRequested = OnCreateNewAlternativeRequestedAsync;
+
                 // Sync initial state if already logged in
                 if (!string.IsNullOrEmpty(vm.ConnectedEmail))
                 {
@@ -177,6 +180,7 @@ namespace SiNetProjectManager.WPFUserControl
                 _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
                 _subscribedVm.OpenAccViewerRequested = null;
                 _subscribedVm.OversizedFileConfirmRequested = null;
+                _subscribedVm.CreateNewAlternativeRequested = null;
                 WebView2Helper.ProjectFileDownloaded -= OnProjectFileDownloaded;
                 _subscribedVm = null;
             }
@@ -294,10 +298,14 @@ namespace SiNetProjectManager.WPFUserControl
             {
                 case ActionFollowUp.NewProjectDialog:
                 {
+                    // Open floating email preview so the user can see the source email
+                    var previewWindow = new EmailPreviewWindow(emailMessageId) { Owner = owner };
+                    previewWindow.Show();
+
                     var mainWindow = owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
                     if (mainWindow?.DataContext is MainWindowViewModel vm)
                     {
-                        vm.CurrentView = new CreateProjectUserControl();
+                        vm.CurrentView = new CreateProjectUserControl(emailMessageId);
                         mainWindow.Activate();
                     }
                     break;
@@ -365,6 +373,56 @@ namespace SiNetProjectManager.WPFUserControl
                 return;
             }
 
+            // Check if a task of this type already exists on this project for ANY employee.
+            // Business rule: one task type per project is assigned to one employee only.
+            var existingTask = await db.ProjectAssignments
+                .Include(a => a.AssignedTo)
+                .FirstOrDefaultAsync(a =>
+                    a.ProjectId == emailProjectId
+                    && a.TaskTypeId == taskType!.Id, ct);
+
+            if (existingTask is not null)
+            {
+                if (existingTask.AssignedToId == assignee.Id)
+                {
+                    // Same employee — just link the email to the existing task
+                    await LinkEmailToTaskIfNeededAsync(db, existingTask.Id, emailMessageId,
+                        actionDescription, currentUserId, assignee.Id, ct);
+                    await db.SaveChangesAsync(ct);
+
+                    MessageBox.Show(
+                        $"כבר קיימת משימה מסוג זה עבור {assignee.Name} (מזהה: {existingTask.Id}).\n" +
+                        $"המייל קושר למשימה הקיימת.",
+                        "קושר למשימה קיימת", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Different employee — ask user whether to transfer
+                var currentName = existingTask.AssignedTo?.Name ?? $"עובד #{existingTask.AssignedToId}";
+                var transferResult = MessageBox.Show(
+                    $"משימה מסוג זה כבר מוקצית ל-{currentName} (מזהה: {existingTask.Id}).\n" +
+                    $"האם להעביר את המשימה ל-{assignee.Name}?",
+                    "העברת משימה", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (transferResult != MessageBoxResult.Yes)
+                    return;
+
+                // Transfer: update assignee on the existing task
+                existingTask.AssignedToId = assignee.Id;
+                existingTask.Modified = DateTime.Now;
+                existingTask.EditorId = currentUserId > 0 ? currentUserId : null;
+
+                await LinkEmailToTaskIfNeededAsync(db, existingTask.Id, emailMessageId,
+                    actionDescription, currentUserId, assignee.Id, ct);
+
+                await db.SaveChangesAsync(ct);
+
+                MessageBox.Show(
+                    $"✅ המשימה הועברה מ-{currentName} ל-{assignee.Name}.",
+                    "משימה הועברה", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             // Build task body with action context for the assignee
             var bodyParts = new List<string>
             {
@@ -391,23 +449,47 @@ namespace SiNetProjectManager.WPFUserControl
             await db.SaveChangesAsync(ct);
 
             // Link the task to the source email
-            var link = new TaskLink
-            {
-                TaskId = task.Id,
-                LinkedEntityType = TaskLinkEntityType.EmailInboxMessage,
-                LinkedEntityId = emailMessageId,
-                Role = TaskLinkRole.Trigger,
-                Description = actionDescription,
-                CreatedAtUtc = DateTime.UtcNow,
-                CreatedByUserId = currentUserId > 0 ? currentUserId : assignee.Id,
-            };
-
-            db.TaskLinks.Add(link);
+            await LinkEmailToTaskIfNeededAsync(db, task.Id, emailMessageId,
+                actionDescription, currentUserId, assignee.Id, ct);
             await db.SaveChangesAsync(ct);
 
             MessageBox.Show(
                 $"✅ משימה נוצרה עבור {assignee.Name}",
                 "משימה נוצרה", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        /// <summary>
+        /// Links an <see cref="EmailInboxMessage"/> to a <see cref="ProjectAssignment"/>
+        /// via <see cref="TaskLink"/> if such a link doesn't already exist.
+        /// Does NOT call <c>SaveChangesAsync</c> — the caller is responsible for saving.
+        /// </summary>
+        private static async Task LinkEmailToTaskIfNeededAsync(
+            SiNetSQLDbContext db,
+            int taskId,
+            int emailMessageId,
+            string description,
+            int currentUserId,
+            int fallbackUserId,
+            CancellationToken ct)
+        {
+            var alreadyLinked = await db.TaskLinks
+                .AnyAsync(l =>
+                    l.TaskId == taskId
+                    && l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage
+                    && l.LinkedEntityId == emailMessageId, ct);
+
+            if (alreadyLinked) return;
+
+            db.TaskLinks.Add(new TaskLink
+            {
+                TaskId = taskId,
+                LinkedEntityType = TaskLinkEntityType.EmailInboxMessage,
+                LinkedEntityId = emailMessageId,
+                Role = TaskLinkRole.Trigger,
+                Description = description,
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = currentUserId > 0 ? currentUserId : fallbackUserId,
+            });
         }
 
         /// <summary>
@@ -497,6 +579,79 @@ namespace SiNetProjectManager.WPFUserControl
                 MessageBoxImage.Question);
 
             return result == MessageBoxResult.Yes;
+        }
+
+        /// <summary>
+        /// Shows a simple input dialog so the user can type a new alternative name.
+        /// Returns the entered name, or null if cancelled/empty.
+        /// </summary>
+        private Task<string?> OnCreateNewAlternativeRequestedAsync()
+        {
+            var owner = Window.GetWindow(this);
+
+            var dialog = new Window
+            {
+                Title = "אלטרנטיבה חדשה",
+                Width = 340,
+                Height = 160,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var textBox = new TextBox
+            {
+                Margin = new Thickness(16, 16, 16, 8),
+                Height = 26,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                FontSize = 13
+            };
+
+            var okButton = new Button
+            {
+                Content = "אישור",
+                Width = 80,
+                Height = 28,
+                Margin = new Thickness(0, 0, 8, 0),
+                IsDefault = true
+            };
+            okButton.Click += (_, _) => { dialog.DialogResult = true; dialog.Close(); };
+
+            var cancelButton = new Button
+            {
+                Content = "ביטול",
+                Width = 80,
+                Height = 28,
+                IsCancel = true
+            };
+
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 12)
+            };
+            buttonPanel.Children.Add(okButton);
+            buttonPanel.Children.Add(cancelButton);
+
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock
+            {
+                Text = "הזן שם אלטרנטיבה:",
+                Margin = new Thickness(16, 12, 16, 0),
+                FontSize = 12
+            });
+            stack.Children.Add(textBox);
+            stack.Children.Add(buttonPanel);
+
+            dialog.Content = stack;
+            dialog.Loaded += (_, _) => textBox.Focus();
+
+            var result = dialog.ShowDialog() == true
+                ? (string.IsNullOrWhiteSpace(textBox.Text) ? null : textBox.Text.Trim())
+                : null;
+
+            return Task.FromResult(result);
         }
 
         private void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -1,25 +1,21 @@
-﻿<Window x:Class="SiNetProjectManager.WPFUserControl.FloatingProjectTasksView"
+﻿<local:FloatingWindowBase x:Class="SiNetProjectManager.WPFUserControl.FloatingProjectTasksView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:conv="clr-namespace:SiNetProjectManager.Converters"
+        xmlns:local="clr-namespace:SiNetProjectManager.WPFUserControl"
         mc:Ignorable="d"
         Title="משימות פרויקט"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="CanResizeWithGrip"
-        Topmost="{Binding IsPinned, Mode=OneWay}"
+        Topmost="{Binding IsTopmost, Mode=OneWay}"
         ShowInTaskbar="False"
         Width="420" Height="560"
         MinWidth="340" MinHeight="360"
-        FlowDirection="RightToLeft"
-        Loaded="Window_Loaded"
-        Closing="Window_Closing"
-        Closed="Window_Closed"
-        MouseEnter="Window_MouseEnter"
-        MouseLeave="Window_MouseLeave">
+        FlowDirection="RightToLeft">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
@@ -145,6 +141,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0"
@@ -196,7 +194,50 @@
                     </ToggleButton.Style>
                 </ToggleButton>
 
-                <Button Grid.Column="2"
+                <!-- Dock/Undock toggle: docked = stays with app, undocked = floats above all -->
+                <ToggleButton Grid.Column="2"
+                              IsChecked="{Binding IsDocked, Mode=TwoWay}"
+                              Width="28" Height="28"
+                              Margin="4,0,0,0"
+                              Cursor="Hand">
+                    <ToggleButton.Style>
+                        <Style TargetType="ToggleButton">
+                            <Setter Property="ToolTip" Value="עגן לאפליקציה"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="DockBorder"
+                                                Background="Transparent"
+                                                CornerRadius="4"
+                                                Padding="4">
+                                            <TextBlock x:Name="DockIcon"
+                                                       Text="🏠"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Opacity="0.5"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="DockIcon" Property="Opacity" Value="1.0"/>
+                                                <Setter TargetName="DockBorder" Property="Background" Value="#1976D2"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="DockBorder" Property="Background" Value="#1976D2"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDocked}" Value="True">
+                                    <Setter Property="ToolTip" Value="עגון לאפליקציה (פעיל — מוסתר מאחורי אפליקציות אחרות)"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ToggleButton.Style>
+                </ToggleButton>
+
+                <Button Grid.Column="3"
                         Content="🔄"
                         Command="{Binding RefreshCommand}"
                         ToolTip="רענן"
@@ -207,8 +248,20 @@
                         BorderThickness="0"
                         Foreground="White"/>
 
+                <Button Grid.Column="4"
+                        Content="⊡"
+                        Click="ResetSizeButton_Click"
+                        ToolTip="אפס גודל חלון"
+                        Width="28" Height="28"
+                        Margin="4,0,0,0"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="White"
+                        FontSize="14"/>
+
                 <!-- Collapse / Expand toggle -->
-                <Button Grid.Column="3"
+                <Button Grid.Column="5"
                         Command="{Binding ToggleCollapseCommand}"
                         Width="28" Height="28"
                         Margin="4,0,0,0"
@@ -231,7 +284,7 @@
                 </Button>
 
                 <!-- Close button -->
-                <Button Grid.Column="4"
+                <Button Grid.Column="6"
                         Content="✕"
                         Click="CloseButton_Click"
                         ToolTip="סגור"
@@ -721,7 +774,7 @@
         </Border>
     </Grid>
     </Border>
-</Window>
+</local:FloatingWindowBase>
 
 
 
