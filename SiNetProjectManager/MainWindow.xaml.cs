@@ -11,6 +11,7 @@ using WpfSiData.WPFUserControl;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiNetSQL.Data;
+using SiOffice.GoogleConnector;
 
 namespace SiNetProjectManager
 {
@@ -149,7 +150,8 @@ namespace SiNetProjectManager
         {
             ActiveProjectContext.Instance.Clear();
             var emailView = new EmailManagementView();
-            emailView.DataContext = new EmailManagementViewModel();
+            var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
+            emailView.DataContext = new EmailManagementViewModel(googleService);
             NavigateToView(emailView);
         }
 
@@ -172,7 +174,8 @@ namespace SiNetProjectManager
                 messageUniqueId = email?.MessageUniqueId;
 
                 // Create ViewModel (instant — constructor no longer blocks on DB queries)
-                var emailVm = new EmailManagementViewModel();
+                var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
+                var emailVm = new EmailManagementViewModel(googleService);
 
                 if (!string.IsNullOrEmpty(messageUniqueId))
                 {

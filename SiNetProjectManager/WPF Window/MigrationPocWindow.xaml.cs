@@ -1100,18 +1100,14 @@ public partial class MigrationPocWindow : Window
     /// </summary>
     private GoogleAuthService? CreateGoogleAuthService()
     {
-        var clientSecretsPath = AppConfiguration.GetGoogleClientSecretsPath();
-        if (string.IsNullOrWhiteSpace(clientSecretsPath))
+        if (string.IsNullOrWhiteSpace(AppConfiguration.GetGoogleClientSecretsPath()))
         {
             MessageBox.Show("Google OAuth credentials לא מוגדרים.\nהגדירו אותם דרך חלון הגדרת מפתחות.",
                 "Config Error", MessageBoxButton.OK, MessageBoxImage.Error);
             return null;
         }
 
-        return new GoogleAuthService(
-            clientSecretsPath,
-            AppConfiguration.GoogleTokenStorePath,
-            AppConfiguration.GoogleApplicationName);
+        return App.ServiceProvider.GetRequiredService<GoogleAuthService>();
     }
 
     /// <summary>

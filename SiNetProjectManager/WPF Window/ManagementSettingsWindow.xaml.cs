@@ -61,6 +61,16 @@ public partial class ManagementSettingsWindow : Window
             HourPriceTextBox.Text = hourPrice;
             InspectionFolderIdTextBox.Text = folderId;
 
+            // ACC Inbox settings (fall back to appsettings.json defaults)
+            var inboxProjectName = await _settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.InboxProjectName,
+                AppConfiguration.InboxProjectName);
+            var inboxFolderName = await _settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.InboxFolderName,
+                AppConfiguration.InboxFolderName);
+            InboxProjectNameTextBox.Text = inboxProjectName;
+            InboxFolderNameTextBox.Text = inboxFolderName;
+
             var reportsFolderId = await _settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InspectionReportsFolderId, string.Empty);
             ReportsFolderIdTextBox.Text = reportsFolderId;
@@ -85,6 +95,10 @@ public partial class ManagementSettingsWindow : Window
             HourPriceTextBox.Text = legacy.HourPriceDefault.ToString("N0");
             InspectionFolderIdTextBox.Text = legacy.InspectionTemplatesFolderId;
             ReportsFolderIdTextBox.Text = legacy.InspectionReportsFolderId;
+
+            // Fallback for ACC inbox: use appsettings.json values
+            InboxProjectNameTextBox.Text = AppConfiguration.InboxProjectName;
+            InboxFolderNameTextBox.Text = AppConfiguration.InboxFolderName;
         }
 
         LoadStatusColors();
@@ -147,6 +161,25 @@ public partial class ManagementSettingsWindow : Window
                 SystemSettingKeys.InspectionReportsFolderId,
                 reportsFolderId,
                 "Google Drive Folder ID לתיקיית דוחות ביקורת");
+
+            // Save ACC Inbox settings
+            var inboxProjectName = InboxProjectNameTextBox.Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(inboxProjectName))
+            {
+                await _settingsService.SetAsync(
+                    SystemSettingKeys.InboxProjectName,
+                    inboxProjectName,
+                    "שם פרויקט ה-Inbox ב-ACC שאליו עולים מיילים וקבצים");
+            }
+
+            var inboxFolderName = InboxFolderNameTextBox.Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(inboxFolderName))
+            {
+                await _settingsService.SetAsync(
+                    SystemSettingKeys.InboxFolderName,
+                    inboxFolderName,
+                    "שם תיקיית ה-Inbox בתוך פרויקט ה-ACC");
+            }
 
             // Save status label mappings
             await SaveStatusLabelsAsync();
@@ -437,15 +470,10 @@ public partial class ManagementSettingsWindow : Window
     /// </summary>
     private static GoogleInspectionTemplateProvider? CreateTemplateProvider()
     {
-        var clientSecretsPath = AppConfiguration.GetGoogleClientSecretsPath();
-        if (string.IsNullOrWhiteSpace(clientSecretsPath))
+        if (string.IsNullOrWhiteSpace(AppConfiguration.GetGoogleClientSecretsPath()))
             return null;
 
-        var authService = new GoogleAuthService(
-            clientSecretsPath,
-            AppConfiguration.GoogleTokenStorePath,
-            AppConfiguration.GoogleApplicationName);
-
+        var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
         return new GoogleInspectionTemplateProvider(authService);
     }
 

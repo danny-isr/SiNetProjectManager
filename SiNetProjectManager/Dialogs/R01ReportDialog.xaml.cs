@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManager.Services;
 using SiNetProjectManager.ViewModels;
 using SiOffice.GoogleConnector.Reports;
@@ -54,13 +55,8 @@ public partial class R01ReportDialog : Window
         // Load non-sensitive configuration from appsettings.json
         var config = LoadConfiguration();
 
-        // Create auth service — secrets from vault
-        var clientSecretsPath = AppConfiguration.GetGoogleClientSecretsPath()
-            ?? config.GoogleReports.ClientSecretsPath;
-        var authService = new GoogleAuthService(
-            clientSecretsPath,
-            AppConfiguration.GoogleTokenStorePath,
-            AppConfiguration.GoogleApplicationName);
+        // Shared auth service (singleton — single auth per session)
+        var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
 
         // Create repositories — connection strings from vault
         var replicaCs = AppConfiguration.GetConnectionString("ReplicaDatabase")

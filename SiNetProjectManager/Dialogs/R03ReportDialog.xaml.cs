@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManager.Services;
 using SiNetProjectManager.ViewModels;
 using SiOffice.GoogleConnector.Reports;
@@ -48,12 +49,8 @@ public partial class R03ReportDialog : Window
     {
         var config = LoadConfiguration();
 
-        var clientSecretsPath = AppConfiguration.GetGoogleClientSecretsPath()
-            ?? config.GoogleReports.ClientSecretsPath;
-        var authService = new GoogleAuthService(
-            clientSecretsPath,
-            AppConfiguration.GoogleTokenStorePath,
-            AppConfiguration.GoogleApplicationName);
+        // Shared auth service (singleton — single auth per session)
+        var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
 
         var replicaCs = AppConfiguration.GetConnectionString("ReplicaDatabase")
             ?? config.ConnectionStrings.ReplicaDatabase;

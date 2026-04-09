@@ -191,7 +191,8 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                                 <ComboBox ItemsSource="{Binding DataContext.AccUserTypes, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          SelectedItem="{Binding EditAccUserType}"
+                                          SelectedItem="{Binding EditAccUserType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectionChanged="OnEditComboBoxSelectionChanged"
                                           VerticalContentAlignment="Center" Margin="2,0"
                                           Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"/>
                             </Grid>
@@ -217,7 +218,8 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                                 <ComboBox ItemsSource="{Binding DataContext.AppUserRoles, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          SelectedItem="{Binding EditRole}"
+                                          SelectedItem="{Binding EditRole, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectionChanged="OnEditComboBoxSelectionChanged"
                                           VerticalContentAlignment="Center" Margin="2,0"
                                           Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
                                     <ComboBox.ItemTemplate>

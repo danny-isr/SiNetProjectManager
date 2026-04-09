@@ -76,6 +76,7 @@ namespace SiNetProjectManager.WPFUserControl
                 _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
                 _subscribedVm.OpenAccViewerRequested = null;
                 _subscribedVm.OversizedFileConfirmRequested = null;
+                _subscribedVm.OnLogoutRequested = null;
                 WebView2Helper.ProjectFileDownloaded -= OnProjectFileDownloaded;
                 _subscribedVm = null;
             }
@@ -98,6 +99,14 @@ namespace SiNetProjectManager.WPFUserControl
 
                 // Wire up "create new alternative" input dialog
                 vm.CreateNewAlternativeRequested = OnCreateNewAlternativeRequestedAsync;
+
+                // Wire up logout coordination: when user logs out of Gmail,
+                // also clear GoogleAuthService so all windows use the same account.
+                vm.OnLogoutRequested = () =>
+                {
+                    var authService = App.ServiceProvider.GetService<SiOffice.GoogleConnector.Reports.GoogleAuthService>();
+                    authService?.Logout();
+                };
 
                 // Sync initial state if already logged in
                 if (!string.IsNullOrEmpty(vm.ConnectedEmail))

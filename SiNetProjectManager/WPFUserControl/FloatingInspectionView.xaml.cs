@@ -198,19 +198,15 @@ public partial class FloatingInspectionView : FloatingWindowBase
     {
         try
         {
-            // ── Get Google client secrets from vault ──
-            var clientSecretsPath = AppConfiguration.GetGoogleClientSecretsPath();
-            if (string.IsNullOrWhiteSpace(clientSecretsPath))
+            // ── Check Google client secrets availability ──
+            if (string.IsNullOrWhiteSpace(AppConfiguration.GetGoogleClientSecretsPath()))
             {
                 System.Diagnostics.Debug.WriteLine("[InspectionView] Google credentials not configured — Google services not wired.");
                 return;
             }
 
-            // ── Create GoogleAuthService ──
-            var authService = new GoogleAuthService(
-                clientSecretsPath,
-                AppConfiguration.GoogleTokenStorePath,
-                AppConfiguration.GoogleApplicationName);
+            // ── Resolve shared GoogleAuthService (singleton — single auth per session) ──
+            var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
 
             // ── Template Provider ──
             var provider = new GoogleInspectionTemplateProvider(authService);

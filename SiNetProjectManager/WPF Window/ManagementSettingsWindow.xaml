@@ -48,6 +48,36 @@
                          Padding="5,3"
                          FlowDirection="RightToLeft"/>
 
+                <!-- ACC Inbox Project -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="פרויקט Inbox ב-ACC" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="שם הפרויקט ב-Autodesk Construction Cloud שאליו עולים מיילים וקבצים מצורפים. חייב להתאים בדיוק לשם פרויקט קיים ב-ACC." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="שם פרויקט:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBox x:Name="InboxProjectNameTextBox" Grid.Row="0" Grid.Column="1"
+                             Width="350" HorizontalAlignment="Right"
+                             VerticalContentAlignment="Center" Padding="5,3" Margin="0,0,0,6"
+                             FlowDirection="RightToLeft"
+                             ToolTip="שם הפרויקט ב-ACC (למשל: מיילים למשרד - POC 4)"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שם תיקייה:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="InboxFolderNameTextBox" Grid.Row="1" Grid.Column="1"
+                             Width="350" HorizontalAlignment="Right"
+                             VerticalContentAlignment="Center" Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="שם תיקיית ה-Inbox בתוך הפרויקט (למשל: _Inbox)"/>
+                </Grid>
+
                 <!-- Hour Price Default -->
                 <Separator Margin="0,20,0,10"/>
                 <TextBlock Text="מחיר לשעה (ברירת מחדל)" FontWeight="Bold" Margin="0,0,0,5"/>

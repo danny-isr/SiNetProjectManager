@@ -17,6 +17,9 @@ using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.EmailIngestion;
 using SiOffice.GoogleConnector.Logging;
+using SiOffice.GoogleConnector;
+using SiOffice.GoogleConnector.RateLimiting;
+using SiOffice.GoogleConnector.Reports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -209,6 +212,18 @@ namespace SiNetProjectManager
 
             // System Settings Service: Singleton (caches global DB settings in-memory)
             services.AddSingleton<SiNetSQL.Services.SystemSettingsService>();
+
+            // Google Auth: Singleton (shared credential across all Google-connected windows)
+            // Ensures the user authenticates once per session instead of per-window.
+            services.AddSingleton(sp => new GoogleAuthService(
+                AppConfiguration.GetGoogleClientSecretsPath() ?? string.Empty,
+                AppConfiguration.GoogleTokenStorePath,
+                AppConfiguration.GoogleApplicationName));
+
+            // Gmail Service: Singleton (shared Gmail credential + throttle across all email views)
+            // Ensures the user authenticates once per session instead of per-navigation.
+            services.AddSingleton<IGmailThrottleService, GmailThrottleService>();
+            services.AddSingleton<GoogleService>();
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();

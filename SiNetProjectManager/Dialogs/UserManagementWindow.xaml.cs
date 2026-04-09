@@ -21,6 +21,22 @@ public partial class UserManagementWindow : Window
         DataContext = new UserManagementViewModel(dbContextFactory);
     }
 
+    /// <summary>
+    /// Forces the ComboBox SelectedItem binding to push the selected value
+    /// back to the source property. Workaround for a known WPF issue where
+    /// ComboBox.SelectedItem inside a read-only DataGrid CellTemplate may
+    /// silently fail to propagate selection changes through TwoWay binding.
+    /// </summary>
+    private void OnEditComboBoxSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox cb)
+        {
+            var binding = cb.GetBindingExpression(
+                System.Windows.Controls.Primitives.Selector.SelectedItemProperty);
+            binding?.UpdateSource();
+        }
+    }
+
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (DataContext is UserManagementViewModel vm && vm.HasUnsavedChanges)
