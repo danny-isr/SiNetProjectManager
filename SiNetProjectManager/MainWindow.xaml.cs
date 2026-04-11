@@ -254,6 +254,12 @@ namespace SiNetProjectManager
             _floatingInspectionWindow.Show();
         }
 
+        private void OpenQuickStamp_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new WPF_Window.QuickStampWindow { Owner = this };
+            window.ShowDialog();
+        }
+
         // ─────────────────────────────────────────────────────────────
         //  Dialog Handlers
         // ─────────────────────────────────────────────────────────────
@@ -317,6 +323,15 @@ namespace SiNetProjectManager
         // ─────────────────────────────────────────────────────────────
         //  Admin-Only Handlers
         // ─────────────────────────────────────────────────────────────
+
+        private void OpenDwfAnalysis_Click(object sender, RoutedEventArgs e)
+        {
+            // Admin-only: DWF Stamp Analysis Tool
+            if (!RequireAdminAccess("אין לך הרשאה לכלי ניתוח DWF."))
+                return;
+
+            DwfAnalysisHelper.RunInteractiveComparison();
+        }
 
         private void AddUser_Click(object sender, RoutedEventArgs e)
         {

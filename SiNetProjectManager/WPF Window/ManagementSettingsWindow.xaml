@@ -261,6 +261,71 @@
                         BorderBrush="#CCC"
                         BorderThickness="1"
                         ToolTip="שחזר את תוויות הסטטוס לערכי ברירת המחדל"/>
+
+                <!-- AI (Ollama) Settings -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="📐 נתיב תבנית חותמת DWF (אופציונלי)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="נתיב לקובץ תבנית חותמת DWF בלבד. קבצי PDF מקבלים חותמת פרוגרמטית עם תאריך ושם בודק אוטומטיים. אם לא מוגדר – קבצי DWF ידולגו." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="StampTemplatePathTextBox"
+                             Grid.Column="0"
+                             VerticalContentAlignment="Center"
+                             Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="נתיב לקובץ תבנית חותמת DWF (אופציונלי)"/>
+                    <Button Grid.Column="1" Content="📂"
+                            Click="BrowseStampTemplate_Click"
+                            Padding="6,3" Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"
+                            ToolTip="בחר קובץ תבנית חותמת DWF"/>
+                </Grid>
+
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="🤖 הגדרות AI (Ollama)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="בחר את מודל ה-AI המקומי לבדיקת הערות ביקורת. מודלים קטנים (4B) מהירים יותר, מודלים גדולים (26B) מדויקים יותר אך דורשים חומרה חזקה." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="מודל AI:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="OllamaModelComboBox" Grid.Row="0" Grid.Column="1"
+                              Width="250" HorizontalAlignment="Right"
+                              Padding="5,3" Margin="0,0,0,6"
+                              FlowDirection="LeftToRight"
+                              IsEditable="True"
+                              ToolTip="בחר מודל מהרשימה או הקלד שם מודל ידנית"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="סטטוס:" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="OllamaStatusLabel" Grid.Row="1" Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Margin="0,0,0,0"/>
+                </Grid>
+                <Button x:Name="OllamaTestButton"
+                        Content="🔍 בדוק חיבור AI"
+                        Click="OllamaTestButton_Click"
+                        Padding="8,3"
+                        Margin="0,6,0,0"
+                        HorizontalAlignment="Right"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderBrush="#CCC"
+                        BorderThickness="1"
+                        ToolTip="בדוק שהשרת המקומי פועל ושהמודל זמין"/>
             </StackPanel>
         </ScrollViewer>
 

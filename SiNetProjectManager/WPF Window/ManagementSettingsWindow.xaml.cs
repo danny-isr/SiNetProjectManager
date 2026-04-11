@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
@@ -84,6 +85,14 @@ public partial class ManagementSettingsWindow : Window
 
             // Load status label mappings
             await LoadStatusLabelsAsync();
+
+            // Load stamp template path
+            var stampPath = await _settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.StampTemplatePath, string.Empty);
+            StampTemplatePathTextBox.Text = stampPath;
+
+            // Load Ollama AI settings
+            await LoadOllamaSettingsAsync();
         }
         catch (Exception ex)
         {
@@ -183,6 +192,16 @@ public partial class ManagementSettingsWindow : Window
 
             // Save status label mappings
             await SaveStatusLabelsAsync();
+
+            // Save stamp template path
+            var stampPath = StampTemplatePathTextBox.Text?.Trim() ?? string.Empty;
+            await _settingsService.SetAsync(
+                SystemSettingKeys.StampTemplatePath,
+                stampPath,
+                "נתיב לקובץ תבנית חותמת (DWF/PDF) לחתימה על סרטוטים מאושרים");
+
+            // Save Ollama AI model
+            await SaveOllamaModelAsync();
 
             // Keep legacy JSON in sync (backward compatibility)
             SyncToLegacyJson(projectTitle, hourPrice, folderId, reportsFolderId);
@@ -372,6 +391,21 @@ public partial class ManagementSettingsWindow : Window
 
     #region Folder Validation
 
+    private void BrowseStampTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "בחר קובץ תבנית חותמת DWF (אופציונלי)",
+            Filter = "DWF Files (*.dwf)|*.dwf|All Files (*.*)|*.*",
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            StampTemplatePathTextBox.Text = dialog.FileName;
+        }
+    }
+
     /// <summary>
     /// Validates the folder ID when the user clicks the validate button.
     /// </summary>
@@ -475,6 +509,150 @@ public partial class ManagementSettingsWindow : Window
 
         var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
         return new GoogleInspectionTemplateProvider(authService);
+    }
+
+    #endregion
+
+    #region Ollama AI Settings
+
+    /// <summary>
+    /// Loads the saved Ollama model and populates the ComboBox with available models from the local server.
+    /// </summary>
+    private async Task LoadOllamaSettingsAsync()
+    {
+        // Load saved model preference from DB (fallback to appsettings.json default)
+        var savedModel = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.OllamaModel,
+            AppConfiguration.Configuration["Ollama:Model"] ?? "gemma3:4b");
+
+        try
+        {
+            // Fetch available models from local Ollama server
+            var ollamaService = App.ServiceProvider.GetService<OllamaService>();
+            if (ollamaService is null)
+            {
+                OllamaModelComboBox.Items.Add(savedModel);
+                OllamaModelComboBox.Text = savedModel;
+                OllamaStatusLabel.Text = "⚠️ שירות AI לא זמין";
+                return;
+            }
+
+            var models = await FetchOllamaModelsAsync();
+            if (models.Count > 0)
+            {
+                foreach (var model in models)
+                    OllamaModelComboBox.Items.Add(model);
+
+                OllamaStatusLabel.Text = $"✅ {models.Count} מודלים זמינים";
+            }
+            else
+            {
+                OllamaModelComboBox.Items.Add(savedModel);
+                OllamaStatusLabel.Text = "⚠️ שרת Ollama לא מגיב";
+            }
+        }
+        catch
+        {
+            OllamaModelComboBox.Items.Add(savedModel);
+            OllamaStatusLabel.Text = "❌ שרת Ollama לא זמין";
+        }
+
+        OllamaModelComboBox.Text = savedModel;
+    }
+
+    /// <summary>
+    /// Saves the selected Ollama model to DB and updates the running OllamaService instance.
+    /// </summary>
+    private async Task SaveOllamaModelAsync()
+    {
+        var model = OllamaModelComboBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(model)) return;
+
+        await _settingsService.SetAsync(
+            SystemSettingKeys.OllamaModel,
+            model,
+            "שם מודל AI מקומי (Ollama) לבדיקת הערות ביקורת");
+
+        // Update the running singleton immediately
+        var ollamaService = App.ServiceProvider.GetService<OllamaService>();
+        if (ollamaService is not null)
+            ollamaService.Model = model;
+    }
+
+    /// <summary>
+    /// Fetches the list of locally available model names from the Ollama <c>/api/tags</c> endpoint.
+    /// </summary>
+    private static async Task<List<string>> FetchOllamaModelsAsync()
+    {
+        var baseUrl = AppConfiguration.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+
+        var response = await client.GetStringAsync($"{baseUrl}/api/tags").ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(response);
+
+        var models = new List<string>();
+        if (doc.RootElement.TryGetProperty("models", out var modelsArray))
+        {
+            foreach (var model in modelsArray.EnumerateArray())
+            {
+                if (model.TryGetProperty("name", out var nameElement))
+                    models.Add(nameElement.GetString() ?? "");
+            }
+        }
+
+        return models;
+    }
+
+    /// <summary>
+    /// Tests Ollama connectivity with the currently selected model.
+    /// </summary>
+    private async void OllamaTestButton_Click(object sender, RoutedEventArgs e)
+    {
+        var model = OllamaModelComboBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            OllamaStatusLabel.Text = "❌ נא לבחור מודל";
+            return;
+        }
+
+        OllamaTestButton.IsEnabled = false;
+        OllamaStatusLabel.Text = "⏳ בודק חיבור...";
+
+        try
+        {
+            var ollamaService = App.ServiceProvider.GetService<OllamaService>();
+            if (ollamaService is null)
+            {
+                OllamaStatusLabel.Text = "❌ שירות AI לא רשום במערכת";
+                return;
+            }
+
+            var available = await ollamaService.IsAvailableAsync();
+            if (!available)
+            {
+                OllamaStatusLabel.Text = "❌ שרת Ollama לא מגיב — ודא שהשרת פועל";
+                return;
+            }
+
+            // Verify the selected model exists in the available list
+            var models = await FetchOllamaModelsAsync();
+            if (models.Contains(model, StringComparer.OrdinalIgnoreCase))
+            {
+                OllamaStatusLabel.Text = $"✅ מודל {model} זמין ומוכן";
+            }
+            else
+            {
+                OllamaStatusLabel.Text = $"⚠️ שרת פועל אך מודל {model} לא נמצא. הריצו: ollama pull {model}";
+            }
+        }
+        catch (Exception ex)
+        {
+            OllamaStatusLabel.Text = $"❌ שגיאה: {ex.Message}";
+        }
+        finally
+        {
+            OllamaTestButton.IsEnabled = true;
+        }
     }
 
     #endregion

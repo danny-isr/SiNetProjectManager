@@ -6,8 +6,10 @@ using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SiNetProjectManager.Services;
+using SiNetProjectManager.Services.Stamping;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
+using SiNetSQL.Services.InspectionSync;
 using SiOffice.GoogleConnector.Reports;
 
 namespace SiNetProjectManager.WPFUserControl;
@@ -36,8 +38,57 @@ public partial class FloatingInspectionView : FloatingWindowBase
         // Wire the Google template provider and export service into the ViewModel
         WireGoogleServices(viewModel);
 
+        // Wire the drawing stamp service
+        viewModel.SetDrawingStampService(new DrawingStampService());
+
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
+
+        // Verify Ollama AI connectivity at startup
+        _ = CheckOllamaConnectivityAsync();
+    }
+
+    /// <summary>
+    /// One-time startup check: loads the saved model from DB and verifies the Ollama server is reachable.
+    /// </summary>
+    private async Task CheckOllamaConnectivityAsync()
+    {
+        var ollamaService = App.ServiceProvider.GetService<OllamaService>();
+        if (ollamaService is null)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Startup] ❌ OllamaService not registered in DI.");
+            return;
+        }
+
+        // Load model preference from DB (overrides appsettings.json default)
+        try
+        {
+            var settingsService = App.ServiceProvider.GetRequiredService<SystemSettingsService>();
+            var savedModel = await settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.OllamaModel, ollamaService.Model);
+
+            if (!string.IsNullOrWhiteSpace(savedModel))
+                ollamaService.Model = savedModel;
+
+            System.Diagnostics.Debug.WriteLine($"[AI Startup] Active model: {ollamaService.Model}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Startup] ⚠️ Could not load model from DB: {ex.Message}");
+        }
+
+        System.Diagnostics.Debug.WriteLine("[AI Startup] Checking Ollama server connectivity...");
+        try
+        {
+            var available = await ollamaService.IsAvailableAsync().ConfigureAwait(false);
+            System.Diagnostics.Debug.WriteLine(available
+                ? "[AI Startup] ✅ Ollama server is reachable and responding."
+                : "[AI Startup] ⚠️ Ollama server returned non-success status.");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Startup] ❌ Ollama server unreachable: {ex.Message}");
+        }
     }
 
     /// <summary>Gets the ViewModel for external access.</summary>
@@ -100,17 +151,28 @@ public partial class FloatingInspectionView : FloatingWindowBase
 
     /// <summary>
     /// Raised by <see cref="RichTextNoteEditor"/> when the user exits edit mode.
-    /// Saves dirty notes and removes empty sub-notes.
+    /// Saves dirty notes, removes empty sub-notes, and triggers background AI review.
     /// </summary>
     private void NoteEditor_EditCompleted(object sender, RoutedEventArgs e)
     {
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted entered. sender={sender?.GetType().Name}");
         if (sender is not RichTextNoteEditor { DataContext: NoteTreeItem note }) return;
+
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted — NoteText='{note.NoteText?.Substring(0, Math.Min(note.NoteText?.Length ?? 0, 50))}', IsDirty={note.IsDirty}");
 
         if (note.IsDirty)
             ViewModel.SaveNote(note);
 
         if (string.IsNullOrWhiteSpace(note.NoteText))
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Flow] Note is empty — deleting, skipping AI.");
             ViewModel.DeleteEmptyNote(note);
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Flow] Calling RunAiReviewInBackground...");
+            _ = RunAiReviewInBackground(note);
+        }
     }
 
     /// <summary>
@@ -188,6 +250,94 @@ public partial class FloatingInspectionView : FloatingWindowBase
     }
 
     #endregion
+
+    /// <summary>
+    /// Applies the selected AI suggestion from <see cref="RichTextNoteEditor"/>'s context menu.
+    /// </summary>
+    private void NoteEditor_AiReviewRequested(object sender, RichTextNoteEditor.AiReviewRequestedEventArgs e)
+    {
+        if (sender is not RichTextNoteEditor { DataContext: NoteTreeItem note }) return;
+
+        note.NoteText = e.SuggestedText;
+        ViewModel.SaveNote(note);
+
+        var displayType = e.ReviewType == "grammar" ? "תיקון תחבירי" : "ניסוח מחדש";
+        ViewModel.StatusMessage = $"🤖 {displayType} הוחל בהצלחה ✓";
+
+        // Re-run AI review on the newly applied text
+        _ = RunAiReviewInBackground(note);
+    }
+
+    /// <summary>
+    /// Sends the note's plain text to the local Ollama server in the background.
+    /// Results are cached on <see cref="NoteTreeItem"/> and displayed in the context menu.
+    /// </summary>
+    private async Task RunAiReviewInBackground(NoteTreeItem note)
+    {
+        System.Diagnostics.Debug.WriteLine("[AI Flow] RunAiReviewInBackground — ENTERED");
+
+        var ollamaService = App.ServiceProvider.GetService<OllamaService>();
+        if (ollamaService is null)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ❌ OllamaService is NULL in DI — aborting.");
+            return;
+        }
+        System.Diagnostics.Debug.WriteLine("[AI Flow] ✓ OllamaService resolved from DI");
+
+        var (plainText, _) = RichTextCodec.Parse(note.NoteText ?? "");
+        if (string.IsNullOrWhiteSpace(plainText))
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ❌ Plain text is empty after parse — aborting.");
+            return;
+        }
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] ✓ Plain text extracted ({plainText.Length} chars): '{plainText.Substring(0, Math.Min(plainText.Length, 80))}'");
+
+        // Skip if already reviewed for this exact text
+        if (note.AiOriginalText == plainText && !note.AiReviewInProgress)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ⏭ Already reviewed for this exact text — skipping.");
+            return;
+        }
+
+        note.ClearAiResults();
+        note.AiOriginalText = plainText;
+        note.AiReviewInProgress = true;
+        ViewModel.StatusMessage = "🤖 AI בודק ברקע...";
+
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] 📡 Sending request to Ollama at {DateTime.Now:HH:mm:ss}...");
+        try
+        {
+            var result = await ollamaService.ReviewNoteAsync(plainText).ConfigureAwait(false);
+            System.Diagnostics.Debug.WriteLine($"[AI Flow] 📡 Ollama response received at {DateTime.Now:HH:mm:ss}. HasError={result.HasError}");
+
+            // Marshal back to UI thread for property updates
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (result.HasError)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AI Review] Background review failed: {result.Error}");
+                    ViewModel.StatusMessage = $"🤖 שגיאה: {result.Error}";
+                    return;
+                }
+
+                note.AiGrammarResult = result.GrammarCorrected?.Trim();
+                note.AiRephraseResult = result.Rephrased?.Trim();
+                ViewModel.StatusMessage = "🤖 AI סיים — לחץ ימין לתפריט ✓";
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Review] Background review exception: {ex.Message}");
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ViewModel.StatusMessage = $"🤖 שגיאה: {ex.Message}";
+            });
+        }
+        finally
+        {
+            Dispatcher.Invoke(() => note.AiReviewInProgress = false);
+        }
+    }
 
     /// <summary>
     /// Creates the Google template provider and export service using vault-based configuration

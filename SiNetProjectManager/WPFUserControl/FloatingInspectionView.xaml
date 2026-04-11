@@ -103,6 +103,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <!-- ═══════ Header: Project Name + Pin + Collapse + Close ═══════ -->
@@ -694,7 +695,8 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                  Validation.ErrorTemplate="{StaticResource ValidationErrorTemplate}"
                                                  VerticalAlignment="Stretch"
                                                  HorizontalAlignment="Stretch"
-                                                 EditCompleted="NoteEditor_EditCompleted"/>
+                                                 EditCompleted="NoteEditor_EditCompleted"
+                                                 AiReviewRequested="NoteEditor_AiReviewRequested"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -778,8 +780,111 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                 </Grid>
             </Border>
 
-            <!-- ═══════ Compact Report Cards List (BOTTOM) ═══════ -->
+            <!-- ═══════ Drawing Files Section ═══════ -->
             <Border Grid.Row="3"
+                    Background="{DynamicResource AppBackground}"
+                    BorderBrush="#C0C0C0"
+                    BorderThickness="0,1,0,0"
+                    Padding="6,4"
+                    MaxHeight="180"
+                    Visibility="{Binding HasSelectedReport, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header + Add button -->
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" FontWeight="SemiBold" Foreground="#555"
+                                   FontSize="{DynamicResource AppFontSizeSecondary}">
+                            📐 שרטוטים
+                        </TextBlock>
+
+                        <ComboBox x:Name="DrawingFileComboBox" Grid.Column="1"
+                                  ItemsSource="{Binding AvailableDrawingFiles}"
+                                  DisplayMemberPath="FileName"
+                                  Width="160"
+                                  FontSize="{DynamicResource AppFontSizeSecondary}"
+                                  Margin="0,0,4,0"
+                                  ToolTip="בחר קובץ שרטוט להוספה"/>
+
+                        <Button Grid.Column="2"
+                                Content="➕"
+                                Command="{Binding AddDrawingCommand}"
+                                CommandParameter="{Binding SelectedItem, ElementName=DrawingFileComboBox}"
+                                Style="{StaticResource CardActionButton}"
+                                Padding="4,1"
+                                FontSize="{DynamicResource AppFontSizeSecondary}"
+                                ToolTip="הוסף שרטוט לדוח"/>
+                    </Grid>
+
+                    <!-- Attached drawings list -->
+                    <ItemsControl Grid.Row="1"
+                                  ItemsSource="{Binding ReportDrawings}"
+                                  Visibility="{Binding HasDrawings, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="3,2" Margin="0,0,0,2"
+                                        CornerRadius="3" BorderThickness="1" BorderBrush="#D0D0D0"
+                                        Background="{DynamicResource AppBackground}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" Text="{Binding FileTypeDisplay}"
+                                                   FontWeight="SemiBold" Foreground="#1565C0"
+                                                   FontSize="{DynamicResource AppFontSizeSmall}"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                                        <TextBlock Grid.Column="1" Text="{Binding FileName}"
+                                                   FontSize="{DynamicResource AppFontSizeSecondary}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Column="2" Text="{Binding StampStatusDisplay}"
+                                                   FontSize="{DynamicResource AppFontSizeSmall}"
+                                                   VerticalAlignment="Center" Margin="4,0"/>
+
+                                        <Button Grid.Column="3" Content="✖"
+                                                Command="{Binding DataContext.RemoveDrawingCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource CardActionButton}"
+                                                Padding="2,0"
+                                                FontSize="{DynamicResource AppFontSizeSmall}"
+                                                ToolTip="הסר שרטוט"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Stamp all button -->
+                    <Button Grid.Row="2"
+                            Content="📐 חתום על שרטוטים"
+                            Command="{Binding StampDrawingsCommand}"
+                            Style="{StaticResource CardActionButton}"
+                            HorizontalAlignment="Right"
+                            Padding="8,3" Margin="0,4,0,0"
+                            FontSize="{DynamicResource AppFontSizeSecondary}"
+                            Visibility="{Binding HasDrawings, Converter={StaticResource BoolToVisibility}}"
+                            ToolTip="הוסף חותמת לכל השרטוטים שטרם נחתמו"/>
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Compact Report Cards List (BOTTOM) ═══════ -->
+            <Border Grid.Row="4"
                     Background="{DynamicResource AppBackground}"
                     BorderBrush="#C0C0C0"
                     BorderThickness="0,1,0,0"
@@ -869,7 +974,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
             </Border>
 
             <!-- ═══════ Status Bar ═══════ -->
-            <Border Grid.Row="4" Background="{DynamicResource AppBackground}" Padding="8,4"
+            <Border Grid.Row="5" Background="{DynamicResource AppBackground}" Padding="8,4"
                     CornerRadius="0,0,8,8">
                 <TextBlock Text="{Binding StatusMessage}"
                            Foreground="#555"

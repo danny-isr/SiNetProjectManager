@@ -4,6 +4,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SiNetSQL.MVVM;
 using static SiNetSQL.Services.InspectionSync.RichTextCodec;
 
 namespace SiNetProjectManager.WPFUserControl;
@@ -94,6 +95,142 @@ public partial class RichTextNoteEditor : UserControl
     {
         add => AddHandler(EditCompletedEvent, value);
         remove => RemoveHandler(EditCompletedEvent, value);
+    }
+
+    #endregion
+
+    #region RoutedEvent – AiReviewRequested
+
+    /// <summary>
+    /// Routed event args carrying the AI review type and the suggested replacement text.
+    /// </summary>
+    public sealed class AiReviewRequestedEventArgs(RoutedEvent routedEvent, object source, string reviewType, string suggestedText)
+        : RoutedEventArgs(routedEvent, source)
+    {
+        /// <summary>"grammar" or "rephrase".</summary>
+        public string ReviewType { get; } = reviewType;
+
+        /// <summary>The AI-suggested replacement text to apply.</summary>
+        public string SuggestedText { get; } = suggestedText;
+    }
+
+    /// <summary>WPF-compatible delegate for <see cref="AiReviewRequestedEvent"/>.</summary>
+    public delegate void AiReviewRequestedEventHandler(object sender, AiReviewRequestedEventArgs e);
+
+    public static readonly RoutedEvent AiReviewRequestedEvent =
+        EventManager.RegisterRoutedEvent(
+            "AiReviewRequested",
+            RoutingStrategy.Bubble,
+            typeof(AiReviewRequestedEventHandler),
+            typeof(RichTextNoteEditor));
+
+    public event AiReviewRequestedEventHandler AiReviewRequested
+    {
+        add => AddHandler(AiReviewRequestedEvent, value);
+        remove => RemoveHandler(AiReviewRequestedEvent, value);
+    }
+
+    /// <summary>
+    /// Builds the AI context menu dynamically based on cached <see cref="NoteTreeItem"/> AI results.
+    /// </summary>
+    private void AiContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu) return;
+        menu.Items.Clear();
+
+        if (DataContext is not NoteTreeItem note || string.IsNullOrWhiteSpace(note.NoteText))
+        {
+            menu.Items.Add(new MenuItem { Header = "🤖 אין טקסט לבדיקה", IsEnabled = false });
+            return;
+        }
+
+        if (note.AiReviewInProgress)
+        {
+            menu.Items.Add(new MenuItem { Header = "⏳ AI בודק...", IsEnabled = false });
+            return;
+        }
+
+        // Check if results are stale (text changed since review)
+        var (currentPlain, _) = Parse(note.NoteText ?? "");
+        if (note.AiOriginalText is null || note.AiOriginalText != currentPlain)
+        {
+            menu.Items.Add(new MenuItem { Header = "🤖 AI לא זמין — ערוך וצא כדי להפעיל", IsEnabled = false });
+            return;
+        }
+
+        // Grammar result
+        if (note.AiGrammarResult is not null)
+        {
+            if (note.HasAiGrammarChanges)
+            {
+                var grammarItem = new MenuItem
+                {
+                    Header = CreateAiMenuContent("🤖 תיקון תחבירי:", note.AiGrammarResult),
+                    Tag = "grammar"
+                };
+                grammarItem.Click += AiApply_Click;
+                menu.Items.Add(grammarItem);
+            }
+            else
+            {
+                menu.Items.Add(new MenuItem { Header = "✅ אין שגיאות תחביריות", IsEnabled = false });
+            }
+        }
+
+        // Rephrase result
+        if (note.AiRephraseResult is not null)
+        {
+            if (menu.Items.Count > 0)
+                menu.Items.Add(new Separator());
+
+            var rephraseItem = new MenuItem
+            {
+                Header = CreateAiMenuContent("🤖 ניסוח מחדש:", note.AiRephraseResult),
+                Tag = "rephrase"
+            };
+            rephraseItem.Click += AiApply_Click;
+            menu.Items.Add(rephraseItem);
+        }
+
+        if (menu.Items.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "🤖 לא התקבלו תוצאות", IsEnabled = false });
+    }
+
+    /// <summary>Applies the selected AI suggestion by raising <see cref="AiReviewRequestedEvent"/>.</summary>
+    private void AiApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string reviewType }) return;
+        if (DataContext is not NoteTreeItem note) return;
+
+        var suggestedText = reviewType == "grammar" ? note.AiGrammarResult : note.AiRephraseResult;
+        if (string.IsNullOrWhiteSpace(suggestedText)) return;
+
+        RaiseEvent(new AiReviewRequestedEventArgs(AiReviewRequestedEvent, this, reviewType, suggestedText));
+    }
+
+    /// <summary>
+    /// Creates a multi-line visual header for an AI context menu item.
+    /// Shows a bold title line followed by the full suggestion text with wrapping.
+    /// </summary>
+    private static StackPanel CreateAiMenuContent(string title, string bodyText)
+    {
+        var panel = new StackPanel { MaxWidth = 350 };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = bodyText,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33))
+        });
+
+        return panel;
     }
 
     #endregion
@@ -213,6 +350,7 @@ public partial class RichTextNoteEditor : UserControl
         DisplayBorder.Visibility = Visibility.Visible;
 
         RenderPreview();
+        System.Diagnostics.Debug.WriteLine("[AI Flow] RichTextNoteEditor.ExitEditMode → raising EditCompleted");
         RaiseEvent(new RoutedEventArgs(EditCompletedEvent, this));
     }
 

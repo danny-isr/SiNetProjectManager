@@ -52,6 +52,9 @@
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🔗 מיפוי MasterPlan ↔ SiNet" Click="OpenMasterPlanMapping_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
+                <Separator Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
+                <MenuItem Header="🔍 ניתוח DWF (Stamp Analysis)" Click="OpenDwfAnalysis_Click"
+                    Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
             </MenuItem>
 
             <!-- ProjectManagers -->
@@ -88,6 +91,7 @@
                 <MenuItem Header="📋 משימות פרויקט (חלון צף)" Click="OpenFloatingTaskPanel_Click"/>
                 <Separator/>
                 <MenuItem Header="🔍 דוחות ביקורת (חלון צף)" Click="OpenFloatingInspection_Click"/>
+                <MenuItem Header="📐 חותמת מהירה (DWF/PDF)" Click="OpenQuickStamp_Click"/>
                 <Separator/>
                 <MenuItem Header="📊 תהליכי עבודה" Click="OpenWorkflowDashboard_Click"/>
                 <MenuItem Header="🛠️ ניהול תהליכים (מרוכז)" Click="OpenWorkflowManagement_Click"

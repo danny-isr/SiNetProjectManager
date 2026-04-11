@@ -11,6 +11,9 @@
                 MinHeight="20"
                 MouseLeftButtonDown="DisplayBorder_MouseDown"
                 Visibility="Visible">
+            <Border.ContextMenu>
+                <ContextMenu Opened="AiContextMenu_Opened"/>
+            </Border.ContextMenu>
             <TextBlock x:Name="DisplayBlock"
                        TextWrapping="Wrap"
                        FontSize="{DynamicResource AppFontSizeSecondary}"

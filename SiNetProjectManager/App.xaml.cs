@@ -23,6 +23,8 @@ using SiOffice.GoogleConnector.Reports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PdfSharp.Fonts;
+using SiNetProjectManager.Services.Stamping;
 
 namespace SiNetProjectManager
 {
@@ -46,6 +48,10 @@ namespace SiNetProjectManager
 
         static App()
         {
+            // PdfSharp 6.x on .NET 8 requires an explicit font resolver
+            // (system fonts are not auto-discovered).
+            GlobalFontSettings.FontResolver = new WindowsFontResolver();
+
             _logDir = GetLogDirectory();
             try { Directory.CreateDirectory(_logDir); } catch { }
 
@@ -248,6 +254,11 @@ namespace SiNetProjectManager
 
             // ACC File Sync: Transient (copies tagged attachments from ACC Inbox → ACC project folders)
             services.AddTransient<SiNetSQL.Services.Coordinators.AccFileSyncService>();
+
+            // Ollama AI Service: Singleton (shared HTTP client for local Ollama server)
+            services.AddSingleton(sp => new SiNetSQL.Services.OllamaService(
+                AppConfiguration.Configuration,
+                sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.OllamaService>()));
 
             // ACC Project Provisioning: Transient (ensures ACC project + folder structure exist)
             services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
