@@ -876,10 +876,11 @@ public sealed class GoogleReportExportService : IReportExportService
     };
 
     /// <summary>
-    /// Strips Unicode BiDi control characters that may interfere with regex matching in RTL sheets.
+    /// Strips Unicode BiDi control characters and zero-width characters
+    /// that may interfere with regex matching in RTL sheets.
     /// </summary>
     private static string StripBidiMarks(string text) =>
-        Regex.Replace(text, @"[\u200E\u200F\u202A-\u202E\u2066-\u2069]", "");
+        Regex.Replace(text, @"[\u200B-\u200F\u00AD\u2060\uFEFF\u202A-\u202E\u2066-\u2069]", "");
 
     /// <summary>
     /// Scans all cells for <c>&lt;&lt;X.Y Title [...]&gt;&gt;</c> (status) and

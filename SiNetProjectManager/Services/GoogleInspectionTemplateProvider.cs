@@ -257,6 +257,38 @@ public sealed class GoogleInspectionTemplateProvider : IInspectionTemplateProvid
             });
         }
 
+        // ── Fallback: numbered tags (note-input / legacy note) without a status tag ──
+        // Sections whose status tag wasn't matched (e.g. invisible Unicode chars broke regex)
+        // are rescued here using any other tag that carries the same section code.
+        var fallbackTags = tags
+            .Where(t => !t.IsGeneralTag && !t.IsStatusTag
+                        && !string.IsNullOrEmpty(t.SectionCode)
+                        && !seenCodes.Contains(t.SectionCode))
+            .OrderBy(t => t.Col)
+            .ThenBy(t => t.Row);
+
+        foreach (var tag in fallbackTags)
+        {
+            if (!seenCodes.Add(tag.SectionCode))
+                continue;
+
+            var dotIdx = tag.SectionCode.IndexOf('.');
+            var chapterPart = dotIdx > 0 ? tag.SectionCode[..dotIdx] : tag.SectionCode;
+            if (!int.TryParse(chapterPart, out var chapterNumber))
+                continue;
+
+            var title = tag.Title?.Trim() ?? tag.SectionCode;
+            rowNumber++;
+            rows.Add(new TemplateSyncRow
+            {
+                RowNumber = rowNumber,
+                ChapterNumber = chapterNumber,
+                ChapterTitle = title,
+                SectionCode = tag.SectionCode,
+                SectionTitle = $"<<{tag.SectionCode} {title}>>"
+            });
+        }
+
         // ── General tags → Chapter 0 sections ──
         // Ordered by column ascending (A first), then row ascending (top first)
         var generalTags = tags

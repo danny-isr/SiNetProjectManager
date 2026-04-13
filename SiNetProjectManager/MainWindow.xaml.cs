@@ -254,6 +254,12 @@ namespace SiNetProjectManager
             _floatingInspectionWindow.Show();
         }
 
+        private void OpenTemplateValidation_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new WPF_Window.TemplateValidationWindow { Owner = this };
+            dialog.ShowDialog();
+        }
+
         private void OpenQuickStamp_Click(object sender, RoutedEventArgs e)
         {
             var window = new WPF_Window.QuickStampWindow { Owner = this };

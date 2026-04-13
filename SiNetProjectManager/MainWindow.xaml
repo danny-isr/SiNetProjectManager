@@ -91,6 +91,8 @@
                 <MenuItem Header="📋 משימות פרויקט (חלון צף)" Click="OpenFloatingTaskPanel_Click"/>
                 <Separator/>
                 <MenuItem Header="🔍 דוחות ביקורת (חלון צף)" Click="OpenFloatingInspection_Click"/>
+                <MenuItem Header="📋 בדיקת תקינות תבניות" Click="OpenTemplateValidation_Click"
+                    Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="📐 חותמת מהירה (DWF/PDF)" Click="OpenQuickStamp_Click"/>
                 <Separator/>
                 <MenuItem Header="📊 תהליכי עבודה" Click="OpenWorkflowDashboard_Click"/>
