@@ -1,0 +1,280 @@
+﻿<Window x:Class="SiNetProjectManagerV2.MigrationPocWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🔬 Migration PoC — Extraction &amp; Task Generation"
+        Width="1200" Height="750"
+        MinWidth="900" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource AppBackground}"
+        Loaded="Window_Loaded">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0">
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB 1: Content Extraction (existing functionality)
+                 ═══════════════════════════════════════════════════════════ -->
+            <TabItem Header="🔬 חילוץ תוכן (Extraction)">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <TextBlock Grid.Row="0" FontSize="14" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,8">
+                        חילוץ תוכן חכם מדוח סופי (Smart Extraction PoC)
+                    </TextBlock>
+
+                    <!-- Inputs -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Row 0: Project selector -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="פרויקט:" 
+                                   VerticalAlignment="Center" Margin="0,0,8,6" FontWeight="SemiBold"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="ProjectComboBox"
+                                  DisplayMemberPath="NameAndNumber"
+                                  Padding="4,3" Margin="0,0,4,6"
+                                  SelectionChanged="ProjectComboBox_SelectionChanged"
+                                  ToolTip="בחר פרויקט לחילוץ"/>
+
+                        <!-- Row 1: Template dropdown from Google Drive folder -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="תבנית:" 
+                                   VerticalAlignment="Center" Margin="0,0,8,6" FontWeight="SemiBold"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="TemplateComboBox"
+                                  DisplayMemberPath="Name"
+                                  Padding="4,3" Margin="0,0,4,6"
+                                  SelectionChanged="TemplateComboBox_SelectionChanged"
+                                  ToolTip="בחר תבנית ביקורת מתוך תיקיית Google Drive"/>
+                        <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="🔄"
+                                    Click="RefreshTemplates_Click"
+                                    ToolTip="רענן רשימת תבניות"
+                                    Width="28" Height="28" Margin="0,0,4,6"
+                                    Cursor="Hand" Background="Transparent"
+                                    BorderBrush="#CCC" BorderThickness="1"/>
+                            <Button x:Name="ManualToggleButton" Content="✏"
+                                    Click="ToggleManualTemplate_Click"
+                                    ToolTip="הזנה ידנית של מזהה תבנית"
+                                    Width="28" Height="28" Margin="0,0,0,6"
+                                    Cursor="Hand" Background="Transparent"
+                                    BorderBrush="#CCC" BorderThickness="1"
+                                    FontSize="13"/>
+                        </StackPanel>
+
+                        <!-- Row 2: Manual template ID fallback (visible when no template selected) -->
+                        <TextBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                 x:Name="TemplateIdBox"
+                                 FlowDirection="LeftToRight" Margin="0,0,0,6"
+                                 ToolTip="או הדביקו מזהה/קישור ישיר לתבנית"
+                                 TextChanged="TemplateIdBox_TextChanged">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+
+                        <!-- Row 3: Report ID -->
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="מזהה/קישור דוח סופי:" 
+                                   VerticalAlignment="Center" Margin="0,0,8,6" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                 x:Name="ReportIdBox"
+                                 FlowDirection="LeftToRight" Margin="0,0,0,6"
+                                 ToolTip="הדביקו את מזהה הגיליון או קישור מלא לדוח הסופי (שכבר יוצא)"/>
+                    </Grid>
+
+                    <!-- Action -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button x:Name="ExtractButton" Content="🚀 חלץ תוכן" 
+                                Click="ExtractButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#2E7D32" Foreground="White" Cursor="Hand"
+                                BorderThickness="0"/>
+                        <Button x:Name="AiExtractButton" Content="🤖 חלץ עם AI" 
+                                Click="AiExtractButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#7B1FA2" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="10,0,0,0"/>
+                        <Button x:Name="BatchExtractButton" Content="⚡ חלץ הכל (Batch)" 
+                                Click="BatchExtractButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#E65100" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="10,0,0,0"
+                                ToolTip="חילוץ AI אוטומטי לכל הפרויקטים והגרסאות מגיליון האינדקס"/>
+                        <TextBlock x:Name="StatusLabel" Text="" VerticalAlignment="Center" 
+                                   Margin="12,0,0,0" FontSize="12" Foreground="#555"/>
+                    </StackPanel>
+
+                    <!-- Results -->
+                    <DataGrid Grid.Row="3" x:Name="ResultsGrid"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserSortColumns="True" CanUserResizeColumns="True"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              FlowDirection="RightToLeft"
+                              GridLinesVisibility="Horizontal"
+                              AlternatingRowBackground="#F5F5F5"
+                              BorderBrush="#D0D0D0" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="קוד סעיף" Binding="{Binding SectionCode}" Width="65"/>
+                            <DataGridTextColumn Header="שם סעיף" Binding="{Binding SectionTitle}" Width="110"/>
+                            <DataGridTextColumn Header="סטטוס" Binding="{Binding StatusKey}" Width="90"/>
+                            <DataGridTextColumn Header="טקסט הערה" Binding="{Binding NoteText}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight" Value="200"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="תגובת מתכנן" Binding="{Binding DesignerResponse}" Width="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight" Value="100"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="אינדקס" Binding="{Binding NoteSubIndex}" Width="55"/>
+                            <DataGridCheckBoxColumn Header="נסגר" Binding="{Binding IsResolved}" Width="45"/>
+                            <DataGridTextColumn Header="תאריך סגירה" Binding="{Binding ClosedDate, StringFormat=dd/MM/yyyy}" Width="85"/>
+                            <DataGridTextColumn Header="פרק" Binding="{Binding ChapterTitle}" Width="75"/>
+                            <DataGridTextColumn Header="צבע" Binding="{Binding StatusColorHex}" Width="65"/>
+                            <DataGridTextColumn Header="תא מקורי" Binding="{Binding OriginalCellRef}" Width="60"/>
+                            <DataGridCheckBoxColumn Header="פוצל" Binding="{Binding WasSplit}" Width="45"/>
+                            <DataGridTextColumn Header="מס׳" Binding="{Binding SplitIndex}" Width="35"/>
+                            <DataGridTextColumn Header="אימות כותרת" Binding="{Binding HeaderValidation}" Width="90"/>
+                            <DataGridTextColumn Header="תגית סטטוס" Binding="{Binding TemplateStatusTag}" Width="180"/>
+                            <DataGridTextColumn Header="תגית הערה" Binding="{Binding TemplateNoteTag}" Width="100"/>
+                            <DataGridTextColumn Header="שורה" Binding="{Binding ReportRow}" Width="45"/>
+                            <DataGridTextColumn Header="זיהוי" Binding="{Binding DetectionMethod}" Width="75"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB 2: Task Generation (new functionality)
+                 ═══════════════════════════════════════════════════════════ -->
+            <TabItem Header="📋 יצירת משימות (Task Generation)">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <TextBlock Grid.Row="0" FontSize="14" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,0,8">
+                        יצירת משימות מגיליון אינדקס (Index Sheet → Tasks)
+                    </TextBlock>
+
+                    <!-- Input: only the Index Sheet ID (project extracted per-row) -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="מזהה/קישור גיליון אינדקס:" 
+                                   VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                        <TextBox Grid.Column="1" x:Name="IndexSheetIdBox"
+                                 FlowDirection="LeftToRight"
+                                 ToolTip="הדביקו את מזהה הגיליון או קישור מלא לגיליון האינדקס (מעקב ביקורות)"/>
+                    </Grid>
+
+                    <!-- Actions: Scan → (review) → Approve & Generate -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button x:Name="ScanSheetButton" Content="🔍 סרוק גיליון" 
+                                Click="ScanSheetButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#1565C0" Foreground="White" Cursor="Hand"
+                                BorderThickness="0"/>
+                        <Button x:Name="GenerateTasksButton" Content="⚡ אשר וצור משימות" 
+                                Click="GenerateTasksButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#E65100" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="10,0,0,0" IsEnabled="False"/>
+                        <TextBlock x:Name="TaskStatusLabel" Text="" VerticalAlignment="Center" 
+                                   Margin="12,0,0,0" FontSize="12" Foreground="#555"/>
+                    </StackPanel>
+
+                    <!-- Config Summary -->
+                    <Border Grid.Row="3" Background="#E3F2FD" BorderBrush="#90CAF9" BorderThickness="1"
+                            CornerRadius="4" Padding="10" Margin="0,0,0,8"
+                            Visibility="Collapsed" x:Name="ConfigSummaryPanel">
+                        <TextBlock x:Name="ConfigSummaryText" TextWrapping="Wrap" FontSize="12"/>
+                    </Border>
+
+                    <!-- Pre-Migration Review DataGrid -->
+                    <DataGrid Grid.Row="4" x:Name="PreviewGrid"
+                              AutoGenerateColumns="False" IsReadOnly="False"
+                              CanUserSortColumns="True" CanUserResizeColumns="True"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              FlowDirection="RightToLeft"
+                              GridLinesVisibility="Horizontal"
+                              AlternatingRowBackground="#F5F5F5"
+                              BorderBrush="#D0D0D0" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="בחר" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="45"/>
+                            <DataGridTextColumn Header="שורה" Binding="{Binding RowIndex}" Width="45" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="פרויקט (גיליון)" Binding="{Binding SheetProjectRef}" Width="110" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="פרויקט (DB)" Binding="{Binding ResolvedProjectName}" Width="140" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#333"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CanMigrate}" Value="False">
+                                                <Setter Property="Foreground" Value="#D32F2F"/>
+                                                <Setter Property="FontWeight" Value="Bold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="סוג פרויקט" Binding="{Binding ProjectTypeName}" Width="100" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="מס׳ ביקורת" Binding="{Binding ReportNumber}" Width="70" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="סטטוס (גיליון)" Binding="{Binding SheetStatus}" Width="130" IsReadOnly="True"/>
+                            <DataGridCheckBoxColumn Header="מאושר" Binding="{Binding IsApproved}" Width="50" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="פעולה מתוכננת" Binding="{Binding ActionDescription}" Width="250" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight" Value="60"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- ═══ Shared Log (below tabs) ═══ -->
+        <Expander Grid.Row="1" Header="📋 יומן אבחון (Warnings)" Margin="0,6,0,0">
+            <TextBox x:Name="LogBox" IsReadOnly="True" MaxHeight="150"
+                     VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"
+                     FlowDirection="LeftToRight" FontFamily="Consolas" FontSize="11"
+                     Background="#FAFAFA" Foreground="#555"/>
+        </Expander>
+    </Grid>
+</Window>

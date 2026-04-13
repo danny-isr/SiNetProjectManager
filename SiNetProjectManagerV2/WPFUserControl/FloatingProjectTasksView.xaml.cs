@@ -1,0 +1,252 @@
+﻿using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection;
+using SiNetSQL.Models;
+using SiNetSQL.MVVM;
+using SiNetProjectManagerV2.Dialogs;
+
+namespace SiNetProjectManagerV2.WPFUserControl;
+
+/// <summary>
+/// Interaction logic for FloatingProjectTasksView.xaml
+/// Floating ToolWindow showing tasks for the currently active project.
+/// Inherits shared behavior (collapse, drag, opacity, position persistence) from <see cref="FloatingWindowBase"/>.
+/// </summary>
+public partial class FloatingProjectTasksView : FloatingWindowBase
+{
+    private bool _isSaving;
+
+    public FloatingProjectTasksView()
+    {
+        InitializeComponent();
+
+        var viewModel = App.ServiceProvider.GetRequiredService<FloatingProjectTasksViewModel>();
+        DataContext = viewModel;
+
+        // Derived-specific subscription
+        viewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
+
+        // Initialize common floating behavior (opacity, settings, collapse)
+        InitializeFloatingBehavior();
+    }
+
+    /// <summary>Gets the ViewModel for external access.</summary>
+    public FloatingProjectTasksViewModel ViewModel => (FloatingProjectTasksViewModel)DataContext;
+
+    #region FloatingWindowBase Overrides
+
+    protected override IFloatingWindowViewModel FloatingViewModel => ViewModel;
+    protected override FrameworkElement OpacityTarget => ContentBorder;
+    protected override string LogPrefix => "[FloatingTasks]";
+
+    protected override (double Top, double Left, double Width, double Height)
+        ReadWindowPosition(AppSettings settings) =>
+        (settings.FloatingTasksTop, settings.FloatingTasksLeft,
+         settings.FloatingTasksWidth, settings.FloatingTasksHeight);
+
+    protected override void WriteWindowPosition(
+        AppSettings settings, double top, double left, double width, double height)
+    {
+        settings.FloatingTasksTop = top;
+        settings.FloatingTasksLeft = left;
+        settings.FloatingTasksWidth = width;
+        settings.FloatingTasksHeight = height;
+    }
+
+    protected override void OnBodyCollapsed()
+    {
+        FilterBar.Visibility = Visibility.Collapsed;
+        QuickCreateBar.Visibility = Visibility.Collapsed;
+        TaskListBox.Visibility = Visibility.Collapsed;
+        DetailPanel.Visibility = Visibility.Collapsed;
+        StatusBarPanel.Visibility = Visibility.Collapsed;
+    }
+
+    protected override void OnBodyExpanded()
+    {
+        FilterBar.Visibility = Visibility.Visible;
+        QuickCreateBar.Visibility = Visibility.Visible;
+        TaskListBox.Visibility = Visibility.Visible;
+        DetailPanel.Visibility = Visibility.Visible;
+        StatusBarPanel.Visibility = Visibility.Visible;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (DataContext is FloatingProjectTasksViewModel vm)
+            vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
+
+        base.OnClosed(e);
+    }
+
+    #endregion
+
+    #region Domain-Specific Handlers
+
+    /// <summary>
+    /// Handles Status ComboBox selection change on task cards — saves immediately to DB.
+    /// Follows the same _isSaving guard pattern as TaskPanelView.
+    /// </summary>
+    private void StatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSaving) return;
+        if (sender is not ComboBox combo) return;
+        if (combo.Tag is not ProjectAssignment task) return;
+        if (e.AddedItems.Count == 0) return;
+        if (e.AddedItems[0] is not ProjectAssignmentStatus newStatus) return;
+
+        // Initial load — no removed items means first population
+        if (e.RemovedItems.Count == 0) return;
+
+        // Get original status ID
+        int? oldStatusId;
+        if (e.RemovedItems[0] is ProjectAssignmentStatus oldStatus)
+        {
+            oldStatusId = oldStatus.Id;
+        }
+        else
+        {
+            oldStatusId = task.StatusId;
+        }
+
+        // Skip if no actual change
+        if (oldStatusId == newStatus.Id) return;
+
+        // Detect Active → Waiting transition (ball leaving our court)
+        bool wasActionable = task.AssignmentStatus?.IsActionable ?? false;
+        bool willBeWaiting = newStatus.IsOpen && !newStatus.IsActionable;
+
+        string? actionNote = null;
+        if (wasActionable && willBeWaiting)
+        {
+            var dialog = new ActionProofDialog { Owner = this };
+            var result = dialog.ShowDialog();
+
+            if (result != true || !dialog.Confirmed)
+            {
+                // User cancelled — revert the status change
+                ViewModel.RevertTaskInGrid(task);
+                return;
+            }
+
+            actionNote = dialog.ActionNote;
+        }
+
+        _isSaving = true;
+        try
+        {
+            ViewModel.UpdateTaskStatusInline(task, newStatus, oldStatusId, actionNote);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FloatingTasks] Status change error: {ex}");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    /// <summary>
+    /// Opens the Task Import window, passing the current active project context.
+    /// </summary>
+    private void ImportTsvButton_Click(object sender, RoutedEventArgs e)
+    {
+        var project = ViewModel.ActiveProject;
+        var importWindow = new TaskImportWindow(
+            activeProjectId: project?.Id,
+            activeProjectDisplay: ViewModel.ActiveProjectDisplay);
+        importWindow.Owner = this;
+        importWindow.ShowDialog();
+
+        // Refresh tasks after import to reflect newly imported items
+        ViewModel.RefreshCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// Handles navigation from a pending email link to the EmailManagement view.
+    /// Routes through the MainWindow (Owner) which hosts the main content area.
+    /// </summary>
+    private void OnNavigateToEmailRequested(int emailId)
+    {
+        var mainWindow = Owner as MainWindow;
+        mainWindow?.NavigateToEmail(emailId);
+        mainWindow?.Activate();
+    }
+
+    #endregion
+
+    #region Priority Inline Editing
+
+    /// <summary>
+    /// Allows only digits in the priority TextBox.
+    /// </summary>
+    private void PriorityTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !int.TryParse(e.Text, out _);
+    }
+
+    /// <summary>
+    /// Commits the priority change when Enter is pressed.
+    /// </summary>
+    private void PriorityTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && sender is TextBox tb)
+        {
+            CommitPriorityChange(tb);
+            e.Handled = true;
+
+            // Move focus away so LostFocus doesn't fire again
+            Keyboard.ClearFocus();
+        }
+        else if (e.Key == Key.Escape && sender is TextBox escTb)
+        {
+            // Revert to original value
+            if (escTb.Tag is ProjectAssignment task)
+            {
+                escTb.Text = task.WorkPriority?.ToString() ?? "";
+            }
+            Keyboard.ClearFocus();
+        }
+    }
+
+    /// <summary>
+    /// Commits the priority change when the TextBox loses focus.
+    /// </summary>
+    private void PriorityTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb)
+        {
+            CommitPriorityChange(tb);
+        }
+    }
+
+    /// <summary>
+    /// Parses the new priority value and calls the ViewModel to reorder if changed.
+    /// </summary>
+    private void CommitPriorityChange(TextBox textBox)
+    {
+        if (textBox.Tag is not ProjectAssignment task) return;
+        if (!int.TryParse(textBox.Text, out var newPriority) || newPriority < 1)
+        {
+            // Revert to current value on invalid input
+            textBox.Text = task.WorkPriority?.ToString() ?? "";
+            return;
+        }
+
+        if (task.WorkPriority == newPriority) return;
+
+        try
+        {
+            ViewModel.UpdateTaskPriority(task, newPriority);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FloatingTasks] Priority change error: {ex}");
+            textBox.Text = task.WorkPriority?.ToString() ?? "";
+        }
+    }
+
+    #endregion
+}

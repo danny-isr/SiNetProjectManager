@@ -1,0 +1,37 @@
+﻿<Window x:Class="SiNetProjectManagerV2.Dialogs.ProjectSelectorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:SiNetProjectManagerV2.Controls"
+        Title="בחירת פרויקט" 
+        Height="150" Width="500"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Project Selector with built-in search -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="בחר פרויקט:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <controls:SearchableProjectSelector
+                x:Name="ProjectSelector"
+                ItemsSource="{Binding Projects}"
+                SelectedItem="{Binding SelectedProject, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                SortPropertyPath="Number"
+                SortAscending="False"
+                Width="350"
+                ToolTip="הקלד לחיפוש לפי שם, עיר או לקוח"/>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,10,0,0">
+            <Button Content="בחר" Width="80" Margin="0,0,10,0" Click="SelectButton_Click"
+                    IsDefault="True"/>
+            <Button Content="ביטול" Width="80" Click="CancelButton_Click"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

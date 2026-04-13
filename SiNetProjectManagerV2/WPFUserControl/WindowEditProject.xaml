@@ -1,0 +1,172 @@
+﻿<UserControl x:Class="SiNetProjectManagerV2.WPFUserControl.WindowEditProject"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+             xmlns:controls="clr-namespace:SiNetProjectManagerV2.Controls"
+             xmlns:conv="clr-namespace:SiNetProjectManagerV2.Converters"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1000"
+             FontFamily="{DynamicResource AppFontFamily}"
+             FontSize="{DynamicResource AppFontSize}"
+             Background="{DynamicResource AppBackground}"
+             Foreground="{DynamicResource AppForeground}">
+    <!-- DataContext is set from code-behind via DI (EditProjectViewModel requires IDbContextFactory) -->
+    <UserControl.Resources>
+        <conv:NotNullToVisibilityConverter x:Key="NotNullToVis"/>
+        <Style TargetType="TextBox">
+            <Style.Triggers>
+                <Trigger Property="Validation.HasError" Value="True">
+                    <Setter Property="ToolTip"
+                            Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Grid Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10" Grid.Row="0">
+                    <TextBlock Text="בחר פרויקט: " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <controls:SearchableProjectSelector
+                        ItemsSource="{Binding Projects}"
+                        SelectedItem="{Binding SelectedProject, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        SortPropertyPath="Number"
+                        SortAscending="False"
+                        Width="350"
+                        ToolTip="בחר פרויקט לעריכה - הקלד לחיפוש לפי שם, עיר או לקוח"/>
+                    <!-- New: Rename Project button bound to ViewModel command (MVVM) -->
+                    <Button Content="Rename Project"
+                            Margin="10,0,0,0"
+                            Command="{Binding RenameProjectCommand}"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="LabelColumn"/>
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- מקום -->
+                    <TextBlock Text="מקום:" Grid.Row="0" Grid.Column="0" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding Places}" 
+                              DisplayMemberPath="Title" 
+                              SelectedItem="{Binding SelectedPlace, Mode=TwoWay}" 
+                              Width="200" Margin="0,0,0,5" HorizontalAlignment="Left"/>
+
+                    <!-- חברה -->
+                    <TextBlock Text="חברה:" Grid.Row="1" Grid.Column="0" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                        <ComboBox ItemsSource="{Binding Companies}"
+                                  DisplayMemberPath="Title"
+                                  SelectedItem="{Binding SelectedCompany, Mode=TwoWay}"
+                                  Width="200" Margin="0,0,0,5"/>
+                        <TextBlock Text="🔄 MP" Foreground="DodgerBlue" FontWeight="Bold" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   ToolTip="חברה זו מסונכרנת מ-MasterPlan"
+                                   Visibility="{Binding SelectedCompany.MasterPlanCompanyId, Converter={StaticResource NotNullToVis}}"/>
+                    </StackPanel>
+
+                    <!-- איש קשר -->
+                    <TextBlock Text="איש קשר:" Grid.Row="2" Grid.Column="0" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                        <ComboBox ItemsSource="{Binding ActiveCompanyContacts}"
+                                  DisplayMemberPath="FullName"
+                                  SelectedItem="{Binding SelectedContact, Mode=TwoWay}"
+                                  Width="200" Margin="0,0,0,5"/>
+                        <TextBlock Text="🔄 MP" Foreground="DodgerBlue" FontWeight="Bold" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   ToolTip="איש קשר זה מסונכרן מ-MasterPlan"
+                                   Visibility="{Binding SelectedContact.MasterPlanContactId, Converter={StaticResource NotNullToVis}}"/>
+                    </StackPanel>
+
+                    <!-- פרויקט אב -->
+                    <TextBlock Text="פרויקט אב:" Grid.Row="3" Grid.Column="0" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                    <controls:SearchableProjectSelector
+                        Grid.Row="3" Grid.Column="1"
+                        ItemsSource="{Binding Projects}"
+                        SelectedItem="{Binding SelectedParentProject, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        SortPropertyPath="Number"
+                        SortAscending="False"
+                        Width="250"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,5"
+                        ToolTip="בחר פרויקט אב - הקלד לחיפוש לפי שם, עיר או לקוח"/>
+
+                    <!-- מצב פרויקט -->
+                    <TextBlock Text="מצב פרויקט:" Grid.Row="4" Grid.Column="0" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding ProjectStatuses}"
+                              DisplayMemberPath="Title"
+                              SelectedItem="{Binding SelectedProjectStatus, Mode=TwoWay}"
+                              Width="200" Margin="0,0,0,5" HorizontalAlignment="Left"/>
+
+                    <!-- תאור למי הוגש -->
+                    <TextBlock Text="תאור למי הוגש:" Grid.Row="5" Grid.Column="0" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="5" Grid.Column="1" Width="200" Margin="0,0,0,5" HorizontalAlignment="Left">
+                        <TextBox.Text>
+                            <Binding Path="ApproveDescription" UpdateSourceTrigger="PropertyChanged" Mode="TwoWay">
+                                <Binding.ValidationRules>
+                                    <local:RequiredFieldValidationRule />
+                                </Binding.ValidationRules>
+                            </Binding>
+                        </TextBox.Text>
+                    </TextBox>
+
+                    <!-- טבלת סוגי פרויקטים -->
+                    <DataGrid Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
+                              ItemsSource="{Binding AllProjectTypes}"
+                              AutoGenerateColumns="False" Margin="0,10,0,10"
+                              
+                              RowHeight="32"
+                              ColumnHeaderHeight="32"
+                              CanUserAddRows="False"
+                              CanUserResizeRows="False">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="בפרויקט" Binding="{Binding HesInProject, Mode=TwoWay}" Width="60"/>
+                            <DataGridTextColumn Header="סוג פרויקט" Binding="{Binding TypeName}" IsReadOnly="True" Width="150" />
+                            <DataGridTemplateColumn Header="עובד אחראי" Width="180">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding DataContext.FilteredUsers, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  DisplayMemberPath="Name"
+                                                  SelectedItem="{Binding AdminWorker, Mode=TwoWay}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name, TargetNullValue='ללא'}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="ערך חוזה" Binding="{Binding Value, Mode=TwoWay, StringFormat=N0}" Width="120"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Grid.Row="2">
+                    <Button Content="הגש" Width="100" Margin="5" Click="Submit_Click" IsEnabled="{Binding CanSubmit}" />
+                    <Button Content="שמור שינויים" Click="Save_Click" Width="100" Margin="5"/>
+                    <Button Content="בטל" Click="Cancel_Click" Width="100" Margin="5"/>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

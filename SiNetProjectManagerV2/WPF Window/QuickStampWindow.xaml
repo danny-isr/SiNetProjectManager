@@ -1,0 +1,140 @@
+﻿<Window x:Class="SiNetProjectManagerV2.WPF_Window.QuickStampWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="📐 חותמת מהירה"
+        Height="440" Width="520"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        ResizeMode="NoResize"
+        Background="{DynamicResource AppBackground}">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="חותמת מהירה על סרטוט" FontWeight="Bold" FontSize="16"/>
+            <TextBlock Text="בחר קובץ DWF או PDF, מלא פרטים, ולחץ 'חתום'. PDF מקבל חותמת אוטומטית. DWF דורש תבנית מוגדרת בהגדרות הניהול." 
+                       Opacity="0.7" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- File picker -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="קובץ:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <TextBox x:Name="FilePathTextBox" Grid.Column="1"
+                     IsReadOnly="True"
+                     VerticalContentAlignment="Center"
+                     Padding="5,3"
+                     FlowDirection="LeftToRight"/>
+            <Button Grid.Column="2" Content="📂 בחר"
+                    Click="BrowseFile_Click"
+                    Padding="8,3" Margin="4,0,0,0"
+                    Cursor="Hand"
+                    Background="Transparent"
+                    BorderBrush="#CCC" BorderThickness="1"/>
+        </Grid>
+
+        <!-- Layout selector (DWF only) -->
+        <Grid x:Name="LayoutSelectorPanel" Grid.Row="2" Margin="0,0,0,12" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Layout:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <ComboBox x:Name="LayoutComboBox" Grid.Column="1"
+                      VerticalContentAlignment="Center"
+                      Padding="5,3"/>
+        </Grid>
+
+        <!-- Stamp title (PDF only — same row, mutually exclusive with Layout) -->
+        <Grid x:Name="StampTitlePanel" Grid.Row="2" Margin="0,0,0,12" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="כותרת:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <TextBox x:Name="StampTitleTextBox" Grid.Column="1"
+                     Text="מאושר"
+                     VerticalContentAlignment="Center"
+                     Padding="5,3"/>
+        </Grid>
+
+        <!-- Inspector name -->
+        <Grid Grid.Row="3" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="שם בודק:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <TextBox x:Name="InspectorNameTextBox" Grid.Column="1"
+                     VerticalContentAlignment="Center"
+                     Padding="5,3"/>
+        </Grid>
+
+        <!-- Date -->
+        <Grid Grid.Row="4" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="תאריך:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <DatePicker x:Name="StampDatePicker" Grid.Column="1"
+                        Width="160"
+                        FlowDirection="LeftToRight"/>
+        </Grid>
+
+        <!-- Output folder (auto-detected, shown for info) -->
+        <Grid Grid.Row="5" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="פלט:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <TextBlock x:Name="OutputInfoLabel" Grid.Column="1"
+                       VerticalAlignment="Center" Opacity="0.7"
+                       TextWrapping="Wrap"
+                       Text="הקובץ החתום יישמר ליד הקובץ המקורי"/>
+        </Grid>
+
+        <!-- Status area -->
+        <Border Grid.Row="6" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4"
+                Padding="10" Margin="0,0,0,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="StatusTextBlock"
+                           TextWrapping="Wrap"
+                           Text="מוכן — בחר קובץ כדי להתחיל."
+                           Opacity="0.8"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button x:Name="StampButton" Content="✅ חתום"
+                    Click="StampButton_Click"
+                    Width="100" Height="32"
+                    FontWeight="Bold"
+                    Background="#2E7D32" Foreground="White"
+                    Cursor="Hand"
+                    IsEnabled="False"/>
+            <Button Content="סגור"
+                    Click="CloseButton_Click"
+                    Width="80" Height="32"
+                    Margin="10,0,0,0"
+                    Cursor="Hand"/>
+        </StackPanel>
+    </Grid>
+</Window>

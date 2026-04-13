@@ -1,0 +1,346 @@
+﻿<Window x:Class="SiNetProjectManagerV2.WPF_Window.ManagementSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+        xmlns:conv="clr-namespace:SiNetProjectManagerV2.Converters"
+        Title="הגדרות ניהול"
+        Height="550" Width="580"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        ResizeMode="CanResizeWithGrip"
+        MinHeight="400" MinWidth="480"
+        Background="{DynamicResource AppBackground}">
+
+    <Window.Resources>
+        <conv:HexToColorConverter x:Key="HexToColor"/>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="הגדרות ניהול" FontWeight="Bold" Margin="0,0,0,5"/>
+            <TextBlock Text="הגדרות אלו משפיעות על חישובי דוחות וזמינות רק למנהלי מערכת" 
+                       Opacity="0.7" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Settings -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,20,0,20">
+            <StackPanel>
+                <!-- Default Project Title -->
+                <TextBlock Text="פרויקט ברירת מחדל לדוא&quot;ל" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="שם הפרויקט שמיילים חדשים ישויכו אליו לפני שיוך ידני. חייב להתאים בדיוק לשם פרויקט קיים במסד הנתונים." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock x:Name="DefaultProjectWarning" 
+                           Text="" 
+                           Foreground="#D32F2F" FontWeight="SemiBold"
+                           TextWrapping="Wrap" Margin="0,0,0,8"
+                           Visibility="Collapsed"/>
+                <TextBox x:Name="DefaultProjectTitleTextBox" 
+                         Width="350" 
+                         HorizontalAlignment="Right"
+                         VerticalContentAlignment="Center"
+                         Padding="5,3"
+                         FlowDirection="RightToLeft"/>
+
+                <!-- ACC Inbox Project -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="פרויקט Inbox ב-ACC" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="שם הפרויקט ב-Autodesk Construction Cloud שאליו עולים מיילים וקבצים מצורפים. חייב להתאים בדיוק לשם פרויקט קיים ב-ACC." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="שם פרויקט:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBox x:Name="InboxProjectNameTextBox" Grid.Row="0" Grid.Column="1"
+                             Width="350" HorizontalAlignment="Right"
+                             VerticalContentAlignment="Center" Padding="5,3" Margin="0,0,0,6"
+                             FlowDirection="RightToLeft"
+                             ToolTip="שם הפרויקט ב-ACC (למשל: מיילים למשרד - POC 4)"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שם תיקייה:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="InboxFolderNameTextBox" Grid.Row="1" Grid.Column="1"
+                             Width="350" HorizontalAlignment="Right"
+                             VerticalContentAlignment="Center" Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="שם תיקיית ה-Inbox בתוך הפרויקט (למשל: _Inbox)"/>
+                </Grid>
+
+                <!-- Hour Price Default -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="מחיר לשעה (ברירת מחדל)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="ערך זה ישמש כברירת מחדל בדוחות R01 עבור חישוב שעות לפי סכום שהוגש" 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBox x:Name="HourPriceTextBox" 
+                             Width="120" 
+                             VerticalContentAlignment="Center"
+                             Padding="5,3"/>
+                    <TextBlock Text="₪" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                </StackPanel>
+
+                <!-- Inspection Templates Folder -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="תיקיית תבניות ביקורת (Google Drive)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="מזהה תיקייה ב-Google Drive שמכילה את תבניות הביקורת (Google Sheets בלבד). המשתמשים יראו רשימה של גיליונות מתוך תיקייה זו." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBox x:Name="InspectionFolderIdTextBox" 
+                         Width="350" 
+                         HorizontalAlignment="Right"
+                         VerticalContentAlignment="Center"
+                         Padding="5,3"
+                         FlowDirection="LeftToRight"
+                         ToolTip="Google Drive Folder ID (from the folder URL)"
+                         LostFocus="InspectionFolderIdTextBox_LostFocus"/>
+
+                <!-- Validate button + folder name preview -->
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" HorizontalAlignment="Right">
+                    <Button x:Name="ValidateFolderButton"
+                            Content="🔍 בדוק חיבור"
+                            Click="ValidateFolderButton_Click"
+                            Padding="8,3"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"
+                            ToolTip="בדוק שהמזהה תקין ושיש גישה לתיקייה"/>
+                </StackPanel>
+                <TextBlock x:Name="FolderPreviewLabel"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           FontWeight="SemiBold"
+                           Visibility="Collapsed"/>
+
+                <!-- Reports Google Drive Folder -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="תיקיית דוחות ביקורת (Google Drive)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="מזהה תיקייה (Folder ID) ב-Google Drive לשמירת דוחות ביקורת מיוצאים. הדוחות יישמרו בתיקייה זו במבנה: [פרויקט אב]/[פרויקט]/[דוח]." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBox x:Name="ReportsFolderIdTextBox"
+                         Width="350"
+                         HorizontalAlignment="Right"
+                         VerticalContentAlignment="Center"
+                         Padding="5,3"
+                         FlowDirection="LeftToRight"
+                         ToolTip="Google Drive Folder ID (מופיע בכתובת ה-URL של התיקייה)"
+                         LostFocus="ReportsFolderIdTextBox_LostFocus"/>
+
+                <!-- Validate button + folder name preview -->
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" HorizontalAlignment="Right">
+                    <Button x:Name="ValidateReportsFolderButton"
+                            Content="🔍 בדוק חיבור"
+                            Click="ValidateReportsFolderButton_Click"
+                            Padding="8,3"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"
+                            ToolTip="בדוק שהמזהה תקין ושיש גישה לתיקייה"/>
+                </StackPanel>
+                <TextBlock x:Name="ReportsFolderPreviewLabel"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           FontWeight="SemiBold"
+                           Visibility="Collapsed"/>
+
+                <!-- Status Default Colors -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="צבעי סטטוס (ברירת מחדל גלובלית)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="צבעים אלו ישפיעו על כל המשתמשים. משתמש יכול לדרוס בצבע אישי." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                <ItemsControl x:Name="StatusColorsItemsControl">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="4,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0" Text="{Binding StatusName}" 
+                                               VerticalAlignment="Center" FontWeight="SemiBold"/>
+
+                                    <xctk:ColorPicker x:Name="AdminColorPicker" Grid.Column="1"
+                                                      SelectedColor="{Binding ColorHex, Converter={StaticResource HexToColor}, Mode=TwoWay}"
+                                                      ShowStandardColors="True"
+                                                      ShowRecentColors="True"
+                                                      UsingAlphaChannel="False"
+                                                      Width="130"
+                                                      Margin="0,0,8,0"
+                                                      ToolTip="בחר צבע לסטטוס"/>
+
+                                    <!-- Live badge preview (mirrors task grid appearance) -->
+                                    <Border Grid.Column="2" CornerRadius="3" Padding="6,2" Margin="0,0,8,0"
+                                            MinWidth="60" VerticalAlignment="Center">
+                                        <Border.Background>
+                                            <SolidColorBrush Color="{Binding SelectedColor, ElementName=AdminColorPicker}"/>
+                                        </Border.Background>
+                                        <TextBlock Text="{Binding StatusName}" Foreground="#333"
+                                                   FontWeight="SemiBold" 
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+
+                                    <TextBlock Grid.Column="3" VerticalAlignment="Center" 
+                                               Margin="4,0,0,0" Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                <Setter Property="Text" Value="פתוח"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsOpen}" Value="False">
+                                                        <Setter Property="Text" Value="סגור"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Inspection Status Labels -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="תוויות סטטוס ביקורת" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="שמות הסטטוסים שיוצגו בדוחות ביקורת ובתפריטים. ניתן לשנות לטקסט מותאם אישית." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="מקובל (Passed):" VerticalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBox x:Name="StatusLabelPassedTextBox" Grid.Row="0" Grid.Column="1"
+                             Width="200" HorizontalAlignment="Right" Padding="5,3" Margin="0,0,0,4"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="הערה (Failed):" VerticalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBox x:Name="StatusLabelFailedTextBox" Grid.Row="1" Grid.Column="1"
+                             Width="200" HorizontalAlignment="Right" Padding="5,3" Margin="0,0,0,4"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="הערה חוזרת (Recurring):" VerticalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBox x:Name="StatusLabelRecurringFailedTextBox" Grid.Row="2" Grid.Column="1"
+                             Width="200" HorizontalAlignment="Right" Padding="5,3" Margin="0,0,0,4"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="לא רלוונטי (N/A):" VerticalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBox x:Name="StatusLabelNotApplicableTextBox" Grid.Row="3" Grid.Column="1"
+                             Width="200" HorizontalAlignment="Right" Padding="5,3" Margin="0,0,0,4"/>
+                </Grid>
+
+                <Button x:Name="RestoreStatusDefaultsButton"
+                        Content="🔄 שחזר ברירות מחדל"
+                        Click="RestoreStatusDefaultsButton_Click"
+                        Padding="8,3"
+                        Margin="0,4,0,0"
+                        HorizontalAlignment="Right"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderBrush="#CCC"
+                        BorderThickness="1"
+                        ToolTip="שחזר את תוויות הסטטוס לערכי ברירת המחדל"/>
+
+                <!-- AI (Ollama) Settings -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="📐 נתיב תבנית חותמת DWF (אופציונלי)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="נתיב לקובץ תבנית חותמת DWF בלבד. קבצי PDF מקבלים חותמת פרוגרמטית עם תאריך ושם בודק אוטומטיים. אם לא מוגדר – קבצי DWF ידולגו." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="StampTemplatePathTextBox"
+                             Grid.Column="0"
+                             VerticalContentAlignment="Center"
+                             Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="נתיב לקובץ תבנית חותמת DWF (אופציונלי)"/>
+                    <Button Grid.Column="1" Content="📂"
+                            Click="BrowseStampTemplate_Click"
+                            Padding="6,3" Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"
+                            ToolTip="בחר קובץ תבנית חותמת DWF"/>
+                </Grid>
+
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="🤖 הגדרות AI (Ollama)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="בחר את מודל ה-AI המקומי לבדיקת הערות ביקורת. מודלים קטנים (4B) מהירים יותר, מודלים גדולים (26B) מדויקים יותר אך דורשים חומרה חזקה." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="מודל AI:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="OllamaModelComboBox" Grid.Row="0" Grid.Column="1"
+                              Width="250" HorizontalAlignment="Right"
+                              Padding="5,3" Margin="0,0,0,6"
+                              FlowDirection="LeftToRight"
+                              IsEditable="True"
+                              ToolTip="בחר מודל מהרשימה או הקלד שם מודל ידנית"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="סטטוס:" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="OllamaStatusLabel" Grid.Row="1" Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Margin="0,0,0,0"/>
+                </Grid>
+                <Button x:Name="OllamaTestButton"
+                        Content="🔍 בדוק חיבור AI"
+                        Click="OllamaTestButton_Click"
+                        Padding="8,3"
+                        Margin="0,6,0,0"
+                        HorizontalAlignment="Right"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderBrush="#CCC"
+                        BorderThickness="1"
+                        ToolTip="בדוק שהשרת המקומי פועל ושהמודל זמין"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="שמור" 
+                    Click="SaveButton_Click"
+                    Width="80" Height="30" 
+                    FontWeight="Bold"
+                    Background="#2E7D32"
+                    Foreground="White"/>
+            <Button Content="ביטול" 
+                    Click="CancelButton_Click"
+                    Width="80" Height="30" 
+                    Margin="10,0,0,0"/>
+        </StackPanel>
+    </Grid>
+</Window>
