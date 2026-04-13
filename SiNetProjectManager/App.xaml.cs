@@ -902,9 +902,12 @@ namespace SiNetProjectManager
             {
                 Current?.Dispatcher?.Invoke(() =>
                 {
-                    MessageBox.Show(
-                        $"אירעה שגיאה בלתי צפויה. (Code: {errorId})\nניתן להמשיך לעבוד אך ייתכנו בעיות.",
-                        "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+                    var owner = Current.MainWindow;
+                    var msg = $"אירעה שגיאה בלתי צפויה. (Code: {errorId})\nניתן להמשיך לעבוד אך ייתכנו בעיות.";
+                    if (owner != null)
+                        MessageBox.Show(owner, msg, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+                    else
+                        MessageBox.Show(msg, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
                 });
             }
             catch { }

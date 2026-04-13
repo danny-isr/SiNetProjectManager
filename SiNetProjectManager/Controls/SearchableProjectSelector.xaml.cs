@@ -325,20 +325,28 @@ public partial class SearchableProjectSelector : UserControl
             if (text == nameAndNumber)
             {
                 Debug.WriteLine($"[SearchableProjectSelector] Ignoring WPF auto-text (NameAndNumber): '{text}'");
-                // Restore the correct display text using converter
-                _isUpdatingText = true;
-                try
-                {
-                    var displayText = _displayConverter.Convert(SelectedItem, typeof(string), null!, CultureInfo.CurrentCulture) as string 
-                                      ?? string.Empty;
-                    PART_ComboBox.Text = displayText;
-                    FilterText = displayText;
-                    Debug.WriteLine($"[SearchableProjectSelector] Restored display text: '{displayText}'");
-                }
-                finally
-                {
-                    _isUpdatingText = false;
-                }
+                    // Restore the correct display text using converter.
+                    // CRITICAL: Set _isSyncingToComboBox to suppress SelectionChanged during
+                    // text restoration. Changing the text from NameAndNumber format to display
+                    // format causes WPF to deselect the item, which would propagate null to the
+                    // DP and trigger an expensive email list rebuild in the ViewModel.
+                    _isUpdatingText = true;
+                    _isSyncingToComboBox = true;
+                    try
+                    {
+                        var displayText = _displayConverter.Convert(SelectedItem, typeof(string), null!, CultureInfo.CurrentCulture) as string 
+                                          ?? string.Empty;
+                        PART_ComboBox.Text = displayText;
+                        FilterText = displayText;
+                        // Re-assert selection in case the text change caused ComboBox to deselect
+                        PART_ComboBox.SelectedItem = SelectedItem;
+                        Debug.WriteLine($"[SearchableProjectSelector] Restored display text: '{displayText}'");
+                    }
+                    finally
+                    {
+                        _isUpdatingText = false;
+                        _isSyncingToComboBox = false;
+                    }
                 return;
             }
 

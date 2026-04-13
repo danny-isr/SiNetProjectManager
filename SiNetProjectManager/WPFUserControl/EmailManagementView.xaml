@@ -433,12 +433,12 @@
                 
                 <!-- Pagination Controls -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,20,0">
-                    <Button Content="⏮ First" 
+                    <Button Content="⏮ ראשון" 
                             Command="{Binding LoadFirstPageCommand}"
                             IsEnabled="{Binding HasPreviousPage}"
                             Margin="0,0,5,0"
                             Padding="8,3"/>
-                    <Button Content="◀ Prev" 
+                    <Button Content="◀ חדשים" 
                             Command="{Binding LoadPreviousPageCommand}"
                             IsEnabled="{Binding HasPreviousPage}"
                             Margin="0,0,5,0"
@@ -447,7 +447,7 @@
                                VerticalAlignment="Center" 
                                Margin="5,0"
                                FontWeight="SemiBold"/>
-                    <Button Content="Next ▶" 
+                    <Button Content="ישנים ▶" 
                             Command="{Binding LoadNextPageCommand}"
                             IsEnabled="{Binding HasNextPage}"
                             Margin="5,0,0,0"
@@ -859,6 +859,10 @@
                              SelectedItem="{Binding SelectedEmail, Mode=TwoWay}"
                              ItemContainerStyle="{StaticResource EmailListItemStyle}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="False"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel"
                              BorderThickness="0">
                         <ListBox.GroupStyle>
                             <GroupStyle ContainerStyle="{StaticResource GroupHeaderStyle}"/>
@@ -866,104 +870,130 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
+                                    <!-- Normal email display -->
+                                    <Grid Visibility="{Binding IsLoadMorePlaceholder, Converter={StaticResource InverseBoolToVisConverter}}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                                    <!-- Status indicator -->
-                                    <TextBlock Grid.Row="0" Grid.Column="0" 
-                                               Grid.RowSpan="2"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value=""/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsAssigned}" Value="True">
-                                                        <Setter Property="Text" Value="✓"/>
-                                                        <Setter Property="Foreground" Value="#2E7D32"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-
-                                    <TextBlock Grid.Row="0" Grid.Column="1"
-                                               Text="{Binding TimeDisplay}"
-                                               Opacity="0.7"
-                                               Margin="0,0,10,0"/>
-
-                                    <TextBlock Grid.Row="0" Grid.Column="2"
-                                               Text="{Binding SenderName}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"/>
-
-                                    <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal">
-                                        <TextBlock Text="📎"
-                                                   Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
-                                                   ToolTip="{Binding RealAttachmentCount, StringFormat='{}{0} attachment(s)'}"
-                                                   Margin="4,0,0,0"/>
-                                        <TextBlock Text="{Binding RealAttachmentCount}"
-                                                   Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
-                                                   Opacity="0.7"
+                                        <!-- Status indicator -->
+                                        <TextBlock Grid.Row="0" Grid.Column="0" 
+                                                   Grid.RowSpan="2"
                                                    VerticalAlignment="Center"
-                                                   Margin="2,0,0,0"/>
-                                    </StackPanel>
-
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
-                                               Text="{Binding Subject}"
-                                               Foreground="#666"
-                                               TextTrimming="CharacterEllipsis"
-                                               MaxHeight="40"/>
-
-                                    <!-- Thread Link Row (Row 2) - Shows for unassigned emails with thread context -->
-                                    <!-- CRITICAL: Email stays in Date group until user clicks the button -->
-                                    <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3"
-                                                Orientation="Horizontal"
-                                                Margin="0,4,0,0"
-                                                Visibility="{Binding ShowThreadProjectLink, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="{Binding ThreadProjectLinkText}"
-                                                   FontStyle="Italic"
-                                                   Foreground="#616161"/>
-                                        <Button Content="[שייך לפרויקט זה]"
-                                                Foreground="#FF5722"
-                                                Background="Transparent"
-                                                BorderThickness="0"
-                                                Cursor="Hand"
-                                                Margin="8,0,0,0"
-                                                Padding="4,2"
-                                                ToolTip="לחץ לשייך מייל זה לפרויקט השרשור"
-                                                Command="{Binding DataContext.FileToThreadProjectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}">
-                                            <Button.Style>
-                                                <Style TargetType="Button">
-                                                    <Setter Property="Template">
-                                                        <Setter.Value>
-                                                            <ControlTemplate TargetType="Button">
-                                                                <TextBlock Text="{TemplateBinding Content}"
-                                                                           Foreground="#FF5722"
-                                                                           TextDecorations="Underline"
-                                                                           Cursor="Hand"/>
-                                                            </ControlTemplate>
-                                                        </Setter.Value>
-                                                    </Setter>
+                                                   Margin="0,0,8,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value=""/>
                                                     <Style.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter Property="Foreground" Value="#E64A19"/>
-                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsAssigned}" Value="True">
+                                                            <Setter Property="Text" Value="✓"/>
+                                                            <Setter Property="Foreground" Value="#2E7D32"/>
+                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </Button.Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                                   Text="{Binding TimeDisplay}"
+                                                   Opacity="0.7"
+                                                   Margin="0,0,10,0"/>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="2"
+                                                   Text="{Binding SenderName}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
+
+                                        <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal">
+                                            <TextBlock Text="📎"
+                                                       Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
+                                                       ToolTip="{Binding RealAttachmentCount, StringFormat='{}{0} attachment(s)'}"
+                                                       Margin="4,0,0,0"/>
+                                            <TextBlock Text="{Binding RealAttachmentCount}"
+                                                       Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
+                                                       Opacity="0.7"
+                                                       VerticalAlignment="Center"
+                                                       Margin="2,0,0,0"/>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
+                                                   Text="{Binding Subject}"
+                                                   Foreground="#666"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxHeight="40"/>
+
+                                        <!-- Thread Link Row (Row 2) - Shows for unassigned emails with thread context -->
+                                        <!-- CRITICAL: Email stays in Date group until user clicks the button -->
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3"
+                                                    Orientation="Horizontal"
+                                                    Margin="0,4,0,0"
+                                                    Visibility="{Binding ShowThreadProjectLink, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding ThreadProjectLinkText}"
+                                                       FontStyle="Italic"
+                                                       Foreground="#616161"/>
+                                            <Button Content="[שייך לפרויקט זה]"
+                                                    Foreground="#FF5722"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    Margin="8,0,0,0"
+                                                    Padding="4,2"
+                                                    ToolTip="לחץ לשייך מייל זה לפרויקט השרשור"
+                                                    Command="{Binding DataContext.FileToThreadProjectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <TextBlock Text="{TemplateBinding Content}"
+                                                                               Foreground="#FF5722"
+                                                                               TextDecorations="Underline"
+                                                                               Cursor="Hand"/>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Foreground" Value="#E64A19"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Load More sentinel display -->
+                                    <Border Visibility="{Binding IsLoadMorePlaceholder, Converter={StaticResource BoolToVis}}"
+                                            Background="#E3F2FD"
+                                            CornerRadius="4"
+                                            Padding="10,8"
+                                            Cursor="Hand"
+                                            Margin="0,2">
+                                        <Button Command="{Binding DataContext.LoadMoreProjectEmailsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                HorizontalContentAlignment="Center"
+                                                Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <TextBlock Text="📩 " FontSize="14" VerticalAlignment="Center"/>
+                                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#1565C0">
+                                                    <Run Text="הצג עוד "/>
+                                                    <Run Text="{Binding LoadMoreRemainingCount, Mode=OneWay}"/>
+                                                    <Run Text=" מיילים"/>
+                                                </TextBlock>
+                                            </StackPanel>
                                         </Button>
-                                    </StackPanel>
+                                    </Border>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

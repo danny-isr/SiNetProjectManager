@@ -394,40 +394,91 @@ public static class PdfStampManager
         };
     }
 
+    /// <summary>
+    /// Reference page short-side dimension (A4 portrait width ≈ 595 pt).
+    /// When the actual page is larger, the stamp scales up proportionally
+    /// so it remains readable on A1/A0 engineering drawings.
+    /// </summary>
+    private const double ReferencePageShortSide = 595.0;
+
     private static void DrawStampContent(
         XGraphics gfx, double pageW, double pageH,
         PdfGeneratedStampOptions options)
     {
-        double w = options.Width;
-        double h = options.Height;
+        // Auto-scale: use the shorter page edge to decide how much to enlarge.
+        double shortSide = Math.Min(pageW, pageH);
+        double scale = Math.Max(1.0, shortSide / ReferencePageShortSide);
+
+        double w = options.Width * scale;
+        double h = options.Height * scale;
 
         var (x, y) = CalculatePosition(pageW, pageH, w, h,
-            options.Placement, options.MarginX, options.MarginY);
+            options.Placement, options.MarginX * scale, options.MarginY * scale);
 
-        // Border only — no fill so content behind the stamp is visible.
-        var borderPen = new XPen(XColor.FromArgb(255, 46, 125, 50), 1.5);
-        gfx.DrawRectangle(borderPen, x, y, w, h);
+        double cornerRadius = 14 * scale;
+        var path = CreateRoundedRectPath(x, y, w, h, cornerRadius);
 
-        var greenBrush = new XSolidBrush(XColor.FromArgb(255, 46, 125, 50));
+        // Semi-transparent white fill
+        var fillBrush = new XSolidBrush(XColor.FromArgb(180, 255, 255, 255));
+        gfx.DrawPath(fillBrush, path);
 
-        // Title (centered)
-        var titleFont = new XFont("Arial", 14, XFontStyleEx.Bold);
-        gfx.DrawString(options.Title, titleFont, greenBrush,
-            new XRect(x, y + 4, w, 22), XStringFormats.TopCenter);
+        // Dark red border
+        var borderPen = new XPen(XColor.FromArgb(255, 153, 55, 37), 3.5 * scale);
+        gfx.DrawPath(borderPen, path);
 
-        // Separator line
-        var linePen = new XPen(XColor.FromArgb(255, 46, 125, 50), 0.5);
-        gfx.DrawLine(linePen, x + 8, y + 26, x + w - 8, y + 26);
+        var blueBrush = new XSolidBrush(XColor.FromArgb(255, 0, 0, 200));
+        double pad = 14 * scale;
+        double textAreaW = w - pad * 2;
 
-        // Inspector name (centered)
-        var detailFont = new XFont("Arial", 9, XFontStyleEx.Regular);
-        gfx.DrawString(options.InspectorName, detailFont, XBrushes.Black,
-            new XRect(x, y + 30, w, 16), XStringFormats.Center);
+        // Line 1 — Inspector name (bold, right-aligned for RTL)
+        var nameFont = new XFont("Arial", 14 * scale, XFontStyleEx.Bold);
+        var rtlFormat = new XStringFormat
+        {
+            Alignment = XStringAlignment.Far,
+            LineAlignment = XLineAlignment.Near
+        };
+        gfx.DrawString(options.InspectorName, nameFont, blueBrush,
+            new XRect(x + pad, y + 10 * scale, textAreaW, 22 * scale), rtlFormat);
 
-        // Date (centered)
+        // Line 2 — Title (bold, right-aligned for RTL)
+        var titleFont = new XFont("Arial", 14 * scale, XFontStyleEx.Bold);
+        gfx.DrawString(options.Title, titleFont, blueBrush,
+            new XRect(x + pad, y + 38 * scale, textAreaW, 22 * scale), rtlFormat);
+
+        // Line 3 — Date (regular, left-aligned)
+        var dateFont = new XFont("Arial", 11 * scale, XFontStyleEx.Regular);
         var dateText = options.StampDate.ToString("dd/MM/yyyy");
-        gfx.DrawString(dateText, detailFont, XBrushes.Black,
-            new XRect(x, y + 48, w, 16), XStringFormats.Center);
+        var ltrFormat = new XStringFormat
+        {
+            Alignment = XStringAlignment.Near,
+            LineAlignment = XLineAlignment.Near
+        };
+        gfx.DrawString(dateText, dateFont, blueBrush,
+            new XRect(x + pad, y + 70 * scale, textAreaW, 20 * scale), ltrFormat);
+    }
+
+    private static XGraphicsPath CreateRoundedRectPath(
+        double x, double y, double w, double h, double r)
+    {
+        var path = new XGraphicsPath();
+        // Top-left arc
+        path.AddArc(x, y, r * 2, r * 2, 180, 90);
+        // Top edge
+        path.AddLine(x + r, y, x + w - r, y);
+        // Top-right arc
+        path.AddArc(x + w - r * 2, y, r * 2, r * 2, 270, 90);
+        // Right edge
+        path.AddLine(x + w, y + r, x + w, y + h - r);
+        // Bottom-right arc
+        path.AddArc(x + w - r * 2, y + h - r * 2, r * 2, r * 2, 0, 90);
+        // Bottom edge
+        path.AddLine(x + w - r, y + h, x + r, y + h);
+        // Bottom-left arc
+        path.AddArc(x, y + h - r * 2, r * 2, r * 2, 90, 90);
+        // Left edge
+        path.AddLine(x, y + h - r, x, y + r);
+        path.CloseFigure();
+        return path;
     }
 
     private static (double X, double Y) CalculatePosition(
@@ -490,10 +541,10 @@ public sealed class PdfGeneratedStampOptions
     public StampPlacement Placement { get; set; } = StampPlacement.BottomRight;
 
     /// <summary>Stamp box width in PDF points.</summary>
-    public double Width { get; set; } = 180;
+    public double Width { get; set; } = 260;
 
     /// <summary>Stamp box height in PDF points.</summary>
-    public double Height { get; set; } = 70;
+    public double Height { get; set; } = 110;
 
     /// <summary>Horizontal margin from page edge in points.</summary>
     public double MarginX { get; set; } = 20;
