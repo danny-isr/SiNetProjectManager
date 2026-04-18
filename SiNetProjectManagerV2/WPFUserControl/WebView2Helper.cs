@@ -1,5 +1,6 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using SiNetProjectManagerV2.Dialogs;
 using SiNetProjectManagerV2.Services;
 using SiNetSQL.Services.EmailIngestion;
 using SiOffice.GoogleConnector;
@@ -615,27 +616,97 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 var emailInfo = GetSelectedEmailInfo(webView);
                 var rawFileName = Path.GetFileName(e.ResultFilePath);
                 var sanitizedFileName = MessageKeyGenerator.SanitizeFileName(rawFileName);
+                var ownerWindow = Window.GetWindow(webView);
 
                 var projectName = ResolveProjectNameFromEmail(emailInfo);
                 var hasProject = emailInfo != null
                               && !string.IsNullOrEmpty(emailInfo.MessageId)
                               && !string.IsNullOrEmpty(projectName);
 
+                if (emailInfo != null && !string.IsNullOrEmpty(emailInfo.MessageId))
+                {
+                    var dialog = new DownloadAssociationDialog(
+                        sanitizedFileName,
+                        hasProject ? projectName : null)
+                    {
+                        Owner = ownerWindow
+                    };
+
+                    var dialogResult = dialog.ShowDialog();
+                    if (dialogResult != true || dialog.ChosenAction == DownloadAction.Cancel)
+                    {
+                        e.Cancel = true;
+                        e.Handled = true;
+                        return;
+                    }
+
+                    switch (dialog.ChosenAction)
+                    {
+                        case DownloadAction.UploadToAcc:
+                        case DownloadAction.AssociateToProject:
+                            var accPath = BuildAccMirroredPath(emailInfo, sanitizedFileName);
+                            if (!ResolveDuplicateFilePath(ownerWindow, sanitizedFileName, accPath, out var resolvedAccPath))
+                            {
+                                e.Cancel = true;
+                                e.Handled = true;
+                                return;
+                            }
+
+                            e.ResultFilePath = resolvedAccPath;
+                            e.Handled = true;
+                            System.Diagnostics.Debug.WriteLine($"WebView2: Download intercepted → {resolvedAccPath}");
+                            TrackDownloadCompletion(e.DownloadOperation, emailInfo);
+                            return;
+
+                        case DownloadAction.SaveToDownloads:
+                            var downloadsPath = Path.Combine(
+                                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                "Downloads",
+                                sanitizedFileName);
+
+                            if (!ResolveDuplicateFilePath(ownerWindow, sanitizedFileName, downloadsPath, out var resolvedDownloadsPath))
+                            {
+                                e.Cancel = true;
+                                e.Handled = true;
+                                return;
+                            }
+
+                            e.ResultFilePath = resolvedDownloadsPath;
+                            e.Handled = true;
+                            System.Diagnostics.Debug.WriteLine($"WebView2: Download routed to Downloads → {resolvedDownloadsPath}");
+                            return;
+                    }
+                }
+
                 if (hasProject)
                 {
                     var accPath = BuildAccMirroredPath(emailInfo!, sanitizedFileName);
-                    e.ResultFilePath = accPath;
+                    if (!ResolveDuplicateFilePath(ownerWindow, sanitizedFileName, accPath, out var resolvedAccPath))
+                    {
+                        e.Cancel = true;
+                        e.Handled = true;
+                        return;
+                    }
+
+                    e.ResultFilePath = resolvedAccPath;
                     e.Handled = true;
-                    System.Diagnostics.Debug.WriteLine($"WebView2: Download intercepted → {accPath}");
+                    System.Diagnostics.Debug.WriteLine($"WebView2: Download intercepted → {resolvedAccPath}");
                     TrackDownloadCompletion(e.DownloadOperation, emailInfo);
                 }
                 else if (emailInfo != null && !string.IsNullOrEmpty(emailInfo.MessageId))
                 {
                     // No project assigned — still route to ACC Inbox path so the upload pipeline can handle it
                     var accPath = BuildAccMirroredPath(emailInfo, sanitizedFileName);
-                    e.ResultFilePath = accPath;
+                    if (!ResolveDuplicateFilePath(ownerWindow, sanitizedFileName, accPath, out var resolvedAccPath))
+                    {
+                        e.Cancel = true;
+                        e.Handled = true;
+                        return;
+                    }
+
+                    e.ResultFilePath = resolvedAccPath;
                     e.Handled = true;
-                    System.Diagnostics.Debug.WriteLine($"WebView2: Download (no project) → ACC Inbox: {accPath}");
+                    System.Diagnostics.Debug.WriteLine($"WebView2: Download (no project) → ACC Inbox: {resolvedAccPath}");
                     TrackDownloadCompletion(e.DownloadOperation, emailInfo);
                 }
                 else
@@ -673,6 +744,66 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             Directory.CreateDirectory(downloadFolder);
             return Path.Combine(downloadFolder, sanitizedFileName);
+        }
+
+        /// <summary>
+        /// If the target file already exists, asks the user whether to continue.
+        /// If approved, returns a unique path with a numeric suffix.
+        /// </summary>
+        internal static bool ResolveDuplicateFilePath(
+            Window? owner,
+            string fileName,
+            string proposedPath,
+            out string resolvedPath)
+        {
+            resolvedPath = proposedPath;
+
+            if (!File.Exists(proposedPath))
+                return true;
+
+            var result = MessageBox.Show(
+                owner ?? Application.Current?.MainWindow,
+                $"הקובץ \"{fileName}\" כבר קיים ברשימה.\nהאם להעלות אותו בכל זאת?",
+                "קובץ קיים",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                resolvedPath = string.Empty;
+                return false;
+            }
+
+            var folderPath = Path.GetDirectoryName(proposedPath);
+            if (string.IsNullOrWhiteSpace(folderPath))
+                return true;
+
+            resolvedPath = BuildUniqueDestinationPath(folderPath, fileName);
+            return true;
+        }
+
+        /// <summary>
+        /// Builds a unique file path in a folder, appending (1), (2), etc. when needed.
+        /// </summary>
+        private static string BuildUniqueDestinationPath(string folderPath, string fileName)
+        {
+            var destPath = Path.Combine(folderPath, fileName);
+
+            if (!File.Exists(destPath))
+                return destPath;
+
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            var extension = Path.GetExtension(fileName);
+            var counter = 1;
+
+            do
+            {
+                destPath = Path.Combine(folderPath, $"{nameWithoutExt} ({counter}){extension}");
+                counter++;
+            }
+            while (File.Exists(destPath));
+
+            return destPath;
         }
 
         /// <summary>

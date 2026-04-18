@@ -7,10 +7,17 @@
 
 ## 2. Task Management
 - **Task Priority Rule:** New open tasks must be appended to the END of the queue (Max+1), NOT inserted at Priority 1. Reopened tasks also go to the end of the queue. On close: clear priority and re-rank to close the gap.
+- **UserGroup Task Assignment:** 
+  - If a group has 1 member, auto-assign the task to that person.
+  - If a group has multiple members, use the group's default assignee.
+  - If no default assignee is set, the user must pick from the group members.
+  - Each group should have a default assignee setting.
+- **Group Assignment Notification:** If a workflow starts and can't create a task because the assigned group has no members, notify the user immediately. The workflow should not proceed without someone being assigned. Show a clear message about what's missing (empty groups, no default assignee).
 
 ## 3. Core Principles & Efficiency
 - **DRY (Don't Repeat Yourself):** Zero tolerance for code duplication. Logic must be centralized.
 - **Single Source of Truth:** Reuse existing tools. Do not re-implement existing processes.
+- **Centralized Formatting:** Use centralized helper functions for building label names/formats instead of scattered inline formatting. Maintain a single source of truth for formatting patterns.
 - **Resource Management:** Use `ReadOnlySpan<T>` for data parsing and `ValueTask` for high-frequency async methods.
 - **CancellationToken:** Always implement and propagate `CancellationToken` in async methods.
 
@@ -25,6 +32,7 @@
 
 ## 6. Database & Migrations (STRICT PROTOCOL)
 - **No Direct Migrations:** Copilot is strictly forbidden from executing migrations automatically.
+- **Manual Migration Files:** Never manually edit migration files. Only change model/configuration files and let EF Core generate the migration.
 - **PMC Commands:** Provide the exact command for 'Package Manager Console' (e.g., `Add-Migration [Name] -Context [Context]`).
 - **Workflow:** Stop after providing the command and wait for user confirmation.
 
@@ -43,3 +51,7 @@
 ## 9. File Versioning Policy
 - **Version Naming Convention:** The `Version` segment in the file naming convention `(ProjectNumber)-ProjectType-FileNumber-Alternative-Version-Name.ext` is NOT used as an actual version tracker. New files always get Version=1. Existing files with Version=2+ keep their name as-is (it's part of their identity).
 - **Version Management:** No new versions are ever created through the system. ACC handles its own versioning natively — files are uploaded with their full original name, and ACC manages version history internally. The tree structure (Folder → File → Alternative → Version) remains unchanged.
+
+## 10. Project Management
+- **Default Office Management Project ID:** The default project ID for Office Management is 136, not 126. This ID is used for project-independent workflows.
+- **Workflow File Classification:** Filing of files can only happen AFTER project creation. During the "פתיחת פרויקט" stage, the user should open the source email to view attachments (already uploaded to ACC Inbox), but actual filing occurs after the project exists. The task should instruct the user to open the email, review files, and create the project before filing.

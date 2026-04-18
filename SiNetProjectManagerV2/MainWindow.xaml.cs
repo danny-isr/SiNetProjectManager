@@ -391,6 +391,12 @@ namespace SiNetProjectManagerV2
             NavigateToView(new WorkflowDashboardView());
         }
 
+        private void OpenWorkflowStatusDashboard_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new WPF_Window.WorkflowStatusMonitorWindow { Owner = this };
+            window.Show();
+        }
+
         private void OpenWorkflowManagement_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new WorkflowManagementWindow();

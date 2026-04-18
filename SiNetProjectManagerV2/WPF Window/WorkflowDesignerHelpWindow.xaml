@@ -1,0 +1,671 @@
+<Window x:Class="SiNetProjectManagerV2.WorkflowDesignerHelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="📘 מרכז עזרה — עורך תהליכי עבודה ויזואלי"
+        Width="620" Height="780"
+        MinWidth="460" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource AppBackground}">
+
+    <Window.Resources>
+        <!-- Section header style -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
+            <Setter Property="Foreground" Value="#1565C0"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <!-- Body text style -->
+        <Style x:Key="BodyText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeSecondary}"/>
+            <Setter Property="Foreground" Value="#333"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="LineHeight" Value="22"/>
+        </Style>
+
+        <!-- Sub-header -->
+        <Style x:Key="SubHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeSecondary}"/>
+            <Setter Property="Foreground" Value="#37474F"/>
+            <Setter Property="Margin" Value="0,8,0,4"/>
+        </Style>
+
+        <!-- Tip border (green) -->
+        <Style x:Key="TipBox" TargetType="Border">
+            <Setter Property="Background" Value="#E8F5E9"/>
+            <Setter Property="BorderBrush" Value="#4CAF50"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,4,0,8"/>
+        </Style>
+
+        <!-- Warning border (orange) -->
+        <Style x:Key="WarnBox" TargetType="Border">
+            <Setter Property="Background" Value="#FFF3E0"/>
+            <Setter Property="BorderBrush" Value="#FF9800"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,4,0,8"/>
+        </Style>
+
+        <!-- Info border (blue) -->
+        <Style x:Key="InfoBox" TargetType="Border">
+            <Setter Property="Background" Value="#E3F2FD"/>
+            <Setter Property="BorderBrush" Value="#1565C0"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,4,0,8"/>
+        </Style>
+
+        <!-- Table header style -->
+        <Style x:Key="TableHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeSecondary}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="6,3"/>
+        </Style>
+
+        <!-- Table cell style -->
+        <Style x:Key="TableCell" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeSecondary}"/>
+            <Setter Property="Foreground" Value="#333"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <!-- Expander style -->
+        <Style TargetType="Expander">
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderBrush" Value="#D0D0D0"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══════ Header ═══════ -->
+        <Border Grid.Row="0" Background="#1565C0" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="📘" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <StackPanel>
+                        <TextBlock Text="עורך תהליכי עבודה ויזואלי — מדריך מלא"
+                                   FontSize="16" FontWeight="Bold" Foreground="White"/>
+                        <TextBlock Text="בניית תהליכים, טריגרים, תנאים, פעולות ותתי-תהליכים"
+                                   FontSize="{DynamicResource AppFontSizeSecondary}" Foreground="#BBDEFB"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="✕" Click="CloseButton_Click"
+                        Width="28" Height="28" Cursor="Hand"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="White" FontWeight="Bold" FontSize="14"
+                        VerticalAlignment="Top"/>
+            </Grid>
+        </Border>
+
+        <!-- ═══════ Scrollable Content ═══════ -->
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="14,8">
+            <StackPanel>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 1. מבוא — מה זה עורך התהליכים -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander IsExpanded="True">
+                    <Expander.Header>
+                        <TextBlock Text="1. מבוא — מה זה עורך התהליכים?" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            עורך התהליכים הוויזואלי מאפשר לבנות ולנהל תהליכי עבודה (Workflows) בצורה גרפית.
+                            כל תהליך מורכב מ:
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            🟢 **צמתים** (Nodes) — שלבים בתהליך&#x0a;
+                            🔗 **חיבורים** (Connectors) — מעברים בין שלבים&#x0a;
+                            ⚡ **טריגרים** — מה מפעיל מעבר או את התהליך עצמו&#x0a;
+                            📋 **תנאים** — מה צריך להתקיים כדי שהמעבר יקרה&#x0a;
+                            🎬 **פעולות** (Actions) — מה קורה כשמעבר מופעל
+                        </TextBlock>
+
+                        <TextBlock Style="{StaticResource SubHeader}" Text="תהליך העבודה:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            1️⃣ בחר תהליך קיים מהרשימה (או צור חדש)&#x0a;
+                            2️⃣ הוסף צמתים — התחלה, שלבים, תנאים, סיום&#x0a;
+                            3️⃣ חבר ביניהם עם חיצים&#x0a;
+                            4️⃣ הגדר טריגרים ותנאים על כל חיבור&#x0a;
+                            5️⃣ הגדר מה מפעיל את התהליך (בצומת ההתחלה)&#x0a;
+                            6️⃣ שמור ובדוק תקינות
+                        </TextBlock>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 2. סוגי צמתים -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="2. סוגי צמתים (Nodes)" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            כל צומת מייצג שלב או נקודת החלטה בתהליך. הוסף צמתים מהטולבר העליון:
+                        </TextBlock>
+
+                        <!-- Table: Node Types -->
+                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,8,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="60"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Header -->
+                                <Border Grid.Row="0" Grid.Column="0" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="כפתור"/></Border>
+                                <Border Grid.Row="0" Grid.Column="1" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="צורה"/></Border>
+                                <Border Grid.Row="0" Grid.Column="2" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="תיאור"/></Border>
+
+                                <!-- Start -->
+                                <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="⏺ התחלה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🟢 עיגול"/></Border>
+                                <Border Grid.Row="1" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="נקודת כניסה לתהליך. אחד בלבד. כאן מגדירים את הטריגרים שמפעילים את התהליך."/></Border>
+
+                                <!-- End -->
+                                <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="⏹ סיום" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🔴 עיגול"/></Border>
+                                <Border Grid.Row="2" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="נקודת סיום. יכולים להיות כמה (למשל: סיום מוצלח, ביטול)."/></Border>
+
+                                <!-- Stage -->
+                                <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="➕ שלב" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🟦 מלבן"/></Border>
+                                <Border Grid.Row="3" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="שלב עבודה שמכיל משימות. הרוב של התהליך מורכב משלבים."/></Border>
+
+                                <!-- Decision -->
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="◆ תנאי" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🔶 מעוין"/></Border>
+                                <Border Grid.Row="4" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="נקודת החלטה (if/else). חייב לפחות 2 חיבורים יוצאים עם תנאים שונים."/></Border>
+
+                                <!-- Fork -->
+                                <Border Grid.Row="5" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="⑂ פיצול" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="5" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🟪 בר"/></Border>
+                                <Border Grid.Row="5" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="פיצול מקבילי — כל הענפים רצים במקביל. לפחות 2 יוצאים."/></Border>
+
+                                <!-- Join -->
+                                <Border Grid.Row="6" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="⊕ מיזוג" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="6" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🟩 בר"/></Border>
+                                <Border Grid.Row="6" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מיזוג ענפים — ממתין שכל הענפים הנכנסים יסתיימו. לפחות 2 נכנסים."/></Border>
+
+                                <!-- SubWorkflow -->
+                                <Border Grid.Row="7" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🔄 תת-תהליך" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="7" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🟫 מלבן כפול"/></Border>
+                                <Border Grid.Row="7" Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מפעיל תהליך אחר כתת-תהליך. יש לקשר אותו להגדרת תהליך קיימת."/></Border>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TipBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#2E7D32">
+                                💡 ניתן לגרור צמתים על הקנבס. לחיצה על צומת מציגה את המאפיינים שלו בפאנל הצד.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 3. חיבורים (Connectors) -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="3. חיבורים בין צמתים (Connectors)" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource SubHeader}" Text="איך מחברים:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            1️⃣ לחץ על כפתור 🔗 חבר בטולבר&#x0a;
+                            2️⃣ לחץ על צומת המקור (משם)&#x0a;
+                            3️⃣ לחץ על צומת היעד (לשם)&#x0a;
+                            ✅ החיבור נוצר! לחץ עליו לעריכת מאפיינים.
+                        </TextBlock>
+
+                        <TextBlock Style="{StaticResource SubHeader}" Text="מאפייני חיבור:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            • **תווית** — טקסט שמוצג על החץ (למשל: "כן", "לא", "מאושר")&#x0a;
+                            • **עדיפות** — כשיש כמה חיבורים יוצאים, מספר נמוך = בדיקה ראשונה&#x0a;
+                            • **טריגר** — מה גורם למעבר להיבדק (ראה סעיף 4)&#x0a;
+                            • **תנאי** — מה צריך להתקיים (ראה סעיף 5)&#x0a;
+                            • **מצב הערכה** — אוטומטי / ידני / אוטומטי+אישור&#x0a;
+                            • **פעולות** — מה קורה כשהמעבר מופעל (ראה סעיף 6)
+                        </TextBlock>
+
+                        <Border Style="{StaticResource TipBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#2E7D32">
+                                💡 ESC מבטל מצב חיבור. Delete מוחק את הצומת או החיבור הנבחר.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 4. טריגרים (מעברים) -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="4. טריגרים — מה מפעיל מעבר בין שלבים" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            טריגר מגדיר **איזה אירוע** גורם למערכת לבדוק את המעבר.
+                            בחר טריגר כשאתה עורך חיבור (חץ) בפאנל הצד:
+                        </TextBlock>
+
+                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,8,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="טריגר"/></Border>
+                                <Border Grid.Row="0" Grid.Column="1" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="מתי נבדק"/></Border>
+
+                                <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="ידני (Manual)" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="רק כשמשתמש לוחץ על 'קדם תהליך' ידנית."/></Border>
+
+                                <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="כל המשימות הושלמו" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="אוטומטית — ברגע שכל המשימות בשלב הנוכחי נסגרו."/></Border>
+
+                                <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סטטוס משימה השתנה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="כשמשימה ספציפית משנה סטטוס (בשילוב עם תנאי)."/></Border>
+
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="תת-תהליך הסתיים" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="כאשר SubWorkflow שהופעל סיים את ריצתו."/></Border>
+
+                                <Border Grid.Row="5" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="טיימר" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="5" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="אחרי פרק זמן מוגדר מאז הכניסה לשלב (עתידי)."/></Border>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 5. תנאים -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="5. תנאים — מה צריך להתקיים למעבר" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            אחרי שטריגר מופעל, המערכת בודקת את **התנאי**.
+                            רק אם התנאי מתקיים — המעבר יופעל:
+                        </TextBlock>
+
+                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,8,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="תנאי"/></Border>
+                                <Border Grid.Row="0" Grid.Column="1" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="מתי עובר"/></Border>
+
+                                <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="תמיד (Always)" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="ללא תנאי — תמיד עובר (ברירת מחדל)."/></Border>
+
+                                <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="כל המשימות הושלמו" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="כל המשימות (חובה) בשלב סגורות."/></Border>
+
+                                <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סטטוס משימה שווה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="משימה מסוימת בסטטוס ספציפי. הגדר ב-JSON תנאי."/></Border>
+
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סטטוס משימה לא שווה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="משימה מסוימת לא בסטטוס מסוים (למשל: לא 'בוטל')."/></Border>
+
+                                <Border Grid.Row="5" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="תת-תהליך הצליח" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="5" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="SubWorkflow הסתיים בהצלחה (Completed)."/></Border>
+
+                                <Border Grid.Row="6" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="תת-תהליך נכשל" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="6" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="SubWorkflow בוטל או נכשל."/></Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource SubHeader}" Text="מצב הערכה:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            • **אוטומטי** — המעבר מתבצע מיד כשהתנאי מתקיים&#x0a;
+                            • **ידני** — המערכת מחכה שמשתמש ילחץ 'קדם' גם אם התנאי מתקיים&#x0a;
+                            • **אוטומטי + אישור** — המערכת מזהה שהתנאי מתקיים ומציגה אישור למשתמש
+                        </TextBlock>
+
+                        <Border Style="{StaticResource InfoBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#1565C0">
+                                ℹ️ **JSON תנאי** — כשבוחרים תנאי שדורש פרמטרים (למשל "סטטוס משימה שווה"), 
+                                צריך למלא JSON עם הפרטים. דוגמה: {"taskStatusId": 5}
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 6. פעולות (Actions) -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="6. פעולות — מה קורה כשמעבר מופעל" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            לכל חיבור (מעבר) ניתן להגדיר פעולות שיתבצעו כשהמעבר מופעל.
+                            הפעולות מתבצעות לפי סדר (SortOrder):
+                        </TextBlock>
+
+                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,8,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Background="#E65100"><TextBlock Style="{StaticResource TableHeader}" Text="פעולה"/></Border>
+                                <Border Grid.Row="0" Grid.Column="1" Background="#E65100"><TextBlock Style="{StaticResource TableHeader}" Text="מה עושה"/></Border>
+
+                                <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="צור משימות שלב" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="יוצר את כל המשימות שמוגדרות בשלב היעד."/></Border>
+
+                                <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סגור משימות שלב קודם" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="סוגר את כל המשימות הפתוחות בשלב שממנו עוברים."/></Border>
+
+                                <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="שלח התראה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="שולח הודעה/מייל (עתידי — נדרש הגדרת template ב-JSON)."/></Border>
+
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="הפעל תת-תהליך" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מפעיל Workflow אחר כ-SubWorkflow עם פרמטרים."/></Border>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource WarnBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#E65100">
+                                ⚠️ מעבר בלי פעולות יעבור לשלב הבא אבל **לא ייצור משימות ולא יסגור ישנות**.
+                                במרבית המקרים תרצה לפחות "צור משימות שלב" + "סגור משימות שלב קודם".
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 7. טריגרי התחלת תהליך -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="7. טריגרי התחלה — מה מפעיל את התהליך" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            בניגוד לטריגרי מעבר (על חיבורים), **טריגרי התחלה** מגדירים מתי נוצר Instance חדש של התהליך.
+                            הם מוגדרים בלחיצה על צומת ⏺ התחלה:
+                        </TextBlock>
+
+                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,8,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Background="#2E7D32"><TextBlock Style="{StaticResource TableHeader}" Text="מקור"/></Border>
+                                <Border Grid.Row="0" Grid.Column="1" Background="#2E7D32"><TextBlock Style="{StaticResource TableHeader}" Text="מתי נוצר Workflow Instance"/></Border>
+
+                                <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🖱️ הפעלה ידנית" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="משתמש מפעיל ידנית מתוך פרויקט."/></Border>
+
+                                <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="📁 פרויקט נוצר" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="פרויקט חדש נוצר במערכת (אוטומטי). תנאי JSON: סוג פרויקט."/></Border>
+
+                                <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="📋 סוג פרויקט" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="סוג פרויקט הוגדר או השתנה. תנאי: קוד סוג ספציפי."/></Border>
+
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="📧 טיוק מייל" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מייל טויק לפי סוג. תנאי: {&quot;emailFileType&quot;:&quot;WorkOrder&quot;}."/></Border>
+
+                                <Border Grid.Row="5" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🔄 תהליך אב" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="5" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מופעל ע&quot;י Workflow אחר כ-SubWorkflow. לא ניתן להפעלה עצמאית."/></Border>
+
+                                <Border Grid.Row="6" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="⏰ טיימר" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="6" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="תזמון מתוכנת (עתידי)."/></Border>
+
+                                <Border Grid.Row="7" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🔌 API" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="7" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="קריאת API חיצונית מפעילה את התהליך (עתידי)."/></Border>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource InfoBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#1565C0">
+                                ℹ️ **לכל טריגר יש שדות ייחודיים** שמופיעים אוטומטית כשבוחרים את הסוג.
+                                לא צריך לכתוב JSON — השדות מוצגים כטפסים בפאנל הצד.
+                            </TextBlock>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource SubHeader}" Text="📧 טיוק מייל — מצבים:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            • 🏗️ **הזמנת עבודה** — חייב פרויקט + קבצים מצורפים&#x0a;
+                            • 📐 **חומר לתכנון** — חייב פרויקט + קבצים מצורפים&#x0a;
+                            • 💰 **הצעת מחיר** — לא חייב פרויקט, יוצר חדש אוטומטית&#x0a;
+                            • 📋 **בקשת שינוי** — חייב פרויקט קיים&#x0a;
+                            • ✅ **אישור** — חייב פרויקט&#x0a;
+                            • 📨 **תכתובת כללית** — לא חייב פרויקט
+                        </TextBlock>
+
+                        <TextBlock Style="{StaticResource SubHeader}" Text="שדות לפי סוג טריגר:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            • 📧 **טיוק מייל**: סוג טיוק, חייב פרויקט?, צור פרויקט?, סוג חדש, חובה קבצים&#x0a;
+                            • 🖱️ **ידני**: חובה פרויקט?&#x0a;
+                            • 📁 **פרויקט נוצר**: סוגי פרויקט, התחל מיד?&#x0a;
+                            • 📋 **סוג פרויקט**: מסוג → לסוג&#x0a;
+                            • 🔄 **תהליך אב**: ירש ProjectId?
+                        </TextBlock>
+
+                        <Border Style="{StaticResource TipBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#2E7D32">
+                                💡 כשמגדירים טריגרי התחלה, **רצועה ירוקה** מופיעה מעל הקנבס עם סיכום:
+                                "🟢 מופעל ע״י: 📧 טיוק מייל · 📁 פרויקט נוצר"
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 8. תת-תהליכים (SubWorkflows) -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="8. תת-תהליכים (SubWorkflows)" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}">
+                            תת-תהליך הוא Workflow שלם שמופעל מתוך תהליך אב. שימושים:
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            • תהליך ביקורת שמופעל מתוך תהליך תכנון&#x0a;
+                            • תהליך אישורים שמשותף לכמה תהליכים&#x0a;
+                            • הפרדת לוגיקה מורכבת ליחידות קטנות
+                        </TextBlock>
+
+                        <TextBlock Style="{StaticResource SubHeader}" Text="איך מגדירים:"/>
+                        <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
+                            1️⃣ הוסף צומת 🔄 תת-תהליך&#x0a;
+                            2️⃣ בפאנל הצד — בחר את התהליך המקושר מהרשימה&#x0a;
+                            3️⃣ הגדר מצב המתנה:&#x0a;
+                               • **המתן לסיום** — התהליך האב ממתין עד שהתת-תהליך מסתיים&#x0a;
+                               • **הפעל והמשך** — מפעיל ברקע וממשיך הלאה
+                        </TextBlock>
+
+                        <Border Style="{StaticResource WarnBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#E65100">
+                                ⚠️ צומת תת-תהליך שלא מקושר להגדרת תהליך יקבל אזהרה בבדיקת תקינות.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 9. דוגמה מלאה -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="9. דוגמה — תהליך תכנון" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold">
+                            דוגמה לתהליך תכנון מלא:
+                        </TextBlock>
+
+                        <Border Style="{StaticResource InfoBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#1565C0" xml:space="preserve">
+⏺ התחלה
+  טריגר: 📁 פרויקט נוצר (תנאי: סוג = תכנון)
+  טריגר: 📧 טיוק מייל (תנאי: סוג = חומר לתכנון)
+    ↓ (טריגר: אוטומטי, תנאי: תמיד)
+    ↓ פעולות: צור משימות שלב
+➕ קליטת חומרים
+    ↓ (טריגר: כל המשימות הושלמו, תנאי: תמיד)
+    ↓ פעולות: סגור קודם + צור חדש
+◆ בדיקת שלמות
+    ↓ "שלם" (תנאי: סטטוס = מאושר)
+    ↓ "חסר" (תנאי: סטטוס ≠ מאושר)
+➕ תכנון פעיל
+    ↓
+🔄 תהליך ביקורת (SubWorkflow, המתן לסיום)
+    ↓ (טריגר: תת-תהליך הסתיים, תנאי: הצליח)
+➕ הגשה
+    ↓
+⏹ סיום</TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ════════════════════════════════════════════════ -->
+                <!-- 10. קיצורי מקלדת -->
+                <!-- ════════════════════════════════════════════════ -->
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="10. קיצורי מקלדת וטיפים" Style="{StaticResource SectionHeader}"/>
+                    </Expander.Header>
+                    <StackPanel Margin="8,4,0,8">
+                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="מקש"/></Border>
+                                <Border Grid.Row="0" Grid.Column="1" Background="#1565C0"><TextBlock Style="{StaticResource TableHeader}" Text="פעולה"/></Border>
+
+                                <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="Delete" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מוחק את הצומת או החיבור הנבחר."/></Border>
+
+                                <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="Escape" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מבטל מצב חיבור (🔗)."/></Border>
+
+                                <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="Ctrl + גלגלת" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="זום פנימה/החוצה (30%–300%)."/></Border>
+
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="גרירה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="גרור צומת למיקום חדש על הקנבס."/></Border>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TipBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#2E7D32">
+                                💡 כפתור "🔄 סדר אוטומטי" מסדר את כל הצמתים בשכבות לפי BFS מצומת ההתחלה.
+                                שימושי כשהתרשים מבולגן או לאחר ייבוא.
+                            </TextBlock>
+                        </Border>
+
+                        <Border Style="{StaticResource TipBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#2E7D32">
+                                💡 כפתור "✅ בדוק" מריץ בדיקת תקינות: צומת התחלה/סיום, צמתים לא מחוברים,
+                                תנאים חסרים, צמתים לא נגישים, ועוד.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- Bottom spacing -->
+                <Border Height="20"/>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

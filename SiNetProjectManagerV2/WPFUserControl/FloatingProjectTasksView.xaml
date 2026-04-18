@@ -310,6 +310,21 @@
                           VerticalAlignment="Center"
                           Margin="12,0,0,0"
                           ToolTip="הצג/הסתר הערות אחרונות במלואן"/>
+
+                <!-- User filter (admin only, when no project selected) -->
+                <StackPanel Orientation="Horizontal" Margin="12,0,0,0"
+                            Visibility="{Binding ShowUserFilter, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="👤" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableUsers}"
+                              SelectedItem="{Binding FilterByUser}"
+                              DisplayMemberPath="Name"
+                              Width="140"
+                              VerticalContentAlignment="Center"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              TextSearch.TextPath="Name"
+                              ToolTip="סינון לפי משתמש"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -517,7 +532,7 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- Row 4: Status change ComboBox (visible only when card is selected) -->
+                            <!-- Row 4: Status change + Workflow action (visible when selected) -->
                             <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,6,0,0"
                                         Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource BoolToVisibility}}">
                                 <ComboBox ItemsSource="{Binding DataContext.AllowedStatuses, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -527,6 +542,26 @@
                                           Width="130"
                                           Tag="{Binding}"
                                           SelectionChanged="StatusComboBox_SelectionChanged"/>
+
+                                <!-- Workflow action button — visible only for workflow tasks -->
+                                <Button Content="▶ פתח"
+                                        Command="{Binding DataContext.OpenWorkflowTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Style="{StaticResource CardActionButton}"
+                                        Background="#E3F2FD" Foreground="#1565C0"
+                                        FontWeight="SemiBold"
+                                        Margin="8,0,0,0"
+                                        ToolTip="פתח את הפעולה המשויכת למשימה"
+                                        Visibility="{Binding DataContext.IsWorkflowTask, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"/>
+
+                                <!-- Complete workflow task button -->
+                                <Button Content="✅ סיום"
+                                        Command="{Binding DataContext.CompleteWorkflowTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Style="{StaticResource CardActionButton}"
+                                        Background="#E8F5E9" Foreground="#2E7D32"
+                                        FontWeight="SemiBold"
+                                        Margin="4,0,0,0"
+                                        ToolTip="סיים את המשימה וקדם את תהליך העבודה"
+                                        Visibility="{Binding DataContext.IsWorkflowTask, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"/>
                             </StackPanel>
                         </Grid>
                     </Border>

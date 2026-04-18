@@ -1,0 +1,413 @@
+<UserControl x:Class="SiNetProjectManagerV2.Controls.EmailListControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:SiNetProjectManagerV2.Controls"
+             xmlns:local="clr-namespace:SiNetProjectManagerV2.WPFUserControl">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
+        <local:StartsWithAssignedConverter x:Key="StartsWithAssigned"/>
+
+        <!-- Filter Toggle Button Style -->
+        <Style x:Key="FilterToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="1" CornerRadius="3" Padding="6,2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.4"/>
+                                <Setter TargetName="border" Property="Background" Value="Transparent"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Email list item style -->
+        <Style x:Key="EmailListItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Background" Value="{Binding RowBackgroundBrush}"/>
+            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=controls:EmailListControl}}"/>
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <MenuItem Header="📁 שייך לפרויקט"
+                                  Command="{Binding PlacementTarget.Tag.FileEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"
+                                  Visibility="{Binding IsAssigned, Converter={StaticResource InverseBoolToVisConverter}}"/>
+                        <MenuItem Header="↩️ בטל שיוך"
+                                  Command="{Binding PlacementTarget.Tag.UnfileEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"
+                                  Visibility="{Binding IsAssigned, Converter={StaticResource BoolToVis}}"/>
+                        <Separator/>
+                        <MenuItem Header="⏳ סמן כממתין לטיפול"
+                                  Command="{Binding PlacementTarget.Tag.MarkAsPendingCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"/>
+                        <MenuItem Header="👤 סמן כאישי"
+                                  Command="{Binding PlacementTarget.Tag.MarkAsPersonalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"/>
+                        <MenuItem Header="🚫 סמן כלא רלוונטי"
+                                  Command="{Binding PlacementTarget.Tag.MarkAsIrrelevantCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"/>
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#BBDEFB"/>
+                    <Setter Property="BorderBrush" Value="#2196F3"/>
+                    <Setter Property="BorderThickness" Value="2,0,0,1"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.85"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Group header style -->
+        <Style x:Key="GroupHeaderStyle" TargetType="GroupItem">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupItem">
+                        <Expander IsExpanded="True" BorderThickness="0">
+                            <Expander.Header>
+                                <Border Padding="8,4" CornerRadius="4" Margin="0,4,0,2">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#E3F2FD"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Name, Converter={StaticResource StartsWithAssigned}}" Value="True">
+                                                    <Setter Property="Background" Value="#C8E6C9"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Margin="0,0,6,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="📥"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Name, Converter={StaticResource StartsWithAssigned}}" Value="True">
+                                                            <Setter Property="Text" Value="📂"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#1976D2"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Name, Converter={StaticResource StartsWithAssigned}}" Value="True">
+                                                            <Setter Property="Foreground" Value="#2E7D32"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text=" (" Foreground="Gray"/>
+                                        <TextBlock Text="{Binding ItemCount}" Foreground="Gray"/>
+                                        <TextBlock Text=")" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+                            </Expander.Header>
+                            <ItemsPresenter Margin="15,0,0,0"/>
+                        </Expander>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!--
+    EMAIL LIST CONTROL
+    Displays the email list with header, filter legend, loading overlay, and auth prompt.
+    DataContext: EmailManagementViewModel (inherited from parent).
+    -->
+    <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="#F5F5F5" Padding="10">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Emails to File" 
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center"/>
+                                <!-- All / Unread Toggle -->
+                                <ToggleButton IsChecked="{Binding ShowUnreadOnly}"
+                                              Margin="10,0,0,0"
+                                              Padding="8,2"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource FilterToggleStyle}"
+                                              Background="#E3F2FD"
+                                              BorderBrush="#64B5F6"
+                                              ToolTip="הצג רק מיילים שלא נקראו">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="📩 לא נקראו " Foreground="#1565C0" FontSize="11"/>
+                                        <TextBlock Text="{Binding UnreadCount, Mode=OneWay}" 
+                                                   Foreground="#1565C0" 
+                                                   FontWeight="Bold" 
+                                                   FontSize="11"/>
+                                    </StackPanel>
+                                </ToggleButton>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Opacity="0.7">
+                                    <Run Text="{Binding EmailCount, Mode=OneWay}"/>
+                                    <Run Text=" emails"/>
+                                </TextBlock>
+                                <TextBlock Text=" • Loading..." 
+                                           Foreground="#2196F3" 
+                                           FontStyle="Italic"
+                                           Visibility="{Binding IsLoadingOrEnriching, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Command="{Binding LoginCommand}"
+                                    Content="Login"
+                                    Padding="10,5"
+                                    Margin="0,0,5,0"
+                                    Visibility="{Binding IsNotAuthenticated, Converter={StaticResource BoolToVis}}"/>
+
+                            <Button Command="{Binding RefreshCommand}"
+                                    Content="Refresh"
+                                    ToolTip="Refresh"
+                                    Padding="8,5"
+                                    Visibility="{Binding IsAuthenticated, Converter={StaticResource BoolToVis}}"/>
+
+                            <Button Command="{Binding LogoutCommand}"
+                                    Margin="5,0,0,0"
+                                    Padding="8,5"
+                                    Background="#D32F2F"
+                                    Foreground="White"
+                                    BorderBrush="#D32F2F"
+                                    ToolTip="Logout &amp; Switch User"
+                                    Visibility="{Binding IsAuthenticated, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="🚪 Logout" FontWeight="Bold"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Color Legend with Filter Toggles -->
+                    <StackPanel Orientation="Horizontal" 
+                                FlowDirection="RightToLeft" 
+                                Margin="0,8,0,0"
+                                HorizontalAlignment="Right">
+                        <Border Background="#FFD54F" CornerRadius="3" Padding="6,2" Margin="0,0,8,0"
+                                BorderBrush="#FFC107" BorderThickness="1">
+                            <TextBlock Text="⚠️ אי-התאמה" Foreground="#E65100"/>
+                        </Border>
+                        <Border Background="#C8E6C9" CornerRadius="3" Padding="6,2" Margin="0,0,8,0"
+                                BorderBrush="#81C784" BorderThickness="1">
+                            <TextBlock Text="שייך לפרויקט הנבחר" Foreground="#2E7D32"/>
+                        </Border>
+                        <Border Background="#E0E0E0" CornerRadius="3" Padding="6,2" Margin="0,0,8,0"
+                                BorderBrush="#9E9E9E" BorderThickness="1">
+                            <TextBlock Text="שייך לפרויקט אחר" Foreground="#424242"/>
+                        </Border>
+
+                        <ToggleButton IsChecked="{Binding ShowPending}" 
+                                      Style="{StaticResource FilterToggleStyle}"
+                                      Background="#F3E5F5" BorderBrush="#AB47BC" Margin="0,0,8,0"
+                                      ToolTip="לחץ להצגה/הסתרה של מיילים ממתינים לטיפול">
+                            <TextBlock Text="⏳ טיפול בהמשך" Foreground="#7B1FA2"/>
+                        </ToggleButton>
+
+                        <ToggleButton IsChecked="{Binding ShowIgnored}" 
+                                      Style="{StaticResource FilterToggleStyle}"
+                                      Background="#E3F2FD" BorderBrush="#64B5F6" Margin="0,0,8,0"
+                                      ToolTip="לחץ להצגה/הסתרה של מיילים אישיים ולא רלוונטיים">
+                            <TextBlock Text="🚫 אישי / לא רלוונטי" Foreground="#1565C0"/>
+                        </ToggleButton>
+
+                        <Border Background="#FFFFFF" CornerRadius="3" Padding="6,2" Margin="0,0,0,0"
+                                BorderBrush="#BDBDBD" BorderThickness="1">
+                            <TextBlock Text="חדש" Foreground="#616161"/>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Loading Overlay (initial) -->
+            <Border Grid.Row="1" Background="#80FFFFFF"
+                    Visibility="{Binding IsInitializing, Converter={StaticResource BoolToVis}}"
+                    Panel.ZIndex="100">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <ProgressBar IsIndeterminate="True" Width="200" Height="4" Margin="0,0,0,10"/>
+                    <TextBlock Text="{Binding StatusMessage}" HorizontalAlignment="Center" Foreground="#666666"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Email ListBox -->
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding EmailsView}"
+                     SelectedItem="{Binding SelectedEmail, Mode=TwoWay}"
+                     ItemContainerStyle="{StaticResource EmailListItemStyle}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="False"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     BorderThickness="0">
+                <ListBox.GroupStyle>
+                    <GroupStyle ContainerStyle="{StaticResource GroupHeaderStyle}"/>
+                </ListBox.GroupStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <!-- Normal email display -->
+                            <Grid Visibility="{Binding IsLoadMorePlaceholder, Converter={StaticResource InverseBoolToVisConverter}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Status indicator -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
+                                           VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value=""/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAssigned}" Value="True">
+                                                    <Setter Property="Text" Value="✓"/>
+                                                    <Setter Property="Foreground" Value="#2E7D32"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                           Text="{Binding TimeDisplay}" Opacity="0.7" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2"
+                                           Text="{Binding SenderName}" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"/>
+
+                                <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal">
+                                    <TextBlock Text="📎"
+                                               Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
+                                               ToolTip="{Binding RealAttachmentCount, StringFormat='{}{0} attachment(s)'}"
+                                               Margin="4,0,0,0"/>
+                                    <TextBlock Text="{Binding RealAttachmentCount}"
+                                               Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
+                                               Opacity="0.7" VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
+                                           Text="{Binding Subject}" Foreground="#666"
+                                           TextTrimming="CharacterEllipsis" MaxHeight="40"/>
+
+                                <!-- Thread Link Row -->
+                                <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3"
+                                            Orientation="Horizontal" Margin="0,4,0,0"
+                                            Visibility="{Binding ShowThreadProjectLink, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding ThreadProjectLinkText}"
+                                               FontStyle="Italic" Foreground="#616161"/>
+                                    <Button Content="[שייך לפרויקט זה]"
+                                            Foreground="#FF5722" Background="Transparent"
+                                            BorderThickness="0" Cursor="Hand" Margin="8,0,0,0" Padding="4,2"
+                                            ToolTip="לחץ לשייך מייל זה לפרויקט השרשור"
+                                            Command="{Binding DataContext.FileToThreadProjectCommand, RelativeSource={RelativeSource AncestorType=controls:EmailListControl}}"
+                                            CommandParameter="{Binding}">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <TextBlock Text="{TemplateBinding Content}"
+                                                                       Foreground="#FF5722"
+                                                                       TextDecorations="Underline" Cursor="Hand"/>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Foreground" Value="#E64A19"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Load More sentinel -->
+                            <Border Visibility="{Binding IsLoadMorePlaceholder, Converter={StaticResource BoolToVis}}"
+                                    Background="#E3F2FD" CornerRadius="4" Padding="10,8" Cursor="Hand" Margin="0,2">
+                                <Button Command="{Binding DataContext.LoadMoreProjectEmailsCommand, RelativeSource={RelativeSource AncestorType=controls:EmailListControl}}"
+                                        Background="Transparent" BorderThickness="0"
+                                        HorizontalContentAlignment="Center" Cursor="Hand">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="📩 " FontSize="14" VerticalAlignment="Center"/>
+                                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#1565C0">
+                                            <Run Text="הצג עוד "/>
+                                            <Run Text="{Binding LoadMoreRemainingCount, Mode=OneWay}"/>
+                                            <Run Text=" מיילים"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Button>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Loading Overlay -->
+            <Border Grid.Row="1" Background="#80FFFFFF" 
+                    Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="Loading..." HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding StatusMessage}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Not Authenticated Message -->
+            <Border Grid.Row="1" Background="#FAFAFA" 
+                    Visibility="{Binding IsNotAuthenticated, Converter={StaticResource BoolToVis}}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20">
+                    <TextBlock Text="Email" FontSize="48" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Connect to Google" FontWeight="Bold" Margin="0,10,0,5" HorizontalAlignment="Center"/>
+                    <TextBlock Text="to see emails for filing" Opacity="0.7" HorizontalAlignment="Center"/>
+                    <Button Command="{Binding LoginCommand}" Content="Login Now" Padding="15,8" Margin="0,15,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

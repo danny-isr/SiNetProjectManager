@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
+using SiNetSQL.MVVM;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,19 +9,27 @@ using System.Windows.Controls;
 namespace SiNetProjectManagerV2.Dialogs;
 
 /// <summary>
-/// Floating window that displays email metadata and its attachments.
-/// Attachments can be opened via ACC viewer URL.
+/// Combined window: email preview (top) + project creation form (bottom).
+/// Replaces the two-window approach (EmailPreviewWindow + separate dialog).
 /// </summary>
-public partial class EmailPreviewWindow : Window
+public partial class WorkflowCreateProjectWindow : Window
 {
     private readonly int _emailMessageId;
 
-    public EmailPreviewWindow(int emailMessageId)
+    public WorkflowCreateProjectWindow(int emailMessageId, Window? owner = null)
     {
         InitializeComponent();
         _emailMessageId = emailMessageId;
+
+        if (owner != null) Owner = owner;
+
         LoadEmailData();
+        LoadProjectForm();
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Email Preview (top panel)
+    // ════════════════════════════════════════════════════════════════════════
 
     private void LoadEmailData()
     {
@@ -30,6 +39,7 @@ public partial class EmailPreviewWindow : Window
             if (dbFactory == null) return;
 
             using var db = dbFactory.CreateDbContext();
+
             var email = db.EmailInboxMessages
                 .AsNoTracking()
                 .Where(m => m.Id == _emailMessageId)
@@ -38,14 +48,10 @@ public partial class EmailPreviewWindow : Window
 
             if (email != null)
             {
-                Title = $"📧 מייל #{email.Id}";
-                SubjectText.Text = email.Subject ?? "(ללא נושא)";
+                Title = $"🆕 יצירת פרויקט — {email.Subject}";
+                SubjectText.Text = $"📧 {email.Subject ?? "(ללא נושא)"}";
                 FromText.Text = $"מאת: {email.FromAddress}";
                 DateText.Text = $"תאריך: {email.ReceivedUtc.ToLocalTime():dd/MM/yyyy HH:mm}";
-            }
-            else
-            {
-                SubjectText.Text = $"מייל #{_emailMessageId} לא נמצא";
             }
 
             // Load attachments
@@ -78,7 +84,6 @@ public partial class EmailPreviewWindow : Window
             else
             {
                 AttachmentsHeader.Text = "📎 אין קבצים מצורפים";
-                AttachmentsList.Visibility = Visibility.Collapsed;
             }
         }
         catch (Exception ex)
@@ -98,7 +103,6 @@ public partial class EmailPreviewWindow : Window
             return;
         }
 
-        // Build ACC Docs URL
         if (string.IsNullOrEmpty(att.InboxAccProjectId))
         {
             MessageBox.Show("מזהה פרויקט ACC לא נמצא.", "לא זמין",
@@ -113,14 +117,14 @@ public partial class EmailPreviewWindow : Window
         if (!string.IsNullOrEmpty(att.InboxAccFolderId))
             url += $"?folderUrn={Uri.EscapeDataString(att.InboxAccFolderId)}&entityId={Uri.EscapeDataString(att.AccItemId)}";
 
-        OpenInBrowser(url, att.FileName);
-    }
-
-    private void OpenInBrowser(string url, string title)
-    {
         try
         {
-            var viewer = new ExternalBrowserWindow(url, null) { Title = $"📄 {title}", Width = 1200, Height = 800 };
+            var viewer = new ExternalBrowserWindow(url, null)
+            {
+                Title = $"📄 {att.FileName}",
+                Width = 1200,
+                Height = 800
+            };
             viewer.Show();
         }
         catch
@@ -128,15 +132,61 @@ public partial class EmailPreviewWindow : Window
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
     }
-}
 
-/// <summary>Simple display item for attachment list.</summary>
-public class AttachmentDisplayItem
-{
-    public int Id { get; set; }
-    public string FileName { get; set; } = string.Empty;
-    public string? AccItemId { get; set; }
-    public string? AccVersionId { get; set; }
-    public string? InboxAccProjectId { get; set; }
-    public string? InboxAccFolderId { get; set; }
+    // ════════════════════════════════════════════════════════════════════════
+    //  Project Creation Form (bottom panel)
+    // ════════════════════════════════════════════════════════════════════════
+
+    private void LoadProjectForm()
+    {
+        var control = new WpfSiData.WPFUserControl.CreateProjectUserControl(_emailMessageId);
+        ProjectFormHost.Content = control;
+
+        // When project is created, apply Gmail label and close this window
+        if (control.DataContext is CreateProjectViewModel vm)
+        {
+            vm.ProjectCreated += args =>
+            {
+                // Apply Gmail label in background (fire-and-forget, don't block dialog close)
+                if (!string.IsNullOrEmpty(args.GmailMessageId))
+                {
+                    ApplyGmailLabelAsync(args);
+                }
+
+                DialogResult = true;
+            };
+        }
+    }
+
+    /// <summary>
+    /// Applies the Gmail project label to the source email. Fire-and-forget.
+    /// </summary>
+    private static async void ApplyGmailLabelAsync(ProjectCreatedEventArgs args)
+    {
+        try
+        {
+            var google = App.ServiceProvider?.GetService<SiOffice.GoogleConnector.GoogleService>();
+            if (google == null)
+            {
+                SiNetSQL.Services.AppLogger.Warn("[WorkflowCreateProject] GoogleService not available — skipping label");
+                return;
+            }
+
+            SiNetSQL.Services.AppLogger.Info(
+                $"[WorkflowCreateProject] Applying label: {args.LocationName}/{args.ProjectName} → gmail msg {args.GmailMessageId}");
+
+            var labelId = await google.GetOrCreateProjectLabelAsync(
+                args.LocationName, args.ProjectName);
+
+            await google.AttachProjectLabelAsync(args.GmailMessageId!, labelId);
+
+            SiNetSQL.Services.AppLogger.Info(
+                $"[WorkflowCreateProject] ✅ Gmail label applied successfully");
+        }
+        catch (Exception ex)
+        {
+            SiNetSQL.Services.AppLogger.Error(ex,
+                $"[WorkflowCreateProject] Failed to apply Gmail label");
+        }
+    }
 }

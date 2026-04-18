@@ -96,6 +96,7 @@
                 <MenuItem Header="📐 חותמת מהירה (DWF/PDF)" Click="OpenQuickStamp_Click"/>
                 <Separator/>
                 <MenuItem Header="📊 תהליכי עבודה" Click="OpenWorkflowDashboard_Click"/>
+                <MenuItem Header="📈 מצב תהליכים — כלל הפרויקטים" Click="OpenWorkflowStatusDashboard_Click"/>
                 <MenuItem Header="🛠️ ניהול תהליכים (מרוכז)" Click="OpenWorkflowManagement_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
             </MenuItem>

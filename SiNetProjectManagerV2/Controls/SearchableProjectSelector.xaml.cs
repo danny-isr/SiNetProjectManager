@@ -385,6 +385,12 @@ public partial class SearchableProjectSelector : UserControl
         var comboBox = sender as ComboBox;
         var newSelection = comboBox?.SelectedItem;
 
+        if (newSelection == null && !string.IsNullOrWhiteSpace(PART_ComboBox.Text))
+        {
+            Debug.WriteLine("[SearchableProjectSelector] SelectionChanged ignored - transient null during active typing");
+            return;
+        }
+
         var projectId = (newSelection as Project)?.Id ?? -1;
         var projectName = (newSelection as Project)?.Title ?? "null";
         Debug.WriteLine($"[SearchableProjectSelector] PART_ComboBox_SelectionChanged: Id={projectId}, Name='{projectName}'");
@@ -634,9 +640,11 @@ public partial class SearchableProjectSelector : UserControl
         }
         else
         {
-            var filterLower = hasTextFilter ? FilterText.ToLowerInvariant() : null;
-            Debug.WriteLine($"[SearchableProjectSelector:{contextType}] ApplyFilter: Applying combined filter (text='{filterLower}')");
-            _collectionView.Filter = item => MatchesCombinedFilter(item, filterLower);
+            var searchTerms = hasTextFilter
+                ? FilterText.Split([' ', '\t', '\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : [];
+            Debug.WriteLine($"[SearchableProjectSelector:{contextType}] ApplyFilter: Applying combined filter (terms='{string.Join("|", searchTerms)}')");
+            _collectionView.Filter = item => MatchesCombinedFilter(item, searchTerms);
         }
 
         // Log count of visible items
@@ -648,7 +656,7 @@ public partial class SearchableProjectSelector : UserControl
     /// <summary>
     /// Combined filter that checks text search, exclusion list, AND external filter.
     /// </summary>
-    private bool MatchesCombinedFilter(object item, string? filterLower)
+    private bool MatchesCombinedFilter(object item, string[] searchTerms)
     {
         if (item == null) return false;
 
@@ -665,33 +673,42 @@ public partial class SearchableProjectSelector : UserControl
         }
 
         // If no text filter, item passes (already passed exclusion and external checks)
-        if (string.IsNullOrEmpty(filterLower))
+        if (searchTerms.Length == 0)
         {
             return true;
         }
 
         // Check text filter against configured properties
-        return MatchesTextFilter(item, filterLower);
+        return MatchesTextFilter(item, searchTerms);
     }
 
-    private bool MatchesTextFilter(object item, string filterLower)
+    private bool MatchesTextFilter(object item, string[] searchTerms)
     {
         if (_filterPropertyPaths == null || _filterPropertyPaths.Length == 0)
             return true;
 
         var itemType = item.GetType();
 
-        foreach (var propertyPath in _filterPropertyPaths)
+        foreach (var term in searchTerms)
         {
-            // Handle nested properties (e.g., "Company.Name")
-            var value = GetNestedPropertyValue(item, itemType, propertyPath);
-            if (!string.IsNullOrEmpty(value) && value.ToLowerInvariant().Contains(filterLower))
+            var termMatched = false;
+
+            foreach (var propertyPath in _filterPropertyPaths)
             {
-                return true;
+                // Handle nested properties (e.g., "Company.Name")
+                var value = GetNestedPropertyValue(item, itemType, propertyPath);
+                if (!string.IsNullOrEmpty(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    termMatched = true;
+                    break;
+                }
             }
+
+            if (!termMatched)
+                return false;
         }
 
-        return false;
+        return true;
     }
 
     /// <summary>

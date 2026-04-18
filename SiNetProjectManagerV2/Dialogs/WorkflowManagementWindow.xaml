@@ -1,6 +1,7 @@
 ﻿<Window x:Class="SiNetProjectManagerV2.Dialogs.WorkflowManagementWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:uc="clr-namespace:SiNetProjectManagerV2.WPFUserControl"
         Title="ניהול תהליכי עבודה"
         Width="1120" Height="720"
         WindowStartupLocation="CenterOwner"
@@ -115,7 +116,14 @@
             </TabItem>
 
             <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-            <!-- TAB 2: POLICY (שיוך לסוגי פרויקט)                       -->
+            <!-- TAB 2: VISUAL DESIGNER (עורך ויזואלי)                    -->
+            <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+            <TabItem Header="🎨 עורך ויזואלי" x:Name="DesignerTab">
+                <uc:WorkflowDesignerView x:Name="DesignerView"/>
+            </TabItem>
+
+            <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+            <!-- TAB 3: POLICY (שיוך לסוגי פרויקט)                       -->
             <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
             <TabItem Header="⚙️ שיוך תהליכים לסוגי פרויקט" x:Name="PolicyTab">
                 <Grid Margin="8">

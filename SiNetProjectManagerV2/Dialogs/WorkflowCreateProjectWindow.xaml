@@ -1,0 +1,81 @@
+<Window x:Class="SiNetProjectManagerV2.Dialogs.WorkflowCreateProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="יצירת פרויקט חדש"
+        Width="850" Height="750"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        MinWidth="700" MinHeight="600"
+        FlowDirection="RightToLeft"
+        FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="{DynamicResource AppFontSize}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Email + Attachments panel (collapsible) -->
+            <RowDefinition Height="Auto" MaxHeight="280"/>
+            <RowDefinition Height="Auto"/>
+            <!-- Project creation form -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══ Top: Email Info + Attachments ═══ -->
+        <Border Grid.Row="0" Background="#FFF8E1" BorderBrush="#FFD54F" BorderThickness="0,0,0,1" Padding="12,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Email header -->
+                <StackPanel Grid.Row="0">
+                    <TextBlock x:Name="SubjectText" FontSize="14" FontWeight="SemiBold"
+                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="40"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                        <TextBlock x:Name="FromText" Foreground="#555" Margin="0,0,15,0"/>
+                        <TextBlock x:Name="DateText" Foreground="#555"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Attachments header -->
+                <TextBlock Grid.Row="1" x:Name="AttachmentsHeader"
+                           Text="📎 קבצים מצורפים:" FontWeight="SemiBold" Margin="0,8,0,4"/>
+
+                <!-- Attachments list (scrollable) -->
+                <ScrollViewer Grid.Row="2" MaxHeight="130" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="AttachmentsList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="6,3" Margin="0,0,0,2" Background="White"
+                                        CornerRadius="3" BorderBrush="#E0E0E0" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="📄" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding FileName}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"/>
+                                        <Button Grid.Column="2" Content="▶ פתח" Padding="8,2"
+                                                Click="OpenAttachment_Click" Tag="{Binding}"
+                                                Cursor="Hand" Background="#E3F2FD" Foreground="#1565C0"
+                                                BorderBrush="#90CAF9" FontWeight="SemiBold"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- Separator with collapse toggle -->
+        <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch"
+                      Background="#FFD54F" ResizeBehavior="PreviousAndNext" Cursor="SizeNS"/>
+
+        <!-- ═══ Bottom: Project Creation Form ═══ -->
+        <ContentPresenter Grid.Row="2" x:Name="ProjectFormHost"/>
+    </Grid>
+</Window>

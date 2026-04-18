@@ -3,8 +3,11 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNetProjectManagerV2.Dialogs;
 using SiNetProjectManagerV2.Services;
+using SiNetSQL.Data;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiOffice.GoogleConnector.Reports;
@@ -62,14 +65,16 @@ public partial class ManagementSettingsWindow : Window
             HourPriceTextBox.Text = hourPrice;
             InspectionFolderIdTextBox.Text = folderId;
 
-            // ACC Inbox settings (fall back to appsettings.json defaults)
-            var inboxProjectName = await _settingsService.GetOrDefaultAsync(
-                SystemSettingKeys.InboxProjectName,
-                AppConfiguration.InboxProjectName);
+            // Office Management Project for project-independent workflows
+            var officeProjectId = await _settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.OfficeManagementProjectId, "136");
+            OfficeProjectIdTextBox.Text = officeProjectId;
+            await PreviewOfficeProjectNameAsync(officeProjectId);
+
+            // ACC Inbox folder (project name derived from Office Management project above)
             var inboxFolderName = await _settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InboxFolderName,
                 AppConfiguration.InboxFolderName);
-            InboxProjectNameTextBox.Text = inboxProjectName;
             InboxFolderNameTextBox.Text = inboxFolderName;
 
             var reportsFolderId = await _settingsService.GetOrDefaultAsync(
@@ -106,7 +111,6 @@ public partial class ManagementSettingsWindow : Window
             ReportsFolderIdTextBox.Text = legacy.InspectionReportsFolderId;
 
             // Fallback for ACC inbox: use appsettings.json values
-            InboxProjectNameTextBox.Text = AppConfiguration.InboxProjectName;
             InboxFolderNameTextBox.Text = AppConfiguration.InboxFolderName;
         }
 
@@ -146,6 +150,16 @@ public partial class ManagementSettingsWindow : Window
             return;
         }
 
+        // Validate office project ID
+        var officeProjectIdText = OfficeProjectIdTextBox.Text?.Trim() ?? "136";
+        if (!int.TryParse(officeProjectIdText, out var officeProjectId) || officeProjectId <= 0)
+        {
+            MessageBox.Show("נא להזין מספר פרויקט ניהול משרד תקין (מספר חיובי)", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            OfficeProjectIdTextBox.Focus();
+            return;
+        }
+
         try
         {
             // Save to centralized DB table
@@ -159,6 +173,12 @@ public partial class ManagementSettingsWindow : Window
                 hourPrice.ToString("G"),
                 "מחיר שעה ברירת מחדל לחישוב שעות בדוחות R01");
 
+            // Save office management project ID
+            await _settingsService.SetAsync(
+                SystemSettingKeys.OfficeManagementProjectId,
+                officeProjectId.ToString(),
+                "מספר פרויקט ניהול משרד — משמש כברירת מחדל עבור תהליכים ללא פרויקט");
+
             var folderId = InspectionFolderIdTextBox.Text?.Trim() ?? string.Empty;
             await _settingsService.SetAsync(
                 SystemSettingKeys.InspectionTemplatesFolderId,
@@ -171,16 +191,7 @@ public partial class ManagementSettingsWindow : Window
                 reportsFolderId,
                 "Google Drive Folder ID לתיקיית דוחות ביקורת");
 
-            // Save ACC Inbox settings
-            var inboxProjectName = InboxProjectNameTextBox.Text?.Trim() ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(inboxProjectName))
-            {
-                await _settingsService.SetAsync(
-                    SystemSettingKeys.InboxProjectName,
-                    inboxProjectName,
-                    "שם פרויקט ה-Inbox ב-ACC שאליו עולים מיילים וקבצים");
-            }
-
+            // Save ACC Inbox folder name (project name derived from Office Management project)
             var inboxFolderName = InboxFolderNameTextBox.Text?.Trim() ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(inboxFolderName))
             {
@@ -653,6 +664,66 @@ public partial class ManagementSettingsWindow : Window
         {
             OllamaTestButton.IsEnabled = true;
         }
+    }
+
+    #endregion
+
+    #region Office Project Preview
+
+    /// <summary>
+    /// Looks up the project name for the given ID and shows it next to the textbox.
+    /// Also syncs the project title as the ACC Inbox project name (InboxProjectName setting).
+    /// </summary>
+    private async Task PreviewOfficeProjectNameAsync(string? projectIdText)
+    {
+        if (!int.TryParse(projectIdText, out var projectId) || projectId <= 0)
+        {
+            OfficeProjectNamePreview.Text = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var dbFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var project = await db.Projects
+                .AsNoTracking()
+                .Where(p => p.Id == projectId)
+                .Select(p => new { p.NameAndNumber, p.Title })
+                .FirstOrDefaultAsync();
+
+            if (project is not null)
+            {
+                OfficeProjectNamePreview.Text = $"✅ {project.NameAndNumber}";
+
+                // Sync project title as ACC Inbox project name
+                if (!string.IsNullOrWhiteSpace(project.Title))
+                {
+                    await _settingsService.SetAsync(
+                        SystemSettingKeys.InboxProjectName,
+                        project.Title,
+                        "שם פרויקט ה-Inbox ב-ACC — נגזר אוטומטית מפרויקט ניהול משרד");
+                }
+            }
+            else
+            {
+                OfficeProjectNamePreview.Text = "❌ פרויקט לא נמצא";
+            }
+        }
+        catch
+        {
+            OfficeProjectNamePreview.Text = "❌ שגיאה בחיפוש";
+        }
+    }
+
+    #endregion
+
+    #region User Groups
+
+    private void ManageGroupsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new UserGroupManagementWindow { Owner = this };
+        window.ShowDialog();
     }
 
     #endregion

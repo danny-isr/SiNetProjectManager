@@ -26,6 +26,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         // Derived-specific subscription
         viewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
+        viewModel.OpenWorkflowTaskRequested += OnOpenWorkflowTaskRequested;
 
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
@@ -75,7 +76,10 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     protected override void OnClosed(EventArgs e)
     {
         if (DataContext is FloatingProjectTasksViewModel vm)
+        {
             vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
+            vm.OpenWorkflowTaskRequested -= OnOpenWorkflowTaskRequested;
+        }
 
         base.OnClosed(e);
     }
@@ -86,57 +90,29 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
     /// <summary>
     /// Handles Status ComboBox selection change on task cards — saves immediately to DB.
-    /// Follows the same _isSaving guard pattern as TaskPanelView.
     /// </summary>
     private void StatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_isSaving) return;
         if (sender is not ComboBox combo) return;
-        if (combo.Tag is not ProjectAssignment task) return;
-        if (e.AddedItems.Count == 0) return;
-        if (e.AddedItems[0] is not ProjectAssignmentStatus newStatus) return;
 
-        // Initial load — no removed items means first population
-        if (e.RemovedItems.Count == 0) return;
+        var result = Helpers.TaskGridEventHelper.ProcessStatusChange(
+            e, combo, this,
+            out var task, out var newStatus, out var oldStatusId, out var actionNote);
 
-        // Get original status ID
-        int? oldStatusId;
-        if (e.RemovedItems[0] is ProjectAssignmentStatus oldStatus)
+        if (result == Helpers.TaskGridEventHelper.StatusChangeResult.NoChange)
+            return;
+
+        if (result == Helpers.TaskGridEventHelper.StatusChangeResult.Cancelled)
         {
-            oldStatusId = oldStatus.Id;
-        }
-        else
-        {
-            oldStatusId = task.StatusId;
-        }
-
-        // Skip if no actual change
-        if (oldStatusId == newStatus.Id) return;
-
-        // Detect Active → Waiting transition (ball leaving our court)
-        bool wasActionable = task.AssignmentStatus?.IsActionable ?? false;
-        bool willBeWaiting = newStatus.IsOpen && !newStatus.IsActionable;
-
-        string? actionNote = null;
-        if (wasActionable && willBeWaiting)
-        {
-            var dialog = new ActionProofDialog { Owner = this };
-            var result = dialog.ShowDialog();
-
-            if (result != true || !dialog.Confirmed)
-            {
-                // User cancelled — revert the status change
-                ViewModel.RevertTaskInGrid(task);
-                return;
-            }
-
-            actionNote = dialog.ActionNote;
+            ViewModel.RevertTaskInGrid(task!);
+            return;
         }
 
         _isSaving = true;
         try
         {
-            ViewModel.UpdateTaskStatusInline(task, newStatus, oldStatusId, actionNote);
+            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote);
         }
         catch (Exception ex)
         {
@@ -173,6 +149,31 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         var mainWindow = Owner as MainWindow;
         mainWindow?.NavigateToEmail(emailId);
         mainWindow?.Activate();
+    }
+
+    /// <summary>
+    /// Handles workflow task action: routes to the appropriate dialog based on stage code.
+    /// </summary>
+    private void OnOpenWorkflowTaskRequested(int emailId, string stageCode)
+    {
+        var mainWindow = Owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
+
+        switch (stageCode)
+        {
+            case "CreateProject":
+                // Combined window: email preview + project creation in one dialog
+                var createWindow = new Dialogs.WorkflowCreateProjectWindow(
+                    emailId, mainWindow ?? Application.Current.MainWindow);
+                createWindow.ShowDialog();
+                break;
+
+            case "FileAttachments":
+            default:
+                // Navigate to the source email so user can tag/file attachments
+                mainWindow?.NavigateToEmail(emailId);
+                mainWindow?.Activate();
+                break;
+        }
     }
 
     #endregion

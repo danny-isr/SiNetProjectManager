@@ -124,10 +124,17 @@ public partial class ExternalBrowserWindow : Window
                             {
                                 var accPath = WebView2Helper.BuildAccMirroredPath(
                                     _emailInfo, sanitizedFileName);
-                                e.ResultFilePath = accPath;
+                                if (!WebView2Helper.ResolveDuplicateFilePath(this, sanitizedFileName, accPath, out var resolvedAccPath))
+                                {
+                                    e.Cancel = true;
+                                    e.Handled = true;
+                                    return;
+                                }
+
+                                e.ResultFilePath = resolvedAccPath;
                                 e.Handled = true;
                                 System.Diagnostics.Debug.WriteLine(
-                                    $"ExternalBrowser: Download → ACC path: {accPath}");
+                                    $"ExternalBrowser: Download → ACC path: {resolvedAccPath}");
                                 WebView2Helper.TrackDownloadCompletion(
                                     e.DownloadOperation, _emailInfo);
                             }
@@ -138,10 +145,17 @@ public partial class ExternalBrowserWindow : Window
                                     Environment.GetFolderPath(
                                         Environment.SpecialFolder.UserProfile),
                                     "Downloads", sanitizedFileName);
-                                e.ResultFilePath = fallbackPath;
+                                if (!WebView2Helper.ResolveDuplicateFilePath(this, sanitizedFileName, fallbackPath, out var resolvedFallbackPath))
+                                {
+                                    e.Cancel = true;
+                                    e.Handled = true;
+                                    return;
+                                }
+
+                                e.ResultFilePath = resolvedFallbackPath;
                                 e.Handled = true;
                                 System.Diagnostics.Debug.WriteLine(
-                                    $"ExternalBrowser: Download → fallback Downloads: {fallbackPath}");
+                                    $"ExternalBrowser: Download → fallback Downloads: {resolvedFallbackPath}");
                             }
                             break;
 
@@ -151,10 +165,17 @@ public partial class ExternalBrowserWindow : Window
                                 Environment.GetFolderPath(
                                     Environment.SpecialFolder.UserProfile),
                                 "Downloads", sanitizedFileName);
-                            e.ResultFilePath = downloadsPath;
+                            if (!WebView2Helper.ResolveDuplicateFilePath(this, sanitizedFileName, downloadsPath, out var resolvedDownloadsPath))
+                            {
+                                e.Cancel = true;
+                                e.Handled = true;
+                                return;
+                            }
+
+                            e.ResultFilePath = resolvedDownloadsPath;
                             e.Handled = true;
                             System.Diagnostics.Debug.WriteLine(
-                                $"ExternalBrowser: Download → Downloads (local only): {downloadsPath}");
+                                $"ExternalBrowser: Download → Downloads (local only): {resolvedDownloadsPath}");
                             break;
 
                         default: // Cancel

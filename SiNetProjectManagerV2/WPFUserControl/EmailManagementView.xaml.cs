@@ -1,4 +1,4 @@
-ï»¿using System.ComponentModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -36,17 +36,17 @@ namespace SiNetProjectManagerV2.WPFUserControl
             Unloaded += OnUnloaded;
             Loaded += OnLoaded;
 
-            // Phase 1: Bridge VM â†’ WebView2Helper for identity sync
+            // Phase 1: Bridge VM ? WebView2Helper for identity sync
             DataContextChanged += OnDataContextChanged;
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             // Register the live email WebView2 with the PDF renderer for WYSIWYG capture
-            if (EmailWebView != null)
+            if (EmailViewerCtl.WebView != null)
             {
                 _pdfRenderer = App.ServiceProvider?.GetService<WebView2PdfRenderer>();
-                _pdfRenderer?.RegisterLiveView(EmailWebView);
+                _pdfRenderer?.RegisterLiveView(EmailViewerCtl.WebView);
             }
 
             // Initialize Email Context Panel via DI
@@ -77,6 +77,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 _subscribedVm.OpenAccViewerRequested = null;
                 _subscribedVm.OversizedFileConfirmRequested = null;
                 _subscribedVm.OnLogoutRequested = null;
+                _subscribedVm.EmailViewer.AttachmentClicked -= OnViewerAttachmentClicked;
                 WebView2Helper.ProjectFileDownloaded -= OnProjectFileDownloaded;
                 _subscribedVm = null;
             }
@@ -94,7 +95,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 vm.OversizedFileConfirmRequested = OnOversizedFileConfirm;
                 vm.MaxUploadFileSizeBytes = AppConfiguration.MaxUploadFileSizeBytes;
 
-                // Wire up external download â†’ ACC upload pipeline
+                // Wire up external download ? ACC upload pipeline
                 WebView2Helper.ProjectFileDownloaded += OnProjectFileDownloaded;
 
                 // Wire up "create new alternative" input dialog
@@ -113,6 +114,9 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 {
                     WebView2Helper.CurrentUserEmail = vm.ConnectedEmail;
                 }
+
+                // Wire up attachment click from the EmailViewerControl ? open in ACC
+                vm.EmailViewer.AttachmentClicked += OnViewerAttachmentClicked;
             }
         }
 
@@ -125,9 +129,9 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 case nameof(EmailManagementViewModel.ConnectedEmail):
                     // Identity sync + OAuth session bridge: after system-browser auth,
                     // inject session hints into WebView2 and attempt Gmail navigation
-                    if (!string.IsNullOrEmpty(vm.ConnectedEmail) && EmailWebView != null)
+                    if (!string.IsNullOrEmpty(vm.ConnectedEmail) && EmailViewerCtl.WebView != null)
                     {
-                        await WebView2Helper.InjectOAuthSessionAsync(EmailWebView, vm.ConnectedEmail);
+                        await WebView2Helper.InjectOAuthSessionAsync(EmailViewerCtl.WebView, vm.ConnectedEmail);
                     }
                     else if (!string.IsNullOrEmpty(vm.ConnectedEmail))
                     {
@@ -143,9 +147,9 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
                 case nameof(EmailManagementViewModel.IsAuthenticated):
                     // Logout sync: clear WebView2 browsing data when user logs out
-                    if (!vm.IsAuthenticated && EmailWebView != null)
+                    if (!vm.IsAuthenticated && EmailViewerCtl.WebView != null)
                     {
-                        await WebView2Helper.ClearSessionAsync(EmailWebView);
+                        await WebView2Helper.ClearSessionAsync(EmailViewerCtl.WebView);
                         WebView2Helper.CurrentUserEmail = null;
                     }
                     break;
@@ -204,9 +208,9 @@ namespace SiNetProjectManagerV2.WPFUserControl
             _pdfRenderer?.UnregisterLiveView();
 
             // Cleanup the WebView2 helper state to prevent memory leaks
-            if (EmailWebView != null)
+            if (EmailViewerCtl.WebView != null)
             {
-                WebView2Helper.CleanupWebView(EmailWebView);
+                WebView2Helper.CleanupWebView(EmailViewerCtl.WebView);
             }
             if (CalendarWebView != null)
             {
@@ -227,7 +231,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             switch (followUp)
             {
-                // â”€â”€â”€ Utility actions â€” always direct â”€â”€â”€
+                // ??? Utility actions — always direct ???
                 case ActionFollowUp.FileImportDialog:
                     var importDialog = new FileImportDialog(emailMessageId) { Owner = owner };
                     importDialog.ShowDialog();
@@ -236,6 +240,9 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 case ActionFollowUp.WorkflowAdvanceDialog:
                     if (result.OutputData.TryGetValue("WorkflowInstanceId", out var wfIdObj) && wfIdObj is int instanceId)
                     {
+                        // Notify floating tasks to refresh (workflow may have created tasks)
+                        SiNetSQL.Services.ActiveProjectContext.Instance.NotifyTaskDataChanged();
+
                         var wfWindow = new WorkflowInstanceWindow(instanceId) { Owner = owner };
                         wfWindow.Show();
                     }
@@ -245,7 +252,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                     await HandleProjectPickerAsync(owner, emailMessageId);
                     break;
 
-                // â”€â”€â”€ Delegatable actions â€” go through AssignActionDialog â”€â”€â”€
+                // ??? Delegatable actions — go through AssignActionDialog ???
                 case ActionFollowUp.NewProjectDialog:
                 case ActionFollowUp.TaskCreationDialog:
                 case ActionFollowUp.DecisionDialog:
@@ -256,7 +263,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 default:
                     MessageBox.Show(
                         result.Message,
-                        "×¤×¢×•×œ×” × ×“×¨×©×ª", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "ôòåìä ğãøùú", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
             }
         }
@@ -281,7 +288,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (assign.ExecuteDirectly)
             {
-                // User chose to do it themselves â€” open the original dialog
+                // User chose to do it themselves — open the original dialog
                 ExecuteDirectAction(owner, followUp, emailMessageId);
                 return;
             }
@@ -377,7 +384,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (openStatus == null)
             {
-                MessageBox.Show("×œ× × ××¦× ×¡×˜×˜×•×¡ ×¤×¢×™×œ ×‘××¢×¨×›×ª.", "×©×’×™××”",
+                MessageBox.Show("ìà ğîöà ñèèåñ ôòéì áîòøëú.", "ùâéàä",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -394,24 +401,24 @@ namespace SiNetProjectManagerV2.WPFUserControl
             {
                 if (existingTask.AssignedToId == assignee.Id)
                 {
-                    // Same employee â€” just link the email to the existing task
+                    // Same employee — just link the email to the existing task
                     await LinkEmailToTaskIfNeededAsync(db, existingTask.Id, emailMessageId,
                         actionDescription, currentUserId, assignee.Id, ct);
                     await db.SaveChangesAsync(ct);
 
                     MessageBox.Show(
-                        $"×›×‘×¨ ×§×™×™××ª ××©×™××” ××¡×•×’ ×–×” ×¢×‘×•×¨ {assignee.Name} (××–×”×”: {existingTask.Id}).\n" +
-                        $"×”××™×™×œ ×§×•×©×¨ ×œ××©×™××” ×”×§×™×™××ª.",
-                        "×§×•×©×¨ ×œ××©×™××” ×§×™×™××ª", MessageBoxButton.OK, MessageBoxImage.Information);
+                        $"ëáø ÷ééîú îùéîä îñåâ æä òáåø {assignee.Name} (îæää: {existingTask.Id}).\n" +
+                        $"äîééì ÷åùø ìîùéîä ä÷ééîú.",
+                        "÷åùø ìîùéîä ÷ééîú", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
 
-                // Different employee â€” ask user whether to transfer
-                var currentName = existingTask.AssignedTo?.Name ?? $"×¢×•×‘×“ #{existingTask.AssignedToId}";
+                // Different employee — ask user whether to transfer
+                var currentName = existingTask.AssignedTo?.Name ?? $"òåáã #{existingTask.AssignedToId}";
                 var transferResult = MessageBox.Show(
-                    $"××©×™××” ××¡×•×’ ×–×” ×›×‘×¨ ××•×§×¦×™×ª ×œ-{currentName} (××–×”×”: {existingTask.Id}).\n" +
-                    $"×”×× ×œ×”×¢×‘×™×¨ ××ª ×”××©×™××” ×œ-{assignee.Name}?",
-                    "×”×¢×‘×¨×ª ××©×™××”", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    $"îùéîä îñåâ æä ëáø îå÷öéú ì-{currentName} (îæää: {existingTask.Id}).\n" +
+                    $"äàí ìäòáéø àú äîùéîä ì-{assignee.Name}?",
+                    "äòáøú îùéîä", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
                 if (transferResult != MessageBoxResult.Yes)
                     return;
@@ -427,17 +434,17 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 await db.SaveChangesAsync(ct);
 
                 MessageBox.Show(
-                    $"âœ… ×”××©×™××” ×”×•×¢×‘×¨×” ×-{currentName} ×œ-{assignee.Name}.",
-                    "××©×™××” ×”×•×¢×‘×¨×”", MessageBoxButton.OK, MessageBoxImage.Information);
+                    $"? äîùéîä äåòáøä î-{currentName} ì-{assignee.Name}.",
+                    "îùéîä äåòáøä", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             // Build task body with action context for the assignee
             var bodyParts = new List<string>
             {
-                $"[×¤×¢×•×œ×”: {actionDescription}]",
-                $"[×¡×•×’: {followUp}]",
-                $"[××™×™×œ: #{emailMessageId}]",
+                $"[ôòåìä: {actionDescription}]",
+                $"[ñåâ: {followUp}]",
+                $"[îééì: #{emailMessageId}]",
             };
             if (!string.IsNullOrWhiteSpace(note))
                 bodyParts.Add(note);
@@ -448,29 +455,26 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 AssignedToId = assignee.Id,
                 TaskTypeId = taskType?.Id,
                 StatusId = openStatus.Id,
-                Title = $"{actionDescription} â€” ××™×™×œ #{emailMessageId}",
+                Title = $"{actionDescription} — îééì #{emailMessageId}",
                 Body = string.Join(Environment.NewLine, bodyParts),
-                Created = DateTime.Now,
-                AuthorId = currentUserId > 0 ? currentUserId : null,
             };
 
-            db.ProjectAssignments.Add(task);
-            await db.SaveChangesAsync(ct);
-
-            // Link the task to the source email
-            await LinkEmailToTaskIfNeededAsync(db, task.Id, emailMessageId,
-                actionDescription, currentUserId, assignee.Id, ct);
-            await db.SaveChangesAsync(ct);
+            await SiNetSQL.Services.TaskFactory.CreateAsync(db, task, currentUserId,
+                link: new SiNetSQL.Services.TaskFactory.TaskLinkInfo(
+                    TaskLinkEntityType.EmailInboxMessage, emailMessageId,
+                    Description: actionDescription),
+                eventNote: $"îùéîä ğåöøä îôòåìú îééì: {actionDescription}",
+                ct: ct);
 
             MessageBox.Show(
-                $"âœ… ××©×™××” × ×•×¦×¨×” ×¢×‘×•×¨ {assignee.Name}",
-                "××©×™××” × ×•×¦×¨×”", MessageBoxButton.OK, MessageBoxImage.Information);
+                $"? îùéîä ğåöøä òáåø {assignee.Name}",
+                "îùéîä ğåöøä", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         /// <summary>
         /// Links an <see cref="EmailInboxMessage"/> to a <see cref="ProjectAssignment"/>
         /// via <see cref="TaskLink"/> if such a link doesn't already exist.
-        /// Does NOT call <c>SaveChangesAsync</c> â€” the caller is responsible for saving.
+        /// Does NOT call <c>SaveChangesAsync</c> — the caller is responsible for saving.
         /// </summary>
         private static async Task LinkEmailToTaskIfNeededAsync(
             SiNetSQLDbContext db,
@@ -580,10 +584,10 @@ namespace SiNetProjectManagerV2.WPFUserControl
         {
             var sizeMb = fileSizeBytes / (1024.0 * 1024.0);
             var result = MessageBox.Show(
-                $"×”×§×•×‘×¥ \"{fileName}\" ×’×“×•×œ ×-{limitMb} MB ({sizeMb:F1} MB).\n\n" +
-                $"× ×™×ª×Ÿ ×œ×©× ×•×ª ××ª ×”×’×‘×œ×ª ×”×’×•×“×œ ×‘×”×’×“×¨×•×ª (MaxUploadFileSizeMb).\n\n" +
-                $"×”×× ×œ×”×¢×œ×•×ª ×‘×›×œ ×–××ª ×œ-ACC?",
-                "×§×•×‘×¥ ×’×“×•×œ",
+                $"ä÷åáõ \"{fileName}\" âãåì î-{limitMb} MB ({sizeMb:F1} MB).\n\n" +
+                $"ğéúï ìùğåú àú äâáìú äâåãì áäâãøåú (MaxUploadFileSizeMb).\n\n" +
+                $"äàí ìäòìåú áëì æàú ì-ACC?",
+                "÷åáõ âãåì",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
@@ -600,7 +604,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var dialog = new Window
             {
-                Title = "××œ×˜×¨× ×˜×™×‘×” ×—×“×©×”",
+                Title = "àìèøğèéáä çãùä",
                 Width = 340,
                 Height = 160,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -618,7 +622,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var okButton = new Button
             {
-                Content = "××™×©×•×¨",
+                Content = "àéùåø",
                 Width = 80,
                 Height = 28,
                 Margin = new Thickness(0, 0, 8, 0),
@@ -628,7 +632,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var cancelButton = new Button
             {
-                Content = "×‘×™×˜×•×œ",
+                Content = "áéèåì",
                 Width = 80,
                 Height = 28,
                 IsCancel = true
@@ -646,7 +650,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
             var stack = new StackPanel();
             stack.Children.Add(new TextBlock
             {
-                Text = "×”×–×Ÿ ×©× ××œ×˜×¨× ×˜×™×‘×”:",
+                Text = "äæï ùí àìèøğèéáä:",
                 Margin = new Thickness(16, 12, 16, 0),
                 FontSize = 12
             });
@@ -683,6 +687,19 @@ namespace SiNetProjectManagerV2.WPFUserControl
             {
                 cmd.Execute(fe.DataContext);
                 e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// Handles attachment clicks from the extracted EmailViewerControl.
+        /// Opens the attachment in ACC viewer.
+        /// </summary>
+        private void OnViewerAttachmentClicked(EmailAttachment attachment)
+        {
+            if (_subscribedVm?.ShowAttachmentInAccCommand is { } cmd
+                && cmd.CanExecute(attachment))
+            {
+                cmd.Execute(attachment);
             }
         }
     }

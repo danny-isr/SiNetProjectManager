@@ -48,35 +48,50 @@
                          Padding="5,3"
                          FlowDirection="RightToLeft"/>
 
-                <!-- ACC Inbox Project -->
+                <!-- Office Management Project (workflows + ACC Inbox) -->
                 <Separator Margin="0,20,0,10"/>
-                <TextBlock Text="פרויקט Inbox ב-ACC" FontWeight="Bold" Margin="0,0,0,5"/>
-                <TextBlock Text="שם הפרויקט ב-Autodesk Construction Cloud שאליו עולים מיילים וקבצים מצורפים. חייב להתאים בדיוק לשם פרויקט קיים ב-ACC." 
+                <TextBlock Text="פרויקט ניהול משרד" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="פרויקט הבסיס למשרד. משמש גם כברירת מחדל לתהליכי עבודה שאינם משויכים לפרויקט (למשל: הצעת מחיר), וגם כפרויקט ה-Inbox ב-ACC שאליו עולים מיילים וקבצים מצורפים. שם הפרויקט ב-ACC חייב להתאים בדיוק לשם הפרויקט הנבחר כאן." 
                            Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="100"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="מספר פרויקט:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="OfficeProjectIdTextBox" 
+                             Width="100" 
+                             VerticalContentAlignment="Center"
+                             Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="מספר ID של פרויקט ניהול משרד (ברירת מחדל: 136)"/>
+                    <TextBlock x:Name="OfficeProjectNamePreview" 
+                               VerticalAlignment="Center" Margin="10,0,0,0" 
+                               Opacity="0.7" FontStyle="Italic"/>
+                </StackPanel>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="שם פרויקט:" VerticalAlignment="Center" Margin="0,0,0,6"/>
-                    <TextBox x:Name="InboxProjectNameTextBox" Grid.Row="0" Grid.Column="1"
-                             Width="350" HorizontalAlignment="Right"
-                             VerticalContentAlignment="Center" Padding="5,3" Margin="0,0,0,6"
-                             FlowDirection="RightToLeft"
-                             ToolTip="שם הפרויקט ב-ACC (למשל: מיילים למשרד - POC 4)"/>
+                <!-- User Groups -->
+                <Separator Margin="0,20,0,10"/>
+                <DockPanel Margin="0,0,0,8">
+                    <TextBlock Text="קבוצות משתמשים" FontWeight="Bold" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                    <Button x:Name="ManageGroupsButton" Content="⚙ ניהול קבוצות" 
+                            Click="ManageGroupsButton_Click"
+                            DockPanel.Dock="Left" HorizontalAlignment="Left"
+                            Padding="10,4" Cursor="Hand"
+                            Background="Transparent" BorderBrush="#CCC" BorderThickness="1"/>
+                </DockPanel>
+                <TextBlock Text="הגדרת קבוצות (ניהול משרד, הנהלה בכירה, מתכננים), חברי קבוצה וברירת מחדל לשיוך משימות." 
+                           Opacity="0.7" TextWrapping="Wrap"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שם תיקייה:" VerticalAlignment="Center"/>
-                    <TextBox x:Name="InboxFolderNameTextBox" Grid.Row="1" Grid.Column="1"
-                             Width="350" HorizontalAlignment="Right"
+                <!-- ACC Inbox Folder -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="תיקיית Inbox ב-ACC" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="שם התיקייה בתוך פרויקט ניהול המשרד ב-ACC שאליה עולים מיילים וקבצים. הפרויקט עצמו נקבע לפי ההגדרה למעלה." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="שם תיקייה:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="InboxFolderNameTextBox"
+                             Width="250" 
                              VerticalContentAlignment="Center" Padding="5,3"
                              FlowDirection="LeftToRight"
                              ToolTip="שם תיקיית ה-Inbox בתוך הפרויקט (למשל: _Inbox)"/>
-                </Grid>
+                </StackPanel>
 
                 <!-- Hour Price Default -->
                 <Separator Margin="0,20,0,10"/>

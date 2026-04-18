@@ -233,6 +233,8 @@ namespace SiNetProjectManagerV2
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();
+            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTransitionEvaluator>();
+            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionExecutor>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowQueryService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
@@ -247,7 +249,6 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();
             services.AddTransient<SiNetSQL.Services.EmailContext.ActionExecutor>();
-            services.AddTransient<SiNetSQL.Services.EmailContext.EmailActionExecutor>();
 
             // File Import Coordinator: Transient (orchestrates email attachment → project filesystem)
             services.AddTransient<SiNetSQL.Services.Coordinators.FileImportCoordinator>();
@@ -259,6 +260,9 @@ namespace SiNetProjectManagerV2
             services.AddSingleton(sp => new SiNetSQL.Services.OllamaService(
                 AppConfiguration.Configuration,
                 sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.OllamaService>()));
+
+            // Task Status Resolver: Singleton (cached open/closed status ID lookups)
+            services.AddSingleton<SiNetSQL.Services.TaskStatusResolver>();
 
             // ACC Project Provisioning: Transient (ensures ACC project + folder structure exist)
             services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
@@ -282,6 +286,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<EmailContextViewModel>();
             services.AddTransient<WorkflowDashboardViewModel>();
             services.AddTransient<WorkflowInstanceViewModel>();
+            services.AddTransient<WorkflowDesignerViewModel>();
 
             return services.BuildServiceProvider();
         }
@@ -887,6 +892,8 @@ namespace SiNetProjectManagerV2
             e.SetObserved();
         }
 
+        private volatile bool _isShowingError; // re-entrancy guard for layout exceptions
+
         private void HandleException(Exception ex, string source, bool isFatal)
         {
             var errorId = Guid.NewGuid().ToString("N");
@@ -900,15 +907,26 @@ namespace SiNetProjectManagerV2
             }
             try
             {
-                Current?.Dispatcher?.Invoke(() =>
+                if (!_isShowingError)
                 {
-                    var owner = Current.MainWindow;
-                    var msg = $"אירעה שגיאה בלתי צפויה. (Code: {errorId})\nניתן להמשיך לעבוד אך ייתכנו בעיות.";
-                    if (owner != null)
-                        MessageBox.Show(owner, msg, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
-                    else
-                        MessageBox.Show(msg, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
-                });
+                    _isShowingError = true;
+                    Current?.Dispatcher?.BeginInvoke(() =>
+                    {
+                        try
+                        {
+                            var owner = Current.MainWindow;
+                            var msg = $"אירעה שגיאה בלתי צפויה. (Code: {errorId})\nניתן להמשיך לעבוד אך ייתכנו בעיות.";
+                            if (owner != null)
+                                MessageBox.Show(owner, msg, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+                            else
+                                MessageBox.Show(msg, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                        finally
+                        {
+                            _isShowingError = false;
+                        }
+                    });
+                }
             }
             catch { }
             if (isFatal)
