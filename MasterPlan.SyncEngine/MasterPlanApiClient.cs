@@ -482,6 +482,7 @@ public class MasterPlanApiClient : IDisposable
             return await LoadEntitiesFromDumpFileAsync<T>(entityName, cancellationToken);
         }
 
+        const int maxRetries = 3;
         var fullUrl = $"{_baseUrl}{endpoint}";
         _logger.LogInformation("[API REQUEST] RunId={RunId} Entity={EntityName} URL={Url}", _currentRunId ?? "(none)", entityName, fullUrl);
         Console.WriteLine($"    [API] GET {fullUrl}");
@@ -489,10 +490,30 @@ public class MasterPlanApiClient : IDisposable
         try
         {
             TrackApiCall(endpoint, $"Sync:{entityName}");
-            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
 
-            // Read response content for logging
-            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            HttpResponseMessage response = null!;
+            string content = null!;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                response = await _httpClient.GetAsync(endpoint, cancellationToken);
+                content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if ((int)response.StatusCode == 429 && attempt < maxRetries)
+                {
+                    // Respect Retry-After header if present, otherwise exponential backoff
+                    var delay = response.Headers.RetryAfter?.Delta
+                        ?? TimeSpan.FromSeconds(Math.Pow(2, attempt) * 5);
+                    _logger.LogWarning(
+                        "[API RETRY] {EntityName}: 429 Too Many Requests. Attempt {Attempt}/{Max}. Waiting {Delay}s...",
+                        entityName, attempt, maxRetries, delay.TotalSeconds);
+                    Console.WriteLine($"    [API] 429 Too Many Requests — retrying in {delay.TotalSeconds}s (attempt {attempt}/{maxRetries})");
+                    await Task.Delay(delay, cancellationToken);
+                    continue;
+                }
+
+                break;
+            }
             var contentType = response.Content.Headers.ContentType?.MediaType ?? "unknown";
             var contentPreview = content.Length > ResponsePreviewLength 
                 ? content[..ResponsePreviewLength] + "..." 

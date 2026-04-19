@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
              xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
-              xmlns:conv="clr-namespace:SiNetProjectManagerV2.Converters">
+              xmlns:conv="clr-namespace:SiNetProjectManagerV2.Converters"
+             ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
         <!-- קונברטר שמעביר את עצמו כ-CommandParameter -->
         <conv:SelfConverter x:Key="SelfConverter"/>
