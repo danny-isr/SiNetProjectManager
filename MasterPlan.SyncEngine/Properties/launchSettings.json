@@ -2,7 +2,7 @@
   "profiles": {
     "MasterPlan.SyncEngine": {
       "commandName": "Project",
-      "commandLineArgs": "MasterPlan.SyncEngine.exe --daily --skip-validation --no-capture\r\n"
+      "commandLineArgs": "MasterPlan.SyncEngine.exe --monthly --backup \"C:\\Backups\\MasterPlan.bak\"\r\n"
     }
   }
 }

@@ -16,7 +16,7 @@ SqlMapper.AddTypeHandler(new SqlNullableTimeSpanHandler());
 
 // Build configuration
 var configuration = new ConfigurationBuilder()
-    .SetBasePath(Directory.GetCurrentDirectory())
+    .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .Build();
 
