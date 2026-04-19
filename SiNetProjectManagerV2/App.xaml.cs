@@ -310,7 +310,7 @@ namespace SiNetProjectManagerV2
         {
             // Must be set BEFORE any dialog is shown — default is OnLastWindowClose,
             // which causes auto-shutdown when a setup dialog closes with no other windows open.
-            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             ConfigureGlobalHandlers();
             EnableBindingTracing();
