@@ -1,0 +1,120 @@
+<UserControl x:Class="SiNetProjectManagerV2.Controls.ProjectFileTreeControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:local="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+             xmlns:selectors="clr-namespace:SiNetProjectManagerV2.WPFUserControl"
+             xmlns:controls="clr-namespace:SiNetProjectManagerV2.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="600"
+             FontFamily="{DynamicResource AppFontFamily}"
+             FontSize="{DynamicResource AppFontSize}">
+
+    <UserControl.Resources>
+        <!-- Style for ProjectFileNode (alternating rows) -->
+        <Style x:Key="FileItemStyle"
+               TargetType="TreeViewItem"
+               BasedOn="{StaticResource {x:Type TreeViewItem}}">
+            <Setter Property="ItemsControl.AlternationCount" Value="2"/>
+            <Setter Property="Background" Value="#F7F7F7"/>
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#E1E1E1"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DefaultItemStyle"
+               TargetType="TreeViewItem"
+               BasedOn="{StaticResource {x:Type TreeViewItem}}">
+            <Setter Property="ItemsControl.AlternationCount" Value="2"/>
+            <Setter Property="Background" Value="#F7F7F7"/>
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#E1E1E1"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <selectors:FileItemContainerStyleSelector
+            x:Key="FileStyleSelector"
+            FileStyle="{StaticResource FileItemStyle}"
+            DefaultStyle="{StaticResource DefaultItemStyle}" />
+    </UserControl.Resources>
+
+    <TreeView Name="FilesTreeView"
+              ItemsSource="{Binding ProjectFiles, RelativeSource={RelativeSource AncestorType=controls:ProjectFileTreeControl}}"
+              AlternationCount="2"
+              ItemContainerStyleSelector="{StaticResource FileStyleSelector}">
+
+        <i:Interaction.Behaviors>
+            <local:FileDropBehavior
+                FileDroppedCommand="{Binding FileDropCommand, RelativeSource={RelativeSource AncestorType=controls:ProjectFileTreeControl}}"
+                AllowMultipleFiles="False" />
+        </i:Interaction.Behaviors>
+
+        <TreeView.Resources>
+            <!-- ProjectFileNode -->
+            <HierarchicalDataTemplate DataType="{x:Type local:ProjectFileNode}" ItemsSource="{Binding Alternatives}">
+                <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
+                    <TextBlock Text="{Binding FileName}" FontWeight="Bold" />
+                    <TextBlock Text=" (" />
+                    <TextBlock Text="{Binding Extension}" />
+                    <TextBlock Text=")  " />
+                    <TextBlock>
+                        <Run Text="Alt: " />
+                        <Run Text="{Binding AlternativeCount, Mode=OneWay}" />
+                        <Run Text=", Ver: " />
+                        <Run Text="{Binding VersionCount, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </HierarchicalDataTemplate>
+
+            <!-- AlternativeNode with Drag&Drop -->
+            <HierarchicalDataTemplate DataType="{x:Type local:AlternativeNode}" ItemsSource="{Binding Versions}">
+                <HierarchicalDataTemplate.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                        <Setter Property="ItemsControl.AlternationCount" Value="2"/>
+                        <Setter Property="Background" Value="#F7F7F7"/>
+
+                        <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TreeViewItem_PreviewMouseLeftButtonDown"/>
+                        <EventSetter Event="MouseMove" Handler="TreeViewItem_MouseMove"/>
+                        <EventSetter Event="MouseDoubleClick" Handler="TreeViewItem_MouseDoubleClick"/>
+
+                        <Style.Triggers>
+                            <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                <Setter Property="Background" Value="#E1E1E1"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </HierarchicalDataTemplate.ItemContainerStyle>
+
+                <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
+                    <Image Source="{Binding DisplayIcon}" Width="20" Height="20" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding AlternativeName}" FontWeight="SemiBold" />
+                    <TextBlock Text=" (" />
+                    <TextBlock Text="{Binding VersionCount, Mode=OneWay}" />
+                    <TextBlock Text=" גרסאות)" />
+                </StackPanel>
+            </HierarchicalDataTemplate>
+
+            <!-- VersionNode -->
+            <DataTemplate DataType="{x:Type local:VersionNode}">
+                <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
+                    <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,5,0" />
+                    <TextBlock Text="{Binding Description}" Margin="5,0" />
+                    <TextBlock Text=" Ver: " FontWeight="Bold" />
+                    <TextBlock Text="{Binding VersionNumber}" Margin="5,0" />
+                    <TextBlock Text=" Size: " FontWeight="Bold" />
+                    <TextBlock Text="{Binding Size}" Margin="5,0" />
+                    <TextBlock Text=" Date: " FontWeight="Bold" />
+                    <TextBlock Text="{Binding Date}" Margin="5,0" />
+                    <TextBlock Text=" Exclude: " FontWeight="Bold" />
+                    <TextBlock Text="{Binding ExcludeReason}" Margin="5,0" />
+                </StackPanel>
+            </DataTemplate>
+        </TreeView.Resources>
+    </TreeView>
+</UserControl>

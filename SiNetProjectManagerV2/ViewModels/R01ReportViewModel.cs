@@ -1,5 +1,6 @@
 ﻿using SiNetSQL.MVVM;
 using SiNetSQL.Services;
+using Microsoft.Extensions.DependencyInjection;
 using SiOffice.GoogleConnector.Reports;
 using SiOffice.GoogleConnector.Reports.Data;
 using SiOffice.GoogleConnector.Reports.Models;
@@ -65,9 +66,11 @@ public class R01ReportViewModel : INotifyPropertyChanged
 
         _reportService = reportService;
 
-        // Load HourPrice default from Management Settings
-        var managementSettings = ManagementSettingsManager.LoadSettings();
-        HourPrice = managementSettings.HourPriceDefault;
+        // Load HourPrice default from DB SystemSettings
+        var settingsService = App.ServiceProvider.GetRequiredService<SystemSettingsService>();
+        var hourPriceStr = settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.HourPriceDefault, "280").AsTask().GetAwaiter().GetResult();
+        HourPrice = decimal.TryParse(hourPriceStr, out var hp) ? hp : 280m;
         AppLogger.Debug($"[R01] Initialize: HourPrice set to {HourPrice}");
 
         // Load filter data

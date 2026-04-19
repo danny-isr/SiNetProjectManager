@@ -134,7 +134,11 @@
                     <!-- ══════ File Node ══════ -->
                     <HierarchicalDataTemplate DataType="{x:Type local:ProjectFileNode}" ItemsSource="{Binding Alternatives}">
                         <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
-                            <TextBlock Text="📄 " />
+                            <Image Source="{Binding FileTypeIconByExtension}" Width="16" Height="16" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding StorageLocationLabel}" FontWeight="Bold" FontSize="12"
+                                       Foreground="{Binding StorageLocationColor}"
+                                       VerticalAlignment="Center" Margin="0,0,3,0"
+                                       ToolTip="{Binding StorageLocationToolTip}"/>
                             <TextBlock Text="{Binding FileName}" FontWeight="Bold" />
                             <TextBlock Text=" (" />
                             <TextBlock Text="{Binding Extension}" />
@@ -151,7 +155,7 @@
                     <!-- ══════ Alternative Node ══════ -->
                     <HierarchicalDataTemplate DataType="{x:Type local:AlternativeNode}" ItemsSource="{Binding Versions}">
                         <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
-                            <Image Source="{Binding DisplayIcon}" Width="20" Height="20" Margin="0,0,4,0" VerticalAlignment="Center" />
+                            <Image Source="{Binding DisplayIcon}" Width="14" Height="14" Margin="0,0,4,0" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding AlternativeName}" FontWeight="SemiBold" />
                             <TextBlock Text=" (" />
                             <TextBlock Text="{Binding VersionCount, Mode=OneWay}" />
@@ -162,12 +166,28 @@
                     <!-- ══════ Version Node ══════ -->
                     <DataTemplate DataType="{x:Type local:VersionNode}">
                         <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
-                            <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,5,0" />
-                            <!-- ACC cloud badge -->
-                            <TextBlock Text="☁" Foreground="#1565C0" FontWeight="Bold" FontSize="14"
+                            <!-- File type icon from shell -->
+                            <Image Source="{Binding FileTypeIcon}" Width="16" Height="16" Margin="0,0,3,0" />
+                            <!-- Storage location badge -->
+                            <TextBlock Text="{Binding StorageLocationLabel}" FontWeight="Bold" FontSize="13"
                                        VerticalAlignment="Center" Margin="0,0,4,0"
-                                       ToolTip="קובץ שמור ב-ACC — לחץ פעמיים לצפייה"
-                                       Visibility="{Binding IsAccFile, Converter={StaticResource BoolToVis}}"/>
+                                       ToolTip="{Binding StorageLocationToolTip}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StorageDestination}" Value="0">
+                                                <Setter Property="Foreground" Value="#555555"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding StorageDestination}" Value="1">
+                                                <Setter Property="Foreground" Value="#1565C0"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding StorageDestination}" Value="2">
+                                                <Setter Property="Foreground" Value="#0F9D58"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <TextBlock Text="{Binding Description}" Margin="5,0" />
                             <TextBlock Text=" Ver: " FontWeight="Bold" />
                             <TextBlock Text="{Binding VersionNumber}" Margin="5,0" />

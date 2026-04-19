@@ -257,9 +257,24 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Coordinators.AccFileSyncService>();
 
             // Ollama AI Service: Singleton (shared HTTP client for local Ollama server)
-            services.AddSingleton(sp => new SiNetSQL.Services.OllamaService(
-                AppConfiguration.Configuration,
-                sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.OllamaService>()));
+            // On first resolve, checks DB for saved BaseUrl/Model overrides.
+            services.AddSingleton(sp =>
+            {
+                var ollama = new SiNetSQL.Services.OllamaService(
+                    AppConfiguration.Configuration,
+                    sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.OllamaService>());
+
+                // Apply DB overrides if available (non-blocking — DB is already cached by this point)
+                var settings = sp.GetRequiredService<SystemSettingsService>();
+                var dbUrl = Task.Run(() => settings.GetAsync(SystemSettingKeys.OllamaBaseUrl).AsTask()).GetAwaiter().GetResult();
+                if (!string.IsNullOrWhiteSpace(dbUrl))
+                    ollama.BaseUrl = dbUrl;
+                var dbModel = Task.Run(() => settings.GetAsync(SystemSettingKeys.OllamaModel).AsTask()).GetAwaiter().GetResult();
+                if (!string.IsNullOrWhiteSpace(dbModel))
+                    ollama.Model = dbModel;
+
+                return ollama;
+            });
 
             // Task Status Resolver: Singleton (cached open/closed status ID lookups)
             services.AddSingleton<SiNetSQL.Services.TaskStatusResolver>();
@@ -313,12 +328,15 @@ namespace SiNetProjectManagerV2
                 return;
             }
 
-            // ── Step 3: Logging & Management Settings ─────────────────
+            // ── Step 3: Logging ──────────────────────────────────────
             ConfigureLoggingAndSettings();
 
             // ── Step 4: Dependency Injection ──────────────────────────
             ServiceProvider = ConfigureServices();
             WireLegacyLocators();
+
+            // ── Step 4b: Load Management Settings from DB ────────────
+            LoadManagementSettingsFromDb();
 
             // ── Step 5: Background Services (non-blocking) ───────────
             SchedulePdfRendererInit();
@@ -467,7 +485,7 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// Configures AppLogger with user settings, wires ReportLogger, and loads management settings.
+        /// Configures AppLogger with user settings and wires ReportLogger.
         /// </summary>
         private static void ConfigureLoggingAndSettings()
         {
@@ -478,13 +496,22 @@ namespace SiNetProjectManagerV2
 
             // Wire ReportLogger to use AppLogger (for GoogleConnector)
             ReportLogger.Instance = AppLoggerReportAdapter.Instance;
+        }
 
-            // Load admin-level settings — must happen before DefaultProjectService uses ConfiguredTitle
-            var managementSettings = ManagementSettingsManager.LoadSettings();
+        /// <summary>
+        /// Loads admin-level settings from the DB (SystemSettings table) and configures DefaultProjectService.
+        /// Must be called after DI is configured (SystemSettingsService is registered as singleton).
+        /// </summary>
+        private static void LoadManagementSettingsFromDb()
+        {
+            var settingsService = ServiceProvider.GetRequiredService<SystemSettingsService>();
+            var title = Task.Run(() => settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.DefaultProjectTitle, string.Empty).AsTask()).GetAwaiter().GetResult();
+
             SiNetSQL.Services.DefaultProjectService.ConfiguredTitle =
-                string.IsNullOrWhiteSpace(managementSettings.DefaultProjectTitle)
+                string.IsNullOrWhiteSpace(title)
                     ? SiNetSQL.Services.DefaultProjectService.FallbackDefaultProjectTitle
-                    : managementSettings.DefaultProjectTitle;
+                    : title;
         }
 
         /// <summary>
@@ -819,11 +846,13 @@ namespace SiNetProjectManagerV2
                     return false;
                 }
 
-                // Reload settings and retry with the updated title
-                var updatedSettings = ManagementSettingsManager.LoadSettings();
-                var newTitle = string.IsNullOrWhiteSpace(updatedSettings.DefaultProjectTitle)
-                    ? SiNetSQL.Services.DefaultProjectService.FallbackDefaultProjectTitle
-                    : updatedSettings.DefaultProjectTitle;
+                // Reload settings from DB and retry with the updated title
+                var settingsService = ServiceProvider.GetRequiredService<SystemSettingsService>();
+                settingsService.InvalidateCache();
+                var newTitle = Task.Run(() => settingsService.GetOrDefaultAsync(
+                    SystemSettingKeys.DefaultProjectTitle, string.Empty).AsTask()).GetAwaiter().GetResult();
+                if (string.IsNullOrWhiteSpace(newTitle))
+                    newTitle = SiNetSQL.Services.DefaultProjectService.FallbackDefaultProjectTitle;
 
                 SiNetSQL.Services.DefaultProjectService.ConfiguredTitle = newTitle;
                 SiNetSQL.Services.DefaultProjectService.ResetCache();

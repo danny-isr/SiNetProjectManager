@@ -315,18 +315,26 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="מודל AI:" VerticalAlignment="Center" Margin="0,0,0,6"/>
-                    <ComboBox x:Name="OllamaModelComboBox" Grid.Row="0" Grid.Column="1"
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="כתובת שרת:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBox x:Name="OllamaBaseUrlTextBox" Grid.Row="0" Grid.Column="1"
+                             Width="250" HorizontalAlignment="Right"
+                             Padding="5,3" Margin="0,0,0,6"
+                             FlowDirection="LeftToRight"
+                             ToolTip="כתובת שרת Ollama (למשל: http://192.168.1.50:11434). ברירת מחדל: http://localhost:11434"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="מודל AI:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="OllamaModelComboBox" Grid.Row="1" Grid.Column="1"
                               Width="250" HorizontalAlignment="Right"
                               Padding="5,3" Margin="0,0,0,6"
                               FlowDirection="LeftToRight"
                               IsEditable="True"
                               ToolTip="בחר מודל מהרשימה או הקלד שם מודל ידנית"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="סטטוס:" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="OllamaStatusLabel" Grid.Row="1" Grid.Column="1"
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="סטטוס:" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="OllamaStatusLabel" Grid.Row="2" Grid.Column="1"
                                VerticalAlignment="Center"
                                Margin="0,0,0,0"/>
                 </Grid>

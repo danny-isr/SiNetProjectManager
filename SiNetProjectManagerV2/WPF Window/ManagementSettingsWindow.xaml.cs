@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
@@ -101,17 +100,10 @@ public partial class ManagementSettingsWindow : Window
         }
         catch (Exception ex)
         {
-            AppLogger.Error(ex, "Failed to load system settings from DB — falling back to local file");
-
-            // Fallback: read from legacy JSON file
-            var legacy = ManagementSettingsManager.LoadSettings();
-            DefaultProjectTitleTextBox.Text = legacy.DefaultProjectTitle;
-            HourPriceTextBox.Text = legacy.HourPriceDefault.ToString("N0");
-            InspectionFolderIdTextBox.Text = legacy.InspectionTemplatesFolderId;
-            ReportsFolderIdTextBox.Text = legacy.InspectionReportsFolderId;
-
-            // Fallback for ACC inbox: use appsettings.json values
-            InboxFolderNameTextBox.Text = AppConfiguration.InboxFolderName;
+            AppLogger.Error(ex, "Failed to load system settings from DB");
+            MessageBox.Show(
+                $"שגיאה בטעינת הגדרות מהדטאבייס: {ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
         LoadStatusColors();
@@ -214,9 +206,6 @@ public partial class ManagementSettingsWindow : Window
             // Save Ollama AI model
             await SaveOllamaModelAsync();
 
-            // Keep legacy JSON in sync (backward compatibility)
-            SyncToLegacyJson(projectTitle, hourPrice, folderId, reportsFolderId);
-
             // Save status default colors
             SaveStatusColors();
 
@@ -229,28 +218,6 @@ public partial class ManagementSettingsWindow : Window
         {
             MessageBox.Show($"שגיאה בשמירת ההגדרות: {ex.Message}", "שגיאה", 
                 MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Keeps the legacy <c>management_settings.json</c> in sync during the transition period.
-    /// Can be removed once all consumers read from SystemSettings DB table.
-    /// </summary>
-    private static void SyncToLegacyJson(string projectTitle, decimal hourPrice, string folderId, string reportsFolderId)
-    {
-        try
-        {
-            var legacy = ManagementSettingsManager.LoadSettings();
-            legacy.DefaultProjectTitle = projectTitle;
-            legacy.HourPriceDefault = hourPrice;
-            legacy.InspectionTemplatesFolderId = folderId;
-            legacy.ReportsOutputRoot = string.Empty;
-            legacy.InspectionReportsFolderId = reportsFolderId;
-            ManagementSettingsManager.SaveSettings(legacy);
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error(ex, "Failed to sync legacy management_settings.json");
         }
     }
 
@@ -531,6 +498,12 @@ public partial class ManagementSettingsWindow : Window
     /// </summary>
     private async Task LoadOllamaSettingsAsync()
     {
+        // Load saved base URL from DB (fallback to appsettings.json default)
+        var savedBaseUrl = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.OllamaBaseUrl,
+            AppConfiguration.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434");
+        OllamaBaseUrlTextBox.Text = savedBaseUrl;
+
         // Load saved model preference from DB (fallback to appsettings.json default)
         var savedModel = await _settingsService.GetOrDefaultAsync(
             SystemSettingKeys.OllamaModel,
@@ -548,7 +521,7 @@ public partial class ManagementSettingsWindow : Window
                 return;
             }
 
-            var models = await FetchOllamaModelsAsync();
+            var models = await FetchOllamaModelsAsync(savedBaseUrl);
             if (models.Count > 0)
             {
                 foreach (var model in models)
@@ -576,6 +549,17 @@ public partial class ManagementSettingsWindow : Window
     /// </summary>
     private async Task SaveOllamaModelAsync()
     {
+        // Save base URL
+        var baseUrl = OllamaBaseUrlTextBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(baseUrl))
+        {
+            await _settingsService.SetAsync(
+                SystemSettingKeys.OllamaBaseUrl,
+                baseUrl,
+                "כתובת שרת Ollama (למשל: http://192.168.1.50:11434)");
+        }
+
+        // Save model
         var model = OllamaModelComboBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(model)) return;
 
@@ -587,15 +571,18 @@ public partial class ManagementSettingsWindow : Window
         // Update the running singleton immediately
         var ollamaService = App.ServiceProvider.GetService<OllamaService>();
         if (ollamaService is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+                ollamaService.BaseUrl = baseUrl;
             ollamaService.Model = model;
+        }
     }
 
     /// <summary>
     /// Fetches the list of locally available model names from the Ollama <c>/api/tags</c> endpoint.
     /// </summary>
-    private static async Task<List<string>> FetchOllamaModelsAsync()
+    private static async Task<List<string>> FetchOllamaModelsAsync(string baseUrl)
     {
-        var baseUrl = AppConfiguration.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
         var response = await client.GetStringAsync($"{baseUrl}/api/tags").ConfigureAwait(false);
@@ -629,24 +616,29 @@ public partial class ManagementSettingsWindow : Window
         OllamaTestButton.IsEnabled = false;
         OllamaStatusLabel.Text = "⏳ בודק חיבור...";
 
+        var testUrl = OllamaBaseUrlTextBox.Text?.Trim() ?? "http://localhost:11434";
+
         try
         {
-            var ollamaService = App.ServiceProvider.GetService<OllamaService>();
-            if (ollamaService is null)
+            // Test connectivity directly against the URL in the TextBox (not the running singleton)
+            using var testClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            try
             {
-                OllamaStatusLabel.Text = "❌ שירות AI לא רשום במערכת";
-                return;
+                using var pingResponse = await testClient.GetAsync($"{testUrl}/api/tags");
+                if (!pingResponse.IsSuccessStatusCode)
+                {
+                    OllamaStatusLabel.Text = $"❌ שרת ב-{testUrl} החזיר שגיאה ({(int)pingResponse.StatusCode})";
+                    return;
+                }
             }
-
-            var available = await ollamaService.IsAvailableAsync();
-            if (!available)
+            catch (Exception)
             {
-                OllamaStatusLabel.Text = "❌ שרת Ollama לא מגיב — ודא שהשרת פועל";
+                OllamaStatusLabel.Text = $"❌ לא ניתן להתחבר ל-{testUrl} — ודא שהשרת פועל";
                 return;
             }
 
             // Verify the selected model exists in the available list
-            var models = await FetchOllamaModelsAsync();
+            var models = await FetchOllamaModelsAsync(testUrl);
             if (models.Contains(model, StringComparer.OrdinalIgnoreCase))
             {
                 OllamaStatusLabel.Text = $"✅ מודל {model} זמין ומוכן";
