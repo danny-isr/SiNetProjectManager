@@ -13,6 +13,23 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <NoWarn>NU1701</NoWarn>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+
+    <!-- ClickOnce Settings -->
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <ProductName>SiNet Project Manager</ProductName>
+    <PublisherName>SI Office</PublisherName>
+    <ApplicationRevision>1</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+
+    <!-- Ensure all content files are included in publish -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Assets\folder_project.png" />
@@ -60,12 +77,14 @@
     </Resource>
   </ItemGroup>
   <ItemGroup>
-    <None Update="credentials.json">
+    <!-- Content files MUST be marked as Content for ClickOnce -->
+    <Content Include="credentials.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="appsettings.json">
+    </Content>
+    <Content Include="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
+    <!-- appsettings.local.json is optional (user-specific overrides) -->
     <None Update="appsettings.local.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

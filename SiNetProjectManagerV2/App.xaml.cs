@@ -308,78 +308,131 @@ namespace SiNetProjectManagerV2
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Set explicit shutdown mode during startup to prevent premature shutdown
-            // when setup dialogs (credential vault, database connection) are shown.
-            // This will be changed to OnMainWindowClose once MainWindow is established.
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-
-            ConfigureGlobalHandlers();
-            EnableBindingTracing();
-
-            AppSettings = SettingsManager.LoadSettings();
-            ApplySettings();
-
-            // ── Step 1: Credential Vault ──────────────────────────────
-            SetupCredentialVault();
-
-            // ── Step 2: Database Connection Gate ──────────────────────
-            if (!EnsureDatabaseConnection())
+            try
             {
-                Shutdown();
-                return;
+                Log.Information("[STARTUP] ═══ Application startup initiated ═══");
+
+                // Set explicit shutdown mode during startup to prevent premature shutdown
+                // when setup dialogs (credential vault, database connection) are shown.
+                // This will be changed to OnMainWindowClose once MainWindow is established.
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+                Log.Information("[STARTUP] Step 0: Configuring global handlers...");
+                ConfigureGlobalHandlers();
+                EnableBindingTracing();
+
+                Log.Information("[STARTUP] Step 0: Loading app settings...");
+                AppSettings = SettingsManager.LoadSettings();
+                ApplySettings();
+
+                // ── Step 1: Credential Vault ──────────────────────────────
+                Log.Information("[STARTUP] Step 1: Setting up credential vault...");
+                SetupCredentialVault();
+
+                // ── Step 2: Database Connection Gate ──────────────────────
+                Log.Information("[STARTUP] Step 2: Ensuring database connection...");
+                if (!EnsureDatabaseConnection())
+                {
+                    Log.Warning("[STARTUP] Database connection failed. Shutting down.");
+                    Shutdown();
+                    return;
+                }
+
+                // ── Step 3: Logging ──────────────────────────────────────
+                Log.Information("[STARTUP] Step 3: Configuring logging...");
+                ConfigureLoggingAndSettings();
+
+                // ── Step 4: Dependency Injection ──────────────────────────
+                Log.Information("[STARTUP] Step 4: Configuring DI services...");
+                ServiceProvider = ConfigureServices();
+                WireLegacyLocators();
+
+                // ── Step 4b: Load Management Settings from DB ────────────
+                Log.Information("[STARTUP] Step 4b: Loading management settings from DB...");
+                LoadManagementSettingsFromDb();
+
+                // ── Step 5: Background Services (non-blocking) ───────────
+                Log.Information("[STARTUP] Step 5: Scheduling background services...");
+                SchedulePdfRendererInit();
+                StartAccUserBootstrap();
+
+                // ── Step 6: Database Validation & Seeding ─────────────────
+                Log.Information("[STARTUP] Step 6: Validating database schema...");
+                if (!ValidateDatabaseSchema(out var defaultProjectError))
+                {
+                    Log.Warning("[STARTUP] Database schema validation failed. Shutting down.");
+                    Shutdown();
+                    return;
+                }
+
+                // ── Step 7: User Authorization ────────────────────────────
+                Log.Information("[STARTUP] Step 7: Authorizing current user...");
+                if (!AuthorizeCurrentUser())
+                {
+                    Log.Warning("[STARTUP] User authorization failed. Shutting down.");
+                    Shutdown();
+                    return;
+                }
+
+                // ── Step 8: Post-Auth Initialization ──────────────────────
+                Log.Information("[STARTUP] Step 8: Post-auth initialization...");
+                if (defaultProjectError is not null && !HandleDefaultProjectFailure())
+                {
+                    Log.Warning("[STARTUP] Default project handling failed. Shutting down.");
+                    Shutdown();
+                    return;
+                }
+
+                Log.Information("[STARTUP] Step 8: Initializing status colors...");
+                InitializeStatusColors();
+
+                // ── Step 9: Launch ────────────────────────────────────────
+                Log.Information("[STARTUP] Step 9: Enforcing single instance...");
+                if (!EnforceSingleInstance())
+                {
+                    Log.Information("[STARTUP] Another instance is already running. Shutting down.");
+                    Shutdown();
+                    return;
+                }
+
+                Log.Information("[STARTUP] Step 10: Launching main window...");
+                base.OnStartup(e);
+                ShowSplashThenMainWindow();
+
+                // ── Step 10: Post-Launch Admin Alerts ─────────────────────
+                // Show sync failures AFTER MainWindow is established
+                // This ensures the alert is a non-blocking floating notification
+                Dispatcher.BeginInvoke(ShowSyncFailureAlertIfAdmin, DispatcherPriority.Background);
+
+                Log.Information("[STARTUP] ═══ Application startup completed successfully ═══");
             }
-
-            // ── Step 3: Logging ──────────────────────────────────────
-            ConfigureLoggingAndSettings();
-
-            // ── Step 4: Dependency Injection ──────────────────────────
-            ServiceProvider = ConfigureServices();
-            WireLegacyLocators();
-
-            // ── Step 4b: Load Management Settings from DB ────────────
-            LoadManagementSettingsFromDb();
-
-            // ── Step 5: Background Services (non-blocking) ───────────
-            SchedulePdfRendererInit();
-            StartAccUserBootstrap();
-
-            // ── Step 6: Database Validation & Seeding ─────────────────
-            if (!ValidateDatabaseSchema(out var defaultProjectError))
+            catch (Exception ex)
             {
+                // CRITICAL: Unhandled exception during startup
+                // This is the LAST line of defense before silent crash
+                var errorId = Guid.NewGuid().ToString("N");
+
+                try
+                {
+                    Log.Fatal(ex, "[STARTUP FATAL] Application failed to start. ErrorId={ErrorId}", errorId);
+                    Log.CloseAndFlush();
+                }
+                catch { }
+
+                try
+                {
+                    var logPath = GetLogDirectory();
+                    var msg = $"האפליקציה נכשלה בהפעלה:\n\n{ex.Message}\n\n" +
+                              $"קוד שגיאה: {errorId}\n" +
+                              $"לוגים: {logPath}\n\n" +
+                              $"פרטים טכניים:\n{ex.GetType().Name}";
+
+                    MessageBox.Show(msg, "שגיאת הפעלה קריטית", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch { }
+
                 Shutdown();
-                return;
             }
-
-            // ── Step 7: User Authorization ────────────────────────────
-            if (!AuthorizeCurrentUser())
-            {
-                Shutdown();
-                return;
-            }
-
-            // ── Step 8: Post-Auth Initialization ──────────────────────
-            if (defaultProjectError is not null && !HandleDefaultProjectFailure())
-            {
-                Shutdown();
-                return;
-            }
-
-            InitializeStatusColors();
-
-            // ── Step 9: Launch ────────────────────────────────────────
-            if (!EnforceSingleInstance())
-            {
-                Shutdown();
-                return;
-            }
-
-            base.OnStartup(e);
-            ShowSplashThenMainWindow();
-
-            // ── Step 10: Post-Launch Admin Alerts ─────────────────────
-            // Show sync failures AFTER MainWindow is established
-            // This ensures the alert is a non-blocking floating notification
-            Dispatcher.BeginInvoke(ShowSyncFailureAlertIfAdmin, DispatcherPriority.Background);
         }
 
         #region Startup Pipeline Steps
