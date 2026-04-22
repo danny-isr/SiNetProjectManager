@@ -38,6 +38,10 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             // Phase 1: Bridge VM ? WebView2Helper for identity sync
             DataContextChanged += OnDataContextChanged;
+
+            // Wire EmailViewerControl context-menu events
+            EmailViewerCtl.OpenLocalFileRequested += OnViewerOpenLocalFileRequested;
+            EmailViewerCtl.ShowInAccRequested += OnViewerShowInAccRequested;
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -695,6 +699,30 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// Opens the attachment in ACC viewer.
         /// </summary>
         private void OnViewerAttachmentClicked(EmailAttachment attachment)
+        {
+            if (_subscribedVm?.ShowAttachmentInAccCommand is { } cmd
+                && cmd.CanExecute(attachment))
+            {
+                cmd.Execute(attachment);
+            }
+        }
+
+        /// <summary>
+        /// Handles "פתח קובץ מקומי" from EmailViewerControl context menu.
+        /// </summary>
+        private void OnViewerOpenLocalFileRequested(object? sender, EmailAttachment attachment)
+        {
+            if (_subscribedVm?.OpenLocalFileCommand is { } cmd
+                && cmd.CanExecute(attachment))
+            {
+                cmd.Execute(attachment);
+            }
+        }
+
+        /// <summary>
+        /// Handles "הצג ב-ACC" from EmailViewerControl context menu.
+        /// </summary>
+        private void OnViewerShowInAccRequested(object? sender, EmailAttachment attachment)
         {
             if (_subscribedVm?.ShowAttachmentInAccCommand is { } cmd
                 && cmd.CanExecute(attachment))

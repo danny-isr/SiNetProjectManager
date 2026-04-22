@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using Serilog;
 
 namespace SiNetProjectManagerV2.Services.Stamping;
 
@@ -303,24 +304,28 @@ public static class DwfStampManager
 
             var templateStamped = templateStampedSection.Value;
 
+            Log.Information("[DwfStamp] AddStampFromTemplate: EnsureGlobalStampInfrastructure");
             EnsureGlobalStampInfrastructure(
                 sourceArchive,
                 templateArchive,
                 sourceManifest,
                 templateManifest);
 
+            Log.Information("[DwfStamp] AddStampFromTemplate: CopyStampResourcesToTargetLayout");
             CopyStampResourcesToTargetLayout(
                 sourceArchive,
                 templateArchive,
                 target.Section,
                 templateStamped.Section);
 
+            Log.Information("[DwfStamp] AddStampFromTemplate: AdjustStampPositionForPageSize");
             AdjustStampPositionForPageSize(
                 sourceArchive,
                 templateArchive,
                 target.Section,
                 templateStamped.Section);
 
+            Log.Information("[DwfStamp] AddStampFromTemplate: SaveXml manifest.xml");
             SaveXml(sourceArchive, "manifest.xml", sourceManifest);
 
             result = new DwfStampInsertResult
@@ -721,6 +726,7 @@ public static class DwfStampManager
         XElement targetSection,
         XElement templateStampedSection)
     {
+        Log.Debug("[DwfStamp] AdjustStampPositionForPageSize START");
         var targetToc = GetRequiredElement(targetSection, DwfNs + "Toc");
         var templateToc = GetRequiredElement(templateStampedSection, DwfNs + "Toc");
 
@@ -730,12 +736,20 @@ public static class DwfStampManager
         double targetWidthIn = PaperWidthInInches(targetDesc.Root!.Element(EPlotNs + "Paper"));
         double templateWidthIn = PaperWidthInInches(templateDesc.Root!.Element(EPlotNs + "Paper"));
 
+        Log.Debug("[DwfStamp] AdjustPosition: TargetWidth={TargetWidth}in, TemplateWidth={TemplateWidth}in", targetWidthIn, templateWidthIn);
+
         if (targetWidthIn <= 0 || templateWidthIn <= 0)
+        {
+            Log.Warning("[DwfStamp] AdjustPosition SKIPPED — invalid paper width (target={TargetWidth}, template={TemplateWidth})", targetWidthIn, templateWidthIn);
             return;
+        }
 
         double shiftInches = targetWidthIn - templateWidthIn;
         if (Math.Abs(shiftInches) < 0.001)
+        {
+            Log.Debug("[DwfStamp] AdjustPosition SKIPPED — same paper width (shift={Shift})", shiftInches);
             return; // Same paper width — no adjustment needed.
+        }
 
         // Find the markup private entry in the target archive.
         var markupPrivateHref = targetToc
@@ -766,6 +780,7 @@ public static class DwfStampManager
             modified = true;
         }
 
+        Log.Information("[DwfStamp] AdjustPosition: ShiftInches={Shift}, Modified={Modified}", shiftInches, modified);
         if (modified)
             SaveXml(sourceArchive, markupPrivateHref, markupDoc);
     }
@@ -933,6 +948,12 @@ public static class DwfStampManager
     {
         /// <summary>Date placeholder (10 chars). Replace with dd/MM/yyyy formatted date.</summary>
         public const string Date = "DD/MM/YYYY";
+
+        /// <summary>X-placeholder line (47 X's). Each line in the stamp template is this pattern.</summary>
+        public const string XLine = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+
+        /// <summary>Number of X-placeholder lines in the current stamp template.</summary>
+        public const int XLineCount = 9;
     }
 
     /// <summary>
@@ -949,6 +970,10 @@ public static class DwfStampManager
         string dwfPath,
         IReadOnlyDictionary<string, string> replacements)
     {
+        Log.Information("[DwfStamp] ReplaceStampPlaceholders START — Path={Path}, ReplacementCount={Count}", dwfPath, replacements.Count);
+        foreach (var (k, v) in replacements)
+            Log.Debug("[DwfStamp]   Placeholder: '{Key}' ({KeyLen} chars) → '{Value}' ({ValLen} chars)", k, k.Length, v, v.Length);
+
         if (!File.Exists(dwfPath))
             throw new FileNotFoundException("DWF file not found.", dwfPath);
 
@@ -988,22 +1013,27 @@ public static class DwfStampManager
                     using var ms = new MemoryStream();
                     srcStream.CopyTo(ms);
                     var data = ms.ToArray();
+                    int entryHits = 0;
 
                     foreach (var (placeholder, replacement) in replacements)
                     {
                         // UTF-8 (covers XML files where text is stored as attribute values)
-                        totalReplacements += ReplaceBytesInPlace(
+                        int utf8Hits = ReplaceBytesInPlace(
                             data,
                             Encoding.UTF8.GetBytes(placeholder),
                             Encoding.UTF8.GetBytes(replacement));
 
                         // UTF-16LE (covers W2D binary text opcodes)
-                        totalReplacements += ReplaceBytesInPlace(
+                        int utf16Hits = ReplaceBytesInPlace(
                             data,
                             Encoding.Unicode.GetBytes(placeholder),
                             Encoding.Unicode.GetBytes(replacement));
+
+                        entryHits += utf8Hits + utf16Hits;
+                        totalReplacements += utf8Hits + utf16Hits;
                     }
 
+                    Log.Debug("[DwfStamp] ReplaceStampPlaceholders entry={Entry} size={Size} hits={Hits}", entry.FullName, data.Length, entryHits);
                     using var dstStream = newEntry.Open();
                     dstStream.Write(data, 0, data.Length);
                 }
@@ -1017,6 +1047,7 @@ public static class DwfStampManager
         }
 
         // Write back to the same file (header + ZIP with correct offsets).
+        Log.Information("[DwfStamp] ReplaceStampPlaceholders: TotalReplacements={Total}, writing back to {Path}", totalReplacements, dwfPath);
         finalStream.Position = 0;
         using (var fs = File.Create(dwfPath))
         {
@@ -1024,7 +1055,32 @@ public static class DwfStampManager
             fs.Flush();
         }
 
+        Log.Information("[DwfStamp] ReplaceStampPlaceholders DONE — {Total} replacement(s)", totalReplacements);
         return totalReplacements;
+    }
+
+    /// <summary>
+    /// Returns a byte array of exactly <paramref name="targetLength"/> bytes.
+    /// Truncates if too long, pads with 0x20 (space) if too short.
+    /// </summary>
+    private static byte[] FitBytes(byte[] source, int targetLength)
+    {
+        if (source.Length == targetLength)
+            return source;
+
+        var result = new byte[targetLength];
+        if (source.Length > targetLength)
+        {
+            Buffer.BlockCopy(source, 0, result, 0, targetLength);
+        }
+        else
+        {
+            Buffer.BlockCopy(source, 0, result, 0, source.Length);
+            for (int i = source.Length; i < targetLength; i++)
+                result[i] = 0x20; // space
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -1062,7 +1118,219 @@ public static class DwfStampManager
         return count;
     }
 
-    // ── Self-test / verification ───────────────────────────────────────
+    /// <summary>
+    /// Replaces each occurrence of <paramref name="pattern"/> in <paramref name="data"/>
+    /// with a <b>different</b> replacement from <paramref name="replacements"/>.
+    /// The Nth occurrence gets <c>replacements[N]</c>. If there are more occurrences
+    /// than replacements, excess occurrences are replaced with spaces.
+    /// All replacement strings must have the same byte length as <paramref name="pattern"/>.
+    /// </summary>
+    /// <returns>Number of replacements performed.</returns>
+    private static int ReplaceBytesSequential(
+        byte[] data,
+        byte[] pattern,
+        IReadOnlyList<byte[]> replacements)
+    {
+        if (pattern.Length == 0)
+            return 0;
+
+        int count = 0;
+        int limit = data.Length - pattern.Length;
+
+        for (int i = 0; i <= limit; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < pattern.Length; j++)
+            {
+                if (data[i + j] != pattern[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match)
+            {
+                var replacement = count < replacements.Count
+                    ? replacements[count]
+                    : new byte[pattern.Length]; // spaces (0x20) would need explicit fill
+
+                // If we ran out of replacements, fill with spaces
+                if (count >= replacements.Count)
+                {
+                    var spaceBytes = new byte[pattern.Length];
+                    for (int s = 0; s < spaceBytes.Length; s++)
+                        spaceBytes[s] = 0x20;
+                    Buffer.BlockCopy(spaceBytes, 0, data, i, pattern.Length);
+                }
+                else
+                {
+                    Buffer.BlockCopy(replacement, 0, data, i, pattern.Length);
+                }
+
+                i += pattern.Length - 1; // skip past replacement
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Replaces placeholders in a DWF file where a single placeholder pattern appears
+    /// multiple times and each occurrence needs a <b>different</b> replacement text.
+    /// This is used for X-placeholder lines in stamps where all lines are identical
+    /// (e.g. 9 lines of "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    /// but each should be filled with a different sentence.
+    /// <para>
+    /// Also supports single-replacement placeholders (like DD/MM/YYYY) via 
+    /// <paramref name="singleReplacements"/>.
+    /// </para>
+    /// </summary>
+    public static int ReplaceStampPlaceholdersSequential(
+        string dwfPath,
+        IReadOnlyDictionary<string, string> singleReplacements,
+        string xPattern,
+        IReadOnlyList<string> sequentialReplacements)
+    {
+        Log.Information("[DwfStamp] ReplaceStampPlaceholdersSequential START — Path={Path}, SingleCount={Single}, XPatternLen={XLen}, SeqCount={Seq}",
+            dwfPath, singleReplacements.Count, xPattern.Length, sequentialReplacements.Count);
+        for (int idx = 0; idx < sequentialReplacements.Count; idx++)
+            Log.Debug("[DwfStamp]   SeqReplacement[{Idx}]: '{Text}' ({Len} chars)", idx, sequentialReplacements[idx], sequentialReplacements[idx].Length);
+
+        if (!File.Exists(dwfPath))
+            throw new FileNotFoundException("DWF file not found.", dwfPath);
+
+        foreach (var (key, value) in singleReplacements)
+        {
+            if (key.Length != value.Length)
+                throw new ArgumentException(
+                    $"Placeholder '{key}' ({key.Length} chars) and replacement " +
+                    $"'{value}' ({value.Length} chars) must have identical character counts.");
+        }
+
+        var magicHeader = ReadMagicHeader(dwfPath);
+        int totalReplacements = 0;
+
+        using var finalStream = new MemoryStream();
+        finalStream.Write(magicHeader, 0, magicHeader.Length);
+
+        // Build the full X-block pattern and its replacement.
+        // In the raw XML bytes (not parsed), lines are separated by different
+        // CR entity forms: "&#x000D;" in F8 (Name property) and "&#xD;" in F9 (TextPhrase).
+        // The Label property in F8 uses plain spaces.
+        int lineCount = DwfStampManager.StampPlaceholders.XLineCount;
+        string[] crEntities = ["&#x000D;", "&#xD;"];
+        var xBlocksByCr = crEntities.Select(cr => string.Join(cr, Enumerable.Repeat(xPattern, lineCount))).ToArray();
+        string xBlockSpace = string.Join(" ", Enumerable.Repeat(xPattern, lineCount));
+
+        // Build the replacement block: user sentences (trimmed, XML-escaped)
+        var sentenceLines = new List<string>(lineCount);
+        for (int i = 0; i < lineCount; i++)
+        {
+            var line = i < sequentialReplacements.Count
+                ? sequentialReplacements[i].TrimEnd()
+                : string.Empty;
+            // Escape XML special characters since we're inserting into raw XML attribute values
+            line = line.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+            sentenceLines.Add(line);
+        }
+        var replacementBlocksByCr = crEntities.Select(cr => string.Join(cr, sentenceLines)).ToArray();
+        string replacementBlockSpace = string.Join(" ", sentenceLines);
+
+        Log.Debug("[DwfStamp] XBlock CR-entity variants: {Variants}, Space-block length={SpLen}", 
+            string.Join(", ", xBlocksByCr.Select((b, i) => $"'{crEntities[i]}'→{b.Length}chars")), xBlockSpace.Length);
+
+        using (var source = ZipFile.OpenRead(dwfPath))
+        using (var target = new ZipArchive(finalStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                bool isXml = entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+                bool isW2d = entry.FullName.EndsWith(".w2d", StringComparison.OrdinalIgnoreCase);
+                bool isMarkupEntry = isXml || isW2d;
+
+                var newEntry = target.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                newEntry.LastWriteTime = entry.LastWriteTime;
+
+                if (isMarkupEntry)
+                {
+                    using var srcStream = entry.Open();
+                    using var ms = new MemoryStream();
+                    srcStream.CopyTo(ms);
+                    var data = ms.ToArray();
+
+                    // Single replacements (date etc.) — byte-level, same-length, all occurrences
+                    foreach (var (placeholder, replacement) in singleReplacements)
+                    {
+                        totalReplacements += ReplaceBytesInPlace(
+                            data,
+                            Encoding.UTF8.GetBytes(placeholder),
+                            Encoding.UTF8.GetBytes(replacement));
+
+                        totalReplacements += ReplaceBytesInPlace(
+                            data,
+                            Encoding.Unicode.GetBytes(placeholder),
+                            Encoding.Unicode.GetBytes(replacement));
+                    }
+
+                    // X-block replacement — string-level on XML entries.
+                    // Since we create new ZIP entries, byte length may differ.
+                    if (isXml && xPattern.Length > 0)
+                    {
+                        var xmlText = Encoding.UTF8.GetString(data);
+                        bool changed = false;
+
+                        // Replace CR-entity-separated blocks (try all entity variants)
+                        for (int v = 0; v < crEntities.Length; v++)
+                        {
+                            if (xmlText.Contains(xBlocksByCr[v], StringComparison.Ordinal))
+                            {
+                                xmlText = xmlText.Replace(xBlocksByCr[v], replacementBlocksByCr[v]);
+                                changed = true;
+                                totalReplacements++;
+                                Log.Debug("[DwfStamp] XBlock replaced with CR entity '{Entity}' in {Entry}", crEntities[v], entry.FullName);
+                            }
+                        }
+
+                        // Replace space-separated block (F8 Label property)
+                        if (xmlText.Contains(xBlockSpace, StringComparison.Ordinal))
+                        {
+                            xmlText = xmlText.Replace(xBlockSpace, replacementBlockSpace);
+                            changed = true;
+                            totalReplacements++;
+                            Log.Debug("[DwfStamp] XBlock space-sep replaced in {Entry}", entry.FullName);
+                        }
+
+                        if (changed)
+                            data = Encoding.UTF8.GetBytes(xmlText);
+                    }
+
+                    using var dstStream = newEntry.Open();
+                    dstStream.Write(data, 0, data.Length);
+                }
+                else
+                {
+                    using var src = entry.Open();
+                    using var dst = newEntry.Open();
+                    src.CopyTo(dst);
+                }
+            }
+        }
+
+        Log.Information("[DwfStamp] ReplaceStampPlaceholdersSequential: TotalReplacements={Total}, writing back to {Path}", totalReplacements, dwfPath);
+        finalStream.Position = 0;
+        using (var fs = File.Create(dwfPath))
+        {
+            finalStream.CopyTo(fs);
+            fs.Flush();
+        }
+
+        Log.Information("[DwfStamp] ReplaceStampPlaceholdersSequential DONE — {Total} replacement(s)", totalReplacements);
+        return totalReplacements;
+    }
+
+    // ── Self-test / verification
     //
     // C# equivalent of Python's `if __name__ == "__main__":` block.
     // Call DwfStampManager.VerifyMagicHeader("path/to/file.dwf") from

@@ -43,6 +43,13 @@ namespace SiNetProjectManagerV2
         /// Intercepts application close. If background ACC operations (ingestion or external
         /// downloads) are in progress, shows a status dialog with count and options to wait,
         /// force-close, or cancel.
+        /// <para>
+        /// This works correctly with <see cref="ShutdownMode.OnMainWindowClose"/>:
+        /// <list type="bullet">
+        ///   <item>If user cancels: <c>e.Cancel = true</c> prevents MainWindow from closing → app continues running</item>
+        ///   <item>If user confirms: MainWindow closes → app shuts down (ShutdownMode.OnMainWindowClose)</item>
+        /// </list>
+        /// </para>
         /// </summary>
         protected override void OnClosing(CancelEventArgs e)
         {

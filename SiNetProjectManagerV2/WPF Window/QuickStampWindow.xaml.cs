@@ -1,7 +1,9 @@
 ﻿using System.IO;
+using System.Linq;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
+using Serilog;
 using SiNetProjectManagerV2.Services.Stamping;
 using SiNetSQL.Services;
 
@@ -64,6 +66,7 @@ public partial class QuickStampWindow : Window
                 LayoutComboBox.DisplayMemberPath = "LayoutName";
                 LayoutComboBox.SelectedIndex = 0;
                 LayoutSelectorPanel.Visibility = Visibility.Visible;
+                SentencesPanel.Visibility = Visibility.Visible;
                 StampTitlePanel.Visibility = Visibility.Collapsed;
 
                 StatusTextBlock.Text += $"\nנמצאו {_layouts.Count} layouts.";
@@ -73,6 +76,7 @@ public partial class QuickStampWindow : Window
                 StatusTextBlock.Text += $"\n⚠️ שגיאה בזיהוי layouts: {ex.Message}";
                 _layouts = null;
                 LayoutSelectorPanel.Visibility = Visibility.Collapsed;
+                SentencesPanel.Visibility = Visibility.Collapsed;
                 StampTitlePanel.Visibility = Visibility.Collapsed;
             }
         }
@@ -80,6 +84,7 @@ public partial class QuickStampWindow : Window
         {
             _layouts = null;
             LayoutSelectorPanel.Visibility = Visibility.Collapsed;
+            SentencesPanel.Visibility = Visibility.Visible;
             StampTitlePanel.Visibility = Visibility.Visible;
         }
     }
@@ -114,12 +119,14 @@ public partial class QuickStampWindow : Window
         {
             if (_isDwf)
             {
-                await StampDwfAsync(_selectedFilePath, outputPath, inspectorName, stampDate);
+                var sentencesText = SentencesTextBox.Text;
+                await StampDwfAsync(_selectedFilePath, outputPath, inspectorName, stampDate, sentencesText);
             }
             else
             {
                 var stampTitle = StampTitleTextBox.Text.Trim();
-                await StampPdfAsync(_selectedFilePath, outputPath, inspectorName, stampDate, stampTitle);
+                var sentencesText = SentencesTextBox.Text;
+                await StampPdfAsync(_selectedFilePath, outputPath, inspectorName, stampDate, stampTitle, sentencesText);
             }
 
             StatusTextBlock.Text = $"✅ הקובץ נחתם בהצלחה!\n📁 {outputPath}";
@@ -137,16 +144,23 @@ public partial class QuickStampWindow : Window
     // ── PDF stamp (programmatic — no template needed) ──────────────────
 
     private static Task StampPdfAsync(string sourcePath, string outputPath,
-        string inspectorName, DateTime stampDate, string title)
+        string inspectorName, DateTime stampDate, string title, string sentencesText)
     {
         return Task.Run(() =>
         {
+            var sentences = string.IsNullOrWhiteSpace(sentencesText)
+                ? []
+                : sentencesText.Split('\n', StringSplitOptions.None)
+                    .Select(s => s.TrimEnd('\r'))
+                    .ToArray();
+
             PdfStampManager.GenerateAndApplyStamp(sourcePath, outputPath,
                 new PdfGeneratedStampOptions
                 {
                     Title = title,
                     InspectorName = inspectorName,
                     StampDate = stampDate,
+                    Sentences = sentences,
                     Placement = StampPlacement.BottomRight,
                     StampAllPages = true,
                     OverwriteOutput = true
@@ -157,7 +171,7 @@ public partial class QuickStampWindow : Window
     // ── DWF stamp (template-based + date placeholder replacement) ──────
 
     private async Task StampDwfAsync(string sourcePath, string outputPath,
-        string inspectorName, DateTime stampDate)
+        string inspectorName, DateTime stampDate, string sentencesText)
     {
         // Resolve DWF template path from system settings
         var templatePath = await ResolveDwfTemplatePathAsync();
@@ -183,9 +197,22 @@ public partial class QuickStampWindow : Window
 
         StatusTextBlock.Text = $"⏳ חותם layout: \"{selectedLayout.LayoutName}\" (index {selectedLayout.Index})...";
 
+        // Parse user sentences (one per line)
+        var sentences = string.IsNullOrWhiteSpace(sentencesText)
+            ? Array.Empty<string>()
+            : sentencesText.Split('\n', StringSplitOptions.None)
+                .Select(s => s.TrimEnd('\r'))
+                .ToArray();
+
         // Insert stamp from template into the selected layout
         await Task.Run(() =>
         {
+            Log.Information("[QuickStamp] StampDwfAsync START \u2014 Source={Source}, Output={Output}, Template={Template}, Layout={Layout}({Index})",
+                sourcePath, outputPath, templatePath, selectedLayout.LayoutName, selectedLayout.Index);
+            Log.Information("[QuickStamp] Sentences count={Count}", sentences.Length);
+            for (int i = 0; i < sentences.Length; i++)
+                Log.Debug("[QuickStamp]   Sentence[{Idx}]: '{Text}'", i, sentences[i]);
+
             var result = DwfStampManager.AddStampFromTemplate(
                 sourcePath, templatePath, outputPath,
                 new DwfStampInsertOptions
@@ -197,13 +224,36 @@ public partial class QuickStampWindow : Window
             if (!result.Success)
                 throw new InvalidOperationException($"החתמה נכשלה: {result.Message}");
 
-            // Replace date placeholder in the stamped output
-            var replacements = new Dictionary<string, string>
+            Log.Information("[QuickStamp] AddStampFromTemplate succeeded: {Message}", result.Message);
+            Log.Information("[QuickStamp] Output file exists={Exists}, size={Size} bytes",
+                File.Exists(outputPath), File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0);
+
+            // Step 1: Replace date placeholder (proven global replace)
+            var dateReplacements = new Dictionary<string, string>
             {
                 [DwfStampManager.StampPlaceholders.Date] = stampDate.ToString("dd/MM/yyyy")
             };
 
-            DwfStampManager.ReplaceStampPlaceholders(outputPath, replacements);
+            DwfStampManager.ReplaceStampPlaceholders(outputPath, dateReplacements);
+            Log.Information("[QuickStamp] Date replacement done");
+
+            // Step 2: Replace X-placeholder lines sequentially (each line gets a different sentence)
+            if (sentences.Length > 0)
+            {
+                var xPattern = DwfStampManager.StampPlaceholders.XLine;
+                Log.Information("[QuickStamp] XLine pattern: '{Pattern}' ({Len} chars)", xPattern, xPattern.Length);
+                var seqReplacements = StampFormatter.BuildSequentialReplacements(
+                    xPattern, DwfStampManager.StampPlaceholders.XLineCount, sentences);
+
+                DwfStampManager.ReplaceStampPlaceholdersSequential(
+                    outputPath,
+                    new Dictionary<string, string>(),
+                    xPattern,
+                    seqReplacements);
+            }
+
+            Log.Information("[QuickStamp] StampDwfAsync COMPLETE \u2014 Output={Output}, Size={Size} bytes",
+                outputPath, File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0);
         });
     }
 

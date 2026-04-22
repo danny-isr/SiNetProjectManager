@@ -401,6 +401,44 @@ public static class PdfStampManager
     /// </summary>
     private const double ReferencePageShortSide = 595.0;
 
+    /// <summary>
+    /// PdfSharp does not support BiDi / RTL shaping. Hebrew characters render
+    /// in logical (LTR) order instead of visual (RTL) order. This helper
+    /// reverses runs of RTL characters so they appear correctly when drawn
+    /// left-to-right by the PDF renderer, while keeping Latin/digit runs intact.
+    /// </summary>
+    private static string FixRtlForPdf(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+
+        // Reverse the entire char array, then re-reverse any LTR (Latin/digit) runs
+        // so they read correctly. This is a simplified visual-order approach.
+        var chars = text.ToCharArray();
+        Array.Reverse(chars);
+
+        // Re-reverse contiguous Latin/digit/punctuation runs
+        int i = 0;
+        while (i < chars.Length)
+        {
+            if (IsLtrChar(chars[i]))
+            {
+                int start = i;
+                while (i < chars.Length && IsLtrChar(chars[i])) i++;
+                Array.Reverse(chars, start, i - start);
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        return new string(chars);
+
+        static bool IsLtrChar(char c) =>
+            c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9')
+                or '.' or '/' or '-' or ':' or '(' or ')' or '[' or ']' or '{'  or '}';
+    }
+
     private static void DrawStampContent(
         XGraphics gfx, double pageW, double pageH,
         PdfGeneratedStampOptions options)
@@ -410,7 +448,14 @@ public static class PdfStampManager
         double scale = Math.Max(1.0, shortSide / ReferencePageShortSide);
 
         double w = options.Width * scale;
-        double h = options.Height * scale;
+
+        // Calculate height: title + date header, then sentence lines
+        double headerHeight = 75;  // space for title + date
+        double sentenceLineHeight = 18;
+        int sentenceCount = options.Sentences.Count;
+        double baseHeight = options.Height
+            ?? (headerHeight + Math.Max(0, sentenceCount) * sentenceLineHeight + 15);
+        double h = baseHeight * scale;
 
         var (x, y) = CalculatePosition(pageW, pageH, w, h,
             options.Placement, options.MarginX * scale, options.MarginY * scale);
@@ -418,11 +463,11 @@ public static class PdfStampManager
         double cornerRadius = 14 * scale;
         var path = CreateRoundedRectPath(x, y, w, h, cornerRadius);
 
-        // Semi-transparent white fill
-        var fillBrush = new XSolidBrush(XColor.FromArgb(180, 255, 255, 255));
-        gfx.DrawPath(fillBrush, path);
+        // Transparent fill (no background)
+        // var fillBrush = new XSolidBrush(XColor.FromArgb(180, 255, 255, 255));
+        // gfx.DrawPath(fillBrush, path);
 
-        // Dark red border
+        // Dark red border (matches DWF stamp)
         var borderPen = new XPen(XColor.FromArgb(255, 153, 55, 37), 3.5 * scale);
         gfx.DrawPath(borderPen, path);
 
@@ -430,31 +475,44 @@ public static class PdfStampManager
         double pad = 14 * scale;
         double textAreaW = w - pad * 2;
 
-        // Line 1 — Inspector name (bold, right-aligned for RTL)
-        var nameFont = new XFont("Arial", 14 * scale, XFontStyleEx.Bold);
-        var rtlFormat = new XStringFormat
-        {
-            Alignment = XStringAlignment.Far,
-            LineAlignment = XLineAlignment.Near
-        };
-        gfx.DrawString(options.InspectorName, nameFont, blueBrush,
-            new XRect(x + pad, y + 10 * scale, textAreaW, 22 * scale), rtlFormat);
-
-        // Line 2 — Title (bold, right-aligned for RTL)
-        var titleFont = new XFont("Arial", 14 * scale, XFontStyleEx.Bold);
-        gfx.DrawString(options.Title, titleFont, blueBrush,
-            new XRect(x + pad, y + 38 * scale, textAreaW, 22 * scale), rtlFormat);
-
-        // Line 3 — Date (regular, left-aligned)
-        var dateFont = new XFont("Arial", 11 * scale, XFontStyleEx.Regular);
-        var dateText = options.StampDate.ToString("dd/MM/yyyy");
-        var ltrFormat = new XStringFormat
+        // PdfSharp renders LTR — use Near alignment with visually-reversed Hebrew text
+        var format = new XStringFormat
         {
             Alignment = XStringAlignment.Near,
             LineAlignment = XLineAlignment.Near
         };
+
+        // Line 1 — Title header (bold, Tahoma) e.g. "מהנדס תנועה דני ישראל אין התנגדות תנועתית"
+        var titleFont = new XFont("Tahoma", 14 * scale, XFontStyleEx.Bold);
+        gfx.DrawString(FixRtlForPdf(options.Title), titleFont, blueBrush,
+            new XRect(x + pad, y + 10 * scale, textAreaW, 22 * scale), format);
+
+        // Line 2 — Date
+        var dateFont = new XFont("Tahoma", 11 * scale, XFontStyleEx.Regular);
+        var dateText = options.StampDate.ToString("dd/MM/yyyy");
         gfx.DrawString(dateText, dateFont, blueBrush,
-            new XRect(x + pad, y + 70 * scale, textAreaW, 20 * scale), ltrFormat);
+            new XRect(x + pad, y + 38 * scale, textAreaW, 20 * scale), format);
+
+        // Lines 3+ — User sentences (Tahoma)
+        if (sentenceCount > 0)
+        {
+            var sentenceFont = new XFont("Tahoma", 11 * scale, XFontStyleEx.Regular);
+            double sentenceY = y + 62 * scale;
+            double lineStep = sentenceLineHeight * scale;
+
+            foreach (var sentence in options.Sentences)
+            {
+                if (string.IsNullOrWhiteSpace(sentence))
+                {
+                    sentenceY += lineStep;
+                    continue;
+                }
+
+                gfx.DrawString(FixRtlForPdf(sentence), sentenceFont, blueBrush,
+                    new XRect(x + pad, sentenceY, textAreaW, lineStep), format);
+                sentenceY += lineStep;
+            }
+        }
     }
 
     private static XGraphicsPath CreateRoundedRectPath(
@@ -522,8 +580,8 @@ public static class PdfStampManager
 /// </summary>
 public sealed class PdfGeneratedStampOptions
 {
-    /// <summary>Main stamp title (e.g., "מאושר").</summary>
-    public string Title { get; set; } = "מאושר";
+    /// <summary>Main stamp title/header line (e.g., "מהנדס תנועה דני ישראל אין התנגדות תנועתית").</summary>
+    public string Title { get; set; } = "מהנדס תנועה דני ישראל אין התנגדות תנועתית";
 
     /// <summary>Inspector/approver name.</summary>
     public string InspectorName { get; set; } = "";
@@ -541,10 +599,13 @@ public sealed class PdfGeneratedStampOptions
     public StampPlacement Placement { get; set; } = StampPlacement.BottomRight;
 
     /// <summary>Stamp box width in PDF points.</summary>
-    public double Width { get; set; } = 260;
+    public double Width { get; set; } = 380;
 
-    /// <summary>Stamp box height in PDF points.</summary>
-    public double Height { get; set; } = 110;
+    /// <summary>Stamp box height in PDF points. When null, auto-calculated from content.</summary>
+    public double? Height { get; set; }
+
+    /// <summary>User text lines to display below the date (same as DWF X-placeholder lines).</summary>
+    public IReadOnlyList<string> Sentences { get; set; } = [];
 
     /// <summary>Horizontal margin from page edge in points.</summary>
     public double MarginX { get; set; } = 20;

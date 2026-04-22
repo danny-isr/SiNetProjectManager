@@ -6,6 +6,8 @@ namespace SiNetProjectManagerV2.Dialogs;
 /// <summary>
 /// Admin-only popup listing recent daily sync failures from SiData.dbo.Sync_RunFailures.
 /// Shown at startup when failures exist in the last 7 days.
+/// DESIGN NOTE: This is a floating, non-modal notification window that does NOT block the application.
+/// Closing this window does not affect the application lifecycle.
 /// </summary>
 public partial class SyncFailuresWindow : Window
 {
@@ -15,6 +17,9 @@ public partial class SyncFailuresWindow : Window
         SubHeaderText.Text = $"{failures.Count} failure(s) found.";
         FailuresGrid.ItemsSource = failures;
         FailuresGrid.SelectionChanged += FailuresGrid_SelectionChanged;
+
+        // Ensure this window doesn't control application shutdown
+        // By NOT setting Owner, this becomes an independent top-level window
     }
 
     private void FailuresGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)

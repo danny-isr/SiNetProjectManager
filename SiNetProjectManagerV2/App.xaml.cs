@@ -308,8 +308,9 @@ namespace SiNetProjectManagerV2
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Must be set BEFORE any dialog is shown — default is OnLastWindowClose,
-            // which causes auto-shutdown when a setup dialog closes with no other windows open.
+            // Set explicit shutdown mode during startup to prevent premature shutdown
+            // when setup dialogs (credential vault, database connection) are shown.
+            // This will be changed to OnMainWindowClose once MainWindow is established.
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             ConfigureGlobalHandlers();
@@ -364,7 +365,6 @@ namespace SiNetProjectManagerV2
             }
 
             InitializeStatusColors();
-            ShowSyncFailureAlertIfAdmin();
 
             // ── Step 9: Launch ────────────────────────────────────────
             if (!EnforceSingleInstance())
@@ -375,6 +375,11 @@ namespace SiNetProjectManagerV2
 
             base.OnStartup(e);
             ShowSplashThenMainWindow();
+
+            // ── Step 10: Post-Launch Admin Alerts ─────────────────────
+            // Show sync failures AFTER MainWindow is established
+            // This ensures the alert is a non-blocking floating notification
+            Dispatcher.BeginInvoke(ShowSyncFailureAlertIfAdmin, DispatcherPriority.Background);
         }
 
         #region Startup Pipeline Steps
@@ -799,6 +804,7 @@ namespace SiNetProjectManagerV2
 
         /// <summary>
         /// Shows the splash screen then transitions to the main window after a brief delay.
+        /// Once MainWindow is established, switches ShutdownMode to OnMainWindowClose.
         /// </summary>
         private void ShowSplashThenMainWindow()
         {
@@ -811,6 +817,13 @@ namespace SiNetProjectManagerV2
                 {
                     var main = new MainWindow();
                     Current.MainWindow = main;
+
+                    // CRITICAL: Switch shutdown mode to normal behavior now that MainWindow exists.
+                    // This allows the app to close properly when MainWindow is closed.
+                    // Prior to this point, ShutdownMode was OnExplicitShutdown to prevent
+                    // premature shutdown during setup dialogs (credential vault, database connection).
+                    Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
                     main.Show();
                     splash.Close();
                 });
@@ -966,7 +979,8 @@ namespace SiNetProjectManagerV2
 
         /// <summary>
         /// Admin-only: checks SiData.dbo.Sync_RunFailures for recent failures (last 7 days).
-        /// If any exist, shows a popup listing them. Non-blocking — never crashes the app.
+        /// If any exist, shows a non-modal floating popup listing them.
+        /// Non-blocking — never crashes the app and doesn't interfere with application lifecycle.
         /// </summary>
         private void ShowSyncFailureAlertIfAdmin()
         {
@@ -997,8 +1011,9 @@ namespace SiNetProjectManagerV2
                 if (failures.Count == 0)
                     return;
 
+                // Show as a non-modal, floating window (doesn't block main window)
                 var window = new Dialogs.SyncFailuresWindow(failures);
-                window.ShowDialog();
+                window.Show(); // Changed from ShowDialog() to Show()
             }
             catch (Exception ex)
             {

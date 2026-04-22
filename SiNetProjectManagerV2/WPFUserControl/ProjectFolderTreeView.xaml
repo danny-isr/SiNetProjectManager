@@ -74,6 +74,14 @@
             <TextBlock Text="{Binding ProjectDetails}" TextWrapping="Wrap" />
         </Border>
 
+        <!-- סינון: הצג רק קבצים קיימים -->
+        <CheckBox Grid.Row="2" Grid.Column="1"
+                  Content="הצג רק קבצים קיימים"
+                  IsChecked="{Binding ShowOnlyExistingFiles}"
+                  HorizontalAlignment="Right"
+                  Margin="0,0,10,5"
+                  ToolTip="מסנן קבצים ללא גרסאות – מציג רק קבצים שקיימים בפועל על השרת, ב-ACC או ב-Drive" />
+
         <!-- 3: עץ תיקיות (TreeView כולל ScrollViewer פנימי משלו) -->
         <TreeView Grid.Row="3" Grid.Column="0"
                   ItemsSource="{Binding RootFolders}"

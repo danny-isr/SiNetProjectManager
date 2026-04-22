@@ -2,6 +2,7 @@
 using Microsoft.Web.WebView2.Wpf;
 using SiNetProjectManagerV2.Dialogs;
 using SiNetProjectManagerV2.Services;
+using SiNetSQL.Services;
 using SiNetSQL.Services.EmailIngestion;
 using SiOffice.GoogleConnector;
 using System.Collections.Concurrent;
@@ -98,9 +99,21 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// → <c>.WN9Ejb.buw</c> → <c>.nH</c> as fallbacks.
         /// A <see cref="MutationObserver"/> re-applies the isolation whenever Google
         /// dynamically rebuilds the DOM.
+        /// Additionally intercepts ALL link clicks and URL changes to open external URLs in popup windows.
         /// </summary>
         private const string CalendarCleanViewJs = @"
 (function() {
+    const log = (msg) => {
+        try {
+            window.chrome.webview.postMessage('[Calendar JS] ' + msg);
+        } catch(e) {
+            console.log('[Calendar JS] ' + msg);
+        }
+    };
+
+    log('Script loaded and executing...');
+    log('Current URL: ' + window.location.href);
+
     const isolateCalendar = () => {
         const mainCalendar = document.getElementById('YPCqFe')
             || document.querySelector('.WN9Ejb.buw')
@@ -127,8 +140,130 @@ namespace SiNetProjectManagerV2.WPFUserControl
             mainCalendar.style.setProperty('background-color', 'white', 'important');
         }
     };
+
+    // Monitor URL changes (for SPA navigation)
+    let lastUrl = window.location.href;
+    const checkUrlChange = () => {
+        const currentUrl = window.location.href;
+        if (currentUrl !== lastUrl) {
+            log('🔄 URL changed from: ' + lastUrl);
+            log('🔄 URL changed to: ' + currentUrl);
+
+            // Check if navigated to event detail or external link
+            if (!currentUrl.includes('/r/day') && 
+                !currentUrl.includes('/r/week') && 
+                !currentUrl.includes('/r/month') && 
+                !currentUrl.includes('/r/agenda')) {
+                log('🚨 Non-calendar-view URL detected (event details or external)');
+            }
+
+            lastUrl = currentUrl;
+        }
+    };
+
+    // Monitor URL changes via interval (fallback)
+    setInterval(checkUrlChange, 500);
+
+    // Intercept history.pushState and history.replaceState
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(state, title, url) {
+        log('📍 history.pushState intercepted. URL: ' + url);
+
+        // Check if this is an event edit navigation
+        if (url && (url.includes('/r/eventedit') || url.includes('eventedit'))) {
+            log('🚨 EVENT EDIT detected in pushState - BLOCKING and opening in external window');
+
+            // Build full URL if it's relative
+            const fullUrl = url.startsWith('http') ? url : 'https://calendar.google.com' + url;
+            log('Opening external window with URL: ' + fullUrl);
+
+            // Open in external window instead
+            window.open(fullUrl, '_blank');
+
+            // DON'T call original pushState - prevent navigation
+            return;
+        }
+
+        log('✓ Allowing pushState for: ' + url);
+        originalPushState.apply(this, arguments);
+        checkUrlChange();
+    };
+
+    history.replaceState = function(state, title, url) {
+        log('📍 history.replaceState intercepted. URL: ' + url);
+
+        // Check if this is an event edit navigation
+        if (url && (url.includes('/r/eventedit') || url.includes('eventedit'))) {
+            log('🚨 EVENT EDIT detected in replaceState - BLOCKING and opening in external window');
+
+            // Build full URL if it's relative
+            const fullUrl = url.startsWith('http') ? url : 'https://calendar.google.com' + url;
+            log('Opening external window with URL: ' + fullUrl);
+
+            // Open in external window instead
+            window.open(fullUrl, '_blank');
+
+            // DON'T call original replaceState - prevent navigation
+            return;
+        }
+
+        log('✓ Allowing replaceState for: ' + url);
+        originalReplaceState.apply(this, arguments);
+        checkUrlChange();
+    };
+
+    // Intercept ALL clicks on the page - using multiple event types
+    const handleClick = (e) => {
+        const tagName = e.target.tagName || 'unknown';
+        const className = e.target.className || '';
+        log('Click on: ' + tagName + ' class=' + className);
+
+        // Find if the clicked element or any parent is a link
+        let target = e.target;
+        let depth = 0;
+        while (target && depth < 10) {
+            if (target.tagName === 'A' && target.href) {
+                const href = target.href;
+                log('Found A tag! href: ' + href);
+
+                // Check if it's a calendar internal navigation (only day/week/month/agenda views)
+                // Event details (/r/eventedit) should open in external window
+                if (href.includes('calendar.google.com/calendar/u/') && 
+                    (href.includes('/r/day') || 
+                     href.includes('/r/week') || 
+                     href.includes('/r/month') || 
+                     href.includes('/r/agenda'))) {
+                    log('Internal calendar view navigation - allowing');
+                    return;
+                }
+
+                // External link or event details - open in new window
+                log('🚀 EXTERNAL LINK or EVENT DETAILS - blocking and opening in new window: ' + href);
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                window.open(href, '_blank');
+                return false;
+            }
+
+            target = target.parentElement;
+            depth++;
+        }
+    };
+
+    // Install event listeners
+    document.addEventListener('click', handleClick, true);
+    document.addEventListener('mousedown', handleClick, true);
+
+    log('✓ Click interceptors installed');
+    log('✓ URL change monitoring installed');
+
     isolateCalendar();
     new MutationObserver(isolateCalendar).observe(document.body, { childList: true, subtree: true });
+    log('✓ Calendar isolation active');
+    log('═══ Calendar script ready ═══');
 })();";
 
         private class WebView2State : IDisposable
@@ -471,9 +606,13 @@ namespace SiNetProjectManagerV2.WPFUserControl
             coreWebView.NewWindowRequested += (sender, e) =>
             {
                 e.Handled = true;
+                AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                AppLogger.Info($"WebView2 [NEW-WINDOW]: NewWindowRequested event fired");
+                AppLogger.Info($"WebView2 [NEW-WINDOW]: Target URI → {e.Uri}");
+                AppLogger.Info($"WebView2 [NEW-WINDOW]: Opening in external browser window");
+                AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
                 if (!string.IsNullOrEmpty(e.Uri))
                 {
-                    System.Diagnostics.Debug.WriteLine($"WebView2: New-window → floating browser: {e.Uri}");
                     var emailInfo = GetSelectedEmailInfo(webView);
                     webView.Dispatcher.InvokeAsync(() => OpenExternalBrowserWindow(webView, e.Uri, emailInfo));
                 }
@@ -482,24 +621,44 @@ namespace SiNetProjectManagerV2.WPFUserControl
             // 3. Navigation guard — only allow Gmail core domains; everything else opens externally
             coreWebView.NavigationStarting += (sender, e) =>
             {
-                System.Diagnostics.Debug.WriteLine($"WebView2: NavigationStarting → {e.Uri}");
+                AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                AppLogger.Info($"WebView2 [NAVIGATION]: NavigationStarting event fired");
+                AppLogger.Info($"WebView2 [NAVIGATION]: Target URI → {e.Uri}");
+                AppLogger.Info($"WebView2 [NAVIGATION]: IsUserInitiated → {e.IsUserInitiated}");
+                AppLogger.Info($"WebView2 [NAVIGATION]: IsRedirected → {e.IsRedirected}");
 
-                if (string.IsNullOrEmpty(e.Uri)) return;
+                if (string.IsNullOrEmpty(e.Uri))
+                {
+                    AppLogger.Info($"WebView2 [NAVIGATION]: URI is empty, allowing navigation");
+                    AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    return;
+                }
 
                 // Always allow internal URIs and virtual host
                 if (e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
                     e.Uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
                     e.Uri.Contains(InlineImageProvider.VirtualHostName, StringComparison.OrdinalIgnoreCase))
                 {
+                    AppLogger.Info($"WebView2 [NAVIGATION]: Internal/Virtual URI detected, allowing navigation");
+                    AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
                     return;
                 }
 
                 // Allow only Gmail core navigations (mail, auth, calendar) + supporting assets
-                if (IsGmailCoreNavigation(e.Uri)) return;
+                bool isCoreNav = IsGmailCoreNavigation(e.Uri);
+                AppLogger.Info($"WebView2 [NAVIGATION]: IsGmailCoreNavigation result → {isCoreNav}");
+
+                if (isCoreNav)
+                {
+                    AppLogger.Info($"WebView2 [NAVIGATION]: ✓ ALLOWED - Core Gmail/Calendar navigation");
+                    AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    return;
+                }
 
                 // Everything else (other Google domains, external sites) → floating browser window
                 e.Cancel = true;
-                System.Diagnostics.Debug.WriteLine($"WebView2: Blocked → floating browser: {e.Uri}");
+                AppLogger.Info($"WebView2 [NAVIGATION]: ✗ BLOCKED - Opening in external browser window");
+                AppLogger.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
                 var emailInfo = GetSelectedEmailInfo(webView);
                 webView.Dispatcher.InvokeAsync(() => OpenExternalBrowserWindow(webView, e.Uri, emailInfo));
             };
@@ -518,18 +677,31 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 if (sender is CoreWebView2 core)
                 {
                     var uri = core.Source;
+                    AppLogger.Info($"[DOMContentLoaded] Event fired for URI: {uri}");
                     if (!string.IsNullOrEmpty(uri))
                     {
                         if (uri.Contains("mail.google.com", StringComparison.OrdinalIgnoreCase))
                         {
+                            AppLogger.Info($"[DOMContentLoaded] Gmail detected, injecting clean-view script");
                             _ = InjectCleanViewAsync(core);
                         }
                         else if (uri.Contains("calendar.google.com", StringComparison.OrdinalIgnoreCase))
                         {
+                            AppLogger.Info($"[DOMContentLoaded] Calendar detected, injecting calendar clean-view script");
                             _ = InjectCalendarCleanViewAsync(core);
+                        }
+                        else
+                        {
+                            AppLogger.Info($"[DOMContentLoaded] Non-Gmail/Calendar page, skipping script injection");
                         }
                     }
                 }
+            };
+
+            // 6. Console message handler: capture JavaScript console.log for debugging
+            coreWebView.WebMessageReceived += (sender, e) =>
+            {
+                AppLogger.Info($"[JS → C#] {e.WebMessageAsJson}");
             };
 
             System.Diagnostics.Debug.WriteLine("WebView2: Browser behavior configured (UA + navigation guard + download interception + clean-view)");
@@ -537,29 +709,72 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
         /// <summary>
         /// Checks whether a URI is a core Gmail/Calendar navigation that must stay in the WebView2.
-        /// Only allows: mail.google.com, accounts.google.com, calendar.google.com,
-        /// and supporting asset domains (googleapis, gstatic, googleusercontent).
-        /// Other Google products (Groups, Docs, Drive, etc.) are intentionally excluded
-        /// so they open in a floating browser window.
+        /// Only allows: mail.google.com, accounts.google.com, and specific calendar view paths.
+        /// Supporting asset domains (googleapis, gstatic, googleusercontent) are also allowed.
+        /// Calendar event details (/r/eventedit) and external links are excluded and will open 
+        /// in a floating browser window.
         /// </summary>
         private static bool IsGmailCoreNavigation(string uri)
         {
+            AppLogger.Info($"    [IsGmailCoreNavigation] Checking URI: {uri}");
+
             // Supporting asset domains — CSS, JS, fonts, images loaded by Gmail/Calendar
             if (uri.Contains("googleapis.com", StringComparison.OrdinalIgnoreCase) ||
                 uri.Contains("gstatic.com", StringComparison.OrdinalIgnoreCase) ||
                 uri.Contains("googleusercontent.com", StringComparison.OrdinalIgnoreCase))
             {
+                AppLogger.Info($"    [IsGmailCoreNavigation] → TRUE (supporting asset domain)");
                 return true;
             }
 
             // Core Google services that must navigate in-place
             if (uri.Contains("mail.google.com", StringComparison.OrdinalIgnoreCase) ||
-                uri.Contains("accounts.google.com", StringComparison.OrdinalIgnoreCase) ||
-                uri.Contains("calendar.google.com", StringComparison.OrdinalIgnoreCase))
+                uri.Contains("accounts.google.com", StringComparison.OrdinalIgnoreCase))
             {
+                AppLogger.Info($"    [IsGmailCoreNavigation] → TRUE (mail/accounts domain)");
                 return true;
             }
 
+            // Calendar: Only allow core view navigation paths (day, week, month, agenda)
+            // Block event detail pages (/r/eventedit) and external links
+            if (uri.Contains("calendar.google.com", StringComparison.OrdinalIgnoreCase))
+            {
+                AppLogger.Info($"    [IsGmailCoreNavigation] Calendar domain detected, checking paths...");
+
+                bool hasCalendarPath = uri.Contains("/calendar/u/", StringComparison.OrdinalIgnoreCase);
+                AppLogger.Info($"    [IsGmailCoreNavigation] Has /calendar/u/ path → {hasCalendarPath}");
+
+                if (hasCalendarPath)
+                {
+                    bool isDayView = uri.Contains("/r/day", StringComparison.OrdinalIgnoreCase);
+                    bool isWeekView = uri.Contains("/r/week", StringComparison.OrdinalIgnoreCase);
+                    bool isMonthView = uri.Contains("/r/month", StringComparison.OrdinalIgnoreCase);
+                    bool isAgendaView = uri.Contains("/r/agenda", StringComparison.OrdinalIgnoreCase);
+                    bool isCustomDayView = uri.Contains("/r/customday", StringComparison.OrdinalIgnoreCase);
+                    bool isCustomWeekView = uri.Contains("/r/customweek", StringComparison.OrdinalIgnoreCase);
+                    bool isSearchView = uri.Contains("/r/search", StringComparison.OrdinalIgnoreCase);
+                    // REMOVED: eventedit - event details should open in external window
+
+                    bool isAllowedView = isDayView || isWeekView || isMonthView || isAgendaView || 
+                                        isCustomDayView || isCustomWeekView || isSearchView;
+
+                    AppLogger.Info($"    [IsGmailCoreNavigation] View checks:");
+                    AppLogger.Info($"      - /r/day → {isDayView}");
+                    AppLogger.Info($"      - /r/week → {isWeekView}");
+                    AppLogger.Info($"      - /r/month → {isMonthView}");
+                    AppLogger.Info($"      - /r/agenda → {isAgendaView}");
+                    AppLogger.Info($"      - /r/eventedit → BLOCKED (opens in popup)");
+                    AppLogger.Info($"    [IsGmailCoreNavigation] → {isAllowedView} (allowed calendar view)");
+
+                    return isAllowedView;
+                }
+
+                // Block everything else (event detail pages with external links)
+                AppLogger.Info($"    [IsGmailCoreNavigation] → FALSE (calendar domain but not an allowed view path)");
+                return false;
+            }
+
+            AppLogger.Info($"    [IsGmailCoreNavigation] → FALSE (not a core Gmail/Calendar domain)");
             return false;
         }
 
@@ -1321,12 +1536,13 @@ namespace SiNetProjectManagerV2.WPFUserControl
         {
             try
             {
+                AppLogger.Info("[Calendar JS Injection] Injecting calendar clean-view script with link interceptor...");
                 await coreWebView.ExecuteScriptAsync(CalendarCleanViewJs);
-                System.Diagnostics.Debug.WriteLine("WebView2: Calendar clean-view MutationObserver injected");
+                AppLogger.Info("[Calendar JS Injection] ✓ Calendar script injected successfully");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"WebView2: Error injecting calendar clean-view script - {ex.Message}");
+                AppLogger.Error(ex, "[Calendar JS Injection] Failed to inject calendar script");
             }
         }
 
@@ -1347,33 +1563,53 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// </summary>
         public static async Task InitializeCalendarAsync(WebView2 webView, CancellationToken ct = default)
         {
+            System.Diagnostics.Debug.WriteLine($"╔═══════════════════════════════════════════════╗");
+            System.Diagnostics.Debug.WriteLine($"║ [CALENDAR INIT] InitializeCalendarAsync START ║");
+            System.Diagnostics.Debug.WriteLine($"╚═══════════════════════════════════════════════╝");
+
             var state = _webViewStates.GetOrAdd(webView, _ => new WebView2State());
 
             // Already initialized and navigated
             if (state.IsInitialized && webView.CoreWebView2 != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] Already initialized, skipping");
                 return;
+            }
 
             if (!await state.InitSemaphore.WaitAsync(0))
+            {
+                System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] Init already in progress, skipping");
                 return;
+            }
 
             try
             {
                 if (state.IsInitialized && webView.CoreWebView2 != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] Double-check: Already initialized, skipping");
                     return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] Proceeding with initialization...");
 
                 if (!webView.Dispatcher.CheckAccess())
                 {
+                    System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] Not on UI thread, dispatching...");
                     await await webView.Dispatcher.InvokeAsync(
                         () => InitializeCalendarCoreAsync(webView, state));
                 }
                 else
                 {
+                    System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] On UI thread, initializing directly...");
                     await InitializeCalendarCoreAsync(webView, state);
                 }
+
+                System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] ✓ Initialization completed successfully");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"WebView2: Calendar initialization failed - {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] ✗ Initialization failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[CALENDAR INIT] Stack trace: {ex.StackTrace}");
                 state.IsInitialized = false;
             }
             finally
@@ -1391,29 +1627,51 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// </summary>
         private static async Task InitializeCalendarCoreAsync(WebView2 webView, WebView2State state)
         {
+            AppLogger.Info($"[CALENDAR INIT CORE] Starting core initialization...");
             try
             {
                 if (webView.CoreWebView2 == null)
                 {
+                    AppLogger.Info($"[CALENDAR INIT CORE] CoreWebView2 is null, creating environment...");
                     var environment = await CreateUserEnvironmentAsync();
+                    AppLogger.Info($"[CALENDAR INIT CORE] Environment created, ensuring CoreWebView2...");
                     await webView.EnsureCoreWebView2Async(environment);
-                    System.Diagnostics.Debug.WriteLine("WebView2: Calendar core initialization completed");
+                    AppLogger.Info($"[CALENDAR INIT CORE] ✓ CoreWebView2 initialized");
+                }
+                else
+                {
+                    AppLogger.Info($"[CALENDAR INIT CORE] CoreWebView2 already exists");
                 }
 
                 if (!state.BrowserConfigured && webView.CoreWebView2 != null)
                 {
+                    AppLogger.Info($"[CALENDAR INIT CORE] Configuring browser behavior (Navigation guards, UA, etc.)...");
                     ConfigureBrowserBehavior(webView);
                     state.BrowserConfigured = true;
+                    AppLogger.Info($"[CALENDAR INIT CORE] ✓ Browser behavior configured");
+                }
+                else
+                {
+                    AppLogger.Info($"[CALENDAR INIT CORE] Browser already configured or CoreWebView2 is null");
                 }
 
                 state.IsInitialized = true;
+                AppLogger.Info($"[CALENDAR INIT CORE] State marked as initialized");
 
-                webView.CoreWebView2?.Navigate(CalendarDayViewUrl);
-                System.Diagnostics.Debug.WriteLine($"WebView2: Calendar navigating to {CalendarDayViewUrl}");
+                if (webView.CoreWebView2 != null)
+                {
+                    AppLogger.Info($"[CALENDAR INIT CORE] Navigating to: {CalendarDayViewUrl}");
+                    webView.CoreWebView2.Navigate(CalendarDayViewUrl);
+                    AppLogger.Info($"[CALENDAR INIT CORE] ✓ Navigation command sent");
+                }
+                else
+                {
+                    AppLogger.Info($"[CALENDAR INIT CORE] ✗ Cannot navigate - CoreWebView2 is null");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"WebView2: Calendar core init error - {ex.Message}");
+                AppLogger.Error(ex, $"[CALENDAR INIT CORE] ERROR");
                 state.IsInitialized = false;
             }
         }

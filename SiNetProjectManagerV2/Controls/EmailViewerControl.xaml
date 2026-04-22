@@ -9,34 +9,141 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Attachment item template -->
+        <!-- Rich attachment item template with tag selector -->
         <DataTemplate x:Key="ViewerAttachmentTemplate">
-            <Border Padding="6,3" Margin="2" CornerRadius="4"
-                    Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1"
+            <Border CornerRadius="3" 
+                    Padding="4,2" 
+                    Margin="1"
                     Cursor="Hand"
                     MouseLeftButtonUp="AttachmentBorder_MouseLeftButtonUp"
                     Tag="{Binding}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#F5F5F5"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsExternalDownload}" Value="True">
+                                <Setter Property="Background" Value="#E3F2FD"/>
+                                <Setter Property="BorderBrush" Value="#90CAF9"/>
+                                <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsInAcc}" Value="True">
+                                <Setter Property="Background" Value="#E8F5E9"/>
+                                <Setter Property="BorderBrush" Value="#81C784"/>
+                                <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsPlaced}" Value="True">
+                                <Setter Property="Background" Value="#C8E6C9"/>
+                                <Setter Property="BorderBrush" Value="#43A047"/>
+                                <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Border.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="הצג ב-ACC"
-                                  Command="{Binding PlacementTarget.Tag.DataContext.ShowInAccCommand, 
-                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}"/>
+                        <MenuItem Header="📂 פתח קובץ מקומי" 
+                                  Click="OpenLocalFile_Click"
+                                  Visibility="{Binding HasLocalFile, Converter={StaticResource BoolToVis}}"/>
+                        <MenuItem Header="🔍 הצג ב-ACC" 
+                                  Click="ShowInAcc_Click"/>
                     </ContextMenu>
                 </Border.ContextMenu>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding IconName}" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="{Binding FileName}" FontSize="11" VerticalAlignment="Center"
-                               MaxWidth="180" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding FileName}"/>
-                    <TextBlock Text="{Binding DisplaySize}" FontSize="9" Opacity="0.6"
-                               VerticalAlignment="Center" Margin="4,0,0,0"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding IconName}" 
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               Margin="0,0,3,0"/>
                     <!-- ACC badge -->
-                    <Border Visibility="{Binding IsInAcc, Converter={StaticResource BoolToVis}}"
-                            Background="#C8E6C9" CornerRadius="3" Padding="3,1" Margin="4,0,0,0"
-                            VerticalAlignment="Center">
-                        <TextBlock Text="✓ ACC" FontSize="8" Foreground="#2E7D32" FontWeight="Bold"/>
-                    </Border>
+                    <TextBlock Text="☁✓" 
+                               Foreground="#2E7D32"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Margin="0,0,3,0"
+                               ToolTip="הקובץ הועלה ל-ACC — לחץ לפתיחה"
+                               Visibility="{Binding IsInAcc, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="{Binding FileName}" 
+                               FontSize="11"
+                               MaxWidth="160"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               ToolTip="{Binding FileName}"/>
+                    <TextBlock Text="{Binding DisplaySize}" 
+                               FontSize="9"
+                               Opacity="0.6"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0"/>
+                    <!-- Tag badge -->
+                    <TextBlock Text="{Binding TagBadge}"
+                               Foreground="#1565C0"
+                               FontSize="9"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Margin="3,0,0,0"
+                               ToolTip="{Binding TaggedProjectFileTitle}"/>
+                    <!-- Placement badge -->
+                    <TextBlock Text="{Binding PlacementBadge}"
+                               Foreground="#2E7D32"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Margin="3,0,0,0"
+                               ToolTip="{Binding PlacementInfo}"
+                               Visibility="{Binding IsPlaced, Converter={StaticResource BoolToVis}}"/>
+                    <!-- Inline tag selector (compact) -->
+                    <ComboBox Margin="3,0,0,0"
+                              MinWidth="100"
+                              MaxWidth="160"
+                              Height="20"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding ShowTagSelector, Converter={StaticResource BoolToVis}}"
+                              ItemsSource="{Binding TagTargets, ElementName=Root}"
+                              SelectedValue="{Binding TaggedProjectFileId, Mode=TwoWay}"
+                              SelectedValuePath="Id"
+                              DisplayMemberPath="TagDisplayLabel"
+                              ToolTip="בחר סוג קובץ / יעד תיוג"
+                              IsTextSearchEnabled="True"
+                              TextSearch.TextPath="TagDisplayLabel">
+                        <ComboBox.Style>
+                            <Style TargetType="ComboBox">
+                                <Setter Property="FontSize" Value="10"/>
+                                <Setter Property="BorderBrush" Value="#90CAF9"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTagged}" Value="True">
+                                        <Setter Property="BorderBrush" Value="#66BB6A"/>
+                                        <Setter Property="Background" Value="#E8F5E9"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ComboBox.Style>
+                    </ComboBox>
+                    <!-- Inline alternative selector (compact) -->
+                    <ComboBox Margin="3,0,0,0"
+                              MinWidth="80"
+                              MaxWidth="140"
+                              Height="20"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding ShowAlternativeSelector, Converter={StaticResource BoolToVis}}"
+                              ItemsSource="{Binding AvailableAlternatives}"
+                              SelectedValue="{Binding SelectedAlternativeId, Mode=TwoWay}"
+                              SelectedValuePath="Id"
+                              DisplayMemberPath="Name"
+                              ToolTip="בחר אלטרנטיבה"
+                              IsTextSearchEnabled="True"
+                              TextSearch.TextPath="Name">
+                        <ComboBox.Style>
+                            <Style TargetType="ComboBox">
+                                <Setter Property="FontSize" Value="10"/>
+                                <Setter Property="BorderBrush" Value="#CE93D8"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedAlternativeId}" Value="{x:Null}">
+                                        <Setter Property="BorderBrush" Value="#EF9A9A"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ComboBox.Style>
+                    </ComboBox>
                 </StackPanel>
             </Border>
         </DataTemplate>
