@@ -36,6 +36,7 @@
             <RowDefinition Height="Auto"/>  <!-- 0: Filters -->
             <RowDefinition Height="Auto"/>  <!-- 1: Project details -->
             <RowDefinition Height="*"/>     <!-- 2: Main content -->
+            <RowDefinition Height="Auto"/>  <!-- 3: Status bar -->
         </Grid.RowDefinitions>
 
         <!-- 0: Filters -->
@@ -243,5 +244,58 @@
                 </Border>
             </Grid>
         </Grid>
+
+        <!-- 3: Status bar — scan + upload progress -->
+        <Border Grid.Row="3" Background="#ECEFF1" BorderBrush="#B0BEC5" BorderThickness="0,1,0,0"
+                Padding="8,4" Margin="0,6,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Scan progress -->
+                <StackPanel Grid.Column="0" Orientation="Vertical" Margin="0,0,10,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🔍 סריקה:" FontWeight="SemiBold" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding ScanStatus}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <ProgressBar Height="6" Margin="0,3,0,0"
+                                 IsIndeterminate="{Binding IsScanning}"
+                                 Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+
+                <!-- Upload progress -->
+                <StackPanel Grid.Column="1" Orientation="Vertical">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⬆ העלאה:" FontWeight="SemiBold" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding UploadStatus}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <ProgressBar Height="6" Margin="0,3,0,0"
+                                 IsIndeterminate="{Binding IsUploading}"
+                                 Visibility="{Binding IsUploading, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+
+                <!-- Extension-conflict badge (visible only when there are conflicts).
+                     Hover = full list of conflicts; double-click = popup with the same list. -->
+                <Border Grid.Column="2" Background="#FDECEA" BorderBrush="#D32F2F" BorderThickness="1"
+                        CornerRadius="3" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center"
+                        Cursor="Hand"
+                        Visibility="{Binding HasConflicts, Converter={StaticResource BoolToVis}}"
+                        ToolTip="{Binding ConflictDetailsText}">
+                    <Border.InputBindings>
+                        <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding ShowConflictsCommand}"/>
+                    </Border.InputBindings>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⚠" Foreground="#D32F2F" FontWeight="Bold" Margin="0,0,4,0"/>
+                        <TextBlock Foreground="#B71C1C" FontWeight="SemiBold">
+                            <Run Text="{Binding ConflictCount, Mode=OneWay}"/>
+                            <Run Text=" התנגשויות סיומות"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

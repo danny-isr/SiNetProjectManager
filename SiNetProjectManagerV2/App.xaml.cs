@@ -256,6 +256,21 @@ namespace SiNetProjectManagerV2
             // ACC File Sync: Transient (copies tagged attachments from ACC Inbox → ACC project folders)
             services.AddTransient<SiNetSQL.Services.Coordinators.AccFileSyncService>();
 
+            // Project File Upload: Transient (uploads project file alternatives to ACC/GoogleDrive)
+            services.AddTransient<SiNetSQL.Services.Coordinators.ProjectFileUploadService>();
+
+            // ACC Metadata Status Reporter: Singleton (shared collector of Custom-Attribute
+            // failures — surfaced as a badge in ProjectWorkView so the user sees when
+            // their ACC role / license can't read/write metadata).
+            services.AddSingleton<SiNetSQL.FileIndex.IAccMetadataStatusReporter, SiNetSQL.FileIndex.AccMetadataStatusReporter>();
+
+            // File Index: unified scan/open/upload abstraction over FileServer / ACC / GoogleDrive.
+            // Stores are registered as IFileStore so FileIndexService can enumerate them all.
+            services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.FileServerStore>();
+            services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.AccFileStore>();
+            services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.GoogleDriveStore>();
+            services.AddSingleton<SiNetSQL.FileIndex.FileIndexService>();
+
             // Ollama AI Service: Singleton (shared HTTP client for local Ollama server)
             // On first resolve, checks DB for saved BaseUrl/Model overrides.
             services.AddSingleton(sp =>
@@ -281,6 +296,10 @@ namespace SiNetProjectManagerV2
 
             // ACC Project Provisioning: Transient (ensures ACC project + folder structure exist)
             services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
+
+            // ACC Membership Reconciler: Singleton (single background worker, debounced Channel).
+            // Re-syncs every ACC project's members with the local Siuser table when triggered.
+            services.AddSingleton<IAccMembershipReconciler, AccMembershipReconciler>();
 
             // ═══════════════════════════════════════════════════════════════════
             // VIEWMODELS: Register all ViewModels that use IDbContextFactory
@@ -346,6 +365,9 @@ namespace SiNetProjectManagerV2
                 Log.Information("[STARTUP] Step 4: Configuring DI services...");
                 ServiceProvider = ConfigureServices();
                 WireLegacyLocators();
+
+                // Initialize ServiceLocator for SiNetSQL library access
+                SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
 
                 // ── Step 4b: Load Management Settings from DB ────────────
                 Log.Information("[STARTUP] Step 4b: Loading management settings from DB...");
