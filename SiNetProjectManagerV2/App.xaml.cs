@@ -271,6 +271,13 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.GoogleDriveStore>();
             services.AddSingleton<SiNetSQL.FileIndex.FileIndexService>();
 
+            // Drag-and-drop "replace existing file" flow: stateless service +
+            // WPF-backed prompt provider. Singleton because the dialogs are
+            // pure (no per-call state) — keeps allocation noise down on hot drops.
+            services.AddSingleton<SiNetSQL.FileIndex.IFileReplacePrompts,
+                                  SiNetProjectManagerV2.Services.FileReplacePrompts>();
+            services.AddSingleton<SiNetSQL.FileIndex.FileReplaceService>();
+
             // Ollama AI Service: Singleton (shared HTTP client for local Ollama server)
             // On first resolve, checks DB for saved BaseUrl/Model overrides.
             services.AddSingleton(sp =>
