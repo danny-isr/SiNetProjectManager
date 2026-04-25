@@ -295,6 +295,27 @@
                         </TextBlock>
                     </StackPanel>
                 </Border>
+
+                <!-- ACC metadata-health badge (visible only when there are failures).
+                     Hover = up to 25 most-recent failures; double-click = popup with full list + clear option.
+                     Mirrors the conflicts badge but uses an amber palette so the two are visually distinct. -->
+                <Border Grid.Column="2" Background="#FFF8E1" BorderBrush="#F9A825" BorderThickness="1"
+                        CornerRadius="3" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center"
+                        HorizontalAlignment="Right"
+                        Cursor="Hand"
+                        Visibility="{Binding HasAccMetadataIssues, Converter={StaticResource BoolToVis}}"
+                        ToolTip="{Binding AccMetadataIssuesText}">
+                    <Border.InputBindings>
+                        <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding ShowAccMetadataIssuesCommand}"/>
+                    </Border.InputBindings>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="ⓘ" Foreground="#F9A825" FontWeight="Bold" Margin="0,0,4,0"/>
+                        <TextBlock Foreground="#8D6E00" FontWeight="SemiBold">
+                            <Run Text="{Binding AccMetadataIssueCount, Mode=OneWay}"/>
+                            <Run Text=" כשלי מטא-דאטה ACC"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
     </Grid>
