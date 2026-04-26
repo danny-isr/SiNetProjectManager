@@ -128,6 +128,11 @@
                                     </Style>
                                 </Image.Style>
                             </Image>
+                            <!-- Colored folder glyph: green = subtree has files, gray = empty subtree.
+                                 Sits on top of the asset image so existing iconography is preserved
+                                 while the colour communicates the recursive "has-files" status. -->
+                            <TextBlock Text="📁" FontSize="13" Margin="0,0,4,0" VerticalAlignment="Center"
+                                       Foreground="{Binding FolderColor}"/>
                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
                         </StackPanel>
                     </HierarchicalDataTemplate>
