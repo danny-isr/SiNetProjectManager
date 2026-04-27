@@ -49,9 +49,12 @@ public static class SecretProvisioningService
 
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
 
-        using var deriveBytes = new Rfc2898DeriveBytes(
-            Encoding.UTF8.GetBytes(password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256);
-        var aesKey = deriveBytes.GetBytes(KeySize);
+        var aesKey = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(password),
+            salt,
+            Pbkdf2Iterations,
+            HashAlgorithmName.SHA256,
+            KeySize);
 
         byte[] encryptedPayload;
         byte[] iv;
@@ -114,9 +117,12 @@ public static class SecretProvisioningService
         var encryptedPayload = reader.ReadBytes(encryptedLength);
 
         // Derive key from password
-        using var deriveBytes = new Rfc2898DeriveBytes(
-            Encoding.UTF8.GetBytes(password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256);
-        var aesKey = deriveBytes.GetBytes(KeySize);
+        var aesKey = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(password),
+            salt,
+            Pbkdf2Iterations,
+            HashAlgorithmName.SHA256,
+            KeySize);
 
         byte[] jsonBytes;
         try
