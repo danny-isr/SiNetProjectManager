@@ -301,8 +301,40 @@ namespace SiNetProjectManagerV2
             // Task Status Resolver: Singleton (cached open/closed status ID lookups)
             services.AddSingleton<SiNetSQL.Services.TaskStatusResolver>();
 
-            // ACC Project Provisioning: Transient (ensures ACC project + folder structure exist)
-            services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
+            // ACC Project Provisioning:
+            //   • If "AccService:BaseUrl" is configured (production), forward all
+            //     privileged ACC operations to SiOffice.AccService over HTTPS so
+            //     regular users don't need Account Admin credentials.
+            //   • Otherwise (dev / standalone install), fall back to the in-process
+            //     AccProjectProvisioningService, which talks to ACC directly.
+            // The shared API key is read from the same vault used for every other
+            // secret (SecretKeys.AccServiceApiKey).
+            var accServiceBaseUrl = AppConfiguration.Configuration["AccService:BaseUrl"];
+            if (!string.IsNullOrWhiteSpace(accServiceBaseUrl))
+            {
+                var apiKey = SiNetSQL.Services.CredentialVaultService.GetSecret(
+                    SiNetSQL.Services.SecretKeys.AccServiceApiKey);
+
+                services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(client =>
+                {
+                    client.BaseAddress = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
+                    // Long-running endpoints (ensure-mapping ≈ 1–2 min) rely on the
+                    // per-call CancellationToken; HttpClient.Timeout would short-circuit it.
+                    client.Timeout = Timeout.InfiniteTimeSpan;
+                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        client.DefaultRequestHeaders.Add(
+                            SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiKeyHeader,
+                            apiKey);
+                    }
+                });
+                Log.Information("ACC Provisioning: using REMOTE SiOffice.AccService at {Url}.", accServiceBaseUrl);
+            }
+            else
+            {
+                services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
+                Log.Information("ACC Provisioning: using LOCAL in-process AccProjectProvisioningService (AccService:BaseUrl not configured).");
+            }
 
             // ACC Membership Reconciler: Singleton (single background worker, debounced Channel).
             // Re-syncs every ACC project's members with the local Siuser table when triggered.

@@ -9,6 +9,7 @@ using SiNetProjectManagerV2.Services;
 using SiNetSQL.Data;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
+using SiNetSQL.Services.AccBootstrap;
 using SiOffice.GoogleConnector.Reports;
 
 namespace SiNetProjectManagerV2.WPF_Window;
@@ -97,6 +98,9 @@ public partial class ManagementSettingsWindow : Window
 
             // Load Ollama AI settings
             await LoadOllamaSettingsAsync();
+
+            // Load ACC project template (selection happens against a freshly fetched list).
+            await LoadAccTemplateAsync();
         }
         catch (Exception ex)
         {
@@ -205,6 +209,9 @@ public partial class ManagementSettingsWindow : Window
 
             // Save Ollama AI model
             await SaveOllamaModelAsync();
+
+            // Save ACC project template selection
+            await SaveAccTemplateAsync();
 
             // Save status default colors
             SaveStatusColors();
@@ -716,6 +723,90 @@ public partial class ManagementSettingsWindow : Window
     {
         var window = new UserGroupManagementWindow { Owner = this };
         window.ShowDialog();
+    }
+
+    #endregion
+
+    #region ACC Project Template
+
+    private List<TemplateItem> _accTemplates = new();
+
+    private sealed class TemplateItem
+    {
+        public string Id { get; init; } = "";
+        public string Name { get; init; } = "";
+        public override string ToString() => Name;
+    }
+
+    private async Task LoadAccTemplateAsync()
+    {
+        try
+        {
+            var saved = await _settingsService.GetAsync(SystemSettingKeys.AccProjectTemplateName) ?? string.Empty;
+
+            // Always show the saved value first so the user can see what is currently set,
+            // even before fetching the live list (which requires Autodesk auth).
+            _accTemplates = string.IsNullOrWhiteSpace(saved)
+                ? new List<TemplateItem>()
+                : new List<TemplateItem> { new() { Id = "", Name = saved } };
+
+            AccTemplateComboBox.ItemsSource = _accTemplates;
+            AccTemplateComboBox.SelectedValue = string.IsNullOrWhiteSpace(saved) ? null : saved;
+            AccTemplateStatusLabel.Text = string.IsNullOrWhiteSpace(saved)
+                ? "לא הוגדרה תבנית — פרויקטים חדשים ייווצרו ללא תבנית."
+                : $"תבנית נוכחית: {saved}. לחצי 'רענן רשימה' כדי לטעון מ-ACC.";
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to load ACC template setting");
+            AccTemplateStatusLabel.Text = $"שגיאה בטעינת ההגדרה: {ex.Message}";
+        }
+    }
+
+    private async void RefreshTemplatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshTemplatesButton.IsEnabled = false;
+        AccTemplateStatusLabel.Text = "טוען רשימת תבניות מ-ACC...";
+        try
+        {
+            var provisioning = App.ServiceProvider.GetRequiredService<IAccProjectProvisioningService>();
+            var templates = await provisioning.ListAvailableTemplatesAsync(CancellationToken.None);
+
+            var saved = await _settingsService.GetAsync(SystemSettingKeys.AccProjectTemplateName) ?? string.Empty;
+
+            _accTemplates = templates
+                .Select(t => new TemplateItem { Id = t.Id, Name = t.Name })
+                .ToList();
+
+            AccTemplateComboBox.ItemsSource = _accTemplates;
+            if (!string.IsNullOrWhiteSpace(saved) &&
+                _accTemplates.Any(t => string.Equals(t.Name, saved, StringComparison.Ordinal)))
+            {
+                AccTemplateComboBox.SelectedValue = saved;
+            }
+
+            AccTemplateStatusLabel.Text = _accTemplates.Count == 0
+                ? "לא נמצאו תבניות בחשבון. צרי תבנית ב-ACC ואז לחצי 'רענן רשימה'."
+                : $"נטענו {_accTemplates.Count} תבניות. בחרי תבנית ולחצי 'שמור'.";
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to list ACC templates");
+            AccTemplateStatusLabel.Text = $"שגיאה: {ex.Message}";
+        }
+        finally
+        {
+            RefreshTemplatesButton.IsEnabled = true;
+        }
+    }
+
+    private async Task SaveAccTemplateAsync()
+    {
+        var selected = AccTemplateComboBox.SelectedValue as string ?? string.Empty;
+        await _settingsService.SetAsync(
+            SystemSettingKeys.AccProjectTemplateName,
+            selected,
+            "שם תבנית ה-ACC ליצירת פרויקטים חדשים — מקור הרשאות התיקיות");
     }
 
     #endregion

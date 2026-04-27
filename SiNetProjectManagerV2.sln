@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNetSQL.Tests", "..\SiNetS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNetSQL.E2ETests", "..\SiNetSQL\SiNetSQL.E2ETests\SiNetSQL.E2ETests.csproj", "{DEA17939-8C03-4EB7-84BC-9B9110B47878}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AccService", "SiOffice.AccService\SiOffice.AccService.csproj", "{E232DEE6-67D7-4D9E-98C1-90CD72B32919}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -139,6 +141,18 @@ Global
 		{DEA17939-8C03-4EB7-84BC-9B9110B47878}.Release|x64.Build.0 = Release|Any CPU
 		{DEA17939-8C03-4EB7-84BC-9B9110B47878}.Release|x86.ActiveCfg = Release|Any CPU
 		{DEA17939-8C03-4EB7-84BC-9B9110B47878}.Release|x86.Build.0 = Release|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Debug|x64.Build.0 = Debug|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Debug|x86.Build.0 = Debug|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x64.ActiveCfg = Release|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x64.Build.0 = Release|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x86.ActiveCfg = Release|Any CPU
+		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

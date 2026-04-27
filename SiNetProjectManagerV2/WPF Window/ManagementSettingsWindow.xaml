@@ -93,6 +93,36 @@
                              ToolTip="שם תיקיית ה-Inbox בתוך הפרויקט (למשל: _Inbox)"/>
                 </StackPanel>
 
+                <!-- ACC Project Template -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="תבנית פרויקט ב-ACC" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="כל פרויקט חדש ב-ACC ייווצר מהתבנית שתבחרי כאן ויירש ממנה את מבנה התיקיות והרשאות התפקידים (Engineer=Edit, Administrator=Manage וכו'). השאר ריק כדי לבטל יצירה דרך תבנית." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="תבנית:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="AccTemplateComboBox"
+                              Width="280"
+                              VerticalContentAlignment="Center"
+                              Padding="5,3"
+                              DisplayMemberPath="Name"
+                              SelectedValuePath="Name"
+                              ToolTip="בחרי תבנית מהרשימה (נטענת מ-ACC)."/>
+                    <Button x:Name="RefreshTemplatesButton"
+                            Content="🔄 רענן רשימה"
+                            Click="RefreshTemplatesButton_Click"
+                            Margin="8,0,0,0"
+                            Padding="8,3"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"/>
+                </StackPanel>
+                <TextBlock x:Name="AccTemplateStatusLabel"
+                           Margin="0,0,0,0"
+                           Opacity="0.7"
+                           FontStyle="Italic"
+                           TextWrapping="Wrap"/>
+
                 <!-- Hour Price Default -->
                 <Separator Margin="0,20,0,10"/>
                 <TextBlock Text="מחיר לשעה (ברירת מחדל)" FontWeight="Bold" Margin="0,0,0,5"/>

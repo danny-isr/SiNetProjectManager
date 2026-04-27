@@ -2,6 +2,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
@@ -53,6 +54,7 @@ public partial class SecretSetupWindow : Window
         StatusCsMasterPlan.Fill = status.GetValueOrDefault(SecretKeys.MasterPlanDatabase) ? _greenBrush : _redBrush;
         StatusAdUser.Fill = status.GetValueOrDefault(SecretKeys.AdUsername) ? _greenBrush : _redBrush;
         StatusAdPass.Fill = status.GetValueOrDefault(SecretKeys.AdPassword) ? _greenBrush : _redBrush;
+        StatusAccServiceApiKey.Fill = status.GetValueOrDefault(SecretKeys.AccServiceApiKey) ? _greenBrush : _redBrush;
     }
 
     /// <summary>
@@ -69,6 +71,9 @@ public partial class SecretSetupWindow : Window
 
         // Active Directory username: pre-fill from vault
         TxtAdUsername.Text = CredentialVaultService.GetSecret(SecretKeys.AdUsername) ?? "";
+
+        // AccService API key: pre-fill from vault (this is a shared secret across machines, not per-user PII)
+        TxtAccServiceApiKey.Text = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey) ?? "";
 
         // Google credentials: show status text
         if (CredentialVaultService.HasSecret(SecretKeys.GoogleClientSecrets))
@@ -174,6 +179,13 @@ public partial class SecretSetupWindow : Window
                 saved++;
             }
 
+            // AccService API Key
+            if (!string.IsNullOrWhiteSpace(TxtAccServiceApiKey.Text))
+            {
+                CredentialVaultService.SetSecret(SecretKeys.AccServiceApiKey, TxtAccServiceApiKey.Text.Trim());
+                saved++;
+            }
+
             // ═══════════════════════════════════════════════════════════════════
             // VALIDATION: Test ALL secrets against their actual services.
             // Green = verified working, Orange = saved but test failed, Red = missing.
@@ -199,6 +211,11 @@ public partial class SecretSetupWindow : Window
             ApplyResult(StatusCsMasterPlan, "MasterPlan DB", connMasterPlanTask.Result, passed, failed);
             ApplyResult(StatusGemini, "Gemini API", geminiTask.Result, passed, failed);
             ApplyResult(StatusGoogleSecrets, "Google OAuth", googleResult, passed, failed);
+
+                // AccService API key — local-only (no network test); just check vault presence
+                var hasAccKey = CredentialVaultService.HasSecret(SecretKeys.AccServiceApiKey);
+                ApplyResult(StatusAccServiceApiKey, "AccService API Key",
+                    (hasAccKey, hasAccKey, hasAccKey ? "מוגדר ב-Vault" : null), passed, failed);
 
             // Paired secrets: both dots share the validation result
             ApplyPairResult(StatusAdClientId, StatusAdClientSecret,
@@ -625,5 +642,20 @@ public partial class SecretSetupWindow : Window
     {
         DialogResult = false;
         Close();
+    }
+
+    /// <summary>
+    /// Generates a fresh 256-bit cryptographically random key, encoded as Base64.
+    /// The same value must be copied to every machine (clients + the AccService host).
+    /// </summary>
+    private void BtnGenerateAccServiceApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        var bytes = RandomNumberGenerator.GetBytes(32);
+        TxtAccServiceApiKey.Text = Convert.ToBase64String(bytes);
+        MessageBox.Show(
+            "נוצר מפתח חדש.\n\n" +
+            "חשוב: יש להעתיק את אותו מפתח לכל המחשבים (לקוחות + שרת AccService).\n" +
+            "לחץ 'שמור' כדי לאחסן ב-Credential Manager.",
+            "מפתח AccService חדש", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

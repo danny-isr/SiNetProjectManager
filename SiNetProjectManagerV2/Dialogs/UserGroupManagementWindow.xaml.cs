@@ -1,9 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
+using SiNetSQL.Services.AccBootstrap;
 
 namespace SiNetProjectManagerV2.Dialogs;
 
@@ -284,6 +286,160 @@ public partial class UserGroupManagementWindow : Window
         group.Name = name;
         group.Description = desc;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Bulk: Reconcile All Projects (members + roles + folder permissions)
+    // ════════════════════════════════════════════════════════════════════════
+
+    private async void ReconcileAllProjectsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = MessageBox.Show(
+            this,
+            "פעולה זו תסנכרן את חברי הפרויקטים, התפקידים והרשאות התיקיות עבור כל פרויקטי ACC הקיימים.\n\nלהמשיך?",
+            "עדכון כל הגדרות הפרויקטים",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        IAccProjectProvisioningService? provisioning;
+        try
+        {
+            provisioning = App.ServiceProvider.GetRequiredService<IAccProjectProvisioningService>();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"שירות הסנכרון אינו זמין:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        ReconcileAllProjectsButton.IsEnabled = false;
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            var summary = await provisioning.ReconcileAllProjectsAsync(CancellationToken.None);
+            MessageBox.Show(this, $"עדכון הסתיים.\n\n{summary}",
+                "סיום", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"העדכון נכשל:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            ReconcileAllProjectsButton.IsEnabled = true;
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Diagnostic: minimal folder-permissions probe (creates a throwaway project)
+    // ════════════════════════════════════════════════════════════════════════
+
+    private async void ProbeFolderPermissionsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = MessageBox.Show(
+            this,
+            "פעולה זו תיצור פרויקט בדיקה חדש ב-ACC (בשם SI-PermProbe-...), תקצה Project Admin, ותנסה להגדיר הרשאות Engineer על תיקיית השורש.\n\nלא יבוצעו פעולות נוספות (לא יווספו משתמשים, לא ייווצרו תיקיות נוספות, לא יישמר mapping).\n\nפרויקט הבדיקה יישאר ב-ACC ויהיה צריך להעבירו לארכיון/למחוק ידנית.\n\nלהמשיך?",
+            "בדיקת הרשאות תיקייה",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        IAccProjectProvisioningService? provisioning;
+        try
+        {
+            provisioning = App.ServiceProvider.GetRequiredService<IAccProjectProvisioningService>();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"שירות הסנכרון אינו זמין:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        ProbeFolderPermissionsButton.IsEnabled = false;
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            var summary = await provisioning.ProbeFolderPermissionsAsync(CancellationToken.None);
+            MessageBox.Show(this, $"בדיקה הסתיימה.\n\n{summary}",
+                "סיום", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"הבדיקה נכשלה:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            ProbeFolderPermissionsButton.IsEnabled = true;
+        }
+    }
+
+    private async void ProbeFromTemplateButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Ask the user for the exact template name (Hebrew names supported).
+        var input = new TextInputDialog(
+            "בדיקה עם תבנית",
+            "הזן את שם התבנית ב-ACC (בדיוק כפי שמופיע במסך Account Admin > Templates):",
+            defaultValue: "שיא חדש בע\"מ")
+        {
+            Owner = this
+        };
+        if (input.ShowDialog() != true)
+            return;
+
+        var templateName = (input.ResponseText ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(templateName))
+            return;
+
+        var confirm = MessageBox.Show(
+            this,
+            $"פעולה זו תאתר את התבנית '{templateName}' בחשבון ACC ותיצור ממנה פרויקט בדיקה חדש (SI-TplProbe-...).\nלאחר מכן תנסה להגדיר הרשאות Engineer על תיקיית השורש.\n\nפרויקט הבדיקה יישאר ב-ACC.\n\nלהמשיך?",
+            "בדיקה עם תבנית",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        IAccProjectProvisioningService? provisioning;
+        try
+        {
+            provisioning = App.ServiceProvider.GetRequiredService<IAccProjectProvisioningService>();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"שירות הסנכרון אינו זמין:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        ProbeFromTemplateButton.IsEnabled = false;
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            var summary = await provisioning.ProbeFolderPermissionsFromTemplateAsync(templateName, CancellationToken.None);
+            MessageBox.Show(this, $"בדיקה הסתיימה.\n\n{summary}",
+                "סיום", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"הבדיקה נכשלה:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            ProbeFromTemplateButton.IsEnabled = true;
+        }
+    }
 }
 
 /// <summary>
@@ -360,5 +516,59 @@ public partial class UserPickerDialog : Window
         panel.Children.Add(okButton);
         panel.Children.Add(listBox);
         Content = panel;
+    }
+}
+
+/// <summary>
+/// Minimal single-line text input dialog. Sets <see cref="ResponseText"/> when the user
+/// confirms; <see cref="Window.DialogResult"/> reflects accept/cancel.
+/// </summary>
+public class TextInputDialog : Window
+{
+    public string? ResponseText { get; private set; }
+
+    public TextInputDialog(string title, string prompt, string defaultValue = "")
+    {
+        Title = title;
+        Width = 460;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        FlowDirection = FlowDirection.RightToLeft;
+        ResizeMode = ResizeMode.NoResize;
+
+        var panel = new StackPanel { Margin = new Thickness(12) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = prompt,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var textBox = new TextBox
+        {
+            Text = defaultValue,
+            Padding = new Thickness(5, 3, 5, 3),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        panel.Children.Add(textBox);
+
+        var buttonsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        var okButton = new Button { Content = "אישור", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancelButton = new Button { Content = "ביטול", Width = 80, IsCancel = true };
+        okButton.Click += (_, _) =>
+        {
+            ResponseText = textBox.Text;
+            DialogResult = true;
+        };
+        buttonsPanel.Children.Add(okButton);
+        buttonsPanel.Children.Add(cancelButton);
+        panel.Children.Add(buttonsPanel);
+
+        Content = panel;
+        Loaded += (_, _) => { textBox.Focus(); textBox.SelectAll(); };
     }
 }
