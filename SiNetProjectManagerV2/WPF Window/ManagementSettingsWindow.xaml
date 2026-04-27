@@ -93,6 +93,20 @@
                              ToolTip="שם תיקיית ה-Inbox בתוך הפרויקט (למשל: _Inbox)"/>
                 </StackPanel>
 
+                <!-- ACC Bootstrap Admin (service account, NOT in user-management) -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="חשבון אדמין ייעודי ל-ACC (Bootstrap Admin)" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="חשבון השירות שמופקד על יצירת פרויקטים ב-ACC. הוא לא מופיע ברשימת המשתמשים, ההרשאות שלו לא נוגעות אוטומטית — כל פרויקט חדש שנוצר ימנה אותו כ-Project Admin אך הוא יישאר עם ההרשאות שלו במלואן." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="אימייל אדמין:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="AccBootstrapAdminEmailTextBox"
+                             Width="320"
+                             VerticalContentAlignment="Center" Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="אימייל החשבון ב-ACC. השאר ריק כדי לחזור לבחירה אוטומטית מטבלת המשתמשים."/>
+                </StackPanel>
+
                 <!-- ACC Project Template -->
                 <Separator Margin="0,20,0,10"/>
                 <TextBlock Text="תבנית פרויקט ב-ACC" FontWeight="Bold" Margin="0,0,0,5"/>

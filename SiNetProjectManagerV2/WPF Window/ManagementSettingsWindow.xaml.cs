@@ -101,6 +101,11 @@ public partial class ManagementSettingsWindow : Window
 
             // Load ACC project template (selection happens against a freshly fetched list).
             await LoadAccTemplateAsync();
+
+            // Load ACC bootstrap-admin email (dedicated service account, not a SIUser).
+            var bootstrapAdminEmail = await _settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.AccBootstrapAdminEmail, string.Empty);
+            AccBootstrapAdminEmailTextBox.Text = bootstrapAdminEmail;
         }
         catch (Exception ex)
         {
@@ -212,6 +217,13 @@ public partial class ManagementSettingsWindow : Window
 
             // Save ACC project template selection
             await SaveAccTemplateAsync();
+
+            // Save ACC bootstrap-admin email (trim, persist as-is — empty disables the override).
+            var bootstrapAdminEmail = AccBootstrapAdminEmailTextBox.Text?.Trim() ?? string.Empty;
+            await _settingsService.SetAsync(
+                SystemSettingKeys.AccBootstrapAdminEmail,
+                bootstrapAdminEmail,
+                "אימייל חשבון השירות שמשמש כאדמין ביצירת פרויקטים ב-ACC. הרשאות החשבון הזה לא משתנות אוטומטית.");
 
             // Save status default colors
             SaveStatusColors();
