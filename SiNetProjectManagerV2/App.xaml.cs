@@ -2,6 +2,7 @@
 using SiNetProjectManagerV2.WPF;
 using System;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
@@ -315,7 +316,10 @@ namespace SiNetProjectManagerV2
                 var apiKey = SiNetSQL.Services.CredentialVaultService.GetSecret(
                     SiNetSQL.Services.SecretKeys.AccServiceApiKey);
 
-                services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(client =>
+                // Shared HttpClient configurator — same base address, header and
+                // infinite timeout for both the project-provisioning and the
+                // inbox-provisioning typed clients.
+                void ConfigureAccServiceClient(HttpClient client)
                 {
                     client.BaseAddress = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
                     // Long-running endpoints (ensure-mapping ≈ 1–2 min) rely on the
@@ -327,12 +331,18 @@ namespace SiNetProjectManagerV2
                             SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiKeyHeader,
                             apiKey);
                     }
-                });
+                }
+
+                Action<HttpClient> configure = ConfigureAccServiceClient;
+                services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure);
+                services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure);
                 Log.Information("ACC Provisioning: using REMOTE SiOffice.AccService at {Url}.", accServiceBaseUrl);
             }
             else
             {
                 services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
+                services.AddTransient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner,
+                                      SiNetSQL.Services.AccBootstrap.LocalAccInboxProvisioner>();
                 Log.Information("ACC Provisioning: using LOCAL in-process AccProjectProvisioningService (AccService:BaseUrl not configured).");
             }
 
