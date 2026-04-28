@@ -393,6 +393,102 @@
                         BorderBrush="#CCC"
                         BorderThickness="1"
                         ToolTip="בדוק שהשרת המקומי פועל ושהמודל זמין"/>
+
+                <!-- Centralized Logging -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="📋 לוגים מרוכזים" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="מיקום אחד שאליו כל היישומים (Client, AccService, SyncEngine) כותבים לוג. רמת הסף נקבעת בנפרד לכל יישום לקובץ המקומי ולתיקייה המרוכזת. שינוי נכנס לתוקף בהפעלה הבאה של היישום." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                <TextBlock Text="נתיב מרוכז (UNC או מקומי):" Margin="0,0,0,4"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="LoggingCentralPathTextBox"
+                             Grid.Column="0"
+                             VerticalContentAlignment="Center"
+                             Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="ריק = הסינק המרוכז כבוי. ברירת מחדל: \\si-win-2k19\AutoCAD Data\log"/>
+                    <Button Grid.Column="1" Content="בדוק כתיבה"
+                            Click="TestCentralLogPath_Click"
+                            Padding="6,3" Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"
+                            ToolTip="צור את התיקייה (אם חסרה) ובדוק הרשאות כתיבה"/>
+                    <Button Grid.Column="2" Content="📂 פתח"
+                            Click="OpenCentralLogPath_Click"
+                            Padding="6,3" Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="#CCC"
+                            BorderThickness="1"
+                            ToolTip="פתח את התיקייה ב-Explorer"/>
+                </Grid>
+                <TextBlock x:Name="LoggingPathStatusLabel"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           FontStyle="Italic"
+                           Opacity="0.8"
+                           Visibility="Collapsed"/>
+
+                <!-- Per-app levels -->
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="יישום" FontWeight="SemiBold" Margin="0,0,8,4"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="קובץ מקומי" FontWeight="SemiBold" Margin="0,0,8,4"/>
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="קובץ מרוכז" FontWeight="SemiBold" Margin="0,0,0,4"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Client (WPF)" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                    <ComboBox x:Name="LoggingClientFileLevelCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,8,4" Padding="5,3" FlowDirection="LeftToRight"/>
+                    <ComboBox x:Name="LoggingClientCentralLevelCombo" Grid.Row="1" Grid.Column="2" Margin="0,0,0,4" Padding="5,3" FlowDirection="LeftToRight"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="AccService" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                    <ComboBox x:Name="LoggingAccFileLevelCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,8,4" Padding="5,3" FlowDirection="LeftToRight"/>
+                    <ComboBox x:Name="LoggingAccCentralLevelCombo" Grid.Row="2" Grid.Column="2" Margin="0,0,0,4" Padding="5,3" FlowDirection="LeftToRight"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="SyncEngine" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                    <ComboBox x:Name="LoggingSyncFileLevelCombo" Grid.Row="3" Grid.Column="1" Margin="0,0,8,4" Padding="5,3" FlowDirection="LeftToRight"/>
+                    <ComboBox x:Name="LoggingSyncCentralLevelCombo" Grid.Row="3" Grid.Column="2" Margin="0,0,0,4" Padding="5,3" FlowDirection="LeftToRight"/>
+                </Grid>
+
+                <!-- Retention -->
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="שמירת קבצים מקומיים (ימים):" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                    <TextBox x:Name="LoggingLocalRetentionTextBox" Grid.Row="0" Grid.Column="1"
+                             Width="80" HorizontalAlignment="Right" Padding="5,3" Margin="0,0,0,4"
+                             FlowDirection="LeftToRight"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שמירת קבצים מרוכזים (ימים):" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                    <TextBox x:Name="LoggingCentralRetentionTextBox" Grid.Row="1" Grid.Column="1"
+                             Width="80" HorizontalAlignment="Right" Padding="5,3" Margin="0,0,0,4"
+                             FlowDirection="LeftToRight"/>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
 

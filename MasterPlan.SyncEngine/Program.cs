@@ -3,6 +3,9 @@ using MasterPlan.SyncEngine;
 using MasterPlan.SyncEngine.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Extensions.Logging;
+using SiNetSQL.Services.Logging;
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // Register Dapper type handlers for SQL Server compatibility
@@ -20,13 +23,30 @@ var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .Build();
 
-// Setup logging
-using var loggerFactory = LoggerFactory.Create(builder =>
-{
-    builder
-        .AddConsole()
-        .SetMinimumLevel(LogLevel.Information);
-});
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// Centralized logging — Serilog wired via Microsoft.Extensions.Logging.
+// Configuration (central path, levels, retention) is read from the SystemSettings
+// table in SQL — single source of truth shared with the WPF client and AccService.
+// Falls back to compile-time defaults when the DB is unreachable.
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+var loggingConnectionString =
+    configuration.GetConnectionString("SiData")
+    ?? configuration.GetConnectionString("ReplicaDatabase")
+    ?? configuration.GetConnectionString("SourceDatabase");
+
+var loggingConfig = CentralLoggingSettings.LoadFromDatabase(
+    loggingConnectionString,
+    SiNetApp.SyncEngine,
+    enableConsole: true);
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+    .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
+    .AddSiNetCentralLogging(loggingConfig)
+    .CreateLogger();
+
+using var loggerFactory = new SerilogLoggerFactory(Log.Logger, dispose: false);
 
 var dbSyncLogger = loggerFactory.CreateLogger<DatabaseSyncManager>();
 var apiClientLogger = loggerFactory.CreateLogger<MasterPlanApiClient>();
@@ -34,6 +54,9 @@ var apiSyncLogger = loggerFactory.CreateLogger<ApiDailySyncService>();
 var monthlyServiceLogger = loggerFactory.CreateLogger<MonthlyBackupRestoreService>();
 var captureServiceLogger = loggerFactory.CreateLogger<RawCaptureService>();
 var dumpServiceLogger = loggerFactory.CreateLogger<ApiDumpService>();
+
+// Flush any buffered log entries on every exit path (including Environment.Exit).
+AppDomain.CurrentDomain.ProcessExit += (_, _) => Log.CloseAndFlush();
 
 // Connection strings - configure these in appsettings.json or environment variables
 var sourceConnectionString = configuration.GetConnectionString("SourceDatabase")

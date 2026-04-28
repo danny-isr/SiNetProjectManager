@@ -1,6 +1,7 @@
 ﻿using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,8 @@ using SiNetSQL.Data;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
+using SiNetSQL.Services.Logging;
+using Serilog.Events;
 using SiOffice.GoogleConnector.Reports;
 
 namespace SiNetProjectManagerV2.WPF_Window;
@@ -106,6 +109,9 @@ public partial class ManagementSettingsWindow : Window
             var bootstrapAdminEmail = await _settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.AccBootstrapAdminEmail, string.Empty);
             AccBootstrapAdminEmailTextBox.Text = bootstrapAdminEmail;
+
+            // Load centralized logging settings.
+            await LoadLoggingSettingsAsync();
         }
         catch (Exception ex)
         {
@@ -224,6 +230,9 @@ public partial class ManagementSettingsWindow : Window
                 SystemSettingKeys.AccBootstrapAdminEmail,
                 bootstrapAdminEmail,
                 "אימייל חשבון השירות שמשמש כאדמין ביצירת פרויקטים ב-ACC. הרשאות החשבון הזה לא משתנות אוטומטית.");
+
+            // Save centralized logging settings.
+            await SaveLoggingSettingsAsync();
 
             // Save status default colors
             SaveStatusColors();
@@ -819,6 +828,162 @@ public partial class ManagementSettingsWindow : Window
             SystemSettingKeys.AccProjectTemplateName,
             selected,
             "שם תבנית ה-ACC ליצירת פרויקטים חדשים — מקור הרשאות התיקיות");
+    }
+
+    #endregion
+
+    #region Centralized Logging
+
+    private static readonly LogEventLevel[] _logLevels =
+    [
+        LogEventLevel.Verbose,
+        LogEventLevel.Debug,
+        LogEventLevel.Information,
+        LogEventLevel.Warning,
+        LogEventLevel.Error,
+        LogEventLevel.Fatal,
+    ];
+
+    /// <summary>
+    /// Populates all logging UI controls from <see cref="SystemSettingKeys"/>
+    /// values, falling back to the per-app code defaults from
+    /// <see cref="CentralLoggingDefaults"/> when a row is missing.
+    /// </summary>
+    private async Task LoadLoggingSettingsAsync()
+    {
+        // Populate level dropdowns once.
+        foreach (var combo in new[]
+        {
+            LoggingClientFileLevelCombo, LoggingClientCentralLevelCombo,
+            LoggingAccFileLevelCombo,    LoggingAccCentralLevelCombo,
+            LoggingSyncFileLevelCombo,   LoggingSyncCentralLevelCombo,
+        })
+        {
+            if (combo.Items.Count == 0)
+            {
+                foreach (var lvl in _logLevels)
+                    combo.Items.Add(lvl.ToString());
+            }
+        }
+
+        LoggingCentralPathTextBox.Text = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.LoggingCentralLogPath,
+            CentralLoggingDefaults.DefaultCentralLogPath);
+
+        LoggingLocalRetentionTextBox.Text = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.LoggingLocalRetentionDays, "14");
+        LoggingCentralRetentionTextBox.Text = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.LoggingCentralRetentionDays, "90");
+
+        await SetLevelComboAsync(LoggingClientFileLevelCombo,    SystemSettingKeys.LoggingClientFileLevel,     LogEventLevel.Error);
+        await SetLevelComboAsync(LoggingClientCentralLevelCombo, SystemSettingKeys.LoggingClientCentralLevel,  LogEventLevel.Error);
+        await SetLevelComboAsync(LoggingAccFileLevelCombo,       SystemSettingKeys.LoggingAccServiceFileLevel, LogEventLevel.Information);
+        await SetLevelComboAsync(LoggingAccCentralLevelCombo,    SystemSettingKeys.LoggingAccServiceCentralLevel, LogEventLevel.Warning);
+        await SetLevelComboAsync(LoggingSyncFileLevelCombo,      SystemSettingKeys.LoggingSyncEngineFileLevel,    LogEventLevel.Information);
+        await SetLevelComboAsync(LoggingSyncCentralLevelCombo,   SystemSettingKeys.LoggingSyncEngineCentralLevel, LogEventLevel.Warning);
+    }
+
+    private async Task SetLevelComboAsync(ComboBox combo, string key, LogEventLevel fallback)
+    {
+        var raw = await _settingsService.GetOrDefaultAsync(key, fallback.ToString());
+        var lvl = Enum.TryParse<LogEventLevel>(raw, ignoreCase: true, out var parsed) ? parsed : fallback;
+        combo.SelectedItem = lvl.ToString();
+    }
+
+    /// <summary>
+    /// Persists every logging setting back to <c>dbo.SystemSettings</c>.
+    /// Changes apply on the next process start of each affected app.
+    /// </summary>
+    private async Task SaveLoggingSettingsAsync()
+    {
+        var centralPath = LoggingCentralPathTextBox.Text?.Trim() ?? string.Empty;
+        await _settingsService.SetAsync(
+            SystemSettingKeys.LoggingCentralLogPath,
+            centralPath,
+            "נתיב UNC לתיקיית הלוגים המרוכזת. ריק = הסינק המרוכז כבוי.");
+
+        await _settingsService.SetAsync(
+            SystemSettingKeys.LoggingLocalRetentionDays,
+            ParsePositiveIntOrDefault(LoggingLocalRetentionTextBox.Text, 14).ToString(),
+            "תקופת שמירת קבצי לוג מקומיים (ימים).");
+        await _settingsService.SetAsync(
+            SystemSettingKeys.LoggingCentralRetentionDays,
+            ParsePositiveIntOrDefault(LoggingCentralRetentionTextBox.Text, 90).ToString(),
+            "תקופת שמירת קבצי לוג מרוכזים (ימים).");
+
+        await SaveLevelAsync(LoggingClientFileLevelCombo,    SystemSettingKeys.LoggingClientFileLevel,        "רמת המינימום לקובץ הלוג המקומי של ה-WPF Client.");
+        await SaveLevelAsync(LoggingClientCentralLevelCombo, SystemSettingKeys.LoggingClientCentralLevel,     "רמת המינימום לקובץ הלוג המרוכז של ה-WPF Client.");
+        await SaveLevelAsync(LoggingAccFileLevelCombo,       SystemSettingKeys.LoggingAccServiceFileLevel,    "רמת המינימום לקובץ הלוג המקומי של AccService.");
+        await SaveLevelAsync(LoggingAccCentralLevelCombo,    SystemSettingKeys.LoggingAccServiceCentralLevel, "רמת המינימום לקובץ הלוג המרוכז של AccService.");
+        await SaveLevelAsync(LoggingSyncFileLevelCombo,      SystemSettingKeys.LoggingSyncEngineFileLevel,    "רמת המינימום לקובץ הלוג המקומי של SyncEngine.");
+        await SaveLevelAsync(LoggingSyncCentralLevelCombo,   SystemSettingKeys.LoggingSyncEngineCentralLevel, "רמת המינימום לקובץ הלוג המרוכז של SyncEngine.");
+    }
+
+    private async Task SaveLevelAsync(ComboBox combo, string key, string description)
+    {
+        var value = combo.SelectedItem as string ?? combo.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(value)) return;
+        await _settingsService.SetAsync(key, value, description);
+    }
+
+    private static int ParsePositiveIntOrDefault(string? text, int fallback)
+        => int.TryParse(text, out var n) && n > 0 ? n : fallback;
+
+    private void TestCentralLogPath_Click(object sender, RoutedEventArgs e)
+    {
+        var path = LoggingCentralPathTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            ShowLoggingPathStatus("⚠️ נתיב ריק — הסינק המרוכז יישאר כבוי", isError: true);
+            return;
+        }
+
+        try
+        {
+            System.IO.Directory.CreateDirectory(path);
+            var probe = System.IO.Path.Combine(path, $".write-test-{Environment.MachineName}-{Guid.NewGuid():N}.tmp");
+            System.IO.File.WriteAllText(probe, "ok");
+            System.IO.File.Delete(probe);
+            ShowLoggingPathStatus($"✅ הכתיבה הצליחה: {path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowLoggingPathStatus($"❌ נכשל: {ex.Message}", isError: true);
+        }
+    }
+
+    private void OpenCentralLogPath_Click(object sender, RoutedEventArgs e)
+    {
+        var path = LoggingCentralPathTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            ShowLoggingPathStatus("⚠️ נתיב ריק", isError: true);
+            return;
+        }
+
+        try
+        {
+            if (!System.IO.Directory.Exists(path))
+                System.IO.Directory.CreateDirectory(path);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowLoggingPathStatus($"❌ לא ניתן לפתוח: {ex.Message}", isError: true);
+        }
+    }
+
+    private void ShowLoggingPathStatus(string text, bool isError)
+    {
+        LoggingPathStatusLabel.Text = text;
+        LoggingPathStatusLabel.Foreground = isError
+            ? new SolidColorBrush(Color.FromRgb(0xD3, 0x2F, 0x2F))
+            : new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32));
+        LoggingPathStatusLabel.Visibility = Visibility.Visible;
     }
 
     #endregion

@@ -1,106 +1,184 @@
-# SiNet Application Logging System
+# SiNet Centralized Logging System
 
 ## Overview
 
-The SiNet application uses a centralized logging system controlled by user settings.
-**Default state: DISABLED (OFF)** - no log files are created until the user explicitly enables logging.
+All three SiNet apps share a single, **DB-driven** logging configuration so logs from
+every machine and every user funnel into one well-known network share with a
+consistent format and folder structure.
 
-## Settings Location
+| App | Project | TFM | Default local level | Default central level |
+|---|---|---|---|---|
+| WPF Client | `SiNetProjectManagerV2` | `net10.0-windows` | Error (toggleable) | Error |
+| ACC Service | `SiOffice.AccService` | `net10.0-windows` | Information | Warning |
+| MasterPlan Sync | `MasterPlan.SyncEngine` | `net10.0` | Information | Warning |
 
-Logging settings are accessible via:
-**Main Menu → Settings (הגדרות) → Logging Section (רישום לוג)**
+Logging framework: **Serilog 4.2** (sinks: File 7.0 + Async 1.5 + Console 6.0).
+Shared configuration code lives in `SiNetSQL\Services\Logging\CentralLogging.cs`
+and is re-used by `MasterPlan.SyncEngine` via `<Compile Include Link="..."/>`
+(no `ProjectReference` — keeps the slim `net10.0` TFM).
 
-### Options:
-- **Enable logging checkbox** - Master on/off switch
-- **Log folder picker** - Choose custom folder (or use default)
-- **Test write button** - Verify write permissions
-- **Open folder button** - Quick access to log directory
-- **Clear old logs button** - Delete logs older than 7 days
+## Storage Layout
 
-## Log File Location
+### Central share
 
-**Default location:**
 ```
-%LocalAppData%\SiNetProjectManager\Logs\
+\\si-win-2k19\AutoCAD Data\log\
+    <AppName>\<MachineName>\<UserName>\<AppName>-yyyyMMdd.log
 ```
-Example: `C:\Users\<username>\AppData\Local\SiNetProjectManager\Logs\`
 
-**Custom location:**
-Users can specify any folder with write permissions.
+`<AppName>` is one of `Client`, `AccService`, `SyncEngine`. The three-level
+sub-folder layout makes it trivial to grep a specific user/machine without
+opening a single huge folder.
 
-## Log File Naming
+### Local fallback (per machine)
 
-Files use rolling daily naming:
+| App | Local path |
+|---|---|
+| Client | `%LocalAppData%\SiNetProjectManager\Logs\` |
+| AccService | `%ProgramData%\SiOffice\AccService\logs\` |
+| SyncEngine | `%ProgramData%\SiOffice\MasterPlanSync\logs\` |
+
+Files roll daily and on a 10 MB size limit. The local sink keeps **14** days,
+the central sink keeps **90** days (overridable in DB).
+
+## Output Template
+
+Every sink in every app uses the exact same template — keeps the central log
+greppable across sources:
+
 ```
-SiNet_yyyy-MM-dd.log
-```
-Examples:
-- `SiNet_2025-01-15.log`
-- `SiNet_2025-01-16.log`
-
-## Log Format
-
-Each log entry follows this format:
-```
-[timestamp] [T###] [LEVEL] message
+[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{App}] [{Machine}] [{User}] [P{ProcessId:D5}/T{ThreadId:D3}] [{Level:u4}] {Message}{NewLine}{Exception}
 ```
 
 Example:
+
 ```
-[2025-01-15 14:32:15.123] [T001] [INFO] Logger initialized. LogDirectory=C:\Users\danny\AppData\Local\SiNetProjectManager\Logs
-[2025-01-15 14:32:16.456] [T005] [DEBUG] [R01] LoadProjectsAsync: CustomerId=NULL, ActiveOnly=True
-[2025-01-15 14:32:17.789] [T005] [ERROR] Database connection failed: Connection timeout
+[2025-01-15 14:32:15.123] [Client] [WS-DANNY] [danny] [P12345/T001] [INFO] Logger initialized
+[2025-01-15 14:32:17.789] [AccService] [SI-WIN-2K19] [SYSTEM] [P09872/T015] [WARN] ACC token refresh stale
 ```
 
-### Log Levels:
-- **DEBUG** - Detailed diagnostic information (only in Debug builds)
-- **INFO** - General informational messages
-- **WARN** - Warning conditions
-- **ERROR** - Error conditions
+## Configuration — Single Source of Truth: `SystemSettings` table
 
-## Technical Details
+All knobs live in `dbo.SystemSettings` under the `Logging.*` prefix. The
+WPF Admin UI (Management Settings) is the only place users edit them.
 
-### Central Logger: `AppLogger`
-Located in: `SiNetSQL\Services\AppLogger.cs`
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `Logging.CentralLogPath` | UNC string | `\\si-win-2k19\AutoCAD Data\log` | Root of the central share. Empty = central sink disabled. |
+| `Logging.LocalRetentionDays` | int | `14` | Local rolling-file retention. |
+| `Logging.CentralRetentionDays` | int | `90` | Central rolling-file retention. |
+| `Logging.Client.FileLevel` | level | `Error` | WPF client local file min level. |
+| `Logging.Client.CentralLevel` | level | `Error` | WPF client central file min level. |
+| `Logging.AccService.FileLevel` | level | `Information` | AccService local file min level. |
+| `Logging.AccService.CentralLevel` | level | `Warning` | AccService central file min level. |
+| `Logging.SyncEngine.FileLevel` | level | `Information` | SyncEngine local file min level. |
+| `Logging.SyncEngine.CentralLevel` | level | `Warning` | SyncEngine central file min level. |
 
-Key APIs:
+Valid level values (case-insensitive): `Verbose`, `Debug`, `Information`,
+`Warning`, `Error`, `Fatal`.
+
+### How settings are loaded
+
+Each app, at process start, calls
+`CentralLoggingSettings.LoadFromDatabase(connectionString, app)` which:
+
+1. Opens a **raw `SqlConnection`** (no EF, no DI yet — must work before the
+   container is built).
+2. Runs `SELECT SettingKey, SettingValue FROM dbo.SystemSettings WHERE SettingKey LIKE 'Logging.%'`
+   with a 5-second `CommandTimeout`.
+3. Maps the rows; missing rows fall back to the per-app code defaults
+   (`CentralLoggingDefaults`).
+4. **Any failure** (DB unreachable, parse error, share missing) is swallowed —
+   the logger always boots, even if only the local sink is active.
+
+### Optional dynamic level switch (WPF only)
+
+The WPF client passes `AppLogger.FileLevelSwitch` (a `LoggingLevelSwitch`)
+into `LoadFromDatabase`. The local sink is then controlled by that switch
+instead of `LocalFileMinLevel`, so the existing in-app Settings toggle keeps
+working at runtime without rebuilding the logger.
+
+## Bootstrapping in Each App
+
+### WPF Client — `App.xaml.cs` (static ctor)
+
 ```csharp
-AppLogger.Configure(enabled, logDirectory);  // Initialize at startup
-AppLogger.Info("message");                    // Log info
-AppLogger.Warn("message");                    // Log warning
-AppLogger.Error("message");                   // Log error
-AppLogger.Error(exception, "context");        // Log exception
-AppLogger.Debug("message");                   // Log debug (DEBUG builds only)
+var connStr = CredentialVaultService.GetSecret(SecretKeys.SiNetDatabase);
+var loggingConfig = CentralLoggingSettings.LoadFromDatabase(
+        connStr, SiNetApp.Client, enableConsole: false, AppLogger.FileLevelSwitch)
+    with { LocalLogDirectory = _logDir };
+
+Log.Logger = new LoggerConfiguration()
+    .AddSiNetCentralLogging(loggingConfig)
+    .CreateLogger();
 ```
 
-### GoogleConnector Integration
-The GoogleConnector library uses `IReportLogger` interface.
-Main app wires it via `AppLoggerReportAdapter` at startup.
+### AccService — `Program.cs` (before `Host.CreateApplicationBuilder`)
 
-### Thread Safety
-- All logging is thread-safe (uses lock for file writes)
-- Never throws exceptions - all I/O is wrapped in try/catch
+The CredentialProvider bridge must be installed BEFORE the logger reads the
+connection string from the vault.
+
+```csharp
+var connStr = CredentialVaultService.GetSecret(SecretKeys.SiNetDatabase)
+              ?? builder.Configuration.GetConnectionString("SiNetDatabase");
+
+Log.Logger = new LoggerConfiguration()
+    .AddSiNetCentralLogging(
+        CentralLoggingSettings.LoadFromDatabase(connStr, SiNetApp.AccService, enableConsole: true))
+    .CreateLogger();
+```
+
+### SyncEngine — `Program.cs`
+
+Console + file. The shared library is pulled into the project via
+`<Compile Include="..\..\SiNetSQL\SiNetSQL\Services\Logging\CentralLogging.cs" Link="..."/>`
+plus `SystemSettingKeys.cs` — no `ProjectReference`.
+
+```csharp
+Log.Logger = new LoggerConfiguration()
+    .AddSiNetCentralLogging(
+        CentralLoggingSettings.LoadFromDatabase(connStr, SiNetApp.SyncEngine, enableConsole: true))
+    .CreateLogger();
+
+ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger, dispose: true);
+AppDomain.CurrentDomain.ProcessExit += (_, _) => Log.CloseAndFlush();
+```
+
+## Build Notes
+
+- **Always build via Visual Studio MSBuild**, not `dotnet build`. `SiNetSQL.csproj`
+  has a COM reference (`IWshRuntimeLibrary`) that `dotnet` rejects with
+  `MSB4803`.
+- VS MSBuild path:
+  `C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe`
+- Solution: `SiNetProjectManager.sln`.
 
 ## Maintenance
 
-### Automatic Cleanup
-- Users can manually clear old logs via Settings
-- Logs older than 7 days can be deleted
-
-### Storage Considerations
-- Each log file typically 1-10 MB depending on activity
-- Enable only when troubleshooting issues
-- Remember to disable after debugging to save disk space
+- Default retention: 14 days local / 90 days central.
+- The central share is keyed by `\<AppName>\<Machine>\<User>\` so a single user
+  on a single machine can be wiped without touching others.
+- The legacy `appsettings.json → Logging.CentralLogPath` is **deprecated** and
+  ignored — left in place only as a hint for first-run when the DB is
+  unreachable.
 
 ## Troubleshooting
 
-### Logs not being created?
-1. Verify logging is enabled in Settings
-2. Test write permissions using "בדוק כתיבה" button
-3. Check folder path is valid and writable
+### Nothing in the central share
+1. Verify the share `\\si-win-2k19\AutoCAD Data\log` is reachable as the
+   running process's identity (LOCAL SYSTEM for AccService — make sure the
+   service account has write rights).
+2. Check the per-app local file — it always works even when the central share
+   is down and will record write failures.
+3. Make sure `Logging.<App>.CentralLevel` isn't set to a level higher than
+   what your code emits.
 
-### Finding specific issues?
-1. Note the timestamp when issue occurred
-2. Open the log file for that date
-3. Search for `[ERROR]` entries
-4. Look for stack traces after error messages
+### Levels not applying
+1. Edit the value in **Management Settings → Logging** (not in
+   `appsettings.json`).
+2. Restart the app — levels are read once at process start.
+
+### Want richer local logs only on one developer's machine
+For the WPF client, lower the `AppLogger.FileLevelSwitch.MinimumLevel` at
+runtime — the central sink is unaffected, the local sink follows the switch
+immediately.

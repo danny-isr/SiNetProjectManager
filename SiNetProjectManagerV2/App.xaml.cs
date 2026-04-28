@@ -17,6 +17,7 @@ using SiNetSQL.Diagnostics;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.EmailIngestion;
+using SiNetSQL.Services.Logging;
 using SiOffice.GoogleConnector.Logging;
 using SiOffice.GoogleConnector;
 using SiOffice.GoogleConnector.RateLimiting;
@@ -56,63 +57,39 @@ namespace SiNetProjectManagerV2
             _logDir = GetLogDirectory();
             try { Directory.CreateDirectory(_logDir); } catch { }
 
-            // Sync AppLogger's display directory with Serilog's actual log directory
+            // Sync AppLogger's display directory with the resolved local log directory.
             AppLogger.LogDirectory = _logDir;
 
-            const string outputTemplate =
-                "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [T{ThreadId:D3}] [{Level:u4}] {Message:lj}{NewLine}{Exception}";
+            // ─── Centralized logging — DB-driven config (single source of truth) ───
+            // Connection string is read from the Windows Credential Manager. If the
+            // vault is not provisioned yet (first run), the loader silently falls
+            // back to compile-time defaults so the logger always boots.
+            var loggingConnectionString =
+                CredentialVaultService.GetSecret(SecretKeys.SiNetDatabase);
+
+            var loggingConfig = CentralLoggingSettings.LoadFromDatabase(
+                loggingConnectionString,
+                SiNetApp.Client,
+                enableConsole: false,
+                // Local file level is controlled at runtime by the user's
+                // "Enable detailed logging" toggle (Settings → Logging).
+                localFileLevelSwitch: AppLogger.FileLevelSwitch) with
+            {
+                LocalLogDirectory = _logDir
+            };
 
             var logConfig = new LoggerConfiguration()
                 .MinimumLevel.Debug()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .MinimumLevel.Override("System", LogEventLevel.Warning)
                 .Enrich.WithProperty("SessionId", SessionId)
-                .Enrich.With(new ThreadIdEnricher())
-                // ═══ FILE SINK: Level controlled by AppLogger.FileLevelSwitch ═══
-                // Error when user logging is OFF, Debug when ON (toggled at runtime).
-                .WriteTo.Logger(sub => sub
-                    .MinimumLevel.ControlledBy(AppLogger.FileLevelSwitch)
-                    .WriteTo.Async(a => a.File(
-                        path: Path.Combine(_logDir, "SiNet-.log"),
-                        rollingInterval: RollingInterval.Day,
-                        rollOnFileSizeLimit: true,
-                        fileSizeLimitBytes: 10_000_000,
-                        retainedFileCountLimit: 14,
-                        outputTemplate: outputTemplate)));
-
-            // ═══ CENTRAL ERROR SINK: shared network folder for all deployed instances ═══
-            // Structure: {CentralLogPath}\{Username}\errors-yyyyMMdd.log
-            // Only Error + Fatal level events are written to the central location.
-            var centralPath = AppConfiguration.CentralLogPath;
-            if (!string.IsNullOrEmpty(centralPath))
-            {
-                try
-                {
-                    var userFolder = Path.Combine(centralPath, Environment.UserName);
-                    Directory.CreateDirectory(userFolder);
-
-                    logConfig = logConfig.WriteTo.Logger(sub => sub
-                        .MinimumLevel.Error()
-                        .WriteTo.Async(a => a.File(
-                            path: Path.Combine(userFolder, "errors-.log"),
-                            rollingInterval: RollingInterval.Day,
-                            rollOnFileSizeLimit: true,
-                            fileSizeLimitBytes: 5_000_000,
-                            retainedFileCountLimit: 30,
-                            outputTemplate: outputTemplate)));
-                }
-                catch
-                {
-                    // Non-fatal: if central path is unreachable, continue with local logging only.
-                    // The error will be visible in local logs once they're created.
-                }
-            }
+                .AddSiNetCentralLogging(loggingConfig);
 
             // ═══ DEBUG OUTPUT SINK: VS Output window (DEBUG builds only) ═══
             // Shows ALL log levels in the Output window with the same format as the file.
             // No level filtering — everything that reaches Serilog appears in Output.
 #if DEBUG
-            logConfig = logConfig.WriteTo.Sink(new DebugOutputSink(outputTemplate));
+            logConfig = logConfig.WriteTo.Sink(new DebugOutputSink(CentralLoggingDefaults.OutputTemplate));
 #endif
 
             Log.Logger = logConfig.CreateLogger();

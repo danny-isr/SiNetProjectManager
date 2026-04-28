@@ -4,6 +4,7 @@ using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
+using SiNetSQL.Services.Logging;
 using SiOffice.AccService.Auth;
 using SiOffice.AccService.Endpoints;
 
@@ -29,21 +30,30 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 // from a console (UseWindowsService no-ops in that case).
 builder.Host.UseWindowsService(o => o.ServiceName = "SiOffice.AccService");
 
-// ─── Logging: Serilog (console + rolling daily file) ────────────────────────
-var logsDir = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-    "SiOffice", "AccService", "logs");
-Directory.CreateDirectory(logsDir);
+// ─── Credential vault bridge (Windows Credential Manager, same as WPF client) ─
+// All secrets — Autodesk client id/secret, connection strings, etc. — live in the
+// machine-scoped Windows Credential Manager and are looked up by the well-known
+// keys in SiNetSQL.Services.SecretKeys. Wiring this BEFORE building services so
+// any DI factory that resolves credentials at construction time gets them.
+CredentialProvider.GetSecret = CredentialVaultService.GetSecret;
+
+// ─── Logging: Serilog with shared SiNet sinks layout ────────────────────────
+// Settings (central path, levels, retention) come from the SystemSettings table
+// in SQL — single source of truth shared with the WPF client. Falls back to
+// compile-time defaults when the DB is unreachable so the service still boots.
+var loggingConnectionString =
+    CredentialVaultService.GetSecret(SecretKeys.SiNetDatabase)
+    ?? builder.Configuration.GetConnectionString("SiNetDatabase");
+
+var loggingConfig = CentralLoggingSettings.LoadFromDatabase(
+    loggingConnectionString,
+    SiNetApp.AccService,
+    enableConsole: true);
 
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.File(
-        path: Path.Combine(logsDir, "accservice-.log"),
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 30,
-        shared: true)
+    .AddSiNetCentralLogging(loggingConfig)
     .CreateLogger();
 builder.Host.UseSerilog();
 
@@ -70,13 +80,6 @@ builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
         }
     });
 });
-
-// ─── Credential vault bridge (Windows Credential Manager, same as WPF client) ─
-// All secrets — Autodesk client id/secret, connection strings, etc. — live in the
-// machine-scoped Windows Credential Manager and are looked up by the well-known
-// keys in SiNetSQL.Services.SecretKeys. Wiring this BEFORE building services so
-// any DI factory that resolves credentials at construction time gets them.
-CredentialProvider.GetSecret = CredentialVaultService.GetSecret;
 
 // ─── Database: shared SiNetSQL context, factory pattern (same as WPF client) ─
 // Resolution order matches AppConfiguration.GetConnectionString in the WPF app:

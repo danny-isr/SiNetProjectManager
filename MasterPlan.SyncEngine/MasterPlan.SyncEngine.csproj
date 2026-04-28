@@ -15,6 +15,26 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.7" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.Sinks.Async" Version="1.5.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+  </ItemGroup>
+
+  <!--
+    Shared logging code (CentralLoggingBuilder + DB-driven settings loader)
+    is sourced directly from SiNetSQL via Compile links so this console app
+    keeps a slim TFM (net10.0, no WPF deps) while still using the exact same
+    sink layout / settings keys as the WPF client and AccService.
+    Only the keys file is shared — SystemSettingsService itself depends on
+    EF Core models which we don't need here.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\SiNetSQL\SiNetSQL\Services\SystemSettingKeys.cs"
+             Link="Logging\Shared\SystemSettingKeys.cs" />
+    <Compile Include="..\..\SiNetSQL\SiNetSQL\Services\Logging\CentralLogging.cs"
+             Link="Logging\Shared\CentralLogging.cs" />
   </ItemGroup>
 
   <ItemGroup>
