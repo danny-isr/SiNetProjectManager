@@ -12,6 +12,12 @@
     <RootNamespace>SiOffice.AccService</RootNamespace>
     <AssemblyName>SiOffice.AccService</AssemblyName>
     <UserSecretsId>siofficeaccservice-d9b2c1a0</UserSecretsId>
+    <!--
+      Version is the single source of truth for AssemblyVersion / FileVersion
+      AND for the MSI ProductVersion (read by publish-service.ps1 and passed
+      to SiOffice.AccService.Installer.wixproj). Bump on every release.
+    -->
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

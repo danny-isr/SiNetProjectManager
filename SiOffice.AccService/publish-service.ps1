@@ -1,14 +1,26 @@
-# Publish SiOffice.AccService for production deployment
+# Publish SiOffice.AccService for production deployment AND build the updater MSI.
 # Workaround for .NET 10 SDK MSB4803 (COM ResolveComReference) — uses full VS MSBuild for Build, dotnet for Publish.
+#
+# Pipeline:
+#   1. Publish AccService payload to a local intermediate folder ($OutputDir, default under repo \artifacts).
+#   2. Build SiOfficeAccService.msi from that payload.
+#   3. Copy the final MSI to the network share ($MsiDeployDir) so the server can run it directly.
 
 param(
-    [string]$OutputDir = "D:\AccService_Publish",
+    # Intermediate publish folder. Local-only scratch space; you never run anything from here.
+    [string]$OutputDir = (Join-Path $PSScriptRoot "..\artifacts\AccService_Publish"),
     [string]$Configuration = "Release",
-    [string]$Runtime = "win-x64"
+    [string]$Runtime = "win-x64",
+    # Network share where the final MSI lands. The server picks it up from here.
+    [string]$MsiDeployDir = "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full",
+    [switch]$SkipMsi,
+    [switch]$SkipDeploy
 )
 
 $ErrorActionPreference = "Stop"
-$projectPath = Join-Path $PSScriptRoot "SiOffice.AccService.csproj"
+$projectPath  = Join-Path $PSScriptRoot "SiOffice.AccService.csproj"
+$installerDir = Resolve-Path (Join-Path $PSScriptRoot "..\SiOffice.AccService.Installer")
+$installerProj = Join-Path $installerDir "SiOffice.AccService.Installer.wixproj"
 
 Write-Host "=== Locating Visual Studio MSBuild ===" -ForegroundColor Cyan
 $vsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -33,5 +45,46 @@ try {
 }
 finally { Pop-Location }
 
-Write-Host "`n=== Done. Output: $OutputDir ===" -ForegroundColor Green
+Write-Host "`n=== Publish output: $OutputDir ===" -ForegroundColor Green
 Get-ChildItem $OutputDir | Where-Object { $_.Name -match "AccService\.(exe|dll)$|appsettings" } | Format-Table Name, Length
+
+if ($SkipMsi) {
+    Write-Host "`n-SkipMsi specified, not building installer." -ForegroundColor Yellow
+    return
+}
+
+Write-Host "`n=== Reading version from csproj ===" -ForegroundColor Cyan
+[xml]$csproj = Get-Content $projectPath
+$productVersion = ($csproj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+if (-not $productVersion) { throw "Could not read <Version> from $projectPath" }
+Write-Host "ProductVersion: $productVersion"
+
+Write-Host "`n=== Building updater MSI ===" -ForegroundColor Cyan
+dotnet build $installerProj `
+    -c $Configuration `
+    -p:PublishDir=$OutputDir `
+    -p:ProductVersion=$productVersion
+if ($LASTEXITCODE -ne 0) { throw "MSI build failed" }
+
+$msiPath = Join-Path $installerDir "bin\$Configuration\SiOfficeAccService.msi"
+if (-not (Test-Path $msiPath)) { throw "Expected MSI not found at $msiPath" }
+
+Write-Host "`n=== Built MSI: $msiPath ===" -ForegroundColor Green
+Get-Item $msiPath | Format-Table Name, Length, LastWriteTime
+
+if ($SkipDeploy) {
+    Write-Host "`n-SkipDeploy specified, MSI was NOT copied to network share." -ForegroundColor Yellow
+    return
+}
+
+Write-Host "`n=== Deploying MSI to $MsiDeployDir ===" -ForegroundColor Cyan
+if (-not (Test-Path $MsiDeployDir)) {
+    throw "Network share '$MsiDeployDir' is not reachable. Check VPN / credentials and try again, or pass -SkipDeploy."
+}
+
+$deployedMsi = Join-Path $MsiDeployDir "SiOfficeAccService.msi"
+Copy-Item $msiPath $deployedMsi -Force
+
+Write-Host "`n=== Done. Server can now run: ===" -ForegroundColor Green
+Write-Host "    msiexec /i `"$deployedMsi`" /qn /l*v upgrade.log" -ForegroundColor Green
+Get-Item $deployedMsi | Format-Table Name, Length, LastWriteTime

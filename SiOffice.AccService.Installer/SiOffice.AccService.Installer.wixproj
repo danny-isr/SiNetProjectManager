@@ -1,0 +1,27 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputName>SiOfficeAccService</OutputName>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+
+    <!--
+      The MSI is built from a published folder produced by publish-service.ps1.
+      Override on the command line with -p:PublishDir=...
+    -->
+    <PublishDir Condition="'$(PublishDir)' == ''">D:\AccService_Publish</PublishDir>
+
+    <!--
+      Product version flows in from publish-service.ps1 (read from the
+      AccService csproj). Default keeps Visual Studio "Build" working locally.
+    -->
+    <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
+
+    <DefineConstants>
+      PublishDir=$(PublishDir);ProductVersion=$(ProductVersion)
+    </DefineConstants>
+
+    <SuppressIces>ICE57;ICE64</SuppressIces>
+  </PropertyGroup>
+
+</Project>

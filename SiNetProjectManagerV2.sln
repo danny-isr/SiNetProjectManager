@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNetSQL.E2ETests", "..\SiN
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AccService", "SiOffice.AccService\SiOffice.AccService.csproj", "{E232DEE6-67D7-4D9E-98C1-90CD72B32919}"
 EndProject
+Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "SiOffice.AccService.Installer", "SiOffice.AccService.Installer\SiOffice.AccService.Installer.wixproj", "{9571BF78-12CF-4497-B7BE-36189D0BAD8A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -153,6 +155,18 @@ Global
 		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x64.Build.0 = Release|Any CPU
 		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x86.ActiveCfg = Release|Any CPU
 		{E232DEE6-67D7-4D9E-98C1-90CD72B32919}.Release|x86.Build.0 = Release|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Debug|x64.Build.0 = Debug|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Debug|x86.Build.0 = Debug|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Release|x64.ActiveCfg = Release|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Release|x64.Build.0 = Release|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Release|x86.ActiveCfg = Release|Any CPU
+		{9571BF78-12CF-4497-B7BE-36189D0BAD8A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
