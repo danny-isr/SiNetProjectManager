@@ -10,6 +10,7 @@
       Override on the command line with -p:PublishDir=...
     -->
     <PublishDir Condition="'$(PublishDir)' == ''">D:\AccService_Publish</PublishDir>
+    <SharedDir Condition="'$(SharedDir)' == ''">$(PublishDir)</SharedDir>
 
     <!--
       Product version flows in from publish-service.ps1 (read from the
@@ -18,7 +19,7 @@
     <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
 
     <DefineConstants>
-      PublishDir=$(PublishDir);ProductVersion=$(ProductVersion)
+      PublishDir=$(PublishDir);SharedDir=$(SharedDir);ProductVersion=$(ProductVersion)
     </DefineConstants>
 
     <SuppressIces>ICE57;ICE64</SuppressIces>

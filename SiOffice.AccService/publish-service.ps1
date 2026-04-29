@@ -88,9 +88,20 @@ if (-not $productVersion) { throw "Could not read <Version> from $projectPath" }
 Write-Host "ProductVersion: $productVersion"
 
 Write-Host "`n=== Building updater MSI ===" -ForegroundColor Cyan
+
+# Create a "shared" payload folder that contains every published file
+# EXCEPT the service exe. The WiX <Files> harvester reads this folder, while
+# the ServiceHost component references the exe directly from $OutputDir. This
+# avoids the duplicate-component / single-KeyPath conflict on the .exe.
+$sharedDir = Join-Path (Split-Path $OutputDir -Parent) "AccService_MsiShared"
+if (Test-Path $sharedDir) { Remove-Item $sharedDir -Recurse -Force }
+Copy-Item $OutputDir $sharedDir -Recurse -Force
+Remove-Item (Join-Path $sharedDir "SiOffice.AccService.exe") -Force -ErrorAction SilentlyContinue
+
 dotnet build $installerProj `
     -c $Configuration `
     -p:PublishDir=$OutputDir `
+    -p:SharedDir=$sharedDir `
     -p:ProductVersion=$productVersion
 if ($LASTEXITCODE -ne 0) { throw "MSI build failed" }
 

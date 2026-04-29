@@ -47,8 +47,7 @@
 
     <Feature Id="Main" Title="ACC Service" Level="1">
       <ComponentGroupRef Id="ServiceHostGroup" />
-      <Files Include="$(var.PublishDir)\**"
-             Exclude="$(var.PublishDir)\SiOffice.AccService.exe"
+      <Files Include="$(var.SharedDir)\**"
              Directory="INSTALLFOLDER" />
     </Feature>
 
