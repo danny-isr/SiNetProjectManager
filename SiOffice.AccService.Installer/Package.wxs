@@ -53,8 +53,8 @@
       they survive the elevation barrier (UAC) in managed MSI installs.
       SERVICEPASSWORD is also Hidden so it does not appear in MSI logs.
     -->
-    <Property Id="SERVICEACCOUNT" Value="" Secure="yes" />
-    <Property Id="SERVICEPASSWORD" Value="" Secure="yes" Hidden="yes" />
+    <Property Id="SERVICEACCOUNT" Secure="yes" />
+    <Property Id="SERVICEPASSWORD" Secure="yes" Hidden="yes" />
 
     <!--
       RESOLVEDSERVICEACCOUNT: SERVICEACCOUNT if non-empty, otherwise "LocalSystem".
