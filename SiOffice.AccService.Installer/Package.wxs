@@ -48,15 +48,8 @@
     <Feature Id="Main" Title="ACC Service" Level="1">
       <ComponentGroupRef Id="ServiceHostGroup" />
       <Files Include="$(var.PublishDir)\**"
-             Directory="INSTALLFOLDER">
-        <!--
-          Exclude the main service exe from the auto-harvested file set so
-          the explicit ServiceHost component below owns it (only one component
-          may reference a file as KeyPath, and ServiceInstall must live on
-          the component that owns the .exe).
-        -->
-        <ExcludeFile Id="ExcludeAccServiceExe" Name="SiOffice.AccService.exe" />
-      </Files>
+             Exclude="$(var.PublishDir)\SiOffice.AccService.exe"
+             Directory="INSTALLFOLDER" />
     </Feature>
 
     <!--
