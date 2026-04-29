@@ -7,6 +7,7 @@
       2019 only, so this constraint is acceptable.
     -->
     <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>SiOffice.AccService</RootNamespace>
