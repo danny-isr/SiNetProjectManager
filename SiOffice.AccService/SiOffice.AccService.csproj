@@ -17,7 +17,7 @@
       AND for the MSI ProductVersion (read by publish-service.ps1 and passed
       to SiOffice.AccService.Installer.wixproj). Bump on every release.
     -->
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
