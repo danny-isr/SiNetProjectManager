@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
   <PropertyGroup>
     <!--
       net8.0-windows is required because SiNetSQL targets net8.0-windows
@@ -18,19 +17,16 @@
       AND for the MSI ProductVersion (read by publish-service.ps1 and passed
       to SiOffice.AccService.Installer.wixproj). Bump on every release.
     -->
-    <Version>2.0.0</Version>
+    <Version>2.0.2</Version>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\SiNetSQL\SiNetSQL\SiNetSQL.csproj" />
     <ProjectReference Include="..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
-
 </Project>
