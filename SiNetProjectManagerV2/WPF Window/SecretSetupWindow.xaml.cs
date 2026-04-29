@@ -708,7 +708,8 @@ public partial class SecretSetupWindow : Window
         }
 
         var confirm = MessageBox.Show(
-            $"לכתוב {secrets.Count} סודות לכספת של LocalSystem במחשב הזה ולהפעיל מחדש את {"" /* service name shown in tooltip */}השירות SiOffice.AccService?",
+            $"לכתוב {secrets.Count} סודות לכספת של המשתמש הנוכחי במחשב הזה ולהפעיל מחדש את השירות SiOffice.AccService?\n\n" +
+            "השירות חייב להיות מוגדר לרוץ תחת אותו משתמש כדי שיוכל לקרוא את הסודות.",
             "אישור", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
@@ -723,10 +724,14 @@ public partial class SecretSetupWindow : Window
             if (ok > 0)
                 restartLine = "\n\n" + AccServiceLocalSystemProvisioner.RestartService();
 
+            // Refresh the AccService API key status dot — it should now be green.
+            if (CredentialVaultService.HasSecret(SecretKeys.AccServiceApiKey))
+                StatusAccServiceApiKey.Fill = _greenBrush;
+
             if (failed.Count == 0)
             {
                 MessageBox.Show(
-                    $"✅ נכתבו {ok} סודות לכספת של LocalSystem.{restartLine}",
+                    $"✅ נכתבו {ok} סודות לכספת של המשתמש הנוכחי.{restartLine}",
                     "הסתיים", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
