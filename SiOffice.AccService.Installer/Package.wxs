@@ -65,12 +65,6 @@
     <SetProperty Id="RESOLVEDSERVICEACCOUNT"
                  Value="[SERVICEACCOUNT]"
                  After="AppSearch"
-                 Sequence="execute"
-                 Condition="SERVICEACCOUNT AND SERVICEACCOUNT &lt;&gt; &quot;&quot;" />
-    <SetProperty Id="RESOLVEDSERVICEACCOUNT"
-                 Value="[SERVICEACCOUNT]"
-                 After="AppSearch"
-                 Sequence="ui"
                  Condition="SERVICEACCOUNT AND SERVICEACCOUNT &lt;&gt; &quot;&quot;" />
 
     <!--
