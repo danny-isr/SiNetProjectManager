@@ -150,7 +150,29 @@ app.MapAccEndpoints();
 
 try
 {
-    Log.Information("SiOffice.AccService starting...");
+    // Rich startup banner — confirms key configuration in the central log so an
+    // operator can verify environment without attaching a debugger.
+    var listenPort = builder.Configuration.GetValue<int?>("AccService:HttpsPort") ?? 8443;
+    var hasApiKey = !string.IsNullOrWhiteSpace(
+        CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey)
+        ?? builder.Configuration["AccService:ApiKey"]);
+    Log.Information(
+        "SiOffice.AccService starting — version {Version}, machine {Machine}, user {User}, https port {Port}, api key configured: {HasApiKey}.",
+        typeof(Program).Assembly.GetName().Version?.ToString() ?? "?",
+        Environment.MachineName,
+        Environment.UserName,
+        listenPort,
+        hasApiKey);
+
+    // Hook the host lifetime so we get explicit started / stopping / stopped lines.
+    var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+    lifetime.ApplicationStarted.Register(() =>
+        Log.Information("SiOffice.AccService started — listening on https://*:{Port}.", listenPort));
+    lifetime.ApplicationStopping.Register(() =>
+        Log.Information("SiOffice.AccService stopping..."));
+    lifetime.ApplicationStopped.Register(() =>
+        Log.Information("SiOffice.AccService stopped."));
+
     app.Run();
 }
 catch (Exception ex)

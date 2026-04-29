@@ -29,4 +29,7 @@
     <ProjectReference Include="..\..\SiNetSQL\SiNetSQL\SiNetSQL.csproj" />
     <ProjectReference Include="..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Diagnostics\" />
+  </ItemGroup>
 </Project>
