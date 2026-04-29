@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  SiOffice ACC Service updater MSI.
+  SiOffice ACC Service installer MSI.
 
   Scope:
-    - Stop the existing Windows service 'SiOfficeAccService'
-    - Replace files under C:\AccService with the contents of $(var.PublishDir)
-    - Start the service again
+    - Install all files under C:\AccService from $(var.PublishDir)
+    - Register the Windows service 'SiOfficeAccService' (LocalSystem, auto-start)
+    - Stop / Start the service on upgrade
+    - Open inbound TCP firewall rule on the configured HTTPS port (default 8443)
     - Support side-by-side major upgrades (older MSI auto-uninstalled)
 
-  This MSI INTENTIONALLY does NOT install or configure the service itself
-  (no ServiceInstall element). The service is provisioned once on the server
-  with sc.exe (see SiOffice.AccService\README.md), keeping its
-  DisplayName / Description / Recovery / ACL settings unchanged across upgrades.
+  No bootstrap required — this MSI is self-contained:
+    msiexec /i SiOfficeAccService.msi /qn /l*v upgrade.log
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
 
   <Package
       Name="SiOffice ACC Service"
@@ -24,7 +24,7 @@
       InstallerVersion="500"
       Compressed="yes">
 
-    <SummaryInformation Description="SiOffice ACC Service updater" />
+    <SummaryInformation Description="SiOffice ACC Service installer" />
 
     <MajorUpgrade
         DowngradeErrorMessage="A newer version of [ProductName] is already installed."
@@ -32,22 +32,6 @@
         AllowSameVersionUpgrades="yes" />
 
     <MediaTemplate EmbedCab="yes" />
-
-    <!--
-      Refuse to install if the Windows service has not been bootstrapped.
-      Without this guard a clean machine would silently get only files
-      and no service - very confusing in production.
-    -->
-    <Property Id="ACCSERVICE_INSTALLED">
-      <RegistrySearch Id="AccSvcImagePath"
-                      Root="HKLM"
-                      Key="SYSTEM\CurrentControlSet\Services\SiOfficeAccService"
-                      Name="ImagePath"
-                      Type="raw" />
-    </Property>
-
-    <Launch Condition="Installed OR ACCSERVICE_INSTALLED"
-            Message="The Windows service 'SiOfficeAccService' is not installed on this machine. Run the initial bootstrap (sc.exe create ...) from the SiOffice.AccService README before using this updater." />
 
     <!--
       Force install dir to C:\AccService regardless of MSI defaults.
@@ -62,39 +46,66 @@
     </StandardDirectory>
 
     <Feature Id="Main" Title="ACC Service" Level="1">
-      <ComponentGroupRef Id="ServiceControlGroup" />
+      <ComponentGroupRef Id="ServiceHostGroup" />
       <Files Include="$(var.PublishDir)\**"
-             Directory="INSTALLFOLDER" />
+             Directory="INSTALLFOLDER">
+        <!--
+          Exclude the main service exe from the auto-harvested file set so
+          the explicit ServiceHost component below owns it (only one component
+          may reference a file as KeyPath, and ServiceInstall must live on
+          the component that owns the .exe).
+        -->
+        <ExcludeFile Id="ExcludeAccServiceExe" Name="SiOffice.AccService.exe" />
+      </Files>
     </Feature>
 
     <!--
-      Single component that owns the Stop/Start ServiceControl rows.
-      KeyPath is a benign HKLM registry value so the component stays
-      installable even though it has no payload files of its own.
+      Component that hosts the service binary, registers the Windows service,
+      controls its lifecycle, and opens the firewall port.
     -->
-    <ComponentGroup Id="ServiceControlGroup" Directory="INSTALLFOLDER">
-      <Component Id="AccServiceController"
+    <ComponentGroup Id="ServiceHostGroup" Directory="INSTALLFOLDER">
+      <Component Id="AccServiceHost"
                  Guid="D4F2C8A1-6B3E-4F9C-AE7D-2C5B8E1F0A3D">
-        <RegistryValue Root="HKLM"
-                       Key="Software\SiOffice\AccService\Installer"
-                       Name="Installed"
-                       Type="integer"
-                       Value="1"
-                       KeyPath="yes" />
+
+        <File Id="AccServiceExe"
+              Source="$(var.PublishDir)\SiOffice.AccService.exe"
+              KeyPath="yes" />
+
+        <ServiceInstall Id="InstallAccService"
+                        Name="SiOfficeAccService"
+                        DisplayName="SiOffice ACC Service"
+                        Description="SiOffice privileged ACC operations service. Listens on HTTPS for the SiOffice WPF client."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Vital="yes" />
 
         <!-- Stop on install (before file copy) AND on uninstall -->
         <ServiceControl Id="StopAccService"
                         Name="SiOfficeAccService"
                         Stop="both"
+                        Remove="uninstall"
                         Wait="yes" />
 
-        <!-- Start on install (after file copy); never auto-start on uninstall -->
+        <!-- Start after install completes -->
         <ServiceControl Id="StartAccService"
                         Name="SiOfficeAccService"
                         Start="install"
                         Wait="yes" />
+
+        <!-- Inbound firewall rule for the HTTPS listener (default 8443). -->
+        <fw:FirewallException Id="AccServiceHttpsIn"
+                              Name="SiOffice ACC Service (HTTPS 8443)"
+                              Description="Allow inbound HTTPS to SiOffice ACC Service"
+                              Port="8443"
+                              Protocol="tcp"
+                              Scope="any"
+                              Profile="all"
+                              IgnoreFailure="yes" />
       </Component>
     </ComponentGroup>
 
   </Package>
 </Wix>
+

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SiNetSQL.Data;
@@ -76,10 +78,53 @@ builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
         }
         else
         {
-            listen.UseHttps();
+            // Production fallback: persist a self-signed cert next to the
+            // executable so the service boots cleanly on Windows Server where
+            // the ASP.NET Core dev-cert is not available. Replace with a real
+            // cert by setting AccService:Certificate:Path/Password.
+            var cert = LoadOrCreateSelfSignedCertificate();
+            listen.UseHttps(cert);
         }
     });
 });
+
+static X509Certificate2 LoadOrCreateSelfSignedCertificate()
+{
+    var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
+    const string password = "siofficeaccservice"; // local-only, file is ACL'd to LocalSystem
+    if (File.Exists(certFile))
+    {
+        return X509CertificateLoader.LoadPkcs12FromFile(
+            certFile, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    using var rsa = RSA.Create(2048);
+    var req = new CertificateRequest(
+        $"CN={Environment.MachineName}",
+        rsa,
+        HashAlgorithmName.SHA256,
+        RSASignaturePadding.Pkcs1);
+
+    var sanBuilder = new SubjectAlternativeNameBuilder();
+    sanBuilder.AddDnsName(Environment.MachineName);
+    sanBuilder.AddDnsName("localhost");
+    req.CertificateExtensions.Add(sanBuilder.Build());
+    req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+    req.CertificateExtensions.Add(new X509KeyUsageExtension(
+        X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
+    req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+        new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false)); // Server Auth
+
+    using var generated = req.CreateSelfSigned(
+        DateTimeOffset.UtcNow.AddDays(-1),
+        DateTimeOffset.UtcNow.AddYears(10));
+
+    var pfxBytes = generated.Export(X509ContentType.Pfx, password);
+    File.WriteAllBytes(certFile, pfxBytes);
+
+    return X509CertificateLoader.LoadPkcs12(
+        pfxBytes, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+}
 
 // ─── Database: shared SiNetSQL context, factory pattern (same as WPF client) ─
 // Resolution order matches AppConfiguration.GetConnectionString in the WPF app:

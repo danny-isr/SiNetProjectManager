@@ -1,218 +1,77 @@
-# מדריך פריסה — SiOffice.AccService
+# SiOffice.AccService — Deployment Guide
 
-מסמך זה מסביר איך לבנות ולפרוס גרסה חדשה של ה-Windows Service `SiOfficeAccService` לשרת `SI-WIN-2K19`.
+## TL;DR
 
-> ⚠️ **חובה להעלות את מספר הגרסה (Version) לפני כל פריסה.**
-> בלי זה, ה-MSI יתקין את קבצי ה-JSON וה-PDB אבל **לא יחליף את ה-DLL הראשי** (זו התנהגות סטנדרטית של Windows Installer — file versioning rules).
+שתי פקודות. זהו.
 
----
-
-## 1. איפה הגרסה מוגדרת? (Source of Truth)
-
-יש **קובץ אחד בלבד** שקובע את הגרסה — `SiOffice.AccService.csproj`:
-
-📄 **`D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService\SiOffice.AccService.csproj`**
-
-```xml
-<PropertyGroup>
-  ...
-  <!--
-    Version is the single source of truth for AssemblyVersion / FileVersion
-    AND for the MSI ProductVersion (read by publish-service.ps1 and passed
-    to SiOffice.AccService.Installer.wixproj). Bump on every release.
-  -->
-  <Version>1.0.0</Version>   <!-- ← זה הקובץ והשורה שצריך לשנות -->
-</PropertyGroup>
-```
-
-מספר הגרסה הזה משמש לשלושה דברים בו זמנית:
-1. **AssemblyVersion / FileVersion** של ה-DLL וה-EXE.
-2. **ProductVersion** של ה-MSI (נקרא אוטומטית ע"י `publish-service.ps1`).
-3. ה-`MajorUpgrade` של WiX כדי לזהות שגרסה חדשה יותר זמינה ולבצע upgrade אוטומטי.
-
----
-
-## 2. איך מעלים את הגרסה?
-
-פתח את הקובץ:
-```
-D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService\SiOffice.AccService.csproj
-```
-
-מצא את השורה:
-```xml
-<Version>1.0.0</Version>
-```
-
-ושנה אותה — מספיק להעלות את החלק האחרון:
-
-| לפני | אחרי | מתי |
-|---|---|---|
-| `1.0.0` | `1.0.1` | תיקון/שינוי קטן |
-| `1.0.1` | `1.0.2` | תיקון/שינוי קטן נוסף |
-| `1.0.9` | `1.1.0` | פיצ'ר חדש |
-| `1.9.x` | `2.0.0` | שינוי גדול / Breaking change |
-
-📌 **חוק:** **כל פריסה לשרת = עליית גרסה.** גם אם זה רק שינוי של שורה אחת. אין יוצא מן הכלל.
-
-לאחר השינוי — שמור את הקובץ.
-
----
-
-## 3. איפה רואים את הגרסה הנוכחית?
-
-### 🔹 בקוד המקור (לפני build)
-```
-D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService\SiOffice.AccService.csproj
-```
-חפש את התג `<Version>...</Version>`.
-
-### 🔹 ב-DLL שכבר מותקן בשרת
-```powershell
-(Get-Item C:\AccService\SiOffice.AccService.dll).VersionInfo |
-    Select-Object FileVersion, ProductVersion
-```
-
-### 🔹 ב-MSI שנבנה (במחשב הפיתוח)
-```powershell
-$msi = "D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService.Installer\bin\Release\SiOfficeAccService.msi"
-$wi = New-Object -ComObject WindowsInstaller.Installer
-$db = $wi.GetType().InvokeMember("OpenDatabase","InvokeMethod",$null,$wi,@($msi,0))
-$view = $db.GetType().InvokeMember("OpenView","InvokeMethod",$null,$db,
-    @("SELECT `Value` FROM Property WHERE Property='ProductVersion'"))
-$view.GetType().InvokeMember("Execute","InvokeMethod",$null,$view,$null)
-$rec = $view.GetType().InvokeMember("Fetch","InvokeMethod",$null,$view,$null)
-$rec.GetType().InvokeMember("StringData","GetProperty",$null,$rec,1)
-```
-
-### 🔹 ב-Programs and Features (בשרת, לאחר התקנה)
-```powershell
-Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\* |
-    Where-Object { $_.DisplayName -eq "SiOffice ACC Service" } |
-    Select-Object DisplayName, DisplayVersion
-```
-
----
-
-## 4. שתי הפקודות של תהליך הפריסה
-
-לאחר שהעלית את הגרסה ב-csproj, יש שתי פקודות בלבד:
-
-### 📦 פקודה #1 — בניית ה-Deployment (במחשב הפיתוח שלך)
-
-הרץ ב-**PowerShell** (לא חייב Admin):
-
+**1. במחשב פיתוח** (גרסה נבמפת אוטומטית, MSI נבנה ומועתק לשרת):
 ```powershell
 cd D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService
-.\publish-service.ps1
+powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
 ```
 
-הסקריפט יעשה הכל בסדר הזה:
-1. בונה את הפרויקט ב-Release / win-x64 (כולל COM refs).
-2. מבצע `dotnet publish` ל-`D:\repos2026\SiNetProjectManager_GitHub\artifacts\AccService_Publish\`.
-3. קורא את `<Version>` מ-csproj ובונה את ה-MSI עם ה-ProductVersion הזה.
-4. מעתיק את ה-MSI ל-share הרשת:
-   ```
-   \\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi
-   ```
-
-**אם אין VPN / לא נגישה הרשת**, הוסף `-SkipDeploy`:
+**2. בשרת** (התקנה / עדכון - אותה פקודה בדיוק בכל פעם):
 ```powershell
-.\publish-service.ps1 -SkipDeploy
+msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi" /qn /l*v C:\Temp\AccService-install.log
 ```
-(במקרה כזה ה-MSI נשאר ב-`SiOffice.AccService.Installer\bin\Release\` ותעתיק ידנית).
+
+ה-MSI מטפל לבד ב:
+- העתקת קבצים ל-`C:\AccService`
+- רישום השירות `SiOfficeAccService` (LocalSystem, auto-start)
+- עצירה/הפעלה של השירות בכל עדכון
+- פתיחת פורט 8443 בחומת האש
+- יצירת תעודת SSL self-signed בהפעלה ראשונה (`accservice.pfx` ליד ה-exe)
 
 ---
 
-### 🚀 פקודה #2 — התקנה בשרת
+## ניהול גרסאות
 
-התחבר ל-`SI-WIN-2K19` (RDP), פתח **PowerShell as Administrator**, והרץ:
+הגרסה נשמרת במקום אחד בלבד: `<Version>` בקובץ `SiOffice.AccService.csproj`.
 
+הסקריפט `publish-service.ps1` **מעלה אותה אוטומטית** בכל הרצה (Build component עולה ב-1, למשל 2.0.0 → 2.0.1). אין צורך לערוך את הקובץ ידנית.
+
+אם בכל זאת רוצים להריץ בלי במפ:
 ```powershell
-msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi" /qn /l*v C:\Temp\AccService-upgrade.log
+.\publish-service.ps1 -NoBump
 ```
 
-מה ה-flags עושים:
-- `/i` — install.
-- `/qn` — מצב שקט לחלוטין (ללא UI).
-- `/l*v <נתיב>` — לוג מלא (חשוב ל-debug אם משהו משתבש).
-
-ה-MSI יבצע אוטומטית:
-1. עוצר את השירות `SiOfficeAccService`.
-2. **מסיר את הגרסה הישנה** (כי `MajorUpgrade` רואה שגרסה חדשה יותר נכנסה).
-3. מעתיק את כל הקבצים החדשים ל-`C:\AccService\` (כולל ה-DLL!).
-4. מפעיל מחדש את השירות.
+לצפייה בגרסה הנוכחית:
+```powershell
+Select-String -Path .\SiOffice.AccService.csproj -Pattern "<Version>"
+```
 
 ---
 
-## 5. בדיקות לאחר ההתקנה
-
-הרץ בשרת לוודא שהכל תקין:
+## בדיקה אחרי התקנה (בשרת)
 
 ```powershell
-# 1. השירות רץ
 Get-Service SiOfficeAccService
-
-# 2. ה-DLL החדש באמת הוחלף — בדוק LastWriteTime ו-FileVersion
-Get-Item C:\AccService\SiOffice.AccService.dll |
-    Select-Object Name, Length, LastWriteTime, @{N='Version';E={$_.VersionInfo.FileVersion}}
-
-# 3. Smoke test ל-API
-Invoke-RestMethod https://localhost:8443/v1/acc/health -SkipCertificateCheck
-
-# 4. לוגי השירות (היום)
-Get-ChildItem "$env:ProgramData\SiOffice\AccService\logs" |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1 |
-    Get-Content -Tail 30
+Invoke-WebRequest https://localhost:8443/v1/acc/health -SkipCertificateCheck
 ```
 
-ה-`LastWriteTime` של ה-DLL וה-`Version` חייבים להיות הגרסה החדשה שהעלית. אם הם עדיין מציגים את הגרסה הישנה — סימן ששכחת להעלות `<Version>` ב-csproj.
-
----
-
-## 6. סיכום מהיר — Cheat Sheet
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  שלב 1: העלאת גרסה (חובה!)                                       │
-│  ערוך:  SiOffice.AccService\SiOffice.AccService.csproj           │
-│  שורה:  <Version>1.0.X</Version>   ← הגדל ב-1                    │
-├─────────────────────────────────────────────────────────────────┤
-│  שלב 2: בניית ה-Deployment (במחשב פיתוח)                         │
-│  cd D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService  │
-│  .\publish-service.ps1                                           │
-├─────────────────────────────────────────────────────────────────┤
-│  שלב 3: התקנה (בשרת SI-WIN-2K19, PowerShell as Admin)            │
-│  msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi" /qn /l*v C:\Temp\AccService-upgrade.log │
-└─────────────────────────────────────────────────────────────────┘
+אם משהו נכשל - הלוג המלא ב-`C:\Temp\AccService-install.log`. חיפוש מהיר לסיבת כישלון:
+```powershell
+Select-String -Path C:\Temp\AccService-install.log -Pattern "value 3","Rollback","1603" -Context 3,3
 ```
 
 ---
 
-## 7. נספח — שאלות נפוצות
+## הסרת המוצר
 
-### ❓ שכחתי להעלות גרסה. מה לעשות?
-שתי אפשרויות:
-1. **המומלצת** — חזור לשלב 1, העלה את הגרסה והרץ שוב את שני השלבים.
-2. **כפיית overwrite חד-פעמית** (לא מומלץ באופן קבוע):
 ```powershell
-msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi" REINSTALL=ALL REINSTALLMODE=amus /qn /l*v C:\Temp\AccService-force.log
+msiexec /x "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi" /qn
 ```
-ה-`REINSTALLMODE=amus` עוקף את file-versioning rules ומאלץ החלפה של כל הקבצים גם באותה גרסה.
 
-### ❓ ההתקנה הראשונה מעולם לא בוצעה
-ה-MSI הוא **updater** בלבד — הוא דורש שהשירות יהיה כבר רשום ב-Windows.
-לפני ההתקנה הראשונה אי-פעם, הרץ בשרת (PowerShell as Admin):
+---
+
+## חד-פעמי: ניקוי התקנה ידנית קודמת
+
+אם השירות נרשם פעם בעבר עם `sc.exe` (לפני ש-MSI התחיל לטפל בזה), יש למחוק אותו פעם אחת לפני ההתקנה החדשה כדי שה-MSI יוכל לרשום את ה-ServiceInstall שלו ללא קונפליקט:
+
 ```powershell
-sc.exe create SiOfficeAccService binPath= "C:\AccService\SiOffice.AccService.exe" start= auto DisplayName= "SiOffice ACC Service"
-sc.exe failure SiOfficeAccService reset= 86400 actions= restart/5000/restart/5000/restart/5000
-sc.exe start SiOfficeAccService
+Stop-Service SiOfficeAccService -ErrorAction SilentlyContinue
+sc.exe delete SiOfficeAccService
+Remove-Item C:\AccService -Recurse -Force -ErrorAction SilentlyContinue
 ```
-(זה צריך לקרות פעם אחת בלבד אי-פעם.)
 
-### ❓ איך אני יודע אם ההתקנה הצליחה?
-בדוק את ה-`$LASTEXITCODE` מיד לאחר `msiexec`:
-- `0` — הצליח ✅
-- `3010` — הצליח, צריך restart ⚠️
-- `1603` — נכשל ❌ (בדוק את הלוג ב-`C:\Temp\AccService-upgrade.log`)
+מכאן והלאה, כל התקנה/עדכון נעשים אך ורק דרך ה-MSI.

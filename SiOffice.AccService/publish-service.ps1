@@ -14,13 +14,41 @@ param(
     # Network share where the final MSI lands. The server picks it up from here.
     [string]$MsiDeployDir = "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full",
     [switch]$SkipMsi,
-    [switch]$SkipDeploy
+    [switch]$SkipDeploy,
+    # Skip the automatic version bump (use the existing <Version> in csproj as-is).
+    [switch]$NoBump
 )
 
 $ErrorActionPreference = "Stop"
 $projectPath  = Join-Path $PSScriptRoot "SiOffice.AccService.csproj"
 $installerDir = Resolve-Path (Join-Path $PSScriptRoot "..\SiOffice.AccService.Installer")
 $installerProj = Join-Path $installerDir "SiOffice.AccService.Installer.wixproj"
+
+# ---------------------------------------------------------------
+# Auto-bump <Version> in the csproj (patch component) unless -NoBump.
+# This guarantees that every publish produces a new MSI ProductVersion
+# and FileVersion, so MajorUpgrade replaces the DLL on the server.
+# ---------------------------------------------------------------
+if (-not $NoBump) {
+    Write-Host "=== Bumping <Version> in csproj ===" -ForegroundColor Cyan
+    [xml]$xmlDoc = Get-Content $projectPath
+    $versionNode = $xmlDoc.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+    if (-not $versionNode) { throw "No <Version> element found in $projectPath" }
+
+    $current = [version]$versionNode
+    $bumped  = [version]::new($current.Major, $current.Minor, $current.Build + 1)
+
+    # Find the actual XML node and update its inner text
+    foreach ($pg in $xmlDoc.Project.PropertyGroup) {
+        if ($pg.Version) {
+            $pg.Version = $bumped.ToString()
+            break
+        }
+    }
+    $xmlDoc.Save($projectPath)
+    Write-Host "Version bumped: $current -> $bumped" -ForegroundColor Yellow
+}
+
 
 Write-Host "=== Locating Visual Studio MSBuild ===" -ForegroundColor Cyan
 $vsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
