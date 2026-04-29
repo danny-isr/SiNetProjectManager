@@ -6,8 +6,6 @@ Privileged-operations service that centralizes ACC API calls requiring
 (`SiNetProjectManagerV2`) calls this service over HTTPS instead of holding
 Autodesk admin credentials itself.
 
-## Phase B scaffold
-
 | Endpoint                 | Description                                  |
 |--------------------------|----------------------------------------------|
 | `GET /v1/acc/health`     | Health probe (no auth)                       |
@@ -15,54 +13,202 @@ Autodesk admin credentials itself.
 
 All non-health endpoints require the header `X-AccService-Key: <key>`.
 
-## Configuration
+---
 
-`appsettings.json` ships with empty placeholders. Real values go in
-`appsettings.Production.json` next to the published binaries (or via
-environment variables using the `__` separator):
+## Architecture (the part that matters for installation)
 
-```jsonc
-{
-  "AccService": {
-    "HttpsPort": 8443,
-    "ApiKey": "<random 256-bit base64>",
-    "Certificate": {
-      "Path": "C:\\ProgramData\\SiOffice\\AccService\\cert.pfx",
-      "Password": "<pfx password>"
-    }
-  },
-  "ConnectionStrings": {
-    "SiNetDatabase": "Server=...;Database=SiNet;..."
-  },
-  "Secrets": {
-    "SiNet/Autodesk/ClientId":     "<3-legged app client id>",
-    "SiNet/Autodesk/ClientSecret": "<3-legged app client secret>"
-  }
-}
+Secrets — including the AccService API key, connection strings, Autodesk
+credentials, etc. — are stored in **Windows Credential Manager** (generic
+credentials). The store is **scoped per Windows user**: a credential written
+by user `A` is invisible to a process running as user `B`.
+
+This has one critical consequence:
+
+> **The Windows service must run under the same Windows account that wrote
+> the secrets in the WPF client.**
+
+If the service runs as `LocalSystem` (the default for Windows services) but
+secrets were saved interactively by `DOMAIN\YourUser`, the service will log:
+
+```
+WARN  AccService API key is not configured (vault key 'SiNet/AccService/ApiKey' …).
+      All non-health requests will be rejected with 401.
 ```
 
-## Install as a Windows Service
+…even though the WPF "save" succeeded — different vault namespace.
+
+The MSI exposes two install-time properties that solve this:
+
+| Property          | Purpose                                                       |
+|-------------------|---------------------------------------------------------------|
+| `SERVICEACCOUNT`  | Windows account to run the service under. Default: LocalSystem.|
+| `SERVICEPASSWORD` | Password for that account. Hidden in MSI logs.                |
+
+When `SERVICEACCOUNT` is empty the service installs as `LocalSystem` (legacy
+behavior). When set, the service is registered under that account and reads
+from that account's credential vault.
+
+---
+
+## End-to-end install on the server
+
+Do these once, in order, on the Windows Server.
+
+### 1. Build the MSI on the developer machine
 
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained false `
-    -o C:\SiOffice\AccService
-
-sc.exe create SiOfficeAccService `
-    binPath= "C:\SiOffice\AccService\SiOffice.AccService.exe" `
-    start= auto `
-    DisplayName= "SiOffice ACC Service"
-
-sc.exe failure SiOfficeAccService reset= 86400 actions= restart/5000/restart/5000/restart/5000
-sc.exe start SiOfficeAccService
+cd D:\repos2026\SiNetProjectManager_GitHub\SiOffice.AccService
+.\publish-service.ps1
 ```
+
+This bumps `<Version>` in `SiOffice.AccService.csproj`, publishes the service,
+builds `SiOfficeAccService.msi`, and copies it to:
+
+```
+\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi
+```
+
+### 2. Grant "Log on as a service" to your Windows user (one time)
+
+RDP to the server with the account that will run the service, then in
+**PowerShell as Administrator**:
+
+```powershell
+$tmp  = [IO.Path]::GetTempFileName()
+secedit /export /cfg $tmp | Out-Null
+$cfg  = Get-Content $tmp
+$user = "$env:USERDOMAIN\$env:USERNAME"
+if ($cfg -notmatch [regex]::Escape($user)) {
+    $cfg = $cfg -replace '(SeServiceLogonRight\s*=.*)', "`$1,$user"
+    $cfg | Set-Content $tmp
+    secedit /configure /db secedit.sdb /cfg $tmp /areas USER_RIGHTS | Out-Null
+    Write-Host "Added $user to 'Log on as a service'"
+} else {
+    Write-Host "$user already has 'Log on as a service'"
+}
+Remove-Item $tmp
+```
+
+Without this right Windows will refuse to start the service after we point it
+at a user account.
+
+### 3. Install (or upgrade) the MSI under your account
+
+Still in **PowerShell as Administrator**:
+
+```powershell
+$msi  = "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi"
+$user = "$env:USERDOMAIN\$env:USERNAME"
+$sec  = Read-Host "Password for $user" -AsSecureString
+$pwd  = [System.Net.NetworkCredential]::new('', $sec).Password
+
+msiexec.exe /i $msi `
+    SERVICEACCOUNT="$user" `
+    SERVICEPASSWORD="$pwd" `
+    /qb /l*v "$env:TEMP\AccService-install.log"
+```
+
+The MSI will:
+
+1. Detect the existing install and run a major upgrade.
+2. Stop the running service.
+3. Replace files in `C:\AccService`.
+4. Re-register `SiOfficeAccService` to log on as your account.
+5. Open the firewall rule for HTTPS 8443 if missing.
+6. Start the service.
+
+### 4. Verify the service is running under the right account
+
+```powershell
+sc.exe qc SiOfficeAccService | Select-String "SERVICE_START_NAME"
+Get-Service SiOfficeAccService
+```
+
+Expected:
+
+```
+SERVICE_START_NAME : DOMAIN\YourUser
+Status             : Running
+```
+
+If `SERVICE_START_NAME` is `LocalSystem` the property pass-through didn't
+land — re-run step 3 inside an elevated shell.
+
+### 5. Save the secrets from the WPF client
+
+RDP to the server **as the same account** the service now runs under, launch
+`SiNetProjectManagerV2`, open **"הגדרות הרשאות מערכת"**, and:
+
+1. Fill the AccService API key (or click **צור חדש** to generate one — copy
+   it to clipboard so you can paste the same value on every client machine).
+2. Fill the rest of the secrets you actually need (Autodesk Client Id /
+   Secret, connection strings, etc.).
+3. Click **שמור** (the regular save button). That's it.
+
+`Save` writes everything to your user's Credential Manager. Because the
+service is now running under that same account, it sees the keys immediately
+on its next request.
+
+### 6. Smoke test
+
+```powershell
+Invoke-RestMethod https://localhost:8443/v1/acc/health -SkipCertificateCheck
+# expect: { "status": "ok", ... }
+
+$key = "<paste the same AccService API key>"
+Invoke-RestMethod https://localhost:8443/v1/acc/templates `
+    -Headers @{ "X-AccService-Key" = $key } -SkipCertificateCheck
+```
+
+A 200 response with the templates list means the service read your vault
+correctly.
+
+---
+
+## Day-2: refreshing or rotating a secret
+
+You only need to install once. To change a secret afterwards:
+
+1. RDP to the server **as the service account**.
+2. Open the WPF client → **"הגדרות הרשאות מערכת"** → edit → **שמור**.
+3. Restart the service so it re-reads the vault on its next startup:
+
+   ```powershell
+   Restart-Service SiOfficeAccService
+   ```
+
+No reinstall required.
+
+---
+
+## Troubleshooting
+
+| Symptom in `accservice-YYYYMMDD.log`                                            | Cause                                                                                  | Fix                                                              |
+|---------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|------------------------------------------------------------------|
+| `AccService API key is not configured (vault key 'SiNet/AccService/ApiKey' …)`  | The service's logon account differs from the user that saved the secret in the WPF.    | Steps 2–4 above. Verify `sc.exe qc SiOfficeAccService`.          |
+| `Rejected request to /v1/acc/… : invalid or missing X-AccService-Key`           | Client is sending the wrong key.                                                       | Re-paste the key from the WPF "save" message into the client.    |
+| `Service did not start in a timely fashion` after install                       | The account is missing the **Log on as a service** right, or the password is wrong.    | Re-run step 2; re-run step 3 with the correct password.          |
+| MSI install fails with `1603` and the log shows `Service cannot be started`     | Same as above.                                                                         | Same as above.                                                   |
 
 Logs: `%ProgramData%\SiOffice\AccService\logs\accservice-YYYYMMDD.log`.
 
-## Smoke test
+---
+
+## Manual install (without the MSI)
+
+For development boxes only — production should always use the MSI.
 
 ```powershell
-$key = "<your api key>"
-Invoke-RestMethod https://localhost:8443/v1/acc/health -SkipCertificateCheck
-Invoke-RestMethod https://localhost:8443/v1/acc/templates `
-    -Headers @{ "X-AccService-Key" = $key } -SkipCertificateCheck
+dotnet publish -c Release -r win-x64 --self-contained false `
+    -o C:\AccService
+
+sc.exe create SiOfficeAccService `
+    binPath= "C:\AccService\SiOffice.AccService.exe" `
+    start= auto `
+    obj= "DOMAIN\YourUser" password= "..." `
+    DisplayName= "SiOffice ACC Service"
+
+sc.exe failure SiOfficeAccService reset= 86400 `
+    actions= restart/5000/restart/5000/restart/5000
+sc.exe start SiOfficeAccService
 ```
