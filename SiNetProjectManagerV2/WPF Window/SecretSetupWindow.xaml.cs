@@ -672,15 +672,34 @@ public partial class SecretSetupWindow : Window
         {
             MessageBox.Show(
                 "השירות SiOffice.AccService לא מותקן במחשב הזה (C:\\AccService).\n\n" +
-                "הפעולה הזו אמורה לרוץ במחשב השרת בלבד — הסודות נכתבים לכספת של חשבון " +
-                "LocalSystem שמתחתיו רץ השירות.",
+                "הפעולה הזו אמורה לרוץ במחשב השרת בלבד.",
                 "לא במחשב השרת", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
+        // ─── account-context check ─────────────────────────────────────────
+        // Generic credentials in Windows Credential Manager are scoped per
+        // Windows user. If the service is configured to run as LocalSystem
+        // (the default), the secrets we just wrote into the interactive user's
+        // vault are invisible to the service — that's exactly what produces:
+        //     "AccService API key is not configured (vault key 'SiNet/AccService/ApiKey' …)"
+        // even though SetSecret returned successfully. Detect & offer to fix.
+        var serviceAccount = AccServiceLocalSystemProvisioner.GetServiceLogonAccount();
+        if (AccServiceLocalSystemProvisioner.IsServiceRunningAsLocalSystem())
+        {
+            var fix = MessageBox.Show(
+                "השירות מוגדר כרגע לרוץ תחת LocalSystem,\n" +
+                $"אבל הסודות נכתבים לכספת של המשתמש הנוכחי ({Environment.UserDomainName}\\{Environment.UserName}).\n" +
+                "לכן השירות לא רואה אותם וממשיך להחזיר 401.\n\n" +
+                "האם להגדיר את השירות לרוץ תחת המשתמש הנוכחי? (יידרשו שם משתמש וסיסמה)",
+                "השירות רץ תחת חשבון אחר", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (fix == MessageBoxResult.Yes && !TryReconfigureServiceLogon())
+                return; // user cancelled or reconfiguration failed; abort the save flow
+        }
+
         // Build the list of secrets from the form. Only fields that the user filled in
         // are pushed — empty fields are skipped (we never want to wipe an existing
-        // value in the LocalSystem vault by accident).
+        // value by accident).
         var secrets = new List<KeyValuePair<string, string>>();
         void Add(string key, string? value)
         {
@@ -709,7 +728,7 @@ public partial class SecretSetupWindow : Window
 
         var confirm = MessageBox.Show(
             $"לכתוב {secrets.Count} סודות לכספת של המשתמש הנוכחי במחשב הזה ולהפעיל מחדש את השירות SiOffice.AccService?\n\n" +
-            "השירות חייב להיות מוגדר לרוץ תחת אותו משתמש כדי שיוכל לקרוא את הסודות.",
+            $"חשבון השירות: {serviceAccount ?? "(לא ידוע)"}",
             "אישור", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
@@ -759,5 +778,33 @@ public partial class SecretSetupWindow : Window
         {
             Cursor = System.Windows.Input.Cursors.Arrow;
         }
+    }
+
+    /// <summary>
+    /// Prompts for a Windows account + password and reconfigures
+    /// SiOfficeAccService to log on under that account. Returns false if the
+    /// user cancels or the operation fails (in which case an error has already
+    /// been shown to the user).
+    /// </summary>
+    private bool TryReconfigureServiceLogon()
+    {
+        var defaultAccount = $"{Environment.UserDomainName}\\{Environment.UserName}";
+        var prompt = new ServiceLogonPromptWindow(defaultAccount) { Owner = this };
+        if (prompt.ShowDialog() != true) return false;
+
+        var (success, output) = AccServiceLocalSystemProvisioner.ConfigureServiceLogonAccount(
+            prompt.Account, prompt.Password);
+        if (!success)
+        {
+            MessageBox.Show(output, "הגדרת חשבון השירות נכשלה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+
+        MessageBox.Show(
+            $"✅ השירות הוגדר לרוץ תחת {prompt.Account}.\n\n" +
+            "ההפעלה מחדש בסוף השמירה תיקח את ההגדרה החדשה.",
+            "השירות עודכן", MessageBoxButton.OK, MessageBoxImage.Information);
+        return true;
     }
 }

@@ -4,13 +4,27 @@
 
   Scope:
     - Install all files under C:\AccService from $(var.PublishDir)
-    - Register the Windows service 'SiOfficeAccService' (LocalSystem, auto-start)
+    - Register the Windows service 'SiOfficeAccService' under either LocalSystem
+      (default) or a named Windows account passed in at install time
     - Stop / Start the service on upgrade
     - Open inbound TCP firewall rule on the configured HTTPS port (default 8443)
     - Support side-by-side major upgrades (older MSI auto-uninstalled)
 
-  No bootstrap required — this MSI is self-contained:
-    msiexec /i SiOfficeAccService.msi /qn /l*v upgrade.log
+  Install — default (LocalSystem):
+    msiexec /i SiOfficeAccService.msi /qb /l*v install.log
+
+  Install — under a specific Windows account (so the service can read secrets
+  from that user's Credential Manager vault):
+    msiexec /i SiOfficeAccService.msi ^
+            SERVICEACCOUNT="DOMAIN\User" SERVICEPASSWORD="P@ssw0rd" ^
+            /qb /l*v install.log
+
+  Notes on service account:
+    - The account MUST already have the 'Log on as a service' right
+      (secpol.msc → Local Policies → User Rights Assignment → Log on as a service).
+    - When SERVICEACCOUNT is omitted (or empty), the service is installed as
+      LocalSystem just like before, preserving backward-compatible behavior.
+    - SERVICEPASSWORD is required by Windows for any non-system account.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
@@ -32,6 +46,32 @@
         AllowSameVersionUpgrades="yes" />
 
     <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      Service-account MSI properties. Both default to empty; when SERVICEACCOUNT
+      is empty we resolve to LocalSystem at install time. Marked Secure="yes" so
+      they survive the elevation barrier (UAC) in managed MSI installs.
+      SERVICEPASSWORD is also Hidden so it does not appear in MSI logs.
+    -->
+    <Property Id="SERVICEACCOUNT" Value="" Secure="yes" />
+    <Property Id="SERVICEPASSWORD" Value="" Secure="yes" Hidden="yes" />
+
+    <!--
+      RESOLVEDSERVICEACCOUNT: SERVICEACCOUNT if non-empty, otherwise "LocalSystem".
+      Implemented with two SetProperty actions because MSI has no inline
+      conditional expression on the ServiceInstall element itself.
+    -->
+    <Property Id="RESOLVEDSERVICEACCOUNT" Value="LocalSystem" Secure="yes" />
+    <SetProperty Id="RESOLVEDSERVICEACCOUNT"
+                 Value="[SERVICEACCOUNT]"
+                 After="AppSearch"
+                 Sequence="execute"
+                 Condition="SERVICEACCOUNT AND SERVICEACCOUNT &lt;&gt; &quot;&quot;" />
+    <SetProperty Id="RESOLVEDSERVICEACCOUNT"
+                 Value="[SERVICEACCOUNT]"
+                 After="AppSearch"
+                 Sequence="ui"
+                 Condition="SERVICEACCOUNT AND SERVICEACCOUNT &lt;&gt; &quot;&quot;" />
 
     <!--
       Force install dir to C:\AccService regardless of MSI defaults.
@@ -70,7 +110,8 @@
                         Type="ownProcess"
                         Start="auto"
                         ErrorControl="normal"
-                        Account="LocalSystem"
+                        Account="[RESOLVEDSERVICEACCOUNT]"
+                        Password="[SERVICEPASSWORD]"
                         Vital="yes" />
 
         <!-- Stop on install (before file copy) AND on uninstall -->
