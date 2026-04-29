@@ -11,16 +11,34 @@ using SiOffice.AccService.Auth;
 using SiOffice.AccService.Endpoints;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  SiOffice.AccService — Privileged Operations Service
+//  CLI provisioning mode: --import-secret <key> <base64-utf8-value>
 //
-//  Centralizes all ACC operations that require Account Admin / Project Admin /
-//  Folder CONTROL. Runs as a Windows Service on the office Windows Server 2019.
-//  Regular employees use the WPF client which calls this service over HTTPS
-//  using an API key, instead of holding admin credentials themselves.
-//
-//  Phase B scaffold: a single live endpoint (GET /v1/acc/templates) wired
-//  end-to-end through IAccProjectProvisioningService, plus /v1/acc/health.
+//  Used by the WPF SecretSetupWindow to write secrets to the vault under the
+//  LocalSystem account (the same account the Windows service runs as), via a
+//  one-shot scheduled task. Value is Base64-encoded UTF8 to avoid escaping
+//  issues when the task scheduler passes the argument through cmd.
 // ─────────────────────────────────────────────────────────────────────────────
+if (args.Length >= 1 && args[0] == "--import-secret")
+{
+    if (args.Length != 3)
+    {
+        Console.Error.WriteLine("Usage: SiOffice.AccService.exe --import-secret <key> <base64-utf8-value>");
+        return 2;
+    }
+    try
+    {
+        var key = args[1];
+        var value = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(args[2]));
+        CredentialVaultService.SetSecret(key, value);
+        Console.WriteLine($"OK: '{key}' written to vault for user '{Environment.UserName}'.");
+        return 0;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"FAIL: {ex.Message}");
+        return 1;
+    }
+}
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -88,44 +106,6 @@ builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
     });
 });
 
-static X509Certificate2 LoadOrCreateSelfSignedCertificate()
-{
-    var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
-    const string password = "siofficeaccservice"; // local-only, file is ACL'd to LocalSystem
-    if (File.Exists(certFile))
-    {
-        return X509CertificateLoader.LoadPkcs12FromFile(
-            certFile, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
-    }
-
-    using var rsa = RSA.Create(2048);
-    var req = new CertificateRequest(
-        $"CN={Environment.MachineName}",
-        rsa,
-        HashAlgorithmName.SHA256,
-        RSASignaturePadding.Pkcs1);
-
-    var sanBuilder = new SubjectAlternativeNameBuilder();
-    sanBuilder.AddDnsName(Environment.MachineName);
-    sanBuilder.AddDnsName("localhost");
-    req.CertificateExtensions.Add(sanBuilder.Build());
-    req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-    req.CertificateExtensions.Add(new X509KeyUsageExtension(
-        X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
-    req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
-        new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false)); // Server Auth
-
-    using var generated = req.CreateSelfSigned(
-        DateTimeOffset.UtcNow.AddDays(-1),
-        DateTimeOffset.UtcNow.AddYears(10));
-
-    var pfxBytes = generated.Export(X509ContentType.Pfx, password);
-    File.WriteAllBytes(certFile, pfxBytes);
-
-    return X509CertificateLoader.LoadPkcs12(
-        pfxBytes, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
-}
-
 // ─── Database: shared SiNetSQL context, factory pattern (same as WPF client) ─
 // Resolution order matches AppConfiguration.GetConnectionString in the WPF app:
 //   1. Vault key  SiNet/ConnectionStrings/SiNetDatabase
@@ -181,4 +161,44 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+return 0;
+
+static X509Certificate2 LoadOrCreateSelfSignedCertificate()
+{
+    var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
+    const string password = "siofficeaccservice"; // local-only, file is ACL'd to LocalSystem
+    if (File.Exists(certFile))
+    {
+        return X509CertificateLoader.LoadPkcs12FromFile(
+            certFile, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    using var rsa = RSA.Create(2048);
+    var req = new CertificateRequest(
+        $"CN={Environment.MachineName}",
+        rsa,
+        HashAlgorithmName.SHA256,
+        RSASignaturePadding.Pkcs1);
+
+    var sanBuilder = new SubjectAlternativeNameBuilder();
+    sanBuilder.AddDnsName(Environment.MachineName);
+    sanBuilder.AddDnsName("localhost");
+    req.CertificateExtensions.Add(sanBuilder.Build());
+    req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+    req.CertificateExtensions.Add(new X509KeyUsageExtension(
+        X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
+    req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+        new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false)); // Server Auth
+
+    using var generated = req.CreateSelfSigned(
+        DateTimeOffset.UtcNow.AddDays(-1),
+        DateTimeOffset.UtcNow.AddYears(10));
+
+    var pfxBytes = generated.Export(X509ContentType.Pfx, password);
+    File.WriteAllBytes(certFile, pfxBytes);
+
+    return X509CertificateLoader.LoadPkcs12(
+        pfxBytes, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
 }

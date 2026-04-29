@@ -658,4 +658,101 @@ public partial class SecretSetupWindow : Window
             "לחץ 'שמור' כדי לאחסן ב-Credential Manager.",
             "מפתח AccService חדש", MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    /// <summary>
+    /// Writes all secrets currently shown in the form into the LocalSystem credential
+    /// vault on this machine, by invoking <c>SiOffice.AccService.exe --import-secret</c>
+    /// through a one-shot SYSTEM scheduled task. Only meaningful on the AccService host
+    /// (the Windows server running the service). After provisioning, the service is
+    /// restarted so it picks up the new values.
+    /// </summary>
+    private void BtnProvisionAccServiceOnServer_Click(object sender, RoutedEventArgs e)
+    {
+        if (!AccServiceLocalSystemProvisioner.IsAccServiceInstalledLocally())
+        {
+            MessageBox.Show(
+                "השירות SiOffice.AccService לא מותקן במחשב הזה (C:\\AccService).\n\n" +
+                "הפעולה הזו אמורה לרוץ במחשב השרת בלבד — הסודות נכתבים לכספת של חשבון " +
+                "LocalSystem שמתחתיו רץ השירות.",
+                "לא במחשב השרת", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Build the list of secrets from the form. Only fields that the user filled in
+        // are pushed — empty fields are skipped (we never want to wipe an existing
+        // value in the LocalSystem vault by accident).
+        var secrets = new List<KeyValuePair<string, string>>();
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                secrets.Add(new KeyValuePair<string, string>(key, value.Trim()));
+        }
+
+        Add(SecretKeys.GeminiApiKey, TxtGeminiApiKey.Password);
+        Add(SecretKeys.AutodeskClientId, TxtAdClientId.Text);
+        Add(SecretKeys.AutodeskClientSecret, TxtAdClientSecret.Password);
+        if (!string.IsNullOrWhiteSpace(_googleCredentialsContent))
+            secrets.Add(new KeyValuePair<string, string>(SecretKeys.GoogleClientSecrets, _googleCredentialsContent));
+        Add(SecretKeys.SiNetDatabase, NormalizeConnectionString(TxtCsSiNet.Text));
+        Add(SecretKeys.ReplicaDatabase, NormalizeConnectionString(TxtCsReplica.Text));
+        Add(SecretKeys.MasterPlanDatabase, NormalizeConnectionString(TxtCsMasterPlan.Text));
+        Add(SecretKeys.AdUsername, TxtAdUsername.Text);
+        Add(SecretKeys.AdPassword, TxtAdPassword.Password);
+        Add(SecretKeys.AccServiceApiKey, TxtAccServiceApiKey.Text);
+
+        if (secrets.Count == 0)
+        {
+            MessageBox.Show("אין סודות למלא. הזן ערכים בטופס ונסה שוב.",
+                "ריק", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"לכתוב {secrets.Count} סודות לכספת של LocalSystem במחשב הזה ולהפעיל מחדש את {"" /* service name shown in tooltip */}השירות SiOffice.AccService?",
+            "אישור", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        Cursor = System.Windows.Input.Cursors.Wait;
+        try
+        {
+            var results = AccServiceLocalSystemProvisioner.ImportMany(secrets);
+            var ok = results.Count(r => r.Result.Success);
+            var failed = results.Where(r => !r.Result.Success).ToList();
+
+            string restartLine = "";
+            if (ok > 0)
+                restartLine = "\n\n" + AccServiceLocalSystemProvisioner.RestartService();
+
+            if (failed.Count == 0)
+            {
+                MessageBox.Show(
+                    $"✅ נכתבו {ok} סודות לכספת של LocalSystem.{restartLine}",
+                    "הסתיים", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"הצליחו: {ok}, נכשלו: {failed.Count}");
+                sb.AppendLine();
+                foreach (var f in failed)
+                {
+                    sb.AppendLine($"❌ {f.Key}");
+                    sb.AppendLine(f.Result.Output);
+                    sb.AppendLine();
+                }
+                sb.Append(restartLine);
+                MessageBox.Show(sb.ToString(),
+                    "חלק מהסודות נכשלו", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה: {ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Cursor = System.Windows.Input.Cursors.Arrow;
+        }
+    }
 }
