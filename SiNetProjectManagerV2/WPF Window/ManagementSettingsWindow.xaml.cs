@@ -74,6 +74,11 @@ public partial class ManagementSettingsWindow : Window
             OfficeProjectIdTextBox.Text = officeProjectId;
             await PreviewOfficeProjectNameAsync(officeProjectId);
 
+            // ACC viewer tab limit ("בעבודה 2") — global, defaults to 10.
+            var accMaxTabs = await _settingsService.GetOrDefaultAsync(
+                SystemSettingKeys.AccViewerMaxTabs, "10");
+            AccViewerMaxTabsTextBox.Text = accMaxTabs;
+
             // ACC Inbox folder (project name derived from Office Management project above)
             var inboxFolderName = await _settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InboxFolderName,
@@ -167,6 +172,16 @@ public partial class ManagementSettingsWindow : Window
             return;
         }
 
+        // Validate ACC viewer max-tabs (positive integer)
+        var accMaxTabsText = AccViewerMaxTabsTextBox.Text?.Trim() ?? "10";
+        if (!int.TryParse(accMaxTabsText, out var accMaxTabs) || accMaxTabs <= 0)
+        {
+            MessageBox.Show("נא להזין מספר תקין למגבלת טאבים בתצוגת ACC (מספר שלם חיובי)", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            AccViewerMaxTabsTextBox.Focus();
+            return;
+        }
+
         try
         {
             // Save to centralized DB table
@@ -185,6 +200,12 @@ public partial class ManagementSettingsWindow : Window
                 SystemSettingKeys.OfficeManagementProjectId,
                 officeProjectId.ToString(),
                 "מספר פרויקט ניהול משרד — משמש כברירת מחדל עבור תהליכים ללא פרויקט");
+
+            // Save ACC viewer tab limit
+            await _settingsService.SetAsync(
+                SystemSettingKeys.AccViewerMaxTabs,
+                accMaxTabs.ToString(),
+                "מגבלת טאבים פתוחים בו-זמנית בתצוגת ACC (חלון 'בעבודה 2')");
 
             var folderId = InspectionFolderIdTextBox.Text?.Trim() ?? string.Empty;
             await _settingsService.SetAsync(

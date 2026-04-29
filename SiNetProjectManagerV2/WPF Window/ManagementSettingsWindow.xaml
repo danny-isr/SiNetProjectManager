@@ -66,6 +66,21 @@
                                Opacity="0.7" FontStyle="Italic"/>
                 </StackPanel>
 
+                <!-- ACC Viewer Tab Limit ("בעבודה 2" multi-tab viewer) -->
+                <Separator Margin="0,20,0,10"/>
+                <TextBlock Text="מגבלת טאבים לתצוגת ACC" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="מספר הטאבים המקסימלי שניתן לפתוח בו-זמנית בחלון 'בעבודה 2'. ברירת המחדל היא 10." 
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="מקסימום טאבים:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="AccViewerMaxTabsTextBox" 
+                             Width="80" 
+                             VerticalContentAlignment="Center"
+                             Padding="5,3"
+                             FlowDirection="LeftToRight"
+                             ToolTip="מספר שלם חיובי. ברירת מחדל: 10."/>
+                </StackPanel>
+
                 <!-- User Groups -->
                 <Separator Margin="0,20,0,10"/>
                 <DockPanel Margin="0,0,0,8">

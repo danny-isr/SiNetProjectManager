@@ -161,6 +161,12 @@
                     <!-- ══════ Alternative Node ══════ -->
                     <HierarchicalDataTemplate DataType="{x:Type local:AlternativeNode}" ItemsSource="{Binding Versions}">
                         <StackPanel Orientation="Horizontal" ContextMenu="{Binding ContextMenu}">
+                            <!-- ACC viewer tab toggle: visible only when this alternative has ACC versions.
+                                 Checked = open / activate the ACC tab; Unchecked = close it. -->
+                            <CheckBox IsChecked="{Binding IsAccTabOpen, Mode=TwoWay}"
+                                      Visibility="{Binding HasAccVersions, Converter={StaticResource BoolToVis}}"
+                                      VerticalAlignment="Center" Margin="0,0,4,0"
+                                      ToolTip="פתח/סגור טאב ACC עבור חלופה זו"/>
                             <Image Source="{Binding DisplayIcon}" Width="14" Height="14" Margin="0,0,4,0" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding AlternativeName}" FontWeight="SemiBold" />
                             <TextBlock Text=" (" />
@@ -219,35 +225,104 @@
             <!-- Splitter -->
             <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="LightGray"/>
 
-            <!-- Right: ACC WebView2 file viewer -->
-            <Grid Grid.Column="2">
+            <!-- Right: Multi-tab ACC viewer.
+                 The tab strip is bound to AccViewerTabs; each tab renders its own
+                 persistent WebView2 so navigation/state survives tab switches.
+                 Tabs only close via the alternative checkbox or the tab's X button.
+                 The whole panel can be popped out to a floating window via the dock toggle. -->
+            <Border Grid.Column="2" x:Name="AccViewerDockHost">
+                <Grid x:Name="AccViewerInner">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Background="#E3F2FD" Padding="8">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📁 ACC - קבצי פרויקט" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock Text=" (Autodesk Construction Cloud)" Opacity="0.6" VerticalAlignment="Center" Margin="5,0,0,0"/>
-                    </StackPanel>
+                    <DockPanel LastChildFill="True">
+                        <Button x:Name="AccDockToggleButton" DockPanel.Dock="Right"
+                                Click="AccDockToggleButton_Click"
+                                Content="⧉" FontSize="14" Padding="6,2"
+                                ToolTip="נתק לחלון צף / החזר לתוך החלון"
+                                Cursor="Hand"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📁 ACC - קבצי פרויקט" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock Text=" (Autodesk Construction Cloud)" Opacity="0.6" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </DockPanel>
                 </Border>
 
-                <!-- WebView2 for ACC documents viewer -->
-                <wv2:WebView2 Grid.Row="1" x:Name="AccWebView"
-                              selectors:WebView2Helper.IsAccViewer="True"
-                              selectors:WebView2Helper.NavigateUrl="{Binding AccViewerUrl}"/>
+                <!-- Tab strip -->
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding AccViewerTabs}"
+                              Visibility="{Binding HasAccTabs, Converter={StaticResource BoolToVis}}"
+                              Background="#F5F5F5">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="2,2,0,0" Padding="6,3" CornerRadius="3,3,0,0"
+                                    BorderBrush="#90CAF9" BorderThickness="1,1,1,0"
+                                    Cursor="Hand">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#E3F2FD"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="Background" Value="White"/>
+                                                <Setter Property="BorderBrush" Value="#1976D2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftClick" Command="{Binding ActivateCommand}"/>
+                                </Border.InputBindings>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="240"
+                                               ToolTip="{Binding Title}"/>
+                                    <Button Command="{Binding CloseCommand}"
+                                            Content="✕" FontSize="10" Margin="6,0,0,0"
+                                            Padding="4,0" MinWidth="16" Height="16"
+                                            ToolTip="סגור טאב"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-                <!-- Placeholder when no ACC URL is available -->
-                <Border Grid.Row="1" Background="#FAFAFA"
-                        Visibility="{Binding AccViewerUrl, Converter={StaticResource BoolToVis}, ConverterParameter=Invert, FallbackValue=Visible}">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="🔗" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                        <TextBlock Text="חיבור ACC לא מוגדר לפרויקט זה" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="לאחר מיפוי מזהה ACC, קבצי הפרויקט יוצגו כאן" Opacity="0.6" HorizontalAlignment="Center" Margin="0,5,0,0"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
+                <!-- Tab content host: one WebView2 per tab; only the active one is visible. -->
+                <Grid Grid.Row="2">
+                    <ItemsControl ItemsSource="{Binding AccViewerTabs}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Grid/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <wv2:WebView2 selectors:WebView2Helper.IsAccViewer="True"
+                                              selectors:WebView2Helper.NavigateUrl="{Binding Url}"
+                                              Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Placeholder when no ACC tabs are open -->
+                    <Border Background="#FAFAFA"
+                            Visibility="{Binding HasAccTabs, Converter={StaticResource BoolToVis}, ConverterParameter=Invert, FallbackValue=Visible}">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="🔗" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                            <TextBlock Text="אין טאבים פתוחים" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="סמן ✓ ליד חלופה עם קבצי ACC כדי לפתוח טאב" Opacity="0.6" HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- 3: Status bar — scan + upload progress -->
