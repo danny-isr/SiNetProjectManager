@@ -156,7 +156,12 @@ try
     var hasApiKey = !string.IsNullOrWhiteSpace(
         CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey)
         ?? builder.Configuration["AccService:ApiKey"]);
-    Log.Information(
+    // Lifecycle lines are emitted at Warning level on purpose: the central
+    // log share's default minimum level for AccService is Warning, so logging
+    // service-up / service-down at Information would only land in the local
+    // file. Warning guarantees they reach \\si-win-2k19\AutoCAD Data\log\…
+    // even with the default DB settings.
+    Log.Warning(
         "SiOffice.AccService starting — version {Version}, machine {Machine}, user {User}, https port {Port}, api key configured: {HasApiKey}.",
         typeof(Program).Assembly.GetName().Version?.ToString() ?? "?",
         Environment.MachineName,
@@ -167,11 +172,11 @@ try
     // Hook the host lifetime so we get explicit started / stopping / stopped lines.
     var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
     lifetime.ApplicationStarted.Register(() =>
-        Log.Information("SiOffice.AccService started — listening on https://*:{Port}.", listenPort));
+        Log.Warning("SiOffice.AccService started — listening on https://*:{Port}.", listenPort));
     lifetime.ApplicationStopping.Register(() =>
-        Log.Information("SiOffice.AccService stopping..."));
+        Log.Warning("SiOffice.AccService stopping..."));
     lifetime.ApplicationStopped.Register(() =>
-        Log.Information("SiOffice.AccService stopped."));
+        Log.Warning("SiOffice.AccService stopped."));
 
     app.Run();
 }

@@ -123,9 +123,23 @@ public sealed class RemoteAccProjectProvisioningService : IAccProjectProvisionin
             detail = await resp.Content.ReadAsStringAsync(ct);
         }
 
+        // Friendly hint so the UI can tell the user *where* the failure originated:
+        //   504 → ACC itself was slow/timed-out (upstream Autodesk).
+        //   409 + FOLDER_ALREADY_EXIST → ACC says the resource already exists; usually benign.
+        //   401/403 → AccService rejected our X-AccService-Key.
+        //   anything else → bubble up the body so we can diagnose.
+        var hint = (int)resp.StatusCode switch
+        {
+            504 => "ACC (Autodesk) timed out responding to the service. Retry in a moment.",
+            409 when detail.Contains("FOLDER_ALREADY_EXIST", StringComparison.OrdinalIgnoreCase)
+                => "ACC reports the folder already exists — this is usually safe to ignore.",
+            401 or 403 => "SiOffice.AccService rejected the API key (X-AccService-Key). Verify the secret in Credential Manager.",
+            _ => "Unexpected response from SiOffice.AccService."
+        };
+
         throw new HttpRequestException(
-            $"SiOffice.AccService returned {(int)resp.StatusCode} {resp.ReasonPhrase} for " +
-            $"{resp.RequestMessage?.Method} {resp.RequestMessage?.RequestUri}. Detail: {detail}",
+            $"{hint} (HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} from " +
+            $"{resp.RequestMessage?.Method} {resp.RequestMessage?.RequestUri}). Detail: {detail}",
             inner: null,
             statusCode: resp.StatusCode);
     }

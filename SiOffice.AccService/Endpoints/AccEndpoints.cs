@@ -19,10 +19,14 @@ internal static class AccEndpoints
         var v1 = app.MapGroup(AccServiceContracts.ApiVersionPrefix + "/acc");
 
         // ── Health (auth-exempt — see ApiKeyMiddleware) ─────────────────────
+        // `apiVersion` is the API CONTRACT version (matches the route prefix).
+        // `buildVersion` is the assembly version of the running service binary —
+        // useful for verifying which build is actually deployed on the server.
         v1.MapGet("/health", () => Results.Ok(new
         {
             status = "ok",
-            version = "1.0",
+            apiVersion = "1.0",
+            buildVersion = typeof(AccEndpoints).Assembly.GetName().Version?.ToString() ?? "?",
             utcNow = DateTime.UtcNow
         }));
 
