@@ -62,14 +62,17 @@ internal static class Program
             return 1;
         }
 
-        var password = args.Length >= 3 ? args[2] : PromptPassword("Enter package password: ");
+        PrintWhoAmI();
+        Console.WriteLine($"File: {Path.GetFullPath(filePath)}");
+        Console.WriteLine();
+
+        var password = args.Length >= 3 ? args[2] : PromptPassword("Enter package password (typing is hidden, then press Enter): ");
         if (string.IsNullOrWhiteSpace(password))
         {
             Console.Error.WriteLine("Password is required.");
             return 1;
         }
 
-        PrintWhoAmI();
         Console.WriteLine($"Importing secrets from: {filePath}");
 
         var imported = SecretProvisioningService.ImportFromFile(filePath, password);
@@ -123,6 +126,7 @@ internal static class Program
     private static string PromptPassword(string prompt)
     {
         Console.Write(prompt);
+        Console.Out.Flush();
         var sb = new System.Text.StringBuilder();
         while (true)
         {

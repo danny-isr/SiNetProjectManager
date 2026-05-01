@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.2.11415.280
@@ -24,6 +24,17 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AccService", "SiOffice.AccService\SiOffice.AccService.csproj", "{4C55C179-8E05-4FE6-BD7C-B11F0BD755D0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNet.SecretImport", "SiNet.SecretImport\SiNet.SecretImport.csproj", "{9CF21F58-D83E-430A-91B3-32628BC26420}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs and Scripts", "Docs and Scripts", "{4F2D7C5A-A111-4B22-9D33-DC10A11FF111}"
+	ProjectSection(SolutionItems) = preProject
+		DEPLOYMENT.md = DEPLOYMENT.md
+		SECRETS-MANAGEMENT.md = SECRETS-MANAGEMENT.md
+		publish-all.ps1 = publish-all.ps1
+		SiOffice.AccService\publish-service.ps1 = SiOffice.AccService\publish-service.ps1
+		MasterPlan.SyncEngine\publish-console.ps1 = MasterPlan.SyncEngine\publish-console.ps1
+		SiNetProjectManagerV2\publish-desktop.ps1 = SiNetProjectManagerV2\publish-desktop.ps1
+		SiNet.SecretImport\publish-tool.ps1 = SiNet.SecretImport\publish-tool.ps1
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
