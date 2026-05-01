@@ -16,7 +16,7 @@ param(
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
     # Network share where the Task Scheduler runs the exe from.
-    [string]$DeployDir = "\\SI-WIN-2K19\AppFolder\AppNet\MasterPlanSync",
+    [string]$DeployDir = "\\SI-WIN-2K19\AppFolder\AppNet\MasterPlan.SyncEngine",
     [switch]$SkipDeploy,
     # Skip the automatic version bump (use the existing <Version> as-is, or 1.0.0 if missing).
     [switch]$NoBump
