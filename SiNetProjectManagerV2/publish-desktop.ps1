@@ -101,16 +101,41 @@ New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
 New-Item -ItemType Directory -Path $artefactDir -Force | Out-Null
 
 # ---------------------------------------------------------------
-# dotnet publish: self-contained single-file is NOT compatible with MSIX
-# (MSIX expects loose files). Use self-contained=true, single-file=false.
+# Locate Visual Studio MSBuild (handles COM ResolveComReference, which the
+# .NET 10 SDK MSBuild does not support -- error MSB4803). Same workaround
+# as publish-service.ps1.
 # ---------------------------------------------------------------
-Write-Host "`n=== dotnet publish (self-contained, loose files) ===" -ForegroundColor Cyan
+Write-Host "`n=== Locating Visual Studio MSBuild ===" -ForegroundColor Cyan
+$vsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+$vsPath = & $vsWhere -latest -prerelease -products Microsoft.VisualStudio.Product.Community,Microsoft.VisualStudio.Product.Professional,Microsoft.VisualStudio.Product.Enterprise -property installationPath
+if (-not $vsPath) { $vsPath = & $vsWhere -latest -prerelease -all -property installationPath | Select-Object -First 1 }
+$msbuild = Join-Path $vsPath "MSBuild\Current\Bin\amd64\MSBuild.exe"
+if (-not (Test-Path $msbuild)) { throw "MSBuild not found at $msbuild" }
+Write-Host "MSBuild: $msbuild"
+
+# ---------------------------------------------------------------
+# Build with VS MSBuild (handles COM refs), then dotnet publish --no-build
+# to lay out the loose files MSIX needs (self-contained=true,
+# single-file=false: MSIX requires loose files, not a single-file bundle).
+# ---------------------------------------------------------------
+Write-Host "`n=== Building via VS MSBuild (handles COM refs) ===" -ForegroundColor Cyan
+& $msbuild $projectPath /t:Restore,Build `
+    /p:Configuration=$Configuration `
+    /p:RuntimeIdentifier=$Runtime `
+    /p:SelfContained=true `
+    /p:PublishSingleFile=false `
+    /p:PublishReadyToRun=true `
+    /m /v:m
+if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+
+Write-Host "`n=== Publishing (no rebuild) ===" -ForegroundColor Cyan
 Push-Location $PSScriptRoot
 try {
     dotnet publish $projectPath `
         -c $Configuration `
         -r $Runtime `
         --self-contained true `
+        --no-build `
         -o $payloadDir `
         /p:PublishSingleFile=false `
         /p:PublishReadyToRun=true `
