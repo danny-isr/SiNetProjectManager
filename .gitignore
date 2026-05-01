@@ -3,6 +3,21 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# === Deployment artefacts (publish-*.ps1 outputs) ===
+# MSIX / MSI / .appinstaller outputs - artifacts/ already covered below, but be explicit:
+**/AppPackages/
+**/BundleArtifacts/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appinstaller
+*.msi
+# Code-signing private keys MUST NEVER be committed:
+*.pfx
+*.snk
+# Public certificate (.cer) is OK to commit if you want shared install convenience.
+
 # User-specific files
 *.rsuser
 *.suo
