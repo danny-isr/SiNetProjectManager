@@ -68,7 +68,7 @@ WPF Admin UI (Management Settings) is the only place users edit them.
 | `Logging.LocalRetentionDays` | int | `14` | Local rolling-file retention. |
 | `Logging.CentralRetentionDays` | int | `90` | Central rolling-file retention. |
 | `Logging.Client.FileLevel` | level | `Error` | WPF client local file min level. |
-| `Logging.Client.CentralLevel` | level | `Error` | WPF client central file min level. |
+| `Logging.Client.CentralLevel` | level | `Warning` | WPF client central file min level. |
 | `Logging.AccService.FileLevel` | level | `Information` | AccService local file min level. |
 | `Logging.AccService.CentralLevel` | level | `Warning` | AccService central file min level. |
 | `Logging.SyncEngine.FileLevel` | level | `Information` | SyncEngine local file min level. |
@@ -161,6 +161,23 @@ AppDomain.CurrentDomain.ProcessExit += (_, _) => Log.CloseAndFlush();
 - The legacy `appsettings.json → Logging.CentralLogPath` is **deprecated** and
   ignored — left in place only as a hint for first-run when the DB is
   unreachable.
+
+## Lifecycle Markers (guaranteed central-log entries)
+
+To prove the central share is healthy even when nothing is going wrong, every
+app emits **lifecycle markers at `Warning` level** — that level reaches the
+central sink under all default per-app settings. If the central folder for an
+app/machine/user stays empty, the share or its permissions are broken; it is
+not "no events".
+
+| App | Event | Source |
+|---|---|---|
+| WPF Client | `SiNetProjectManagerV2 opened — version … session …` | `App.OnStartup` |
+| WPF Client | `SiNetProjectManagerV2 closing — exit code … session …` | `App.OnExit` |
+| AccService | `SiOffice.AccService starting / started / stopping / stopped` | `Program.cs` lifetime hooks |
+| SyncEngine | `MasterPlan.SyncEngine starting — args …` | `Program.cs` top-level |
+| SyncEngine | `MasterPlan.SyncEngine stopped — exit code …` | `AppDomain.ProcessExit` |
+| SyncEngine | `MasterPlan.SyncEngine DB update started / finished — mode {Mode}, duration {Duration}` | wraps each `--daily / --daily-db / --monthly` run |
 
 ## Troubleshooting
 

@@ -56,7 +56,29 @@ var captureServiceLogger = loggerFactory.CreateLogger<RawCaptureService>();
 var dumpServiceLogger = loggerFactory.CreateLogger<ApiDumpService>();
 
 // Flush any buffered log entries on every exit path (including Environment.Exit).
-AppDomain.CurrentDomain.ProcessExit += (_, _) => Log.CloseAndFlush();
+AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+{
+    // Lifecycle marker — Warning level so the central log share records
+    // every SyncEngine run end (matches the WPF client / AccService pattern).
+    try
+    {
+        Log.Warning(
+            "MasterPlan.SyncEngine stopped — exit code {ExitCode}.",
+            Environment.ExitCode);
+    }
+    catch { /* never block process exit on a log write */ }
+    Log.CloseAndFlush();
+};
+
+// Lifecycle marker — Warning level so this lands in the central share even
+// with the default Warning-only central level. Records every run start with
+// machine, user and the command-line mode (--daily / --monthly / --offline …).
+Log.Warning(
+    "MasterPlan.SyncEngine starting — version {Version}, machine {Machine}, user {User}, args {Args}.",
+    typeof(Program).Assembly.GetName().Version?.ToString() ?? "?",
+    Environment.MachineName,
+    Environment.UserName,
+    args.Length == 0 ? "(none)" : string.Join(' ', args));
 
 // Connection strings - configure these in appsettings.json or environment variables
 var sourceConnectionString = configuration.GetConnectionString("SourceDatabase")
@@ -112,7 +134,12 @@ if (args.Contains("--monthly") || args.Contains("-m"))
 
     try
     {
+        // DB-update lifecycle markers — Warning so they reach the central share.
+        Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}, backup {Backup}.", "monthly", backupPath);
+        var __monthlySw = System.Diagnostics.Stopwatch.StartNew();
         var result = await monthlyService.RunMonthlyBackupRestoreAsync(backupPath);
+        __monthlySw.Stop();
+        Log.Warning("MasterPlan.SyncEngine DB update finished — mode {Mode}, success {Success}, duration {Duration}.", "monthly", result.Success, __monthlySw.Elapsed);
 
         // Compute step completed and duration
         var stepCompleted = result.Step3Completed ? "All Steps (ETL Complete)" :
@@ -176,7 +203,21 @@ else if (args.Contains("--daily-db") || args.Contains("-dd"))
 {
     // Daily Delta Sync via direct database connection (legacy mode)
     Console.WriteLine("Running Daily Delta Sync (Database Mode)...");
-    await syncManager.RunDailySyncAsync();
+    // DB-update lifecycle markers — Warning so they reach the central share.
+    Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}.", "daily-db");
+    var __dailyDbSw = System.Diagnostics.Stopwatch.StartNew();
+    try
+    {
+        await syncManager.RunDailySyncAsync();
+        __dailyDbSw.Stop();
+        Log.Warning("MasterPlan.SyncEngine DB update finished — mode {Mode}, duration {Duration}.", "daily-db", __dailyDbSw.Elapsed);
+    }
+    catch (Exception __ex)
+    {
+        __dailyDbSw.Stop();
+        Log.Error(__ex, "MasterPlan.SyncEngine DB update failed — mode {Mode}, duration {Duration}.", "daily-db", __dailyDbSw.Elapsed);
+        throw;
+    }
 }
 else if (args.Contains("--daily") || args.Contains("-d") || args.Contains("--daily-api") || args.Contains("-da"))
 {
@@ -262,7 +303,12 @@ else if (args.Contains("--daily") || args.Contains("-d") || args.Contains("--dai
             Console.WriteLine("[CONFIG] Endpoint validation SKIPPED (--skip-validation). Saving API rate limit quota.");
         }
 
+        // DB-update lifecycle markers — Warning so they reach the central share.
+        Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}.", "daily-api");
+        var __dailyApiSw = System.Diagnostics.Stopwatch.StartNew();
         await apiSyncService.RunDailySyncAsync();
+        __dailyApiSw.Stop();
+        Log.Warning("MasterPlan.SyncEngine DB update finished — mode {Mode}, duration {Duration}.", "daily-api", __dailyApiSw.Elapsed);
         Console.WriteLine("Daily API Sync completed successfully!");
     }
     catch (MasterPlanApiException ex)
