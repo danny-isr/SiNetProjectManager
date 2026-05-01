@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for SiNetProjectManagerV2 (WPF / .NET 10).
+
+  This file is COMMITTED to Git. publish-desktop.ps1 substitutes a single
+  placeholder ({VERSION}) at build time before passing to MakeAppx.exe.
+
+  CRITICAL: <Identity Publisher="..."/> below MUST EXACTLY MATCH the Subject
+  on the code-signing certificate (see DEPLOYMENT.md, "Create signing cert").
+  If they don't match, MakeAppx/SignTool will fail.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="SiNet.ProjectManagerV2"
+    Publisher="CN=SI Office"
+    Version="{VERSION}"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>SiNet Project Manager</DisplayName>
+    <PublisherDisplayName>SI Office</PublisherDisplayName>
+    <Logo>Images\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="he-il" />
+  </Resources>
+
+  <Applications>
+    <!--
+      EntryPoint="Windows.FullTrustApplication" is required for a classic
+      WPF/Win32 app inside MSIX. It tells Windows to launch the .exe directly
+      without any UWP sandboxing.
+    -->
+    <Application
+      Id="SiNetProjectManagerV2"
+      Executable="SiNetProjectManagerV2.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="SiNet Project Manager"
+        Description="SiNet Project Manager - desktop client"
+        BackgroundColor="transparent"
+        Square150x150Logo="Images\Square150x150Logo.png"
+        Square44x44Logo="Images\Square44x44Logo.png">
+        <uap:DefaultTile ShortName="SiNet PM" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Required for any WPF/Win32 app shipped via MSIX. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
