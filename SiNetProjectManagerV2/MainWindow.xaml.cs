@@ -4,6 +4,7 @@ using SiNetProjectManagerV2.WPFUserControl;
 using SiNetProjectManagerV2.Dialogs;
 using SiNetProjectManagerV2.WPF_Window;
 using System.ComponentModel;
+using System.Reflection;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,16 +18,32 @@ namespace SiNetProjectManagerV2
 {
     public partial class MainWindow : BaseWindow
     {
-        private const string _defaultTitle = "תוכנת ניהול";
+        private static readonly string _appVersion = GetAppVersion();
+        private static readonly string _defaultTitle = $"תוכנת ניהול   v{_appVersion}";
         private FloatingProjectTasksView? _floatingTasksWindow;
         private FloatingInspectionView? _floatingInspectionWindow;
 
         public MainWindow()
         {
             InitializeComponent(); // חובה כדי לטעון את ה־XAML
+            Title = _defaultTitle;
 
             // Dynamic title: reflect the currently active project
             ActiveProjectContext.Instance.ActiveProjectChanged += OnActiveProjectChanged;
+        }
+
+        private static string GetAppVersion()
+        {
+            // Prefer InformationalVersion (matches csproj <Version>); fall back to FileVersion.
+            var asm = Assembly.GetExecutingAssembly();
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrWhiteSpace(info))
+            {
+                // Strip "+commitsha" suffix that SourceLink may append.
+                var plus = info.IndexOf('+');
+                return plus > 0 ? info.Substring(0, plus) : info;
+            }
+            return asm.GetName().Version?.ToString(3) ?? "0.0.0";
         }
 
         private void OnActiveProjectChanged(SiNetSQL.Models.Project? project)
