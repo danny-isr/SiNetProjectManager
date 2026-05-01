@@ -31,6 +31,8 @@
   <ItemGroup>
     <Compile Include="..\..\SiNetSQL\SiNetSQL\Services\SystemSettingKeys.cs" Link="Logging\Shared\SystemSettingKeys.cs" />
     <Compile Include="..\..\SiNetSQL\SiNetSQL\Services\Logging\CentralLogging.cs" Link="Logging\Shared\CentralLogging.cs" />
+    <Compile Include="..\..\SiNetSQL\SiNetSQL\Services\CredentialProvider.cs" Link="Secrets\Shared\CredentialProvider.cs" />
+    <Compile Include="..\..\SiNetSQL\SiNetSQL\Services\CredentialVaultService.cs" Link="Secrets\Shared\CredentialVaultService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json">
