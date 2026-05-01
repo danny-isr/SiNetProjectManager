@@ -55,6 +55,7 @@ public partial class SecretSetupWindow : Window
         StatusAdUser.Fill = status.GetValueOrDefault(SecretKeys.AdUsername) ? _greenBrush : _redBrush;
         StatusAdPass.Fill = status.GetValueOrDefault(SecretKeys.AdPassword) ? _greenBrush : _redBrush;
         StatusAccServiceApiKey.Fill = status.GetValueOrDefault(SecretKeys.AccServiceApiKey) ? _greenBrush : _redBrush;
+        StatusMasterPlanApiKey.Fill = status.GetValueOrDefault(SecretKeys.MasterPlanApiKey) ? _greenBrush : _redBrush;
     }
 
     /// <summary>
@@ -74,6 +75,9 @@ public partial class SecretSetupWindow : Window
 
         // AccService API key: pre-fill from vault (this is a shared secret across machines, not per-user PII)
         TxtAccServiceApiKey.Text = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey) ?? "";
+
+        // MasterPlan API key: pre-fill from vault
+        TxtMasterPlanApiKey.Text = CredentialVaultService.GetSecret(SecretKeys.MasterPlanApiKey) ?? "";
 
         // Google credentials: show status text
         if (CredentialVaultService.HasSecret(SecretKeys.GoogleClientSecrets))
@@ -186,6 +190,13 @@ public partial class SecretSetupWindow : Window
                 saved++;
             }
 
+            // MasterPlan API Key
+            if (!string.IsNullOrWhiteSpace(TxtMasterPlanApiKey.Text))
+            {
+                CredentialVaultService.SetSecret(SecretKeys.MasterPlanApiKey, TxtMasterPlanApiKey.Text.Trim());
+                saved++;
+            }
+
             // ═══════════════════════════════════════════════════════════════════
             // VALIDATION: Test ALL secrets against their actual services.
             // Green = verified working, Orange = saved but test failed, Red = missing.
@@ -216,6 +227,11 @@ public partial class SecretSetupWindow : Window
                 var hasAccKey = CredentialVaultService.HasSecret(SecretKeys.AccServiceApiKey);
                 ApplyResult(StatusAccServiceApiKey, "AccService API Key",
                     (hasAccKey, hasAccKey, hasAccKey ? "מוגדר ב-Vault" : null), passed, failed);
+
+                // MasterPlan API key — local-only (no network test); just check vault presence
+                var hasMpKey = CredentialVaultService.HasSecret(SecretKeys.MasterPlanApiKey);
+                ApplyResult(StatusMasterPlanApiKey, "MasterPlan API Key",
+                    (hasMpKey, hasMpKey, hasMpKey ? "מוגדר ב-Vault" : null), passed, failed);
 
             // Paired secrets: both dots share the validation result
             ApplyPairResult(StatusAdClientId, StatusAdClientSecret,

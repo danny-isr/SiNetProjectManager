@@ -62,7 +62,19 @@ public class MasterPlanApiClient : IDisposable
         // Read configuration
         var apiConfig = configuration.GetSection("MasterPlanApi");
         _baseUrl = apiConfig["BaseUrl"] ?? throw new InvalidOperationException("MasterPlanApi:BaseUrl is required");
-        var apiKey = apiConfig["ApiKey"] ?? throw new InvalidOperationException("MasterPlanApi:ApiKey is required");
+
+        // API key precedence:
+        //   1) Windows Credential Manager  (SecretKeys.MasterPlanApiKey) — preferred, per-user encrypted
+        //   2) MASTERPLAN_API_KEY env var  — for ad-hoc/test runs
+        //   3) appsettings.json:MasterPlanApi:ApiKey — legacy fallback
+        var apiKey = SiNetSQL.Services.CredentialVaultService.GetSecret(SiNetSQL.Services.SecretKeys.MasterPlanApiKey)
+            ?? Environment.GetEnvironmentVariable("MASTERPLAN_API_KEY")
+            ?? apiConfig["ApiKey"]
+            ?? throw new InvalidOperationException(
+                "MasterPlan API key not found. Provision via WPF SecretSetupWindow " +
+                $"(vault key '{SiNetSQL.Services.SecretKeys.MasterPlanApiKey}'), " +
+                "or set MASTERPLAN_API_KEY env var, or MasterPlanApi:ApiKey in appsettings.json.");
+
         var timeoutSeconds = int.TryParse(apiConfig["TimeoutSeconds"], out var t) ? t : 300;
 
         // Configure HTTP client with required headers
