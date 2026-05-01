@@ -1,4 +1,4 @@
-# Master publish script for the entire SiNetProjectManager solution.
+﻿# Master publish script for the entire SiNetProjectManager solution.
 #
 # Runs the three independent deployment channels in order:
 #   1. SiOffice.AccService    -> WiX MSI    -> \\SI-WIN-2K19\...\SiProjecNet2026-Full\

@@ -1,4 +1,4 @@
-# Publish MasterPlan.SyncEngine to a network share so the Task Scheduler on the
+﻿# Publish MasterPlan.SyncEngine to a network share so the Task Scheduler on the
 # server picks up the latest single-file EXE on its next run.
 #
 # Pipeline (mirrors publish-service.ps1 conventions):

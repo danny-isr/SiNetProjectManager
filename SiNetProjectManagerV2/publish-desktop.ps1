@@ -1,4 +1,4 @@
-# Publish SiNetProjectManagerV2 (WPF .NET 10) as MSIX with .appinstaller for
+﻿# Publish SiNetProjectManagerV2 (WPF .NET 10) as MSIX with .appinstaller for
 # auto-update. Uses the modern "self-contained MSIX" approach: NO .wapproj,
 # NO Windows Application Packaging Project. Just `dotnet publish` -> MakeAppx
 # -> SignTool -> robocopy. All tools ship with the Windows 10/11 SDK that VS
@@ -36,7 +36,7 @@ $manifestSrc  = Join-Path $PSScriptRoot "Package.appxmanifest"
 $imagesSrc    = Join-Path $PSScriptRoot "Images"
 
 if (-not (Test-Path $manifestSrc)) {
-    throw "Package.appxmanifest not found at $manifestSrc — should be committed alongside the csproj."
+    throw "Package.appxmanifest not found at $manifestSrc -- should be committed alongside the csproj."
 }
 
 # ---------------------------------------------------------------
@@ -128,7 +128,7 @@ $manifestText = (Get-Content $manifestSrc -Raw).Replace('{VERSION}', $msixVersio
 Set-Content -Path (Join-Path $payloadDir "AppxManifest.xml") -Value $manifestText -Encoding UTF8
 
 if (-not (Test-Path $imagesSrc)) {
-    Write-Host "  Images\ folder not found — generating placeholder PNGs." -ForegroundColor Yellow
+    Write-Host "  Images\ folder not found -- generating placeholder PNGs." -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $imagesSrc -Force | Out-Null
     # Generate trivial 1x1 transparent PNGs for the three required logos.
     # (Replace these with proper artwork later; MSIX install works with placeholders.)

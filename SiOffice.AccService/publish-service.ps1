@@ -1,5 +1,5 @@
-# Publish SiOffice.AccService for production deployment AND build the updater MSI.
-# Workaround for .NET 10 SDK MSB4803 (COM ResolveComReference) — uses full VS MSBuild for Build, dotnet for Publish.
+﻿# Publish SiOffice.AccService for production deployment AND build the updater MSI.
+# Workaround for .NET 10 SDK MSB4803 (COM ResolveComReference) -- uses full VS MSBuild for Build, dotnet for Publish.
 #
 # Pipeline:
 #   1. Publish AccService payload to a local intermediate folder ($OutputDir, default under repo \artifacts).
