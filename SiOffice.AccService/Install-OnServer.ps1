@@ -88,24 +88,28 @@ if (-not $SkipService -and -not (Test-Path $MsiPath)) {
     throw "MSI not found at: $MsiPath"
 }
 
-# ─── Single password prompt for SI-ENG\sieng ───────────────────────────────
+# ─── Single password prompt for SI-ENG\sieng (GUI dialog) ──────────────────
 # Same Windows password is used for BOTH:
 #   - Start-Process -Credential (so secret import runs as sieng)
 #   - msiexec SERVICEPASSWORD=... (so the Windows service starts as sieng)
-Write-Host "Enter Windows password for $ServiceUser" -ForegroundColor Yellow
-Write-Host "(this is the Windows account password, NOT the .secrets package password)" -ForegroundColor DarkGray
-$winPwdSecure = Read-Host -AsSecureString "Password"
+# Using Get-Credential -> native Windows credential dialog (works reliably
+# even when the script is launched from a UNC path / non-interactive host).
+Write-Host "A Windows credential dialog will pop up for: $ServiceUser" -ForegroundColor Yellow
+$cred = Get-Credential -UserName $ServiceUser -Message "Windows password for $ServiceUser (NOT the .secrets package password)"
+if (-not $cred) { throw "Cancelled at Windows credential prompt." }
+# Keep service user exactly as requested (Get-Credential may strip the domain
+# from UserName if the same account is the current user).
+$winPwdSecure = $cred.Password
 $winPwdPlain  = [System.Net.NetworkCredential]::new("", $winPwdSecure).Password
 $cred = New-Object System.Management.Automation.PSCredential($ServiceUser, $winPwdSecure)
 
-# ─── Prompt for secrets package password (if not passed in) ────────────────
+# ─── Prompt for secrets package password (GUI dialog) ──────────────────────
 if (-not $SkipImport) {
     if (-not $SecretsPwd) {
-        Write-Host ""
-        Write-Host "Enter the package password for the .secrets file" -ForegroundColor Yellow
-        Write-Host "(this is the password you typed in the WPF Export dialog)" -ForegroundColor DarkGray
-        $pkgSecure = Read-Host -AsSecureString "Package password"
-        $SecretsPwd = [System.Net.NetworkCredential]::new("", $pkgSecure).Password
+        Write-Host "A second dialog will pop up for the .secrets package password." -ForegroundColor Yellow
+        $pkgCred = Get-Credential -UserName "package" -Message "Package password for the .secrets file (the password you typed in the WPF Export dialog). Username is ignored."
+        if (-not $pkgCred) { throw "Cancelled at package password prompt." }
+        $SecretsPwd = [System.Net.NetworkCredential]::new("", $pkgCred.Password).Password
     }
 }
 
