@@ -13,7 +13,6 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <NoWarn>NU1701</NoWarn>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
-
     <!-- ClickOnce Settings -->
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <PublishUrl>publish\</PublishUrl>
@@ -27,9 +26,9 @@
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-
     <!-- Ensure all content files are included in publish -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <Version>1.0.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Assets\folder_project.png" />
