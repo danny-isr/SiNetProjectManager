@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
@@ -25,7 +25,7 @@
     is sourced directly from SiNetSQL via Compile links so this console app
     keeps a slim TFM (net10.0, no WPF deps) while still using the exact same
     sink layout / settings keys as the WPF client and AccService.
-    Only the keys file is shared ׳’ג‚¬ג€ SystemSettingsService itself depends on
+    Only the keys file is shared ׳³ג€™׳’ג€ֲ¬׳’ג‚¬ֲ SystemSettingsService itself depends on
     EF Core models which we don't need here.
   -->
   <ItemGroup>
