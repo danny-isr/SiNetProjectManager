@@ -355,6 +355,17 @@ namespace SiNetProjectManagerV2
         {
             try
             {
+                // Lifecycle marker — emitted at Warning so it lands in the
+                // central log share even with the default per-app levels.
+                // Mirrors the AccService "service-up" / SyncEngine "starting"
+                // lines, so the shared log shows every app open/close.
+                Log.Warning(
+                    "SiNetProjectManagerV2 opened — version {Version}, machine {Machine}, user {User}, session {Session}.",
+                    Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "?",
+                    Environment.MachineName,
+                    Environment.UserName,
+                    SessionId);
+
                 Log.Information("[STARTUP] ═══ Application startup initiated ═══");
 
                 // Set explicit shutdown mode during startup to prevent premature shutdown
@@ -1131,6 +1142,17 @@ namespace SiNetProjectManagerV2
 
         protected override void OnExit(ExitEventArgs e)
         {
+            // Lifecycle marker — Warning level so the central log share records
+            // every app close alongside the matching "opened" line in OnStartup.
+            try
+            {
+                Log.Warning(
+                    "SiNetProjectManagerV2 closing — exit code {ExitCode}, session {Session}.",
+                    e.ApplicationExitCode,
+                    SessionId);
+            }
+            catch { /* never block shutdown on a log write */ }
+
             // Cancel background tasks (ACC User Bootstrap, etc.)
             try
             {
@@ -1140,7 +1162,6 @@ namespace SiNetProjectManagerV2
             catch { /* Best effort cleanup */ }
 
             base.OnExit(e);
-            // no non-error logs on exit
             Log.CloseAndFlush();
         }
 
