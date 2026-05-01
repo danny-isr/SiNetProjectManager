@@ -80,6 +80,15 @@ Log.Warning(
     Environment.UserName,
     args.Length == 0 ? "(none)" : string.Join(' ', args));
 
+// If the central sink failed to bootstrap (typically: SyncEngine host can't
+// reach \\si-win-2k19, or its account lacks Modify rights on the share),
+// surface the exact reason through the logger — otherwise the central folder
+// just stays empty with no clue why. The line still reaches the LOCAL file.
+if (CentralLoggingBuilder.CentralSinkBootstrapError is { } centralErr)
+{
+    Log.Warning("MasterPlan.SyncEngine: {Detail}", centralErr);
+}
+
 // Connection strings - configure these in appsettings.json or environment variables
 var sourceConnectionString = configuration.GetConnectionString("SourceDatabase")
     ?? throw new InvalidOperationException("SourceDatabase connection string is required");
