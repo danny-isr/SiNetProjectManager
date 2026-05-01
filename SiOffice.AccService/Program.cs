@@ -169,6 +169,20 @@ try
         listenPort,
         hasApiKey);
 
+    // Resolved log targets — always emitted so the local log states exactly
+    // which network folder/file the central log is being written to. Makes
+    // "central folder is empty" trivial to diagnose.
+    Log.Warning(
+        "SiOffice.AccService log targets — local file: {LocalFile}, central file: {CentralFile}, central enabled: {CentralEnabled}.",
+        CentralLoggingBuilder.LocalSinkTargetFile ?? "(none)",
+        CentralLoggingBuilder.CentralSinkTargetFile ?? "(disabled — Logging.CentralLogPath empty)",
+        CentralLoggingBuilder.CentralSinkEnabled);
+
+    if (CentralLoggingBuilder.CentralSinkBootstrapError is { } centralErr)
+    {
+        Log.Warning("SiOffice.AccService: {Detail}", centralErr);
+    }
+
     // Hook the host lifetime so we get explicit started / stopping / stopped lines.
     var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
     lifetime.ApplicationStarted.Register(() =>

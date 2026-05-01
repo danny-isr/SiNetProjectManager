@@ -80,6 +80,16 @@ Log.Warning(
     Environment.UserName,
     args.Length == 0 ? "(none)" : string.Join(' ', args));
 
+// Record the resolved log targets. Always emitted — even when the central
+// sink came up successfully — so the local log states explicitly which
+// network folder/file the central log is being written to. Makes diagnosing
+// "central folder is empty" trivial: the local log shows the exact path.
+Log.Warning(
+    "MasterPlan.SyncEngine log targets — local file: {LocalFile}, central file: {CentralFile}, central enabled: {CentralEnabled}.",
+    CentralLoggingBuilder.LocalSinkTargetFile ?? "(none)",
+    CentralLoggingBuilder.CentralSinkTargetFile ?? "(disabled — Logging.CentralLogPath empty)",
+    CentralLoggingBuilder.CentralSinkEnabled);
+
 // If the central sink failed to bootstrap (typically: SyncEngine host can't
 // reach \\si-win-2k19, or its account lacks Modify rights on the share),
 // surface the exact reason through the logger — otherwise the central folder

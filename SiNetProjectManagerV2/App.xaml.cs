@@ -366,6 +366,20 @@ namespace SiNetProjectManagerV2
                     Environment.UserName,
                     SessionId);
 
+                // Resolved log targets — always emitted so the local log states
+                // exactly which network folder/file the central log is being
+                // written to. Makes "central folder is empty" trivial to diagnose.
+                Log.Warning(
+                    "SiNetProjectManagerV2 log targets — local file: {LocalFile}, central file: {CentralFile}, central enabled: {CentralEnabled}.",
+                    CentralLoggingBuilder.LocalSinkTargetFile ?? "(none)",
+                    CentralLoggingBuilder.CentralSinkTargetFile ?? "(disabled — Logging.CentralLogPath empty)",
+                    CentralLoggingBuilder.CentralSinkEnabled);
+
+                if (CentralLoggingBuilder.CentralSinkBootstrapError is { } centralErr)
+                {
+                    Log.Warning("SiNetProjectManagerV2: {Detail}", centralErr);
+                }
+
                 Log.Information("[STARTUP] ═══ Application startup initiated ═══");
 
                 // Set explicit shutdown mode during startup to prevent premature shutdown
