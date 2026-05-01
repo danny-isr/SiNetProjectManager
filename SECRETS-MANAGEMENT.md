@@ -1,141 +1,161 @@
-# 🔐 ניהול מפתחות וסודות - SiNetProjectManager
+﻿# 🔐 SiNetProjectManager - מדריך התקנה ופריסה
 
-מסמך זה מסביר **איפה** המפתחות נשמרים, **איך** מעבירים אותם בין מחשבים,
-ו**איך** מספקים אותם לשרת `SI-WIN-2K19` בלי להתקין שם את WPF.
-
-> **TL;DR:** כל הסודות חיים ב-**Windows Credential Manager** (DPAPI per-user).
-> במחשב הפיתוח שלך מנהלים אותם דרך `SecretSetupWindow` ב-WPF; בשרת מייבאים
-> אותם פעם אחת באמצעות `SiNet.SecretImport.exe` תחת חשבון השירות.
+> **המסמך הזה הוא מקור האמת היחיד.** כל פעם שצריך לפרוס משהו או להחליף מפתחות - תפתח את זה ותעשה לפי הסדר.
 
 ---
 
-## 1. ארכיטקטורת הסודות
+## ⚡ TL;DR - מה עושים ב-99% מהמקרים
 
-### איפה הסודות חיים?
-- **Windows Credential Manager** (Generic Credentials, prefix `SiNet/`).
-- מוצפן ב-DPAPI **לפי משתמש Windows** - משתמש A לא רואה סודות של משתמש B.
-- אין סוד יחיד שמסונכרן בין מחשבים אוטומטית; כל מחשב/משתמש מוגדר בנפרד.
-
-### רשימת המפתחות (`SecretKeys` ב-`SiNetSQL\Services\CredentialProvider.cs`)
-| מפתח | שימוש | רכיב צרכן |
-|---|---|---|
-| `SiNet/GeminiApiKey` | Gemini AI | WPF |
-| `SiNet/Autodesk/ClientId` + `ClientSecret` | Autodesk APS OAuth | WPF + AccService |
-| `SiNet/Google/ClientSecrets` | תוכן `credentials.json` של Google OAuth | WPF |
-| `SiNet/ActiveDirectory/Username` + `Password` | חיבור AD | WPF |
-| `SiNet/ConnectionStrings/SiNetDatabase` | DB ראשי | WPF + AccService |
-| `SiNet/ConnectionStrings/ReplicaDatabase` | DB Replica | WPF + SyncEngine |
-| `SiNet/ConnectionStrings/MasterPlanDatabase` | DB MasterPlan | WPF + SyncEngine |
-| `SiNet/AccService/ApiKey` | אימות לקוח↔שירות (header `X-AccService-Key`) | WPF (שולח) + AccService (מאמת) |
-| `SiNet/MasterPlanApi/ApiKey` | header `X-API-Key` ל-MasterPlan Web API | SyncEngine |
-
-### סדר עדיפויות לקריאת מפתח (דוגמה: `MasterPlanApiClient`)
-1. **Windows Credential Manager** (vault) ✅ מועדף
-2. **Environment Variable** (`MASTERPLAN_API_KEY`) - ל-CI / בדיקות
-3. **`appsettings.json`** - fallback dev/legacy בלבד
-
----
-
-## 2. איפה זה רץ ומי המשתמש
-
-| רכיב | היכן | משתמש Windows |
-|---|---|---|
-| `SiNetProjectManagerV2` (WPF) | מחשבי משתמשים | המשתמש המחובר |
-| `SiOffice.AccService` (Windows Service) | `SI-WIN-2K19` | מותקן עם `SERVICEACCOUNT=DOMAIN\sieng` |
-| `MasterPlan.SyncEngine` (Console) | `SI-WIN-2K19` Task Scheduler | **`sieng`** (`MasterPlandaily`, `MasterPlanMonthly`) |
-
-> ⚠️ **חשוב:** Credential Manager הוא per-user. אם ה-Service רץ כ-`LocalSystem`
-> אבל הסודות נשמרו תחת `DOMAIN\YourUser` - השירות לא יראה אותם ויחזיר 401.
-> בשרת `SI-WIN-2K19` כל הסודות חייבים להיכתב תחת **`sieng`**.
-
----
-
-## 3. הזרימה המעשית
-
-### 🟢 שלב 1: הגדרת מפתחות במחשב הפיתוח
-1. פתח את WPF (`SiNetProjectManagerV2`).
-2. ייפתח דיאלוג `SecretSetupWindow` (או הגעה אליו דרך התפריט).
-3. מלא את כל השדות → **שמור** (וידוא: כל הנקודות ירוקות 🟢).
-4. לחץ **📦 ייצוא חבילה** → בחר סיסמה חזקה → קובץ `SiNet.secrets`.
-
-קובץ ה-`.secrets` מוצפן AES-256-CBC + PBKDF2 (100K iterations). בטוח להעביר.
-
-### 🟢 שלב 2: publish של הכל לרשת
+**1. במחשב הפיתוח (PowerShell):**
 ```powershell
 cd D:\repos2026\SiNetProjectManager_GitHub
-.\publish-all.ps1
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
 ```
-זה ירוץ 4 ערוצים:
-1. `SiOffice.AccService` → MSI
-2. `MasterPlan.SyncEngine` → robocopy
-3. `SiNetProjectManagerV2` → MSIX + .appinstaller
-4. `SiNet.SecretImport` → robocopy ⬅ **הכלי הפורטבילי לשרת**
 
-מתגי דילוג: `-SkipService`, `-SkipConsole`, `-SkipDesktop`, `-SkipTool`,
-`-NoBump` (בלי קידום גרסה), `-SkipDeploy` (בלי העתקה לרשת).
+**2. בשרת SI-WIN-2K19 (PowerShell as Administrator):**
+```powershell
+powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets"
+```
 
-### 🟢 שלב 3: התקנה בשרת - שיטה אחת ויחידה
-
-> ⛔ **אל תעשה שלבים נפרדים.** יש סקריפט אחד שעושה הכל במכה אחת:
-> מתקין/מעדכן את ה-Service עם החשבון הנכון, ומייבא את הסודות לאותו חשבון.
-> סיסמה אחת מוקלדת = הסיסמה של `SI-ENG\sieng`.
-
-**מהמחשב שלך (RDP לשרת לא חובה - אפשר ישירות מ-share):**
-
-1. RDP לשרת `SI-WIN-2K19` כמשתמש שיש לו הרשאות **Administrator**
-   (לא חייב להיות `sieng` - הסקריפט יריץ דברים בשם `sieng` בעצמו).
-
-2. פתח **PowerShell as Administrator** והרץ:
-   ```powershell
-   & "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" `
-       -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets"
-   ```
-
-3. הסקריפט ישאל **שתי סיסמאות** (פעם אחת בלבד, שתיהן מוסתרות):
-   - **Password** — הסיסמה של חשבון Windows `SI-ENG\sieng`.
-   - **Package password** — הסיסמה שהזנת בייצוא ב-WPF.
-
-4. הסקריפט עושה הכל:
-   1. מייבא את `SiNet.secrets` ל-Credential Manager של `sieng`.
-   2. (מסיר אם צריך ו)מתקין את `SiOfficeAccService` עם `SERVICEACCOUNT=SI-ENG\sieng`.
-   3. מאמת: מציג `StartName`, `State`, ורשימת המפתחות ב-vault.
-
-**סוויצ'ים שימושיים:**
-| מתג | מתי |
-|---|---|
-| `-SkipImport` | רק להחליף חשבון השירות בלי לגעת בסודות |
-| `-SkipService` | רק לרענן סודות (החלפת מפתח) |
-| `-ServiceUser "DOMAIN\other"` | חשבון אחר במקום `sieng` |
-
-**הסקריפט עצמו:** `SiOffice.AccService\Install-OnServer.ps1` (מתפרסם אוטומטית
-ל-`\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\` ע"י `publish-service.ps1`).
-
-### 🟢 שלב 4: וידוא שזה עובד
-- ה-Task `MasterPlandaily` ירוץ בריצה הבאה ויצרוך את `MasterPlanApi/ApiKey`
-  מה-vault במקום מ-`appsettings.json`.
-- `AccService` יקרא `AccService/ApiKey` מה-vault של `sieng`.
-- אחרי כמה ימי הצלחה - אפשר להסיר את `"ApiKey"` מ-`MasterPlan.SyncEngine\appsettings.json`.
+זהו. שני שלבים. הסקריפט בשרת ישאל שתי סיסמאות ויעשה הכל.
 
 ---
 
-## 4. תרחישים מיוחדים
+## 1. ארכיטקטורה - באיזה משתמש כל דבר רץ
 
-### החלפת מפתח MasterPlan API
-1. במחשב הפיתוח: WPF → מלא את ה-MasterPlan key החדש → ייצוא.
-2. RDP לשרת כ-`sieng` → `SiNet.SecretImport.exe import ...` → ה-vault מתעדכן.
-3. ה-Task הבא יזרום עם המפתח החדש - **בלי restart לשירותים**.
+| רכיב | רץ ב | משתמש Windows |
+|---|---|---|
+| `SiNetProjectManagerV2` (WPF) | מחשבי משתמשים | המשתמש המחובר |
+| `SiOffice.AccService` (Service) | `SI-WIN-2K19` | **`SI-ENG\sieng`** |
+| `MasterPlan.SyncEngine` (Tasks) | `SI-WIN-2K19` | **`SI-ENG\sieng`** |
 
-### החלפת חשבון השירות (לדוגמה sieng → si-service)
-1. RDP בחשבון החדש (`si-service`).
-2. הרץ `SiNet.SecretImport.exe import ...` תחתיו.
-3. שנה את הגדרות ה-Tasks וה-Service לרוץ תחתיו.
-4. אופציונלי: מחק את הסודות הישנים מ-vault של `sieng`.
+**הכלל:** Windows Credential Manager הוא **per-user** (DPAPI). השירות חייב לרוץ כאותו משתמש שהסודות נשמרו אצלו, אחרת הוא לא יראה אותם.
 
-### הוספת מפתח חדש
-1. הוסף קבוע ב-`SiNetSQL\Services\CredentialProvider.cs` (`SecretKeys.XYZ` + הוסף ל-`All`).
-2. הוסף שדה ב-`SecretSetupWindow.xaml` + `.cs` (סטטוס + prefill + save + validate).
-3. במקום הצריכה: `CredentialVaultService.GetSecret(SecretKeys.XYZ) ?? envFallback ?? configFallback`.
-4. צא חבילה חדשה → ייבא בשרת.
+---
+
+## 2. הסודות
+
+מאוחסנים ב-**Windows Credential Manager** עם prefix `SiNet/`. רשימה ב-`SiNetSQL\Services\CredentialProvider.cs` (`SecretKeys.All`):
+
+| מפתח | שימוש |
+|---|---|
+| `SiNet/GeminiApiKey` | Gemini AI |
+| `SiNet/Autodesk/ClientId` + `ClientSecret` | Autodesk APS |
+| `SiNet/Google/ClientSecrets` | Google OAuth |
+| `SiNet/ActiveDirectory/Username` + `Password` | חיבור AD |
+| `SiNet/ConnectionStrings/SiNetDatabase` | DB ראשי |
+| `SiNet/ConnectionStrings/ReplicaDatabase` | DB Replica |
+| `SiNet/ConnectionStrings/MasterPlanDatabase` | DB MasterPlan |
+| `SiNet/AccService/ApiKey` | אימות client ↔ service |
+| `SiNet/MasterPlanApi/ApiKey` | header X-API-Key ל-MasterPlan API |
+
+**11 מפתחות סך הכל.** אם בייצוא רואים פחות → חסר משהו ב-vault שלך.
+
+---
+
+## 3. זרימה מלאה
+
+### שלב 1: עדכון מפתחות במחשב הפיתוח
+
+1. הרץ את WPF `SiNetProjectManagerV2` → פתח `SecretSetupWindow`.
+2. מלא/עדכן שדות → **שמור** (כל הנקודות ירוקות).
+3. **📦 ייצוא חבילה** → סיסמה חזקה → שמור כ-`SiNet.secrets`.
+
+הקובץ מוצפן AES-256 + PBKDF2.
+
+### שלב 2: פרסום הכל לרשת (במחשב הפיתוח)
+
+```powershell
+cd D:\repos2026\SiNetProjectManager_GitHub
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
+```
+
+זה ירוץ 4 ערוצים:
+1. **AccService** → MSI → `\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi`
+2. **SyncEngine** → robocopy → `\\SI-WIN-2K19\AppFolder\AppNet\MasterPlan.SyncEngine\`
+3. **WPF (MSIX)** → `\\...\SiNetProjectManagerV2\` + `.appinstaller`
+4. **SecretImport CLI + Install-OnServer.ps1** → `\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\` + `\\...\SiNet.SecretImport\`
+
+**סוויצ'ים שימושיים (תמיד באותו פורמט):**
+```powershell
+# רק Service:
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1 -SkipConsole -SkipDesktop -SkipTool
+
+# רק SyncEngine:
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1 -SkipService -SkipDesktop -SkipTool
+
+# רק WPF:
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1 -SkipService -SkipConsole -SkipTool
+
+# רק SecretImport:
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1 -SkipService -SkipConsole -SkipDesktop
+
+# בלי קידום גרסה ובלי העתקה לרשת (build מקומי):
+powershell -ExecutionPolicy Bypass -File .\publish-all.ps1 -NoBump -SkipDeploy
+```
+
+### שלב 3: העלאת `SiNet.secrets` לשרת
+
+העתק את הקובץ שייצאת בשלב 1 ל:
+```
+\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets
+```
+
+### שלב 4: התקנה בשרת - **השיטה היחידה**
+
+1. **RDP לשרת** `SI-WIN-2K19` עם משתמש Administrator.
+
+2. פתח **PowerShell as Administrator** והרץ (אותו פורמט בדיוק):
+```powershell
+powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets"
+```
+
+3. הסקריפט ישאל **שתי סיסמאות** (מוסתרות):
+   - **Password** = הסיסמה של חשבון Windows `SI-ENG\sieng`
+   - **Package password** = הסיסמה שהזנת בייצוא ב-WPF
+
+4. הסקריפט עושה אוטומטית:
+   - מייבא את הסודות ל-vault של `sieng` (גם אם אתה Administrator)
+   - מסיר Service ישן אם החשבון לא נכון
+   - מתקין `SiOfficeAccService` עם `SERVICEACCOUNT=SI-ENG\sieng`
+   - מאמת ומציג: `StartName`, `State`, רשימת מפתחות
+
+**סוויצ'ים שימושיים:**
+```powershell
+# רק לרענן סודות (השירות כבר מותקן נכון):
+powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets" -SkipService
+
+# רק להתקין/להחליף Service בלי לגעת בסודות:
+powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" -SkipImport
+```
+
+### שלב 5: וידוא ידני
+
+```powershell
+Get-CimInstance Win32_Service -Filter "Name='SiOfficeAccService'" | Select Name, StartName, State
+# StartName צריך להיות: SI-ENG\sieng
+# State צריך להיות:     Running
+```
+
+---
+
+## 4. תחזוקה שוטפת
+
+### החלפת מפתח אחד (לדוגמה Gemini)
+1. WPF → עדכן Gemini → שמור → ייצוא.
+2. העתק `SiNet.secrets` ל-share.
+3. בשרת (Administrator):
+```powershell
+powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets" -SkipService
+```
+
+### הוספת מפתח חדש (קוד)
+1. `SiNetSQL\Services\CredentialProvider.cs` → הוסף `public const string XyzKey = "SiNet/Xyz";` **וגם הוסף ל-`SecretKeys.All`**.
+2. `SecretSetupWindow.xaml` + `.cs` → הוסף שדה + סטטוס + prefill + save + validate.
+3. במקום הצריכה: `CredentialVaultService.GetSecret(SecretKeys.XyzKey)`.
+4. publish-all → Install-OnServer.
+
+⚠️ אם תוסיף קבוע אבל **תשכח להוסיף ל-`All`** - הוא לא ייוצא ולא ייובא. בדיוק הבאג שהיה עם `AccServiceApiKey`.
 
 ---
 
@@ -143,31 +163,34 @@ cd D:\repos2026\SiNetProjectManager_GitHub
 
 | תסמין | סיבה | פתרון |
 |---|---|---|
-| `WARN AccService API key is not configured` | ה-Service רץ תחת משתמש אחר מזה שייבא | RDP בחשבון השירות, הרץ `import` שוב |
-| `MasterPlan API key not found` בלוג של SyncEngine | Task רץ כ-`sieng` אבל המפתחות יובאו תחת `Administrator` | RDP כ-`sieng`, ייבא שוב |
-| WPF פותח את `SecretSetupWindow` בכל הפעלה | חסרים מפתחות חובה ב-vault של המשתמש | מלא ושמור הכל בירוק |
-| `סיסמה שגויה או קובץ פגום` בייבוא | סיסמה לא תואמת לזו של הייצוא | ייצא מחדש עם סיסמה ידועה |
-| הכלי לא נמצא בשרת | `publish-all.ps1` לא רץ עם הערוץ הרביעי | הרץ `.\SiNet.SecretImport\publish-tool.ps1` |
+| Service רץ אבל מחזיר 401 | רץ כ-`LocalSystem` במקום `sieng` | הרץ Install-OnServer שוב (השלם) |
+| לוג: `MasterPlan API key not found` | Task רץ כ-`sieng` אבל מפתחות יובאו ל-Admin | Install-OnServer (תמיד מייבא ל-`sieng`) |
+| WPF פותח SecretSetup בכל פעם | חסרים מפתחות מקומית | מלא ושמור הכל בירוק |
+| ייבוא: "סיסמה שגויה או קובץ פגום" | Package password שגוי | ייצא מחדש |
+| בייצוא רואים פחות מ-11 מפתחות | חסר מפתח ב-vault או ב-`SecretKeys.All` | הוסף לקוד / מלא ב-WPF |
+| `Install-OnServer.ps1` לא מוצא MSI | publish-all נכשל בערוץ Service | הרץ publish-all מחדש |
 
 ---
 
-## 6. קבצים קשורים
+## 6. קבצים מרכזיים
 
-- `SiNetSQL\Services\CredentialProvider.cs` - `SecretKeys`
-- `SiNetSQL\Services\CredentialVaultService.cs` - P/Invoke ל-Credential Manager
-- `SiNetProjectManagerV2\Services\SecretProvisioningService.cs` - ייצוא/ייבוא `.secrets`
-- `SiNetProjectManagerV2\WPF Window\SecretSetupWindow.xaml(.cs)` - דיאלוג GUI
-- `SiNet.SecretImport\Program.cs` - CLI פורטבילי לשרת
-- `SiNet.SecretImport\publish-tool.ps1` - publish של הכלי
-- `publish-all.ps1` - אורקסטרטור 4 ערוצים
-- `DEPLOYMENT.md` - מדריך הפצה כללי
+| מטרה | קובץ |
+|---|---|
+| רשימת מפתחות | `SiNetSQL\Services\CredentialProvider.cs` |
+| גישה ל-Vault | `SiNetSQL\Services\CredentialVaultService.cs` |
+| Export/Import .secrets | `SiNetProjectManagerV2\Services\SecretProvisioningService.cs` |
+| GUI ניהול סודות | `SiNetProjectManagerV2\WPF Window\SecretSetupWindow.xaml(.cs)` |
+| CLI ייבוא לשרת | `SiNet.SecretImport\Program.cs` |
+| **התקנה בשרת (זה מה שמריצים!)** | `SiOffice.AccService\Install-OnServer.ps1` |
+| Publish של הכל | `publish-all.ps1` |
+| MSI definition | `SiOffice.AccService.Installer\Package.wxs` |
 
 ---
 
 ## 7. אבטחה
 
-- ✅ הסודות מוצפנים DPAPI per-user - **לא ניתנים לקריאה ע"י משתמש אחר**.
-- ✅ קובץ `.secrets` מוצפן AES-256 עם PBKDF2 - בטוח להעביר ב-USB/אימייל.
-- ✅ אין סודות ב-Git: `appsettings.json` מכיל רק `BaseUrl` ו-fallback dev שצריך להסיר.
-- ⚠️ מי שמקבל את `SiNet.secrets` + הסיסמה = שולט בכל הסודות. שמור על שתיהן בנפרד.
-- ⚠️ אחרי החלפת איש צוות שעזב: ייצא חבילה חדשה עם מפתחות שהוחלפו (Gemini, Autodesk וכו').
+- ✅ DPAPI per-user → סודות לא נראים למשתמשים אחרים.
+- ✅ `.secrets` מוצפן AES-256 + PBKDF2(100K) → בטוח להעביר.
+- ✅ אין סודות ב-Git.
+- ⚠️ `SiNet.secrets` + הסיסמה = שליטה מלאה. שמור בנפרד.
+- ⚠️ אחרי עזיבת איש צוות: ייצא חבילה חדשה עם מפתחות שהוחלפו.

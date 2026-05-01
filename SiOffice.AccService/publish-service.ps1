@@ -128,9 +128,15 @@ Copy-Item $msiPath $deployedMsi -Force
 # share, so admins can run it directly from the network without manual copying.
 $installScriptSrc = Join-Path $PSScriptRoot "Install-OnServer.ps1"
 $installScriptDir = "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService"
-if ((Test-Path $installScriptSrc) -and (Test-Path $installScriptDir)) {
+if (Test-Path $installScriptSrc) {
+    if (-not (Test-Path $installScriptDir)) {
+        Write-Host "Creating $installScriptDir ..." -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $installScriptDir -Force | Out-Null
+    }
     Copy-Item $installScriptSrc (Join-Path $installScriptDir "Install-OnServer.ps1") -Force
     Write-Host "Install-OnServer.ps1 deployed to $installScriptDir" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: $installScriptSrc not found - server install script was NOT deployed." -ForegroundColor Red
 }
 
 Write-Host "`n=== Done. On the server, run (elevated PowerShell): ===" -ForegroundColor Green
