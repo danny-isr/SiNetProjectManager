@@ -124,6 +124,16 @@ if (-not (Test-Path $MsiDeployDir)) {
 $deployedMsi = Join-Path $MsiDeployDir "SiOfficeAccService.msi"
 Copy-Item $msiPath $deployedMsi -Force
 
-Write-Host "`n=== Done. Server can now run: ===" -ForegroundColor Green
-Write-Host "    msiexec /i `"$deployedMsi`" /qn /l*v upgrade.log" -ForegroundColor Green
+# Also publish the unified server-install script next to the MSI on a dedicated
+# share, so admins can run it directly from the network without manual copying.
+$installScriptSrc = Join-Path $PSScriptRoot "Install-OnServer.ps1"
+$installScriptDir = "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService"
+if ((Test-Path $installScriptSrc) -and (Test-Path $installScriptDir)) {
+    Copy-Item $installScriptSrc (Join-Path $installScriptDir "Install-OnServer.ps1") -Force
+    Write-Host "Install-OnServer.ps1 deployed to $installScriptDir" -ForegroundColor Green
+}
+
+Write-Host "`n=== Done. On the server, run (elevated PowerShell): ===" -ForegroundColor Green
+Write-Host "    & `"\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1`" ``" -ForegroundColor Green
+Write-Host "        -SecretsFile `"\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets`"" -ForegroundColor Green
 Get-Item $deployedMsi | Format-Table Name, Length, LastWriteTime

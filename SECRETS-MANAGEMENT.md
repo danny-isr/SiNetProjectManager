@@ -74,28 +74,41 @@ cd D:\repos2026\SiNetProjectManager_GitHub
 מתגי דילוג: `-SkipService`, `-SkipConsole`, `-SkipDesktop`, `-SkipTool`,
 `-NoBump` (בלי קידום גרסה), `-SkipDeploy` (בלי העתקה לרשת).
 
-### 🟢 שלב 3: ייבוא בשרת (פעם אחת לכל סבב מפתחות)
+### 🟢 שלב 3: התקנה בשרת - שיטה אחת ויחידה
 
-1. **העבר את `SiNet.secrets`** לשרת (USB / share).
+> ⛔ **אל תעשה שלבים נפרדים.** יש סקריפט אחד שעושה הכל במכה אחת:
+> מתקין/מעדכן את ה-Service עם החשבון הנכון, ומייבא את הסודות לאותו חשבון.
+> סיסמה אחת מוקלדת = הסיסמה של `SI-ENG\sieng`.
 
-2. **RDP לשרת בחשבון `sieng`** (לא Administrator!).
+**מהמחשב שלך (RDP לשרת לא חובה - אפשר ישירות מ-share):**
 
-3. הרץ את הכלי הפורטבילי:
+1. RDP לשרת `SI-WIN-2K19` כמשתמש שיש לו הרשאות **Administrator**
+   (לא חייב להיות `sieng` - הסקריפט יריץ דברים בשם `sieng` בעצמו).
+
+2. פתח **PowerShell as Administrator** והרץ:
    ```powershell
-   $tool = "\\SI-WIN-2K19\AppFolder\AppNet\SiNet.SecretImport\SiNet.SecretImport.exe"
-
-   # ודא שאתה החשבון הנכון
-   & $tool whoami
-   #   -> Current Windows user : SI-WIN-2K19\sieng   (או DOMAIN\sieng)
-
-   # ייבא
-   & $tool import C:\Temp\SiNet.secrets
-
-   # אמת
-   & $tool status
+   & "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" `
+       -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets"
    ```
 
-4. **לא נדרש להתקין WPF בשרת.** הכלי self-contained (~82MB) בלי תלויות.
+3. הסקריפט ישאל **שתי סיסמאות** (פעם אחת בלבד, שתיהן מוסתרות):
+   - **Password** — הסיסמה של חשבון Windows `SI-ENG\sieng`.
+   - **Package password** — הסיסמה שהזנת בייצוא ב-WPF.
+
+4. הסקריפט עושה הכל:
+   1. מייבא את `SiNet.secrets` ל-Credential Manager של `sieng`.
+   2. (מסיר אם צריך ו)מתקין את `SiOfficeAccService` עם `SERVICEACCOUNT=SI-ENG\sieng`.
+   3. מאמת: מציג `StartName`, `State`, ורשימת המפתחות ב-vault.
+
+**סוויצ'ים שימושיים:**
+| מתג | מתי |
+|---|---|
+| `-SkipImport` | רק להחליף חשבון השירות בלי לגעת בסודות |
+| `-SkipService` | רק לרענן סודות (החלפת מפתח) |
+| `-ServiceUser "DOMAIN\other"` | חשבון אחר במקום `sieng` |
+
+**הסקריפט עצמו:** `SiOffice.AccService\Install-OnServer.ps1` (מתפרסם אוטומטית
+ל-`\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\` ע"י `publish-service.ps1`).
 
 ### 🟢 שלב 4: וידוא שזה עובד
 - ה-Task `MasterPlandaily` ירוץ בריצה הבאה ויצרוך את `MasterPlanApi/ApiKey`

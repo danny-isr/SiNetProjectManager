@@ -31,6 +31,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs and Scripts", "Docs an
 		SECRETS-MANAGEMENT.md = SECRETS-MANAGEMENT.md
 		publish-all.ps1 = publish-all.ps1
 		SiOffice.AccService\publish-service.ps1 = SiOffice.AccService\publish-service.ps1
+		SiOffice.AccService\Install-OnServer.ps1 = SiOffice.AccService\Install-OnServer.ps1
 		MasterPlan.SyncEngine\publish-console.ps1 = MasterPlan.SyncEngine\publish-console.ps1
 		SiNetProjectManagerV2\publish-desktop.ps1 = SiNetProjectManagerV2\publish-desktop.ps1
 		SiNet.SecretImport\publish-tool.ps1 = SiNet.SecretImport\publish-tool.ps1
