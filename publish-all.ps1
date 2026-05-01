@@ -27,8 +27,11 @@ function Invoke-Channel {
     Write-Host "`n############################################################" -ForegroundColor Magenta
     Write-Host "  $Title"                                                       -ForegroundColor Magenta
     Write-Host "############################################################`n" -ForegroundColor Magenta
+    # Child scripts use $ErrorActionPreference=Stop + throw on real failures.
+    # We do NOT check $LASTEXITCODE here because it reflects the last native
+    # command in the child (e.g. robocopy returns 1-7 for normal success).
     & $Script @forwardArgs
-    if ($LASTEXITCODE -ne 0) { throw "$Title failed (exit $LASTEXITCODE)" }
+    $global:LASTEXITCODE = 0
 }
 
 if (-not $SkipService) {
