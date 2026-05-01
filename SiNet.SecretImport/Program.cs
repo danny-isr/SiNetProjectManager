@@ -127,21 +127,36 @@ internal static class Program
     {
         Console.Write(prompt);
         Console.Out.Flush();
-        var sb = new System.Text.StringBuilder();
-        while (true)
+
+        // Console.ReadKey can fail when the EXE is launched from a UNC path or a redirected
+        // console. Fall back to ReadLine in that case so the user can still type the password.
+        try
         {
-            var key = Console.ReadKey(intercept: true);
-            if (key.Key == ConsoleKey.Enter) { Console.WriteLine(); break; }
-            if (key.Key == ConsoleKey.Backspace)
+            var sb = new System.Text.StringBuilder();
+            while (true)
             {
-                if (sb.Length > 0) sb.Length--;
+                var key = Console.ReadKey(intercept: true);
+                if (key.Key == ConsoleKey.Enter) { Console.WriteLine(); break; }
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (sb.Length > 0) sb.Length--;
+                }
+                else if (!char.IsControl(key.KeyChar))
+                {
+                    sb.Append(key.KeyChar);
+                }
             }
-            else if (!char.IsControl(key.KeyChar))
-            {
-                sb.Append(key.KeyChar);
-            }
+            return sb.ToString();
         }
-        return sb.ToString();
+        catch (InvalidOperationException)
+        {
+            // Console input is redirected - use ReadLine (password will be visible).
+            Console.WriteLine();
+            Console.WriteLine("(Note: console input is redirected, password will be visible while typing.)");
+            Console.Write(prompt);
+            Console.Out.Flush();
+            return Console.ReadLine() ?? string.Empty;
+        }
     }
 
     private static int PrintHelp()
