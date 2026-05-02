@@ -310,10 +310,33 @@ namespace SiNetProjectManagerV2
                     }
                 }
 
+                // SiOffice.AccService presents a self-signed cert (accservice.pfx, CN=<MachineName>)
+                // that is NOT in the local trust store. For localhost/loopback we accept that cert
+                // explicitly — production deployments should set AccService:Certificate:Path on the
+                // service to a CA-issued cert instead. Non-loopback hosts still go through normal
+                // chain validation.
+                var accServiceUri = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
+                var allowSelfSignedForLoopback = accServiceUri.IsLoopback;
+
                 Action<HttpClient> configure = ConfigureAccServiceClient;
-                services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure);
-                services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure);
-                Log.Information("ACC Provisioning: using REMOTE SiOffice.AccService at {Url}.", accServiceBaseUrl);
+                Action<IHttpClientBuilder> configureHandler = b =>
+                {
+                    if (allowSelfSignedForLoopback)
+                    {
+                        b.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                        {
+                            ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
+                                errors == System.Net.Security.SslPolicyErrors.None ||
+                                errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors
+                        });
+                    }
+                };
+
+                configureHandler(services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure));
+                configureHandler(services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure));
+                Log.Information(
+                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (loopback self-signed accepted: {AllowSelfSigned}).",
+                    accServiceBaseUrl, allowSelfSignedForLoopback);
             }
             else
             {
