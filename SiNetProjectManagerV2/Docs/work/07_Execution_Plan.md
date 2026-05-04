@@ -6,6 +6,41 @@
 
 ---
 
+## 🔄 עדכון מצב ביצוע (2026)
+
+חלקים מרכזיים של התוכנית כבר בוצעו ואוחדו:
+
+- ✅ **Phase 1 (DB) — בוצע:** הישויות `WorkflowDefinition`, `WorkflowStageDefinition`,
+  `WorkflowTransitionRule`, `WorkflowInstance`, `WorkflowStageTransition` קיימות,
+  כולל `ProjectTypeWorkflowDefinition`, `ProjectTypeWorkflowStage`, `ProjectTypeDiscipline`.
+- ✅ **Phase 2 (Engine) — בוצע:** קיימים `WorkflowEngine`, `WorkflowQueryService`,
+  `WorkflowValidationService`, `WorkflowSeedService`, `WorkflowActionExecutor`.
+- ✅ **קונסולידציה:** הזרמים הישנים (Design / Review / Opinion / Intake / ScopeExpansion)
+  הוסרו. נשאר **PlanningWorkflow קנוני אחד** עם `PLN.*` stages.
+- ✅ **TaskResult:** משימות נסגרות עם `RecordTaskResult`. שינויי סטטוס פרויקט נעשים
+  דרך פעולות מעבר במנוע (`SetProjectStatus`, `SetBillingPending`, `CloseProject`).
+- ✅ **UI:** `WorkflowManagementWindow` הוא ה-hub היחיד עם 5 לשוניות
+  (Builder / Visual Designer / Policy / Dashboard / Behaviors / Help).
+- ✅ **Policy UI:** הורחבה ל-3 לשוניות-משנה — תהליכים מותרים, שלבים פעילים,
+  תחומים פעילים — פר-סוג-פרויקט.
+- ✅ **TFM:** הפרויקט עבר ל-.NET 10.
+- ✅ **אוטומציה End-to-End:**
+  - יצירת פרויקט ממייל מפעילה אוטומטית `PlanningWorkflow` (`WorkflowCreateProjectWindow` →
+    `WorkflowTaskOrchestrator.StartWorkflowAsync`).
+  - עדכון סטטוס משימה inline משדר ל-`WorkflowTaskOrchestrator.CheckAndAutoAdvanceAsync`
+    (טריגרים `AllRequiredTasksClosed` + `TaskStatusChanged`).
+  - סגירת משימה פותחת `TaskResultPickerDialog` ושומרת `LastTaskResultId` +
+    `ProjectAssignmentEvent.TaskResultId`.
+  - `WorkflowTransitionEvaluator` תומך ב-`TaskResultEquals` (משווה
+    `ChangedTaskResultCode` ל-`TaskResultDefinition.Code`).
+  - ה-UI מציג את התוצאה האחרונה בעמודה ב-`TaskPanelView` ובכרטיסים של
+    `FloatingProjectTasksView`.
+
+ההפניות בהמשך המסמך לזרמים הישנים (Design / Review / Opinion וכו') ול-.NET 8
+נשארו כקונטקסט היסטורי בלבד.
+
+---
+
 ## מה ניתחתי
 
 קראתי ועיבדתי את כל המסמכים הבאים:

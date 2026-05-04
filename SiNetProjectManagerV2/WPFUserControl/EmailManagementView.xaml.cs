@@ -61,6 +61,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 {
                     EmailContextPanel.DataContext = _emailContextVm;
                     _emailContextVm.FollowUpRequested = HandleFollowUpAsync;
+                    _emailContextVm.ActionExecuted += OnEmailContextActionExecuted;
                 }
             }
 
@@ -206,6 +207,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
             if (_emailContextVm != null)
             {
                 _emailContextVm.FollowUpRequested = null;
+                _emailContextVm.ActionExecuted -= OnEmailContextActionExecuted;
             }
 
             // Unregister live view from PDF renderer
@@ -220,6 +222,43 @@ namespace SiNetProjectManagerV2.WPFUserControl
             {
                 WebView2Helper.CleanupWebView(CalendarWebView);
             }
+        }
+
+        /// <summary>
+        /// Surfaces a prominent notification after an email action is executed,
+        /// so the user gets clear feedback even when the action only reports through
+        /// the inline status text in <see cref="EmailContextPanel"/>.
+        /// </summary>
+        private void OnEmailContextActionExecuted(ActionResult result)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => OnEmailContextActionExecuted(result));
+                return;
+            }
+
+            var owner = Window.GetWindow(this);
+            string title;
+            MessageBoxImage icon;
+
+            if (result.IsCompleted)
+            {
+                title = "הפעולה בוצעה";
+                icon = MessageBoxImage.Information;
+            }
+            else if (result.RequiresFollowUp)
+            {
+                // Follow-up dialogs handle their own UX — skip the toast.
+                return;
+            }
+            else
+            {
+                title = "הפעולה לא הושלמה";
+                icon = MessageBoxImage.Warning;
+            }
+
+            MessageBox.Show(owner, result.Message ?? string.Empty, title,
+                MessageBoxButton.OK, icon);
         }
 
         /// <summary>

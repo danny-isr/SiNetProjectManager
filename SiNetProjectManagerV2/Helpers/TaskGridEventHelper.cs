@@ -39,12 +39,14 @@ public static class TaskGridEventHelper
         out ProjectAssignment? task,
         out ProjectAssignmentStatus? newStatus,
         out int? oldStatusId,
-        out string? actionNote)
+        out string? actionNote,
+        out int? taskResultId)
     {
         task = null;
         newStatus = null;
         oldStatusId = null;
         actionNote = null;
+        taskResultId = null;
 
         if (combo.Tag is not ProjectAssignment t) return StatusChangeResult.NoChange;
         if (e.AddedItems.Count == 0) return StatusChangeResult.NoChange;
@@ -77,6 +79,22 @@ public static class TaskGridEventHelper
                 return StatusChangeResult.Cancelled;
 
             actionNote = dialog.ActionNote;
+        }
+
+        // Detect closing transition (open → closed) and prompt for an optional TaskResult
+        // so workflow rules can branch on the recorded business outcome.
+        bool wasOpen = task.AssignmentStatus?.IsOpen ?? true;
+        bool willBeClosed = !newStatus.IsOpen;
+
+        if (wasOpen && willBeClosed)
+        {
+            var picker = new TaskResultPickerDialog { Owner = ownerWindow };
+            var pickerResult = picker.ShowDialog();
+
+            if (pickerResult != true)
+                return StatusChangeResult.Cancelled;
+
+            taskResultId = picker.SelectedResult?.Id;
         }
 
         return StatusChangeResult.Commit;

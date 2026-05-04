@@ -1,4 +1,4 @@
-<UserControl x:Class="SiNetProjectManagerV2.WPFUserControl.WorkflowDesignerView"
+﻿<UserControl x:Class="SiNetProjectManagerV2.WPFUserControl.WorkflowDesignerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -656,7 +656,7 @@
                                                             </StackPanel.Style>
                                                             <Border Background="#E3F2FD" CornerRadius="3" Padding="5" Margin="0,0,0,2">
                                                                 <StackPanel>
-                                                                    <TextBlock Text="סוג טיוק:" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                                                                    <TextBlock Text="סוג תיוק:" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2"/>
                                                                     <ComboBox ItemsSource="{Binding Source={StaticResource EmailFileTypeValues}}"
                                                                               SelectedItem="{Binding Properties.EmailFileType}"
                                                                               FontSize="11" Margin="0,0,0,4">
@@ -895,13 +895,39 @@
                                                             </ComboBox>
                                                         </DockPanel>
 
-                                                        <!-- Row 1: Config JSON -->
-                                                        <TextBlock Grid.Row="1" Text="הגדרות (JSON):" FontSize="10" Opacity="0.7" Margin="0,0,0,2"/>
+                                                        <!-- Row 1: Config hint per action type -->
+                                                        <TextBlock Grid.Row="1" FontSize="10" Opacity="0.7" Margin="0,0,0,2">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="הגדרות (JSON):"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding ActionType}" Value="SetProjectStatus">
+                                                                            <Setter Property="Text" Value='הגדרות: {"code":"Active"}  — קודי ProjectStatus'/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ActionType}" Value="RecordTaskResult">
+                                                                            <Setter Property="Text" Value='הגדרות: {"code":"QuoteApprovedByClient"}  — קודי TaskResult'/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ActionType}" Value="SetBillingPending">
+                                                                            <Setter Property="Text" Value="ללא הגדרות נדרשות (משאיר ריק)"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ActionType}" Value="CloseProject">
+                                                                            <Setter Property="Text" Value='הגדרות (אופציונלי): {"reason":"..."}'/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ActionType}" Value="SendNotification">
+                                                                            <Setter Property="Text" Value='הגדרות: {"template":"...","to":"..."}'/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ActionType}" Value="StartSubWorkflow">
+                                                                            <Setter Property="Text" Value='הגדרות: {"workflowCode":"..."}'/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
                                                         <TextBox Grid.Row="2"
                                                                  Text="{Binding ConfigJson, UpdateSourceTrigger=PropertyChanged}"
                                                                  FontFamily="Consolas" FontSize="10"
                                                                  AcceptsReturn="True" Height="30" TextWrapping="Wrap"
-                                                                 ToolTip="JSON קונפיגורציה (למשל: template, parameters)"/>
+                                                                 ToolTip="JSON קונפיגורציה לפי סוג הפעולה"/>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>

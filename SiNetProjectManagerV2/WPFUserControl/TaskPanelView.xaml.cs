@@ -105,7 +105,7 @@ public partial class TaskPanelView : UserControl
 
         var result = Helpers.TaskGridEventHelper.ProcessStatusChange(
             e, combo, Window.GetWindow(this),
-            out var task, out var newStatus, out var oldStatusId, out var actionNote);
+            out var task, out var newStatus, out var oldStatusId, out var actionNote, out var taskResultId);
 
         if (result == Helpers.TaskGridEventHelper.StatusChangeResult.NoChange)
             return;
@@ -119,7 +119,7 @@ public partial class TaskPanelView : UserControl
         _isSaving = true;
         try
         {
-            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote);
+            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote, taskResultId);
         }
         catch (Exception ex)
         {

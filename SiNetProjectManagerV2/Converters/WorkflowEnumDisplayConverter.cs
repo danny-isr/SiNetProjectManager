@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows.Data;
 using SiNetSQL.Models;
@@ -40,6 +40,10 @@ public class WorkflowEnumDisplayConverter : IValueConverter
             WorkflowTransitionActionType.ClosePreviousStageTasks => "סגור משימות שלב קודם",
             WorkflowTransitionActionType.SendNotification => "שלח התראה",
             WorkflowTransitionActionType.StartSubWorkflow => "הפעל תת-תהליך",
+            WorkflowTransitionActionType.SetProjectStatus => "עדכן סטטוס פרויקט",
+            WorkflowTransitionActionType.RecordTaskResult => "רשום תוצאת משימה",
+            WorkflowTransitionActionType.SetBillingPending => "ממתין לחיוב",
+            WorkflowTransitionActionType.CloseProject => "סגור פרויקט",
 
             // SubWorkflow wait modes
             WorkflowSubWorkflowWaitMode.WaitForCompletion => "המתן לסיום",
@@ -49,7 +53,7 @@ public class WorkflowEnumDisplayConverter : IValueConverter
             WorkflowStartTriggerSource.ManualStart => "🖱️ הפעלה ידנית",
             WorkflowStartTriggerSource.ProjectCreated => "📁 פרויקט נוצר",
             WorkflowStartTriggerSource.ProjectTypeAssigned => "📋 סוג פרויקט הוגדר",
-            WorkflowStartTriggerSource.EmailFiled => "📧 טיוק מייל",
+            WorkflowStartTriggerSource.EmailFiled => "📧 תיוק מייל",
             WorkflowStartTriggerSource.ParentWorkflow => "🔄 תהליך אב (SubWorkflow)",
             WorkflowStartTriggerSource.ScheduledTimer => "⏰ טיימר מתוזמן",
             WorkflowStartTriggerSource.ApiCall => "🔌 קריאת API",

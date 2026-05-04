@@ -335,8 +335,10 @@ public sealed class MigrationTaskService
                 }
 
                 // ═══ Step D: Build title + explicit duplicate check ═══
-                // Title MUST be globally unique (DB constraint ProjectAssignment_TitleIndex
-                // is on Title alone), so we embed the ProjectId in the title.
+                // Title is no longer DB-unique (the unique constraint moved to the
+                // (ProjectId, AssignedToId, TaskTypeId, ParentAssignmentId) filtered index),
+                // but we still keep titles distinct per project to make migration runs idempotent
+                // and to give each migrated row a stable, human-readable identifier.
                 var reportNum = originalRow.ReportNumber?.Trim() ?? string.Empty;
                 var title = !string.IsNullOrWhiteSpace(reportNum)
                     ? $"{MigrationTaskTypeName} {pId} — ביקורת {reportNum}"

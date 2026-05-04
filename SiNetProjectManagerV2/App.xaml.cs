@@ -223,6 +223,9 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService>();
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskBehaviorSeedService>();
 
+            // Smart Tasks: Transient (work-target completion + parent-task aggregation)
+            services.AddTransient<SiNetSQL.Services.SmartTasks.SmartTaskService>();
+
             // Email Context Services: Transient (analyze email → business context → actions)
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();

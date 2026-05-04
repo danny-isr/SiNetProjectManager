@@ -125,21 +125,19 @@
             <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
             <!-- TAB 3: POLICY (שיוך לסוגי פרויקט)                       -->
             <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-            <TabItem Header="⚙️ שיוך תהליכים לסוגי פרויקט" x:Name="PolicyTab">
+            <TabItem Header="⚙️ מדיניות פר-סוג-פרויקט" x:Name="PolicyTab">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- Header -->
                     <Border Grid.Row="0" Background="#E3F2FD" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                        <TextBlock Text="בחר סוג פרויקט משמאל, וסמן את תהליכי העבודה המותרים עבורו מימין. סימון ⭐ = ברירת מחדל."
+                        <TextBlock Text="בחר סוג פרויקט משמאל, ובחר לשונית מימין: תהליכים מותרים, שלבים פעילים, תחומים פעילים."
                                    TextWrapping="Wrap" Foreground="#1565C0" FontSize="12"/>
                     </Border>
 
-                    <!-- Two panels -->
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="240"/>
@@ -147,7 +145,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Left: ProjectType list -->
+                        <!-- Left: ProjectType list (shared) -->
                         <Border Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -186,7 +184,7 @@
                         <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center"
                                       VerticalAlignment="Stretch" Background="Transparent"/>
 
-                        <!-- Right: Workflow checklist -->
+                        <!-- Right: TabControl with 3 sub-tabs -->
                         <Border Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -200,55 +198,200 @@
                                                FontWeight="Bold" FontSize="13"/>
                                 </Border>
 
-                                <ListBox Grid.Row="1"
-                                         x:Name="PolicyWorkflowListBox"
-                                         BorderThickness="0" Padding="4"
-                                         SelectionMode="Single">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="2,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
+                                <TabControl Grid.Row="1" x:Name="PolicySubTabs" Margin="2"
+                                            SelectionChanged="PolicySubTabs_SelectionChanged">
 
-                                                <CheckBox Grid.Column="0"
-                                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                                          Checked="PolicyCheckBox_Changed"
-                                                          Unchecked="PolicyCheckBox_Changed"
-                                                          VerticalAlignment="Center"/>
+                                    <!-- Sub-tab 1: Allowed Workflows -->
+                                    <TabItem Header="תהליכים מותרים">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
 
-                                                <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding DefinitionName}" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding DefinitionDescription}"
-                                                               Foreground="Gray" FontSize="11"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
+                                            <ListBox Grid.Row="0"
+                                                     x:Name="PolicyWorkflowListBox"
+                                                     BorderThickness="0" Padding="4"
+                                                     SelectionMode="Single">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="2,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
 
-                                                <ToggleButton Grid.Column="2"
-                                                              IsChecked="{Binding IsDefault, Mode=TwoWay}"
-                                                              Content="⭐" ToolTip="ברירת מחדל"
-                                                              FontSize="14" Width="32" Height="28"
-                                                              Margin="4,0,0,0"
-                                                              IsEnabled="{Binding IsEnabled}"
-                                                              Checked="PolicyDefaultToggle_Changed"
-                                                              Unchecked="PolicyDefaultToggle_Changed"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                                            <CheckBox Grid.Column="0"
+                                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                                      Checked="PolicyCheckBox_Changed"
+                                                                      Unchecked="PolicyCheckBox_Changed"
+                                                                      VerticalAlignment="Center"/>
+
+                                                            <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding DefinitionName}" FontWeight="SemiBold"/>
+                                                                <TextBlock Text="{Binding DefinitionDescription}"
+                                                                           Foreground="Gray" FontSize="11"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+
+                                                            <ToggleButton Grid.Column="2"
+                                                                          IsChecked="{Binding IsDefault, Mode=TwoWay}"
+                                                                          Content="⭐" ToolTip="ברירת מחדל"
+                                                                          FontSize="14" Width="32" Height="28"
+                                                                          Margin="4,0,0,0"
+                                                                          IsEnabled="{Binding IsEnabled}"
+                                                                          Checked="PolicyDefaultToggle_Changed"
+                                                                          Unchecked="PolicyDefaultToggle_Changed"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal"
+                                                        HorizontalAlignment="Left" Margin="6,8,0,6">
+                                                <Button Content="💾 שמור תהליכים מותרים" Padding="14,6"
+                                                        Background="#C8E6C9" BorderBrush="#66BB6A"
+                                                        FontWeight="Bold" Click="PolicySave_Click"
+                                                        ToolTip="שמור את שיוך התהליכים לסוג הפרויקט"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </TabItem>
+
+                                    <!-- Sub-tab 2: Active Stages per ProjectType -->
+                                    <TabItem Header="שלבים פעילים">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Border Grid.Row="0" Background="#FFF3E0" Padding="8,6" Margin="4">
+                                                <TextBlock TextWrapping="Wrap" Foreground="#E65100" FontSize="11"
+                                                           Text="הפעלה/השבתה של שלבי PlanningWorkflow פר-סוג-פרויקט. ✓ פעיל = השלב יופיע בתהליך לסוג זה. 🔒 חובה = השלב לא ניתן לדילוג."/>
+                                            </Border>
+
+                                            <ListBox Grid.Row="1"
+                                                     x:Name="PolicyStagesListBox"
+                                                     BorderThickness="0" Padding="4">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="2,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <CheckBox Grid.Column="0"
+                                                                      IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                                      ToolTip="פעיל לסוג פרויקט זה"
+                                                                      Checked="PolicyStageActive_Changed"
+                                                                      Unchecked="PolicyStageActive_Changed"
+                                                                      VerticalAlignment="Center"/>
+
+                                                            <CheckBox Grid.Column="1"
+                                                                      IsChecked="{Binding IsRequired, Mode=TwoWay}"
+                                                                      Content="🔒"
+                                                                      ToolTip="חובה (לא ניתן לדילוג)"
+                                                                      Margin="8,0,0,0"
+                                                                      IsEnabled="{Binding IsActive}"
+                                                                      Checked="PolicyStageRequired_Changed"
+                                                                      Unchecked="PolicyStageRequired_Changed"
+                                                                      VerticalAlignment="Center"/>
+
+                                                            <StackPanel Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StageName}" FontWeight="SemiBold"/>
+                                                                <TextBlock Text="{Binding StageCode}" Foreground="Gray"
+                                                                           FontSize="10"/>
+                                                            </StackPanel>
+
+                                                            <TextBlock Grid.Column="3" Text="{Binding SortOrder, StringFormat='#{0}'}"
+                                                                       Foreground="Gray" FontSize="11"
+                                                                       VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+
+                                            <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                                        HorizontalAlignment="Left" Margin="6,8,0,6">
+                                                <Button Content="💾 שמור שלבים" Padding="14,6"
+                                                        Background="#C8E6C9" BorderBrush="#66BB6A"
+                                                        FontWeight="Bold" Click="PolicyStagesSave_Click"
+                                                        ToolTip="שמור את הגדרות השלבים לסוג הפרויקט"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </TabItem>
+
+                                    <!-- Sub-tab 3: Active Disciplines per ProjectType -->
+                                    <TabItem Header="תחומים פעילים">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Border Grid.Row="0" Background="#FFF3E0" Padding="8,6" Margin="4">
+                                                <TextBlock TextWrapping="Wrap" Foreground="#E65100" FontSize="11"
+                                                           Text="תחומי תכנון (Disciplines) הם TaskTypes שמשויכים לסוג פרויקט. ✓ פעיל = ייווצר/יוצע לפרויקטים מסוג זה."/>
+                                            </Border>
+
+                                            <ListBox Grid.Row="1"
+                                                     x:Name="PolicyDisciplinesListBox"
+                                                     BorderThickness="0" Padding="4">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="2,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <CheckBox Grid.Column="0"
+                                                                      IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                                      ToolTip="פעיל לסוג פרויקט זה"
+                                                                      Checked="PolicyDisciplineActive_Changed"
+                                                                      Unchecked="PolicyDisciplineActive_Changed"
+                                                                      VerticalAlignment="Center"/>
+
+                                                            <CheckBox Grid.Column="1"
+                                                                      IsChecked="{Binding IsRequired, Mode=TwoWay}"
+                                                                      Content="🔒"
+                                                                      ToolTip="חובה"
+                                                                      Margin="8,0,0,0"
+                                                                      IsEnabled="{Binding IsActive}"
+                                                                      Checked="PolicyDisciplineRequired_Changed"
+                                                                      Unchecked="PolicyDisciplineRequired_Changed"
+                                                                      VerticalAlignment="Center"/>
+
+                                                            <StackPanel Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding DisciplineName}" FontWeight="SemiBold"/>
+                                                                <TextBlock Text="{Binding DisciplineCode}" Foreground="Gray"
+                                                                           FontSize="10"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+
+                                            <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                                        HorizontalAlignment="Left" Margin="6,8,0,6">
+                                                <Button Content="💾 שמור תחומים" Padding="14,6"
+                                                        Background="#C8E6C9" BorderBrush="#66BB6A"
+                                                        FontWeight="Bold" Click="PolicyDisciplinesSave_Click"
+                                                        ToolTip="שמור את הגדרות התחומים לסוג הפרויקט"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </TabItem>
+                                </TabControl>
                             </Grid>
                         </Border>
                     </Grid>
-
-                    <!-- Save button -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
-                        <Button Content="💾 שמור שיוכים" Padding="14,6"
-                                Background="#C8E6C9" BorderBrush="#66BB6A" FontWeight="Bold"
-                                Click="PolicySave_Click"
-                                ToolTip="שמור את כל השינויים"/>
-                    </StackPanel>
                 </Grid>
             </TabItem>
 

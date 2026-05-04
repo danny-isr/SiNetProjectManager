@@ -1,9 +1,32 @@
 # 🏗️ SiNet Project Manager — Technical Architecture Design
 
-> **גרסה:** 1.0 | **תאריך:** יוני 2026  
+> **גרסה:** 1.1 | **תאריך:** יוני 2026  
 > **סוג מסמך:** אפיון טכני ארכיטקטוני  
 > **קהל יעד:** מפתחים, ארכיטקטים, מנהלי פרויקט טכניים  
-> **סטטוס:** טיוטה לאישור
+> **סטטוס:** מתואם לארכיטקטורה הקנונית הנוכחית
+
+---
+
+## 🔄 עדכון אלינמנט (Workflow Canonical Model)
+
+מסמך זה מתואם למצב הנוכחי של ה-codebase לאחר ניקוי הזרם הישן והמעבר ל-PlanningWorkflow:
+
+- **WorkflowDefinition קנוני יחיד:** `PlanningWorkflow` עם שלבי `PLN.*`. הזרמים הישנים
+  (Design / Review / Opinion / Intake / ScopeExpansion) הוסרו.
+- **TFM:** הפרויקט עבר ל-.NET 10. כל הפניה ל-.NET 8 במסמך זה תקפה כהקשר היסטורי בלבד.
+- **ProjectStatus היחיד שעוקבים אחריו:** Lead/QuotePreparation/.../Active/.../Closed.
+  אין שימוש ב-`Completed`. שינויי סטטוס נעשים אך ורק דרך פעולות מעבר במנוע
+  (`SetProjectStatus`, `SetBillingPending`, `CloseProject`).
+- **TaskResult ולא TaskStatus:** משימות נסגרות עם `RecordTaskResult` (CompletedSuccess /
+  AuthorityApproved / וכו'). אין מיפוי גלובלי של "סטטוס משימה" כסטטוס פרויקט.
+- **פעולות מעבר נתמכות (WorkflowTransitionActionType):**
+  `SetProjectStatus`, `RecordTaskResult`, `SetBillingPending`, `CloseProject`, וכו'.
+- **Per-ProjectType policy:** מופעל דרך seed (`SeedProjectTypeWorkflowStagesAsync`,
+  `SeedProjectTypeDisciplinesAsync`) **וגם** דרך UI ב-`WorkflowManagementWindow → Policy`
+  עם 3 לשוניות: תהליכים מותרים / שלבים פעילים / תחומים פעילים.
+- **WorkflowManagementWindow** הוא ה-hub היחיד לניהול תהליכים (Builder / Designer /
+  Policy / Dashboard / Behaviors / Help). חלונות `WorkflowBuilderWindow` ו-
+  `WorkflowPolicyWindow` הוסרו כיתירים.
 
 ---
 

@@ -301,6 +301,14 @@
         <!-- Filter bar -->
         <Border x:Name="FilterBar" Grid.Row="1" Background="#E3F2FD" Padding="10,6">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Task scope toggle (only meaningful when a project is active) -->
+                <CheckBox Content="🌐 כל המשימות"
+                          IsChecked="{Binding ShowAllProjects}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,0"
+                          ToolTip="הצג משימות מכל הפרויקטים מבלי לבטל את בחירת הפרויקט הפעיל"
+                          Visibility="{Binding HasActiveProject, Converter={StaticResource BoolToVisibility}}"/>
+
                 <CheckBox Content="הצג גם משימות סגורות"
                           IsChecked="{Binding IncludeClosedTasks}"
                           VerticalAlignment="Center"/>
@@ -420,10 +428,41 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <!-- Row 0: TaskType + Priority + Status Badge -->
-                            <Grid Grid.Row="0">
+                            <!-- Row 0: Created date + Project number (if any) -->
+                            <Grid Grid.Row="0" Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           FontSize="11"
+                                           Foreground="#666"
+                                           Text="{Binding Created, StringFormat='📅 {0:dd/MM/yyyy}'}"/>
+                                <TextBlock Grid.Column="1"
+                                           Margin="8,0,0,0"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="#1565C0"
+                                           TextTrimming="CharacterEllipsis"
+                                           Text="{Binding Project.NameAndNumber, StringFormat='📁 {0}'}"
+                                           ToolTip="{Binding Project.NameAndNumber}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ProjectId}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <!-- Row 1: TaskType + Priority + Status Badge -->
+                            <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -469,7 +508,7 @@
                             </Grid>
 
                             <!-- Row 2: Assigned Employee + Due Date -->
-                            <Grid Grid.Row="1" Margin="0,4,0,0">
+                            <Grid Grid.Row="2" Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -495,8 +534,25 @@
                                 </TextBlock>
                             </Grid>
 
-                            <!-- Row 2: Body/Description (shown when selected, scrollable for long text) -->
-                            <TextBlock Grid.Row="2"
+                            <!-- Last business result (TaskResultDefinition) - shown only when set -->
+                            <TextBlock Margin="0,2,0,0"
+                                       FontSize="11"
+                                       Foreground="#2E7D32"
+                                       Text="{Binding LastTaskResult.Name, StringFormat='תוצאה: {0}'}"
+                                       ToolTip="{Binding LastTaskResult.Name}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LastTaskResult}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <!-- Row 3: Body/Description (shown when selected, scrollable for long text) -->
+                            <TextBlock Grid.Row="3"
                                        Text="{Binding Body}"
                                        Opacity="0.7"
                                        TextWrapping="Wrap"
@@ -506,8 +562,8 @@
                                        ToolTip="{Binding Body}"
                                        Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource BoolToVisibility}}"/>
 
-                            <!-- Row 3: Notes Preview -->
-                            <TextBlock Grid.Row="3"
+                            <!-- Row 4: Notes Preview -->
+                            <TextBlock Grid.Row="4"
                                        Text="{Binding RecentNotesSummary}"
                                        Opacity="0.7"
                                        Padding="0,3,0,0"
@@ -532,8 +588,8 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- Row 4: Status change + Workflow action (visible when selected) -->
-                            <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,6,0,0"
+                            <!-- Row 5: Status change + Workflow action (visible when selected) -->
+                            <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,6,0,0"
                                         Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource BoolToVisibility}}">
                                 <ComboBox ItemsSource="{Binding DataContext.AllowedStatuses, RelativeSource={RelativeSource AncestorType=Window}}"
                                           SelectedValue="{Binding StatusId, Mode=TwoWay}"
@@ -581,6 +637,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto" MaxHeight="130"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -779,6 +836,37 @@
                             Command="{Binding AddNoteCommand}"
                             Style="{StaticResource CardActionButton}"
                             VerticalAlignment="Bottom"
+                            Margin="6,0,0,0"
+                            Padding="8,4"/>
+                </Grid>
+
+                <!-- Reassign task to another worker in the same group -->
+                <Grid Grid.Row="6" Margin="0,6,0,0"
+                      Visibility="{Binding HasSelectedTask, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="העבר לעובד:"
+                               VerticalAlignment="Center"
+                               Margin="0,0,6,0"
+                               Foreground="#555"/>
+
+                    <ComboBox Grid.Column="1"
+                              x:Name="ReassignComboBox"
+                              ItemsSource="{Binding AvailableAssignees}"
+                              DisplayMemberPath="Name"
+                              MinWidth="160"
+                              VerticalAlignment="Center"/>
+
+                    <Button Grid.Column="2"
+                            Content="העבר"
+                            Command="{Binding ReassignSelectedTaskCommand}"
+                            CommandParameter="{Binding SelectedItem, ElementName=ReassignComboBox}"
+                            Style="{StaticResource CardActionButton}"
                             Margin="6,0,0,0"
                             Padding="8,4"/>
                 </Grid>

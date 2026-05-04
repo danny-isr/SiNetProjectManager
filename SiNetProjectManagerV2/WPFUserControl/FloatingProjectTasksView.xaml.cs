@@ -98,7 +98,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         var result = Helpers.TaskGridEventHelper.ProcessStatusChange(
             e, combo, this,
-            out var task, out var newStatus, out var oldStatusId, out var actionNote);
+            out var task, out var newStatus, out var oldStatusId, out var actionNote, out var taskResultId);
 
         if (result == Helpers.TaskGridEventHelper.StatusChangeResult.NoChange)
             return;
@@ -112,7 +112,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         _isSaving = true;
         try
         {
-            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote);
+            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote, taskResultId);
         }
         catch (Exception ex)
         {
@@ -168,8 +168,18 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             case "FileAttachments":
+                // Open a dedicated window with this specific email + its attachments
+                // so the user can file the attachments without leaving the task context.
+                var fileWindow = new Dialogs.EmailPreviewWindow(emailId)
+                {
+                    Owner = mainWindow ?? Application.Current.MainWindow,
+                    Title = $"📎 תיוק קבצים — מייל #{emailId}"
+                };
+                fileWindow.Show();
+                break;
+
             default:
-                // Navigate to the source email so user can tag/file attachments
+                // Fallback: navigate to the source email in the inbox
                 mainWindow?.NavigateToEmail(emailId);
                 mainWindow?.Activate();
                 break;

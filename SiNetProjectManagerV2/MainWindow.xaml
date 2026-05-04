@@ -55,6 +55,11 @@
                 <Separator Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🔍 ניתוח DWF (Stamp Analysis)" Click="OpenDwfAnalysis_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
+                <Separator x:Name="DevResetSeparator" Visibility="Collapsed"/>
+                <MenuItem x:Name="DevResetMenuItem"
+                          Header="🧨 איפוס נתוני פיתוח (DEBUG בלבד)"
+                          Click="DevResetData_Click"
+                          Visibility="Collapsed"/>
             </MenuItem>
 
             <!-- ProjectManagers -->
