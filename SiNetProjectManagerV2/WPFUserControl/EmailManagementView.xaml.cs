@@ -292,7 +292,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                     break;
 
                 case ActionFollowUp.ProjectPicker:
-                    await HandleProjectPickerAsync(owner, emailMessageId);
+                    await HandleProjectPickerAsync(owner, emailMessageId, result);
                     break;
 
                 // ??? Delegatable actions — go through AssignActionDialog ???
@@ -552,7 +552,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// Opens the ProjectSelectorDialog. When the user picks a project,
         /// updates the email's ProjectId in the DB and re-triggers context analysis.
         /// </summary>
-        private async Task HandleProjectPickerAsync(Window? owner, int emailMessageId)
+        private async Task HandleProjectPickerAsync(Window? owner, int emailMessageId, ActionResult? pendingResult = null)
         {
             var dialog = new ProjectSelectorDialog();
             if (owner != null) dialog.Owner = owner;
@@ -570,6 +570,13 @@ namespace SiNetProjectManagerV2.WPFUserControl
                         msg.UpdatedAtUtc = DateTime.UtcNow;
                         await db.SaveChangesAsync(CancellationToken.None);
                     }
+                }
+
+                // Surface the picked project to the caller so the action can be retried
+                // with a known ProjectId (e.g. CreateNewReview ? OpenReviewProject task).
+                if (pendingResult != null)
+                {
+                    pendingResult.OutputData["ProjectId"] = project.Id;
                 }
 
                 // Re-analyze after association so context chips update
