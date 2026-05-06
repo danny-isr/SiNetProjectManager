@@ -182,13 +182,38 @@ not "no events".
 ## Troubleshooting
 
 ### Nothing in the central share
-1. Verify the share `\\si-win-2k19\AutoCAD Data\log` is reachable as the
-   running process's identity (LOCAL SYSTEM for AccService — make sure the
-   service account has write rights).
-2. Check the per-app local file — it always works even when the central share
-   is down and will record write failures.
+1. **First, look at the LOCAL log** for the app — it always works even when
+   the central share is down. At startup every app emits two diagnostic
+   lines that pinpoint the cause:
+   - `<App> log targets — local file: …, central file: …, central enabled: True/False.`
+   - `<App>: Central log sink DISABLED — probe failed for '<unc>'. <ExceptionType>: <message>` (only when the probe fails).
+   The exception type is the diagnosis:
+   - `UnauthorizedAccessException` → ACL / share permissions / **UAC token filtering** (see below).
+   - `IOException: The network path was not found` → host can't reach `\\si-win-2k19` (DNS/firewall/SMB).
+   - `IOException: Logon failure` → no cached credentials for that account; use `cmdkey` or run as a domain user.
+2. Verify the share `\\si-win-2k19\AutoCAD Data\log` is reachable as the
+   running process's identity. Quick probe from that account's session:
+   ```powershell
+   "probe" | Out-File '\\si-win-2k19\AutoCAD Data\log\<App>\<Machine>\<User>\probe.txt'
+   ```
 3. Make sure `Logging.<App>.CentralLevel` isn't set to a level higher than
    what your code emits.
+
+### `UnauthorizedAccessException` from a Scheduled Task (SyncEngine, etc.)
+If the offending account *does* have Modify rights on the share when you log
+in interactively, but the Scheduled Task still gets `Access denied`, the
+cause is almost always **Windows UAC token filtering**:
+
+> A standard scheduled task receives the account's *filtered* (non-elevated)
+> token. Group memberships that grant the share permission can be stripped
+> from that token, so the task fails to write even though the same user can
+> from Explorer.
+
+**Fix:** open the task in Task Scheduler → **General** tab → tick
+**"Run with highest privileges"** → OK. The task now runs with the full
+(elevated) token and the central sink writes immediately. This is the
+recommended setting for SyncEngine because it also needs to restore SQL
+backups (`--monthly`) which requires elevation anyway.
 
 ### Levels not applying
 1. Edit the value in **Management Settings → Logging** (not in

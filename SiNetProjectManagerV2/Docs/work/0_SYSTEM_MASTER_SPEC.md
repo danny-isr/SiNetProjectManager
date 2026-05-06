@@ -19,6 +19,58 @@ The goal of this document is to allow **Copilot to implement the system directly
 
 ---
 
+## 🔄 2026 Alignment Notes (Workflow cleanup completed)
+
+The legacy multi-workflow taxonomy (Design / Review / Opinion / Intake / ScopeExpansion)
+has been **removed** in favor of a single canonical `PlanningWorkflow` definition with
+`PLN.*` stages. The following sections still reference older terms for context, but the
+implemented model is:
+
+- **WorkflowDefinition:** one canonical `PlanningWorkflow`. New projects default to it.
+- **WorkflowStageDefinition:** uses `PLN.*` stage codes. Per-ProjectType activation is
+  driven by `ProjectTypeWorkflowStage` and seeded via
+  `WorkflowSeedService.SeedProjectTypeWorkflowStagesAsync(...)`. It is also editable in
+  the UI via `WorkflowManagementWindow → Policy → "שלבים פעילים"`.
+- **Disciplines:** modeled as `ProjectTypeDiscipline` (TaskType per ProjectType) and
+  seeded via `WorkflowSeedService.SeedProjectTypeDisciplinesAsync(...)`. Editable in
+  `WorkflowManagementWindow → Policy → "תחומים פעילים"`.
+- **ProjectStatus:** the only canonical project state. There is no `Completed` status.
+  Status changes are done exclusively through transition actions (`SetProjectStatus`,
+  `SetBillingPending`, `CloseProject`).
+- **TaskResult:** task closure is recorded via `RecordTaskResult`; tasks no longer drive
+  project status.
+- **WorkflowTransitionActionType:** supported actions include `SetProjectStatus`,
+  `RecordTaskResult`, `SetBillingPending`, `CloseProject`.
+- **Target framework:** .NET 10 (the references to .NET 8 below are historical context).
+- **UI hub:** `WorkflowManagementWindow` is the single workflow administration window.
+  Standalone `WorkflowBuilderWindow` and `WorkflowPolicyWindow` were removed as duplicates.
+
+### 🆕 End-to-end automation hooks (post-cleanup)
+
+The runtime now wires the canonical workflow into the daily UI:
+
+- **Auto-start of `PlanningWorkflow`:** `WorkflowCreateProjectWindow` fire-and-forget calls
+  `WorkflowTaskOrchestrator.StartWorkflowAsync(...)` after a project is created from email,
+  so `PLN.Start` advances and the first stage tasks are generated automatically.
+- **Auto-advance on inline status change:** `TaskOperationHelper.UpdateTaskStatusInline(...)`
+  notifies `WorkflowTaskOrchestrator.CheckAndAutoAdvanceAsync(...)` for both
+  `AllRequiredTasksClosed` and `TaskStatusChanged` triggers.
+- **TaskResult capture at close:** when an inline status change closes a task,
+  `TaskGridEventHelper` opens `TaskResultPickerDialog` for an optional
+  `TaskResultDefinition`. The selected result is persisted on
+  `ProjectAssignment.LastTaskResultId` and on `ProjectAssignmentEvent.TaskResultId`,
+  threaded through `TaskService.ChangeTaskStatus(... taskResultId)`.
+- **`TaskResultEquals` branching:** `WorkflowTransitionEvaluator` evaluates
+  `TaskResultEquals` against `TransitionEvaluationContext.ChangedTaskResultCode`,
+  populated from the task's `LastTaskResult.Code`. Transition rules can therefore branch
+  on the recorded business outcome without any extra UI step.
+- **UI surfacing:** `TaskPanelView` shows a "תוצאה אחרונה" column and
+  `FloatingProjectTasksView` shows a green "תוצאה: ..." line on each task card when a
+  result has been recorded.
+
+
+---
+
 # 1. System Overview
 
 The system is an **internal engineering project management and execution platform**.

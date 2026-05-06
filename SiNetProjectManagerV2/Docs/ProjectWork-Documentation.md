@@ -6,6 +6,20 @@
 
 ---
 
+## 🔄 הערת אלינמנט
+
+מסמך זה מתאר את מסך ProjectWork ולא את מנוע ה-Workflow.
+לאחר ניקוי הקוד ב-2026:
+
+- TFM הנוכחי הוא **.NET 10**.
+- ניהול תהליכים נעשה רק דרך **`WorkflowManagementWindow`** (Builder / Visual Designer /
+  Policy / Dashboard / Behaviors / Help). אין יותר חלונות נפרדים של Builder/Policy.
+- ProjectStatus הוא הסטטוס הקנוני של הפרויקט; אין `Completed` כסטטוס פרויקט.
+- מסך "בעבודה 2" אינו משנה ProjectStatus או workflow stage — שינויים אלה נעשים
+  אך ורק דרך פעולות מעבר במנוע התהליכים.
+
+---
+
 ## 1. תיאור כללי
 
 מסך **"בעבודה 2"** (ProjectWorkView) הוא חלון העבודה המרכזי של המשתמש לניהול קבצי פרויקט.

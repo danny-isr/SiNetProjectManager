@@ -6,6 +6,7 @@ using SiNetProjectManagerV2.WPF_Window;
 using System.ComponentModel;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using WpfSiData.WPFUserControl;
@@ -13,7 +14,6 @@ using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiNetSQL.Data;
 using SiOffice.GoogleConnector;
-
 namespace SiNetProjectManagerV2
 {
     public partial class MainWindow : BaseWindow
@@ -30,6 +30,15 @@ namespace SiNetProjectManagerV2
 
             // Dynamic title: reflect the currently active project
             ActiveProjectContext.Instance.ActiveProjectChanged += OnActiveProjectChanged;
+
+#if DEBUG
+            // DEBUG-only dev data reset: visible only to allowed Windows users.
+            if (SiNetSQL.Services.DevDataResetService.IsCurrentUserAllowed())
+            {
+                DevResetMenuItem.Visibility = Visibility.Visible;
+                DevResetSeparator.Visibility = Visibility.Visible;
+            }
+#endif
         }
 
         private static string GetAppVersion()
@@ -432,5 +441,168 @@ namespace SiNetProjectManagerV2
         {
 
         }
+
+#if DEBUG
+        /// <summary>
+        /// DEBUG-only handler that wipes all data from the migration-introduced (new) tables.
+        /// Triple-gated:
+        ///   1. Compiled only in DEBUG builds.
+        ///   2. UI element only visible to allowed Windows users (see DevDataResetService).
+        ///   3. Requires explicit double-confirmation by the user.
+        /// </summary>
+        private async void DevResetData_Click(object sender, RoutedEventArgs e)
+        {
+            // Hard re-check at click time (defense in depth — the menu item could be made visible by mistake).
+            if (!SiNetSQL.Services.DevDataResetService.IsCurrentUserAllowed())
+            {
+                MessageBox.Show(
+                    $"פעולה זו אינה זמינה למשתמש הנוכחי ({SiNetSQL.Services.DevDataResetService.CurrentWindowsUser}).",
+                    "גישה נדחתה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            // Authorization gate: must be FullAccess (Role >= Management). Checked here
+            // BEFORE the user is asked to confirm, so they get a clean message.
+            if (!SiNetSQL.Services.CurrentUserContext.Instance.IsFullAccess)
+            {
+                MessageBox.Show(
+                    "פעולה זו דורשת הרשאת Full Access (Role >= Management).",
+                    "גישה נדחתה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            string dbName;
+            try
+            {
+                var factoryPeek = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+                using var ctxPeek = factoryPeek.CreateDbContext();
+                dbName = ctxPeek.Database.GetDbConnection().Database;
+            }
+            catch
+            {
+                dbName = "(unknown)";
+            }
+
+            // First confirmation — explicit warning with target DB name.
+            var firstConfirm = MessageBox.Show(
+                $"⚠️ אזהרה ⚠️\n\n" +
+                $"פעולה זו תמחק את כל המידע מכל הטבלאות החדשות שנוצרו במיגריישנים\n" +
+                $"(מיילים, ACC, סטטוסים, החלטות, ביקורות, תהליכי עבודה, משימות, קבוצות וכו').\n\n" +
+                $"מסד הנתונים: {dbName}\n" +
+                $"משתמש: {SiNetSQL.Services.DevDataResetService.CurrentWindowsUser}\n\n" +
+                $"האם להמשיך?",
+                "איפוס נתוני פיתוח",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (firstConfirm != MessageBoxResult.Yes)
+                return;
+
+            // Second confirmation — final.
+            var secondConfirm = MessageBox.Show(
+                $"זו פעולה בלתי הפיכה.\n\nלאשר מחיקה סופית של כל הנתונים מהטבלאות החדשות במסד '{dbName}'?",
+                "אישור סופי",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Stop,
+                MessageBoxResult.No);
+
+            if (secondConfirm != MessageBoxResult.Yes)
+                return;
+
+            // Third question — should the Bootstrap / SystemSettings table also be wiped?
+            // Default = No: keep configuration (ACC admin email, stamp paths, default project IDs,
+            // logging, etc.) so the app stays usable after the reset.
+            var wipeBootstrap = MessageBox.Show(
+                "האם למחוק גם את טבלת ה-Bootstrap / SystemSettings (הגדרות מערכת)?\n\n" +
+                "• ברירת מחדל: לא — ההגדרות יישמרו.\n" +
+                "• בחירה ב-'כן' תמחק גם הגדרות מערכת.",
+                "שמירת Bootstrap",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+
+            bool preserveSystemSettings = wipeBootstrap != MessageBoxResult.Yes;
+
+            try
+            {
+                Mouse.OverrideCursor = Cursors.Wait;
+
+                var factory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+                var report = await SiNetSQL.Services.DevDataResetService.ResetAsync(factory, preserveSystemSettings);
+
+                var summary =
+                    $"איפוס הסתיים.\n\n" +
+                    $"מסד נתונים: {report.DatabaseName}\n" +
+                    $"טבלאות שעובדו: {report.TableResults.Count}\n" +
+                    $"שורות שנמחקו: {report.TotalRowsDeleted}\n" +
+                    $"כשלים: {report.FailedTableCount}\n" +
+                    $"משך: {report.Duration.TotalSeconds:F1} שניות\n" +
+                    $"Bootstrap/SystemSettings: {(report.SystemSettingsPreserved ? "נשמר ✅" : "נמחק")}";
+
+                if (report.FailedTableCount > 0)
+                {
+                    var failed = string.Join("\n",
+                        report.TableResults.Where(r => r.Error != null).Select(r => $"• {r.Table}: {r.Error}"));
+                    summary += $"\n\nטבלאות שנכשלו:\n{failed}";
+                }
+
+                if (!string.IsNullOrEmpty(report.PostResetError))
+                {
+                    summary += $"\n\n⚠️ שגיאה בהפעלת FK מחדש: {report.PostResetError}";
+                }
+
+                if (report.SeedApplied)
+                {
+                    summary += "\n\n✅ נתוני סיד בסיסיים הוטענו מחדש.";
+                }
+                else if (!string.IsNullOrEmpty(report.SeedError))
+                {
+                    summary += $"\n\n⚠️ שגיאה בטעינת נתוני סיד: {report.SeedError}";
+                }
+
+                if (report.MappingsApplied)
+                {
+                    summary += "\n✅ מיפויי ProjectType↔TaskType / Status הוטענו מחדש.";
+                }
+                else if (!string.IsNullOrEmpty(report.MappingsError))
+                {
+                    summary += $"\n⚠️ שגיאה במיפויי ברירת מחדל: {report.MappingsError}";
+                }
+
+                if (report.WorkflowSeedApplied)
+                {
+                    summary += "\n✅ Workflow + UserGroups + הפעלות שלבים/דיסציפלינות הוטענו.";
+                }
+                else if (!string.IsNullOrEmpty(report.WorkflowSeedError))
+                {
+                    summary += $"\n⚠️ שגיאה בטעינת ה-Workflow: {report.WorkflowSeedError}";
+                }
+
+                MessageBox.Show(
+                    summary,
+                    "איפוס נתוני פיתוח — הסתיים",
+                    MessageBoxButton.OK,
+                    report.FailedTableCount > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "DevDataResetService failed");
+                MessageBox.Show(
+                    $"איפוס הנתונים נכשל:\n\n{ex.Message}",
+                    "שגיאה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+            }
+        }
+#endif
     }
 }

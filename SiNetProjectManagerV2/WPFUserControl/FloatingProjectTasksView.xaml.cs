@@ -27,6 +27,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         // Derived-specific subscription
         viewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
         viewModel.OpenWorkflowTaskRequested += OnOpenWorkflowTaskRequested;
+        viewModel.OpenTaskNavigationRequested += OnOpenTaskNavigationRequested;
 
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
@@ -79,6 +80,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         {
             vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
             vm.OpenWorkflowTaskRequested -= OnOpenWorkflowTaskRequested;
+            vm.OpenTaskNavigationRequested -= OnOpenTaskNavigationRequested;
         }
 
         base.OnClosed(e);
@@ -98,7 +100,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         var result = Helpers.TaskGridEventHelper.ProcessStatusChange(
             e, combo, this,
-            out var task, out var newStatus, out var oldStatusId, out var actionNote);
+            out var task, out var newStatus, out var oldStatusId, out var actionNote, out var taskResultId);
 
         if (result == Helpers.TaskGridEventHelper.StatusChangeResult.NoChange)
             return;
@@ -112,7 +114,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         _isSaving = true;
         try
         {
-            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote);
+            ViewModel.UpdateTaskStatusInline(task!, newStatus!, oldStatusId, actionNote, taskResultId);
         }
         catch (Exception ex)
         {
@@ -168,10 +170,70 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             case "FileAttachments":
+                // Open a dedicated window with this specific email + its attachments
+                // so the user can file the attachments without leaving the task context.
+                var fileWindow = new Dialogs.EmailPreviewWindow(emailId)
+                {
+                    Owner = mainWindow ?? Application.Current.MainWindow,
+                    Title = $"📎 תיוק קבצים — מייל #{emailId}"
+                };
+                fileWindow.Show();
+                break;
+
             default:
-                // Navigate to the source email so user can tag/file attachments
+                // Fallback: navigate to the source email in the inbox
                 mainWindow?.NavigateToEmail(emailId);
                 mainWindow?.Activate();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Resolver-driven open handler. Selects the host view based on
+    /// <see cref="SiNetSQL.Services.Tasks.TaskNavigationRequest.ComponentKey"/>.
+    /// Keeps existing legacy behavior intact for tasks that fall through to
+    /// <see cref="OnOpenWorkflowTaskRequested(int, string)"/>.
+    /// </summary>
+    private void OnOpenTaskNavigationRequested(SiNetSQL.Services.Tasks.TaskNavigationRequest request)
+    {
+        var mainWindow = Owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
+        var primaryEmailId = (int?)request.PrimaryWorkTargetEntityId;
+
+        switch (request.ComponentKey)
+        {
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectCreationFromEmail:
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.ReviewProjectSetupFromEmail:
+                if (primaryEmailId is int emailIdForCreate)
+                {
+                    var createWindow = new Dialogs.WorkflowCreateProjectWindow(
+                        emailIdForCreate, mainWindow ?? Application.Current.MainWindow);
+                    createWindow.ShowDialog();
+                }
+                break;
+
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.EmailFiling:
+                if (primaryEmailId is int emailIdForFiling)
+                {
+                    var fileWindow = new Dialogs.EmailPreviewWindow(emailIdForFiling)
+                    {
+                        Owner = mainWindow ?? Application.Current.MainWindow,
+                        Title = $"📎 תיוק קבצים — מייל #{emailIdForFiling}"
+                    };
+                    fileWindow.Show();
+                }
+                break;
+
+            default:
+                // No specialized host yet — navigate to the task's project (if any).
+                if (request.ProjectId is int projectId)
+                {
+                    mainWindow?.Activate();
+                }
+                else if (primaryEmailId is int fallbackEmailId)
+                {
+                    mainWindow?.NavigateToEmail(fallbackEmailId);
+                    mainWindow?.Activate();
+                }
                 break;
         }
     }

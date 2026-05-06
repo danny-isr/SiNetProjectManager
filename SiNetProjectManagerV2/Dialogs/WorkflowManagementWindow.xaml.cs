@@ -40,6 +40,71 @@ public sealed class PolicyProjectTypeItem : INotifyPropertyChanged
 }
 
 /// <summary>
+/// Represents a WorkflowStageDefinition activation row for a single ProjectType
+/// (Policy → Stages sub-tab). Editable: <see cref="IsActive"/>, <see cref="IsRequired"/>.
+/// </summary>
+public sealed class PolicyStageItem : INotifyPropertyChanged
+{
+    public int? MappingId { get; set; }
+    public int StageDefinitionId { get; init; }
+    public string StageName { get; init; } = "";
+    public string StageCode { get; init; } = "";
+    public int SortOrder { get; init; }
+
+    private bool _isActive;
+    public bool IsActive
+    {
+        get => _isActive;
+        set { _isActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isRequired;
+    public bool IsRequired
+    {
+        get => _isRequired;
+        set { _isRequired = value; OnPropertyChanged(); }
+    }
+
+    public bool IsDirty { get; set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? n = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+}
+
+/// <summary>
+/// Represents a Discipline (TaskType) activation row for a single ProjectType
+/// (Policy → Disciplines sub-tab).
+/// </summary>
+public sealed class PolicyDisciplineItem : INotifyPropertyChanged
+{
+    public int? MappingId { get; set; }
+    public int DisciplineTaskTypeId { get; init; }
+    public string DisciplineName { get; init; } = "";
+    public string DisciplineCode { get; init; } = "";
+
+    private bool _isActive;
+    public bool IsActive
+    {
+        get => _isActive;
+        set { _isActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isRequired;
+    public bool IsRequired
+    {
+        get => _isRequired;
+        set { _isRequired = value; OnPropertyChanged(); }
+    }
+
+    public bool IsDirty { get; set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? n = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+}
+
+/// <summary>
 /// Represents a WorkflowDefinition row in the Policy tab right-side checklist.
 /// </summary>
 public sealed class PolicyWorkflowMappingItem : INotifyPropertyChanged
@@ -120,6 +185,14 @@ public partial class WorkflowManagementWindow : Window
     private readonly Dictionary<int, List<PolicyMappingState>> _policyMappingMap = [];
     private int? _policySelectedProjectTypeId;
     private bool _policyLoaded;
+
+    // Stages / Disciplines sub-tab state
+    private List<WorkflowStageDefinition> _policyAllStages = [];
+    private List<TaskType> _policyAllDisciplineTaskTypes = [];
+    private readonly Dictionary<int, ObservableCollection<PolicyStageItem>> _policyStagesMap = [];
+    private readonly Dictionary<int, ObservableCollection<PolicyDisciplineItem>> _policyDisciplinesMap = [];
+    private bool _policyStagesLoaded;
+    private bool _policyDisciplinesLoaded;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Tab 3: Dashboard state
@@ -1745,8 +1818,10 @@ public partial class WorkflowManagementWindow : Window
         if (PolicyProjectTypeListBox.SelectedItem is not PolicyProjectTypeItem item) return;
 
         _policySelectedProjectTypeId = item.Id;
-        PolicySelectedTypeHeader.Text = $"תהליכים עבור: {item.Title}";
+        PolicySelectedTypeHeader.Text = $"מדיניות עבור: {item.Title}";
         RefreshPolicyWorkflowList();
+        RefreshPolicyStagesList();
+        RefreshPolicyDisciplinesList();
     }
 
     private void RefreshPolicyWorkflowList()
@@ -1909,6 +1984,354 @@ public partial class WorkflowManagementWindow : Window
         public int DefinitionId { get; init; }
         public bool IsEnabled { get; set; }
         public bool IsDefault { get; set; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Policy → Stages / Disciplines sub-tabs
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private void PolicySubTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.Source != PolicySubTabs) return;
+
+        // Lazy-load reference data on first visit to each sub-tab
+        if (PolicySubTabs.SelectedIndex == 1 && !_policyStagesLoaded)
+        {
+            EnsurePolicyStagesReferenceLoaded();
+            RefreshPolicyStagesList();
+        }
+        else if (PolicySubTabs.SelectedIndex == 2 && !_policyDisciplinesLoaded)
+        {
+            EnsurePolicyDisciplinesReferenceLoaded();
+            RefreshPolicyDisciplinesList();
+        }
+    }
+
+    private void EnsurePolicyStagesReferenceLoaded()
+    {
+        if (_policyStagesLoaded) return;
+
+        var dbFactory = GetFactory();
+        if (dbFactory is null) return;
+
+        try
+        {
+            using var context = dbFactory.CreateDbContext();
+
+            // Load PlanningWorkflow stages (canonical workflow only). If not present,
+            // fall back to all active stages.
+            var planning = context.WorkflowDefinitions
+                .AsNoTracking()
+                .FirstOrDefault(d => d.Code == "PlanningWorkflow" && d.IsActive);
+
+            var stagesQuery = context.WorkflowStageDefinitions.AsNoTracking();
+            if (planning is not null)
+                stagesQuery = stagesQuery.Where(s => s.WorkflowDefinitionId == planning.Id);
+
+            _policyAllStages = stagesQuery.OrderBy(s => s.SortOrder).ThenBy(s => s.Name).ToList();
+            _policyStagesLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בטעינת שלבים: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void EnsurePolicyDisciplinesReferenceLoaded()
+    {
+        if (_policyDisciplinesLoaded) return;
+
+        var dbFactory = GetFactory();
+        if (dbFactory is null) return;
+
+        try
+        {
+            using var context = dbFactory.CreateDbContext();
+
+            _policyAllDisciplineTaskTypes = context.TaskTypes
+                .AsNoTracking()
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+                .ToList();
+
+            _policyDisciplinesLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בטעינת תחומים: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void RefreshPolicyStagesList()
+    {
+        if (_policySelectedProjectTypeId is not { } ptId)
+        {
+            PolicyStagesListBox.ItemsSource = null;
+            return;
+        }
+
+        if (!_policyStagesLoaded)
+        {
+            EnsurePolicyStagesReferenceLoaded();
+            if (!_policyStagesLoaded) return;
+        }
+
+        if (!_policyStagesMap.TryGetValue(ptId, out var items))
+        {
+            items = LoadPolicyStagesForProjectType(ptId);
+            _policyStagesMap[ptId] = items;
+        }
+
+        PolicyStagesListBox.ItemsSource = items;
+    }
+
+    private ObservableCollection<PolicyStageItem> LoadPolicyStagesForProjectType(int projectTypeId)
+    {
+        var dbFactory = GetFactory();
+        if (dbFactory is null) return [];
+
+        using var context = dbFactory.CreateDbContext();
+
+        var existing = context.ProjectTypeWorkflowStages
+            .AsNoTracking()
+            .Where(m => m.ProjectTypeId == projectTypeId)
+            .ToList();
+
+        var items = _policyAllStages.Select(s =>
+        {
+            var mapping = existing.FirstOrDefault(m => m.WorkflowStageDefinitionId == s.Id);
+            return new PolicyStageItem
+            {
+                MappingId = mapping?.Id,
+                StageDefinitionId = s.Id,
+                StageName = s.Name,
+                StageCode = s.Code,
+                SortOrder = s.SortOrder,
+                IsActive = mapping?.IsActive ?? true,
+                IsRequired = mapping?.IsRequired ?? true,
+            };
+        }).ToList();
+
+        return new ObservableCollection<PolicyStageItem>(items);
+    }
+
+    private void RefreshPolicyDisciplinesList()
+    {
+        if (_policySelectedProjectTypeId is not { } ptId)
+        {
+            PolicyDisciplinesListBox.ItemsSource = null;
+            return;
+        }
+
+        if (!_policyDisciplinesLoaded)
+        {
+            EnsurePolicyDisciplinesReferenceLoaded();
+            if (!_policyDisciplinesLoaded) return;
+        }
+
+        if (!_policyDisciplinesMap.TryGetValue(ptId, out var items))
+        {
+            items = LoadPolicyDisciplinesForProjectType(ptId);
+            _policyDisciplinesMap[ptId] = items;
+        }
+
+        PolicyDisciplinesListBox.ItemsSource = items;
+    }
+
+    private ObservableCollection<PolicyDisciplineItem> LoadPolicyDisciplinesForProjectType(int projectTypeId)
+    {
+        var dbFactory = GetFactory();
+        if (dbFactory is null) return [];
+
+        using var context = dbFactory.CreateDbContext();
+
+        var existing = context.ProjectTypeDisciplines
+            .AsNoTracking()
+            .Where(m => m.ProjectTypeId == projectTypeId)
+            .ToList();
+
+        var items = _policyAllDisciplineTaskTypes.Select(t =>
+        {
+            var mapping = existing.FirstOrDefault(m => m.DisciplineTaskTypeId == t.Id);
+            return new PolicyDisciplineItem
+            {
+                MappingId = mapping?.Id,
+                DisciplineTaskTypeId = t.Id,
+                DisciplineName = t.Name,
+                DisciplineCode = t.Code,
+                IsActive = mapping?.IsActive ?? false,
+                IsRequired = mapping?.IsRequired ?? false,
+            };
+        }).ToList();
+
+        return new ObservableCollection<PolicyDisciplineItem>(items);
+    }
+
+    private void PolicyStageActive_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: PolicyStageItem item })
+        {
+            item.IsDirty = true;
+            if (!item.IsActive) item.IsRequired = false;
+        }
+    }
+
+    private void PolicyStageRequired_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: PolicyStageItem item })
+            item.IsDirty = true;
+    }
+
+    private void PolicyDisciplineActive_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: PolicyDisciplineItem item })
+        {
+            item.IsDirty = true;
+            if (!item.IsActive) item.IsRequired = false;
+        }
+    }
+
+    private void PolicyDisciplineRequired_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: PolicyDisciplineItem item })
+            item.IsDirty = true;
+    }
+
+    private void PolicyStagesSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (_policySelectedProjectTypeId is not { } ptId)
+        {
+            MessageBox.Show("בחר סוג פרויקט תחילה.", "מידע",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (!_policyStagesMap.TryGetValue(ptId, out var items)) return;
+
+        try
+        {
+            var dbFactory = GetFactory();
+            if (dbFactory is null) return;
+
+            using var context = dbFactory.CreateDbContext();
+
+            int added = 0, updated = 0;
+
+            foreach (var item in items)
+            {
+                if (item.MappingId is { } id)
+                {
+                    var row = context.ProjectTypeWorkflowStages.FirstOrDefault(m => m.Id == id);
+                    if (row is null) continue;
+                    if (row.IsActive != item.IsActive || row.IsRequired != item.IsRequired)
+                    {
+                        row.IsActive = item.IsActive;
+                        row.IsRequired = item.IsActive && item.IsRequired;
+                        updated++;
+                    }
+                }
+                else
+                {
+                    // Persist a row only if user changed defaults (active+required default = true).
+                    if (!item.IsDirty && item.IsActive && item.IsRequired)
+                        continue;
+
+                    var row = new ProjectTypeWorkflowStage
+                    {
+                        ProjectTypeId = ptId,
+                        WorkflowStageDefinitionId = item.StageDefinitionId,
+                        IsActive = item.IsActive,
+                        IsRequired = item.IsActive && item.IsRequired,
+                        SortOrder = item.SortOrder,
+                        CanRepeat = false,
+                    };
+                    context.ProjectTypeWorkflowStages.Add(row);
+                    added++;
+                }
+            }
+
+            context.SaveChanges();
+
+            // Refresh mapping ids after save so next save updates instead of inserts
+            _policyStagesMap.Remove(ptId);
+            RefreshPolicyStagesList();
+
+            StatusText.Text = $"✅ שלבים נשמרו — {added} נוספו, {updated} עודכנו";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בשמירת שלבים: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void PolicyDisciplinesSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (_policySelectedProjectTypeId is not { } ptId)
+        {
+            MessageBox.Show("בחר סוג פרויקט תחילה.", "מידע",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (!_policyDisciplinesMap.TryGetValue(ptId, out var items)) return;
+
+        try
+        {
+            var dbFactory = GetFactory();
+            if (dbFactory is null) return;
+
+            using var context = dbFactory.CreateDbContext();
+
+            int added = 0, updated = 0, removed = 0;
+
+            foreach (var item in items)
+            {
+                if (item.MappingId is { } id)
+                {
+                    var row = context.ProjectTypeDisciplines.FirstOrDefault(m => m.Id == id);
+                    if (row is null) continue;
+
+                    if (!item.IsActive)
+                    {
+                        // Deactivate by deleting the mapping row (clean state).
+                        context.ProjectTypeDisciplines.Remove(row);
+                        removed++;
+                    }
+                    else if (row.IsActive != item.IsActive || row.IsRequired != item.IsRequired)
+                    {
+                        row.IsActive = item.IsActive;
+                        row.IsRequired = item.IsActive && item.IsRequired;
+                        updated++;
+                    }
+                }
+                else if (item.IsActive)
+                {
+                    var row = new ProjectTypeDiscipline
+                    {
+                        ProjectTypeId = ptId,
+                        DisciplineTaskTypeId = item.DisciplineTaskTypeId,
+                        IsActive = true,
+                        IsRequired = item.IsRequired,
+                        SortOrder = 0,
+                    };
+                    context.ProjectTypeDisciplines.Add(row);
+                    added++;
+                }
+            }
+
+            context.SaveChanges();
+
+            _policyDisciplinesMap.Remove(ptId);
+            RefreshPolicyDisciplinesList();
+
+            StatusText.Text = $"✅ תחומים נשמרו — {added} נוספו, {updated} עודכנו, {removed} הוסרו";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בשמירת תחומים: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     #endregion
@@ -2918,7 +3341,7 @@ public partial class WorkflowManagementWindow : Window
         AddHelpBullet(panel, "סגירה אוטומטית", "האם לסגור/לעדכן סטטוס כשכלל השלמה מתקיים.");
 
         AddHelpSubSection(panel, "סוגי טריגרים (יצירת משימה):");
-        AddHelpBullet(panel, "📧 מייל הוקצה לפרויקט", "כשמייל מקבל ProjectId ← נוצרת משימה (למשל: טיוק חומר).");
+        AddHelpBullet(panel, "📧 מייל הוקצה לפרויקט", "כשמייל מקבל ProjectId ← נוצרת משימה (למשל: תיוק חומר).");
         AddHelpBullet(panel, "📎 קובץ מצורף תויק", "כשקובץ מצורף מקבל ProjectFileId ← נוצרת משימה (למשל: בדיקה מקצועית).");
         AddHelpBullet(panel, "✋ ידני", "משימה נוצרת ידנית — ללא טריגר אוטומטי.");
 
@@ -2954,8 +3377,8 @@ public partial class WorkflowManagementWindow : Window
             "סיווג עבודת תכנון. נוצר ידנית או דרך Workflow — ללא אוטומציה.");
         AddHelpTaskTypeRow(panel, "PlanReview", "בדיקת תוכנית",
             "סיווג בדיקת תוכנית. תבנית לשלבי בדיקה ב-Workflow — ללא אוטומציה.");
-        AddHelpTaskTypeRow(panel, "MaterialFiling", "טיוק חומר",
-            "⚡ אוטומטי: מייל הוקצה לפרויקט → נוצרת משימת טיוק. כל הקבצים תויקו → המשימה נסגרת.");
+        AddHelpTaskTypeRow(panel, "MaterialFiling", "תיוק חומר",
+            "⚡ אוטומטי: מייל הוקצה לפרויקט → נוצרת משימת תיוק. כל הקבצים תויקו → המשימה נסגרת.");
         AddHelpTaskTypeRow(panel, "ProfessionalReview", "בדיקה מקצועית",
             "⚡ אוטומטי: קובץ תויק → נוצרת משימת בדיקה. תגובת הערות → \"ממתין לתיקון\". תגובת אישור → \"מאושר\".");
 

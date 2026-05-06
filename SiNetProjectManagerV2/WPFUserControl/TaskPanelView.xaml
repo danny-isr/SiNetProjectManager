@@ -303,6 +303,12 @@
                                     Width="Auto"
                                     IsReadOnly="True"/>
 
+                <!-- Last business result (TaskResultDefinition) - read only -->
+                <DataGridTextColumn Header="תוצאה אחרונה"
+                                    Binding="{Binding LastTaskResult.Name}"
+                                    Width="Auto"
+                                    IsReadOnly="True"/>
+
                 <!-- Notes Preview - LAST column, takes all remaining space -->
                 <DataGridTemplateColumn Header="הערות" Width="*" IsReadOnly="True">
                     <DataGridTemplateColumn.CellTemplate>
@@ -498,6 +504,8 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
 
                                                     <TextBlock Grid.Column="0" Text="🔗" Margin="0,0,4,0" VerticalAlignment="Center"/>
@@ -512,7 +520,20 @@
                                                         <Run Text=": " Foreground="#666"/>
                                                         <Run Text="{Binding LinkedEntityName, Mode=OneWay}"/>
                                                     </TextBlock>
-                                                    <Button Grid.Column="3" Content="✕" FontSize="10"
+                                                    <Border Grid.Column="3" Background="#FFF3E0" CornerRadius="8" Padding="6,1" Margin="6,0,2,0"
+                                                            Visibility="{Binding IsWorkTarget, Converter={StaticResource BoolToVisibility}}"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding WorkStatusDisplay}" FontSize="10" Foreground="#E65100"/>
+                                                    </Border>
+                                                    <Button Grid.Column="4" Content="✓" FontSize="10"
+                                                            Command="{Binding DataContext.MarkWorkTargetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Background="Transparent" BorderThickness="0"
+                                                            Foreground="#2E7D32" Cursor="Hand"
+                                                            VerticalAlignment="Center"
+                                                            Visibility="{Binding IsWorkTarget, Converter={StaticResource BoolToVisibility}}"
+                                                            ToolTip="סמן יעד עבודה כהושלם"/>
+                                                    <Button Grid.Column="5" Content="✕" FontSize="10"
                                                             Command="{Binding DataContext.RemoveLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding LinkId}"
                                                             Background="Transparent" BorderThickness="0"

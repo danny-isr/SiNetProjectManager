@@ -409,6 +409,65 @@
                         BorderThickness="1"
                         ToolTip="בדוק שהשרת המקומי פועל ושהמודל זמין"/>
 
+                <!-- AI Model Catalog & per-level selection -->
+                <Separator Margin="0,20,0,10"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="🧠 בחירת מודלי AI לפי רמה" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <Button Grid.Column="1" x:Name="OpenAiCatalogButton"
+                            Content="📚 קטלוג מודלים..."
+                            Click="OpenAiCatalogButton_Click"
+                            Padding="8,3" Cursor="Hand"
+                            Background="Transparent" BorderBrush="#CCC" BorderThickness="1"
+                            ToolTip="פתח את קטלוג מודלי ה-AI להורדה / הגדרה"/>
+                </Grid>
+                <TextBlock Text="כל רמה מצביעה על מודל אחד מהרשימה. הרשימה מאחדת מודלים מקומיים מותקנים (Ollama) ומודלי ענן שהוגדרו בקטלוג."
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Simple:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="SelectedSimpleModel" Grid.Row="0" Grid.Column="1"
+                              Width="320" HorizontalAlignment="Right"
+                              Padding="5,3" Margin="0,0,0,6"
+                              FlowDirection="LeftToRight"
+                              DisplayMemberPath="Display"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="QualityCheck:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="SelectedQualityCheckModel" Grid.Row="1" Grid.Column="1"
+                              Width="320" HorizontalAlignment="Right"
+                              Padding="5,3" Margin="0,0,0,6"
+                              FlowDirection="LeftToRight"
+                              DisplayMemberPath="Display"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Writing:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="SelectedWritingModel" Grid.Row="2" Grid.Column="1"
+                              Width="320" HorizontalAlignment="Right"
+                              Padding="5,3" Margin="0,0,0,6"
+                              FlowDirection="LeftToRight"
+                              DisplayMemberPath="Display"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="DeepAnalysis:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="SelectedDeepAnalysisModel" Grid.Row="3" Grid.Column="1"
+                              Width="320" HorizontalAlignment="Right"
+                              Padding="5,3" Margin="0,0,0,6"
+                              FlowDirection="LeftToRight"
+                              DisplayMemberPath="Display"/>
+                </Grid>
+
                 <!-- Centralized Logging -->
                 <Separator Margin="0,20,0,10"/>
                 <TextBlock Text="📋 לוגים מרוכזים" FontWeight="Bold" Margin="0,0,0,5"/>

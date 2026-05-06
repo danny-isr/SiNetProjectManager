@@ -11,6 +11,7 @@ using SiNetSQL.Data;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
+using SiNetSQL.Services.AI;
 using SiNetSQL.Services.Logging;
 using Serilog.Events;
 using SiOffice.GoogleConnector.Reports;
@@ -106,6 +107,9 @@ public partial class ManagementSettingsWindow : Window
 
             // Load Ollama AI settings
             await LoadOllamaSettingsAsync();
+
+            // Load AI model catalog selections (per-level dropdowns).
+            await LoadAiModelLevelSelectionsAsync();
 
             // Load ACC project template (selection happens against a freshly fetched list).
             await LoadAccTemplateAsync();
@@ -241,6 +245,9 @@ public partial class ManagementSettingsWindow : Window
 
             // Save Ollama AI model
             await SaveOllamaModelAsync();
+
+            // Save AI model catalog selections (per-level dropdowns).
+            await SaveAiModelLevelSelectionsAsync();
 
             // Save ACC project template selection
             await SaveAccTemplateAsync();
@@ -1005,6 +1012,135 @@ public partial class ManagementSettingsWindow : Window
             ? new SolidColorBrush(Color.FromRgb(0xD3, 0x2F, 0x2F))
             : new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32));
         LoggingPathStatusLabel.Visibility = Visibility.Visible;
+    }
+
+    #endregion
+
+    #region AI Model Level Selection
+
+    /// <summary>
+    /// Lightweight item shown in the per-level AI model ComboBoxes. Combines a model name with
+    /// its provider so the calling code can route the request without an extra lookup.
+    /// </summary>
+    private sealed record AiModelOption(string ModelName, AiProvider Provider, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    /// <summary>
+    /// Builds the union of installed Ollama models (live) and configured cloud models (DB) and
+    /// populates the four per-level ComboBoxes, restoring the saved selection per level.
+    /// </summary>
+    private async Task LoadAiModelLevelSelectionsAsync()
+    {
+        var options = await BuildAiModelOptionsAsync();
+
+        await ApplyOptionsToComboAsync(SelectedSimpleModel, options,
+            SystemSettingKeys.AiModelSimple, SystemSettingKeys.AiProviderSimple);
+        await ApplyOptionsToComboAsync(SelectedQualityCheckModel, options,
+            SystemSettingKeys.AiModelQualityCheck, SystemSettingKeys.AiProviderQualityCheck);
+        await ApplyOptionsToComboAsync(SelectedWritingModel, options,
+            SystemSettingKeys.AiModelWriting, SystemSettingKeys.AiProviderWriting);
+        await ApplyOptionsToComboAsync(SelectedDeepAnalysisModel, options,
+            SystemSettingKeys.AiModelDeepAnalysis, SystemSettingKeys.AiProviderDeepAnalysis);
+    }
+
+    private async Task<List<AiModelOption>> BuildAiModelOptionsAsync()
+    {
+        var list = new List<AiModelOption>();
+
+        // 1) Live Ollama models from /api/tags (best-effort — server may be down).
+        var baseUrl = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.OllamaBaseUrl, "http://localhost:11434");
+        try
+        {
+            foreach (var name in await FetchOllamaModelsAsync(baseUrl))
+            {
+                if (!string.IsNullOrWhiteSpace(name))
+                    list.Add(new AiModelOption(name, AiProvider.Ollama, $"{name}  (Ollama)"));
+            }
+        }
+        catch
+        {
+            // Ollama server unreachable — silently skip; saved selection still shows below.
+        }
+
+        // 2) Configured cloud models from DB (CSV of "Provider|ModelName").
+        var configuredCsv = await _settingsService.GetOrDefaultAsync(
+            SystemSettingKeys.AiConfiguredCloudModels, string.Empty);
+        foreach (var entry in configuredCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = entry.Split('|', 2);
+            if (parts.Length != 2) continue;
+            if (!Enum.TryParse<AiProvider>(parts[0], ignoreCase: true, out var provider)) continue;
+            var model = parts[1];
+            if (string.IsNullOrWhiteSpace(model)) continue;
+            list.Add(new AiModelOption(model, provider, $"{model}  ({provider})"));
+        }
+
+        return list;
+    }
+
+    private async Task ApplyOptionsToComboAsync(
+        ComboBox combo, List<AiModelOption> options, string modelKey, string providerKey)
+    {
+        var savedModel = await _settingsService.GetAsync(modelKey);
+        var savedProviderText = await _settingsService.GetAsync(providerKey);
+        AiProvider? savedProvider = Enum.TryParse<AiProvider>(savedProviderText, true, out var p) ? p : null;
+
+        // If the saved selection is no longer in the list (e.g. model was uninstalled),
+        // surface it anyway as a "missing" option so the admin sees what is currently in effect.
+        var working = new List<AiModelOption>(options);
+        if (!string.IsNullOrWhiteSpace(savedModel) &&
+            !working.Any(o => o.ModelName.Equals(savedModel, StringComparison.OrdinalIgnoreCase) &&
+                              (savedProvider is null || o.Provider == savedProvider)))
+        {
+            var prov = savedProvider ?? AiProvider.Ollama;
+            working.Insert(0, new AiModelOption(savedModel, prov, $"{savedModel}  ({prov}, לא זמין)"));
+        }
+
+        combo.ItemsSource = working;
+
+        if (!string.IsNullOrWhiteSpace(savedModel))
+        {
+            combo.SelectedItem = working.FirstOrDefault(o =>
+                o.ModelName.Equals(savedModel, StringComparison.OrdinalIgnoreCase) &&
+                (savedProvider is null || o.Provider == savedProvider));
+        }
+    }
+
+    private async Task SaveAiModelLevelSelectionsAsync()
+    {
+        await SaveAiLevelAsync(SelectedSimpleModel,
+            SystemSettingKeys.AiModelSimple, SystemSettingKeys.AiProviderSimple,
+            "מודל AI שנבחר עבור משימות פשוטות (Simple)");
+        await SaveAiLevelAsync(SelectedQualityCheckModel,
+            SystemSettingKeys.AiModelQualityCheck, SystemSettingKeys.AiProviderQualityCheck,
+            "מודל AI שנבחר לבדיקת לשון (QualityCheck)");
+        await SaveAiLevelAsync(SelectedWritingModel,
+            SystemSettingKeys.AiModelWriting, SystemSettingKeys.AiProviderWriting,
+            "מודל AI שנבחר לניסוח (Writing)");
+        await SaveAiLevelAsync(SelectedDeepAnalysisModel,
+            SystemSettingKeys.AiModelDeepAnalysis, SystemSettingKeys.AiProviderDeepAnalysis,
+            "מודל AI שנבחר לניתוח עמוק (DeepAnalysis)");
+    }
+
+    private async Task SaveAiLevelAsync(ComboBox combo, string modelKey, string providerKey, string description)
+    {
+        if (combo.SelectedItem is not AiModelOption opt) return;
+        await _settingsService.SetAsync(modelKey, opt.ModelName, description);
+        await _settingsService.SetAsync(providerKey, opt.Provider.ToString(),
+            $"ספק (Ollama / Gemini / OpenAICompatible) למודל המתאים: {description}");
+    }
+
+    private async void OpenAiCatalogButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new AiModelCatalogWindow { Owner = this };
+        window.ShowDialog();
+
+        // After the catalog dialog closes, refresh the per-level dropdowns so newly-installed
+        // Ollama models or newly-configured cloud models appear immediately.
+        await LoadAiModelLevelSelectionsAsync();
     }
 
     #endregion

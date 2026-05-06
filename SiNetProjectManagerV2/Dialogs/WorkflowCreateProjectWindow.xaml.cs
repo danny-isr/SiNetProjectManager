@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNetSQL.Constants;
 using SiNetSQL.Data;
 using SiNetSQL.MVVM;
+using SiNetSQL.Models;
+using SiNetSQL.Services.Workflow;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -153,8 +156,73 @@ public partial class WorkflowCreateProjectWindow : Window
                     ApplyGmailLabelAsync(args);
                 }
 
+                // Auto-start the canonical PlanningWorkflow for the new project (fire-and-forget)
+                StartPlanningWorkflowAsync(args, _emailMessageId);
+
                 DialogResult = true;
             };
+        }
+    }
+
+    /// <summary>
+    /// Starts the canonical PlanningWorkflow for a freshly-created project so it immediately
+    /// enters PLN.Intake (with initial stage tasks) and runs configured transition actions.
+    /// Fire-and-forget — failures are logged but never block the dialog or the user.
+    /// </summary>
+    private static async void StartPlanningWorkflowAsync(ProjectCreatedEventArgs args, int emailMessageId)
+    {
+        try
+        {
+            var sp = App.ServiceProvider;
+            if (sp == null) return;
+
+            var dbFactory = sp.GetService<IDbContextFactory<SiNetSQLDbContext>>();
+            var orchestrator = sp.GetService<WorkflowTaskOrchestrator>();
+            if (dbFactory == null || orchestrator == null)
+            {
+                SiNetSQL.Services.AppLogger.Warn(
+                    "[WorkflowCreateProject] Workflow services unavailable — skipping auto-start");
+                return;
+            }
+
+            int definitionId;
+            await using (var db = await dbFactory.CreateDbContextAsync())
+            {
+                definitionId = await db.WorkflowDefinitions
+                    .AsNoTracking()
+                    .Where(w => w.Code == WorkflowCodes.PlanningWorkflow && w.IsActive)
+                    .Select(w => w.Id)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (definitionId == 0)
+            {
+                SiNetSQL.Services.AppLogger.Warn(
+                    "[WorkflowCreateProject] PlanningWorkflow definition not found — skipping auto-start");
+                return;
+            }
+
+            var userId = SiNetSQL.Services.CurrentUserContext.Instance.CurrentUserId ?? 0;
+
+            SiNetSQL.Services.AppLogger.Info(
+                $"[WorkflowCreateProject] Starting PlanningWorkflow for project {args.ProjectId}");
+
+            await orchestrator.StartWorkflowAsync(
+                definitionId,
+                args.ProjectId,
+                WorkflowTriggerType.Email,
+                triggerEntityId: emailMessageId == 0 ? null : emailMessageId,
+                userId: userId,
+                notes: "Auto-started on project creation from email",
+                ct: CancellationToken.None);
+
+            SiNetSQL.Services.AppLogger.Info(
+                $"[WorkflowCreateProject] ✅ PlanningWorkflow started for project {args.ProjectId}");
+        }
+        catch (Exception ex)
+        {
+            SiNetSQL.Services.AppLogger.Error(ex,
+                "[WorkflowCreateProject] Failed to auto-start PlanningWorkflow");
         }
     }
 

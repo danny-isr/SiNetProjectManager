@@ -223,6 +223,12 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService>();
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskBehaviorSeedService>();
 
+            // Task Navigation Resolver: Transient (read-only resolver for opening tasks via the registry)
+            services.AddTransient<SiNetSQL.Services.Tasks.TaskNavigationResolver>();
+
+            // Smart Tasks: Transient (work-target completion + parent-task aggregation)
+            services.AddTransient<SiNetSQL.Services.SmartTasks.SmartTaskService>();
+
             // Email Context Services: Transient (analyze email → business context → actions)
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();
@@ -276,6 +282,14 @@ namespace SiNetProjectManagerV2
                 return ollama;
             });
 
+            // Level-based AI router: resolves model+provider per AiModelLevel from
+            // SystemSettings and dispatches to OllamaService (and future cloud providers).
+            services.AddSingleton<SiNetSQL.Services.AI.AiService>(sp =>
+                new SiNetSQL.Services.AI.AiService(
+                    sp.GetRequiredService<SystemSettingsService>(),
+                    sp.GetRequiredService<SiNetSQL.Services.OllamaService>(),
+                    sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.AI.AiService>()));
+
             // Task Status Resolver: Singleton (cached open/closed status ID lookups)
             services.AddSingleton<SiNetSQL.Services.TaskStatusResolver>();
 
@@ -310,10 +324,33 @@ namespace SiNetProjectManagerV2
                     }
                 }
 
+                // SiOffice.AccService presents a self-signed cert (accservice.pfx, CN=<MachineName>)
+                // that is NOT in the local trust store. For localhost/loopback we accept that cert
+                // explicitly — production deployments should set AccService:Certificate:Path on the
+                // service to a CA-issued cert instead. Non-loopback hosts still go through normal
+                // chain validation.
+                var accServiceUri = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
+                var allowSelfSignedForLoopback = accServiceUri.IsLoopback;
+
                 Action<HttpClient> configure = ConfigureAccServiceClient;
-                services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure);
-                services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure);
-                Log.Information("ACC Provisioning: using REMOTE SiOffice.AccService at {Url}.", accServiceBaseUrl);
+                Action<IHttpClientBuilder> configureHandler = b =>
+                {
+                    if (allowSelfSignedForLoopback)
+                    {
+                        b.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                        {
+                            ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
+                                errors == System.Net.Security.SslPolicyErrors.None ||
+                                errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors
+                        });
+                    }
+                };
+
+                configureHandler(services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure));
+                configureHandler(services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure));
+                Log.Information(
+                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (loopback self-signed accepted: {AllowSelfSigned}).",
+                    accServiceBaseUrl, allowSelfSignedForLoopback);
             }
             else
             {

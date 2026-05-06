@@ -1,4 +1,4 @@
-<Window x:Class="SiNetProjectManagerV2.WorkflowDesignerHelpWindow"
+﻿<Window x:Class="SiNetProjectManagerV2.WorkflowDesignerHelpWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="📘 מרכז עזרה — עורך תהליכי עבודה ויזואלי"
@@ -418,29 +418,51 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
                                 <Border Grid.Row="0" Grid.Column="0" Background="#E65100"><TextBlock Style="{StaticResource TableHeader}" Text="פעולה"/></Border>
                                 <Border Grid.Row="0" Grid.Column="1" Background="#E65100"><TextBlock Style="{StaticResource TableHeader}" Text="מה עושה"/></Border>
 
                                 <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="צור משימות שלב" FontWeight="SemiBold"/></Border>
-                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="יוצר את כל המשימות שמוגדרות בשלב היעד."/></Border>
+                                <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="יוצר את כל המשימות שמוגדרות בשלב היעד."/></Border>
 
                                 <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סגור משימות שלב קודם" FontWeight="SemiBold"/></Border>
-                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="סוגר את כל המשימות הפתוחות בשלב שממנו עוברים."/></Border>
+                                <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סוגר את כל המשימות הפתוחות בשלב שממנו עוברים."/></Border>
 
                                 <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="שלח התראה" FontWeight="SemiBold"/></Border>
-                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="שולח הודעה/מייל (עתידי — נדרש הגדרת template ב-JSON)."/></Border>
+                                <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="שולח הודעה/מייל (עתידי — נדרש הגדרת template ב-JSON)."/></Border>
 
                                 <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="הפעל תת-תהליך" FontWeight="SemiBold"/></Border>
-                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מפעיל Workflow אחר כ-SubWorkflow עם פרמטרים."/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="מפעיל Workflow אחר כ-SubWorkflow עם פרמטרים."/></Border>
+
+                                <Border Grid.Row="5" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="עדכן סטטוס פרויקט" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="5" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text='מעדכן את ProjectStatus של הפרויקט. JSON: {"code":"Active"}. קודים: LeadReceived, QuotePreparation, WaitingForQuoteApproval, WaitingForWorkOrder, Active, WaitingForClient, WaitingForAuthority, WaitingForMaterial, BillingPending, Closed, ClosedLost, Cancelled.'/></Border>
+
+                                <Border Grid.Row="6" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="רשום תוצאת משימה" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="6" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text='רושם TaskResult על המשימה שהפעילה את המעבר. JSON: {"code":"AuthorityApproved"}. קודים נפוצים: QuoteApprovedByClient, WorkOrderReceived, AuthorityApproved, BillApproved, ProjectClosed.'/></Border>
+
+                                <Border Grid.Row="7" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="ממתין לחיוב" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="7" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="קיצור דרך — קובע ProjectStatus = BillingPending. ללא JSON."/></Border>
+
+                                <Border Grid.Row="8" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="סגור פרויקט" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="8" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text='סוגר את הפרויקט סופית — קובע ProjectStatus = Closed. JSON אופציונלי: {"reason":"..."}'/></Border>
                             </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource InfoBox}">
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="#1565C0">
+                                ℹ️ **ProjectStatus הוא הסטטוס היחיד שמעניין** — 4 הפעולות החדשות (עדכן סטטוס, רשום תוצאה, ממתין לחיוב, סגור פרויקט) מאפשרות לתהליך להניע את מצב הפרויקט אוטומטית בכל מעבר. הכניסה לעורך ה-JSON מציגה רמז דינמי לפי סוג הפעולה הנבחר.
+                            </TextBlock>
                         </Border>
 
                         <Border Style="{StaticResource WarnBox}">
                             <TextBlock Style="{StaticResource BodyText}" Foreground="#E65100">
-                                ⚠️ מעבר בלי פעולות יעבור לשלב הבא אבל **לא ייצור משימות ולא יסגור ישנות**.
-                                במרבית המקרים תרצה לפחות "צור משימות שלב" + "סגור משימות שלב קודם".
+                                ⚠️ מעבר בלי פעולות יעבור לשלב הבא אבל **לא ייצור משימות, לא יסגור ישנות ולא יעדכן סטטוס פרויקט**.
+                                במרבית המקרים תרצה לפחות "צור משימות שלב" + "סגור משימות שלב קודם", ובמעברים מהותיים גם "עדכן סטטוס פרויקט".
                             </TextBlock>
                         </Border>
                     </StackPanel>
@@ -488,8 +510,8 @@
                                 <Border Grid.Row="3" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="📋 סוג פרויקט" FontWeight="SemiBold"/></Border>
                                 <Border Grid.Row="3" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="סוג פרויקט הוגדר או השתנה. תנאי: קוד סוג ספציפי."/></Border>
 
-                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="📧 טיוק מייל" FontWeight="SemiBold"/></Border>
-                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מייל טויק לפי סוג. תנאי: {&quot;emailFileType&quot;:&quot;WorkOrder&quot;}."/></Border>
+                                <Border Grid.Row="4" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="📧 תיוק מייל" FontWeight="SemiBold"/></Border>
+                                <Border Grid.Row="4" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מייל תויק לפי סוג. תנאי: {&quot;emailFileType&quot;:&quot;WorkOrder&quot;}."/></Border>
 
                                 <Border Grid.Row="5" Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,1"><TextBlock Style="{StaticResource TableCell}" Text="🔄 תהליך אב" FontWeight="SemiBold"/></Border>
                                 <Border Grid.Row="5" Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"><TextBlock Style="{StaticResource TableCell}" Text="מופעל ע&quot;י Workflow אחר כ-SubWorkflow. לא ניתן להפעלה עצמאית."/></Border>
@@ -509,7 +531,7 @@
                             </TextBlock>
                         </Border>
 
-                        <TextBlock Style="{StaticResource SubHeader}" Text="📧 טיוק מייל — מצבים:"/>
+                        <TextBlock Style="{StaticResource SubHeader}" Text="📧 תיוק מייל — מצבים:"/>
                         <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
                             • 🏗️ **הזמנת עבודה** — חייב פרויקט + קבצים מצורפים&#x0a;
                             • 📐 **חומר לתכנון** — חייב פרויקט + קבצים מצורפים&#x0a;
@@ -521,7 +543,7 @@
 
                         <TextBlock Style="{StaticResource SubHeader}" Text="שדות לפי סוג טריגר:"/>
                         <TextBlock Style="{StaticResource BodyText}" Margin="12,0,0,0">
-                            • 📧 **טיוק מייל**: סוג טיוק, חייב פרויקט?, צור פרויקט?, סוג חדש, חובה קבצים&#x0a;
+                            • 📧 **תיוק מייל**: סוג תיוק, חייב פרויקט?, צור פרויקט?, סוג חדש, חובה קבצים&#x0a;
                             • 🖱️ **ידני**: חובה פרויקט?&#x0a;
                             • 📁 **פרויקט נוצר**: סוגי פרויקט, התחל מיד?&#x0a;
                             • 📋 **סוג פרויקט**: מסוג → לסוג&#x0a;
@@ -531,7 +553,7 @@
                         <Border Style="{StaticResource TipBox}">
                             <TextBlock Style="{StaticResource BodyText}" Foreground="#2E7D32">
                                 💡 כשמגדירים טריגרי התחלה, **רצועה ירוקה** מופיעה מעל הקנבס עם סיכום:
-                                "🟢 מופעל ע״י: 📧 טיוק מייל · 📁 פרויקט נוצר"
+                                "🟢 מופעל ע״י: 📧 תיוק מייל · 📁 פרויקט נוצר"
                             </TextBlock>
                         </Border>
                     </StackPanel>
@@ -587,7 +609,7 @@
                             <TextBlock Style="{StaticResource BodyText}" Foreground="#1565C0" xml:space="preserve">
 ⏺ התחלה
   טריגר: 📁 פרויקט נוצר (תנאי: סוג = תכנון)
-  טריגר: 📧 טיוק מייל (תנאי: סוג = חומר לתכנון)
+  טריגר: 📧 תיוק מייל (תנאי: סוג = חומר לתכנון)
     ↓ (טריגר: אוטומטי, תנאי: תמיד)
     ↓ פעולות: צור משימות שלב
 ➕ קליטת חומרים
