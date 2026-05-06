@@ -514,13 +514,33 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0"
-                                           Text="{Binding AssignedTo.Name}"
-                                           Opacity="0.7"
-                                           TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Grid.Column="0" Orientation="Vertical">
+                                    <TextBlock Opacity="0.75" TextTrimming="CharacterEllipsis">
+                                        <Run Text="מופנה אל: " FontWeight="SemiBold"/>
+                                        <Run Text="{Binding AssignedTo.Name, FallbackValue='— לא הוקצה —'}"/>
+                                        <Run Text=" · קבוצה: " FontWeight="SemiBold">
+                                            <Run.Style>
+                                                <Style TargetType="Run">
+                                                    <Setter Property="Text" Value=" · קבוצה: "/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding TaskGroup}" Value="{x:Null}">
+                                                            <Setter Property="Text" Value=""/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Run.Style>
+                                        </Run>
+                                        <Run Text="{Binding TaskGroup.Name, FallbackValue=''}"/>
+                                    </TextBlock>
+                                    <TextBlock Opacity="0.6" FontSize="11" TextTrimming="CharacterEllipsis">
+                                        <Run Text="נוצר על ידי: " FontWeight="SemiBold"/>
+                                        <Run Text="{Binding Author.Name, FallbackValue='—'}"/>
+                                    </TextBlock>
+                                </StackPanel>
 
                                 <TextBlock Grid.Column="1"
-                                           Foreground="#888">
+                                           Foreground="#888"
+                                           VerticalAlignment="Top">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="{Binding DueDate, StringFormat=dd/MM/yyyy}"/>
@@ -591,22 +611,36 @@
                             <!-- Row 5: Status change + Workflow action (visible when selected) -->
                             <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,6,0,0"
                                         Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource BoolToVisibility}}">
-                                <ComboBox ItemsSource="{Binding DataContext.AllowedStatuses, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          SelectedValue="{Binding StatusId, Mode=TwoWay}"
-                                          SelectedValuePath="Id"
-                                          DisplayMemberPath="Name"
-                                          Width="130"
-                                          Tag="{Binding}"
-                                          SelectionChanged="StatusComboBox_SelectionChanged"/>
+                                <StackPanel Orientation="Horizontal"
+                                            Visibility="{Binding DataContext.HasAllowedStatuses, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="שנה סטטוס:" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.7" FontSize="11"/>
+                                    <ComboBox ItemsSource="{Binding DataContext.AllowedStatuses, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              SelectedValue="{Binding StatusId, Mode=TwoWay}"
+                                              SelectedValuePath="Id"
+                                              DisplayMemberPath="Name"
+                                              Width="130"
+                                              Tag="{Binding}"
+                                              ToolTip="שנה את סטטוס המשימה (פתוחה / בוצעה / וכו')"
+                                              SelectionChanged="StatusComboBox_SelectionChanged"/>
+                                </StackPanel>
 
-                                <!-- Workflow action button — visible only for workflow tasks -->
-                                <Button Content="▶ פתח"
+                                <!-- Resolver-driven open task button — preferred for tasks registered in TaskInteractionRegistry -->
+                                <Button Content="{Binding DataContext.OpenSelectedTaskLabel, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Command="{Binding DataContext.OpenSelectedTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Style="{StaticResource CardActionButton}"
+                                        Background="#FFF3E0" Foreground="#E65100"
+                                        FontWeight="SemiBold"
+                                        Margin="8,0,0,0"
+                                        ToolTip="פתח את המשימה ברכיב המתאים (לפי סוג המשימה)"/>
+
+                                <!-- Workflow action button — visible only for legacy workflow tasks -->
+                                <Button Content="▶ פתח (Workflow)"
                                         Command="{Binding DataContext.OpenWorkflowTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         Style="{StaticResource CardActionButton}"
                                         Background="#E3F2FD" Foreground="#1565C0"
                                         FontWeight="SemiBold"
-                                        Margin="8,0,0,0"
-                                        ToolTip="פתח את הפעולה המשויכת למשימה"
+                                        Margin="4,0,0,0"
+                                        ToolTip="פתח את הפעולה המשויכת למשימה (תהליך עבודה ישן מבוסס Stage)"
                                         Visibility="{Binding DataContext.IsWorkflowTask, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"/>
 
                                 <!-- Complete workflow task button -->

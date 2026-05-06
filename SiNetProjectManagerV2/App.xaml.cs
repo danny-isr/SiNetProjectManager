@@ -223,6 +223,9 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService>();
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskBehaviorSeedService>();
 
+            // Task Navigation Resolver: Transient (read-only resolver for opening tasks via the registry)
+            services.AddTransient<SiNetSQL.Services.Tasks.TaskNavigationResolver>();
+
             // Smart Tasks: Transient (work-target completion + parent-task aggregation)
             services.AddTransient<SiNetSQL.Services.SmartTasks.SmartTaskService>();
 
@@ -278,6 +281,14 @@ namespace SiNetProjectManagerV2
 
                 return ollama;
             });
+
+            // Level-based AI router: resolves model+provider per AiModelLevel from
+            // SystemSettings and dispatches to OllamaService (and future cloud providers).
+            services.AddSingleton<SiNetSQL.Services.AI.AiService>(sp =>
+                new SiNetSQL.Services.AI.AiService(
+                    sp.GetRequiredService<SystemSettingsService>(),
+                    sp.GetRequiredService<SiNetSQL.Services.OllamaService>(),
+                    sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.AI.AiService>()));
 
             // Task Status Resolver: Singleton (cached open/closed status ID lookups)
             services.AddSingleton<SiNetSQL.Services.TaskStatusResolver>();

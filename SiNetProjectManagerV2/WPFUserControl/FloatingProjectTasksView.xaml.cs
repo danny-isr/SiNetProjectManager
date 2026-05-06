@@ -27,6 +27,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         // Derived-specific subscription
         viewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
         viewModel.OpenWorkflowTaskRequested += OnOpenWorkflowTaskRequested;
+        viewModel.OpenTaskNavigationRequested += OnOpenTaskNavigationRequested;
 
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
@@ -79,6 +80,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         {
             vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
             vm.OpenWorkflowTaskRequested -= OnOpenWorkflowTaskRequested;
+            vm.OpenTaskNavigationRequested -= OnOpenTaskNavigationRequested;
         }
 
         base.OnClosed(e);
@@ -182,6 +184,56 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 // Fallback: navigate to the source email in the inbox
                 mainWindow?.NavigateToEmail(emailId);
                 mainWindow?.Activate();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Resolver-driven open handler. Selects the host view based on
+    /// <see cref="SiNetSQL.Services.Tasks.TaskNavigationRequest.ComponentKey"/>.
+    /// Keeps existing legacy behavior intact for tasks that fall through to
+    /// <see cref="OnOpenWorkflowTaskRequested(int, string)"/>.
+    /// </summary>
+    private void OnOpenTaskNavigationRequested(SiNetSQL.Services.Tasks.TaskNavigationRequest request)
+    {
+        var mainWindow = Owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
+        var primaryEmailId = (int?)request.PrimaryWorkTargetEntityId;
+
+        switch (request.ComponentKey)
+        {
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectCreationFromEmail:
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.ReviewProjectSetupFromEmail:
+                if (primaryEmailId is int emailIdForCreate)
+                {
+                    var createWindow = new Dialogs.WorkflowCreateProjectWindow(
+                        emailIdForCreate, mainWindow ?? Application.Current.MainWindow);
+                    createWindow.ShowDialog();
+                }
+                break;
+
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.EmailFiling:
+                if (primaryEmailId is int emailIdForFiling)
+                {
+                    var fileWindow = new Dialogs.EmailPreviewWindow(emailIdForFiling)
+                    {
+                        Owner = mainWindow ?? Application.Current.MainWindow,
+                        Title = $"📎 תיוק קבצים — מייל #{emailIdForFiling}"
+                    };
+                    fileWindow.Show();
+                }
+                break;
+
+            default:
+                // No specialized host yet — navigate to the task's project (if any).
+                if (request.ProjectId is int projectId)
+                {
+                    mainWindow?.Activate();
+                }
+                else if (primaryEmailId is int fallbackEmailId)
+                {
+                    mainWindow?.NavigateToEmail(fallbackEmailId);
+                    mainWindow?.Activate();
+                }
                 break;
         }
     }

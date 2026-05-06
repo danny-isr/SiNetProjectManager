@@ -1,0 +1,94 @@
+<Window x:Class="SiNetProjectManagerV2.WPF_Window.AiModelCatalogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="קטלוג מודלי AI"
+        Height="560" Width="820"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        ResizeMode="CanResizeWithGrip"
+        MinHeight="420" MinWidth="640"
+        Background="{DynamicResource AppBackground}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="קטלוג מודלי AI" FontWeight="Bold" FontSize="16"/>
+            <TextBlock Text="מודלים מקומיים (Ollama) ניתן להוריד; מודלי ענן (Gemini) ניתן להגדיר כך שיופיעו ברשימת הבחירה בהגדרות AI."
+                       Opacity="0.7" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,12,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="סינון ספק:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="ProviderFilterCombo" Width="160"
+                          SelectionChanged="ProviderFilter_Changed"
+                          FlowDirection="LeftToRight"/>
+            </StackPanel>
+            <Button x:Name="RefreshInstalledButton" Grid.Column="2"
+                    Content="🔄 רענן מודלים מותקנים"
+                    Click="RefreshInstalledButton_Click"
+                    Padding="8,3" Cursor="Hand"
+                    Background="Transparent" BorderBrush="#CCC" BorderThickness="1"/>
+        </Grid>
+
+        <DataGrid x:Name="CatalogGrid" Grid.Row="2"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  IsReadOnly="True"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  SelectionMode="Single"
+                  SelectionChanged="CatalogGrid_SelectionChanged"
+                  FlowDirection="RightToLeft">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="שם תצוגה" Binding="{Binding DisplayName}" Width="220"/>
+                <DataGridTextColumn Header="מזהה מודל" Binding="{Binding ModelName}" Width="160"/>
+                <DataGridTextColumn Header="ספק" Binding="{Binding Provider}" Width="110"/>
+                <DataGridTextColumn Header="רמה מומלצת" Binding="{Binding RecommendedLevel}" Width="110"/>
+                <DataGridCheckBoxColumn Header="עברית" Binding="{Binding SupportsHebrew, Mode=OneWay}" Width="60" IsReadOnly="True"/>
+                <DataGridTextColumn Header="סטטוס" Binding="{Binding StatusText}" Width="120"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock x:Name="NotesLabel" Grid.Row="3"
+                   Margin="0,8,0,0" TextWrapping="Wrap"
+                   Opacity="0.8" FontStyle="Italic"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
+            <Button x:Name="DownloadButton"
+                    Content="הורד מודל"
+                    Click="DownloadButton_Click"
+                    Width="140" Height="30" FontWeight="Bold"
+                    Background="#1976D2" Foreground="White"
+                    IsEnabled="False"/>
+            <Button x:Name="ConfigureButton"
+                    Content="הגדר מודל"
+                    Click="ConfigureButton_Click"
+                    Width="140" Height="30" Margin="8,0,0,0" FontWeight="Bold"
+                    Background="#2E7D32" Foreground="White"
+                    IsEnabled="False"/>
+            <Button x:Name="RemoveConfiguredButton"
+                    Content="הסר מהגדרות"
+                    Click="RemoveConfiguredButton_Click"
+                    Width="140" Height="30" Margin="8,0,0,0"
+                    IsEnabled="False"/>
+            <TextBlock x:Name="StatusLabel" VerticalAlignment="Center" Margin="16,0,0,0" Opacity="0.85"/>
+            <Button Content="סגור"
+                    Click="CloseButton_Click"
+                    Width="80" Height="30" Margin="16,0,0,0"
+                    HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Grid>
+</Window>

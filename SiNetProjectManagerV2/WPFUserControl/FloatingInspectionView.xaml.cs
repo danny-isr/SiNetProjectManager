@@ -9,6 +9,7 @@ using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.Services.Stamping;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services;
+using SiNetSQL.Services.AI;
 using SiNetSQL.Services.InspectionSync;
 using SiOffice.GoogleConnector.Reports;
 
@@ -269,20 +270,25 @@ public partial class FloatingInspectionView : FloatingWindowBase
     }
 
     /// <summary>
-    /// Sends the note's plain text to the local Ollama server in the background.
-    /// Results are cached on <see cref="NoteTreeItem"/> and displayed in the context menu.
+    /// Runs the two AI checks for the inspection note in the background:
+    /// <list type="bullet">
+    ///   <item><see cref="AiModelLevel.Simple"/> for the quick mistake / spelling check.</item>
+    ///   <item><see cref="AiModelLevel.QualityCheck"/> for the wording / phrasing check.</item>
+    /// </list>
+    /// The concrete model name is resolved per-level by <see cref="AiService"/> from
+    /// <see cref="SystemSettingsService"/>; the inspection form does not know it.
     /// </summary>
     private async Task RunAiReviewInBackground(NoteTreeItem note)
     {
         System.Diagnostics.Debug.WriteLine("[AI Flow] RunAiReviewInBackground — ENTERED");
 
-        var ollamaService = App.ServiceProvider.GetService<OllamaService>();
-        if (ollamaService is null)
+        var aiService = App.ServiceProvider.GetService<AiService>();
+        if (aiService is null)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] ❌ OllamaService is NULL in DI — aborting.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ❌ AiService is NULL in DI — aborting.");
             return;
         }
-        System.Diagnostics.Debug.WriteLine("[AI Flow] ✓ OllamaService resolved from DI");
+        System.Diagnostics.Debug.WriteLine("[AI Flow] ✓ AiService resolved from DI");
 
         var (plainText, _) = RichTextCodec.Parse(note.NoteText ?? "");
         if (string.IsNullOrWhiteSpace(plainText))
@@ -290,7 +296,8 @@ public partial class FloatingInspectionView : FloatingWindowBase
             System.Diagnostics.Debug.WriteLine("[AI Flow] ❌ Plain text is empty after parse — aborting.");
             return;
         }
-        System.Diagnostics.Debug.WriteLine($"[AI Flow] ✓ Plain text extracted ({plainText.Length} chars): '{plainText.Substring(0, Math.Min(plainText.Length, 80))}'");
+        // Length only — never log the note text itself (may contain sensitive project info).
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] ✓ Plain text extracted ({plainText.Length} chars)");
 
         // Skip if already reviewed for this exact text
         if (note.AiOriginalText == plainText && !note.AiReviewInProgress)
@@ -304,25 +311,38 @@ public partial class FloatingInspectionView : FloatingWindowBase
         note.AiReviewInProgress = true;
         ViewModel.StatusMessage = "🤖 AI בודק ברקע...";
 
-        System.Diagnostics.Debug.WriteLine($"[AI Flow] 📡 Sending request to Ollama at {DateTime.Now:HH:mm:ss}...");
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] 📡 Sending request to AI at {DateTime.Now:HH:mm:ss}...");
         try
         {
-            var result = await ollamaService.ReviewNoteAsync(plainText).ConfigureAwait(false);
-            System.Diagnostics.Debug.WriteLine($"[AI Flow] 📡 Ollama response received at {DateTime.Now:HH:mm:ss}. HasError={result.HasError}");
+            // 1) Mistake check → Simple level
+            var grammar = (await CheckMistakesWithAiAsync(aiService, plainText).ConfigureAwait(false))?.Trim();
+            // 2) Wording check → QualityCheck level (NOT Writing — Writing is reserved for future rewrite action)
+            var rephrased = (await CheckWordingWithAiAsync(aiService, plainText).ConfigureAwait(false))?.Trim();
 
-            // Marshal back to UI thread for property updates
+            System.Diagnostics.Debug.WriteLine(
+                $"[AI Flow] 📡 AI responses received at {DateTime.Now:HH:mm:ss}.");
+
             await Dispatcher.InvokeAsync(() =>
             {
-                if (result.HasError)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AI Review] Background review failed: {result.Error}");
-                    ViewModel.StatusMessage = $"🤖 שגיאה: {result.Error}";
-                    return;
-                }
-
-                note.AiGrammarResult = result.GrammarCorrected?.Trim();
-                note.AiRephraseResult = result.Rephrased?.Trim();
+                note.AiGrammarResult = grammar;
+                note.AiRephraseResult = rephrased;
                 ViewModel.StatusMessage = "🤖 AI סיים — לחץ ימין לתפריט ✓";
+            });
+        }
+        catch (AiModelNotConfiguredException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Review] No model configured for level {ex.Level}: {ex.Message}");
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ViewModel.StatusMessage = $"🤖 {ex.Message}";
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Review] ⏱ Request timed out or was cancelled.");
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ViewModel.StatusMessage = "🤖 AI לא הגיב תוך הזמן המוקצב (timeout).";
             });
         }
         catch (Exception ex)
@@ -337,6 +357,27 @@ public partial class FloatingInspectionView : FloatingWindowBase
         {
             Dispatcher.Invoke(() => note.AiReviewInProgress = false);
         }
+    }
+
+    /// <summary>
+    /// Simple mistake / spelling / punctuation check.
+    /// Uses <see cref="AiModelLevel.Simple"/> — fast, cheap model configured in AI Settings.
+    /// </summary>
+    private static Task<string> CheckMistakesWithAiAsync(AiService aiService, string plainText)
+    {
+        System.Diagnostics.Debug.WriteLine("[AI Flow] → CheckMistakesWithAiAsync (level=Simple)");
+        return aiService.AskAsync($"{AiPrompts.Grammar}\n{plainText}", AiModelLevel.Simple);
+    }
+
+    /// <summary>
+    /// Wording / phrasing check on the inspection note.
+    /// Uses <see cref="AiModelLevel.QualityCheck"/>; <see cref="AiModelLevel.Writing"/>
+    /// is intentionally reserved for a future "rewrite / draft" action.
+    /// </summary>
+    private static Task<string> CheckWordingWithAiAsync(AiService aiService, string plainText)
+    {
+        System.Diagnostics.Debug.WriteLine("[AI Flow] → CheckWordingWithAiAsync (level=QualityCheck)");
+        return aiService.AskAsync($"{AiPrompts.Rephrase}\n{plainText}", AiModelLevel.QualityCheck);
     }
 
     /// <summary>
