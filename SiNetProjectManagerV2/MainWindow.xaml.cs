@@ -603,6 +603,11 @@ namespace SiNetProjectManagerV2
                 Mouse.OverrideCursor = null;
             }
         }
+#else
+        // Release-build stub: the menu item is hidden (Visibility="Collapsed" in XAML
+        // and never made visible outside DEBUG), but the XAML compiler still requires
+        // the Click handler symbol to exist on the partial class.
+        private void DevResetData_Click(object sender, RoutedEventArgs e) { }
 #endif
     }
 }
