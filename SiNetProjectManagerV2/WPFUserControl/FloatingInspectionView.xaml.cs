@@ -422,6 +422,11 @@ public partial class FloatingInspectionView : FloatingWindowBase
             viewModel.SetTemplateProvider(provider, folderId);
             viewModel.SetExportService(exportService);
 
+            // ── Planner Response Import Service ──
+            var importLogger = loggerFactory?.CreateLogger<GooglePlannerResponseImportService>();
+            var importService = new GooglePlannerResponseImportService(authService, dbContextFactory, importLogger);
+            viewModel.SetPlannerResponseImportService(importService);
+
             System.Diagnostics.Debug.WriteLine(
                 $"[InspectionView] Google services wired. FolderId={folderId}");
         }

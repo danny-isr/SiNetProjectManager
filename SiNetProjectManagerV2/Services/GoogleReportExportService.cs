@@ -96,6 +96,7 @@ public sealed class GoogleReportExportService : IReportExportService
                         .ThenInclude(c => c.ChapterName)
                 .Include(n => n.Section)
                     .ThenInclude(s => s.SectionName)
+                .Include(n => n.Attachments)
                 .Where(n => n.ReportId == reportId)
                 .OrderBy(n => n.Section.Chapter.ChapterNumber)
                 .ThenBy(n => n.Section.SectionCode)
@@ -389,6 +390,7 @@ public sealed class GoogleReportExportService : IReportExportService
             }
 
             // 6d. Inject note text into <<X.Y Title>> cells (bottom-up to avoid index shifting)
+            var noteCellMap = new List<ExportedNoteCellMap>();
             foreach (var (code, info) in sectionTags.OrderByDescending(kv => kv.Value.NoteCell?.Row ?? -1))
             {
                 if (info.NoteCell is not { } noteCell || info.Notes.Count == 0)
@@ -560,6 +562,44 @@ public sealed class GoogleReportExportService : IReportExportService
                     }
 
                     rowsInjected++;
+
+                    noteCellMap.Add(new ExportedNoteCellMap
+                    {
+                        NoteId = note.NoteId,
+                        SectionCode = code,
+                        NoteSubIndex = note.NoteSubIndex,
+                        SheetName = sheetTitle,
+                        ExportedRowIndex = targetRow,
+                        ExportedNoteColumnIndex = noteCell.Col,
+                        // Planner response is two columns to the right of the note column
+                        // (the column immediately right is reserved for status/separator).
+                        PlannerResponseColumnIndex = noteCell.Col + 2
+                    });
+                }
+
+                // Per-note ancillary tag substitution (PlannerResponse, OurResponse,
+                // ACC links, screenshot). Only applied for single-note sections to keep
+                // multi-note row insertion logic unchanged. Tags use the section code,
+                // e.g. <<3.1 PlannerResponse>>.
+                if (sectionNotes.Count == 1)
+                {
+                    var n = sectionNotes[0];
+                    AddTagFindReplace(requests, sheetId, $"<<{code} PlannerResponse>>", n.PlannerResponseText);
+                    AddTagFindReplace(requests, sheetId, $"<<{code} OurResponse>>", n.OurResponseToPlanner);
+                    AddTagFindReplace(requests, sheetId, $"<<{code} AccIssueUrl>>", n.AccIssueUrl);
+                    AddTagFindReplace(requests, sheetId, $"<<{code} AccMarkupUrl>>", n.AccMarkupUrl ?? n.AccMarkupLink);
+
+                    var screenshot = n.Attachments?
+                        .FirstOrDefault(a => a.AttachmentType == InspectionNoteAttachmentType.Screenshot
+                            && !string.IsNullOrWhiteSpace(a.GoogleDriveUrl));
+
+                    AddTagFindReplace(requests, sheetId, $"<<{code} ScreenshotUrl>>", screenshot?.GoogleDriveUrl);
+                    // =IMAGE() requires a directly-served image URL; not all Drive URLs work, so we emit
+                    // the formula and leave Sheets to display the image when supported.
+                    var imageFormula = string.IsNullOrWhiteSpace(screenshot?.GoogleDriveUrl)
+                        ? null
+                        : $"=IMAGE(\"{screenshot!.GoogleDriveUrl}\")";
+                    AddTagFindReplace(requests, sheetId, $"<<{code} ScreenshotImage>>", imageFormula);
                 }
             }
 
@@ -575,13 +615,28 @@ public sealed class GoogleReportExportService : IReportExportService
             }
 
             _logger?.LogInformation(
-                "[Export] Export complete. Tags={Tags}, Rows={Rows}, Warnings={Warnings}.",
-                tagsReplaced, rowsInjected, warnings.Count);
+                "[Export] Export complete. Tags={Tags}, Rows={Rows}, Warnings={Warnings}, NoteCellMapCount={MapCount}.",
+                tagsReplaced, rowsInjected, warnings.Count, noteCellMap.Count);
+
+            if (noteCellMap.Count == 0)
+            {
+                _logger?.LogError(
+                    "[Export] ERROR: NoteCellMap is EMPTY for report {ReportId}. Planner-response import will not work.",
+                    reportId);
+            }
+            else
+            {
+                _logger?.LogInformation(
+                    "[Export] NoteCellMap sample: NoteId={NoteId}, Sheet={Sheet}, Row={Row}, NoteCol={NoteCol}, RespCol={RespCol}.",
+                    noteCellMap[0].NoteId, noteCellMap[0].SheetName,
+                    noteCellMap[0].ExportedRowIndex, noteCellMap[0].ExportedNoteColumnIndex,
+                    noteCellMap[0].PlannerResponseColumnIndex);
+            }
 
             // ── 8. No-PDF rule ──
             bool pdfGenerated = !report.ReportNumber.ToString().Contains('.');
 
-            return BuildResult(destinationId, destinationUrl, tagsReplaced, rowsInjected, report, warnings, true, pdfGenerated);
+            return BuildResult(destinationId, destinationUrl, tagsReplaced, rowsInjected, report, warnings, true, pdfGenerated, noteCellMap);
         }
         catch (OperationCanceledException)
         {
@@ -1136,6 +1191,26 @@ public sealed class GoogleReportExportService : IReportExportService
     #region Helpers
 
     /// <summary>
+    /// Adds a FindReplace request that substitutes <paramref name="tag"/> with
+    /// <paramref name="value"/> on a single sheet. Empty values clear the tag.
+    /// </summary>
+    private static void AddTagFindReplace(List<Request> requests, int sheetId, string tag, string? value)
+    {
+        if (string.IsNullOrEmpty(tag)) return;
+        requests.Add(new Request
+        {
+            FindReplace = new FindReplaceRequest
+            {
+                Find = tag,
+                Replacement = value ?? string.Empty,
+                MatchCase = false,
+                MatchEntireCell = false,
+                SheetId = sheetId
+            }
+        });
+    }
+
+    /// <summary>
     /// Extracts the section code from a NoteSubIndex by stripping the last segment.
     /// E.g. "1.1.1" → "1.1", "2.3.2" → "2.3". Falls back to <paramref name="fullCode"/> when NoteSubIndex
     /// has no multi-level dot notation.
@@ -1159,7 +1234,8 @@ public sealed class GoogleReportExportService : IReportExportService
         InspectionReport report,
         List<string> warnings,
         bool success,
-        bool pdfGenerated = false)
+        bool pdfGenerated = false,
+        List<ExportedNoteCellMap>? noteCellMap = null)
     {
         return new ReportExportResult
         {
@@ -1169,7 +1245,8 @@ public sealed class GoogleReportExportService : IReportExportService
             RowsInjected = rowsInjected,
             PdfGenerated = pdfGenerated,
             Warnings = warnings,
-            IsSuccess = success
+            IsSuccess = success,
+            NoteCellMap = noteCellMap ?? []
         };
     }
 

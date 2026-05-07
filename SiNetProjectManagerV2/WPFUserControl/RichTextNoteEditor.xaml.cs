@@ -82,6 +82,42 @@ public partial class RichTextNoteEditor : UserControl
 
     #endregion
 
+    #region DependencyProperty – IsReadOnly
+
+    public static readonly DependencyProperty IsReadOnlyProperty =
+        DependencyProperty.Register(
+            nameof(IsReadOnly),
+            typeof(bool),
+            typeof(RichTextNoteEditor),
+            new PropertyMetadata(false, OnIsReadOnlyChanged));
+
+    /// <summary>
+    /// When true, the editor cannot enter edit mode and the inner TextBox is read-only.
+    /// Used to lock notes after a report is sent.
+    /// </summary>
+    public bool IsReadOnly
+    {
+        get => (bool)GetValue(IsReadOnlyProperty);
+        set => SetValue(IsReadOnlyProperty, value);
+    }
+
+    private static void OnIsReadOnlyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var editor = (RichTextNoteEditor)d;
+        var isReadOnly = (bool)e.NewValue;
+        editor.EditBox.IsReadOnly = isReadOnly;
+        // If currently editing and we just became read-only, exit edit mode safely.
+        if (isReadOnly && editor._isEditing)
+        {
+            editor._isEditing = false;
+            editor.EditBox.Visibility = Visibility.Collapsed;
+            editor.DisplayBorder.Visibility = Visibility.Visible;
+            editor.RenderPreview();
+        }
+    }
+
+    #endregion
+
     #region RoutedEvent – EditCompleted
 
     public static readonly RoutedEvent EditCompletedEvent =
@@ -320,6 +356,7 @@ public partial class RichTextNoteEditor : UserControl
     private void EnterEditMode()
     {
         if (_isEditing) return;
+        if (IsReadOnly) return;
         _isEditing = true;
 
         EditBox.Text = EncodedText ?? string.Empty;
