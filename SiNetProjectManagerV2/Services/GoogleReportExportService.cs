@@ -123,14 +123,49 @@ public sealed class GoogleReportExportService : IReportExportService
                 .Where(n => !string.IsNullOrEmpty(n.NoteSubIndex))
                 .ToList();
 
+            // Stability audit: explicitly log every note that the export drops
+            // because it has no NoteSubIndex. These notes are visible in the
+            // VM tree but silently disappear from the exported report, which
+            // matched the user's symptom of "different sections missing in
+            // each export".
+            var skippedNoSubIndex = notes
+                .Where(n => string.IsNullOrEmpty(n.NoteSubIndex))
+                .ToList();
+            if (skippedNoSubIndex.Count > 0)
+            {
+                _logger?.LogWarning(
+                    "[Export] SKIPPED {Count} notes with empty NoteSubIndex: [{Ids}]",
+                    skippedNoSubIndex.Count,
+                    string.Join(", ", skippedNoSubIndex.Select(n => $"NoteId={n.NoteId}/Section={n.Section?.FullCode}")));
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Export] SKIPPED {skippedNoSubIndex.Count} notes with empty NoteSubIndex: " +
+                    string.Join(", ", skippedNoSubIndex.Select(n => $"NoteId={n.NoteId}/Section={n.Section?.FullCode}")));
+            }
+
             _logger?.LogInformation(
                 "[Export] Filter: {Total} total → {WithSub} with NoteSubIndex.",
                 notes.Count, withSubIndex.Count);
             System.Diagnostics.Debug.WriteLine($"[Export] FILTER: {notes.Count} total → {withSubIndex.Count} with NoteSubIndex");
 
             // Group by numeric code prefix (e.g. "1.1") — template tags use <<1.1 Title [...]>> / <<1.1 Title>>
-            var notesBySection = withSubIndex
-                .GroupBy(n => n.Section.FullCode)
+            // Stability audit: detect duplicate Section.FullCode keys before
+            // collapsing into a Dictionary, otherwise GroupBy+ToDictionary
+            // would silently drop one of the colliding sections.
+            var groupedBySection = withSubIndex.GroupBy(n => n.Section.FullCode).ToList();
+            var duplicateKeys = groupedBySection
+                .GroupBy(g => g.Key)
+                .Where(gg => gg.Count() > 1)
+                .Select(gg => gg.Key)
+                .ToList();
+            if (duplicateKeys.Count > 0)
+            {
+                _logger?.LogWarning(
+                    "[Export] Duplicate Section.FullCode keys detected (would overwrite): [{Keys}]",
+                    string.Join(", ", duplicateKeys));
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Export] DUPLICATE SECTION KEYS: [{string.Join(", ", duplicateKeys)}]");
+            }
+            var notesBySection = groupedBySection
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             _logger?.LogInformation(

@@ -141,6 +141,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0"
@@ -150,7 +151,22 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center"/>
 
-                    <ToggleButton Grid.Column="1"
+                    <!-- [DEBUG] Fill report fields automatically (Debug builds only). -->
+                    <Button Grid.Column="1"
+                            Content="[DEBUG] מלא נתוני בדיקה"
+                            Command="{Binding DebugFillCommand}"
+                            ToolTip="מילוי אוטומטי של ReviewedVersion וטקסט הערות ריקות (DEBUG בלבד)"
+                            ToolTipService.ShowOnDisabled="True"
+                            Visibility="{Binding IsDebugMode, Converter={StaticResource BoolToVisibility}}"
+                            Margin="6,0,0,0"
+                            Padding="6,2"
+                            Cursor="Hand"
+                            Background="#FFB300"
+                            Foreground="Black"
+                            FontWeight="SemiBold"
+                            BorderThickness="0"/>
+
+                    <ToggleButton Grid.Column="2"
                                   IsChecked="{Binding IsPinned, Mode=TwoWay}"
                                   Width="28" Height="28"
                                   Margin="6,0,0,0"
@@ -188,7 +204,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     </ToggleButton>
 
                     <!-- Dock/Undock toggle: docked = stays with app, undocked = floats above all -->
-                    <ToggleButton Grid.Column="2"
+                    <ToggleButton Grid.Column="3"
                                   IsChecked="{Binding IsDocked, Mode=TwoWay}"
                                   Width="28" Height="28"
                                   Margin="4,0,0,0"
@@ -230,7 +246,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                         </ToggleButton.Style>
                     </ToggleButton>
 
-                    <Button Grid.Column="3"
+                    <Button Grid.Column="4"
                             Content="🔄"
                             Command="{Binding RefreshCommand}"
                             ToolTip="רענן"
@@ -241,7 +257,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                             BorderThickness="0"
                             Foreground="White"/>
 
-                    <Button Grid.Column="4"
+                    <Button Grid.Column="5"
                             Content="⊡"
                             Click="ResetSizeButton_Click"
                             ToolTip="אפס גודל חלון"
@@ -253,7 +269,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                             Foreground="White"
                             FontSize="14"/>
 
-                    <Button Grid.Column="5"
+                    <Button Grid.Column="6"
                             Command="{Binding ToggleCollapseCommand}"
                             Width="28" Height="28"
                             Margin="4,0,0,0"
@@ -275,7 +291,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                         </Button.Style>
                     </Button>
 
-                    <Button Grid.Column="6"
+                    <Button Grid.Column="7"
                             Content="✕"
                             Click="CloseButton_Click"
                             ToolTip="סגור"
@@ -526,20 +542,33 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                         </Grid>
                     </Border>
 
-                    <!-- Global Fields: Report metadata (non-hierarchical) -->
+                    <!-- Global Fields: Report metadata (non-hierarchical) — single inline row -->
                     <Border Grid.Row="2" Background="{DynamicResource AppBackground}" CornerRadius="4"
                             BorderBrush="#D0D0D0" BorderThickness="1"
                             Padding="6,3" Margin="2,0,2,3">
-                        <Grid>
+                        <StackPanel Orientation="Vertical">
+                            <!-- Banner: shown when Work Window 2 isn't open (file query service unavailable) -->
+                            <Border Background="#FFF8E1" BorderBrush="#FFB300" BorderThickness="1"
+                                    CornerRadius="3" Padding="6,3" Margin="0,0,0,4"
+                                    Visibility="{Binding IsActiveFileServiceAvailable, Converter={StaticResource InverseBool}}">
+                                <TextBlock Text="{Binding ActiveFileServiceUnavailableMessage}"
+                                           Foreground="#6D4C00"
+                                           FontSize="{DynamicResource AppFontSizeSecondary}"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+
+                            <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto" MinWidth="80"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto" MinWidth="60"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
 
                             <TextBlock Grid.Column="0" Text="בודק:"
                                        FontSize="{DynamicResource AppFontSizeSecondary}" Foreground="#555"
@@ -556,7 +585,54 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                        Text="{Binding SelectedReport.InspectionDate, StringFormat=dd/MM/yyyy, Mode=OneWay}"
                                        FontSize="{DynamicResource AppFontSizeSecondary}" FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
+
+                            <!-- Reviewed Version (Phase A) — inline -->
+                            <TextBlock Grid.Column="4" Text="גרסה:"
+                                       FontSize="{DynamicResource AppFontSizeSecondary}" Foreground="#555"
+                                       VerticalAlignment="Center" Margin="12,0,6,0"/>
+                            <TextBox Grid.Column="5"
+                                     Text="{Binding SelectedReportReviewedVersion, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding IsSelectedReportEditable}"
+                                     FontSize="{DynamicResource AppFontSizeSecondary}"
+                                     VerticalAlignment="Center" Padding="3,1"
+                                     ToolTip="גרסת התוכנית שנבדקה (חובה לייצוא)"/>
+
+                            <!-- Reviewed Plan (Phase B) — inline -->
+                            <TextBlock Grid.Column="6" Text="תוכנית:"
+                                       FontSize="{DynamicResource AppFontSizeSecondary}" Foreground="#555"
+                                       VerticalAlignment="Center" Margin="12,0,6,0"/>
+                            <ItemsControl Grid.Column="7"
+                                          ItemsSource="{Binding ReviewedFiles}"
+                                          VerticalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#E3F2FD" BorderBrush="#90CAF9" BorderThickness="1"
+                                                CornerRadius="2" Padding="4,0" Margin="0,0,4,0">
+                                            <TextBlock FontSize="{DynamicResource AppFontSizeSecondary}"
+                                                       TextTrimming="CharacterEllipsis">
+                                                <Run Text="{Binding FileName, Mode=OneWay}"/>
+                                                <Run Text=" / "/>
+                                                <Run Text="{Binding Alternative, Mode=OneWay}"/>
+                                            </TextBlock>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Grid.Column="8"
+                                    Content="בחר תוכנית..."
+                                    Command="{Binding SelectReviewedPlanCommand}"
+                                    Margin="6,0,0,0" Padding="8,1"
+                                    FontSize="{DynamicResource AppFontSizeSecondary}"
+                                    VerticalAlignment="Center"
+                                    ToolTip="{Binding SelectReviewedPlanTooltip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
                         </Grid>
+                        </StackPanel>
                     </Border>
 
                     <TreeView Grid.Row="3"
@@ -750,11 +826,19 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                     <Setter Property="Background" Value="#E8F5E9"/>
                                                     <Setter Property="BorderBrush" Value="#2E7D32"/>
                                                 </DataTrigger>
+                                                <!-- ManagerReview notes block export — flag the whole row red. -->
+                                                <DataTrigger Binding="{Binding IsManagerReviewBlockingExport}" Value="True">
+                                                    <Setter Property="Background" Value="#FDECEA"/>
+                                                    <Setter Property="BorderBrush" Value="#C62828"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                    <Setter Property="ToolTip" Value="הערה זו ממתינה לבדיקת מנהל ולכן מונעת ייצוא דוח."/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="42"/>
                                             <ColumnDefinition Width="70"/>
@@ -777,7 +861,17 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                     ToolTip="הזז למטה"/>
                                         </StackPanel>
 
-                                        <TextBlock Grid.Column="1"
+                                        <Button Grid.Column="1" Content="📂"
+                                                FontSize="{DynamicResource AppFontSizeSmall}"
+                                                Width="18" Height="20" Padding="0" Margin="1,0,2,0"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource CardActionButton}"
+                                                ToolTip="{Binding DataContext.OpenNoteLinkedFileTooltip, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTipService.ShowOnDisabled="True"/>
+
+                                        <TextBlock Grid.Column="2"
                                                    Text="{Binding DisplayLabel}"
                                                    Foreground="#333" FontSize="{DynamicResource AppFontSizeSecondary}"
                                                    FontWeight="Bold"
@@ -785,7 +879,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                    HorizontalAlignment="Right"
                                                    Margin="0,0,2,0"/>
 
-                                        <TextBlock Grid.Column="1"
+                                        <TextBlock Grid.Column="2"
                                                    Text="💬"
                                                    FontSize="{DynamicResource AppFontSizeSmall}"
                                                    VerticalAlignment="Top"
@@ -807,7 +901,7 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                             </TextBlock.Style>
                                         </TextBlock>
 
-                                        <ComboBox Grid.Column="2"
+                                        <ComboBox Grid.Column="3"
                                                   ItemsSource="{Binding DataContext.StatusOptions, RelativeSource={RelativeSource AncestorType=Window}}"
                                                   DisplayMemberPath="Label"
                                                   SelectedValuePath="DbKey"
@@ -819,9 +913,22 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                   VerticalAlignment="Center"
                                                   Height="20"
                                                   IsEnabled="{Binding DataContext.IsSelectedReportEditable, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  SelectionChanged="TreeNoteStatusComboBox_SelectionChanged"/>
+                                                  SelectionChanged="TreeNoteStatusComboBox_SelectionChanged">
+                                            <ComboBox.Style>
+                                                <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsManagerReviewBlockingExport}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#C62828"/>
+                                                            <Setter Property="BorderThickness" Value="2"/>
+                                                            <Setter Property="Background" Value="#FDECEA"/>
+                                                            <Setter Property="ToolTip" Value="הערה זו ממתינה לבדיקת מנהל ולכן מונעת ייצוא דוח."/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ComboBox.Style>
+                                        </ComboBox>
 
-                                        <Border Grid.Column="3" CornerRadius="2">
+                                        <Border Grid.Column="4" CornerRadius="2">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="BorderThickness" Value="0"/>
@@ -989,6 +1096,9 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                         <TextBlock Grid.Column="0" FontWeight="SemiBold" Foreground="#555"
                                    FontSize="{DynamicResource AppFontSizeSecondary}">
                             📐 שרטוטים
+                            <Run Text="{Binding DrawingsDropdownHint, Mode=OneWay}"
+                                 FontWeight="Normal" Foreground="#888"
+                                 FontSize="{DynamicResource AppFontSizeSmall}"/>
                         </TextBlock>
 
                         <ComboBox x:Name="DrawingFileComboBox" Grid.Column="1"
@@ -998,7 +1108,8 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                   FontSize="{DynamicResource AppFontSizeSecondary}"
                                   Margin="0,0,4,0"
                                   IsEnabled="{Binding IsSelectedReportEditable}"
-                                  ToolTip="בחר קובץ שרטוט להוספה"/>
+                                  ToolTip="{Binding DrawingsDropdownHint}"
+                                  ToolTipService.ShowOnDisabled="True"/>
 
                         <Button Grid.Column="2"
                                 Content="➕"
@@ -1141,7 +1252,8 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                     Style="{StaticResource CardActionButton}"
                                                     Padding="2,0" FontSize="{DynamicResource AppFontSizeSecondary}"
                                                     Margin="2,0,0,0"
-                                                    ToolTip="ייצוא דוח"/>
+                                                    ToolTip="{Binding DataContext.ExportReportTooltip, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    ToolTipService.ShowOnDisabled="True"/>
                                             <Button Content="🗑️"
                                                     Command="{Binding DataContext.DeleteReportCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     Style="{StaticResource CardActionButton}"
