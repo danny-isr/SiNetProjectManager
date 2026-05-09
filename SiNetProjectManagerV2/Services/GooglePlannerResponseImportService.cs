@@ -379,43 +379,20 @@ public sealed class GooglePlannerResponseImportService : IPlannerResponseImportS
                         confidence = "Low";
                     }
 
-                    // Backward-compat fallback: older snapshots saved
-                    // PlannerResponseColumnIndex = NoteCol + 1, but the actual planner
-                    // response cell is NoteCol + 2. If the primary cell is empty, try
-                    // (NoteCol + 2) and log when the fallback is used.
+                    // The planner-response column is now sourced exclusively from the
+                    // <<תגובת המתכנן>> template tag (captured into PlannerResponseColumnIndex
+                    // at export time). No offset-based guessing is performed: if the snapshot
+                    // mapping lacks a planner-response column, we log and skip rather than
+                    // silently picking the wrong column.
                     int effectiveResponseCol = entry.PlannerResponseColumnIndex;
                     bool fallbackUsed = false;
-                    if (string.IsNullOrEmpty(responseText) && row != null)
+                    if (effectiveResponseCol < 0)
                     {
-                        int fallbackCol = entry.ExportedNoteColumnIndex + 2;
-                        if (fallbackCol != entry.PlannerResponseColumnIndex
-                            && fallbackCol >= 0 && fallbackCol < row.Count)
-                        {
-                            var fallbackRaw = row[fallbackCol]?.ToString();
-                            var fallbackText = NormalizePlannerResponse(fallbackRaw);
-                            if (fallbackText.Length > 0 && IsPlaceholderPlannerResponse(fallbackText))
-                            {
-                                _logger?.LogInformation(
-                                    "[InspectionResponseImport] Ignored placeholder response. NoteId={NoteId}, Cell={Cell}, Value={Value}",
-                                    entry.NoteId,
-                                    ToA1Address(entry.ExportedRowIndex, fallbackCol),
-                                    fallbackText);
-                                fallbackText = string.Empty;
-                            }
-                            if (fallbackText.Length > 0)
-                            {
-                                _logger?.LogWarning(
-                                    "[InspectionResponseImport] Used fallback response column. NoteId={NoteId}, PrimaryCell={Primary}, FallbackCell={Fallback}, FallbackLen={Len}",
-                                    entry.NoteId,
-                                    ToA1Address(entry.ExportedRowIndex, entry.PlannerResponseColumnIndex),
-                                    ToA1Address(entry.ExportedRowIndex, fallbackCol),
-                                    fallbackRaw?.Length ?? 0);
-                                rawResponse = fallbackRaw;
-                                responseText = fallbackText;
-                                effectiveResponseCol = fallbackCol;
-                                fallbackUsed = true;
-                            }
-                        }
+                        _logger?.LogWarning(
+                            "[InspectionResponseImport] Snapshot has no planner-response column. " +
+                            "NoteId={NoteId}, SectionCode={Section}, SubIndex={Sub}, " +
+                            "Operation=DesignerCommentsColumn, Reason=Missing PlannerResponseColumnIndex in snapshot",
+                            entry.NoteId, entry.SectionCode, entry.NoteSubIndex);
                     }
 
                     bool willImport = !string.IsNullOrEmpty(responseText);

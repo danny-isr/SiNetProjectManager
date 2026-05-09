@@ -308,6 +308,47 @@ public sealed class GoogleReportExportService : IReportExportService
             // ── 6. Build batch requests ──
             var requests = new List<Request>();
 
+            // 6.0. Locate the mandatory <<תגובת המתכנן>> column tag and replace it with
+            //      a user-friendly header. The column it sits in becomes the authoritative
+            //      planner-response column for this exported report — no fixed offset.
+            var allScannedTags = ScanAllTemplateTags(allRows);
+            var plannerResponseTag = allScannedTags
+                .FirstOrDefault(t => t.IsPlannerResponseColumnTag);
+            int plannerResponseColumnIndex = plannerResponseTag?.Col ?? -1;
+
+            if (plannerResponseTag is null)
+            {
+                _logger?.LogWarning(
+                    "[Export] Planner-response column tag <<{Tag}>> not found in template. " +
+                    "ReportId={ReportId}, ReportNumber={ReportNumber}, Operation=DesignerCommentsColumn, " +
+                    "Reason=Template tag missing — falling back to noteCol+2 for backward compatibility.",
+                    TemplateTagValidator.PlannerResponseTagLabel,
+                    reportId, report.ReportNumber);
+                warnings.Add(TemplateTagValidator.PlannerResponseTagMissingMessage);
+            }
+            else
+            {
+                _logger?.LogInformation(
+                    "[Export] Planner-response column resolved from tag. ReportId={ReportId}, " +
+                    "Tag=<<{Tag}>>, Row={Row}, Col={Col}, Operation=DesignerCommentsColumn",
+                    reportId, TemplateTagValidator.PlannerResponseTagLabel,
+                    plannerResponseTag.Row, plannerResponseTag.Col);
+
+                // Replace the tag literal in the destination sheet with a plain header
+                // so the user never sees the raw <<...>> placeholder.
+                requests.Add(new Request
+                {
+                    FindReplace = new FindReplaceRequest
+                    {
+                        Find = $"<<{TemplateTagValidator.PlannerResponseTagLabel}>>",
+                        Replacement = TemplateTagValidator.PlannerResponseTagLabel,
+                        AllSheets = true,
+                        MatchCase = false,
+                        MatchEntireCell = false
+                    }
+                });
+            }
+
             // 6a. Global <<tag>> replacement via FindReplace
             foreach (var (tag, value) in tagMap)
             {
@@ -347,6 +388,34 @@ public sealed class GoogleReportExportService : IReportExportService
                 warnings.Add("No matching section tags found in the template. " +
                     $"NotesBySection keys: [{string.Join(", ", notesBySection.Keys)}]. " +
                     "Verify that the template contains <<X.Y Title [...]>> and <<X.Y Title>> tags matching these codes.");
+            }
+
+            // ── Export completeness validation: compare DB sections vs template tags ──
+            // Operation=GoogleReportExportValidation. Non-blocking — log warnings only.
+            var templateSectionCodes = allScannedTags
+                .Where(t => !t.IsGeneralTag && !string.IsNullOrEmpty(t.SectionCode))
+                .Select(t => t.SectionCode)
+                .Distinct(StringComparer.Ordinal)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var code in notesBySection.Keys)
+            {
+                if (!sectionTags.ContainsKey(code))
+                {
+                    var sectionTitle = notesBySection[code]
+                        .FirstOrDefault()?.Section?.SectionName?.Name;
+                    _logger?.LogWarning(
+                        "[Export] Section in report not exported. ReportId={ReportId}, " +
+                        "ReportNumber={ReportNumber}, SectionNumber={SectionNumber}, " +
+                        "SectionTitle={SectionTitle}, Operation=GoogleReportExportValidation, " +
+                        "Reason={Reason}",
+                        reportId, report.ReportNumber, code, sectionTitle ?? "<unknown>",
+                        templateSectionCodes.Contains(code)
+                            ? "Template tag present but no NoteCell/StatusCell mapping was built"
+                            : "Unknown export mapping failure");
+                    warnings.Add(
+                        $"סעיף {code} ({sectionTitle ?? string.Empty}) לא יוצא לדוח Google.");
+                }
             }
 
             // 6c. Inject aggregated status LABEL into <<X.Y Title [...]>> cells (bold + background color)
@@ -606,9 +675,11 @@ public sealed class GoogleReportExportService : IReportExportService
                         SheetName = sheetTitle,
                         ExportedRowIndex = targetRow,
                         ExportedNoteColumnIndex = noteCell.Col,
-                        // Planner response is two columns to the right of the note column
-                        // (the column immediately right is reserved for status/separator).
-                        PlannerResponseColumnIndex = noteCell.Col + 2
+                        // Planner-response column is determined exclusively by the mandatory
+                        // <<תגובת המתכנן>> template tag. We deliberately do NOT guess a
+                        // fallback column (e.g. noteCol+2): the import side will log a
+                        // warning and skip the note rather than read the wrong column.
+                        PlannerResponseColumnIndex = plannerResponseColumnIndex
                     });
                 }
 
@@ -1056,11 +1127,16 @@ public sealed class GoogleReportExportService : IReportExportService
                 {
                     if (matched.Contains((rowIdx, colIdx, m.Index))) continue;
                     var label = m.Groups[1].Value.Trim();
+                    var isPlannerResponseTag = string.Equals(
+                        label,
+                        TemplateTagValidator.PlannerResponseTagLabel,
+                        StringComparison.Ordinal);
                     tags.Add(new TemplateScanTag
                     {
                         SectionCode = string.Empty,
                         GeneralTagLabel = label,
                         IsGeneralTag = true,
+                        IsPlannerResponseColumnTag = isPlannerResponseTag,
                         Row = rowIdx,
                         Col = colIdx
                     });

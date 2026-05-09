@@ -369,6 +369,21 @@
                             קוד: DUPLICATE_GENERAL_TAG&#x0a;
                             כל תגית כללית (&lt;&lt;שם פרויקט&gt;&gt;) חייבת להיות ייחודית בתבנית.
                         </TextBlock>
+
+                        <!-- Rule 8: Mandatory planner-response column tag -->
+                        <TextBlock Style="{StaticResource BodyText}" FontWeight="Bold" Margin="0,8,0,2">
+                            כלל 8: עמודת תגובת המתכנן (חובה)
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource BodyText}" Foreground="#555" Margin="12,0,0,0">
+                            קוד: MISSING_PLANNER_RESPONSE_TAG / DUPLICATE_PLANNER_RESPONSE_TAG&#x0a;
+                            התגית &lt;&lt;תגובת המתכנן&gt;&gt; חייבת להופיע בתבנית בדיוק פעם אחת.&#x0a;
+                            התא שבו היא מופיעה קובע את העמודה שבה ייכתבו וייקראו תגובות המתכנן.&#x0a;
+                            בעת יצירת הדוח התגית מוחלפת בכותרת רגילה: "תגובת המתכנן".&#x0a;
+                            המערכת אינה מסתמכת יותר על מיקום יחסי (שתי עמודות אחרי מספר הסעיף).&#x0a;
+                            הודעות שגיאה:&#x0a;
+                            • "לא נמצאה עמודת תגובת המתכנן בתבנית"&#x0a;
+                            • "תגית עמודת תגובת המתכנן יכולה להופיע רק פעם אחת בתבנית"
+                        </TextBlock>
                     </StackPanel>
                 </Expander>
 
