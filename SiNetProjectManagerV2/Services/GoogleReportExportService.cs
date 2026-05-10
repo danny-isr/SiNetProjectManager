@@ -1217,24 +1217,24 @@ public sealed class GoogleReportExportService : IReportExportService
         {
             await _authService.EnsureAuthenticatedAsync(cancellationToken);
             var driveService = _authService.DriveService
-                ?? throw new InvalidOperationException(""Drive service not available after authentication."");
+                ?? throw new InvalidOperationException("Drive service not available after authentication.");
 
             var listRequest = driveService.Permissions.List(spreadsheetId);
-            listRequest.Fields = ""permissions(id,type,role,allowFileDiscovery)"";
+            listRequest.Fields = "permissions(id,type,role,allowFileDiscovery)";
             listRequest.SupportsAllDrives = true;
 
             var existing = await listRequest.ExecuteAsync(cancellationToken);
             var anyone = existing?.Permissions?
-                .FirstOrDefault(p => string.Equals(p.Type, ""anyone"", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(p => string.Equals(p.Type, "anyone", StringComparison.OrdinalIgnoreCase));
 
             bool existingFound = anyone != null;
-            var url = $""https://docs.google.com/spreadsheets/d/{spreadsheetId}"";
+            var url = $"https://docs.google.com/spreadsheets/d/{spreadsheetId}";
 
             if (anyone != null)
             {
-                if (!string.Equals(anyone.Role, ""writer"", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(anyone.Role, "writer", StringComparison.OrdinalIgnoreCase))
                 {
-                    var updateBody = new Google.Apis.Drive.v3.Data.Permission { Role = ""writer"" };
+                    var updateBody = new Google.Apis.Drive.v3.Data.Permission { Role = "writer" };
                     var updateRequest = driveService.Permissions.Update(updateBody, spreadsheetId, anyone.Id);
                     updateRequest.SupportsAllDrives = true;
                     await updateRequest.ExecuteAsync(cancellationToken);
@@ -1244,8 +1244,8 @@ public sealed class GoogleReportExportService : IReportExportService
             {
                 var permission = new Google.Apis.Drive.v3.Data.Permission
                 {
-                    Type = ""anyone"",
-                    Role = ""writer"",
+                    Type = "anyone",
+                    Role = "writer",
                     AllowFileDiscovery = false
                 };
                 var createRequest = driveService.Permissions.Create(permission, spreadsheetId);
@@ -1255,8 +1255,8 @@ public sealed class GoogleReportExportService : IReportExportService
             }
 
             _logger?.LogInformation(
-                ""[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} "" +
-                ""ExistingAnyonePermissionFound={Existing} Result=Success"",
+                "[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} " +
+                "ExistingAnyonePermissionFound={Existing} Result=Success",
                 spreadsheetId, existingFound);
 
             return new AnyoneWithLinkShareResult
@@ -1269,8 +1269,8 @@ public sealed class GoogleReportExportService : IReportExportService
         catch (Exception ex)
         {
             _logger?.LogError(ex,
-                ""[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} "" +
-                ""Result=Failed Reason={Reason}"", spreadsheetId, ex.Message);
+                "[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} " +
+                "Result=Failed Reason={Reason}", spreadsheetId, ex.Message);
             return new AnyoneWithLinkShareResult
             {
                 IsSuccess = false,

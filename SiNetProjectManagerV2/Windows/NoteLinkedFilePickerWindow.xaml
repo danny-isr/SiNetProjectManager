@@ -1,0 +1,49 @@
+<Window x:Class="SiNetProjectManagerV2.Windows.NoteLinkedFilePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="בחר קובץ מקושר להערה"
+        FlowDirection="RightToLeft"
+        Width="520" Height="520"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ResizeMode="CanResize">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="בחר את הקובץ והאלטרנטיבה שאליהם תהיה ההערה מקושרת."
+                   Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+        <TextBox Grid.Row="1" x:Name="FilterBox"
+                 Margin="0,0,0,8"
+                 TextChanged="OnFilterChanged"
+                 ToolTip="סינון לפי שם קובץ או אלטרנטיבה"/>
+
+        <ListBox x:Name="CandidatesList" Grid.Row="2"
+                 SelectionMode="Single"
+                 MouseDoubleClick="OnListDoubleClick">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock>
+                        <Run Text="{Binding FileName, Mode=OneWay}" FontWeight="SemiBold"/>
+                        <Run Text=" / "/>
+                        <Run Text="{Binding Alternative, Mode=OneWay}"/>
+                    </TextBlock>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal"
+                    HorizontalAlignment="Left" Margin="0,8,0,0">
+            <Button Content="אישור" Width="90" Margin="0,0,8,0"
+                    IsDefault="True" Click="OnOk"/>
+            <Button Content="ביטול" Width="90"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

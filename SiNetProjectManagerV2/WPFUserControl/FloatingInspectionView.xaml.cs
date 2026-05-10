@@ -1,4 +1,4 @@
-ο»Ώusing System.ComponentModel;
+using System.ComponentModel;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -45,6 +45,9 @@ public partial class FloatingInspectionView : FloatingWindowBase
         // Wire the WPF reviewed-plan picker (Phase B)
         viewModel.SetReviewedPlanPicker(new SiNetProjectManagerV2.Services.Inspection.ReviewedPlanPicker());
 
+        // Wire the WPF per-note linked-file picker
+        viewModel.SetNoteLinkedFilePicker(new SiNetProjectManagerV2.Services.Inspection.NoteLinkedFilePicker());
+
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
 
@@ -88,7 +91,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
         var ollamaService = App.ServiceProvider.GetService<OllamaService>();
         if (ollamaService is null)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Startup] β OllamaService not registered in DI.");
+            System.Diagnostics.Debug.WriteLine("[AI Startup] ? OllamaService not registered in DI.");
             return;
         }
 
@@ -106,7 +109,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI Startup] β οΈ Could not load model from DB: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AI Startup] ?? Could not load model from DB: {ex.Message}");
         }
 
         System.Diagnostics.Debug.WriteLine("[AI Startup] Checking Ollama server connectivity...");
@@ -114,12 +117,12 @@ public partial class FloatingInspectionView : FloatingWindowBase
         {
             var available = await ollamaService.IsAvailableAsync().ConfigureAwait(false);
             System.Diagnostics.Debug.WriteLine(available
-                ? "[AI Startup] β… Ollama server is reachable and responding."
-                : "[AI Startup] β οΈ Ollama server returned non-success status.");
+                ? "[AI Startup] ? Ollama server is reachable and responding."
+                : "[AI Startup] ?? Ollama server returned non-success status.");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI Startup] β Ollama server unreachable: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AI Startup] ? Ollama server unreachable: {ex.Message}");
         }
     }
 
@@ -190,14 +193,14 @@ public partial class FloatingInspectionView : FloatingWindowBase
         System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted entered. sender={sender?.GetType().Name}");
         if (sender is not RichTextNoteEditor { DataContext: NoteTreeItem note }) return;
 
-        System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted β€” NoteText='{note.NoteText?.Substring(0, Math.Min(note.NoteText?.Length ?? 0, 50))}', IsDirty={note.IsDirty}");
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted — NoteText='{note.NoteText?.Substring(0, Math.Min(note.NoteText?.Length ?? 0, 50))}', IsDirty={note.IsDirty}");
 
         if (note.IsDirty)
             ViewModel.SaveNote(note);
 
         if (string.IsNullOrWhiteSpace(note.NoteText))
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] Note is empty β€” deleting, skipping AI.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] Note is empty — deleting, skipping AI.");
             ViewModel.DeleteEmptyNote(note);
         }
         else
@@ -293,8 +296,8 @@ public partial class FloatingInspectionView : FloatingWindowBase
         note.NoteText = e.SuggestedText;
         ViewModel.SaveNote(note);
 
-        var displayType = e.ReviewType == "grammar" ? "ΧªΧ™Χ§Χ•Χ ΧªΧ—Χ‘Χ™Χ¨Χ™" : "Χ Χ™Χ΅Χ•Χ— ΧΧ—Χ“Χ©";
-        ViewModel.StatusMessage = $"π¤– {displayType} Χ”Χ•Χ—Χ Χ‘Χ”Χ¦ΧΧ—Χ” β“";
+        var displayType = e.ReviewType == "grammar" ? "ϊιχεο ϊηαιψι" : "πιρεη ξηγω";
+        ViewModel.StatusMessage = $"?? {displayType} δεημ αδφμηδ ?";
 
         // Re-run AI review on the newly applied text
         _ = RunAiReviewInBackground(note);
@@ -311,53 +314,53 @@ public partial class FloatingInspectionView : FloatingWindowBase
     /// </summary>
     private async Task RunAiReviewInBackground(NoteTreeItem note)
     {
-        System.Diagnostics.Debug.WriteLine("[AI Flow] RunAiReviewInBackground β€” ENTERED");
+        System.Diagnostics.Debug.WriteLine("[AI Flow] RunAiReviewInBackground — ENTERED");
 
         var aiService = App.ServiceProvider.GetService<AiService>();
         if (aiService is null)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] β AiService is NULL in DI β€” aborting.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ? AiService is NULL in DI — aborting.");
             return;
         }
-        System.Diagnostics.Debug.WriteLine("[AI Flow] β“ AiService resolved from DI");
+        System.Diagnostics.Debug.WriteLine("[AI Flow] ? AiService resolved from DI");
 
         var (plainText, _) = RichTextCodec.Parse(note.NoteText ?? "");
         if (string.IsNullOrWhiteSpace(plainText))
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] β Plain text is empty after parse β€” aborting.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ? Plain text is empty after parse — aborting.");
             return;
         }
-        // Length only β€” never log the note text itself (may contain sensitive project info).
-        System.Diagnostics.Debug.WriteLine($"[AI Flow] β“ Plain text extracted ({plainText.Length} chars)");
+        // Length only — never log the note text itself (may contain sensitive project info).
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] ? Plain text extracted ({plainText.Length} chars)");
 
         // Skip if already reviewed for this exact text
         if (note.AiOriginalText == plainText && !note.AiReviewInProgress)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] β­ Already reviewed for this exact text β€” skipping.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ? Already reviewed for this exact text — skipping.");
             return;
         }
 
         note.ClearAiResults();
         note.AiOriginalText = plainText;
         note.AiReviewInProgress = true;
-        ViewModel.StatusMessage = "π¤– AI Χ‘Χ•Χ“Χ§ Χ‘Χ¨Χ§ΧΆ...";
+        ViewModel.StatusMessage = "?? AI αεγχ αψχς...";
 
-        System.Diagnostics.Debug.WriteLine($"[AI Flow] π“΅ Sending request to AI at {DateTime.Now:HH:mm:ss}...");
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] ?? Sending request to AI at {DateTime.Now:HH:mm:ss}...");
         try
         {
-            // 1) Mistake check β†’ Simple level
+            // 1) Mistake check ? Simple level
             var grammar = (await CheckMistakesWithAiAsync(aiService, plainText).ConfigureAwait(false))?.Trim();
-            // 2) Wording check β†’ QualityCheck level (NOT Writing β€” Writing is reserved for future rewrite action)
+            // 2) Wording check ? QualityCheck level (NOT Writing — Writing is reserved for future rewrite action)
             var rephrased = (await CheckWordingWithAiAsync(aiService, plainText).ConfigureAwait(false))?.Trim();
 
             System.Diagnostics.Debug.WriteLine(
-                $"[AI Flow] π“΅ AI responses received at {DateTime.Now:HH:mm:ss}.");
+                $"[AI Flow] ?? AI responses received at {DateTime.Now:HH:mm:ss}.");
 
             await Dispatcher.InvokeAsync(() =>
             {
                 note.AiGrammarResult = grammar;
                 note.AiRephraseResult = rephrased;
-                ViewModel.StatusMessage = "π¤– AI Χ΅Χ™Χ™Χ β€” ΧΧ—Χ¥ Χ™ΧΧ™Χ ΧΧªΧ¤Χ¨Χ™Χ β“";
+                ViewModel.StatusMessage = "?? AI ριιν — μηυ ιξιο μϊτψιθ ?";
             });
         }
         catch (AiModelNotConfiguredException ex)
@@ -365,15 +368,15 @@ public partial class FloatingInspectionView : FloatingWindowBase
             System.Diagnostics.Debug.WriteLine($"[AI Review] No model configured for level {ex.Level}: {ex.Message}");
             await Dispatcher.InvokeAsync(() =>
             {
-                ViewModel.StatusMessage = $"π¤– {ex.Message}";
+                ViewModel.StatusMessage = $"?? {ex.Message}";
             });
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Review] β± Request timed out or was cancelled.");
+            System.Diagnostics.Debug.WriteLine("[AI Review] ? Request timed out or was cancelled.");
             await Dispatcher.InvokeAsync(() =>
             {
-                ViewModel.StatusMessage = "π¤– AI ΧΧ Χ”Χ’Χ™Χ‘ ΧªΧ•Χ Χ”Χ–ΧΧ Χ”ΧΧ•Χ§Χ¦Χ‘ (timeout).";
+                ViewModel.StatusMessage = "?? AI μΰ δβια ϊεκ δζξο δξεχφα (timeout).";
             });
         }
         catch (Exception ex)
@@ -381,7 +384,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
             System.Diagnostics.Debug.WriteLine($"[AI Review] Background review exception: {ex.Message}");
             await Dispatcher.InvokeAsync(() =>
             {
-                ViewModel.StatusMessage = $"π¤– Χ©Χ’Χ™ΧΧ”: {ex.Message}";
+                ViewModel.StatusMessage = $"?? ωβιΰδ: {ex.Message}";
             });
         }
         finally
@@ -392,11 +395,11 @@ public partial class FloatingInspectionView : FloatingWindowBase
 
     /// <summary>
     /// Simple mistake / spelling / punctuation check.
-    /// Uses <see cref="AiModelLevel.Simple"/> β€” fast, cheap model configured in AI Settings.
+    /// Uses <see cref="AiModelLevel.Simple"/> — fast, cheap model configured in AI Settings.
     /// </summary>
     private static Task<string> CheckMistakesWithAiAsync(AiService aiService, string plainText)
     {
-        System.Diagnostics.Debug.WriteLine("[AI Flow] β†’ CheckMistakesWithAiAsync (level=Simple)");
+        System.Diagnostics.Debug.WriteLine("[AI Flow] ? CheckMistakesWithAiAsync (level=Simple)");
         return aiService.AskAsync($"{AiPrompts.Grammar}\n{plainText}", AiModelLevel.Simple);
     }
 
@@ -407,7 +410,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
     /// </summary>
     private static Task<string> CheckWordingWithAiAsync(AiService aiService, string plainText)
     {
-        System.Diagnostics.Debug.WriteLine("[AI Flow] β†’ CheckWordingWithAiAsync (level=QualityCheck)");
+        System.Diagnostics.Debug.WriteLine("[AI Flow] ? CheckWordingWithAiAsync (level=QualityCheck)");
         return aiService.AskAsync($"{AiPrompts.Rephrase}\n{plainText}", AiModelLevel.QualityCheck);
     }
 
@@ -420,27 +423,27 @@ public partial class FloatingInspectionView : FloatingWindowBase
     {
         try
         {
-            // β”€β”€ Check Google client secrets availability β”€β”€
+            // ?? Check Google client secrets availability ??
             if (string.IsNullOrWhiteSpace(AppConfiguration.GetGoogleClientSecretsPath()))
             {
-                System.Diagnostics.Debug.WriteLine("[InspectionView] Google credentials not configured β€” Google services not wired.");
+                System.Diagnostics.Debug.WriteLine("[InspectionView] Google credentials not configured — Google services not wired.");
                 return;
             }
 
-            // β”€β”€ Resolve shared GoogleAuthService (singleton β€” single auth per session) β”€β”€
+            // ?? Resolve shared GoogleAuthService (singleton — single auth per session) ??
             var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
 
-            // β”€β”€ Template Provider β”€β”€
+            // ?? Template Provider ??
             var provider = new GoogleInspectionTemplateProvider(authService);
 
-            // β”€β”€ Export Service (with logger for diagnostic output) β”€β”€
+            // ?? Export Service (with logger for diagnostic output) ??
             var dbContextFactory = App.ServiceProvider
                 .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
             var loggerFactory = App.ServiceProvider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>();
             var exportLogger = loggerFactory?.CreateLogger<GoogleReportExportService>();
             var exportService = new GoogleReportExportService(authService, dbContextFactory, exportLogger);
 
-            // β”€β”€ Read admin-configured folder IDs from centralized DB settings β”€β”€
+            // ?? Read admin-configured folder IDs from centralized DB settings ??
             var settingsService = App.ServiceProvider.GetRequiredService<SystemSettingsService>();
             var folderId = await settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InspectionTemplatesFolderId, string.Empty);
@@ -449,14 +452,22 @@ public partial class FloatingInspectionView : FloatingWindowBase
                 SystemSettingKeys.InspectionReportsFolderId, string.Empty);
             exportService.ReportsFolderId = reportsFolderId;
 
-            // β”€β”€ Inject into ViewModel β”€β”€
+            // ?? Inject into ViewModel ??
             viewModel.SetTemplateProvider(provider, folderId);
             viewModel.SetExportService(exportService);
 
-            // β”€β”€ Planner Response Import Service β”€β”€
+            // ?? Planner Response Import Service ??
             var importLogger = loggerFactory?.CreateLogger<GooglePlannerResponseImportService>();
             var importService = new GooglePlannerResponseImportService(authService, dbContextFactory, importLogger);
             viewModel.SetPlannerResponseImportService(importService);
+
+            // -- Note Screenshot Upload Service --
+            var screenshotLogger = loggerFactory?.CreateLogger<GoogleNoteScreenshotUploadService>();
+            var screenshotService = new GoogleNoteScreenshotUploadService(authService, dbContextFactory, screenshotLogger)
+            {
+                ReportsFolderId = reportsFolderId
+            };
+            viewModel.SetScreenshotUploadService(screenshotService);
 
             System.Diagnostics.Debug.WriteLine(
                 $"[InspectionView] Google services wired. FolderId={folderId}");

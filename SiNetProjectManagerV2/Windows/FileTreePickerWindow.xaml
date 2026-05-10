@@ -1,0 +1,70 @@
+<Window x:Class="SiNetProjectManagerV2.Windows.FileTreePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="בחר קובץ"
+        FlowDirection="RightToLeft"
+        Width="640" Height="600"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ResizeMode="CanResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" x:Name="HeaderText"
+                   Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+        <TextBox Grid.Row="1" x:Name="FilterBox"
+                 Margin="0,0,0,8"
+                 TextChanged="OnFilterChanged"
+                 ToolTip="סינון לפי שם תיקייה, קובץ או חלופה"/>
+
+        <TreeView Grid.Row="2" x:Name="Tree">
+            <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                    <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}"/>
+                </Style>
+            </TreeView.ItemContainerStyle>
+            <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Icon}" Margin="0,0,4,0"/>
+                        <CheckBox Margin="0,0,4,0"
+                                  IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsSelectable}"
+                                  Visibility="{Binding ShowCheckBox, Converter={StaticResource BoolToVis}}"
+                                  Checked="OnItemChecked"
+                                  Unchecked="OnItemUnchecked"/>
+                        <TextBlock Text="{Binding Title}"
+                                   FontWeight="{Binding TitleWeight}"
+                                   MouseDown="OnTitleMouseDown"/>
+                    </StackPanel>
+                </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+
+        <TextBlock Grid.Row="3" x:Name="EmptyText"
+                   Text="לא נמצאו קבצים זמינים לבחירה"
+                   Foreground="#888"
+                   Margin="0,8,0,0"
+                   Visibility="Collapsed"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal"
+                    HorizontalAlignment="Left" Margin="0,8,0,0">
+            <Button Content="אישור" Width="90" Margin="0,0,8,0"
+                    x:Name="OkButton"
+                    IsDefault="True" Click="OnOk"/>
+            <Button Content="ביטול" Width="90"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

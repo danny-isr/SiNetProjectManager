@@ -875,15 +875,66 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                     ToolTip="הזז למטה"/>
                                         </StackPanel>
 
-                                        <Button Grid.Column="1" Content="📂"
-                                                FontSize="{DynamicResource AppFontSizeSmall}"
-                                                Width="18" Height="20" Padding="0" Margin="1,0,2,0"
-                                                VerticalAlignment="Center"
-                                                Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"
-                                                Style="{StaticResource CardActionButton}"
-                                                ToolTip="{Binding DataContext.OpenNoteLinkedFileTooltip, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                ToolTipService.ShowOnDisabled="True"/>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                    VerticalAlignment="Center" Margin="4,0,4,0">
+                                            <Button Content="📂"
+                                                    FontSize="{DynamicResource AppFontSizeSmall}"
+                                                    Width="18" Height="18" Padding="0" Margin="0,0,3,0"
+                                                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource CardActionButton}"
+                                                    ToolTip="{Binding OpenLinkedFileTooltip}"
+                                                    ToolTipService.ShowOnDisabled="True"
+                                                    ContextMenuService.ShowOnDisabled="True">
+                                                <Button.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="פתח קובץ מקושר"
+                                                                  Command="{Binding PlacementTarget.Tag.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                        <MenuItem Header="בחר/שנה קובץ מקושר"
+                                                                  Command="{Binding PlacementTarget.Tag.SetNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                        <MenuItem Header="נקה קובץ מקושר"
+                                                                  Command="{Binding PlacementTarget.Tag.ClearNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                    </ContextMenu>
+                                                </Button.ContextMenu>
+                                            </Button>
+                                            <Button Content="📷"
+                                                    FontSize="{DynamicResource AppFontSizeSmall}"
+                                                    Width="18" Height="18" Padding="0"
+                                                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Command="{Binding DataContext.ScreenshotPrimaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTipService.ShowOnDisabled="True">
+                                                <Button.ToolTip>
+                                                    <ToolTip Style="{StaticResource WrappingPlannerResponseToolTip}"
+                                                             Content="{Binding PlacementTarget.DataContext.AttachmentTooltipText, RelativeSource={RelativeSource Self}}"/>
+                                                </Button.ToolTip>
+                                                <Button.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="פתח את התמונה האחרונה"
+                                                                  Command="{Binding PlacementTarget.Tag.OpenLastAttachmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                        <MenuItem Header="צרף תמונה חדשה מהלוח"
+                                                                  Command="{Binding PlacementTarget.Tag.AttachScreenshotCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                    </ContextMenu>
+                                                </Button.ContextMenu>
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource CardActionButton}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasAttachments}" Value="True">
+                                                                <Setter Property="Background" Value="#E8F5E9"/>
+                                                                <Setter Property="BorderBrush" Value="#2E7D32"/>
+                                                                <Setter Property="BorderThickness" Value="1"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </StackPanel>
 
                                         <TextBlock Grid.Column="2"
                                                    Text="{Binding DisplayLabel}"
