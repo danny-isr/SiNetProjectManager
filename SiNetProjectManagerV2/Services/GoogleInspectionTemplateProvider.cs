@@ -212,11 +212,17 @@ public sealed class GoogleInspectionTemplateProvider : IInspectionTemplateProvid
         // 3. Convert header tags to TemplateSyncRow (even if errors — caller decides)
         var syncRows = BuildSyncRowsFromTags(allTags);
 
+        // 4. Locate the mandatory <<תגובת המתכנן>> tag (validated above).
+        var plannerResponseTag = allTags
+            .FirstOrDefault(t => t.IsPlannerResponseColumnTag);
+
         return new TemplateScanResult
         {
             SyncRows = syncRows,
             AllTags = allTags,
-            ValidationErrors = validationErrors
+            ValidationErrors = validationErrors,
+            PlannerResponseColumnIndex = plannerResponseTag?.Col ?? -1,
+            PlannerResponseRowIndex = plannerResponseTag?.Row ?? -1
         };
     }
 

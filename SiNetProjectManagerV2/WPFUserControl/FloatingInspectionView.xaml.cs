@@ -42,6 +42,9 @@ public partial class FloatingInspectionView : FloatingWindowBase
         // Wire the drawing stamp service
         viewModel.SetDrawingStampService(new DrawingStampService());
 
+        // Wire the WPF reviewed-plan picker (Phase B)
+        viewModel.SetReviewedPlanPicker(new SiNetProjectManagerV2.Services.Inspection.ReviewedPlanPicker());
+
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
 
@@ -421,6 +424,11 @@ public partial class FloatingInspectionView : FloatingWindowBase
             // ── Inject into ViewModel ──
             viewModel.SetTemplateProvider(provider, folderId);
             viewModel.SetExportService(exportService);
+
+            // ── Planner Response Import Service ──
+            var importLogger = loggerFactory?.CreateLogger<GooglePlannerResponseImportService>();
+            var importService = new GooglePlannerResponseImportService(authService, dbContextFactory, importLogger);
+            viewModel.SetPlannerResponseImportService(importService);
 
             System.Diagnostics.Debug.WriteLine(
                 $"[InspectionView] Google services wired. FolderId={folderId}");

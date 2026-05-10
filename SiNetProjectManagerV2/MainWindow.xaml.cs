@@ -23,6 +23,13 @@ namespace SiNetProjectManagerV2
         private FloatingProjectTasksView? _floatingTasksWindow;
         private FloatingInspectionView? _floatingInspectionWindow;
 
+        // Cached heavy views — created on first navigation, then reused.
+        // The view-models subscribe to ActiveProjectContext.ActiveProjectChanged so
+        // they stay in sync with the global active project even while hidden,
+        // and any embedded WebView2 instances keep their state across navigation.
+        private ProjectWorkView? _cachedProjectWorkView;
+        private EmailManagementView? _cachedEmailManagementView;
+
         public MainWindow()
         {
             InitializeComponent(); // חובה כדי לטעון את ה־XAML
@@ -157,7 +164,7 @@ namespace SiNetProjectManagerV2
             => NavigateToView(new ProjectFolderTreeView());
 
         private void OpenProjectWork2_Click(object sender, RoutedEventArgs e)
-            => NavigateToView(new ProjectWorkView());
+            => NavigateToView(_cachedProjectWorkView ??= new ProjectWorkView());
 
         private void Control_Click(object sender, RoutedEventArgs e)
         {
@@ -181,11 +188,16 @@ namespace SiNetProjectManagerV2
 
         private void OpenEmailManagement_Click(object sender, RoutedEventArgs e)
         {
-            ActiveProjectContext.Instance.Clear();
-            var emailView = new EmailManagementView();
-            var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
-            emailView.DataContext = new EmailManagementViewModel(googleService);
-            NavigateToView(emailView);
+            // NOTE: do NOT clear ActiveProjectContext here.
+            // The active project must persist across windows; the EmailManagementViewModel
+            // auto-selects it once reference data has loaded.
+            if (_cachedEmailManagementView == null)
+            {
+                _cachedEmailManagementView = new EmailManagementView();
+                var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
+                _cachedEmailManagementView.DataContext = new EmailManagementViewModel(googleService);
+            }
+            NavigateToView(_cachedEmailManagementView);
         }
 
         /// <summary>
@@ -206,9 +218,16 @@ namespace SiNetProjectManagerV2
                 emailSubject = email?.Subject;
                 messageUniqueId = email?.MessageUniqueId;
 
-                // Create ViewModel (instant — constructor no longer blocks on DB queries)
-                var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
-                var emailVm = new EmailManagementViewModel(googleService);
+                // Reuse the cached EmailManagementView/VM if available so WebView2 state
+                // and Gmail session are preserved across navigation.
+                if (_cachedEmailManagementView == null)
+                {
+                    _cachedEmailManagementView = new EmailManagementView();
+                    var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
+                    _cachedEmailManagementView.DataContext = new EmailManagementViewModel(googleService);
+                }
+
+                var emailVm = (EmailManagementViewModel)_cachedEmailManagementView.DataContext!;
 
                 if (!string.IsNullOrEmpty(messageUniqueId))
                 {
@@ -216,9 +235,7 @@ namespace SiNetProjectManagerV2
                 }
 
                 // Navigate immediately so the user sees the view while data loads
-                var emailView = new EmailManagementView();
-                emailView.DataContext = emailVm;
-                NavigateToView(emailView);
+                NavigateToView(_cachedEmailManagementView);
 
                 // Title hint as fallback if email is not on current page
                 var hint = !string.IsNullOrWhiteSpace(emailSubject)
@@ -226,18 +243,10 @@ namespace SiNetProjectManagerV2
                     : $"{_defaultTitle} — 📧 מייל #{emailId}";
                 Title = hint;
 
-                // Wait for reference data to load, then pre-select the active project
+                // Wait for reference data to load. Pre-selection of the active project
+                // is now handled inside the VM (via ActiveProjectContext sync), so we
+                // only need to await here for callers that rely on Title fallbacks.
                 await emailVm.DataLoadedTask;
-
-                var activeProjectId = ActiveProjectContext.Instance.ActiveProjectId;
-                if (activeProjectId.HasValue)
-                {
-                    var matchingProject = emailVm.Projects.FirstOrDefault(p => p.Id == activeProjectId.Value);
-                    if (matchingProject != null)
-                    {
-                        emailVm.SelectedProject = matchingProject;
-                    }
-                }
             }
             catch (Exception ex)
             {
@@ -249,7 +258,7 @@ namespace SiNetProjectManagerV2
 
         private void OpenTaskPanel_Click(object sender, RoutedEventArgs e)
         {
-            ActiveProjectContext.Instance.Clear();
+            // Active project persists across views; do not clear it here.
             NavigateToView(new TaskPanelView());
         }
 
@@ -420,7 +429,7 @@ namespace SiNetProjectManagerV2
 
         private void OpenWorkflowDashboard_Click(object sender, RoutedEventArgs e)
         {
-            ActiveProjectContext.Instance.Clear();
+            // Active project persists across views; do not clear it here.
             NavigateToView(new WorkflowDashboardView());
         }
 

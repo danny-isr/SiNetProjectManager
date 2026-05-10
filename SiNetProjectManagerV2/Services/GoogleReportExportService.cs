@@ -96,6 +96,7 @@ public sealed class GoogleReportExportService : IReportExportService
                         .ThenInclude(c => c.ChapterName)
                 .Include(n => n.Section)
                     .ThenInclude(s => s.SectionName)
+                .Include(n => n.Attachments)
                 .Where(n => n.ReportId == reportId)
                 .OrderBy(n => n.Section.Chapter.ChapterNumber)
                 .ThenBy(n => n.Section.SectionCode)
@@ -122,14 +123,49 @@ public sealed class GoogleReportExportService : IReportExportService
                 .Where(n => !string.IsNullOrEmpty(n.NoteSubIndex))
                 .ToList();
 
+            // Stability audit: explicitly log every note that the export drops
+            // because it has no NoteSubIndex. These notes are visible in the
+            // VM tree but silently disappear from the exported report, which
+            // matched the user's symptom of "different sections missing in
+            // each export".
+            var skippedNoSubIndex = notes
+                .Where(n => string.IsNullOrEmpty(n.NoteSubIndex))
+                .ToList();
+            if (skippedNoSubIndex.Count > 0)
+            {
+                _logger?.LogWarning(
+                    "[Export] SKIPPED {Count} notes with empty NoteSubIndex: [{Ids}]",
+                    skippedNoSubIndex.Count,
+                    string.Join(", ", skippedNoSubIndex.Select(n => $"NoteId={n.NoteId}/Section={n.Section?.FullCode}")));
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Export] SKIPPED {skippedNoSubIndex.Count} notes with empty NoteSubIndex: " +
+                    string.Join(", ", skippedNoSubIndex.Select(n => $"NoteId={n.NoteId}/Section={n.Section?.FullCode}")));
+            }
+
             _logger?.LogInformation(
                 "[Export] Filter: {Total} total → {WithSub} with NoteSubIndex.",
                 notes.Count, withSubIndex.Count);
             System.Diagnostics.Debug.WriteLine($"[Export] FILTER: {notes.Count} total → {withSubIndex.Count} with NoteSubIndex");
 
             // Group by numeric code prefix (e.g. "1.1") — template tags use <<1.1 Title [...]>> / <<1.1 Title>>
-            var notesBySection = withSubIndex
-                .GroupBy(n => n.Section.FullCode)
+            // Stability audit: detect duplicate Section.FullCode keys before
+            // collapsing into a Dictionary, otherwise GroupBy+ToDictionary
+            // would silently drop one of the colliding sections.
+            var groupedBySection = withSubIndex.GroupBy(n => n.Section.FullCode).ToList();
+            var duplicateKeys = groupedBySection
+                .GroupBy(g => g.Key)
+                .Where(gg => gg.Count() > 1)
+                .Select(gg => gg.Key)
+                .ToList();
+            if (duplicateKeys.Count > 0)
+            {
+                _logger?.LogWarning(
+                    "[Export] Duplicate Section.FullCode keys detected (would overwrite): [{Keys}]",
+                    string.Join(", ", duplicateKeys));
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Export] DUPLICATE SECTION KEYS: [{string.Join(", ", duplicateKeys)}]");
+            }
+            var notesBySection = groupedBySection
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             _logger?.LogInformation(
@@ -272,6 +308,47 @@ public sealed class GoogleReportExportService : IReportExportService
             // ── 6. Build batch requests ──
             var requests = new List<Request>();
 
+            // 6.0. Locate the mandatory <<תגובת המתכנן>> column tag and replace it with
+            //      a user-friendly header. The column it sits in becomes the authoritative
+            //      planner-response column for this exported report — no fixed offset.
+            var allScannedTags = ScanAllTemplateTags(allRows);
+            var plannerResponseTag = allScannedTags
+                .FirstOrDefault(t => t.IsPlannerResponseColumnTag);
+            int plannerResponseColumnIndex = plannerResponseTag?.Col ?? -1;
+
+            if (plannerResponseTag is null)
+            {
+                _logger?.LogWarning(
+                    "[Export] Planner-response column tag <<{Tag}>> not found in template. " +
+                    "ReportId={ReportId}, ReportNumber={ReportNumber}, Operation=DesignerCommentsColumn, " +
+                    "Reason=Template tag missing — falling back to noteCol+2 for backward compatibility.",
+                    TemplateTagValidator.PlannerResponseTagLabel,
+                    reportId, report.ReportNumber);
+                warnings.Add(TemplateTagValidator.PlannerResponseTagMissingMessage);
+            }
+            else
+            {
+                _logger?.LogInformation(
+                    "[Export] Planner-response column resolved from tag. ReportId={ReportId}, " +
+                    "Tag=<<{Tag}>>, Row={Row}, Col={Col}, Operation=DesignerCommentsColumn",
+                    reportId, TemplateTagValidator.PlannerResponseTagLabel,
+                    plannerResponseTag.Row, plannerResponseTag.Col);
+
+                // Replace the tag literal in the destination sheet with a plain header
+                // so the user never sees the raw <<...>> placeholder.
+                requests.Add(new Request
+                {
+                    FindReplace = new FindReplaceRequest
+                    {
+                        Find = $"<<{TemplateTagValidator.PlannerResponseTagLabel}>>",
+                        Replacement = TemplateTagValidator.PlannerResponseTagLabel,
+                        AllSheets = true,
+                        MatchCase = false,
+                        MatchEntireCell = false
+                    }
+                });
+            }
+
             // 6a. Global <<tag>> replacement via FindReplace
             foreach (var (tag, value) in tagMap)
             {
@@ -311,6 +388,34 @@ public sealed class GoogleReportExportService : IReportExportService
                 warnings.Add("No matching section tags found in the template. " +
                     $"NotesBySection keys: [{string.Join(", ", notesBySection.Keys)}]. " +
                     "Verify that the template contains <<X.Y Title [...]>> and <<X.Y Title>> tags matching these codes.");
+            }
+
+            // ── Export completeness validation: compare DB sections vs template tags ──
+            // Operation=GoogleReportExportValidation. Non-blocking — log warnings only.
+            var templateSectionCodes = allScannedTags
+                .Where(t => !t.IsGeneralTag && !string.IsNullOrEmpty(t.SectionCode))
+                .Select(t => t.SectionCode)
+                .Distinct(StringComparer.Ordinal)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var code in notesBySection.Keys)
+            {
+                if (!sectionTags.ContainsKey(code))
+                {
+                    var sectionTitle = notesBySection[code]
+                        .FirstOrDefault()?.Section?.SectionName?.Name;
+                    _logger?.LogWarning(
+                        "[Export] Section in report not exported. ReportId={ReportId}, " +
+                        "ReportNumber={ReportNumber}, SectionNumber={SectionNumber}, " +
+                        "SectionTitle={SectionTitle}, Operation=GoogleReportExportValidation, " +
+                        "Reason={Reason}",
+                        reportId, report.ReportNumber, code, sectionTitle ?? "<unknown>",
+                        templateSectionCodes.Contains(code)
+                            ? "Template tag present but no NoteCell/StatusCell mapping was built"
+                            : "Unknown export mapping failure");
+                    warnings.Add(
+                        $"סעיף {code} ({sectionTitle ?? string.Empty}) לא יוצא לדוח Google.");
+                }
             }
 
             // 6c. Inject aggregated status LABEL into <<X.Y Title [...]>> cells (bold + background color)
@@ -389,6 +494,7 @@ public sealed class GoogleReportExportService : IReportExportService
             }
 
             // 6d. Inject note text into <<X.Y Title>> cells (bottom-up to avoid index shifting)
+            var noteCellMap = new List<ExportedNoteCellMap>();
             foreach (var (code, info) in sectionTags.OrderByDescending(kv => kv.Value.NoteCell?.Row ?? -1))
             {
                 if (info.NoteCell is not { } noteCell || info.Notes.Count == 0)
@@ -560,6 +666,46 @@ public sealed class GoogleReportExportService : IReportExportService
                     }
 
                     rowsInjected++;
+
+                    noteCellMap.Add(new ExportedNoteCellMap
+                    {
+                        NoteId = note.NoteId,
+                        SectionCode = code,
+                        NoteSubIndex = note.NoteSubIndex,
+                        SheetName = sheetTitle,
+                        ExportedRowIndex = targetRow,
+                        ExportedNoteColumnIndex = noteCell.Col,
+                        // Planner-response column is determined exclusively by the mandatory
+                        // <<תגובת המתכנן>> template tag. We deliberately do NOT guess a
+                        // fallback column (e.g. noteCol+2): the import side will log a
+                        // warning and skip the note rather than read the wrong column.
+                        PlannerResponseColumnIndex = plannerResponseColumnIndex
+                    });
+                }
+
+                // Per-note ancillary tag substitution (PlannerResponse, OurResponse,
+                // ACC links, screenshot). Only applied for single-note sections to keep
+                // multi-note row insertion logic unchanged. Tags use the section code,
+                // e.g. <<3.1 PlannerResponse>>.
+                if (sectionNotes.Count == 1)
+                {
+                    var n = sectionNotes[0];
+                    AddTagFindReplace(requests, sheetId, $"<<{code} PlannerResponse>>", n.PlannerResponseText);
+                    AddTagFindReplace(requests, sheetId, $"<<{code} OurResponse>>", n.OurResponseToPlanner);
+                    AddTagFindReplace(requests, sheetId, $"<<{code} AccIssueUrl>>", n.AccIssueUrl);
+                    AddTagFindReplace(requests, sheetId, $"<<{code} AccMarkupUrl>>", n.AccMarkupUrl ?? n.AccMarkupLink);
+
+                    var screenshot = n.Attachments?
+                        .FirstOrDefault(a => a.AttachmentType == InspectionNoteAttachmentType.Screenshot
+                            && !string.IsNullOrWhiteSpace(a.GoogleDriveUrl));
+
+                    AddTagFindReplace(requests, sheetId, $"<<{code} ScreenshotUrl>>", screenshot?.GoogleDriveUrl);
+                    // =IMAGE() requires a directly-served image URL; not all Drive URLs work, so we emit
+                    // the formula and leave Sheets to display the image when supported.
+                    var imageFormula = string.IsNullOrWhiteSpace(screenshot?.GoogleDriveUrl)
+                        ? null
+                        : $"=IMAGE(\"{screenshot!.GoogleDriveUrl}\")";
+                    AddTagFindReplace(requests, sheetId, $"<<{code} ScreenshotImage>>", imageFormula);
                 }
             }
 
@@ -575,13 +721,28 @@ public sealed class GoogleReportExportService : IReportExportService
             }
 
             _logger?.LogInformation(
-                "[Export] Export complete. Tags={Tags}, Rows={Rows}, Warnings={Warnings}.",
-                tagsReplaced, rowsInjected, warnings.Count);
+                "[Export] Export complete. Tags={Tags}, Rows={Rows}, Warnings={Warnings}, NoteCellMapCount={MapCount}.",
+                tagsReplaced, rowsInjected, warnings.Count, noteCellMap.Count);
+
+            if (noteCellMap.Count == 0)
+            {
+                _logger?.LogError(
+                    "[Export] ERROR: NoteCellMap is EMPTY for report {ReportId}. Planner-response import will not work.",
+                    reportId);
+            }
+            else
+            {
+                _logger?.LogInformation(
+                    "[Export] NoteCellMap sample: NoteId={NoteId}, Sheet={Sheet}, Row={Row}, NoteCol={NoteCol}, RespCol={RespCol}.",
+                    noteCellMap[0].NoteId, noteCellMap[0].SheetName,
+                    noteCellMap[0].ExportedRowIndex, noteCellMap[0].ExportedNoteColumnIndex,
+                    noteCellMap[0].PlannerResponseColumnIndex);
+            }
 
             // ── 8. No-PDF rule ──
             bool pdfGenerated = !report.ReportNumber.ToString().Contains('.');
 
-            return BuildResult(destinationId, destinationUrl, tagsReplaced, rowsInjected, report, warnings, true, pdfGenerated);
+            return BuildResult(destinationId, destinationUrl, tagsReplaced, rowsInjected, report, warnings, true, pdfGenerated, noteCellMap);
         }
         catch (OperationCanceledException)
         {
@@ -966,11 +1127,16 @@ public sealed class GoogleReportExportService : IReportExportService
                 {
                     if (matched.Contains((rowIdx, colIdx, m.Index))) continue;
                     var label = m.Groups[1].Value.Trim();
+                    var isPlannerResponseTag = string.Equals(
+                        label,
+                        TemplateTagValidator.PlannerResponseTagLabel,
+                        StringComparison.Ordinal);
                     tags.Add(new TemplateScanTag
                     {
                         SectionCode = string.Empty,
                         GeneralTagLabel = label,
                         IsGeneralTag = true,
+                        IsPlannerResponseColumnTag = isPlannerResponseTag,
                         Row = rowIdx,
                         Col = colIdx
                     });
@@ -1136,6 +1302,26 @@ public sealed class GoogleReportExportService : IReportExportService
     #region Helpers
 
     /// <summary>
+    /// Adds a FindReplace request that substitutes <paramref name="tag"/> with
+    /// <paramref name="value"/> on a single sheet. Empty values clear the tag.
+    /// </summary>
+    private static void AddTagFindReplace(List<Request> requests, int sheetId, string tag, string? value)
+    {
+        if (string.IsNullOrEmpty(tag)) return;
+        requests.Add(new Request
+        {
+            FindReplace = new FindReplaceRequest
+            {
+                Find = tag,
+                Replacement = value ?? string.Empty,
+                MatchCase = false,
+                MatchEntireCell = false,
+                SheetId = sheetId
+            }
+        });
+    }
+
+    /// <summary>
     /// Extracts the section code from a NoteSubIndex by stripping the last segment.
     /// E.g. "1.1.1" → "1.1", "2.3.2" → "2.3". Falls back to <paramref name="fullCode"/> when NoteSubIndex
     /// has no multi-level dot notation.
@@ -1159,7 +1345,8 @@ public sealed class GoogleReportExportService : IReportExportService
         InspectionReport report,
         List<string> warnings,
         bool success,
-        bool pdfGenerated = false)
+        bool pdfGenerated = false,
+        List<ExportedNoteCellMap>? noteCellMap = null)
     {
         return new ReportExportResult
         {
@@ -1169,7 +1356,8 @@ public sealed class GoogleReportExportService : IReportExportService
             RowsInjected = rowsInjected,
             PdfGenerated = pdfGenerated,
             Warnings = warnings,
-            IsSuccess = success
+            IsSuccess = success,
+            NoteCellMap = noteCellMap ?? []
         };
     }
 
