@@ -50,7 +50,35 @@ public partial class FloatingInspectionView : FloatingWindowBase
 
         // Verify Ollama AI connectivity at startup
         _ = CheckOllamaConnectivityAsync();
+
+#if DEBUG
+        Loaded += FloatingInspectionView_DebugLogIdentity;
+#endif
     }
+
+#if DEBUG
+    private void FloatingInspectionView_DebugLogIdentity(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var vm = DataContext as FloatingInspectionViewModel;
+            var reg = SiNetSQL.Services.ActiveFileQuery.ActiveFileQueryRegistry.Instance;
+            System.Diagnostics.Debug.WriteLine(
+                $"[FloatingInspectionView] Loaded " +
+                $"Window#{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this)} " +
+                $"DataContextType={(DataContext?.GetType().FullName ?? "(null)")} " +
+                $"VM#{(vm == null ? "(null)" : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(vm).ToString())} " +
+                $"VM.IsActiveFileServiceAvailable={(vm?.IsActiveFileServiceAvailable.ToString() ?? "(null)")} " +
+                $"VM.IsWorkWindowWarningVisible={(vm?.IsWorkWindowWarningVisible.ToString() ?? "(null)")} " +
+                $"Registry.IsAvailable={reg.IsAvailable} " +
+                $"Registry.CurrentProjectNumber={(reg.CurrentProjectNumber?.ToString() ?? "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FloatingInspectionView] Loaded log failed: {ex.Message}");
+        }
+    }
+#endif
 
     /// <summary>
     /// One-time startup check: loads the saved model from DB and verifies the Ollama server is reachable.

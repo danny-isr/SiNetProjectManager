@@ -296,9 +296,14 @@ public sealed class GoogleInspectionTemplateProvider : IInspectionTemplateProvid
         }
 
         // ── General tags → Chapter 0 sections ──
-        // Ordered by column ascending (A first), then row ascending (top first)
+        // Ordered by column ascending (A first), then row ascending (top first).
+        // The mandatory <<תגובת המתכנן>> tag (IsPlannerResponseColumnTag) is
+        // explicitly excluded — it is a column-locator, not a data field, and must
+        // not flow into SyncRows / SectionNames / InspectionNotes.
         var generalTags = tags
-            .Where(t => t.IsGeneralTag && !string.IsNullOrWhiteSpace(t.GeneralTagLabel))
+            .Where(t => t.IsGeneralTag
+                        && !t.IsPlannerResponseColumnTag
+                        && !string.IsNullOrWhiteSpace(t.GeneralTagLabel))
             .OrderBy(t => t.Col)
             .ThenBy(t => t.Row);
 

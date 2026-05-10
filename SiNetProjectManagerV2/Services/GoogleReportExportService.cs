@@ -85,6 +85,9 @@ public sealed class GoogleReportExportService : IReportExportService
                     .ThenInclude(p => p!.OnerProject)
                 .Include(r => r.Project)
                     .ThenInclude(p => p!.Contacts)
+                .Include(r => r.Project)
+                    .ThenInclude(p => p!.ProjectPlanners)
+                        .ThenInclude(pp => pp.Contacts)
                 .Include(r => r.Inspector)
                 .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken)
                 ?? throw new InvalidOperationException($"Report {reportId} not found.");
@@ -724,6 +727,33 @@ public sealed class GoogleReportExportService : IReportExportService
                 "[Export] Export complete. Tags={Tags}, Rows={Rows}, Warnings={Warnings}, NoteCellMapCount={MapCount}.",
                 tagsReplaced, rowsInjected, warnings.Count, noteCellMap.Count);
 
+            // ── 7b. Apply planner-only edit permissions ──
+            // Share the sheet with the planner email (if any) and protect everything
+            // except the planner-response cells listed in noteCellMap.
+            try
+            {
+                var designerEmail = ResolvePlannerEmail(report);
+                await ApplyPlannerResponsePermissionsAsync(
+                    sheetsService,
+                    driveService,
+                    templateSpreadsheetId,
+                    destinationId,
+                    spreadsheet,
+                    noteCellMap,
+                    report,
+                    designerEmail,
+                    warnings,
+                    cancellationToken);
+            }
+            catch (Exception permEx)
+            {
+                _logger?.LogWarning(permEx,
+                    "[Export] Operation=PlannerResponsePermissions ReportId={ReportId} ReportNumber={ReportNumber} " +
+                    "SpreadsheetId={SpreadsheetId} Failed to apply planner-response permissions — export not aborted.",
+                    reportId, report.ReportNumber, destinationId);
+                warnings.Add($"Planner-response permissions failed: {permEx.Message}");
+            }
+
             if (noteCellMap.Count == 0)
             {
                 _logger?.LogError(
@@ -1176,6 +1206,78 @@ public sealed class GoogleReportExportService : IReportExportService
 
     #endregion
 
+    /// <inheritdoc />
+    public async Task<AnyoneWithLinkShareResult> ShareReportAnyoneWithLinkAsync(
+        string spreadsheetId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(spreadsheetId);
+
+        try
+        {
+            await _authService.EnsureAuthenticatedAsync(cancellationToken);
+            var driveService = _authService.DriveService
+                ?? throw new InvalidOperationException(""Drive service not available after authentication."");
+
+            var listRequest = driveService.Permissions.List(spreadsheetId);
+            listRequest.Fields = ""permissions(id,type,role,allowFileDiscovery)"";
+            listRequest.SupportsAllDrives = true;
+
+            var existing = await listRequest.ExecuteAsync(cancellationToken);
+            var anyone = existing?.Permissions?
+                .FirstOrDefault(p => string.Equals(p.Type, ""anyone"", StringComparison.OrdinalIgnoreCase));
+
+            bool existingFound = anyone != null;
+            var url = $""https://docs.google.com/spreadsheets/d/{spreadsheetId}"";
+
+            if (anyone != null)
+            {
+                if (!string.Equals(anyone.Role, ""writer"", StringComparison.OrdinalIgnoreCase))
+                {
+                    var updateBody = new Google.Apis.Drive.v3.Data.Permission { Role = ""writer"" };
+                    var updateRequest = driveService.Permissions.Update(updateBody, spreadsheetId, anyone.Id);
+                    updateRequest.SupportsAllDrives = true;
+                    await updateRequest.ExecuteAsync(cancellationToken);
+                }
+            }
+            else
+            {
+                var permission = new Google.Apis.Drive.v3.Data.Permission
+                {
+                    Type = ""anyone"",
+                    Role = ""writer"",
+                    AllowFileDiscovery = false
+                };
+                var createRequest = driveService.Permissions.Create(permission, spreadsheetId);
+                createRequest.SupportsAllDrives = true;
+                createRequest.SendNotificationEmail = false;
+                await createRequest.ExecuteAsync(cancellationToken);
+            }
+
+            _logger?.LogInformation(
+                ""[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} "" +
+                ""ExistingAnyonePermissionFound={Existing} Result=Success"",
+                spreadsheetId, existingFound);
+
+            return new AnyoneWithLinkShareResult
+            {
+                IsSuccess = true,
+                ExistingAnyonePermissionFound = existingFound,
+                SpreadsheetUrl = url
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex,
+                ""[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} "" +
+                ""Result=Failed Reason={Reason}"", spreadsheetId, ex.Message);
+            return new AnyoneWithLinkShareResult
+            {
+                IsSuccess = false,
+                ErrorMessage = ex.Message
+            };
+        }
+    }
     #region TextFormatRun Conversion
 
     /// <summary>
@@ -1359,6 +1461,425 @@ public sealed class GoogleReportExportService : IReportExportService
             IsSuccess = success,
             NoteCellMap = noteCellMap ?? []
         };
+    }
+
+    #endregion
+
+    #region Planner-Response Permissions
+
+    private static readonly System.Text.RegularExpressions.Regex EmailRegex =
+        new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Resolves the planner/designer email from the report's project planners.
+    /// Returns null if no planner with a valid email is associated.
+    /// </summary>
+    private static string? ResolvePlannerEmail(InspectionReport report)
+    {
+        var email = report.Project?.ProjectPlanners?
+            .Select(pp => pp.Contacts?.Email)
+            .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e) && EmailRegex.IsMatch(e!));
+        return string.IsNullOrWhiteSpace(email) ? null : email;
+    }
+
+    private const string PlannerProtectionDescriptionPrefix = "SI Inspection Planner Response Protection";
+
+    private static string BuildPlannerProtectionDescription(InspectionReport report)
+        => $"{PlannerProtectionDescriptionPrefix} - ReportId={report.ReportId}";
+
+    /// <summary>
+    /// Shares the exported spreadsheet with the planner (if email is known) and
+    /// protects every sheet so that only the planner-response cells in
+    /// <paramref name="noteCellMap"/> remain editable. Cells with a missing
+    /// PlannerResponseColumnIndex are skipped with a warning. After applying
+    /// the AddProtectedRange batch, re-reads the spreadsheet and verifies that
+    /// our protections were actually persisted.
+    /// </summary>
+    private async Task ApplyPlannerResponsePermissionsAsync(
+        SheetsService sheetsService,
+        DriveService driveService,
+        string templateSpreadsheetId,
+        string spreadsheetId,
+        Spreadsheet spreadsheet,
+        List<ExportedNoteCellMap> noteCellMap,
+        InspectionReport report,
+        string? designerEmail,
+        List<string> warnings,
+        CancellationToken cancellationToken)
+    {
+        // 0. Sanity: ensure we are operating on the destination, not the template.
+        _logger?.LogInformation(
+            "[Export] Operation=PlannerResponsePermissions Step=Begin ReportId={ReportId} ReportNumber={ReportNumber} " +
+            "TemplateSpreadsheetId={TemplateId} ExportedSpreadsheetId={DestId} SpreadsheetIdUsedForPermissions={UsedId}",
+            report.ReportId, report.ReportNumber, templateSpreadsheetId, spreadsheetId, spreadsheetId);
+
+        if (string.Equals(spreadsheetId, templateSpreadsheetId, StringComparison.Ordinal))
+        {
+            _logger?.LogError(
+                "[Export] Operation=PlannerResponsePermissions Reason=AppliedToTemplate " +
+                "ReportId={ReportId} TemplateSpreadsheetId={TemplateId} — refusing to mutate template.",
+                report.ReportId, templateSpreadsheetId);
+            warnings.Add("Planner-response permissions aborted: target equals template ID.");
+            return;
+        }
+
+        // 1. Build (sheet,row,col) list and log noteCellMap diagnostics.
+        var sheetTitlesInSpreadsheet = spreadsheet.Sheets
+            .Select(s => s.Properties?.Title ?? string.Empty)
+            .ToList();
+        var sheetTitlesInMap = noteCellMap
+            .Select(e => e.SheetName ?? string.Empty)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        _logger?.LogInformation(
+            "[Export] Operation=PlannerResponsePermissions Step=NoteCellMapAudit " +
+            "ReportId={ReportId} SpreadsheetSheetNames=[{SpreadsheetSheets}] NoteCellMapSheetNames=[{MapSheets}] EntriesTotal={Total}",
+            report.ReportId,
+            string.Join(", ", sheetTitlesInSpreadsheet),
+            string.Join(", ", sheetTitlesInMap),
+            noteCellMap.Count);
+
+        var unlocked = new List<(string SheetName, int Row, int Col)>();
+        int skippedMissingSheet = 0;
+        int skippedMissingCol = 0;
+        int skippedBadRow = 0;
+        int skippedSheetNotFound = 0;
+        var validSheetTitles = new HashSet<string>(sheetTitlesInSpreadsheet, StringComparer.Ordinal);
+
+        foreach (var entry in noteCellMap)
+        {
+            if (string.IsNullOrWhiteSpace(entry.SheetName))
+            {
+                skippedMissingSheet++;
+                continue;
+            }
+            if (!validSheetTitles.Contains(entry.SheetName))
+            {
+                skippedSheetNotFound++;
+                _logger?.LogWarning(
+                    "[Export] Operation=PlannerResponsePermissions Reason=SheetNameNotFoundInSpreadsheet " +
+                    "ReportId={ReportId} NoteId={NoteId} Sheet={Sheet}",
+                    report.ReportId, entry.NoteId, entry.SheetName);
+                continue;
+            }
+            if (entry.PlannerResponseColumnIndex < 0)
+            {
+                skippedMissingCol++;
+                _logger?.LogWarning(
+                    "[Export] Operation=PlannerResponsePermissions Reason=Missing PlannerResponseColumnIndex " +
+                    "ReportId={ReportId} NoteId={NoteId} Sheet={Sheet} Row={Row}",
+                    report.ReportId, entry.NoteId, entry.SheetName, entry.ExportedRowIndex);
+                continue;
+            }
+            if (entry.ExportedRowIndex < 0)
+            {
+                skippedBadRow++;
+                continue;
+            }
+            unlocked.Add((entry.SheetName!, entry.ExportedRowIndex, entry.PlannerResponseColumnIndex));
+        }
+
+        // 2. Share the file with the planner as Editor.
+        if (!string.IsNullOrWhiteSpace(designerEmail))
+        {
+            try
+            {
+                var permission = new Google.Apis.Drive.v3.Data.Permission
+                {
+                    Type = "user",
+                    Role = "writer",
+                    EmailAddress = designerEmail
+                };
+                var permRequest = driveService.Permissions.Create(permission, spreadsheetId);
+                permRequest.SendNotificationEmail = false;
+                permRequest.SupportsAllDrives = true;
+                await permRequest.ExecuteAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex,
+                    "[Export] Operation=PlannerResponsePermissions Reason=DriveShareFailed " +
+                    "ReportId={ReportId} DesignerEmail={Email}", report.ReportId, designerEmail);
+                warnings.Add($"Failed to share report with planner '{designerEmail}': {ex.Message}");
+            }
+        }
+        else
+        {
+            _logger?.LogWarning(
+                "[Export] Operation=PlannerResponsePermissions Reason=MissingDesignerEmail " +
+                "ReportId={ReportId} ReportNumber={ReportNumber} — protection still applied, but no planner share.",
+                report.ReportId, report.ReportNumber);
+            warnings.Add("Planner email is unknown — exported sheet protected but not shared.");
+        }
+
+        // 3. Resolve the Google account that runs this export — it must be the
+        //    sole editor of the protected range. If we can't resolve it, abort
+        //    rather than create a wide-open protection.
+        string? currentUserEmail = null;
+        try
+        {
+            var aboutRequest = driveService.About.Get();
+            aboutRequest.Fields = "user(emailAddress,displayName,permissionId)";
+            var about = await aboutRequest.ExecuteAsync(cancellationToken);
+            currentUserEmail = about?.User?.EmailAddress;
+            _logger?.LogInformation(
+                "[Export] Operation=PlannerResponsePermissions Step=ResolveProtectionOwner " +
+                "ReportId={ReportId} CurrentGoogleUserEmail={Email} CurrentGoogleUserDisplayName={Name} " +
+                "CurrentGoogleUserPermissionId={PermId}",
+                report.ReportId, currentUserEmail ?? "(null)",
+                about?.User?.DisplayName ?? "(null)", about?.User?.PermissionId ?? "(null)");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex,
+                "[Export] Operation=PlannerResponsePermissions Reason=CouldNotResolveProtectionOwner " +
+                "ReportId={ReportId} SpreadsheetId={SpreadsheetId}",
+                report.ReportId, spreadsheetId);
+        }
+
+        if (string.IsNullOrWhiteSpace(currentUserEmail))
+        {
+            _logger?.LogWarning(
+                "[Export] Operation=PlannerResponsePermissions Reason=CouldNotResolveProtectionOwner " +
+                "ReportId={ReportId} SpreadsheetId={SpreadsheetId} — aborting protection to avoid wide-open ranges.",
+                report.ReportId, spreadsheetId);
+            warnings.Add("Could not resolve protection owner email — protection NOT applied.");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(designerEmail) &&
+            string.Equals(designerEmail, currentUserEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger?.LogWarning(
+                "[Export] Operation=PlannerResponsePermissions Reason=DesignerEqualsCurrentUser " +
+                "ReportId={ReportId} CurrentUser={CurrentUser} DesignerEmail={Designer}",
+                report.ReportId, currentUserEmail, designerEmail);
+        }
+
+        // 4. Build AddProtectedRange requests per sheet.
+        var ourDescription = BuildPlannerProtectionDescription(report);
+        var requests = new List<Request>();
+        int protectedSheets = 0;
+        var perSheetUnlockCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var sheet in spreadsheet.Sheets)
+        {
+            var props = sheet.Properties;
+            if (props is null) continue;
+
+            var sheetTitle = props.Title ?? string.Empty;
+            int sheetId = props.SheetId ?? 0;
+            int rowCount = props.GridProperties?.RowCount ?? 1000;
+            int colCount = props.GridProperties?.ColumnCount ?? 26;
+
+            var unprotected = unlocked
+                .Where(u => string.Equals(u.SheetName, sheetTitle, StringComparison.Ordinal)
+                            && u.Row < rowCount && u.Col < colCount)
+                .Select(u => new GridRange
+                {
+                    SheetId = sheetId,
+                    StartRowIndex = u.Row,
+                    EndRowIndex = u.Row + 1,
+                    StartColumnIndex = u.Col,
+                    EndColumnIndex = u.Col + 1
+                })
+                .ToList();
+
+            perSheetUnlockCounts[sheetTitle] = unprotected.Count;
+
+            var protectedRange = new ProtectedRange
+            {
+                // Range with only SheetId → protects the entire sheet (per Sheets API docs).
+                Range = new GridRange { SheetId = sheetId },
+                Description = ourDescription,
+                WarningOnly = false,
+                // Editors MUST be set explicitly to restrict edit rights to the
+                // current Google user only. Omitting Editors lets every file editor
+                // (including the planner) edit the protected range, which defeats
+                // the whole purpose. We must NOT include designerEmail here.
+                Editors = new Editors
+                {
+                    Users = new List<string> { currentUserEmail },
+                    DomainUsersCanEdit = false
+                }
+            };
+            if (unprotected.Count > 0)
+                protectedRange.UnprotectedRanges = unprotected;
+
+            var sample = unprotected.Take(3)
+                .Select(r => $"R{r.StartRowIndex + 1}C{r.StartColumnIndex + 1}")
+                .ToList();
+            bool designerInEditors = !string.IsNullOrWhiteSpace(designerEmail) &&
+                protectedRange.Editors.Users.Any(u =>
+                    string.Equals(u, designerEmail, StringComparison.OrdinalIgnoreCase));
+            _logger?.LogInformation(
+                "[Export] Operation=PlannerResponsePermissions Step=BuildRequest " +
+                "ReportId={ReportId} ReportNumber={ReportNumber} SpreadsheetId={SpreadsheetId} " +
+                "SheetName={SheetName} SheetId={SheetId} ProtectedRangeDescription={Desc} " +
+                "EditorsMode=CurrentUserOnly EditorsUsersCount={EditorsCount} EditorsUsers=[{EditorsUsers}] " +
+                "DesignerEmail={Designer} DesignerIsProtectedRangeEditor={DesignerInEditors} " +
+                "UnprotectedRangesCount={UnprotCount} Sample=[{Sample}]",
+                report.ReportId, report.ReportNumber, spreadsheetId,
+                sheetTitle, sheetId, ourDescription,
+                protectedRange.Editors.Users.Count, string.Join(", ", protectedRange.Editors.Users),
+                designerEmail ?? "(none)", designerInEditors,
+                unprotected.Count, string.Join(", ", sample));
+
+            requests.Add(new Request
+            {
+                AddProtectedRange = new AddProtectedRangeRequest { ProtectedRange = protectedRange }
+            });
+            protectedSheets++;
+        }
+
+        _logger?.LogInformation(
+            "[Export] Operation=PlannerResponsePermissions Step=PreBatch " +
+            "ReportId={ReportId} SpreadsheetId={SpreadsheetId} SheetsCount={SheetsCount} RequestsCount={ReqCount} " +
+            "UnlockedTotal={Unlocked} SkippedMissingCol={SkipCol} SkippedSheetNotFound={SkipSheet} " +
+            "SkippedMissingSheetName={SkipName} SkippedBadRow={SkipRow}",
+            report.ReportId, spreadsheetId, spreadsheet.Sheets.Count, requests.Count,
+            unlocked.Count, skippedMissingCol, skippedSheetNotFound, skippedMissingSheet, skippedBadRow);
+
+        if (requests.Count == 0)
+        {
+            _logger?.LogWarning(
+                "[Export] Operation=PlannerResponsePermissions Reason=NoProtectedRangeRequestsCreated " +
+                "ReportId={ReportId} SpreadsheetId={SpreadsheetId}",
+                report.ReportId, spreadsheetId);
+            warnings.Add("No planner-response protections were requested for this report.");
+            return;
+        }
+
+        // 4. Execute the batch and capture replies.
+        BatchUpdateSpreadsheetResponse? batchResponse = null;
+        try
+        {
+            var batch = new BatchUpdateSpreadsheetRequest { Requests = requests };
+            batchResponse = await sheetsService.Spreadsheets.BatchUpdate(batch, spreadsheetId)
+                .ExecuteAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex,
+                "[Export] Operation=PlannerResponsePermissions Reason=BatchUpdateFailed " +
+                "ReportId={ReportId} SpreadsheetId={SpreadsheetId}",
+                report.ReportId, spreadsheetId);
+            warnings.Add($"Planner-response BatchUpdate failed: {ex.Message}");
+            return;
+        }
+
+        var createdProtectedIds = batchResponse?.Replies?
+            .Where(r => r.AddProtectedRange?.ProtectedRange?.ProtectedRangeId != null)
+            .Select(r => r.AddProtectedRange.ProtectedRange.ProtectedRangeId!.Value.ToString())
+            .ToList() ?? new List<string>();
+
+        _logger?.LogInformation(
+            "[Export] Operation=PlannerResponsePermissions Step=PostBatch " +
+            "ReportId={ReportId} SpreadsheetId={SpreadsheetId} RepliesCount={Replies} CreatedProtectedRangeIds=[{Ids}]",
+            report.ReportId, spreadsheetId,
+            batchResponse?.Replies?.Count ?? 0, string.Join(", ", createdProtectedIds));
+
+        // 5. Verification — re-read the spreadsheet and check that our protections persisted.
+        try
+        {
+            var verifyGet = sheetsService.Spreadsheets.Get(spreadsheetId);
+            verifyGet.Fields = "sheets(properties(sheetId,title),protectedRanges(protectedRangeId,description,range,unprotectedRanges,warningOnly,editors))";
+            var verifySpreadsheet = await verifyGet.ExecuteAsync(cancellationToken);
+
+            int totalOurProtected = 0;
+            int totalOurUnprotected = 0;
+            foreach (var sheet in verifySpreadsheet.Sheets)
+            {
+                var props = sheet.Properties;
+                if (props is null) continue;
+                var sheetTitle = props.Title ?? string.Empty;
+                int sheetId = props.SheetId ?? 0;
+
+                var allProt = sheet.ProtectedRanges ?? new List<ProtectedRange>();
+                var ours = allProt
+                    .Where(p => string.Equals(p.Description, ourDescription, StringComparison.Ordinal))
+                    .ToList();
+                int ourUnprot = ours.Sum(p => p.UnprotectedRanges?.Count ?? 0);
+                totalOurProtected += ours.Count;
+                totalOurUnprotected += ourUnprot;
+
+                _logger?.LogInformation(
+                    "[Export] Operation=PlannerResponsePermissionsVerify ReportId={ReportId} ReportNumber={ReportNumber} " +
+                    "SpreadsheetId={SpreadsheetId} SheetName={SheetName} SheetId={SheetId} " +
+                    "ProtectedRangesCount={All} OurProtectedRangesCount={Ours} OurUnprotectedRangesCount={OurUnprot}",
+                    report.ReportId, report.ReportNumber, spreadsheetId, sheetTitle, sheetId,
+                    allProt.Count, ours.Count, ourUnprot);
+
+                foreach (var p in ours)
+                {
+                    bool wholeSheet = p.Range != null
+                        && p.Range.StartRowIndex is null && p.Range.EndRowIndex is null
+                        && p.Range.StartColumnIndex is null && p.Range.EndColumnIndex is null;
+                    var editorUsers = p.Editors?.Users ?? new List<string>();
+                    bool domainCanEdit = p.Editors?.DomainUsersCanEdit ?? false;
+                    var unprotSample = (p.UnprotectedRanges ?? new List<GridRange>())
+                        .Take(3)
+                        .Select(r => $"R{(r.StartRowIndex ?? 0) + 1}C{(r.StartColumnIndex ?? 0) + 1}")
+                        .ToList();
+
+                    _logger?.LogInformation(
+                        "[Export] Operation=PlannerResponsePermissionsVerifyDetails ReportId={ReportId} " +
+                        "SpreadsheetId={SpreadsheetId} SheetName={SheetName} ProtectedRangeId={Pid} " +
+                        "Description={Desc} WarningOnly={Warn} ProtectionScope={Scope} " +
+                        "EditorsUsers=[{Editors}] DomainUsersCanEdit={DomainEdit} " +
+                        "UnprotectedRangesCount={UnprotCount} SampleUnprotectedRanges=[{Sample}]",
+                        report.ReportId, spreadsheetId, sheetTitle,
+                        p.ProtectedRangeId, p.Description, p.WarningOnly,
+                        wholeSheet ? "WholeSheet" : "PartialRange",
+                        string.Join(", ", editorUsers), domainCanEdit,
+                        p.UnprotectedRanges?.Count ?? 0, string.Join(", ", unprotSample));
+
+                    if (editorUsers.Count == 0)
+                    {
+                        _logger?.LogWarning(
+                            "[Export] Operation=PlannerResponsePermissionsVerifyDetails Reason=ProtectedRangeEditorsNotRestricted " +
+                            "ReportId={ReportId} ProtectedRangeId={Pid}",
+                            report.ReportId, p.ProtectedRangeId);
+                        warnings.Add("Protected range editors are not restricted — anyone with file access can edit.");
+                    }
+                    if (!string.IsNullOrWhiteSpace(designerEmail) &&
+                        editorUsers.Any(u => string.Equals(u, designerEmail, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _logger?.LogWarning(
+                            "[Export] Operation=PlannerResponsePermissionsVerifyDetails Reason=DesignerCanEditProtectedRange " +
+                            "ReportId={ReportId} ProtectedRangeId={Pid} DesignerEmail={Designer}",
+                            report.ReportId, p.ProtectedRangeId, designerEmail);
+                        warnings.Add("Planner is listed as protected-range editor — protection ineffective.");
+                    }
+                }
+            }
+
+            if (totalOurProtected == 0)
+            {
+                _logger?.LogWarning(
+                    "[Export] Operation=PlannerResponsePermissionsVerify Reason=OurProtectionNotFound " +
+                    "ReportId={ReportId} SpreadsheetId={SpreadsheetId}",
+                    report.ReportId, spreadsheetId);
+                warnings.Add("לא נמצאה הגנת תאים חדשה בדוח לאחר ניסיון ההגדרה");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex,
+                "[Export] Operation=PlannerResponsePermissionsVerify Reason=VerifyFailed " +
+                "ReportId={ReportId} SpreadsheetId={SpreadsheetId}",
+                report.ReportId, spreadsheetId);
+            warnings.Add($"Planner-response verification failed: {ex.Message}");
+        }
+
+        _logger?.LogInformation(
+            "[Export] Operation=PlannerResponsePermissions Step=Done ReportId={ReportId} ReportNumber={ReportNumber} " +
+            "SpreadsheetId={SpreadsheetId} DesignerEmail={DesignerEmail} ProtectedSheetsCount={ProtectedSheets} " +
+            "UnlockedPlannerResponseCellsCount={Unlocked} SkippedCellsCount={Skipped}",
+            report.ReportId, report.ReportNumber, spreadsheetId,
+            designerEmail ?? "(none)", protectedSheets, unlocked.Count,
+            skippedMissingCol + skippedMissingSheet + skippedBadRow + skippedSheetNotFound);
     }
 
     #endregion
