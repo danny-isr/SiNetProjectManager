@@ -17,6 +17,7 @@ using SiNetSQL.Diagnostics;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.EmailIngestion;
+using SiNetSQL.Services.EmailOutbound;
 using SiNetSQL.Services.Logging;
 using SiOffice.GoogleConnector.Logging;
 using SiOffice.GoogleConnector;
@@ -208,6 +209,7 @@ namespace SiNetProjectManagerV2
             // Ensures the user authenticates once per session instead of per-navigation.
             services.AddSingleton<IGmailThrottleService, GmailThrottleService>();
             services.AddSingleton<GoogleService>();
+            services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();
@@ -233,6 +235,10 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();
             services.AddTransient<SiNetSQL.Services.EmailContext.ActionExecutor>();
+            services.AddSingleton<ProjectRecipientCacheService>();
+            services.AddTransient<IEmailComposerService, EmailComposerService>();
+            services.AddTransient<IInspectionReportEmailBuilder, InspectionReportEmailBuilder>();
+            services.AddTransient<IInspectionReportEmailWorkflow, InspectionReportEmailWorkflow>();
 
             // File Import Coordinator: Transient (orchestrates email attachment → project filesystem)
             services.AddTransient<SiNetSQL.Services.Coordinators.FileImportCoordinator>();

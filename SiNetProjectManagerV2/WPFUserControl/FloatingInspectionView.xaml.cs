@@ -48,6 +48,9 @@ public partial class FloatingInspectionView : FloatingWindowBase
         // Wire the WPF per-note linked-file picker
         viewModel.SetNoteLinkedFilePicker(new SiNetProjectManagerV2.Services.Inspection.NoteLinkedFilePicker());
 
+        // Wire the first-stage inspection report email workflow.
+        viewModel.SetInspectionReportEmailWorkflow(App.ServiceProvider.GetRequiredService<SiNetSQL.Services.EmailOutbound.IInspectionReportEmailWorkflow>());
+
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
 

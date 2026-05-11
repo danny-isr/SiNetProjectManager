@@ -1,0 +1,178 @@
+<Window x:Class="SiNetProjectManagerV2.Windows.EmailComposerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="שליחת מייל"
+        Width="760"
+        Height="680"
+        MinWidth="620"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="170" MinHeight="150"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="שליחה בשם:" Margin="0,0,8,0" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding AvailableFromAddresses}"
+                      Text="{Binding FromAddress, UpdateSourceTrigger=PropertyChanged}"
+                      IsEditable="True"
+                      Margin="0,0,14,0"/>
+            <TextBlock Grid.Column="2" Text="אל:" Margin="0,0,8,0" VerticalAlignment="Center"/>
+            <Grid Grid.Column="3">
+                <TextBox x:Name="ToTextBox"
+                         Text="{Binding To, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="הקלד כתובת מייל אחת או יותר, מופרדות בפסיק או נקודה-פסיק"
+                         TextChanged="RecipientTextBox_TextChanged"
+                         PreviewKeyDown="RecipientTextBox_PreviewKeyDown"
+                         LostKeyboardFocus="RecipientTextBox_LostKeyboardFocus"/>
+                <Popup PlacementTarget="{Binding ElementName=ToTextBox}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True"
+                       IsOpen="{Binding IsToRecipientSuggestionsOpen}">
+                    <Border Background="White" BorderBrush="#999" BorderThickness="1" MinWidth="320" MaxHeight="180">
+                        <ListBox x:Name="ToSuggestionsList"
+                                 ItemsSource="{Binding FilteredRecipientSuggestions}"
+                                 SelectedItem="{Binding SelectedRecipientSuggestion}"
+                                 DisplayMemberPath="DisplayText"
+                                 MouseDoubleClick="RecipientSuggestion_DoubleClick"/>
+                    </Border>
+                </Popup>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="1.2*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="עותק:" Margin="0,0,8,0" VerticalAlignment="Center"/>
+            <Grid Grid.Column="1" Margin="0,0,14,0">
+                <TextBox x:Name="CcTextBox"
+                         Text="{Binding Cc, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="הקלד כתובת מייל אחת או יותר, מופרדות בפסיק או נקודה-פסיק"
+                         TextChanged="RecipientTextBox_TextChanged"
+                         PreviewKeyDown="RecipientTextBox_PreviewKeyDown"
+                         LostKeyboardFocus="RecipientTextBox_LostKeyboardFocus"/>
+                <Popup PlacementTarget="{Binding ElementName=CcTextBox}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True"
+                       IsOpen="{Binding IsCcRecipientSuggestionsOpen}">
+                    <Border Background="White" BorderBrush="#999" BorderThickness="1" MinWidth="320" MaxHeight="180">
+                        <ListBox x:Name="CcSuggestionsList"
+                                 ItemsSource="{Binding FilteredRecipientSuggestions}"
+                                 SelectedItem="{Binding SelectedRecipientSuggestion}"
+                                 DisplayMemberPath="DisplayText"
+                                 MouseDoubleClick="RecipientSuggestion_DoubleClick"/>
+                    </Border>
+                </Popup>
+            </Grid>
+            <TextBlock Grid.Column="2" Text="עותק מוסתר:" Margin="0,0,8,0" VerticalAlignment="Center"/>
+            <Grid Grid.Column="3">
+                <TextBox x:Name="BccTextBox"
+                         Text="{Binding Bcc, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="הקלד כתובת מייל אחת או יותר, מופרדות בפסיק או נקודה-פסיק"
+                         TextChanged="RecipientTextBox_TextChanged"
+                         PreviewKeyDown="RecipientTextBox_PreviewKeyDown"
+                         LostKeyboardFocus="RecipientTextBox_LostKeyboardFocus"/>
+                <Popup PlacementTarget="{Binding ElementName=BccTextBox}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True"
+                       IsOpen="{Binding IsBccRecipientSuggestionsOpen}">
+                    <Border Background="White" BorderBrush="#999" BorderThickness="1" MinWidth="320" MaxHeight="180">
+                        <ListBox x:Name="BccSuggestionsList"
+                                 ItemsSource="{Binding FilteredRecipientSuggestions}"
+                                 SelectedItem="{Binding SelectedRecipientSuggestion}"
+                                 DisplayMemberPath="DisplayText"
+                                 MouseDoubleClick="RecipientSuggestion_DoubleClick"/>
+                    </Border>
+                </Popup>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="נושא:" Margin="0,0,8,6" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Subject, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="תוכן:" Margin="0,0,8,0" VerticalAlignment="Top"/>
+            <TextBox Grid.Row="1" Grid.Column="1"
+                     Text="{Binding Body, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled"/>
+        </Grid>
+
+        <GroupBox Grid.Row="3" Header="קבצים מצורפים" Margin="0,8,0,8" MinHeight="130">
+            <DockPanel Margin="6">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Content="הוסף קובץ" Command="{Binding AddAttachmentCommand}" Padding="10,3" Margin="0,0,6,0"/>
+                    <Button Content="הסר קובץ" Command="{Binding RemoveAttachmentCommand}" CommandParameter="{Binding SelectedItem, ElementName=AttachmentsList}" Padding="10,3"/>
+                </StackPanel>
+                <ListView x:Name="AttachmentsList"
+                          ItemsSource="{Binding Attachments}"
+                          MinHeight="95"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="שם קובץ" DisplayMemberBinding="{Binding FileName}" Width="280"/>
+                            <GridViewColumn Header="מקור" DisplayMemberBinding="{Binding SourceDescription}" Width="140"/>
+                            <GridViewColumn Header="גודל" DisplayMemberBinding="{Binding SizeBytes}" Width="100"/>
+                            <GridViewColumn Header="נתיב" DisplayMemberBinding="{Binding LocalPath}" Width="420"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </DockPanel>
+        </GroupBox>
+
+        <TextBlock Grid.Row="4"
+                   Text="{Binding StatusMessage}"
+                   Foreground="#6D4C00"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Left">
+            <ProgressBar Width="120" Height="16" IsIndeterminate="True" Margin="0,0,8,0">
+                <ProgressBar.Style>
+                    <Style TargetType="ProgressBar">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSending}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ProgressBar.Style>
+            </ProgressBar>
+            <Button Content="שלח" Command="{Binding SendCommand}" Padding="18,4" Margin="0,0,6,0"/>
+            <Button Content="ביטול" Command="{Binding CancelCommand}" Padding="18,4"/>
+        </StackPanel>
+    </Grid>
+</Window>

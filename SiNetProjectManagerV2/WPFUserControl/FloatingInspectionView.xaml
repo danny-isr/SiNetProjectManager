@@ -1,4 +1,4 @@
-﻿<local:FloatingWindowBase x:Class="SiNetProjectManagerV2.WPFUserControl.FloatingInspectionView"
+<local:FloatingWindowBase x:Class="SiNetProjectManagerV2.WPFUserControl.FloatingInspectionView"
 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -854,8 +854,8 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="42"/>
-                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="Auto" MinWidth="28"/>
+                                            <ColumnDefinition Width="Auto" MinWidth="58"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
 
@@ -1318,6 +1318,13 @@ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                                     Padding="2,0" FontSize="{DynamicResource AppFontSizeSecondary}"
                                                     Margin="2,0,0,0"
                                                     ToolTip="{Binding DataContext.ExportReportTooltip, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    ToolTipService.ShowOnDisabled="True"/>
+                                            <Button Content="✉"
+                                                    Command="{Binding DataContext.SendInspectionReportEmailCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Style="{StaticResource CardActionButton}"
+                                                    Padding="2,0" FontSize="{DynamicResource AppFontSizeSecondary}"
+                                                    Margin="2,0,0,0"
+                                                    ToolTip="{Binding DataContext.SendInspectionReportEmailTooltip, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     ToolTipService.ShowOnDisabled="True"/>
                                             <Button Content="🗑️"
                                                     Command="{Binding DataContext.DeleteReportCommand, RelativeSource={RelativeSource AncestorType=Window}}"
