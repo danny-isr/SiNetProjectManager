@@ -216,6 +216,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTransitionEvaluator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionExecutor>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
+            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowQueryService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowSeedService>();
@@ -235,6 +236,24 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();
             services.AddTransient<SiNetSQL.Services.EmailContext.ActionExecutor>();
+            // Action lifecycle reporter: composite fan-out so ActionExecutor's call sites
+            // stay unchanged. Inner reporters:
+            //   • NoOpActionLifecycleReporter — preserves the safe baseline.
+            //   • WorkflowActionLifecycleReporter — bridges Completed events to
+            //     WorkflowActionCompletedHandler, but only when explicit safety
+            //     conditions are met (WorkflowInstanceId present, ActionDefinition
+            //     CanAdvanceWorkflow == true, etc.). It never infers a workflow
+            //     from ProjectId / EmailMessageId.
+            services.AddSingleton<SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter>(
+                _ => SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter.Instance);
+            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionLifecycleReporter>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IActionLifecycleReporter>(sp =>
+                new SiNetSQL.Domain.Actions.CompositeActionLifecycleReporter(
+                    new SiNetSQL.Domain.Actions.IActionLifecycleReporter[]
+                    {
+                        sp.GetRequiredService<SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter>(),
+                        sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowActionLifecycleReporter>(),
+                    }));
             services.AddSingleton<ProjectRecipientCacheService>();
             services.AddTransient<IEmailComposerService, EmailComposerService>();
             services.AddTransient<IInspectionReportEmailBuilder, InspectionReportEmailBuilder>();
