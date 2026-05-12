@@ -1,4 +1,4 @@
-using System.ComponentModel;
+п»їusing System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -243,17 +243,17 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (result.IsCompleted)
             {
-                title = "дфтемд бецтд";
+                title = "пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ";
                 icon = MessageBoxImage.Information;
             }
             else if (result.RequiresFollowUp)
             {
-                // Follow-up dialogs handle their own UX — skip the toast.
+                // Follow-up dialogs handle their own UX пїЅ skip the toast.
                 return;
             }
             else
             {
-                title = "дфтемд ма дещмод";
+                title = "пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ";
                 icon = MessageBoxImage.Warning;
             }
 
@@ -274,28 +274,63 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             switch (followUp)
             {
-                // ??? Utility actions — always direct ???
+                // ??? Utility actions пїЅ always direct ???
                 case ActionFollowUp.FileImportDialog:
                     var importDialog = new FileImportDialog(emailMessageId) { Owner = owner };
                     importDialog.ShowDialog();
                     break;
 
                 case ActionFollowUp.WorkflowAdvanceDialog:
-                    if (result.OutputData.TryGetValue("WorkflowInstanceId", out var wfIdObj) && wfIdObj is int instanceId)
+                {
+                    // Pilot for ApproveOrClose: if the selected action carries an explicit
+                    // WorkflowInstanceId in PrefilledData (populated by SuggestedActionsBuilder
+                    // only when exactly one active workflow exists), ask the user to confirm
+                    // advancing the workflow. On confirm, write ConfirmAdvance=true into
+                    // OutputData so EmailContextViewModel can retry ActionExecutor.ExecuteAsync,
+                    // which returns Completed and the lifecycle bridge advances the workflow.
+                    // If there is no WorkflowInstanceId in PrefilledData, do NOT prompt and do
+                    // NOT confirm; workflow must never be inferred here.
+                    var selected = _emailContextVm?.SelectedAction;
+                    var hasExplicitWorkflow =
+                        selected is not null
+                        && selected.PrefilledData.TryGetValue("WorkflowInstanceId", out var wfObj)
+                        && wfObj is int wfId
+                        && wfId > 0;
+
+                    if (hasExplicitWorkflow)
                     {
-                        // Notify floating tasks to refresh (workflow may have created tasks)
+                        var confirm = MessageBox.Show(
+                            owner,
+                            result.Message ?? "Ч”ЧђЧќ ЧњЧђЧ©ЧЁ ЧђЧЄ Ч§Ч™Ч“Ч•Чќ Ч”ЧЄЧ”ЧњЧ™Чљ?",
+                            "ЧђЧ™Ч©Ч•ЧЁ Ч§Ч™Ч“Ч•Чќ ЧЄЧ”ЧњЧ™Чљ",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question);
+
+                        if (confirm == MessageBoxResult.Yes)
+                        {
+                            // Signal EmailContextViewModel to retry the action with
+                            // ConfirmAdvance=true added to PrefilledData.
+                            result.OutputData["ConfirmAdvance"] = true;
+                        }
+                        // On Cancel/No: leave OutputData untouched. No retry, no advance.
+                    }
+                    else if (result.OutputData.TryGetValue("WorkflowInstanceId", out var wfIdObj) && wfIdObj is int instanceId)
+                    {
+                        // Legacy path: a previously-completed workflow start placed the new
+                        // instance id in OutputData -> open the instance window.
                         SiNetSQL.Services.ActiveProjectContext.Instance.NotifyTaskDataChanged();
 
                         var wfWindow = new WorkflowInstanceWindow(instanceId) { Owner = owner };
                         wfWindow.Show();
                     }
                     break;
+                }
 
                 case ActionFollowUp.ProjectPicker:
                     await HandleProjectPickerAsync(owner, emailMessageId, result);
                     break;
 
-                // ??? Delegatable actions — go through AssignActionDialog ???
+                // ??? Delegatable actions пїЅ go through AssignActionDialog ???
                 case ActionFollowUp.NewProjectDialog:
                 case ActionFollowUp.TaskCreationDialog:
                 case ActionFollowUp.DecisionDialog:
@@ -306,7 +341,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 default:
                     MessageBox.Show(
                         result.Message,
-                        "фтемд ргшщъ", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
             }
         }
@@ -331,7 +366,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (assign.ExecuteDirectly)
             {
-                // User chose to do it themselves — open the original dialog
+                // User chose to do it themselves пїЅ open the original dialog
                 ExecuteDirectAction(owner, followUp, emailMessageId);
                 return;
             }
@@ -427,7 +462,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (openStatus == null)
             {
-                MessageBox.Show("ма роца сииес фтйм ботшлъ.", "щвйад",
+                MessageBox.Show("пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.", "пїЅпїЅпїЅпїЅпїЅ",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -444,24 +479,24 @@ namespace SiNetProjectManagerV2.WPFUserControl
             {
                 if (existingTask.AssignedToId == assignee.Id)
                 {
-                    // Same employee — just link the email to the existing task
+                    // Same employee пїЅ just link the email to the existing task
                     await LinkEmailToTaskIfNeededAsync(db, existingTask.Id, emailMessageId,
                         actionDescription, currentUserId, assignee.Id, ct);
                     await db.SaveChangesAsync(ct);
 
                     MessageBox.Show(
-                        $"лбш чййоъ ощйод осев жд тбеш {assignee.Name} (ождд: {existingTask.Id}).\n" +
-                        $"доййм чещш мощйод дчййоъ.",
-                        "чещш мощйод чййоъ", MessageBoxButton.OK, MessageBoxImage.Information);
+                        $"пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ {assignee.Name} (пїЅпїЅпїЅпїЅ: {existingTask.Id}).\n" +
+                        $"пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.",
+                        "пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
 
-                // Different employee — ask user whether to transfer
-                var currentName = existingTask.AssignedTo?.Name ?? $"тебг #{existingTask.AssignedToId}";
+                // Different employee пїЅ ask user whether to transfer
+                var currentName = existingTask.AssignedTo?.Name ?? $"пїЅпїЅпїЅпїЅ #{existingTask.AssignedToId}";
                 var transferResult = MessageBox.Show(
-                    $"ощйод осев жд лбш оечцйъ м-{currentName} (ождд: {existingTask.Id}).\n" +
-                    $"дан мдтбйш аъ дощйод м-{assignee.Name}?",
-                    "дтбшъ ощйод", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    $"пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ-{currentName} (пїЅпїЅпїЅпїЅ: {existingTask.Id}).\n" +
+                    $"пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ-{assignee.Name}?",
+                    "пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
                 if (transferResult != MessageBoxResult.Yes)
                     return;
@@ -477,17 +512,17 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 await db.SaveChangesAsync(ct);
 
                 MessageBox.Show(
-                    $"? дощйод детбшд о-{currentName} м-{assignee.Name}.",
-                    "ощйод детбшд", MessageBoxButton.OK, MessageBoxImage.Information);
+                    $"? пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ-{currentName} пїЅ-{assignee.Name}.",
+                    "пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             // Build task body with action context for the assignee
             var bodyParts = new List<string>
             {
-                $"[фтемд: {actionDescription}]",
-                $"[сев: {followUp}]",
-                $"[оййм: #{emailMessageId}]",
+                $"[пїЅпїЅпїЅпїЅпїЅ: {actionDescription}]",
+                $"[пїЅпїЅпїЅ: {followUp}]",
+                $"[пїЅпїЅпїЅпїЅ: #{emailMessageId}]",
             };
             if (!string.IsNullOrWhiteSpace(note))
                 bodyParts.Add(note);
@@ -498,7 +533,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 AssignedToId = assignee.Id,
                 TaskTypeId = taskType?.Id,
                 StatusId = openStatus.Id,
-                Title = $"{actionDescription} — оййм #{emailMessageId}",
+                Title = $"{actionDescription} пїЅ пїЅпїЅпїЅпїЅ #{emailMessageId}",
                 Body = string.Join(Environment.NewLine, bodyParts),
             };
 
@@ -506,18 +541,18 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 link: new SiNetSQL.Services.TaskFactory.TaskLinkInfo(
                     TaskLinkEntityType.EmailInboxMessage, emailMessageId,
                     Description: actionDescription),
-                eventNote: $"ощйод рецшд офтемъ оййм: {actionDescription}",
+                eventNote: $"пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ: {actionDescription}",
                 ct: ct);
 
             MessageBox.Show(
-                $"? ощйод рецшд тбеш {assignee.Name}",
-                "ощйод рецшд", MessageBoxButton.OK, MessageBoxImage.Information);
+                $"? пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ {assignee.Name}",
+                "пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         /// <summary>
         /// Links an <see cref="EmailInboxMessage"/> to a <see cref="ProjectAssignment"/>
         /// via <see cref="TaskLink"/> if such a link doesn't already exist.
-        /// Does NOT call <c>SaveChangesAsync</c> — the caller is responsible for saving.
+        /// Does NOT call <c>SaveChangesAsync</c> пїЅ the caller is responsible for saving.
         /// </summary>
         private static async Task LinkEmailToTaskIfNeededAsync(
             SiNetSQLDbContext db,
@@ -634,10 +669,10 @@ namespace SiNetProjectManagerV2.WPFUserControl
         {
             var sizeMb = fileSizeBytes / (1024.0 * 1024.0);
             var result = MessageBox.Show(
-                $"дчебх \"{fileName}\" вгем о-{limitMb} MB ({sizeMb:F1} MB).\n\n" +
-                $"рйъп мщреъ аъ двбмъ двегм бдвгшеъ (MaxUploadFileSizeMb).\n\n" +
-                $"дан мдтмеъ блм жаъ м-ACC?",
-                "чебх вгем",
+                $"пїЅпїЅпїЅпїЅпїЅ \"{fileName}\" пїЅпїЅпїЅпїЅ пїЅ-{limitMb} MB ({sizeMb:F1} MB).\n\n" +
+                $"пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (MaxUploadFileSizeMb).\n\n" +
+                $"пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅ пїЅ-ACC?",
+                "пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
@@ -654,7 +689,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var dialog = new Window
             {
-                Title = "амишрийбд згщд",
+                Title = "пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ",
                 Width = 340,
                 Height = 160,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -672,7 +707,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var okButton = new Button
             {
-                Content = "айщеш",
+                Content = "пїЅпїЅпїЅпїЅпїЅ",
                 Width = 80,
                 Height = 28,
                 Margin = new Thickness(0, 0, 8, 0),
@@ -682,7 +717,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var cancelButton = new Button
             {
-                Content = "бйием",
+                Content = "пїЅпїЅпїЅпїЅпїЅ",
                 Width = 80,
                 Height = 28,
                 IsCancel = true
@@ -700,7 +735,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
             var stack = new StackPanel();
             stack.Children.Add(new TextBlock
             {
-                Text = "джп щн амишрийбд:",
+                Text = "пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ:",
                 Margin = new Thickness(16, 12, 16, 0),
                 FontSize = 12
             });
@@ -754,7 +789,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         /// <summary>
-        /// Handles "фъз чебх очеой" from EmailViewerControl context menu.
+        /// Handles "пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ" from EmailViewerControl context menu.
         /// </summary>
         private void OnViewerOpenLocalFileRequested(object? sender, EmailAttachment attachment)
         {
@@ -766,7 +801,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         /// <summary>
-        /// Handles "дцв б-ACC" from EmailViewerControl context menu.
+        /// Handles "пїЅпїЅпїЅ пїЅ-ACC" from EmailViewerControl context menu.
         /// </summary>
         private void OnViewerShowInAccRequested(object? sender, EmailAttachment attachment)
         {
