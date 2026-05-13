@@ -259,6 +259,41 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             MessageBox.Show(owner, result.Message ?? string.Empty, title,
                 MessageBoxButton.OK, icon);
+
+            if (result.IsCompleted)
+            {
+                TryRefreshAfterAction(result);
+            }
+        }
+
+        /// <summary>
+        /// The Suggested Actions path does not run the optimistic UI updates that
+        /// the WPF context-menu File path performs. After a successful
+        /// state-changing action (e.g. AssociateToExistingProject), this refreshes
+        /// the email list grouping and reloads the Gmail viewer so the new label
+        /// is visible in the open message.
+        /// </summary>
+        private void TryRefreshAfterAction(ActionResult result)
+        {
+            try
+            {
+                // ActionExecutor populates OutputData["ActionType"] only for
+                // state-changing flows (e.g. AssociateToExistingProject). When
+                // present, refresh the email list grouping and reload the Gmail
+                // viewer so the new label is visible without a manual refresh.
+                if (!result.OutputData.ContainsKey("ActionType")) return;
+
+                if (_subscribedVm?.LoadEmailsCommand?.CanExecute(null) == true)
+                {
+                    _subscribedVm.LoadEmailsCommand.Execute(null);
+                }
+
+                EmailViewerCtl.WebView?.CoreWebView2?.Reload();
+            }
+            catch
+            {
+                // UI refresh is best-effort; do not mask the action result.
+            }
         }
 
         /// <summary>
@@ -587,25 +622,20 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// Opens the ProjectSelectorDialog. When the user picks a project,
         /// updates the email's ProjectId in the DB and re-triggers context analysis.
         /// </summary>
-        private async Task HandleProjectPickerAsync(Window? owner, int emailMessageId, ActionResult? pendingResult = null)
+        private Task HandleProjectPickerAsync(Window? owner, int emailMessageId, ActionResult? pendingResult = null)
         {
             var dialog = new ProjectSelectorDialog();
             if (owner != null) dialog.Owner = owner;
 
             if (dialog.ShowDialog() == true && dialog.SelectedProject is { } project)
             {
-                var dbFactory = App.ServiceProvider?.GetService<IDbContextFactory<SiNetSQLDbContext>>();
-                if (dbFactory != null)
-                {
-                    await using var db = await dbFactory.CreateDbContextAsync(CancellationToken.None);
-                    var msg = await db.EmailInboxMessages.FindAsync(emailMessageId);
-                    if (msg != null)
-                    {
-                        msg.ProjectId = project.Id;
-                        msg.UpdatedAtUtc = DateTime.UtcNow;
-                        await db.SaveChangesAsync(CancellationToken.None);
-                    }
-                }
+                SiNetSQL.Services.AppLogger.Info("[EmailContext] ProjectPicker picked ProjectId=" + project.Id + " for EmailMessageId=" + emailMessageId + ".");
+
+                // NOTE: The shared EmailFilingService (invoked by ActionExecutor
+                // when the action is retried with ProjectId) owns the
+                // EmailInboxMessage.ProjectId write, the Gmail label,
+                // ThreadStatusMapping, and TaskLifecycle hook. We only surface
+                // the picked ProjectId here.
 
                 // Surface the picked project to the caller so the action can be retried
                 // with a known ProjectId (e.g. CreateNewReview ? OpenReviewProject task).
@@ -614,12 +644,15 @@ namespace SiNetProjectManagerV2.WPFUserControl
                     pendingResult.OutputData["ProjectId"] = project.Id;
                 }
 
-                // Re-analyze after association so context chips update
-                if (_emailContextVm != null)
-                {
-                    await _emailContextVm.SetEmailMessageAsync(emailMessageId);
-                }
+                // IMPORTANT: do NOT call SetEmailMessageAsync(...) here. That would
+                // rebuild SuggestedActions and reset the bound SelectedItem to null,
+                // wiping _selectedAction in EmailContextViewModel before the retry
+                // path can re-execute the action with the picked ProjectId. The
+                // retry path itself calls AnalyzeCurrentEmailAsync after completion,
+                // which refreshes the context chips.
             }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>

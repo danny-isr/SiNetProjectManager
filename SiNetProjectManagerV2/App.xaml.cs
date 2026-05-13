@@ -1,4 +1,4 @@
-﻿using SiNetProjectManagerV2.Services;
+using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.WPF;
 using System;
 using System.Diagnostics;
@@ -229,6 +229,10 @@ namespace SiNetProjectManagerV2
             // Task Navigation Resolver: Transient (read-only resolver for opening tasks via the registry)
             services.AddTransient<SiNetSQL.Services.Tasks.TaskNavigationResolver>();
 
+            // Task Workflow Resolver: Transient (single source of truth for "is this task workflow-bound?",
+            // process context lookup, and guard predicates used by Task* commands).
+            services.AddTransient<SiNetSQL.Services.Tasks.TaskWorkflowResolver>();
+
             // Smart Tasks: Transient (work-target completion + parent-task aggregation)
             services.AddTransient<SiNetSQL.Services.SmartTasks.SmartTaskService>();
 
@@ -236,6 +240,20 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.EmailContext.EmailContextAnalyzer>();
             services.AddTransient<SiNetSQL.Services.EmailContext.SuggestedActionsBuilder>();
             services.AddTransient<SiNetSQL.Services.EmailContext.ActionExecutor>();
+
+            // Shared Email Business Services: Transient (single source of truth for
+            // email filing/unfiling and Pending/Personal/Irrelevant status updates).
+            // Both the WPF context-menu path (EmailManagementViewModel) and the
+            // Suggested Actions path (ActionExecutor) call into these services so
+            // both routes produce identical Gmail label / DB / lifecycle behavior.
+            services.AddTransient<SiNetSQL.Services.Email.EmailFilingService>();
+            services.AddTransient<SiNetSQL.Services.Email.EmailStatusService>();
+
+            // Email attachment ProjectFile picker (shared FileTreePickerWindow UI, DB-driven).
+            // Used by EmailManagementViewModel.TagAttachmentPickCommand. Does not affect
+            // Inspection / ReviewedPlans pickers.
+            services.AddTransient<SiNetSQL.Services.EmailIngestion.IAttachmentProjectFilePicker,
+                SiNetProjectManagerV2.Services.EmailIngestion.AttachmentProjectFilePicker>();
             // Action lifecycle reporter: composite fan-out so ActionExecutor's call sites
             // stay unchanged. Inner reporters:
             //   • NoOpActionLifecycleReporter — preserves the safe baseline.
@@ -254,6 +272,39 @@ namespace SiNetProjectManagerV2
                         sp.GetRequiredService<SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter>(),
                         sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowActionLifecycleReporter>(),
                     }));
+
+            // Process Actions runtime scaffolding (stage 1).
+            // Registers only IProcessActionDispatcher. No IProcessActionHandler
+            // implementations are registered yet, so this does not change runtime
+            // behavior — existing ActionExecutor and WorkflowActionExecutor remain
+            // the effective execution paths.
+            SiNetSQL.Domain.Actions.ProcessActionsServiceCollectionExtensions.AddProcessActions(services);
+
+            // Stage 2A pilot: register the first IProcessActionHandler — AssociateToExistingProject.
+            // ActionExecutor routes this single ActionCode through the dispatcher when present,
+            // and falls back to the legacy LinkToProjectAsync path otherwise.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.LinkToProjectProcessActionHandler>();
+
+            // Stage 2B: same filing pipeline for the backend-executed LinkToProject Suggested Action.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.LinkToProjectBackendProcessActionHandler>();
+
+            // Stage 2C: route SuggestedActionType.CreateTask through the dispatcher.
+            // ActionExecutor falls back to the legacy CreateTaskDirectAsync path
+            // when the handler is unavailable, so behavior parity is preserved.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.CreateTaskProcessActionHandler>();
+
+            // Stage 2D: route low-risk Suggested Actions through the dispatcher.
+            // ActionExecutor.DispatchOrFallbackAsync wraps each call so the legacy
+            // direct path runs when the handler is missing, returns NotSupported /
+            // Deferred / NoOp, or throws.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.FileOnlyProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.ApproveOrCloseProcessActionHandler>();
+
             services.AddSingleton<ProjectRecipientCacheService>();
             services.AddTransient<IEmailComposerService, EmailComposerService>();
             services.AddTransient<IInspectionReportEmailBuilder, InspectionReportEmailBuilder>();

@@ -91,33 +91,49 @@
                                Margin="3,0,0,0"
                                ToolTip="{Binding PlacementInfo}"
                                Visibility="{Binding IsPlaced, Converter={StaticResource BoolToVis}}"/>
-                    <!-- Inline tag selector (compact) -->
-                    <ComboBox Margin="3,0,0,0"
-                              MinWidth="100"
-                              MaxWidth="160"
-                              Height="20"
-                              VerticalAlignment="Center"
-                              Visibility="{Binding ShowTagSelector, Converter={StaticResource BoolToVis}}"
-                              ItemsSource="{Binding TagTargets, ElementName=Root}"
-                              SelectedValue="{Binding TaggedProjectFileId, Mode=TwoWay}"
-                              SelectedValuePath="Id"
-                              DisplayMemberPath="TagDisplayLabel"
-                              ToolTip="בחר סוג קובץ / יעד תיוג"
-                              IsTextSearchEnabled="True"
-                              TextSearch.TextPath="TagDisplayLabel">
-                        <ComboBox.Style>
-                            <Style TargetType="ComboBox">
+                    <!-- Inline tag selector (compact) — button opens shared FileTreePicker -->
+                    <Button Margin="3,0,0,0"
+                            MinWidth="100"
+                            MaxWidth="220"
+                            Height="20"
+                            VerticalAlignment="Center"
+                            Padding="6,0"
+                            Visibility="{Binding ShowTagSelector, Converter={StaticResource BoolToVis}}"
+                            Command="{Binding DataContext.TagAttachmentPickCommand, ElementName=Root}"
+                            CommandParameter="{Binding}"
+                            Content="{Binding}"
+                            ToolTip="{Binding TaggedProjectFileTitle, TargetNullValue='בחר קובץ פרויקט יעד (חומר חיצוני) לשיוך הקובץ המצורף'}">
+                        <Button.Resources>
+                            <DataTemplate x:Key="TagButtonPickTemplate">
+                                <TextBlock Text="🔗 בחר קובץ"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="TagButtonChangeTemplate">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔗 "/>
+                                    <TextBlock Text="{Binding TaggedProjectFileTitle}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding TaggedProjectFileTitle}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </Button.Resources>
+                        <Button.Style>
+                            <Style TargetType="Button">
                                 <Setter Property="FontSize" Value="10"/>
                                 <Setter Property="BorderBrush" Value="#90CAF9"/>
+                                <Setter Property="Background" Value="White"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                                <Setter Property="ContentTemplate" Value="{StaticResource TagButtonPickTemplate}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsTagged}" Value="True">
                                         <Setter Property="BorderBrush" Value="#66BB6A"/>
                                         <Setter Property="Background" Value="#E8F5E9"/>
+                                        <Setter Property="ContentTemplate" Value="{StaticResource TagButtonChangeTemplate}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </ComboBox.Style>
-                    </ComboBox>
+                        </Button.Style>
+                    </Button>
                     <!-- Inline alternative selector (compact) -->
                     <ComboBox Margin="3,0,0,0"
                               MinWidth="80"

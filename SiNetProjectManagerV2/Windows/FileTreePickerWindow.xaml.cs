@@ -82,6 +82,79 @@ public partial class FileTreePickerWindow : Window
             .Select(n => new FilePickerSelection(n.FileName!, n.Alternative ?? string.Empty))
             .ToList();
 
+    /// <summary>
+    /// Returns the <see cref="PickerNode.Tag"/> values of every currently
+    /// selected leaf, in the order they appear in the tree. Used by callers
+    /// (e.g. attachment ProjectFile picker) that built the tree themselves
+    /// and need to map the selection back to a domain id without going through
+    /// <see cref="FilePickerSelection"/>.
+    /// </summary>
+    public IReadOnlyList<object?> SelectedTags =>
+        _allSelectableLeaves
+            .Where(n => n.IsChecked)
+            .Select(n => n.Tag)
+            .ToList();
+
+    /// <summary>
+    /// Pre-built-tree constructor. Lets callers (e.g. the attachment
+    /// ProjectFile picker) reuse this window as a shared UI without going
+    /// through <see cref="FileTreePickerRequest"/> / <c>ActiveFolderInfo</c>.
+    /// The supplied roots are displayed as-is; <see cref="PickerNode.Tag"/>
+    /// is preserved and exposed via <see cref="SelectedTags"/>.
+    /// </summary>
+    internal FileTreePickerWindow(
+        IEnumerable<PickerNode> roots,
+        FilePickerSelectionMode mode,
+        string headerText)
+    {
+        InitializeComponent();
+        _mode = mode;
+
+        HeaderText.Text = headerText ?? string.Empty;
+
+        int displayedFolders = 0, displayedFiles = 0;
+        foreach (var r in roots)
+        {
+            _roots.Add(r);
+            CollectStats(r, ref displayedFolders, ref displayedFiles);
+            CollectSelectableLeaves(r);
+        }
+
+        Stats = new FilterStats(
+            TotalFiles: displayedFiles,
+            AvailableFiles: displayedFiles,
+            SelectableLeafCount: _allSelectableLeaves.Count,
+            HiddenMissingFiles: 0,
+            DisplayedFolders: displayedFolders,
+            DisplayedFiles: displayedFiles);
+
+        Tree.ItemsSource = _roots;
+
+        if (_allSelectableLeaves.Count == 0)
+        {
+            Tree.Visibility = Visibility.Collapsed;
+            EmptyText.Visibility = Visibility.Visible;
+            OkButton.IsEnabled = false;
+        }
+        else
+        {
+            UpdateOkEnabled();
+        }
+    }
+
+    private void CollectSelectableLeaves(PickerNode node)
+    {
+        if (node.IsSelectable) _allSelectableLeaves.Add(node);
+        foreach (var c in node.Children) CollectSelectableLeaves(c);
+    }
+
+    private static void CollectStats(PickerNode node, ref int folders, ref int files)
+    {
+        if (node.Kind == PickerNodeKind.Folder) folders++;
+        else if (node.Kind == PickerNodeKind.File) files++;
+        foreach (var c in node.Children) CollectStats(c, ref folders, ref files);
+    }
+
     // ───── Existence / availability rules ────────────────────────────────
 
     /// <summary>
@@ -326,6 +399,14 @@ public partial class FileTreePickerWindow : Window
 
         public string? FileName { get; init; }
         public string? Alternative { get; init; }
+
+        /// <summary>
+        /// Optional opaque payload attached by callers that build the tree
+        /// themselves (e.g. the attachment ProjectFile picker stores
+        /// <c>ProjectFile.Id</c> here). The default Inspection / ReviewedPlans
+        /// path leaves this <c>null</c>.
+        /// </summary>
+        public object? Tag { get; init; }
 
         public ObservableCollection<PickerNode> Children { get; } = new();
 
