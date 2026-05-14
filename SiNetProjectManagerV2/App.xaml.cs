@@ -305,6 +305,33 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.ApproveOrCloseProcessActionHandler>();
 
+            // Strict dispatcher-only: SuggestedActionType.StartWorkflow runs through
+            // StartWorkflowProcessActionHandler with NO legacy fallback. Missing handler /
+            // dispatcher exception / unexpected status → ActionResult.Failed in the executor.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.StartWorkflowProcessActionHandler>();
+
+            // Strict dispatcher-only: WorkflowTransitionActionType (all 8) run through
+            // IProcessActionDispatcher inside WorkflowActionExecutor. NO legacy switch,
+            // NO silent fallback. Missing handler / handler exception / unexpected status
+            // → ActionExecutionResult(Success=false) returned to WorkflowTaskOrchestrator.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.CreateStageTasksProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.ClosePreviousStageTasksProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.SendNotificationProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.StartSubWorkflowProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.SetProjectStatusProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.RecordTaskResultProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.SetBillingPendingProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.CloseProjectProcessActionHandler>();
+
             services.AddSingleton<ProjectRecipientCacheService>();
             services.AddTransient<IEmailComposerService, EmailComposerService>();
             services.AddTransient<IInspectionReportEmailBuilder, InspectionReportEmailBuilder>();
