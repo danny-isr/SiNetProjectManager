@@ -1,4 +1,4 @@
-using SiNetProjectManagerV2.Services;
+﻿using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.WPF;
 using System;
 using System.Diagnostics;
@@ -332,6 +332,16 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.CloseProjectProcessActionHandler>();
 
+            // Phase 3: filing-related Suggested Actions routed through the dispatcher.
+            //  - AddMaterialToProject: returns Deferred/RequiresUi when ProjectFile/source
+            //    are missing; otherwise files through IProjectFileFilingService.
+            //  - MoveToProject: backend equivalent of EmailManagementViewModel.MoveToProjectAsync,
+            //    files every tagged inbox attachment via IProjectFileFilingService.
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.AddMaterialToProjectProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.MoveToProjectProcessActionHandler>();
+
             services.AddSingleton<ProjectRecipientCacheService>();
             services.AddTransient<IEmailComposerService, EmailComposerService>();
             services.AddTransient<IInspectionReportEmailBuilder, InspectionReportEmailBuilder>();
@@ -343,8 +353,32 @@ namespace SiNetProjectManagerV2
             // ACC File Sync: Transient (copies tagged attachments from ACC Inbox → ACC project folders)
             services.AddTransient<SiNetSQL.Services.Coordinators.AccFileSyncService>();
 
-            // Project File Upload: Transient (uploads project file alternatives to ACC/GoogleDrive)
-            services.AddTransient<SiNetSQL.Services.Coordinators.ProjectFileUploadService>();
+            // ---------------------------------------------------------------------
+            // Phase 2B: Centralized project-file filing service.
+            //
+            // ProjectFileFilingService is the single end-to-end path for placing a
+            // file into a project slot (FileServer + ACC + ProjectFileInstance upsert
+            // + ACC auto-provision via IAccProjectProvisioningService). UI callers
+            // (EmailManagementViewModel.MoveToProjectAsync) are thin bridges over
+            // this service.
+            //
+            // ITokenProvider is registered as a factory that reads Autodesk client
+            // credentials from CredentialProvider, mirroring the pattern used in
+            // AccProjectProvisioningService and the legacy VM code.
+            // ---------------------------------------------------------------------
+            services.AddTransient<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
+            {
+                var clientId = SiNetSQL.Services.CredentialProvider.AutodeskClientId ?? string.Empty;
+                var clientSecret = SiNetSQL.Services.CredentialProvider.AutodeskClientSecret ?? string.Empty;
+                return new MyOffice.AutodeskConnector.TokenProvider(clientId, clientSecret);
+            });
+            services.AddTransient<SiNetSQL.Services.Files.IBim360ServiceFactory, SiNetSQL.Services.Files.Bim360ServiceFactory>();
+            services.AddTransient<SiNetSQL.Services.Files.IAccFileClient, SiNetSQL.Services.Files.Bim360AccFileClient>();
+            services.AddTransient<SiNetSQL.Services.Files.IFolderPathResolver, SiNetSQL.Services.Files.FolderPathResolver>();
+            services.AddTransient<SiNetSQL.Services.Files.IFileServerMetadataStore, SiNetSQL.Services.Files.FileServerMetadataStore>();
+            services.AddTransient<SiNetSQL.Services.Files.IFileServerVersionArchiver, SiNetSQL.Services.Files.FileServerVersionArchiver>();
+            services.AddTransient<SiNetSQL.Services.Files.IFileServerRootResolver, SiNetSQL.Services.Files.FileServerRootResolver>();
+            services.AddTransient<SiNetSQL.Services.Files.IProjectFileFilingService, SiNetSQL.Services.Files.ProjectFileFilingService>();
 
             // ACC Metadata Status Reporter: Singleton (shared collector of Custom-Attribute
             // failures — surfaced as a badge in ProjectWorkView so the user sees when
