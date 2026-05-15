@@ -1,4 +1,4 @@
-using System.ComponentModel;
+ο»Ώusing System.ComponentModel;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -196,14 +196,14 @@ public partial class FloatingInspectionView : FloatingWindowBase
         System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted entered. sender={sender?.GetType().Name}");
         if (sender is not RichTextNoteEditor { DataContext: NoteTreeItem note }) return;
 
-        System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted — NoteText='{note.NoteText?.Substring(0, Math.Min(note.NoteText?.Length ?? 0, 50))}', IsDirty={note.IsDirty}");
+        System.Diagnostics.Debug.WriteLine($"[AI Flow] NoteEditor_EditCompleted - NoteText='{note.NoteText?.Substring(0, Math.Min(note.NoteText?.Length ?? 0, 50))}', IsDirty={note.IsDirty}");
 
         if (note.IsDirty)
             ViewModel.SaveNote(note);
 
         if (string.IsNullOrWhiteSpace(note.NoteText))
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] Note is empty — deleting, skipping AI.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] Note is empty - deleting, skipping AI.");
             ViewModel.DeleteEmptyNote(note);
         }
         else
@@ -299,8 +299,8 @@ public partial class FloatingInspectionView : FloatingWindowBase
         note.NoteText = e.SuggestedText;
         ViewModel.SaveNote(note);
 
-        var displayType = e.ReviewType == "grammar" ? "ϊιχεο ϊηαιψι" : "πιρεη ξηγω";
-        ViewModel.StatusMessage = $"?? {displayType} δεημ αδφμηδ ?";
+        var displayType = e.ReviewType == "grammar" ? "Χ‘Χ“Χ™Χ§Χª Χ©Χ’Χ™ΧΧ•Χª" : "Χ‘Χ“Χ™Χ§Χª Χ Χ™Χ΅Χ•Χ—";
+        ViewModel.StatusMessage = $"β“ {displayType} Χ”Χ•Χ—Χ Χ‘Χ”Χ¦ΧΧ—Χ”";
 
         // Re-run AI review on the newly applied text
         _ = RunAiReviewInBackground(note);
@@ -317,12 +317,12 @@ public partial class FloatingInspectionView : FloatingWindowBase
     /// </summary>
     private async Task RunAiReviewInBackground(NoteTreeItem note)
     {
-        System.Diagnostics.Debug.WriteLine("[AI Flow] RunAiReviewInBackground — ENTERED");
+        System.Diagnostics.Debug.WriteLine("[AI Flow] RunAiReviewInBackground - ENTERED");
 
         var aiService = App.ServiceProvider.GetService<AiService>();
         if (aiService is null)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] ? AiService is NULL in DI — aborting.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ? AiService is NULL in DI - aborting.");
             return;
         }
         System.Diagnostics.Debug.WriteLine("[AI Flow] ? AiService resolved from DI");
@@ -330,30 +330,30 @@ public partial class FloatingInspectionView : FloatingWindowBase
         var (plainText, _) = RichTextCodec.Parse(note.NoteText ?? "");
         if (string.IsNullOrWhiteSpace(plainText))
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] ? Plain text is empty after parse — aborting.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ? Plain text is empty after parse - aborting.");
             return;
         }
-        // Length only — never log the note text itself (may contain sensitive project info).
+        // Length only - never log the note text itself (may contain sensitive project info).
         System.Diagnostics.Debug.WriteLine($"[AI Flow] ? Plain text extracted ({plainText.Length} chars)");
 
         // Skip if already reviewed for this exact text
         if (note.AiOriginalText == plainText && !note.AiReviewInProgress)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Flow] ? Already reviewed for this exact text — skipping.");
+            System.Diagnostics.Debug.WriteLine("[AI Flow] ? Already reviewed for this exact text - skipping.");
             return;
         }
 
         note.ClearAiResults();
         note.AiOriginalText = plainText;
         note.AiReviewInProgress = true;
-        ViewModel.StatusMessage = "?? AI αεγχ αψχς...";
+        ViewModel.StatusMessage = "β³ AI Χ‘Χ•Χ“Χ§ Χ›ΧΆΧª...";
 
         System.Diagnostics.Debug.WriteLine($"[AI Flow] ?? Sending request to AI at {DateTime.Now:HH:mm:ss}...");
         try
         {
             // 1) Mistake check ? Simple level
             var grammar = (await CheckMistakesWithAiAsync(aiService, plainText).ConfigureAwait(false))?.Trim();
-            // 2) Wording check ? QualityCheck level (NOT Writing — Writing is reserved for future rewrite action)
+            // 2) Wording check ? QualityCheck level (NOT Writing - Writing is reserved for future rewrite action)
             var rephrased = (await CheckWordingWithAiAsync(aiService, plainText).ConfigureAwait(false))?.Trim();
 
             System.Diagnostics.Debug.WriteLine(
@@ -363,7 +363,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
             {
                 note.AiGrammarResult = grammar;
                 note.AiRephraseResult = rephrased;
-                ViewModel.StatusMessage = "?? AI ριιν — μηυ ιξιο μϊτψιθ ?";
+                ViewModel.StatusMessage = "β“ AI Χ΅Χ™Χ™Χ β€“ Χ Χ™ΧªΧ ΧΧΆΧ‘Χ•Χ¨ ΧΧ”ΧΆΧ¨Χ•Χª";
             });
         }
         catch (AiModelNotConfiguredException ex)
@@ -379,7 +379,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
             System.Diagnostics.Debug.WriteLine("[AI Review] ? Request timed out or was cancelled.");
             await Dispatcher.InvokeAsync(() =>
             {
-                ViewModel.StatusMessage = "?? AI μΰ δβια ϊεκ δζξο δξεχφα (timeout).";
+                ViewModel.StatusMessage = "β  AI ΧΧ Χ”Χ’Χ™Χ‘ Χ‘Χ–ΧΧ Χ”Χ΅Χ‘Χ™Χ¨ (timeout).";
             });
         }
         catch (Exception ex)
@@ -387,7 +387,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
             System.Diagnostics.Debug.WriteLine($"[AI Review] Background review exception: {ex.Message}");
             await Dispatcher.InvokeAsync(() =>
             {
-                ViewModel.StatusMessage = $"?? ωβιΰδ: {ex.Message}";
+                ViewModel.StatusMessage = $"β  Χ©Χ’Χ™ΧΧ”: {ex.Message}";
             });
         }
         finally
@@ -398,7 +398,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
 
     /// <summary>
     /// Simple mistake / spelling / punctuation check.
-    /// Uses <see cref="AiModelLevel.Simple"/> — fast, cheap model configured in AI Settings.
+    /// Uses <see cref="AiModelLevel.Simple"/> - fast, cheap model configured in AI Settings.
     /// </summary>
     private static Task<string> CheckMistakesWithAiAsync(AiService aiService, string plainText)
     {
@@ -429,11 +429,11 @@ public partial class FloatingInspectionView : FloatingWindowBase
             // ?? Check Google client secrets availability ??
             if (string.IsNullOrWhiteSpace(AppConfiguration.GetGoogleClientSecretsPath()))
             {
-                System.Diagnostics.Debug.WriteLine("[InspectionView] Google credentials not configured — Google services not wired.");
+                System.Diagnostics.Debug.WriteLine("[InspectionView] Google credentials not configured - Google services not wired.");
                 return;
             }
 
-            // ?? Resolve shared GoogleAuthService (singleton — single auth per session) ??
+            // ?? Resolve shared GoogleAuthService (singleton - single auth per session) ??
             var authService = App.ServiceProvider.GetRequiredService<GoogleAuthService>();
 
             // ?? Template Provider ??

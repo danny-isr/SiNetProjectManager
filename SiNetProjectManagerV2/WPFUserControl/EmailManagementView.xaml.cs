@@ -243,17 +243,17 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (result.IsCompleted)
             {
-                title = "������ �����";
+                title = "הפעולה הושלמה";
                 icon = MessageBoxImage.Information;
             }
             else if (result.RequiresFollowUp)
             {
-                // Follow-up dialogs handle their own UX � skip the toast.
+                // Follow-up dialogs handle their own UX - skip the toast.
                 return;
             }
             else
             {
-                title = "������ �� ������";
+                title = "הפעולה לא הושלמה";
                 icon = MessageBoxImage.Warning;
             }
 
@@ -309,7 +309,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             switch (followUp)
             {
-                // ??? Utility actions � always direct ???
+                // ??? Utility actions - always direct ???
                 case ActionFollowUp.FileImportDialog:
                     var importDialog = new FileImportDialog(emailMessageId) { Owner = owner };
                     importDialog.ShowDialog();
@@ -365,7 +365,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                     await HandleProjectPickerAsync(owner, emailMessageId, result);
                     break;
 
-                // ??? Delegatable actions � go through AssignActionDialog ???
+                // ??? Delegatable actions - go through AssignActionDialog ???
                 case ActionFollowUp.NewProjectDialog:
                 case ActionFollowUp.TaskCreationDialog:
                 case ActionFollowUp.DecisionDialog:
@@ -376,7 +376,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 default:
                     MessageBox.Show(
                         result.Message,
-                        "����� �����", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "פעולה במייל", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
             }
         }
@@ -401,7 +401,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (assign.ExecuteDirectly)
             {
-                // User chose to do it themselves � open the original dialog
+                // User chose to do it themselves - open the original dialog
                 ExecuteDirectAction(owner, followUp, emailMessageId);
                 return;
             }
@@ -497,7 +497,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             if (openStatus == null)
             {
-                MessageBox.Show("�� ���� ����� ���� ������.", "�����",
+                MessageBox.Show("לא נמצא סטטוס משימה תקין.", "שגיאה",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -514,24 +514,24 @@ namespace SiNetProjectManagerV2.WPFUserControl
             {
                 if (existingTask.AssignedToId == assignee.Id)
                 {
-                    // Same employee � just link the email to the existing task
+                    // Same employee - just link the email to the existing task
                     await LinkEmailToTaskIfNeededAsync(db, existingTask.Id, emailMessageId,
                         actionDescription, currentUserId, assignee.Id, ct);
                     await db.SaveChangesAsync(ct);
 
                     MessageBox.Show(
-                        $"��� ����� ����� ���� �� ���� {assignee.Name} (����: {existingTask.Id}).\n" +
-                        $"����� ���� ������ ������.",
-                        "���� ������ �����", MessageBoxButton.OK, MessageBoxImage.Information);
+                        $"מייל זה כבר משויך למשימה של {assignee.Name} (משימה: {existingTask.Id}).\n" +
+                        $"לא נוצרה משימה כפולה.",
+                        "משימה קיימת", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
 
-                // Different employee � ask user whether to transfer
-                var currentName = existingTask.AssignedTo?.Name ?? $"���� #{existingTask.AssignedToId}";
+                // Different employee - ask user whether to transfer
+                var currentName = existingTask.AssignedTo?.Name ?? $"עובד #{existingTask.AssignedToId}";
                 var transferResult = MessageBox.Show(
-                    $"����� ���� �� ��� ������ �-{currentName} (����: {existingTask.Id}).\n" +
-                    $"��� ������ �� ������ �-{assignee.Name}?",
-                    "����� �����", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    $"משימה זו כבר משויכת ל-{currentName} (משימה: {existingTask.Id}).\n" +
+                    $"האם להעביר את המשימה ל-{assignee.Name}?",
+                    "העברת משימה", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
                 if (transferResult != MessageBoxResult.Yes)
                     return;
@@ -547,17 +547,17 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 await db.SaveChangesAsync(ct);
 
                 MessageBox.Show(
-                    $"? ������ ������ �-{currentName} �-{assignee.Name}.",
-                    "����� ������", MessageBoxButton.OK, MessageBoxImage.Information);
+                    $"✓ המשימה הועברה מ-{currentName} ל-{assignee.Name}.",
+                    "העברה הצליחה", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             // Build task body with action context for the assignee
             var bodyParts = new List<string>
             {
-                $"[�����: {actionDescription}]",
-                $"[���: {followUp}]",
-                $"[����: #{emailMessageId}]",
+                $"[פעולה: {actionDescription}]",
+                $"[מעקב: {followUp}]",
+                $"[מייל: #{emailMessageId}]",
             };
             if (!string.IsNullOrWhiteSpace(note))
                 bodyParts.Add(note);
@@ -568,7 +568,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 AssignedToId = assignee.Id,
                 TaskTypeId = taskType?.Id,
                 StatusId = openStatus.Id,
-                Title = $"{actionDescription} � ���� #{emailMessageId}",
+                Title = $"{actionDescription} – מייל #{emailMessageId}",
                 Body = string.Join(Environment.NewLine, bodyParts),
             };
 
@@ -576,18 +576,18 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 link: new SiNetSQL.Services.TaskFactory.TaskLinkInfo(
                     TaskLinkEntityType.EmailInboxMessage, emailMessageId,
                     Description: actionDescription),
-                eventNote: $"����� ����� ������ ����: {actionDescription}",
+                eventNote: $"נוצרה משימה מפעולה במייל: {actionDescription}",
                 ct: ct);
 
             MessageBox.Show(
-                $"? ����� ����� ���� {assignee.Name}",
-                "����� �����", MessageBoxButton.OK, MessageBoxImage.Information);
+                $"✓ נוצרה משימה עבור {assignee.Name}",
+                "משימה נוצרה", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         /// <summary>
         /// Links an <see cref="EmailInboxMessage"/> to a <see cref="ProjectAssignment"/>
         /// via <see cref="TaskLink"/> if such a link doesn't already exist.
-        /// Does NOT call <c>SaveChangesAsync</c> � the caller is responsible for saving.
+        /// Does NOT call <c>SaveChangesAsync</c> - the caller is responsible for saving.
         /// </summary>
         private static async Task LinkEmailToTaskIfNeededAsync(
             SiNetSQLDbContext db,
@@ -702,10 +702,10 @@ namespace SiNetProjectManagerV2.WPFUserControl
         {
             var sizeMb = fileSizeBytes / (1024.0 * 1024.0);
             var result = MessageBox.Show(
-                $"����� \"{fileName}\" ���� �-{limitMb} MB ({sizeMb:F1} MB).\n\n" +
-                $"���� ����� �� ����� ����� ������� (MaxUploadFileSizeMb).\n\n" +
-                $"��� ������ ��� ��� �-ACC?",
-                "���� ����",
+                $"הקובץ \"{fileName}\" גדול מ-{limitMb} MB ({sizeMb:F1} MB).\n\n" +
+                $"גודל זה נקבע בהגדרות המערכת (MaxUploadFileSizeMb).\n\n" +
+                $"האם להעלות בכל זאת ל-ACC?",
+                "קובץ גדול",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
@@ -722,7 +722,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var dialog = new Window
             {
-                Title = "��������� ����",
+                Title = "אלטרנטיבה חדשה",
                 Width = 340,
                 Height = 160,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -740,7 +740,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var okButton = new Button
             {
-                Content = "�����",
+                Content = "אישור",
                 Width = 80,
                 Height = 28,
                 Margin = new Thickness(0, 0, 8, 0),
@@ -750,7 +750,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
             var cancelButton = new Button
             {
-                Content = "�����",
+                Content = "ביטול",
                 Width = 80,
                 Height = 28,
                 IsCancel = true
@@ -768,7 +768,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
             var stack = new StackPanel();
             stack.Children.Add(new TextBlock
             {
-                Text = "��� �� ���������:",
+                Text = "שם האלטרנטיבה:",
                 Margin = new Thickness(16, 12, 16, 0),
                 FontSize = 12
             });
@@ -822,7 +822,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         /// <summary>
-        /// Handles "��� ���� �����" from EmailViewerControl context menu.
+        /// Handles "פתח קובץ מקומי" from EmailViewerControl context menu.
         /// </summary>
         private void OnViewerOpenLocalFileRequested(object? sender, EmailAttachment attachment)
         {
@@ -834,7 +834,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         /// <summary>
-        /// Handles "��� �-ACC" from EmailViewerControl context menu.
+        /// Handles "הצג ב-ACC" from EmailViewerControl context menu.
         /// </summary>
         private void OnViewerShowInAccRequested(object? sender, EmailAttachment attachment)
         {

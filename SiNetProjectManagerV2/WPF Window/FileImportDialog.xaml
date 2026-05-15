@@ -33,7 +33,7 @@
 
         <!-- Target folder selection -->
         <StackPanel Grid.Row="1" Margin="0,0,0,8">
-            <TextBlock Text="תיקיית יעד:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="קובץ יעד בפרויקט:" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <ComboBox x:Name="FolderCombo"
                       DisplayMemberPath="Title"
                       SelectedValuePath="Id"

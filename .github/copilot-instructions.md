@@ -1,5 +1,15 @@
 # GitHub Copilot Instructions - C# Desktop Project
+## Commit Messages
 
+- Use [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>(<scope>): <description>`
+- Valid types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `perf`
+- Use scope to indicate the area of the codebase (e.g., `calc`, `tests`, `ci`)
+- Write the subject line in imperative mood, lowercase, and keep it under 72 characters
+- Do not end the subject line with a period
+- Reference related GitHub issues in the footer when applicable (e.g., `Closes #42`)
+- If a commit introduces a breaking change, include `BREAKING CHANGE:` in the footer
+
+### Examples
 ## 1. Safety & Stability (CRITICAL)
 - **Do Not Break Working Code:** Never delete or refactor operational functions unless specifically instructed.
 - **Dead Code Removal:** Only suggest deleting unused code after 100% certain analysis (no references, no functional impact).

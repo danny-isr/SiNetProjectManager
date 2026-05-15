@@ -214,6 +214,13 @@ namespace SiNetProjectManagerV2
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTransitionEvaluator>();
+            // WorkflowActionExecutor depends on IProcessActionDispatcher only at
+            // action-execution time. Handlers like StartWorkflowProcessActionHandler
+            // pull WorkflowTaskOrchestrator → WorkflowActionExecutor, which closes
+            // a constructor-time DI cycle. Resolving the dispatcher lazily via a
+            // factory breaks the cycle without changing runtime behavior.
+            services.AddTransient<Func<SiNetSQL.Domain.Actions.IProcessActionDispatcher>>(sp =>
+                () => sp.GetRequiredService<SiNetSQL.Domain.Actions.IProcessActionDispatcher>());
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionExecutor>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
@@ -248,6 +255,15 @@ namespace SiNetProjectManagerV2
             // both routes produce identical Gmail label / DB / lifecycle behavior.
             services.AddTransient<SiNetSQL.Services.Email.EmailFilingService>();
             services.AddTransient<SiNetSQL.Services.Email.EmailStatusService>();
+
+            // EmailFilingService depends on TaskLifecycleService only at notify-time,
+            // and TaskLifecycleService transitively pulls WorkflowTaskOrchestrator →
+            // WorkflowActionExecutor → IProcessActionDispatcher → handlers (some of
+            // which file emails via EmailFilingService). That closes a constructor
+            // cycle. Resolving TaskLifecycleService lazily via a factory breaks the
+            // cycle without changing any business behavior.
+            services.AddTransient<Func<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService?>>(sp =>
+                () => sp.GetService<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService>());
 
             // Email attachment ProjectFile picker (shared FileTreePickerWindow UI, DB-driven).
             // Used by EmailManagementViewModel.TagAttachmentPickCommand. Does not affect
@@ -347,9 +363,6 @@ namespace SiNetProjectManagerV2
             services.AddTransient<IInspectionReportEmailBuilder, InspectionReportEmailBuilder>();
             services.AddTransient<IInspectionReportEmailWorkflow, InspectionReportEmailWorkflow>();
 
-            // File Import Coordinator: Transient (orchestrates email attachment → project filesystem)
-            services.AddTransient<SiNetSQL.Services.Coordinators.FileImportCoordinator>();
-
             // ACC File Sync: Transient (copies tagged attachments from ACC Inbox → ACC project folders)
             services.AddTransient<SiNetSQL.Services.Coordinators.AccFileSyncService>();
 
@@ -379,6 +392,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Files.IFileServerVersionArchiver, SiNetSQL.Services.Files.FileServerVersionArchiver>();
             services.AddTransient<SiNetSQL.Services.Files.IFileServerRootResolver, SiNetSQL.Services.Files.FileServerRootResolver>();
             services.AddTransient<SiNetSQL.Services.Files.IProjectFileFilingService, SiNetSQL.Services.Files.ProjectFileFilingService>();
+            services.AddTransient<SiNetSQL.Services.Files.IProjectFileRefileService, SiNetSQL.Services.Files.ProjectFileRefileService>();
 
             // ACC Metadata Status Reporter: Singleton (shared collector of Custom-Attribute
             // failures — surfaced as a badge in ProjectWorkView so the user sees when
