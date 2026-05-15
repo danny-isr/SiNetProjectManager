@@ -206,8 +206,22 @@ ProjectWorkView.xaml.cs                 (Code-behind — Drag events, DataContex
 | נתיב הצבה | מקום ביצוע | SourceType |
 |---|---|---|
 | העברה ממייל (`MoveToProjectAsync`) | `EmailManagementViewModel` | EmailAttachment |
-| סנכרון אוטומטי (`AccFileSyncService`) | `AccFileSyncService` | EmailAttachment |
+| סנכרון אוטומטי (`AccFileSyncService`) — **DISABLED by design** | `AccFileSyncService` | EmailAttachment |
 | גרירת קובץ / תבנית (`GetAlternativeNode`) | `ProjectFileNode` | Manual / Template |
+
+> **EmailFiling Task (משימת תיוק):**
+> כאשר משימת `EmailFiling` (Task) נפתחת מתוך `FloatingProjectTasksView`,
+> המערכת מנווטת ל-`EmailManagementView` (לא ל-`EmailPreviewWindow`).
+> ה-`TaskLink` הוא ברמת `EmailInboxMessage`; המשימה נסגרת ב-`TaskLink` רק
+> כאשר **כל** ה-attachments הרלוונטיים של אותו מייל קיבלו
+> `ProjectFileInstanceId != null`. Partial filing לא סוגר את ה-TaskLink.
+> הסגירה נעשית אך ורק דרך `ITaskCompletionCoordinator.CompleteAsync`
+> עם `ReviewCompletionEvents.ReviewMaterialFiled`.
+> פרטים מלאים: ראה `SiNetSQL/docs/TaskDrivenEmailFiling.md`.
+
+> **Auto-sync אחרי תיוג:** מבוטל בכוונה
+> (`EmailManagementViewModel.EnableAutoSyncToProject = false`).
+> תיוג הוא metadata בלבד; `MoveToProject` הוא נתיב ההעברה היחיד.
 
 **ניתוב לפי `StorageDestination`:**
 כאשר קובץ מועבר מהמייל, המערכת בודקת את `ProjectFile.StorageDestination`:
