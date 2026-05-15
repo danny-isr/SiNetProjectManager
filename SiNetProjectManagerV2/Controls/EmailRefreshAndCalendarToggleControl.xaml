@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl x:Class="SiNetProjectManagerV2.Controls.EmailRefreshAndCalendarToggleControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+             mc:Ignorable="d"
+             d:DesignHeight="30" d:DesignWidth="220"
+             d:DataContext="{d:DesignInstance Type=vm:EmailManagementViewModel, IsDesignTimeCreatable=False}">
+    <StackPanel Orientation="Horizontal">
+        <Button Command="{Binding RefreshCommand}"
+                Content="🔄 Refresh"
+                Padding="10,3"/>
+
+        <!-- Calendar Toggle -->
+        <ToggleButton IsChecked="{Binding IsCalendarVisible}"
+                      Margin="8,0,0,0"
+                      Padding="10,3"
+                      Cursor="Hand"
+                      ToolTip="הצג/הסתר לוח שנה">
+            <ToggleButton.Style>
+                <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                    <Setter Property="Content" Value="📅 לוח שנה"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsChecked" Value="False">
+                            <Setter Property="Content" Value="📅 לוח שנה"/>
+                            <Setter Property="Opacity" Value="0.6"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ToggleButton.Style>
+        </ToggleButton>
+    </StackPanel>
+</UserControl>

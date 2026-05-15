@@ -11,221 +11,31 @@
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              mc:Ignorable="d"
              d:DesignHeight="700" d:DesignWidth="1200"
+             d:DataContext="{d:DesignInstance Type=vm:EmailManagementViewModel, IsDesignTimeCreatable=False}"
              FontFamily="{DynamicResource AppFontFamily}"
              FontSize="{DynamicResource AppFontSize}"
              Background="{DynamicResource AppBackground}"
              Foreground="{DynamicResource AppForeground}">
 
-    <UserControl.DataContext>
-        <vm:EmailManagementViewModel />
-    </UserControl.DataContext>
+    <!--
+        DataContext is intentionally NOT declared in XAML.
+        MainWindow.xaml.cs assigns a DI-built EmailManagementViewModel
+        (with shared GoogleService) on creation. The previous
+        <UserControl.DataContext><vm:EmailManagementViewModel/></UserControl.DataContext>
+        block silently instantiated a second VM (creating an extra GoogleService)
+        that was immediately discarded when MainWindow re-assigned DataContext.
+        The d:DataContext above keeps Designer IntelliSense without runtime creation.
+    -->
 
     <UserControl.Resources>
-    <BooleanToVisibilityConverter x:Key="BoolToVis" />
-    <local:StartsWithAssignedConverter x:Key="StartsWithAssigned" />
-    <local:InverseBooleanConverter x:Key="InverseBoolConverter" />
-    <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisConverter" />
-    <conv:ColorConverter x:Key="StringToBrushConverter" />
-        
-        <Style x:Key="EmailListItemStyle" TargetType="ListBoxItem">
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
-            <Setter Property="Background" Value="{Binding RowBackgroundBrush}"/>
-            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-            <Setter Property="ContextMenu">
-                <Setter.Value>
-                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                        <MenuItem Header="📁 שייך לפרויקט"
-                                  Command="{Binding PlacementTarget.Tag.FileEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}"
-                                  Visibility="{Binding IsAssigned, Converter={StaticResource InverseBoolToVisConverter}}"/>
-                        <MenuItem Header="↩️ בטל שיוך"
-                                  Command="{Binding PlacementTarget.Tag.UnfileEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}"
-                                  Visibility="{Binding IsAssigned, Converter={StaticResource BoolToVis}}"/>
-                        <Separator/>
-                        <MenuItem Header="⏳ סמן כממתין לטיפול"
-                                  Command="{Binding PlacementTarget.Tag.MarkAsPendingCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}"/>
-                        <MenuItem Header="👤 סמן כאישי"
-                                  Command="{Binding PlacementTarget.Tag.MarkAsPersonalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}"/>
-                        <MenuItem Header="🚫 סמן כלא רלוונטי"
-                                  Command="{Binding PlacementTarget.Tag.MarkAsIrrelevantCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}"/>
-                    </ContextMenu>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <!-- Selection highlight - uses distinct blue to show active selection -->
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#BBDEFB"/>
-                    <Setter Property="BorderBrush" Value="#2196F3"/>
-                    <Setter Property="BorderThickness" Value="2,0,0,1"/>
-                </Trigger>
-                <!-- Mouse over - use Opacity instead of Background to preserve context colors -->
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Opacity" Value="0.85"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="GroupHeaderStyle" TargetType="GroupItem">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="GroupItem">
-                        <Expander IsExpanded="True" BorderThickness="0">
-                            <Expander.Header>
-                                <Border Padding="8,4" CornerRadius="4" Margin="0,4,0,2">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#E3F2FD"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Name, Converter={StaticResource StartsWithAssigned}}" Value="True">
-                                                    <Setter Property="Background" Value="#C8E6C9"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Margin="0,0,6,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="📥"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Name, Converter={StaticResource StartsWithAssigned}}" Value="True">
-                                                            <Setter Property="Text" Value="📂"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding Name}" 
-                                                   FontWeight="Bold">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="#1976D2"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Name, Converter={StaticResource StartsWithAssigned}}" Value="True">
-                                                            <Setter Property="Foreground" Value="#2E7D32"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text=" (" Foreground="Gray"/>
-                                        <TextBlock Text="{Binding ItemCount}" Foreground="Gray"/>
-                                        <TextBlock Text=")" Foreground="Gray"/>
-                                    </StackPanel>
-                                </Border>
-                            </Expander.Header>
-                            <ItemsPresenter Margin="15,0,0,0"/>
-                        </Expander>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Style for Filter Toggle Buttons in the Legend -->
-        <Style x:Key="FilterToggleStyle" TargetType="ToggleButton">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="border" 
-                                Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                BorderThickness="1" 
-                                CornerRadius="3" 
-                                Padding="6,2">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.4"/>
-                                <Setter TargetName="border" Property="Background" Value="Transparent"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Global rounded-corner button style for a polished look -->
-        <Style TargetType="Button">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"
-                                Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Opacity" Value="0.7"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Background" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#BDBDBD"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
-        </Style>
-
-        <!-- Rounded ToggleButton style (for Calendar, etc.) -->
-        <Style TargetType="ToggleButton">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"
-                                Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Opacity" Value="0.7"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#1976D2"/>
-                                <Setter TargetName="border" Property="Background" Value="#E3F2FD"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Background" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#BDBDBD"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
-        </Style>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/SiNetProjectManagerV2;component/Resources/EmailManagementViewResources.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </UserControl.Resources>
+
+    <!-- Marker: Resources moved to Resources/EmailManagementViewResources.xaml -->
 
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -250,219 +60,19 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- Status Text with Error Count -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Text" Value="Not Connected"/>
-                                <Setter Property="Foreground" Value="Gray"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsAuthenticated}" Value="True">
-                                        <Setter Property="Text" Value="✓"/>
-                                        <Setter Property="Foreground" Value="Green"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                    <!-- Connected Email Display -->
-                    <TextBlock VerticalAlignment="Center" Margin="4,0,0,0"
-                               Visibility="{Binding IsAuthenticated, Converter={StaticResource BoolToVis}}">
-                        <Run Text="{Binding ConnectedEmail, Mode=OneWay}" FontWeight="Bold" Foreground="#333"/>
-                    </TextBlock>
-                    <TextBlock Text=" | " Foreground="Gray" VerticalAlignment="Center"
-                               Visibility="{Binding IsAuthenticated, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Text="{Binding StatusMessage}" 
-                               VerticalAlignment="Center"
-                               Foreground="#555"/>
-                    <!-- Error Count (Red) -->
-                    <TextBlock VerticalAlignment="Center"
-                               Visibility="{Binding HasErrors, Converter={StaticResource BoolToVis}}">
-                        <Run Text=" | " Foreground="Gray"/>
-                        <Run Text="Errors: " Foreground="Red" FontWeight="Bold"/>
-                        <Run Text="{Binding ErrorCount, Mode=OneWay}" Foreground="Red" FontWeight="Bold"/>
-                    </TextBlock>
-                    <!-- Context enrichment indicator -->
-                    <TextBlock Text=" | 🔄 Enriching..." 
-                               Foreground="#1976D2"
-                               Visibility="{Binding IsEnrichingContext, Converter={StaticResource BoolToVis}}"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
+                <!-- Status Text with Error Count (extracted) -->
+                <controls:EmailTopStatusBarControl Grid.Column="0"/>
                 
-                <!-- Pagination Controls -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,20,0">
-                    <Button Content="⏮ ראשון" 
-                            Command="{Binding LoadFirstPageCommand}"
-                            IsEnabled="{Binding HasPreviousPage}"
-                            Margin="0,0,5,0"
-                            Padding="8,3"/>
-                    <Button Content="◀ חדשים" 
-                            Command="{Binding LoadPreviousPageCommand}"
-                            IsEnabled="{Binding HasPreviousPage}"
-                            Margin="0,0,5,0"
-                            Padding="8,3"/>
-                    <TextBlock Text="{Binding PageInfo}" 
-                               VerticalAlignment="Center" 
-                               Margin="5,0"
-                               FontWeight="SemiBold"/>
-                    <Button Content="ישנים ▶" 
-                            Command="{Binding LoadNextPageCommand}"
-                            IsEnabled="{Binding HasNextPage}"
-                            Margin="5,0,0,0"
-                            Padding="8,3"/>
-                </StackPanel>
-                
-                <!-- Refresh Button -->
+                <!-- Pagination Controls (extracted) -->
+                <controls:EmailPaginationControl Grid.Column="1" Margin="0,0,20,0"/>
+
+                <!-- Refresh Button + Calendar Toggle + Help Popup -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Command="{Binding RefreshCommand}"
-                            Content="🔄 Refresh"
-                            Padding="10,3"/>
+                    <!-- Refresh + Calendar Toggle (extracted) -->
+                    <controls:EmailRefreshAndCalendarToggleControl/>
 
-                    <!-- Calendar Toggle -->
-                    <ToggleButton IsChecked="{Binding IsCalendarVisible}"
-                                  Margin="8,0,0,0"
-                                  Padding="10,3"
-                                  Cursor="Hand"
-                                  ToolTip="הצג/הסתר לוח שנה">
-                        <ToggleButton.Style>
-                            <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-                                <Setter Property="Content" Value="📅 לוח שנה"/>
-                                <Style.Triggers>
-                                    <Trigger Property="IsChecked" Value="False">
-                                        <Setter Property="Content" Value="📅 לוח שנה"/>
-                                        <Setter Property="Opacity" Value="0.6"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ToggleButton.Style>
-                    </ToggleButton>
-
-                    <!-- Help Button -->
-                    <ToggleButton x:Name="HelpToggle"
-                                  Margin="8,0,0,0"
-                                  Padding="10,3"
-                                  Cursor="Hand"
-                                  ToolTip="מדריך עבודה"
-                                  Content="❓ עזרה"
-                                  Background="#E8EAF6"
-                                  BorderBrush="#7986CB"/>
-                    <Popup IsOpen="{Binding IsChecked, ElementName=HelpToggle}"
-                           PlacementTarget="{Binding ElementName=HelpToggle}"
-                           Placement="Bottom"
-                           StaysOpen="False"
-                           AllowsTransparency="True"
-                           PopupAnimation="Fade">
-                        <Border Background="White"
-                                BorderBrush="#7986CB"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="16"
-                                MaxWidth="420"
-                                MaxHeight="520">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.25"/>
-                            </Border.Effect>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled">
-                                <StackPanel FlowDirection="RightToLeft">
-                                    <TextBlock Text="📧 מדריך עבודה — ניהול מיילים"
-                                               FontWeight="Bold"
-                                               FontSize="14"
-                                               Foreground="#283593"
-                                               Margin="0,0,0,10"/>
-
-                                    <!-- Step 1 -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        <Run Text="1. התחברות" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="לחץ " Foreground="#444"/>
-                                        <Run Text="Login" FontWeight="Bold"/>
-                                        <Run Text=" להתחברות לחשבון Gmail. המיילים יטענו אוטומטית." Foreground="#444"/>
-                                    </TextBlock>
-
-                                    <!-- Step 2 -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        <Run Text="2. שיוך מייל לפרויקט" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="בחר פרויקט מהרשימה למעלה ← בחר מייל ← לחץ " Foreground="#444"/>
-                                        <Run Text="File Email" FontWeight="Bold"/>
-                                        <Run Text=". המייל יסומן ויעבור לקבוצת הפרויקט." Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="💡 " Foreground="#FF8F00"/>
-                                        <Run Text="שרשורים: אם מייל אחר בשרשור כבר שויך — תופיע הצעה אוטומטית לשיוך." Foreground="#666" FontStyle="Italic"/>
-                                    </TextBlock>
-
-                                    <!-- Step 3 -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        <Run Text="3. תיוג קבצים מצורפים" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="לאחר שיוך — לכל קובץ מצורף יופיע " Foreground="#444"/>
-                                        <Run Text="בוחר סוג קובץ" FontWeight="Bold"/>
-                                        <Run Text=" (מדידה, תוכנית וכו'). אם לקובץ יש אלטרנטיבות — יופיע גם " Foreground="#444"/>
-                                        <Run Text="בוחר אלטרנטיבה" FontWeight="Bold"/>
-                                        <Run Text="." Foreground="#444"/>
-                                    </TextBlock>
-
-                                    <!-- Step 4 -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        <Run Text="4. העברה לפרויקט (Move to Project)" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="לאחר תיוג — לחץ " Foreground="#444"/>
-                                        <Run Text="📂 Move to Project" FontWeight="Bold"/>
-                                        <Run Text=". הקבצים יועלו ל-ACC/שרת תחת שם סטנדרטי לתיקייה הנכונה." Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="✓ " Foreground="#2E7D32" FontWeight="Bold"/>
-                                        <Run Text="קבצים שכבר הועברו יסומנו בירוק ולא יועלו שוב." Foreground="#666" FontStyle="Italic"/>
-                                    </TextBlock>
-
-                                    <!-- Step 5 -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        <Run Text="5. תיקון טעויות" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="שייכת למקום לא נכון? לחץ " Foreground="#444"/>
-                                        <Run Text="Unfile Email" FontWeight="Bold" Foreground="#D32F2F"/>
-                                        <Run Text=" — כל התיוגים וההצבות ימחקו. לאחר מכן שייך מחדש לפרויקט הנכון, תייג, והעבר." Foreground="#444"/>
-                                    </TextBlock>
-
-                                    <Separator Margin="0,4,0,8"/>
-
-                                    <!-- Statuses -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        <Run Text="סימון סטטוסים" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="קליק ימני על מייל ←" Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="  ⏳" Foreground="#7B1FA2"/>
-                                        <Run Text=" טיפול בהמשך — מייל שצריך לחזור אליו" Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="  👤" Foreground="#1565C0"/>
-                                        <Run Text=" אישי — מייל לא עסקי" Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="  🚫" Foreground="#1565C0"/>
-                                        <Run Text=" לא רלוונטי — ספאם / לא קשור" Foreground="#444"/>
-                                    </TextBlock>
-
-                                    <!-- Colors -->
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,4">
-                                        <Run Text="צבעים ברשימה" FontWeight="Bold" Foreground="#1565C0"/>
-                                        <LineBreak/>
-                                        <Run Text="  ⚠️ צהוב" Foreground="#E65100"/>
-                                        <Run Text=" — אי-התאמה (שרשור שייך לפרויקט אחר)" Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="  ✓ ירוק" Foreground="#2E7D32"/>
-                                        <Run Text=" — שייך לפרויקט הנבחר" Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="  ■ אפור" Foreground="#616161"/>
-                                        <Run Text=" — שייך לפרויקט אחר" Foreground="#444"/>
-                                        <LineBreak/>
-                                        <Run Text="  ○ לבן" Foreground="#9E9E9E"/>
-                                        <Run Text=" — חדש, לא שויך" Foreground="#444"/>
-                                    </TextBlock>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Border>
-                    </Popup>
+                    <!-- Help Button + Popup (extracted) -->
+                    <controls:EmailHelpPopupControl Margin="8,0,0,0"/>
                 </StackPanel>
             </Grid>
             <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
@@ -552,24 +162,8 @@
             </StackPanel>
         </Border>
 
-        <!-- ROW 1: Selected Project Info -->
-        <Border Grid.Row="1"
-                Padding="10" 
-                BorderBrush="#2196F3" 
-                BorderThickness="1" 
-                CornerRadius="4" 
-                Background="#E3F2FD" 
-                Margin="0,0,0,10"
-                Visibility="{Binding SelectedProject, Converter={StaticResource BoolToVis}}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Selected Project: " FontWeight="Bold"/>
-                <TextBlock Text="{Binding SelectedProject.NameAndNumber}" FontWeight="Bold" Foreground="#1976D2"/>
-                <TextBlock Text=" | " Foreground="Gray" Margin="10,0"/>
-                <TextBlock Text="{Binding SelectedProject.Place.Title}" Foreground="Gray"/>
-                <TextBlock Text=" | " Foreground="Gray" Margin="10,0"/>
-                <TextBlock Text="{Binding SelectedProject.Company.Title}" Foreground="Gray"/>
-            </StackPanel>
-        </Border>
+        <!-- ROW 1: Selected Project Info (extracted) -->
+        <controls:EmailSelectedProjectInfoControl Grid.Row="1" Margin="0,0,0,10"/>
 
         <!-- ROW 2: Main Content Area (RTL: Column 0 = visual Right, last column = visual Left) -->
         <Grid Grid.Row="2" FlowDirection="RightToLeft">
@@ -639,84 +233,8 @@
                                                    ViewModel="{Binding EmailViewer}"
                                                    TagTargets="{Binding TagTargets}"/>
 
-                        <!-- Row 1: Action Bar -->
-                        <Border Grid.Row="1"
-                                Padding="8,5">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#E8F5E9"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SelectedEmail.IsAssigned}" Value="True">
-                                            <Setter Property="Background" Value="#C8E6C9"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <!-- Show for unassigned emails -->
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center"
-                                            Visibility="{Binding IsSelectedEmailUnassigned, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="File to project:" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding SelectedProject.NameAndNumber}" 
-                                               Foreground="#2E7D32"
-                                               FontWeight="Bold"
-                                               Visibility="{Binding HasSelectedProject, Converter={StaticResource BoolToVis}}"/>
-                                    <TextBlock Text="Select a project above" 
-                                               Foreground="Gray"
-                                               FontStyle="Italic"
-                                               Visibility="{Binding HasSelectedProject, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"/>
-                                </StackPanel>
-
-                                <!-- Show for assigned emails -->
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center"
-                                            Visibility="{Binding SelectedEmail.IsAssigned, Converter={StaticResource BoolToVis}}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="✓ " Foreground="#2E7D32" FontWeight="Bold"/>
-                                        <TextBlock Text="Already assigned to: " FontWeight="SemiBold"/>
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding SelectedEmail.AssignedProjectName}" 
-                                               Foreground="#2E7D32"
-                                               FontWeight="Bold"/>
-                                </StackPanel>
-
-                                <!-- File Email button (for unassigned) -->
-                                <Button Grid.Column="1"
-                                        Command="{Binding FileEmailCommand}"
-                                        Padding="12,5"
-                                        FontWeight="Bold"
-                                        Content="File Email"
-                                        Visibility="{Binding IsSelectedEmailUnassigned, Converter={StaticResource BoolToVis}}"/>
-
-                                <!-- Assigned email buttons: Move to Project + Unfile -->
-                                <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                            Visibility="{Binding IsSelectedEmailAssigned, Converter={StaticResource BoolToVis}}">
-                                    <Button Command="{Binding MoveToProjectCommand}"
-                                            Padding="12,5"
-                                            FontWeight="Bold"
-                                            Content="📂 Move to Project"
-                                            Background="#C8E6C9"
-                                            BorderBrush="#66BB6A"
-                                            ToolTip="העבר קבצים מתויגים לתיקיית הפרויקט"
-                                            Margin="0,0,8,0"/>
-                                    <StackPanel Orientation="Horizontal"
-                                                Visibility="{Binding AreAllAttachmentsPlaced, Converter={StaticResource BoolToVis}}"
-                                                Margin="0,0,8,0">
-                                        <TextBlock Text="✓ " Foreground="#2E7D32" FontWeight="Bold" VerticalAlignment="Center"/>
-                                        <TextBlock Text="הקבצים כבר הועברו לפרויקט" Foreground="#2E7D32" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <Button Command="{Binding UnfileEmailCommand}"
-                                            Padding="12,5"
-                                            FontWeight="Bold"
-                                            Content="Unfile Email"
-                                            Background="#FFCDD2"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
+                        <!-- Row 1: Action Bar (extracted) -->
+                        <controls:EmailActionBarControl Grid.Row="1"/>
 
                         <!-- Row 2: Email Context Panel (Workflow + Suggested Actions) -->
                         <!--

@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl x:Class="SiNetProjectManagerV2.Controls.EmailHelpPopupControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="40" d:DesignWidth="120">
+
+    <StackPanel Orientation="Horizontal">
+        <!-- Help Button -->
+        <ToggleButton x:Name="HelpToggle"
+                      Padding="10,3"
+                      Cursor="Hand"
+                      ToolTip="מדריך עבודה"
+                      Content="❓ עזרה"
+                      Background="#E8EAF6"
+                      BorderBrush="#7986CB"/>
+        <Popup IsOpen="{Binding IsChecked, ElementName=HelpToggle}"
+               PlacementTarget="{Binding ElementName=HelpToggle}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade">
+            <Border Background="White"
+                    BorderBrush="#7986CB"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="16"
+                    MaxWidth="420"
+                    MaxHeight="520">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.25"/>
+                </Border.Effect>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel FlowDirection="RightToLeft">
+                        <TextBlock Text="📧 מדריך עבודה — ניהול מיילים"
+                                   FontWeight="Bold"
+                                   FontSize="14"
+                                   Foreground="#283593"
+                                   Margin="0,0,0,10"/>
+
+                        <!-- Step 1 -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="1. התחברות" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="לחץ " Foreground="#444"/>
+                            <Run Text="Login" FontWeight="Bold"/>
+                            <Run Text=" להתחברות לחשבון Gmail. המיילים יטענו אוטומטית." Foreground="#444"/>
+                        </TextBlock>
+
+                        <!-- Step 2 -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="2. שיוך מייל לפרויקט" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="בחר פרויקט מהרשימה למעלה ← בחר מייל ← לחץ " Foreground="#444"/>
+                            <Run Text="File Email" FontWeight="Bold"/>
+                            <Run Text=". המייל יסומן ויעבור לקבוצת הפרויקט." Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="💡 " Foreground="#FF8F00"/>
+                            <Run Text="שרשורים: אם מייל אחר בשרשור כבר שויך — תופיע הצעה אוטומטית לשיוך." Foreground="#666" FontStyle="Italic"/>
+                        </TextBlock>
+
+                        <!-- Step 3 -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="3. תיוג קבצים מצורפים" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="לאחר שיוך — לכל קובץ מצורף יופיע " Foreground="#444"/>
+                            <Run Text="בוחר סוג קובץ" FontWeight="Bold"/>
+                            <Run Text=" (מדידה, תוכנית וכו'). אם לקובץ יש אלטרנטיבות — יופיע גם " Foreground="#444"/>
+                            <Run Text="בוחר אלטרנטיבה" FontWeight="Bold"/>
+                            <Run Text="." Foreground="#444"/>
+                        </TextBlock>
+
+                        <!-- Step 4 -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="4. העברה לפרויקט (Move to Project)" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="לאחר תיוג — לחץ " Foreground="#444"/>
+                            <Run Text="📂 Move to Project" FontWeight="Bold"/>
+                            <Run Text=". הקבצים יועלו ל-ACC/שרת תחת שם סטנדרטי לתיקייה הנכונה." Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="✓ " Foreground="#2E7D32" FontWeight="Bold"/>
+                            <Run Text="קבצים שכבר הועברו יסומנו בירוק ולא יועלו שוב." Foreground="#666" FontStyle="Italic"/>
+                        </TextBlock>
+
+                        <!-- Step 5 -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="5. תיקון טעויות" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="שייכת למקום לא נכון? לחץ " Foreground="#444"/>
+                            <Run Text="Unfile Email" FontWeight="Bold" Foreground="#D32F2F"/>
+                            <Run Text=" — כל התיוגים וההצבות ימחקו. לאחר מכן שייך מחדש לפרויקט הנכון, תייג, והעבר." Foreground="#444"/>
+                        </TextBlock>
+
+                        <Separator Margin="0,4,0,8"/>
+
+                        <!-- Statuses -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="סימון סטטוסים" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="קליק ימני על מייל ←" Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="  ⏳" Foreground="#7B1FA2"/>
+                            <Run Text=" טיפול בהמשך — מייל שצריך לחזור אליו" Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="  👤" Foreground="#1565C0"/>
+                            <Run Text=" אישי — מייל לא עסקי" Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="  🚫" Foreground="#1565C0"/>
+                            <Run Text=" לא רלוונטי — ספאם / לא קשור" Foreground="#444"/>
+                        </TextBlock>
+
+                        <!-- Colors -->
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,4">
+                            <Run Text="צבעים ברשימה" FontWeight="Bold" Foreground="#1565C0"/>
+                            <LineBreak/>
+                            <Run Text="  ⚠️ צהוב" Foreground="#E65100"/>
+                            <Run Text=" — אי-התאמה (שרשור שייך לפרויקט אחר)" Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="  ✓ ירוק" Foreground="#2E7D32"/>
+                            <Run Text=" — שייך לפרויקט הנבחר" Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="  ■ אפור" Foreground="#616161"/>
+                            <Run Text=" — שייך לפרויקט אחר" Foreground="#444"/>
+                            <LineBreak/>
+                            <Run Text="  ○ לבן" Foreground="#9E9E9E"/>
+                            <Run Text=" — חדש, לא שויך" Foreground="#444"/>
+                        </TextBlock>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Popup>
+    </StackPanel>
+</UserControl>
