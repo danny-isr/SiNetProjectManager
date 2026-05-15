@@ -713,73 +713,22 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         /// <summary>
-        /// Shows a simple input dialog so the user can type a new alternative name.
-        /// Returns the entered name, or null if cancelled/empty.
+        /// Shows the alternative name dialog so the user can enter a new alternative.
+        /// The optional second-level field is joined with the first using '~' as a UI
+        /// grouping separator. Returns the full name, or null if cancelled/empty.
         /// </summary>
-        private Task<string?> OnCreateNewAlternativeRequestedAsync()
+        private Task<string?> OnCreateNewAlternativeRequestedAsync(IReadOnlyList<string> existingNames)
         {
             var owner = Window.GetWindow(this);
 
-            var dialog = new Window
+            var vm = new AlternativeNameViewModel(initialName: "", existingNames: existingNames);
+            var dialog = new AlternativeNameWindow(vm)
             {
-                Title = "אלטרנטיבה חדשה",
-                Width = 340,
-                Height = 160,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ResizeMode = ResizeMode.NoResize
+                Owner = owner
             };
-
-            var textBox = new TextBox
-            {
-                Margin = new Thickness(16, 16, 16, 8),
-                Height = 26,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                FontSize = 13
-            };
-
-            var okButton = new Button
-            {
-                Content = "אישור",
-                Width = 80,
-                Height = 28,
-                Margin = new Thickness(0, 0, 8, 0),
-                IsDefault = true
-            };
-            okButton.Click += (_, _) => { dialog.DialogResult = true; dialog.Close(); };
-
-            var cancelButton = new Button
-            {
-                Content = "ביטול",
-                Width = 80,
-                Height = 28,
-                IsCancel = true
-            };
-
-            var buttonPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 4, 0, 12)
-            };
-            buttonPanel.Children.Add(okButton);
-            buttonPanel.Children.Add(cancelButton);
-
-            var stack = new StackPanel();
-            stack.Children.Add(new TextBlock
-            {
-                Text = "שם האלטרנטיבה:",
-                Margin = new Thickness(16, 12, 16, 0),
-                FontSize = 12
-            });
-            stack.Children.Add(textBox);
-            stack.Children.Add(buttonPanel);
-
-            dialog.Content = stack;
-            dialog.Loaded += (_, _) => textBox.Focus();
 
             var result = dialog.ShowDialog() == true
-                ? (string.IsNullOrWhiteSpace(textBox.Text) ? null : textBox.Text.Trim())
+                ? (string.IsNullOrWhiteSpace(vm.AlternativeName) ? null : vm.AlternativeName)
                 : null;
 
             return Task.FromResult(result);

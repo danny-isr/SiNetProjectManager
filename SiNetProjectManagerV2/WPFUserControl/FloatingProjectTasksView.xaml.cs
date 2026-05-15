@@ -170,14 +170,15 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             case "FileAttachments":
-                // Open a dedicated window with this specific email + its attachments
-                // so the user can file the attachments without leaving the task context.
-                var fileWindow = new Dialogs.EmailPreviewWindow(emailId)
+                // Route to the EmailManagement view (same flow as email tagging).
+                // That view owns the ProjectFile / ProjectAlternative pickers, duplicate
+                // validation, and post-filing picker lock. Opening a separate preview
+                // window would bypass those rules, so we reuse the canonical UI.
+                if (mainWindow != null)
                 {
-                    Owner = mainWindow ?? Application.Current.MainWindow,
-                    Title = $"📎 תיוק קבצים — מייל #{emailId}"
-                };
-                fileWindow.Show();
+                    mainWindow.NavigateToEmail(emailId);
+                    mainWindow.Activate();
+                }
                 break;
 
             default:
@@ -212,14 +213,34 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             case SiNetSQL.Services.Tasks.TaskComponentKeys.EmailFiling:
-                if (primaryEmailId is int emailIdForFiling)
+                if (primaryEmailId is int emailIdForFiling && mainWindow != null)
                 {
-                    var fileWindow = new Dialogs.EmailPreviewWindow(emailIdForFiling)
-                    {
-                        Owner = mainWindow ?? Application.Current.MainWindow,
-                        Title = $"📎 תיוק קבצים — מייל #{emailIdForFiling}"
-                    };
-                    fileWindow.Show();
+                    // Same canonical flow as the inbox email tagging path —
+                    // never open a separate preview-only window for filing.
+                    // Pass the task context so the email VM can call the
+                    // central TaskCompletionCoordinator after a successful
+                    // MoveToProject run (event: ReviewMaterialFiled).
+                    var workTargetEmailIds = request.WorkTargetIds
+                        .Select(id => (int)id)
+                        .ToList();
+                    var pendingWorkTargetEmailIds = request.PendingWorkTargetIds
+                        .Select(id => (int)id)
+                        .ToList();
+
+                    var taskContext = new SiNetSQL.Services.Tasks.EmailFilingTaskContext(
+                        TaskId: request.TaskId,
+                        ComponentKey: request.ComponentKey,
+                        WorkTargetEmailIds: workTargetEmailIds,
+                        PendingWorkTargetEmailIds: pendingWorkTargetEmailIds,
+                        PrimaryWorkTargetEmailId: emailIdForFiling,
+                        OnTaskRefreshRequested: () =>
+                        {
+                            try { ViewModel.RefreshCommand.Execute(null); }
+                            catch { /* best-effort UI refresh */ }
+                        });
+
+                    mainWindow.NavigateToEmail(emailIdForFiling, taskContext);
+                    mainWindow.Activate();
                 }
                 break;
 

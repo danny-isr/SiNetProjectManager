@@ -197,6 +197,13 @@ namespace SiNetProjectManagerV2
                 var googleService = App.ServiceProvider.GetRequiredService<GoogleService>();
                 _cachedEmailManagementView.DataContext = new EmailManagementViewModel(googleService);
             }
+            // Inbox-originated entry: ensure no stale task context lingers from
+            // a previous task-driven navigation. MoveToProject must behave as
+            // pure inbox filing here (no TaskCompletionCoordinator call).
+            if (_cachedEmailManagementView.DataContext is EmailManagementViewModel inboxVm)
+            {
+                inboxVm.ActiveTaskContext = null;
+            }
             NavigateToView(_cachedEmailManagementView);
         }
 
@@ -206,6 +213,23 @@ namespace SiNetProjectManagerV2
         /// The view is shown immediately; project pre-selection happens after async data loads.
         /// </summary>
         public async void NavigateToEmail(int emailId)
+        {
+            await NavigateToEmailAsync(emailId, taskContext: null);
+        }
+
+        /// <summary>
+        /// Task-aware overload. When <paramref name="taskContext"/> is non-null,
+        /// the EmailManagementViewModel will report task completion to
+        /// <c>ITaskCompletionCoordinator</c> after a successful MoveToProject run
+        /// (event: <c>ReviewCompletionEvents.ReviewMaterialFiled</c>). When null,
+        /// behavior is identical to the inbox-originated path.
+        /// </summary>
+        public async void NavigateToEmail(int emailId, SiNetSQL.Services.Tasks.EmailFilingTaskContext? taskContext)
+        {
+            await NavigateToEmailAsync(emailId, taskContext);
+        }
+
+        private async Task NavigateToEmailAsync(int emailId, SiNetSQL.Services.Tasks.EmailFilingTaskContext? taskContext)
         {
             try
             {
@@ -228,6 +252,13 @@ namespace SiNetProjectManagerV2
                 }
 
                 var emailVm = (EmailManagementViewModel)_cachedEmailManagementView.DataContext!;
+
+                // Set the optional task context BEFORE selection so that any
+                // immediate MoveToProject performed by the user is correctly
+                // wired to the centralized TaskCompletionCoordinator. When the
+                // user comes from the normal inbox, taskContext is null and
+                // MoveToProject behavior is unchanged.
+                emailVm.ActiveTaskContext = taskContext;
 
                 if (!string.IsNullOrEmpty(messageUniqueId))
                 {

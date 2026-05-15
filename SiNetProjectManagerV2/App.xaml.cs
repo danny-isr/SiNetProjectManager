@@ -236,6 +236,12 @@ namespace SiNetProjectManagerV2
             // Task Navigation Resolver: Transient (read-only resolver for opening tasks via the registry)
             services.AddTransient<SiNetSQL.Services.Tasks.TaskNavigationResolver>();
 
+            // Task Completion Coordinator: Transient. Single decision point for UI-originated
+            // completion events (e.g. ReviewMaterialFiled after a successful MoveToProject run).
+            // UI components MUST go through this service rather than closing tasks directly.
+            services.AddTransient<SiNetSQL.Services.Tasks.ITaskCompletionCoordinator,
+                SiNetSQL.Services.Tasks.TaskCompletionCoordinator>();
+
             // Task Workflow Resolver: Transient (single source of truth for "is this task workflow-bound?",
             // process context lookup, and guard predicates used by Task* commands).
             services.AddTransient<SiNetSQL.Services.Tasks.TaskWorkflowResolver>();

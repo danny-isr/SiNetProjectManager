@@ -363,7 +363,7 @@ SelectedProject = value
 | `ProjectNumber` | int | מספר פרויקט (מתוך הסוגריים) |
 | `ProjectType` | int | סוג פרויקט (JobType.Id) |
 | `Number` | int | מספר קובץ |
-| `Alternative` | string | שם אלטרנטיבה (יכול לכלול `~date` לתקופה) |
+| `Alternative` | string | שם אלטרנטיבה — הערך המלא של `ProjectAlternative.Name`. הסימן `~` הוא **רק מפריד תצוגה (UI grouping)**, לא מפריד שדה ב-DB ולא נוגע ב-`ProjectFileNameBuilder`. |
 | `Version` | int | מספר גרסה |
 | `Name` | string | שם מקורי |
 | `Extension` | string | סיומת |
@@ -728,12 +728,28 @@ TreeViewItem_MouseDoubleClick():
 
 ### 11.4 `AlternativeNameViewModel` — Dialog
 
-ViewModel לדיאלוג שם אלטרנטיבה, עם ולידציה:
-- **Required** — שם לא ריק
-- **Max 18 characters**
-- **No dash** (`-`) — כי מפריד בתבנית שם
-- **No illegal filename chars**
-- **Unique** — לא קיים כבר באלטרנטיבות
+ViewModel לדיאלוג שם אלטרנטיבה. הדיאלוג קולט **שני שדות** ומרכיב מהם את הערך המלא:
+
+- `FirstLevelName` — שדה חובה (הרמה הראשונה של האלטרנטיבה).
+- `SecondLevelName` — שדה אופציונלי (רמה שנייה לקיבוץ ב-UI).
+- `AlternativeName` — מחושב: `First` או `First~Second`.
+
+**מודל הנתונים הסופי:**
+- `ProjectAlternative` שייכת **ישירות ל-Project** דרך `ProjectID` (אין יותר תלות ב-`TypeOfProjectInProject`/JobType).
+- `OnDelete: Cascade` — מחיקת `Project` מוחקת את האלטרנטיבות שלה.
+- `ProjectAlternative.Name` הוא תמיד **המחרוזת המלאה**, כולל `~` אם הוזנה רמה שנייה.
+- `ProjectAlternative.NormalizedName` משמש לזיהוי כפילויות (lower-invariant) ומאוכלס בקוד, ללא DB default.
+- אותו ערך משמש גם ל-FileServer וגם ל-ACC; `ProjectFileNameBuilder` ו-`MoveToProject` ו-Refile לא משתנים.
+- הסימן `~` הוא **מפריד תצוגה בלבד** — ב-`EmailViewerControl` ה-ComboBox מקבץ את האלטרנטיבות לפי הקידומת לפני `~` (`AlternativeOption.GroupKey`) ומציג את החלק שאחרי `~` (`LeafName`) כעלה תחת הכותרת.
+
+**ולידציה (`ProjectAlternativeNameRules` + `AlternativeNameViewModel`):**
+- **Required** — `FirstLevelName` חייב להיות לא ריק אחרי Trim.
+- **Max 20 characters** על השם **המלא** (`First` או `First~Second` ביחד).
+- **No dash (`-`)** — שמור כמפריד התבנית בשם הקובץ.
+- **No `~`** בתוך רמה — הוא מותר רק כמפריד יחיד בין שתי הרמות; אסור בתחילת/סוף הערך.
+- **No illegal filename chars**: `\ / : * ? " < > |`.
+- **תאריך**, אם מוזן, בפורמט `dd.MM.yyyy` עם נקודות בלבד (לא מקפים).
+- **Unique** — `NormalizedName` חייב להיות ייחודי בין האלטרנטיבות הפעילות של אותו `Project` (filtered unique index `WHERE IsActive = 1`).
 
 ---
 
