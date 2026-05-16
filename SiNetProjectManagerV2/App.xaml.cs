@@ -1,4 +1,4 @@
-﻿using SiNetProjectManagerV2.Services;
+using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.WPF;
 using System;
 using System.Diagnostics;
@@ -242,6 +242,10 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Tasks.ITaskCompletionCoordinator,
                 SiNetSQL.Services.Tasks.TaskCompletionCoordinator>();
 
+            // Task Status Service: Transient. Owns regular (non-completion) status updates from UI.
+            // Completing a task must instead go through ITaskCompletionCoordinator.
+            services.AddTransient<SiNetSQL.Services.Tasks.TaskStatusService>();
+
             // Task Workflow Resolver: Transient (single source of truth for "is this task workflow-bound?",
             // process context lookup, and guard predicates used by Task* commands).
             services.AddTransient<SiNetSQL.Services.Tasks.TaskWorkflowResolver>();
@@ -326,6 +330,8 @@ namespace SiNetProjectManagerV2
                 SiNetSQL.Domain.Actions.Handlers.FileOnlyProcessActionHandler>();
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.ApproveOrCloseProcessActionHandler>();
+            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
+                SiNetSQL.Domain.Actions.Handlers.CloseOpinionProcessActionHandler>();
 
             // Strict dispatcher-only: SuggestedActionType.StartWorkflow runs through
             // StartWorkflowProcessActionHandler with NO legacy fallback. Missing handler /
@@ -399,6 +405,48 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Files.IFileServerRootResolver, SiNetSQL.Services.Files.FileServerRootResolver>();
             services.AddTransient<SiNetSQL.Services.Files.IProjectFileFilingService, SiNetSQL.Services.Files.ProjectFileFilingService>();
             services.AddTransient<SiNetSQL.Services.Files.IProjectFileRefileService, SiNetSQL.Services.Files.ProjectFileRefileService>();
+
+            // Phase 3 Step 1: MoveToProject application service. Owns the
+            // business flow previously embedded in EmailManagementViewModel.
+            // The VM still owns WPF feedback (StatusMessage, MessageBox,
+            // CommandManager, Dispatcher refresh) and maps MoveToProjectResult
+            // to that feedback. The MoveToProjectProcessActionHandler is
+            // intentionally untouched in Step 1.
+            services.AddTransient<
+                SiNetSQL.Services.MoveToProject.IEmailMoveToProjectApplicationService,
+                SiNetSQL.Services.MoveToProject.EmailMoveToProjectApplicationService>();
+
+            // Phase 5: typed-continuation application services for workflow-advance
+            // actions. Each owns its dispatcher loop + lifecycle reporting and is the
+            // VM-facing entry point for the typed Continuation Request / Result contract.
+            services.AddTransient<
+                SiNetSQL.Services.ApproveOrClose.IApproveOrCloseApplicationService,
+                SiNetSQL.Services.ApproveOrClose.ApproveOrCloseApplicationService>();
+            services.AddTransient<
+                SiNetSQL.Services.CloseOpinion.ICloseOpinionApplicationService,
+                SiNetSQL.Services.CloseOpinion.CloseOpinionApplicationService>();
+
+            // Phase 5 extension: typed-continuation application service for the
+            // TaskCreationDialog family (RequestCompletion / PrepareResponse /
+            // InternalReview / HandleComments / UpdateDesign / PrepareSubmission /
+            // CoordinateWithConsultants / SendUpdatedMaterial / PerformReview /
+            // WriteComments / SendComments / TrackCorrections / AnalyzeDocuments /
+            // RequestMissingMaterial / PrepareDraftOpinion / UpdateOpinion /
+            // SendOpinion). The service owns the Start/Continue loop and persists
+            // confirmed drafts through TaskFactory.CreateAsync. ActionExecutor still
+            // emits the legacy ActionResult.RequiresUI fallback so existing UI flows
+            // keep working until callers migrate to the typed path.
+            services.AddTransient<
+                SiNetSQL.Services.TaskCreation.ITaskCreationContinuationApplicationService,
+                SiNetSQL.Services.TaskCreation.TaskCreationContinuationApplicationService>();
+
+            // Phase 5: WPF UI continuation host - boundary between the typed
+            // application services and WPF dialogs. Pilot scope:
+            // ContinuationUiKind.WorkflowAdvanceDialog only. Other UI kinds
+            // remain on the legacy ActionFollowUp / PrefilledData path.
+            services.AddSingleton<
+                SiNetSQL.Domain.Actions.Continuation.IActionContinuationUiHost,
+                SiNetProjectManagerV2.Services.WpfActionContinuationUiHost>();
 
             // ACC Metadata Status Reporter: Singleton (shared collector of Custom-Attribute
             // failures — surfaced as a badge in ProjectWorkView so the user sees when

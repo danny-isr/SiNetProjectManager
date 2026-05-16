@@ -4,6 +4,50 @@
 > no migrations, no refactor, no UI changes, no new types created.
 > `ActionFollowUp` is **not** moved in this document.
 >
+> **Implementation status (as of Phase 5 pilot):** Typed Continuation is
+> **implemented end-to-end for `ApproveOrClose` and `CloseOpinion`** through
+> `WorkflowAdvanceDialog`. The path is:
+> `EmailContextViewModel` → `IApproveOrCloseApplicationService` /
+> `ICloseOpinionApplicationService` (`StartAsync`) → `IProcessActionDispatcher`
+> → handler emits `WorkflowAdvanceContinuationRequest` →
+> `IActionContinuationUiHost` (WPF: `WpfActionContinuationUiHost`) returns
+> `WorkflowAdvanceContinuationResult` → application service `ContinueAsync`
+> finalizes the outcome and lifecycle reporting.
+>
+> **TaskCreationDialog family (Phase 5 extension, no-fallback rule):**
+> The TaskCreationDialog family is migrated to a typed-only path with **no
+> legacy fallback**. The migrated `SuggestedActionType` values are listed in
+> `SiNetSQL.Domain.Actions.Continuation.TaskCreationActionCatalog`. For those
+> actions the only valid path is:
+>
+> `EmailContextViewModel` → `ITaskCreationContinuationApplicationService.StartAsync`
+> → `TaskCreationContinuationRequest` → `IActionContinuationUiHost`
+> (WPF: `TaskCreationDraftDialog`) → `TaskCreationContinuationResult(TaskDraft)`
+> → `ITaskCreationContinuationApplicationService.ContinueAsync` →
+> `TaskFactory.CreateAsync` → `ProjectAssignment` created.
+>
+> If the new path is missing required data, fails validation, or cannot open
+> UI, the action **fails visibly** (clear error message, log entry) — it does
+> **not** fall back to `ActionResult.RequiresUI(ActionFollowUp.TaskCreationDialog)`,
+> `AssignActionDialog`, or `EmailManagementView.CreateActionTaskAsync`.
+> `ActionExecutor` enforces this rule by returning `ActionResult.Failed(...)`
+> via the `TaskCreationTypedRequired(...)` helper if any migrated action
+> reaches its switch directly.
+>
+> Legacy `ActionFollowUp.TaskCreationDialog` / `AssignActionDialog` /
+> `CreateActionTaskAsync(...)` code may remain physically present, but it is
+> **dead code for migrated actions** and is only reachable by `SuggestedActionType`
+> values not yet listed in `TaskCreationActionCatalog`.
+>
+> Phase 3 had previously closed the `MoveToProject` duplicate-path issue via
+> `IEmailMoveToProjectApplicationService`. The legacy
+> `PrefilledData["ConfirmAdvance"]` bridge is intentionally **retained** so
+> any code path that still calls `ActionExecutor.ExecuteAsync(...)` with a
+> confirmation flag keeps working until all WPF callers are migrated. Only
+> `ContinuationUiKind.WorkflowAdvanceDialog` is supported by the host in this
+> pilot; other `RequiresUI` actions still flow through the legacy
+> `ActionFollowUp` / `PrefilledData` path.
+>
 > **Companion documents:**
 > - [`Action-Task-Workflow.md`](./Action-Task-Workflow.md) — architecture overview.
 > - [`Action-Handler-Inventory.md`](./Action-Handler-Inventory.md) — Phase 1 mapping.
@@ -322,3 +366,60 @@ rollout.
 > `CreatedTaskId`) is unchanged. However, **no `TaskDraft` type is introduced
 > as part of the Phase 2 closure** — it remains a Phase 5 / Phase 2B concern
 > and will be designed when one of those phases actually starts.
+
+---
+
+## 14. Phase 5 pilot — implementation note
+
+The pilot is implemented as of this revision and covers exactly two action codes:
+
+- `ApproveOrClose` (`IApproveOrCloseApplicationService`)
+- `CloseOpinion` (`ICloseOpinionApplicationService`)
+
+### Wiring
+
+1. Handler (`ApproveOrCloseProcessActionHandler` / `CloseOpinionProcessActionHandler`)
+   returns `Deferred` and places a typed `WorkflowAdvanceContinuationRequest`
+   in `ProcessActionResult.Data["ContinuationRequest"]`.
+2. Application service `StartAsync(...)` extracts the typed request and
+   surfaces it on the outcome as `NeedsUserInput`.
+3. `EmailContextViewModel` calls `IActionContinuationUiHost.RequestAsync(...)`.
+4. `WpfActionContinuationUiHost` (in `SiNetProjectManagerV2.Services`) shows a
+   WPF confirmation dialog for `ContinuationUiKind.WorkflowAdvanceDialog` and
+   returns a `WorkflowAdvanceContinuationResult` (`Confirmed` / `Cancelled` /
+   `Failed`).
+5. Application service `ContinueAsync(...)` consumes the typed result and
+   produces the final outcome (`Completed` / `Cancelled` / `Failed`) plus
+   lifecycle events.
+
+### Scope guardrails (still in force)
+
+- No DB schema or migration changes.
+- Legacy `PrefilledData["ConfirmAdvance"]` bridge **not** removed.
+- Only `WorkflowAdvanceDialog` is supported by the WPF host. Other
+  `RequiresUI` action families (`CreateTask`, `FileImport`, project picker,
+  etc.) continue to use the legacy `ActionFollowUp` / `PrefilledData` path
+  until they are migrated one at a time.
+- Handlers stay UI-free; the application service owns the continuation loop.
+
+### Tests
+
+- `SiNetSQL.Tests.Services.ApproveOrClose.ApproveOrCloseTypedContinuationTests`.
+- `SiNetSQL.Tests.Services.CloseOpinion.CloseOpinionTypedContinuationTests`.
+- `SiNetSQL.Tests.Services.Continuation.ContinuationUiHostLoopTests` exercises
+  the full start → host → continue loop with a fake `IActionContinuationUiHost`
+  so the UI host contract can be regression-tested without WPF.
+
+### Manual WPF check (not automated)
+
+1. Open an email tied to a project with an active workflow in a stage that
+   exposes `ApproveOrClose` (or `CloseOpinion`).
+2. Select the action from the email context UI.
+3. The new typed path opens a confirmation prompt via
+   `WpfActionContinuationUiHost`.
+4. Confirm → workflow advances and lifecycle reports `Completed`.
+5. Cancel → workflow does not advance and lifecycle reports `Cancelled`.
+6. Trigger the same action via a code path that still sets
+   `PrefilledData["ConfirmAdvance"] = true` to verify the legacy bridge keeps
+   working unchanged.
+

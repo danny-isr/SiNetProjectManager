@@ -5,6 +5,19 @@
 > This file is the **mapping artefact** required by Phase 1 of the roadmap
 > defined in [`Action-Task-Workflow.md`](./Action-Task-Workflow.md).
 >
+> **TaskCreationDialog migration note (Phase 5 extension):**
+> The actions listed in `SiNetSQL.Domain.Actions.Continuation.TaskCreationActionCatalog`
+> are **typed-only**. For those actions:
+> - the only valid path is `ITaskCreationContinuationApplicationService` →
+>   `IActionContinuationUiHost` → `TaskCreationDraftDialog` →
+>   `TaskFactory.CreateAsync`;
+> - the legacy `RequiresUI(TaskCreationDialog)` / `AssignActionDialog` /
+>   `EmailManagementView.CreateActionTaskAsync` path is **not used**;
+> - any inventory row below that still describes the legacy path for a
+>   migrated action should be read as describing **dead code** retained only
+>   until the legacy branches are deleted. Non-migrated TaskCreation rows (if
+>   any) keep their legacy classification.
+>
 > **Repos in scope:** `danny-isr/SiNetProjectManager`, `danny-isr/SiNetSQL`.
 >
 > Companion to:
@@ -92,14 +105,14 @@ Primary executor: `SiNetSQL.Services.EmailContext.ActionExecutor.ExecuteCoreAsyn
 | 26 | `SendComments` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 27 | `TrackCorrections` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 28 | `ReceiveCorrectedVersion` | SuggestedActionType | same | `RequiresUI(FileImportDialog)` | No | Yes | `FileImportDialog` | No | — | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
-| 29 | `ApproveOrClose` | SuggestedActionType | same | `ActionExecutor.DispatchApproveOrCloseAsync` → `ApproveOrCloseProcessActionHandler` (+ lifecycle reporter bridge) | **Yes** | Yes | `WorkflowAdvanceDialog` | No | — | No | — | Yes (after UI confirms `ConfirmAdvance`) | `WorkflowActionLifecycleReporter` → `WorkflowActionCompletedHandler` | HasHandler | Medium | UI continuation contract relies on `PrefilledData["ConfirmAdvance"]` — informal. |
+| 29 | `ApproveOrClose` | SuggestedActionType | same | Canonical (typed): VM → `IApproveOrCloseApplicationService` → `IProcessActionDispatcher` → `ApproveOrCloseProcessActionHandler`. Legacy bridge `ActionExecutor.DispatchApproveOrCloseAsync` preserved for the existing `EmailContextViewModel` retry path. | **Yes** | Yes | `WorkflowAdvanceDialog` | No | — | No | — | Yes (after UI confirms `ConfirmAdvance`) | `WorkflowActionLifecycleReporter` → `WorkflowActionCompletedHandler` | HasHandler | Low | **Phase 5 pilot closed.** Typed `WorkflowAdvanceContinuationRequest` / `WorkflowAdvanceContinuationResult` are emitted via `ProcessActionResult.Data`; legacy `PrefilledData["ConfirmAdvance"]` is kept only as a fallback for the un-migrated UI retry path. |
 | 30 | `ReceiveMaterialForOpinion` | SuggestedActionType | same | `RequiresUI(FileImportDialog)` | No | Yes | `FileImportDialog` | No | — | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 31 | `AnalyzeDocuments` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 32 | `RequestMissingMaterial` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 33 | `PrepareDraftOpinion` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 34 | `UpdateOpinion` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation. |
 | 35 | `SendOpinion` | SuggestedActionType | same | `RequiresUI(TaskCreationDialog)` | No | Yes | `TaskCreationDialog` | Sometimes | Unknown | No | — | No | — | RequiresUiOnly | Medium | No backend continuation, despite `CanAdvanceWorkflow=true` in registry. |
-| 36 | `CloseOpinion` | SuggestedActionType | same | `RequiresUI(WorkflowAdvanceDialog)` | No | Yes | `WorkflowAdvanceDialog` | No | — | No | — | Unclear | (none today) | RequiresUiOnly | **High** | Registry says `CanAdvanceWorkflow=true`, but no backend path takes the UI confirmation. |
+| 36 | `CloseOpinion` | SuggestedActionType | same | Canonical (typed): VM → `ICloseOpinionApplicationService` → `IProcessActionDispatcher` → `CloseOpinionProcessActionHandler`. Legacy bridge `ActionExecutor.DispatchCloseOpinionAsync` mirrors the ApproveOrClose retry path. | **Yes** | Yes | `WorkflowAdvanceDialog` | No | — | No | — | Yes (after UI confirms `ConfirmAdvance`) | `WorkflowActionLifecycleReporter` → `WorkflowActionCompletedHandler` | HasHandler | Low | **Closed (this batch).** Same typed continuation contract as `ApproveOrClose`. Legacy `PrefilledData["ConfirmAdvance"]` accepted as a fallback. |
 | 37 | `StartWorkflow` | SuggestedActionType | same | `ActionExecutor.DispatchStartWorkflowAsync` → `StartWorkflowProcessActionHandler` | **Yes** | Sometimes | `ProjectPicker` when project missing (Deferred) | Sometimes | Orchestrator (stage tasks) | No | — | No (new instance) | Orchestrator direct | HasHandler | Low | Clean dispatcher path. |
 | 38 | `LinkToProject` | SuggestedActionType | same | `ActionExecutor.DispatchLinkToProjectAsync` → `LinkToProjectProcessActionHandler` | **Yes** | No | — | No | — | No | — | No | — | HasHandler | Low | Clean dispatcher path. |
 | 39 | `CreateTask` | SuggestedActionType | same | `ActionExecutor.DispatchCreateTaskAsync` → `CreateTaskProcessActionHandler` | **Yes** | No | — | **Yes** | `CreateTaskProcessActionHandler` (uses task service inside) | No | — | No | — | HasHandler | Low | Single-purpose backend creator. |
@@ -140,7 +153,7 @@ toolbar; many of them parallel a `SuggestedAction` path.
 | 5 | `MarkAsPersonal` | ViewModel Command | same | VM → `EmailStatusService` | No | No | — | No | — | No | — | No | — | ViewModelDirect | Low | — |
 | 6 | `MarkAsIrrelevant` | ViewModel Command | same | VM → `EmailStatusService` | No | No | — | No | — | No | — | No | — | ViewModelDirect | Low | — |
 | 7 | `TagAttachment` | ViewModel Command | same | VM → `IAttachmentProjectFilePicker` + EF write | No | Yes | (attachment picker) | No | — | No | — | No | — | ViewModelDirect | Low | — |
-| 8 | `MoveToProject` | **Mixed / Duplicate** | `EmailManagementViewModel.MoveToProjectAsync` **and** `MoveToProjectProcessActionHandler` | **VM path is the live one used from UI**; the dispatcher handler exists but is **not invoked from any UI today** | Partial (registered, not called) | Yes (project picker) | `ProjectPicker` | No | — | **Yes** (closes EmailFiling WorkTarget) | `ITaskCompletionCoordinator` (VM path) | Sometimes | Coordinator `WorkflowAdvanced` flag | **DuplicatePath** | **High** | Two implementations of the same business action. Future decision required (see §7 of architecture doc). |
+| 8 | `MoveToProject` | **Dispatcher (canonical, Phase 3 closed)** | `EmailManagementViewModel.MoveToProjectViaServiceAsync` → `IEmailMoveToProjectApplicationService.MoveAsync` → `IProcessActionDispatcher.DispatchAsync(ActionCodes.MoveToProject)` → `MoveToProjectProcessActionHandler` | VM calls the application service only; the application service builds `ActionExecutionContext` and delegates to the handler via the dispatcher. VM does not reference `IProcessActionDispatcher` or the handler. | Yes (invoked through the dispatcher by the application service) | Yes (project picker) | `ProjectPicker` | No | — | **Yes** (closes EmailFiling WorkTarget via handler) | `ITaskCompletionCoordinator` (inside `MoveToProjectProcessActionHandler` when `ActionExecutionContext.EmailFilingTask` is set) | Sometimes | Coordinator `WorkflowAdvanced` flag | DispatcherCanonical | Low | Phase 3 closed. Duplicate-path issue resolved; duplicate-target validation reads DB-persisted inbox attachments inside the handler. Remaining caveats: Typed Continuation still not implemented; VM still owns UI feedback. |
 | 9 | `ShowAttachmentInAcc` | ViewModel Command | same | VM → browser launch | No | No | — | No | — | No | — | No | — | ViewModelDirect | Low | UI-only, not lifecycle-emitting. |
 | 10 | `OpenLocalFile` | ViewModel Command | same | VM → shell launch | No | No | — | No | — | No | — | No | — | ViewModelDirect | Low | UI-only. |
 
@@ -202,9 +215,10 @@ Single source of truth: `SiNetProjectManagerV2\App.xaml.cs` (composition root).
 | (same `LinkToProject` code, separate registration) | `LinkToProjectBackendProcessActionHandler` | Backend variant used by the dispatcher path from `AssociateToExistingProject`. **Two classes resolve under the same code via the dispatcher's selection rules — verify before refactor.** |
 | `CreateTask` | `CreateTaskProcessActionHandler` | Backend task creation. |
 | `FileOnly` | `FileOnlyProcessActionHandler` | — |
-| `ApproveOrClose` | `ApproveOrCloseProcessActionHandler` | Followed by lifecycle reporter → completed handler for workflow advance. |
+| `ApproveOrClose` | `ApproveOrCloseProcessActionHandler` | Followed by lifecycle reporter → completed handler for workflow advance. Typed continuation via `WorkflowAdvanceContinuationRequest` / `WorkflowAdvanceContinuationResult`; legacy `ConfirmAdvance` fallback preserved. Application service: `IApproveOrCloseApplicationService`. |
+| `CloseOpinion` | `CloseOpinionProcessActionHandler` | Same typed-continuation pattern as `ApproveOrClose`. Application service: `ICloseOpinionApplicationService`. |
 | `AddMaterialToProject` | `AddMaterialToProjectProcessActionHandler` | Returns `Deferred(RequiresUi, FollowUp=FileImportDialog)` when inputs missing. |
-| `MoveToProject` | `MoveToProjectProcessActionHandler` | **Registered but not invoked from UI today** (duplicate of VM path). |
+| `MoveToProject` | `MoveToProjectProcessActionHandler` | **Canonical handler (Phase 3 closed).** Invoked from the WPF UI via `EmailManagementViewModel` → `IEmailMoveToProjectApplicationService` → `IProcessActionDispatcher`. Owns duplicate-target validation against DB-persisted inbox attachments and `ITaskCompletionCoordinator` reporting when `ActionExecutionContext.EmailFilingTask` is set. |
 | `CreateStageTasks` | `CreateStageTasksProcessActionHandler` | NoOp by design. |
 | `ClosePreviousStageTasks` | `ClosePreviousStageTasksProcessActionHandler` | Bulk close — bypasses `ITaskCompletionCoordinator`. |
 | `SendNotification` | `SendNotificationProcessActionHandler` | — |
@@ -244,38 +258,40 @@ Single source of truth: `SiNetProjectManagerV2\App.xaml.cs` (composition root).
 | `ViewModelDirect` | **31** (9 email VM + 20 inspection VM + 2 task-VM status-edit bypasses) |
 | `WorkflowSystemOnly` | **8** (all `WorkflowTransitionActionType` values) |
 | `Hybrid` | **1** (`AssociateToExistingProject` — counted in `HasHandler` above; also straddles `RequiresUiOnly`) |
-| `DuplicatePath` | **1** (`MoveToProject`) |
+| `DuplicatePath` | **0** (`MoveToProject` resolved in Phase 3 — see Section C / F) |
 | `Unknown` | **0** |
 
 ### 3. Top-10 gaps / risks
 
-1. **`MoveToProject` duplicate path** — VM path is the live one, backend handler is registered but unused. Risk: divergence over time. _(Section C)_
+1. ~~**`MoveToProject` duplicate path**~~ — **Resolved (Phase 3 closed).** Canonical path is `EmailManagementViewModel` → `IEmailMoveToProjectApplicationService` → `IProcessActionDispatcher` → `MoveToProjectProcessActionHandler` → `IProjectFileFilingService` → `ITaskCompletionCoordinator` (when `EmailFilingTask` context exists). Duplicate validation now reads DB attachments inside the handler. Remaining caveats: Typed Continuation still not implemented; VM still owns UI feedback. _(Section C, F)_
 2. ~~**Inline task creation in `ActionExecutor`**~~ — **Resolved on inspection (Phase 2 reconnaissance).** Both `CreateReviewChildProjectTaskAsync` and `CreateAuthorityInvitationTrackingTaskAsync` already call `TaskFactory.CreateAsync`; no direct `db.ProjectAssignments.Add` exists at those sites. _(Section A rows 3, 9)_
 3. **Inline task status edit in Task VMs** — bypasses `ITaskCompletionCoordinator`; coordinator is not the sole writer of `StatusId` today. _(Section E row 1)_
 4. ~~**Inline task creation in `TaskPanelViewModel`**~~ — **Re-scoped (Phase 2 reconnaissance).** `TaskPanelViewModel.CreateTask` calls `TaskService.GetOrCreateTaskWithDueDateAndStatusAsync`, not the `DbContext` directly. The remaining centralization gap is that `TaskService.GetOrCreate*` duplicates `TaskFactory`'s body instead of delegating to it. Tracked as **Phase 2B**, see §7. _(Section E row 2)_
 5. **27 RequiresUI-only suggested actions** — no documented backend continuation contract. UI follow-up returns are informal and per-action. _(Section A)_
-6. **`CloseOpinion` says `CanAdvanceWorkflow=true` but has no backend** — currently `RequiresUiOnly`; nothing wires the UI confirmation to a workflow advance. _(Section A row 36)_
+6. ~~**`CloseOpinion` says `CanAdvanceWorkflow=true` but has no backend**~~ — **Resolved (this batch).** `CloseOpinionProcessActionHandler` + `ICloseOpinionApplicationService` now provide the same typed-continuation workflow-advance path as `ApproveOrClose`. _(Section A row 36, Section F)_
 7. **`ClosePreviousStageTasks` bulk-close bypass** — closes tasks without calling `ITaskCompletionCoordinator`; intentional today, undocumented. _(Section B row 2)_
 8. **`CloseProject` bulk-close bypass** — same as above, larger blast radius. _(Section B row 8)_
 9. **`LinkToProject` has two registered handler classes** for the same code (`LinkToProjectProcessActionHandler` + `LinkToProjectBackendProcessActionHandler`). The dispatcher's duplicate-code validation does not flag this because they share the code constant; behavior depends on registration order / selection. _(Section F)_
-10. **`ApproveOrClose` workflow-advance contract is informal** — relies on the UI writing `PrefilledData["WorkflowInstanceId"]` + `PrefilledData["ConfirmAdvance"]` after a dialog. Easy to break. _(Section A row 29)_
+10. ~~**`ApproveOrClose` workflow-advance contract is informal**~~ — **Resolved (Phase 5 pilot closed).** Typed `WorkflowAdvanceContinuationRequest` / `WorkflowAdvanceContinuationResult` contracts are now the canonical handler↔application-service bridge; legacy `PrefilledData["ConfirmAdvance"]` is preserved only for the un-migrated `EmailContextViewModel` retry path. _(Section A row 29)_
 
 ### 4. Top-5 first targets for Phase 2+
 
 1. ~~**Unify task creation** (Phase 2 in roadmap)~~ — **Closed without code changes** after Phase 2 reconnaissance. The three originally-named sites already comply: both `ActionExecutor` inline methods route through `TaskFactory.CreateAsync`, and `TaskPanelViewModel` routes through `TaskService` (not the `DbContext`). See §7 for the residual **Phase 2B** centralization gap inside `TaskService`.
-2. **Decide and unify `MoveToProject`** (Phase 3): pick the canonical path (VM or handler), keep both alive during the transition. Both paths already exist and behave; this is an organizational decision.
+2. ~~**Decide and unify `MoveToProject`**~~ (Phase 3) — **Closed.** Application service now delegates through `IProcessActionDispatcher` to `MoveToProjectProcessActionHandler`; VM boundary unchanged.
 3. **Close coordinator bypasses for status edits** (Phase 4): route the inline Task VM status edits through `ITaskCompletionCoordinator` (or formally exempt them).
 4. **Formalize the RequiresUI continuation contract** (Phase 5 preparation): define how the UI returns control after a `RequiresUI(...)` result. Until that is decided, all 27 `RequiresUiOnly` rows stay where they are.
-5. **`CloseOpinion`** specifically: cheapest single example of "RequiresUI without backend continuation" — a good pilot for the contract.
+5. ~~**`CloseOpinion`**~~ — **Closed (this batch).** Implemented as the second typed-continuation flow after the `ApproveOrClose` pilot.
 
 ### 5. Inaccuracies found in `Action-Task-Workflow.md`
 
 Two minor clarifications, not contradictions:
 
-- The architecture document lists `MoveToProjectProcessActionHandler` as a
-  "future canonical" path; the inventory confirms more precisely that **it is
-  registered in DI but currently has zero callers from the WPF UI**. Documented
-  here in Sections C and F.
+- The architecture document originally listed `MoveToProjectProcessActionHandler`
+  as a "future canonical" path; as of Phase 3 closure it **is** the canonical
+  backend path, reached through `IEmailMoveToProjectApplicationService` +
+  `IProcessActionDispatcher`. The application service is preserved as the
+  VM-facing boundary for UI-shaped result mapping. Documented here in
+  Sections C and F.
 - The architecture document treats `ITaskCompletionCoordinator` as the
   "single decision point for task completion"; the inventory shows this is
   the **intended** model but **not the enforced** model — Section B rows 2/8
@@ -319,22 +335,23 @@ Decision Points in `Action-Task-Workflow.md` §7.
 
 ---
 
-## 7. Phase 2B — Deferred: `TaskService` / `TaskFactory` unification
+## 7. Phase 2B — Partially implemented: `TaskService` / `TaskFactory` unification
 
-> **Status:** Deferred. Documentation-only entry. No code changes, no DB
-> changes, no tests added.
+> **Status:** Async variants implemented and characterization-tested. Sync
+> variants remain deferred. See §7.4 for the implemented scope and §7.5 for
+> what remains open.
 
-### 7.1 Gap
+### 7.1 Gap (original)
 
 `TaskService.GetOrCreateTaskWithDueDate`,
 `TaskService.GetOrCreateTaskWithDueDateAndStatus`, and their `*Async`
-counterparts (`TaskService.cs` lines 391, 440, 501, 552) construct
-`ProjectAssignment` and call `TaskPriorityEngine.InsertWithAutoPriority(Async)`
-+ `LogTaskEvent(Async)` themselves instead of delegating to
-`TaskFactory.CreateAsync`. This is a **service-level centralization gap**,
-not a ViewModel-direct or ActionExecutor-direct DB write.
+counterparts construct `ProjectAssignment` and call
+`TaskPriorityEngine.InsertWithAutoPriority(Async)` + `LogTaskEvent(Async)`
+themselves instead of delegating to `TaskFactory.CreateAsync`. This is a
+**service-level centralization gap**, not a ViewModel-direct or
+ActionExecutor-direct DB write.
 
-### 7.2 Why Phase 2B is not behavior-neutral
+### 7.2 Why a literal Phase 2B rewrite is not behavior-neutral
 
 A literal "delegate to `TaskFactory.CreateAsync`" rewrite would change
 observable behavior in at least the following ways:
@@ -350,28 +367,59 @@ observable behavior in at least the following ways:
 
 Any of these changes would be visible in the audit trail, in the priority
 queue, in the UI, or in error semantics. Therefore Phase 2B **cannot** be
-treated as a mechanical refactor and is deferred until each item above has
-an explicit decision.
+treated as a mechanical refactor across both sync and async paths.
 
-### 7.3 Open Phase 2B decisions (deferred)
+### 7.3 Implementation decision
 
-1. Should `TaskService` become a thin idempotency + title-generation wrapper
-   that delegates the actual insert/event/link work to `TaskFactory.CreateAsync`?
-2. Should the richer creation-event note continue to be produced (passed via
-   `eventNote`), or do we accept `TaskFactory`'s default note?
-3. Should the event timestamp move from `DateTime.Now` (Local) to `DateTime.UtcNow`?
-4. Should `TaskFactory.CreateAsync` be extended to insert priority even when
-   `AssignedToId` is `null` (matching `TaskService` semantics), or is the
-   current divergence intentional?
-5. Should status existence still be validated, and at which layer?
-6. Does any new `TaskDraft` DTO (per Typed-Continuation-Design §6 and D-6)
-   share a shape with the `TaskService` parameters, or are they intentionally
-   distinct?
+The async paths can safely delegate to `TaskFactory.CreateAsync` if
+`TaskService` continues to own:
 
-Phase 2B is not scheduled. It will be reconsidered once one of the following
-triggers occurs: (a) Phase 5 introduces typed `TaskCreationContinuationResult`
-flows that need a unified factory, or (b) an independent decision is made to
-remove `TaskService.GetOrCreate*` duplication.
+- Idempotency lookup via `GetTask(...)`.
+- Title generation via `GenerateTaskTitle(...)`.
+- Status existence validation (throwing `InvalidOperationException`).
+- Pre-computation of the rich creation note (passed as `eventNote`).
+
+With those responsibilities retained, `TaskFactory.CreateAsync` provides the
+shared insert + priority + event + optional link work. The sync variants
+have no sync `TaskFactory` entry point, so changing them would require a
+broader decision and is intentionally out of scope for this round.
+
+### 7.4 Implemented scope (async)
+
+- `TaskService.GetOrCreateTaskWithDueDateAsync` now delegates creation to
+  `TaskFactory.CreateAsync` after building the `ProjectAssignment` and the
+  precomputed note (`"משימה נוצרה, תאריך יעד: …, סטטוס: …"`).
+- `TaskService.GetOrCreateTaskWithDueDateAndStatusAsync` does the same with
+  the caller-provided status (validated first).
+- Idempotency, title format, status validation, note text, and work-priority
+  behavior are preserved and pinned by
+  `SiNetSQL.Tests/Services/TaskServiceGetOrCreateAsyncTests.cs`
+  (7 characterization tests, all passing).
+- Full `SiNetSQL.Tests` suite remained green after the refactor (334 passed
+  / 0 failed / 2 pre-existing `ExecuteDeleteAsync` InMemory skips).
+
+### 7.5 Open Phase 2B decisions (still deferred — sync path)
+
+1. Should the sync `GetOrCreateTaskWithDueDate` /
+   `GetOrCreateTaskWithDueDateAndStatus` be removed entirely in favor of the
+   async variants, or should a sync `TaskFactory.Create` be introduced to
+   mirror the async delegation?
+2. Is the divergence where `TaskFactory.CreateAsync` only inserts priority
+   when `AssignedToId.HasValue` (vs. `TaskService` always inserting) still
+   intentional for callers that pass an assignee? (Async tests confirm
+   current behavior; no change made.)
+3. Should the event timestamp policy be unified (Local vs. UTC) across both
+   layers, or do we keep `TaskFactory`'s `DateTime.UtcNow` for events and
+   `DateTime.Now` for `Created`?
+4. Does any future `TaskDraft` DTO (per Typed-Continuation-Design §6 and
+   D-6) share a shape with the `TaskService` parameters, or are they
+   intentionally distinct?
+
+Sync Phase 2B remains unscheduled. It will be reconsidered once one of the
+following triggers occurs: (a) Phase 5 introduces typed
+`TaskCreationContinuationResult` flows that need a unified factory across
+both sync and async callers, or (b) an independent decision is made to
+remove the sync `TaskService.GetOrCreate*` duplication.
 
 ---
 
@@ -384,10 +432,10 @@ remove `TaskService.GetOrCreate*` duplication.
 | Typed Continuation Design | **Completed (documentation).** |
 | Architecture decisions (Canonical path, RequiresUI typed continuation, runtime task creation, Coordinator policy, etc.) | **Approved.** |
 | **Original Phase 2 — Unify runtime task creation** | **Closed with no code changes** (reconnaissance verified compliance). |
-| **Phase 2B — `TaskService` / `TaskFactory` unification** | **Deferred** (not behavior-neutral; open decisions per §7.3). |
-| Phase 3 — Unify `MoveToProject` | Not started. |
-| Phase 4 — Close coordinator bypasses | Not started. |
-| Phase 5 — Migrate `RequiresUI` actions (typed continuation) | Not started. |
+| **Phase 2B — `TaskService` / `TaskFactory` unification** | **Partially implemented.** Async `GetOrCreateTaskWithDueDateAsync` and `GetOrCreateTaskWithDueDateAndStatusAsync` now delegate creation to `TaskFactory.CreateAsync` (idempotency, title, status validation, and note text retained in `TaskService`); behavior pinned by `TaskServiceGetOrCreateAsyncTests`. Sync variants remain deferred per §7.5. |
+| Phase 3 — Unify `MoveToProject` | **Closed.** Application service delegates to dispatcher → handler; VM unchanged. Caveats: Typed Continuation still not implemented; VM still owns UI feedback; tag/alternative persistence is eventually-consistent (see Action-Task-Workflow §6.2). |
+| Phase 4 — Close coordinator bypasses | **Completed for completion paths.** `TaskStatusService` is the single entry point for regular status updates; `ITaskCompletionCoordinator` (`AdminSetCompletedAsync`, `CloseTasksAsSystemAsync`) is the single entry point for completed/admin/system/bulk-close. Inline Task-VM status edits route through `TaskStatusService` (regular) and `ITaskCompletionCoordinator` (completion). The bulk-close handlers (`ClosePreviousStageTasksProcessActionHandler`, `CloseProjectProcessActionHandler`) are formally documented as the system bulk-close authority. |
+| Phase 5 — Migrate `RequiresUI` actions (typed continuation) | **Pilot + CloseOpinion closed.** `ApproveOrClose` and `CloseOpinion` migrated to the typed `WorkflowAdvanceContinuationRequest` / `WorkflowAdvanceContinuationResult` contract; remaining 27 `RequiresUiOnly` rows are still pending and continue to use `PrefilledData` bridges until migrated one action at a time per `Typed-Continuation-Design.md`. |
 | Phase 6 — Move `ActionFollowUp` to `Domain/Actions` | Not started (may collapse into Typed Continuation D-4). |
 
 **No runtime code was changed as part of this Phase 2 closure.**

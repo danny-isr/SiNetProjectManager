@@ -5,6 +5,23 @@
 > truth that the team will use to *agree* on the canonical model **before** any
 > implementation step is taken.
 >
+> **TaskCreationDialog migration note (Phase 5 extension):**
+> Migrated TaskCreation actions (see
+> `SiNetSQL.Domain.Actions.Continuation.TaskCreationActionCatalog`) run on a
+> **typed-only path with no legacy fallback**:
+> `EmailContextViewModel` → `ITaskCreationContinuationApplicationService.StartAsync`
+> → `TaskCreationContinuationRequest` → `IActionContinuationUiHost`
+> (`TaskCreationDraftDialog`) → `TaskCreationContinuationResult(TaskDraft)`
+> → `ITaskCreationContinuationApplicationService.ContinueAsync` →
+> `TaskFactory.CreateAsync` → `ProjectAssignment`.
+>
+> If any required piece is missing, the action **fails visibly** (clear error
+> + log). The legacy chain `ActionResult.RequiresUI(ActionFollowUp.TaskCreationDialog)`
+> → `AssignActionDialog` → `EmailManagementView.CreateActionTaskAsync` is
+> **not** used for migrated actions; it remains physically in the codebase
+> only as dead code for migrated actions, or as the live path for any
+> `SuggestedActionType` that is not yet listed in `TaskCreationActionCatalog`.
+>
 > **Repos in scope:** `danny-isr/SiNetProjectManager`, `danny-isr/SiNetSQL`.
 >
 > **Companion documents:**
@@ -277,11 +294,17 @@ the canonical pipeline.
    → EmailManagementViewModel.ActiveTaskContext = EmailFilingTaskContext
 
 3. User triggers MoveToProject in EmailManagementView
-   EmailManagementViewModel.MoveToProjectAsync
-   → files every tagged inbox attachment through IProjectFileFilingService
-   → flips EmailInboxMessage.Status = Moved
+   EmailManagementViewModel.MoveToProjectViaServiceAsync
+   → IEmailMoveToProjectApplicationService.MoveAsync (VM-facing boundary,
+     builds MoveToProjectRequest, filters IsPlacedHint items, owns UI feedback)
+   → IProcessActionDispatcher.DispatchAsync(ActionCodes.MoveToProject,
+     ActionExecutionContext { EmailFilingTask, Data["ExcludedAttachmentIds"] })
+   → MoveToProjectProcessActionHandler.ExecuteAsync
+     → duplicate-target validation against DB-persisted inbox attachments
+     → IProjectFileFilingService files each tagged attachment
+     → flips EmailInboxMessage.Status = Moved
 
-4. VM reports completion to the coordinator
+4. Handler reports completion to the coordinator (when EmailFilingTask context exists)
    ITaskCompletionCoordinator.CompleteAsync(
 	   taskId,
 	   completionEventCode = ReviewCompletionEvents.ReviewMaterialFiled,
@@ -312,15 +335,60 @@ is **no documented callback contract** describing:
 
 This is the largest open hole in the model.
 
-### 6.2 Duplicate `MoveToProject` flow
-- `EmailManagementViewModel.MoveToProjectAsync` — the production path used by
-  the UI today, and the path that bridges the EmailFiling task closure to the
-  coordinator.
-- `MoveToProjectProcessActionHandler` — a Phase-3 handler with equivalent
-  semantics, intended to be the canonical path.
+### 6.2 Duplicate `MoveToProject` flow — **RESOLVED (Phase 3, end of Step 5)**
 
-Both coexist. The VM does **not** call the dispatcher. A future decision is
-required (see §7).
+The duplicate-path issue is closed. The canonical pipeline is now:
+
+```
+EmailManagementViewModel
+  → IEmailMoveToProjectApplicationService.MoveAsync
+    → IProcessActionDispatcher.DispatchAsync(ActionCodes.MoveToProject,
+                                             ActionExecutionContext)
+      → MoveToProjectProcessActionHandler.ExecuteAsync
+        → IProjectFileFilingService.FileAsync (per attachment)
+        → ITaskCompletionCoordinator.CompleteAsync
+          (only when ActionExecutionContext.EmailFilingTask is non-null)
+```
+
+The application service is preserved as the **VM-facing boundary** and is
+responsible for: building `MoveToProjectRequest` -> `ActionExecutionContext`,
+filtering `IsPlacedHint` items via `ExcludedAttachmentIds`, mapping
+`ProcessActionResult` back to `MoveToProjectResult` for the VM, and emitting
+UI-shaped status / `Progress<string>` updates. The handler owns the actual
+business operation, duplicate-target validation (against DB-persisted inbox
+attachments), and `ITaskCompletionCoordinator` reporting.
+
+**Verification (Phase 3 Step 5):**
+- `EmailManagementViewModel` does **not** reference `IProcessActionDispatcher`
+  or `MoveToProjectProcessActionHandler`. The only service it resolves on the
+  MoveToProject path is `IEmailMoveToProjectApplicationService`.
+- Duplicate validation now reads inbox attachments from the DB inside the
+  handler, not from in-memory UI state.
+- Tests: `EmailMoveToProjectApplicationServiceTests` (12/12) and
+  `MoveToProjectProcessActionHandlerTests` (11/11) green; full `SiNetSQL.Tests`
+  green except for 2 pre-existing unrelated InMemory `ExecuteDeleteAsync`
+  skips.
+
+**Remaining caveats (intentionally not addressed in Phase 3):**
+- **Typed Continuation:** Implemented end-to-end **only** for `ApproveOrClose`
+  and `CloseOpinion` via `IActionContinuationUiHost` (WPF host:
+  `WpfActionContinuationUiHost`, `ContinuationUiKind.WorkflowAdvanceDialog`
+  only). Other `Deferred(RequiresUi)` results are still routed through the
+  legacy `ActionFollowUp` / `PrefilledData` path; full migration remains a
+  Phase 5 effort. See [`Typed-Continuation-Design.md`](./Typed-Continuation-Design.md) §14.
+- **VM still owns UI feedback** (`MessageBox` for duplicate-target, status
+  message text, refresh hop via `Dispatcher.BeginInvoke`). This is by design
+  for Phase 3 and is the boundary the application service preserves.
+- **Tag / alternative persistence is eventually-consistent.** Attachment
+  `TaggedProjectFileId` and `SelectedAlternativeId` are persisted via
+  `AttachmentTaggingService.SetAttachmentTagAsync` /
+  `SetAttachmentAlternativeAsync` from `OnAttachmentTagChanged` (an async
+  fire-and-forget event handler). The VM does **not** await those saves
+  before calling `MoveAsync`. In normal use the saves complete well before
+  the user clicks the move button, but no explicit barrier exists. If a user
+  changes a picker and immediately clicks MoveToProject, the handler's
+  duplicate-target validation reads from DB and may see the previous value.
+  This is reported, not fixed, per the Step 5 constraint.
 
 ### 6.3 Manual task creation inside `ActionExecutor` (resolved on inspection)
 - `ActionExecutor.CreateReviewChildProjectTaskAsync`
@@ -442,9 +510,9 @@ Phase 2+ refactor work in §8 starts. None of them have a default answer.
 | **Phase 1 — Handler inventory** | Add a property / column to `ActionDefinition` that classifies each `ActionCode` as: HasHandler / RequiresUiOnly / LegacyInline / SystemOnly. Pure metadata. | `ActionDefinitionRegistry` (additive). |
 | **Phase 2 — Unify task creation** | **Closed (no code changes).** Phase 2 reconnaissance verified that `CreateReviewChildProjectTaskAsync`, `CreateAuthorityInvitationTrackingTaskAsync`, and `TaskPanelViewModel.CreateTask` all already comply (the two ActionExecutor methods call `TaskFactory.CreateAsync`; the VM calls `TaskService`, not the `DbContext`). | None. |
 | **Phase 2B — `TaskService` / `TaskFactory` unification** | **Deferred.** Not behavior-neutral. Tracked in [`Action-Handler-Inventory.md`](./Action-Handler-Inventory.md) §7. | `Services/TaskService.cs`. |
-| **Phase 3 — Unify `MoveToProject`** | Decide canonical path (VM → dispatcher, or handler-driven), then keep exactly one. Remove the other only after a full deprecation window. | `EmailManagementViewModel`, `MoveToProjectProcessActionHandler`. |
+| **Phase 3 — Unify `MoveToProject`** | **Closed.** Canonical path is `EmailManagementViewModel → IEmailMoveToProjectApplicationService → IProcessActionDispatcher → MoveToProjectProcessActionHandler → IProjectFileFilingService → ITaskCompletionCoordinator` (when `EmailFilingTask` context exists). The application service is preserved as the VM-facing boundary; the handler owns business execution and coordinator reporting. See §6.2. | `EmailMoveToProjectApplicationService`, `MoveToProjectProcessActionHandler`, `ActionExecutionContext`. |
 | **Phase 4 — Close coordinator bypasses** | Either document inline status edits as admin overrides or route them through the coordinator. Add `CloseAllForStageAsync` (or formally accept the existing direct close). | `FloatingProjectTasksViewModel`, `TaskPanelViewModel`, `ClosePreviousStageTasksProcessActionHandler`, `ITaskCompletionCoordinator`. |
-| **Phase 5 — Migrate `RequiresUI` actions** | For each remaining inline-only `SuggestedActionType`, define the UI continuation contract and implement an `IProcessActionHandler`. Migrate one action family at a time (Design / Review / Opinion / Shared). | `ActionExecutor`, new handlers. |
+| **Phase 5 — Migrate `RequiresUI` actions** | **Pilot closed.** Typed continuation is now end-to-end for `ApproveOrClose` and `CloseOpinion` through `IActionContinuationUiHost` / `WpfActionContinuationUiHost` (only `ContinuationUiKind.WorkflowAdvanceDialog`). Remaining `RequiresUI` action families (`CreateTask`, `FileImport`, `ProjectPicker`, etc.) still flow through the legacy `ActionFollowUp` / `PrefilledData` path; they will be migrated one family at a time. | `ActionExecutor`, new handlers, new WPF continuation hosts. |
 | **Phase 6 — Move `ActionFollowUp` to `Domain/Actions`** | Mechanical move; update references. Removes the architectural concession comment in `ActionDefinitionRegistry`. | `ActionFollowUp`, `ActionExecutor`, `ActionDefinitionRegistry`. |
 
 Phases are **strictly sequential**: do not begin Phase N until Phase N-1's
