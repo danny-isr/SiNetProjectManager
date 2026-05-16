@@ -22,6 +22,61 @@
 > only as dead code for migrated actions, or as the live path for any
 > `SuggestedActionType` that is not yet listed in `TaskCreationActionCatalog`.
 >
+> **FileImportDialog migration note (Phase 5 extension):**
+> Migrated FileImport actions (see
+> `SiNetSQL.Domain.Actions.Continuation.FileImportActionCatalog`:
+> `UploadNewVersion`, `ReceiveSupplementaryMaterial`, `ReceiveMaterialForReview`,
+> `ReceiveCorrectedVersion`, `ReceiveMaterialForOpinion`) also run on a
+> **typed-only path with no legacy fallback**:
+> `EmailContextViewModel` → `IFileImportContinuationApplicationService.StartAsync`
+> → `FileImportContinuationRequest` → `IActionContinuationUiHost`
+> (`FileImportDialog` in `draftOnlyMode`) →
+> `FileImportContinuationResult(FileImportDraft)` →
+> `IFileImportContinuationApplicationService.ContinueAsync` → one
+> `AddMaterialToProject` dispatch per selection through
+> `IProcessActionDispatcher` → `IProjectFileFilingService.FileAsync`. If any
+> required piece is missing, `ActionExecutor` returns `ActionResult.Failed(...)`
+> through `FileImportTypedRequired(...)`. `CollectMaterial` and
+> `AddMaterialToProject` are intentionally **not** migrated and continue to
+> use the existing dialog/handler paths.
+>
+> **ProjectPicker migration note (Phase 5 extension):**
+> Migrated ProjectPicker actions (see
+> `SiNetSQL.Domain.Actions.Continuation.ProjectPickerActionCatalog`:
+> `AssociateToExistingProject`, `StartWorkflow`, `CreateNewReview`,
+> `CreateOpinionProject`, `OpenReviewRound`) also run on a **typed-only path
+> with no legacy fallback**:
+> `EmailContextViewModel` → `IProjectPickerContinuationApplicationService.StartAsync`
+> → `ProjectPickerContinuationRequest` → `IActionContinuationUiHost`
+> (existing **`ProjectSelectorDialog` reused unchanged** — no UI redesign) →
+> `ProjectPickerContinuationResult(SelectedProjectId)` →
+> `IProjectPickerContinuationApplicationService.ContinueAsync` →
+> re-dispatch of the original `SuggestedAction` via `ActionExecutor.ExecuteAsync`
+> with `PrefilledData["ProjectId"]` populated. Every previous
+> `ActionResult.RequiresUI("...", ActionFollowUp.ProjectPicker)` call site
+> for migrated codes is replaced by
+> `ActionExecutor.ProjectPickerTypedRequired(...)`, so a migrated action that
+> reaches the legacy switch arm now **fails visibly** instead of opening the
+> legacy ProjectPicker. `CreatePriceQuote` (project-independent workflow)
+> is intentionally **not** migrated through ProjectPicker.
+>
+> The **NewProject family** (`CreateNewProject` only) is also closed: typed
+> continuation flows VM → `INewProjectContinuationApplicationService` →
+> `IActionContinuationUiHost` (which hosts the existing
+> `CreateProjectUserControl` inside a modal `Window` and listens to
+> `CreateProjectViewModel.ProjectCreated`) →
+> `INewProjectContinuationApplicationService.ContinueAsync`, validating the
+> `CreatedProjectId`. The previous `ActionResult.RequiresUI("יצירת פרויקט
+> חדש", ActionFollowUp.NewProjectDialog)` call site is replaced by
+> `ActionExecutor.NewProjectTypedRequired(...)`, so a `CreateNewProject` that
+> reaches the legacy switch arm now **fails visibly**. The dialog itself is
+> unchanged and still owns persistence, email-link, and workflow-advance
+> side effects internally.
+>
+> **Still on the legacy `ActionFollowUp` path:** `DecisionDialog`
+> (`ForwardToDecision`) and `DisciplineDialog` (`AddNewDiscipline`) — see
+> [`Typed-Continuation-Design.md`](./Typed-Continuation-Design.md) §15.5.
+>
 > **Repos in scope:** `danny-isr/SiNetProjectManager`, `danny-isr/SiNetSQL`.
 >
 > **Companion documents:**
@@ -512,7 +567,7 @@ Phase 2+ refactor work in §8 starts. None of them have a default answer.
 | **Phase 2B — `TaskService` / `TaskFactory` unification** | **Deferred.** Not behavior-neutral. Tracked in [`Action-Handler-Inventory.md`](./Action-Handler-Inventory.md) §7. | `Services/TaskService.cs`. |
 | **Phase 3 — Unify `MoveToProject`** | **Closed.** Canonical path is `EmailManagementViewModel → IEmailMoveToProjectApplicationService → IProcessActionDispatcher → MoveToProjectProcessActionHandler → IProjectFileFilingService → ITaskCompletionCoordinator` (when `EmailFilingTask` context exists). The application service is preserved as the VM-facing boundary; the handler owns business execution and coordinator reporting. See §6.2. | `EmailMoveToProjectApplicationService`, `MoveToProjectProcessActionHandler`, `ActionExecutionContext`. |
 | **Phase 4 — Close coordinator bypasses** | Either document inline status edits as admin overrides or route them through the coordinator. Add `CloseAllForStageAsync` (or formally accept the existing direct close). | `FloatingProjectTasksViewModel`, `TaskPanelViewModel`, `ClosePreviousStageTasksProcessActionHandler`, `ITaskCompletionCoordinator`. |
-| **Phase 5 — Migrate `RequiresUI` actions** | **Pilot closed.** Typed continuation is now end-to-end for `ApproveOrClose` and `CloseOpinion` through `IActionContinuationUiHost` / `WpfActionContinuationUiHost` (only `ContinuationUiKind.WorkflowAdvanceDialog`). Remaining `RequiresUI` action families (`CreateTask`, `FileImport`, `ProjectPicker`, etc.) still flow through the legacy `ActionFollowUp` / `PrefilledData` path; they will be migrated one family at a time. | `ActionExecutor`, new handlers, new WPF continuation hosts. |
+| **Phase 5 — Migrate `RequiresUI` actions** | **Pilot + WorkflowAdvance + TaskCreation + FileImport + ProjectPicker + NewProject families closed.** Typed continuation is end-to-end for `ApproveOrClose`, `CloseOpinion`, all `TaskCreationActionCatalog.MigratedActions` (17 codes), all `FileImportActionCatalog.MigratedActions` (5 codes), all `ProjectPickerActionCatalog.MigratedActions` (`AssociateToExistingProject`, `StartWorkflow`, `CreateNewReview`, `CreateOpinionProject`, `OpenReviewRound`), and `NewProjectActionCatalog.MigratedActions` (`CreateNewProject`) through `IActionContinuationUiHost` / `WpfActionContinuationUiHost`. The ProjectPicker host **reuses the existing `ProjectSelectorDialog` unchanged** and the NewProject host **reuses the existing `CreateProjectUserControl` inside a modal `Window`** — no UI redesign. `ActionExecutor` enforces no-legacy-fallback via `TaskCreationTypedRequired(...)`, `FileImportTypedRequired(...)`, `ProjectPickerTypedRequired(...)`, and `NewProjectTypedRequired(...)`. Remaining un-migrated `RequiresUI` families: `DecisionDialog`, `DisciplineDialog`. | `ActionExecutor`, application services per family, `WpfActionContinuationUiHost`. |
 | **Phase 6 — Move `ActionFollowUp` to `Domain/Actions`** | Mechanical move; update references. Removes the architectural concession comment in `ActionDefinitionRegistry`. | `ActionFollowUp`, `ActionExecutor`, `ActionDefinitionRegistry`. |
 
 Phases are **strictly sequential**: do not begin Phase N until Phase N-1's

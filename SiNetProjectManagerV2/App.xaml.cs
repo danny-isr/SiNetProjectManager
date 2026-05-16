@@ -440,7 +440,64 @@ namespace SiNetProjectManagerV2
                 SiNetSQL.Services.TaskCreation.ITaskCreationContinuationApplicationService,
                 SiNetSQL.Services.TaskCreation.TaskCreationContinuationApplicationService>();
 
-            // Phase 5: WPF UI continuation host - boundary between the typed
+            // Typed-continuation application service for the FileImportDialog
+            // family (UploadNewVersion / ReceiveSupplementaryMaterial /
+            // ReceiveMaterialForReview / ReceiveCorrectedVersion /
+            // ReceiveMaterialForOpinion). The service owns the Start/Continue
+            // loop and dispatches one AddMaterialToProject per selection
+            // through IProcessActionDispatcher → AddMaterialToProjectProcessActionHandler
+            // → IProjectFileFilingService. ActionExecutor refuses these action
+            // codes via FileImportTypedRequired() — there is no legacy fallback.
+            services.AddTransient<
+                SiNetSQL.Services.FileImport.IFileImportContinuationApplicationService,
+                SiNetSQL.Services.FileImport.FileImportContinuationApplicationService>();
+
+            // Phase 5: typed ProjectPicker continuation. Owns the typed
+            // Start/Continue loop for migrated ProjectPicker-family actions
+            // (AssociateToExistingProject, StartWorkflow, CreateNewReview,
+            // CreateOpinionProject, OpenReviewRound). The service re-dispatches
+            // the original action through ActionExecutor.ExecuteAsync with the
+            // user-selected ProjectId; ActionExecutor refuses these action
+            // codes (missing ProjectId) via ProjectPickerTypedRequired() — there
+            // is no legacy fallback.
+            services.AddTransient<
+                SiNetSQL.Services.ProjectPicker.IProjectPickerContinuationApplicationService,
+                SiNetSQL.Services.ProjectPicker.ProjectPickerContinuationApplicationService>();
+
+            // Phase 5: typed NewProject continuation. Owns the typed
+            // Start/Continue loop for migrated NewProjectDialog-family actions
+            // (currently only CreateNewProject). The host opens the existing
+            // CreateProjectUserControl and captures the CreatedProjectId from
+            // CreateProjectViewModel.ProjectCreated. ActionExecutor refuses
+            // these action codes via NewProjectTypedRequired() — there is no
+            // legacy fallback.
+            services.AddTransient<
+                SiNetSQL.Services.NewProject.INewProjectContinuationApplicationService,
+                SiNetSQL.Services.NewProject.NewProjectContinuationApplicationService>();
+
+            // Phase 5: typed Decision continuation. Owns the typed
+            // Start/Continue loop for migrated DecisionDialog-family actions
+            // (currently only ForwardToDecision). The host opens the existing
+            // ProjectDecisionsWindow, which persists decisions internally via
+            // ProjectDecisionService; the typed result carries only the
+            // lifecycle outcome. ActionExecutor refuses these action codes via
+            // DecisionTypedRequired() — there is no legacy fallback.
+            services.AddTransient<
+                SiNetSQL.Services.Decision.IDecisionContinuationApplicationService,
+                SiNetSQL.Services.Decision.DecisionContinuationApplicationService>();
+
+            // Phase 5: typed Discipline continuation. Owns the typed
+            // Start/Continue loop for migrated DisciplineDialog-family actions
+            // (currently only AddNewDiscipline). There is no dedicated WPF
+            // surface today; the host shows a confirmation prompt. The typed
+            // result carries only the lifecycle outcome. ActionExecutor refuses
+            // these action codes via DisciplineTypedRequired() — there is no
+            // legacy fallback.
+            services.AddTransient<
+                SiNetSQL.Services.Discipline.IDisciplineContinuationApplicationService,
+                SiNetSQL.Services.Discipline.DisciplineContinuationApplicationService>();
+
+            // Phase 5: WPF UI continuation host
             // application services and WPF dialogs. Pilot scope:
             // ContinuationUiKind.WorkflowAdvanceDialog only. Other UI kinds
             // remain on the legacy ActionFollowUp / PrefilledData path.

@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.Domain.Actions;
+using SiNetSQL.Domain.Actions.Continuation;
 using SiNetSQL.Models;
 
 namespace SiNetProjectManagerV2.WPF_Window;
@@ -34,15 +36,38 @@ public partial class FileImportDialog : Window
     private readonly int _emailMessageId;
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly IProcessActionDispatcher _dispatcher;
+    private readonly bool _draftOnlyMode;
     private int _projectId;
+
+    /// <summary>
+    /// Populated when the dialog is hosted by the typed continuation pipeline
+    /// (<c>FileImportContinuationRequest</c>). In that mode the dialog DOES
+    /// NOT dispatch <c>AddMaterialToProject</c> itself — it returns the user
+    /// selections via <see cref="Draft"/>, and
+    /// <c>FileImportContinuationApplicationService</c> performs the filing.
+    /// </summary>
+    public FileImportDraft? Draft { get; private set; }
 
     public ObservableCollection<ImportAttachmentItem> Attachments { get; } = [];
     public ObservableCollection<FolderItem> Folders { get; } = [];
 
-    public FileImportDialog(int emailMessageId)
+    public FileImportDialog(int emailMessageId) : this(emailMessageId, draftOnlyMode: false)
+    {
+    }
+
+    /// <summary>
+    /// Typed-continuation entry point. When <paramref name="draftOnlyMode"/>
+    /// is <c>true</c>, the dialog collects a <see cref="FileImportDraft"/>
+    /// (project file target + selected sources) and closes with
+    /// <c>DialogResult=true</c> without dispatching
+    /// <c>AddMaterialToProject</c>. Filing is then performed by
+    /// <c>FileImportContinuationApplicationService</c>.
+    /// </summary>
+    public FileImportDialog(int emailMessageId, bool draftOnlyMode)
     {
         InitializeComponent();
         _emailMessageId = emailMessageId;
+        _draftOnlyMode = draftOnlyMode;
         _dbFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
         _dispatcher = App.ServiceProvider.GetRequiredService<IProcessActionDispatcher>();
 
@@ -195,6 +220,52 @@ public partial class FileImportDialog : Window
                 SiNetSQL.Services.Files.FilingTargetDuplicateValidator.UserMessageHebrew
                     + "\n\n" + SiNetSQL.Services.Files.FilingTargetDuplicateValidator.FormatDetails(duplicateGroups),
                 "תיוג כפול", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        StatusText.Text = "מייבא קבצים...";
+
+        // Typed continuation mode: do NOT dispatch AddMaterialToProject from
+        // the dialog. Build a FileImportDraft from the user's selections and
+        // hand it back to FileImportContinuationApplicationService which owns
+        // the filing loop. This keeps the host UI-only and the application
+        // service the single source of truth for persistence.
+        if (_draftOnlyMode)
+        {
+            var selections = new List<FileImportSelection>(selectedAttachments.Count);
+            foreach (var attachment in selectedAttachments)
+            {
+                var matchingSource = sourceFiles.FirstOrDefault(sf =>
+                    string.Equals(Path.GetFileName(sf), attachment.FileName, StringComparison.OrdinalIgnoreCase));
+
+                if (matchingSource is null && sourceFiles.Length == 1 && selectedAttachments.Count == 1)
+                    matchingSource = sourceFiles[0];
+
+                if (matchingSource is null)
+                {
+                    attachment.Status = "⚠ לא נמצא קובץ מקור";
+                    continue;
+                }
+
+                selections.Add(new FileImportSelection(
+                    SourceLocalPath: matchingSource,
+                    OriginalFileName: attachment.FileName,
+                    SourceEmailAttachmentId: attachment.AttachmentId));
+            }
+
+            if (selections.Count == 0)
+            {
+                StatusText.Text = "לא נמצאו קבצי מקור תואמים לקבצי היעד.";
+                return;
+            }
+
+            Draft = new FileImportDraft(
+                ProjectId: _projectId,
+                ProjectFileId: selectedTarget.Id,
+                ProjectAlternativeId: null,
+                Selections: selections);
+            DialogResult = true;
+            Close();
             return;
         }
 

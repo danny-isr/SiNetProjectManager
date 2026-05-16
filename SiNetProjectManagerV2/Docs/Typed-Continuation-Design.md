@@ -39,6 +39,33 @@
 > **dead code for migrated actions** and is only reachable by `SuggestedActionType`
 > values not yet listed in `TaskCreationActionCatalog`.
 >
+> **FileImportDialog family (Phase 5 extension, no-fallback rule):**
+> The FileImportDialog family is migrated to a typed-only path with **no
+> legacy fallback**. The migrated `SuggestedActionType` values are listed in
+> `SiNetSQL.Domain.Actions.Continuation.FileImportActionCatalog`
+> (`UploadNewVersion`, `ReceiveSupplementaryMaterial`, `ReceiveMaterialForReview`,
+> `ReceiveCorrectedVersion`, `ReceiveMaterialForOpinion`). `CollectMaterial`
+> is intentionally not migrated (it is not a target-filing flow), and
+> `AddMaterialToProject` continues to run through its canonical handler
+> (`AddMaterialToProjectProcessActionHandler`) where `RequiresUI(FileImportDialog)`
+> represents a legitimate "inputs missing" deferred outcome rather than a
+> legacy fallback. For migrated actions the only valid path is:
+>
+> `EmailContextViewModel` → `IFileImportContinuationApplicationService.StartAsync`
+> → `FileImportContinuationRequest` → `IActionContinuationUiHost`
+> (WPF: `FileImportDialog` in `draftOnlyMode`) →
+> `FileImportContinuationResult(FileImportDraft)` →
+> `IFileImportContinuationApplicationService.ContinueAsync` → one
+> `AddMaterialToProject` dispatch per `FileImportSelection` through
+> `IProcessActionDispatcher` → `IProjectFileFilingService.FileAsync`.
+>
+> If the new path is missing required data, fails validation, or cannot open
+> UI, the action **fails visibly** — it does **not** fall back to
+> `ActionResult.RequiresUI(ActionFollowUp.FileImportDialog)`. `ActionExecutor`
+> enforces this rule by returning `ActionResult.Failed(...)` via the
+> `FileImportTypedRequired(...)` helper if any migrated FileImport action
+> reaches its switch directly.
+>
 > Phase 3 had previously closed the `MoveToProject` duplicate-path issue via
 > `IEmailMoveToProjectApplicationService`. The legacy
 > `PrefilledData["ConfirmAdvance"]` bridge is intentionally **retained** so
@@ -422,4 +449,209 @@ The pilot is implemented as of this revision and covers exactly two action codes
 6. Trigger the same action via a code path that still sets
    `PrefilledData["ConfirmAdvance"] = true` to verify the legacy bridge keeps
    working unchanged.
+
+
+---
+
+## 15. Phase 5 expansion — migrated families to date
+
+Beyond the WorkflowAdvance pilot, three additional `RequiresUI` families have
+been migrated to the typed continuation pipeline. The pattern is identical for
+all of them:
+
+```
+ViewModel
+  └─ I<Family>ContinuationApplicationService.StartAsync(...)        // typed request
+       └─ IActionContinuationUiHost.RequestAsync(...)               // WPF dialog
+            └─ I<Family>ContinuationApplicationService.ContinueAsync(...)
+                 └─ dispatch / re-dispatch through ActionExecutor / IProcessActionDispatcher
+```
+
+For every migrated family, **no legacy fallback remains**: if a migrated
+`SuggestedActionType` reaches `ActionExecutor` directly, the executor returns
+`ActionResult.Failed(...)` with a Hebrew error message instead of returning
+the legacy `RequiresUI(ActionFollowUp.X)` follow-up. The catalogs are the
+single source of truth for which action codes are on the typed path.
+
+### 15.1 TaskCreation family
+
+- Service: `ITaskCreationContinuationApplicationService` /
+  `TaskCreationContinuationApplicationService`.
+- Request/result: `TaskCreationContinuationRequest` /
+  `TaskCreationContinuationResult` (carries `TaskDraft`).
+- WPF dialog: `TaskCreationDraftDialog` (real draft-only dialog, no DB writes).
+- Catalog: `TaskCreationActionCatalog.MigratedActions` (17 action codes).
+- Executor enforcement: `ActionExecutor.TaskCreationTypedRequired(...)`.
+
+### 15.2 FileImport family
+
+- Service: `IFileImportContinuationApplicationService` /
+  `FileImportContinuationApplicationService` — owns the loop and dispatches
+  one `AddMaterialToProject` per selected file through
+  `IProcessActionDispatcher` → `AddMaterialToProjectProcessActionHandler` →
+  `IProjectFileFilingService`.
+- Request/result: `FileImportContinuationRequest` /
+  `FileImportContinuationResult` (carries `FileImportDraft` with per-file
+  `FileImportSelection`s).
+- WPF dialog: `FileImportDraftDialog` (draft-only mode).
+- Catalog: `FileImportActionCatalog.MigratedActions` (`UploadNewVersion`,
+  `ReceiveSupplementaryMaterial`, `ReceiveMaterialForReview`,
+  `ReceiveCorrectedVersion`, `ReceiveMaterialForOpinion`). `CollectMaterial`
+  and `AddMaterialToProject` are intentionally **not** migrated.
+- Executor enforcement: `ActionExecutor.FileImportTypedRequired(...)`.
+
+### 15.3 ProjectPicker family
+
+- Service: `IProjectPickerContinuationApplicationService` /
+  `ProjectPickerContinuationApplicationService` — emits a typed request and,
+  on confirmed selection, **re-dispatches the original `SuggestedAction`**
+  through `ActionExecutor.ExecuteAsync` with `PrefilledData["ProjectId"]`
+  populated.
+- Request/result: `ProjectPickerContinuationRequest` /
+  `ProjectPickerContinuationResult` (carries `SelectedProjectId`).
+- WPF dialog: **reuses the existing `ProjectSelectorDialog` unchanged** —
+  there is **no UI redesign**. `WpfActionContinuationUiHost` adapts the
+  existing dialog into a `ContinuationUiKind.ProjectPicker` branch.
+- Catalog: `ProjectPickerActionCatalog.MigratedActions`
+  (`AssociateToExistingProject`, `StartWorkflow`, `CreateNewReview`,
+  `CreateOpinionProject`, `OpenReviewRound`). `CreatePriceQuote` (uses the
+  configured Office-Management project, never the picker) and
+  `CreateNewProject` (uses `NewProjectDialog`, not the picker) are **not**
+  in scope.
+- Executor enforcement: `ActionExecutor.ProjectPickerTypedRequired(...)`
+  replaces every previous `ActionResult.RequiresUI("...",
+  ActionFollowUp.ProjectPicker)` call site for migrated codes
+  (`AssociateToExistingProject`, `CreateNewReview`, `StartWorkflow`,
+  `StartWorkflowFromActionAsync` for `CreateOpinionProject` /
+  `OpenReviewRound`).
+- VM routing: `EmailContextViewModel.RunProjectPickerTypedAsync(...)` runs
+  the typed path **before** any legacy execute call. The legacy
+  `ActionFollowUp.ProjectPicker` retry branch in `ExecuteSelectedActionAsync`
+  now refuses migrated actions and only services legacy callers.
+
+### 15.4 NewProject family
+
+- Service: `INewProjectContinuationApplicationService` /
+  `NewProjectContinuationApplicationService` — emits a typed request and,
+  on confirmed creation, **validates the `CreatedProjectId`** returned by the
+  host. The service itself performs **no persistence and no re-dispatch**.
+- Request/result: `NewProjectContinuationRequest` (with optional
+  `SuggestedName` / `SuggestedCompanyId` / `SuggestedPlaceId` /
+  `SuggestedProjectTypeCode` pulled from `PrefilledData`) /
+  `NewProjectContinuationResult` (carries `CreatedProjectId` and
+  `CreatedProjectName`).
+- WPF dialog: **reuses the existing `CreateProjectUserControl` unchanged** —
+  there is **no UI redesign**. `WpfActionContinuationUiHost` hosts the
+  UserControl inside a modal `Window`, resolves `CreateProjectViewModel`
+  via `DataContext`, and subscribes to `CreateProjectViewModel.ProjectCreated`
+  to capture the new project id/name. The dialog still owns persistence,
+  email-link, and workflow-advance side effects internally — the typed
+  result only reports the lifecycle outcome and the
+  `CreatedProjectId`. A `ProjectDraft` path would require a redesign of
+  `CreateProjectViewModel` and is out of scope for this batch.
+- Catalog: `NewProjectActionCatalog.MigratedActions` (only
+  `CreateNewProject`).
+- Executor enforcement: `ActionExecutor.NewProjectTypedRequired(...)`
+  replaces the previous `ActionResult.RequiresUI("יצירת פרויקט חדש",
+  ActionFollowUp.NewProjectDialog)` call site for `CreateNewProject`.
+- VM routing: `EmailContextViewModel.RunNewProjectTypedAsync(...)` runs
+  the typed path before any legacy execute call.
+
+### 15.5 Still on the legacy `ActionFollowUp` path
+
+The following `RequiresUI` families remain on the legacy
+`ActionFollowUp` / `PrefilledData` path and have **not** been migrated yet:
+
+| Family | Legacy follow-up | Triggering actions |
+| --- | --- | --- |
+| **DecisionDialog** | `ActionFollowUp.DecisionDialog` | `ForwardToDecision` |
+| **DisciplineDialog** | `ActionFollowUp.DisciplineDialog` | `AddNewDiscipline` |
+
+Each remaining family will follow the same template (catalog →
+request/result DTOs → application service → WPF host adapter → executor
+no-fallback helper → VM routing → tests + docs).
+
+### 15.6 Tests for the new families
+
+- `SiNetSQL.Tests.Services.Continuation.TaskCreationContinuationTests`
+- `SiNetSQL.Tests.Services.Continuation.MigratedTaskCreationTypedRoutingTests`
+- `SiNetSQL.Tests.Services.EmailContext.MigratedTaskCreationNoFallbackTests`
+- `SiNetSQL.Tests.Services.Continuation.FileImportContinuationTests`
+- `SiNetSQL.Tests.Services.EmailContext.MigratedFileImportNoFallbackTests`
+- `SiNetSQL.Tests.Services.Continuation.ProjectPickerContinuationTests`
+- `SiNetSQL.Tests.Services.EmailContext.MigratedProjectPickerNoFallbackTests`
+- `SiNetSQL.Tests.Services.Continuation.NewProjectContinuationTests`
+- `SiNetSQL.Tests.Services.EmailContext.MigratedNewProjectNoFallbackTests`
+
+### 15.7 Manual WPF check — ProjectPicker (not automated)
+
+1. Open an email that does **not** yet have a project association.
+2. Select `AssociateToExistingProject` (or any other migrated ProjectPicker
+   action: `StartWorkflow`, `CreateNewReview`, `CreateOpinionProject`,
+   `OpenReviewRound`).
+3. Confirm that the existing `ProjectSelectorDialog` opens through the typed
+   host (it is the **same** dialog as before — no UI changes).
+4. Pick a project → action re-dispatches with `ProjectId` set and completes
+   the appropriate downstream effect (link to project / start workflow /
+   create OpenReviewProject task).
+5. Cancel the dialog → the VM surfaces a Hebrew "בוטל" message and does **not**
+   re-issue the legacy `ActionFollowUp.ProjectPicker` retry.
+6. As a sanity check, trigger one of the migrated actions through a code path
+   that bypasses the VM (e.g. directly calling `ActionExecutor.ExecuteAsync`
+   from a test or script) without a `ProjectId` → expect
+   `ActionResult.Failed(...)` with the typed-required message, **not**
+   `RequiresUI(ActionFollowUp.ProjectPicker)`.
+
+### 15.8 Manual WPF check — NewProject (not automated)
+
+1. Open an email and trigger `CreateNewProject`.
+2. Confirm that the existing project-creation UI
+   (`CreateProjectUserControl`) opens **inside a modal `Window`** through the
+   typed host — the form itself is unchanged.
+3. Fill in the form and click OK. `CreateProjectViewModel.SaveChanges()` runs
+   as before (persistence, email-link, workflow-advance, `ProjectCreated`
+   event); the host captures `ProjectCreated` and closes the modal.
+4. The VM surfaces a Hebrew success message with the new project id
+   (e.g. `✅ הפרויקט נוצר (מזהה …)`).
+5. Cancel / close the dialog without creating → the VM surfaces a Hebrew
+   "בוטל" message and does **not** re-issue the legacy
+   `ActionFollowUp.NewProjectDialog` retry.
+6. As a sanity check, trigger `CreateNewProject` through a code path that
+   bypasses the VM (e.g. directly calling `ActionExecutor.ExecuteAsync`
+   from a test or script) → expect `ActionResult.Failed(...)` with the
+   `NewProjectTypedRequired` message, **not**
+   `RequiresUI(ActionFollowUp.NewProjectDialog)`.
+
+### 15.9 Manual WPF check — DecisionDialog / DisciplineDialog (not automated)
+
+DecisionDialog (`ForwardToDecision`)
+
+1. Open an email and trigger `ForwardToDecision`.
+2. The typed host opens the existing `ProjectDecisionsWindow` modally — the
+   window itself is unchanged and continues to persist decisions internally
+   via `ProjectDecisionService` / `ProjectDecisionsViewModel`.
+3. Add / edit decisions and close the window. The VM surfaces a Hebrew
+   success message (e.g. `✅ החלטות הפרויקט עודכנו.`).
+4. Cancel / close without changes → the VM surfaces a Hebrew "בוטל" message
+   and does **not** re-issue the legacy `ActionFollowUp.DecisionDialog`
+   retry.
+5. As a sanity check, trigger `ForwardToDecision` through a code path that
+   bypasses the VM (e.g. directly calling `ActionExecutor.ExecuteAsync`
+   from a test or script) → expect `ActionResult.Failed(...)` with the
+   `DecisionTypedRequired` message, **not**
+   `RequiresUI(ActionFollowUp.DecisionDialog)`.
+
+DisciplineDialog (`AddNewDiscipline`)
+
+1. Open an email and trigger `AddNewDiscipline`.
+2. There is **no dedicated WPF surface today**. The typed host shows a
+   confirmation prompt mirroring the legacy default fall-through.
+3. Confirm → the VM surfaces a Hebrew success message
+   (e.g. `✅ בקשת הוספת תחום אושרה.`).
+4. Cancel → the VM surfaces a Hebrew "בוטל" message and does **not**
+   re-issue the legacy `ActionFollowUp.DisciplineDialog` retry.
+5. As a sanity check, trigger `AddNewDiscipline` through a code path that
+   bypasses the VM → expect `ActionResult.Failed(...)` with the
+   `DisciplineTypedRequired` message, **not**
+   `RequiresUI(ActionFollowUp.DisciplineDialog)`.
 
