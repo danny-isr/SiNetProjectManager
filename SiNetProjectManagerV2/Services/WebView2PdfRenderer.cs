@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -576,6 +578,219 @@ public sealed class WebView2PdfRenderer : IEmailPdfRenderer, IDisposable
             await Task.Delay(pollIntervalMs, ct);
         }
         return false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // Full Gmail Body HTML Print
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Extracts the full email body HTML (including tables and images) from the
+    /// live Gmail WebView2 DOM, wraps it in a clean print-friendly HTML document
+    /// and renders it to PDF through the hidden-renderer pipeline.
+    /// 
+    /// This avoids printing Gmail chrome (toolbar, side panels, navigation) while
+    /// preserving the full email body structure — not just the visible viewport.
+    /// 
+    /// If the email body element cannot be located in the DOM, falls back to
+    /// <see cref="PrintLiveViewToPdfAsync"/> so that PDF generation does not fail.
+    /// </summary>
+    public async Task<bool> PrintFullGmailBodyToPdfAsync(string outputPdfPath, CancellationToken ct)
+    {
+        if (_isDisposed)
+        {
+            AppLogger.Error("[GmailBodyPdf] Renderer disposed");
+            return false;
+        }
+
+        if (_liveWebView?.CoreWebView2 == null)
+        {
+            AppLogger.Warn("[GmailBodyPdf] Live WebView2 not available, cannot extract Gmail body");
+            return false;
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null)
+        {
+            AppLogger.Error("[GmailBodyPdf] No UI dispatcher available");
+            return false;
+        }
+
+        // Extraction must happen on the UI thread (touching the live WebView2)
+        GmailBodyExtraction? extraction;
+        if (!dispatcher.CheckAccess())
+        {
+            extraction = await dispatcher.InvokeAsync(
+                async () => await ExtractGmailBodyAsync(ct),
+                DispatcherPriority.Normal, ct).Task.Unwrap();
+        }
+        else
+        {
+            extraction = await ExtractGmailBodyAsync(ct);
+        }
+
+        if (extraction == null || string.IsNullOrWhiteSpace(extraction.Html))
+        {
+            AppLogger.Warn("[GmailBodyPdf] Gmail body not found in DOM, falling back to live-view print");
+            return await PrintLiveViewToPdfAsync(outputPdfPath, ct);
+        }
+
+        AppLogger.Info($"[GmailBodyPdf] Extracted Gmail body html length={extraction.Html.Length}");
+
+        var cleanHtml = BuildCleanEmailHtmlDocument(extraction);
+
+        if (!_isInitialized || _webView == null)
+        {
+            AppLogger.Warn("[GmailBodyPdf] Hidden renderer not initialized, falling back to live-view print");
+            return await PrintLiveViewToPdfAsync(outputPdfPath, ct);
+        }
+
+        return await RenderToPdfAsync(cleanHtml, outputPdfPath, ct);
+    }
+
+    /// <summary>
+    /// Runs JavaScript on the live Gmail WebView2 to extract the email body
+    /// (innerHTML of <c>.a3s</c> or <c>.ii.gt</c>) and header metadata.
+    /// </summary>
+    private async Task<GmailBodyExtraction?> ExtractGmailBodyAsync(CancellationToken ct)
+    {
+        var coreWv = _liveWebView?.CoreWebView2;
+        if (coreWv == null) return null;
+
+        const string script = @"
+(function() {
+    try {
+        var body = document.querySelector('.a3s') || document.querySelector('.ii.gt');
+        if (!body) { return null; }
+
+        function textOf(sel) {
+            var el = document.querySelector(sel);
+            return el ? (el.innerText || el.textContent || '').trim() : '';
+        }
+
+        var subject = textOf('h2.hP') || (document.title || '').trim();
+        var fromEl  = document.querySelector('.gD');
+        var from    = fromEl ? (fromEl.getAttribute('email') || fromEl.innerText || '').trim() : '';
+        var to      = textOf('.g2');
+        var date    = textOf('.g3');
+
+        return JSON.stringify({
+            html:    body.innerHTML,
+            subject: subject,
+            from:    from,
+            to:      to,
+            date:    date
+        });
+    } catch (e) {
+        return null;
+    }
+})();";
+
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            var raw = await coreWv.ExecuteScriptAsync(script);
+
+            if (string.IsNullOrEmpty(raw) || raw == "null")
+                return null;
+
+            // ExecuteScriptAsync returns a JSON-encoded value. Our script returns
+            // a JSON string, so 'raw' is a JSON string containing JSON.
+            string innerJson;
+            using (var outer = JsonDocument.Parse(raw))
+            {
+                if (outer.RootElement.ValueKind != JsonValueKind.String)
+                    return null;
+                innerJson = outer.RootElement.GetString() ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(innerJson))
+                return null;
+
+            using var doc = JsonDocument.Parse(innerJson);
+            var root = doc.RootElement;
+
+            return new GmailBodyExtraction
+            {
+                Html    = root.TryGetProperty("html",    out var h) ? h.GetString() ?? string.Empty : string.Empty,
+                Subject = root.TryGetProperty("subject", out var s) ? s.GetString() ?? string.Empty : string.Empty,
+                From    = root.TryGetProperty("from",    out var f) ? f.GetString() ?? string.Empty : string.Empty,
+                To      = root.TryGetProperty("to",      out var t) ? t.GetString() ?? string.Empty : string.Empty,
+                Date    = root.TryGetProperty("date",    out var d) ? d.GetString() ?? string.Empty : string.Empty,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"[GmailBodyPdf] Failed to extract Gmail body: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Builds a clean print-friendly HTML document around the extracted Gmail body.
+    /// Preserves tables and images; constrains them to the page width.
+    /// </summary>
+    private static string BuildCleanEmailHtmlDocument(GmailBodyExtraction extraction)
+    {
+        var sb = new StringBuilder(extraction.Html.Length + 2048);
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
+        sb.Append("<style>");
+        sb.Append("body{font-family:Arial,sans-serif;font-size:12pt;line-height:1.45;color:#000;direction:auto;margin:0;}");
+        sb.Append(".email-header{border-bottom:1px solid #ccc;margin-bottom:16px;padding-bottom:8px;}");
+        sb.Append(".email-header div{margin:2px 0;}");
+        sb.Append(".email-body{width:100%;}");
+        sb.Append("table{border-collapse:collapse;max-width:100%;}");
+        sb.Append("td,th{border:1px solid #ddd;padding:4px;vertical-align:top;}");
+        sb.Append("img{max-width:100%;height:auto;}");
+        sb.Append("*{box-sizing:border-box;}");
+        sb.Append("@page{size:A4;margin:0.4in;}");
+        sb.Append("</style></head><body>");
+
+        sb.Append("<div class=\"email-header\">");
+        AppendHeaderField(sb, "Subject", extraction.Subject);
+        AppendHeaderField(sb, "From",    extraction.From);
+        AppendHeaderField(sb, "To",      extraction.To);
+        AppendHeaderField(sb, "Date",    extraction.Date);
+        sb.Append("</div>");
+
+        sb.Append("<div class=\"email-body\">");
+        sb.Append(extraction.Html);
+        sb.Append("</div>");
+
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+
+    private static void AppendHeaderField(StringBuilder sb, string label, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        sb.Append("<div><b>");
+        sb.Append(label);
+        sb.Append(":</b> ");
+        sb.Append(HtmlEncode(value));
+        sb.Append("</div>");
+    }
+
+    private static string HtmlEncode(string text)
+    {
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;");
+    }
+
+    private sealed class GmailBodyExtraction
+    {
+        public string Html { get; set; } = string.Empty;
+        public string Subject { get; set; } = string.Empty;
+        public string From { get; set; } = string.Empty;
+        public string To { get; set; } = string.Empty;
+        public string Date { get; set; } = string.Empty;
     }
 
     public void Dispose()
