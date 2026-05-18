@@ -997,16 +997,31 @@ namespace SiNetProjectManagerV2
             {
                 try
                 {
+                    var accServiceBaseUrl = AppConfiguration.Configuration["AccService:BaseUrl"];
+                    var inboxProvisioner = ServiceProvider.GetRequiredService<IAccInboxProvisioner>();
+                    Log.Information("Starting Office Inbox ensure before ACC user bootstrap.");
+                    var (accProjectId, accInboxFolderId) = await inboxProvisioner.EnsureAsync(_appShutdownCts.Token);
+                    Log.Information(
+                        "Office Inbox ensure completed. AccProjectId={AccProjectId}, AccInboxFolderId={AccInboxFolderId}",
+                        accProjectId,
+                        accInboxFolderId);
+
+                    if (!string.IsNullOrWhiteSpace(accServiceBaseUrl))
+                    {
+                        Log.Information("Skipping local ACC user bootstrap because remote ACC service is configured.");
+                        return;
+                    }
+
                     var bootstrapService = ServiceProvider.GetRequiredService<IAccUserBootstrapService>();
                     await bootstrapService.ProvisionUsersAsync(_appShutdownCts.Token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Log.Error(ex, "Office Inbox ensure or ACC User Bootstrap failed unexpectedly.");
                 }
                 catch (OperationCanceledException)
                 {
                     // Expected on shutdown — don't log as error
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "ACC User Bootstrap failed unexpectedly.");
                 }
             }, _appShutdownCts.Token);
         }

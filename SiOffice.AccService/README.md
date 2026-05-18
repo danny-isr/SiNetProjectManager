@@ -10,8 +10,20 @@ Autodesk admin credentials itself.
 |--------------------------|----------------------------------------------|
 | `GET /v1/acc/health`     | Health probe (no auth)                       |
 | `GET /v1/acc/templates`  | List ACC project templates `[ {id, name} ]`  |
+| `POST /v1/acc/inbox/ensure` | Ensure the Office Inbox ACC project/root `_Inbox` folder/member access through the central service path. |
 
 All non-health endpoints require the header `X-AccService-Key: <key>`.
+
+## Current ACC Inbox boundary
+
+- `SiOffice.AccService` is the central service boundary for ACC operations when the WPF application runs in remote/service mode.
+- When `AccService:BaseUrl` is configured, the WPF application uses the service instead of running local privileged ACC provisioning paths.
+- Office Inbox ensure runs through `POST /v1/acc/inbox/ensure`; the service creates/ensures the configured Office Inbox project and root `_Inbox` folder and returns the ACC project/root/inbox folder identifiers.
+- ACC remains the source of truth for physical file existence. SQL stores metadata/cache/helper identifiers only.
+- ACC Inbox file layout is centralized in `AccInboxLayout` in the shared application code: message folder `MSG_{messageKey}`, message files `00_Email.pdf` and `manifest.json`, and regular attachments under the `Attachments` child folder.
+- Viewer/open and MoveToProject flows must use ACC reconciliation/layout-aware lookup results; they must not open or move files from DB-only identifiers.
+- Metadata/custom-attribute read failure is not proof that a file is missing if ACC listing verifies the physical item.
+- The current shortened move-target alternative attribute name is `SiInbox.Move.TargetAltId`.
 
 ---
 

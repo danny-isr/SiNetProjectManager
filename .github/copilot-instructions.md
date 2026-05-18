@@ -62,10 +62,20 @@
 ## 9. File Versioning Policy
 - **Version Naming Convention:** The `Version` segment in the file naming convention `(ProjectNumber)-ProjectType-FileNumber-Alternative-Version-Name.ext` is NOT used as an actual version tracker. New files always get Version=1. Existing files with Version=2+ keep their name as-is (it's part of their identity).
 - **Version Management:** No new versions are ever created through the system. ACC handles its own versioning natively — files are uploaded with their full original name, and ACC manages version history internally. The tree structure (Folder → File → Alternative → Version) remains unchanged.
-- **ACC Inbox Tagging & Metadata:** Treat ACC custom attributes as the source of truth; DB fields are cache only. Write ACC metadata before updating the DB cache. If the ACC metadata write fails, roll back any DB cache updates.
-  - Do not treat LockedForEditing alone as proof of filed state for Round 8. Require MoveToProject/target metadata to mark a file as filed.
+- **ACC Inbox Tagging & Metadata:** 
+  - Treat ACC and ACC custom attributes as the source of truth; DB fields are cache/helper only.
+  - Write ACC metadata before updating the DB cache. If the ACC metadata write fails, roll back any DB cache updates.
   - On metadata read failures, warn and continue using the ProjectFileInstanceId legacy fallback; do not fail the overall process.
   - Log metadata-read failures and fallback usage for later reconciliation.
+  - Do not treat metadata or custom-attribute read failures as proof that the physical file is missing. Require ACC reconciliation to verify physical existence in ACC before marking files as missing or building viewer/opening data.
+  - Do not build an ACC Viewer URL from DB identifiers as a fallback. ACC reconciliation must verify the file exists in ACC and provide opening/viewing data; do not derive or fabricate viewer URLs from cached DB identifiers.
+  - ACC Inbox layout is centralized in `AccInboxLayout`: message folders use `MSG_`, message-folder files are `00_Email.pdf` and `manifest.json`, and regular attachments are stored under the `Attachments` child folder.
+  - `AccInboxReconciliationService`, `ShowAttachmentInAccAsync`, and `MoveToProjectProcessActionHandler` must resolve file existence from ACC layout-aware lookup results, not DB-only identifiers.
+  - The shortened move-target alternative attribute name is `SiInbox.Move.TargetAltId`; do not reintroduce `SiInbox.Move.TargetProjectAlternativeId`.
+  - For ACC Inbox/reconciliation/open/MoveToProject closure work, update documentation and code only within this domain. Treat ACC as the source of truth and the DB strictly as a cache/helper.
+  - Do not leave active DB-only open/move fallbacks in place; disable or clearly mark legacy fallbacks and enable them only after an explicit safety review.
+  - Do not change schema, migrations, ModelSnapshot, TokenProvider, Bim360Service, service architecture, or unrelated areas as part of Inbox/reconciliation/MoveToProject changes.
+
   - Round 9: MoveToProject outcome enrichment (backward compatibility)
     - Keep MoveToProject outcome enrichment backward compatible with existing systems.
     - Preserve all existing properties, including `ProjectFileInstanceId`; do not remove or rename them.
@@ -73,6 +83,20 @@
     - Avoid any schema or migration changes, including ModelSnapshot edits.
     - Do not change refile flows, broad UI/inspection behavior, `UpsertInstanceAsync`, or the `ProjectFileInstance` model/table/foreign-key layout.
     - Use application-level handling (nullable fields and fallback logic) to support new fields while guaranteeing no breaking schema or model changes.
+    - Do not change TokenProvider, Bim360Service, service architecture, or unrelated areas when implementing enrichment changes.
+  - ACC Inbox custom attribute definition provisioning (STRICT POLICY)
+    - Implement only a small, approved fix in the Inbox provisioning path.
+    - Create/ensure SiInbox.* definitions only in the ACC Inbox project/folder via the existing Bim360Service.EnsureCustomAttributeDefinitionsAsync.
+    - Do not auto-create or provision definitions from SetItemCustomAttributesAsync.
+    - Do not modify schema, migrations, ModelSnapshot, ProjectFileInstance, Refile/MoveToProject flows, or UI as part of this fix.
+    - Keep provisioning changes limited in scope; avoid broader provisioning or schema changes.
+
+### SiOffice / ACC Service Boundary (STRICT POLICY)
+- `SiOffice.AccService` is the central service boundary for ACC operations in remote/service mode.
+- Remote WPF clients should call the service instead of running local privileged ACC orchestration when `AccService:BaseUrl` is configured.
+- Office Inbox ensure is exposed through the service endpoint and should be treated as the central remote provisioning path.
+- Do not change service architecture, TokenProvider, Bim360Service, or authentication flows without explicit approval for that scope.
+- Do not add startup-time browser authorization or unrelated ACC bootstrap behavior as part of Inbox/reconciliation/open/MoveToProject work.
 
 ## 10. Project Management
 - **Default Office Management Project ID:** The default project ID for Office Management is 136, not 126. This ID is used for project-independent workflows.

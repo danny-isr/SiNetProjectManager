@@ -17,10 +17,19 @@ msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccServi
 
 ה-MSI מטפל לבד ב:
 - העתקת קבצים ל-`C:\AccService`
-- רישום השירות `SiOfficeAccService` (LocalSystem, auto-start)
+- רישום השירות `SiOfficeAccService` (auto-start; בחירת החשבון בפועל נקבעת לפי פרטי ההתקנה/התצורה)
 - עצירה/הפעלה של השירות בכל עדכון
 - פתיחת פורט 8443 בחומת האש
 - יצירת תעודת SSL self-signed בהפעלה ראשונה (`accservice.pfx` ליד ה-exe)
+
+## מצב ACC Inbox נוכחי
+
+- `SiOffice.AccService` הוא גבול השירות המרכזי לפעולות ACC במצב remote/service.
+- כאשר `AccService:BaseUrl` מוגדר באפליקציה, הלקוח משתמש בשירות ולא מריץ bootstrap מקומי מקביל.
+- Office Inbox ensure רץ דרך endpoint השירות `POST /v1/acc/inbox/ensure`.
+- ACC הוא מקור האמת לקיום קבצים; SQL הוא cache/helper בלבד.
+- מבנה Inbox הנוכחי: תיקיית הודעה `MSG_{messageKey}`, הקבצים `00_Email.pdf` ו-`manifest.json` בתיקיית ההודעה, ו-attachments רגילים תחת תיקיית `Attachments`.
+- אין לפתוח או להעביר קובץ על סמך DB בלבד.
 
 ---
 
