@@ -10,6 +10,7 @@
 - If a commit introduces a breaking change, include `BREAKING CHANGE:` in the footer
 
 ### Examples
+
 ## 1. Safety & Stability (CRITICAL)
 - **Do Not Break Working Code:** Never delete or refactor operational functions unless specifically instructed.
 - **Dead Code Removal:** Only suggest deleting unused code after 100% certain analysis (no references, no functional impact).
@@ -61,6 +62,17 @@
 ## 9. File Versioning Policy
 - **Version Naming Convention:** The `Version` segment in the file naming convention `(ProjectNumber)-ProjectType-FileNumber-Alternative-Version-Name.ext` is NOT used as an actual version tracker. New files always get Version=1. Existing files with Version=2+ keep their name as-is (it's part of their identity).
 - **Version Management:** No new versions are ever created through the system. ACC handles its own versioning natively — files are uploaded with their full original name, and ACC manages version history internally. The tree structure (Folder → File → Alternative → Version) remains unchanged.
+- **ACC Inbox Tagging & Metadata:** Treat ACC custom attributes as the source of truth; DB fields are cache only. Write ACC metadata before updating the DB cache. If the ACC metadata write fails, roll back any DB cache updates.
+  - Do not treat LockedForEditing alone as proof of filed state for Round 8. Require MoveToProject/target metadata to mark a file as filed.
+  - On metadata read failures, warn and continue using the ProjectFileInstanceId legacy fallback; do not fail the overall process.
+  - Log metadata-read failures and fallback usage for later reconciliation.
+  - Round 9: MoveToProject outcome enrichment (backward compatibility)
+    - Keep MoveToProject outcome enrichment backward compatible with existing systems.
+    - Preserve all existing properties, including `ProjectFileInstanceId`; do not remove or rename them.
+    - Add only nullable or default-valued fields for new enrichment data.
+    - Avoid any schema or migration changes, including ModelSnapshot edits.
+    - Do not change refile flows, broad UI/inspection behavior, `UpsertInstanceAsync`, or the `ProjectFileInstance` model/table/foreign-key layout.
+    - Use application-level handling (nullable fields and fallback logic) to support new fields while guaranteeing no breaking schema or model changes.
 
 ## 10. Project Management
 - **Default Office Management Project ID:** The default project ID for Office Management is 136, not 126. This ID is used for project-independent workflows.

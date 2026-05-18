@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
+using SiNetSQL.Services.EmailIngestion;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,7 +23,7 @@ public partial class EmailPreviewWindow : Window
         LoadEmailData();
     }
 
-    private void LoadEmailData()
+    private async void LoadEmailData()
     {
         try
         {
@@ -48,27 +49,26 @@ public partial class EmailPreviewWindow : Window
                 SubjectText.Text = $"מייל #{_emailMessageId} לא נמצא";
             }
 
-            // Load attachments
-            var message = db.EmailInboxMessages
-                .AsNoTracking()
-                .Where(m => m.Id == _emailMessageId)
-                .Select(m => new { m.InboxAccProjectId, m.InboxAccFolderId })
-                .FirstOrDefault();
+            var reconciler = App.ServiceProvider?.GetService<IAccInboxReconciliationService>();
+            var reconciled = reconciler is null
+                ? null
+                : await reconciler.ReconcileByMessageIdAsync(_emailMessageId);
 
-            var attachments = db.EmailInboxAttachments
-                .AsNoTracking()
-                .Where(a => a.MessageId == _emailMessageId)
+            var attachments = reconciled?.Attachments
                 .OrderBy(a => a.AttachmentIndex)
                 .Select(a => new AttachmentDisplayItem
                 {
-                    Id = a.Id,
-                    FileName = a.OriginalFileName ?? a.SavedFileName ?? $"קובץ #{a.AttachmentIndex}",
+                    Id = a.InboxAttachmentId ?? 0,
+                    FileName = a.FileName,
                     AccItemId = a.AccItemId,
                     AccVersionId = a.AccVersionId,
-                    InboxAccProjectId = message!.InboxAccProjectId,
-                    InboxAccFolderId = message.InboxAccFolderId,
+                    InboxAccProjectId = reconciled.InboxAccProjectId,
+                    InboxAccFolderId = reconciled.InboxAccFolderId,
+                    ExistsInAcc = a.ExistsInAcc,
+                    Status = a.Status.ToString(),
+                    StatusText = a.StatusText,
                 })
-                .ToList();
+                .ToList() ?? [];
 
             if (attachments.Count > 0)
             {
@@ -91,9 +91,9 @@ public partial class EmailPreviewWindow : Window
     {
         if (sender is not Button { Tag: AttachmentDisplayItem att }) return;
 
-        if (string.IsNullOrEmpty(att.AccItemId))
+        if (!att.ExistsInAcc || string.IsNullOrEmpty(att.AccItemId))
         {
-            MessageBox.Show("הקובץ עדיין לא הועלה ל-ACC.", "לא זמין",
+            MessageBox.Show($"הקובץ אינו זמין לפתיחה ב-ACC. סטטוס: {att.StatusText}", "לא זמין",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -139,4 +139,7 @@ public class AttachmentDisplayItem
     public string? AccVersionId { get; set; }
     public string? InboxAccProjectId { get; set; }
     public string? InboxAccFolderId { get; set; }
+    public bool ExistsInAcc { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string StatusText { get; set; } = string.Empty;
 }

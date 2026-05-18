@@ -9,6 +9,7 @@ using SiNetSQL.Data;
 using SiNetSQL.Domain.Actions;
 using SiNetSQL.Domain.Actions.Continuation;
 using SiNetSQL.Models;
+using SiNetSQL.Services.EmailIngestion;
 
 namespace SiNetProjectManagerV2.WPF_Window;
 
@@ -36,6 +37,7 @@ public partial class FileImportDialog : Window
     private readonly int _emailMessageId;
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly IProcessActionDispatcher _dispatcher;
+    private readonly IAccInboxReconciliationService? _reconciler;
     private readonly bool _draftOnlyMode;
     private int _projectId;
 
@@ -70,6 +72,7 @@ public partial class FileImportDialog : Window
         _draftOnlyMode = draftOnlyMode;
         _dbFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
         _dispatcher = App.ServiceProvider.GetRequiredService<IProcessActionDispatcher>();
+        _reconciler = App.ServiceProvider.GetService<IAccInboxReconciliationService>();
 
         AttachmentsList.ItemsSource = Attachments;
         FolderCombo.ItemsSource = Folders;
@@ -103,15 +106,38 @@ public partial class FileImportDialog : Window
                 return;
             }
 
-            // Populate attachments list
-            foreach (var att in message.Attachments.OrderBy(a => a.AttachmentIndex))
+            var reconciled = _reconciler is null
+                ? null
+                : await _reconciler.ReconcileByMessageIdAsync(_emailMessageId);
+
+            var displayAttachments = reconciled?.Attachments
+                .OrderBy(a => a.AttachmentIndex)
+                .ToList();
+
+            // Populate attachments list from reconciliation when available.
+            foreach (var att in displayAttachments ?? message.Attachments.OrderBy(a => a.AttachmentIndex).Select(a => new AccInboxAttachmentReconciliationItem(
+                         a.Id,
+                         a.AttachmentIndex,
+                         a.OriginalFileName ?? a.SavedFileName ?? $"attachment_{a.AttachmentIndex}",
+                         a.AccItemId,
+                         a.AccVersionId,
+                         ExistsInAcc: false,
+                         AccInboxAttachmentPresenceStatus.MissingInAcc,
+                         "לא אומת מול ACC",
+                         a.ProjectFileId,
+                         a.ProjectAlternativeId,
+                         LockedForEditing: false,
+                         MovedToProject: false,
+                         MetadataReadFailed: false,
+                         new Dictionary<string, string?>())))
             {
                 Attachments.Add(new ImportAttachmentItem
                 {
-                    AttachmentId = att.Id,
-                    FileName = att.OriginalFileName ?? att.SavedFileName ?? $"attachment_{att.AttachmentIndex}",
-                    IsSelected = true,
-                    Status = att.AccItemId != null ? "ב-ACC" : "—",
+                    AttachmentId = att.InboxAttachmentId ?? 0,
+                    FileName = att.FileName,
+                    IsSelected = att.ExistsInAcc && att.InboxAttachmentId.HasValue,
+                    Status = att.StatusText,
+                    ExistsInAcc = att.ExistsInAcc,
                 });
             }
 
@@ -366,6 +392,7 @@ public partial class FileImportDialog : Window
     {
         public int AttachmentId { get; init; }
         public string FileName { get; init; } = string.Empty;
+        public bool ExistsInAcc { get; init; }
 
         private bool _isSelected = true;
         public bool IsSelected

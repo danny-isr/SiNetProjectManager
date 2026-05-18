@@ -185,6 +185,7 @@ namespace SiNetProjectManagerV2
 
             // Email Ingestion Service Factory: Singleton (caches ACC configuration)
             services.AddSingleton<SiNetSQL.Services.IEmailIngestionServiceFactory, SiNetSQL.Services.EmailIngestionServiceFactory>();
+            services.AddTransient<IEmailRelevanceService, EmailRelevanceService>();
 
             // PDF Renderer: Singleton (reused for all PDF generations)
             services.AddSingleton<WebView2PdfRenderer>();
@@ -509,6 +510,8 @@ namespace SiNetProjectManagerV2
             // failures — surfaced as a badge in ProjectWorkView so the user sees when
             // their ACC role / license can't read/write metadata).
             services.AddSingleton<SiNetSQL.FileIndex.IAccMetadataStatusReporter, SiNetSQL.FileIndex.AccMetadataStatusReporter>();
+            services.AddSingleton<SiNetSQL.FileIndex.IAccItemMetadataService, SiNetSQL.FileIndex.AccItemMetadataService>();
+            services.AddSingleton<SiNetSQL.Services.EmailIngestion.IAccInboxReconciliationService, SiNetSQL.Services.EmailIngestion.AccInboxReconciliationService>();
 
             // File Index: unified scan/open/upload abstraction over FileServer / ACC / GoogleDrive.
             // Stores are registered as IFileStore so FileIndexService can enumerate them all.

@@ -40,8 +40,11 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="📄" FontSize="16" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Grid.Column="1" Text="{Binding FileName}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"/>
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#666"/>
+                            </StackPanel>
                             <Button Grid.Column="2" Content="פתח ▶" Padding="8,2"
                                     Click="OpenAttachment_Click" Tag="{Binding}"
                                     Cursor="Hand" Background="#E3F2FD" Foreground="#1565C0"
