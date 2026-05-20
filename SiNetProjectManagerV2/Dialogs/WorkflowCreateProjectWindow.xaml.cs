@@ -156,8 +156,10 @@ public partial class WorkflowCreateProjectWindow : Window
                     ApplyGmailLabelAsync(args);
                 }
 
-                // Auto-start the canonical PlanningWorkflow for the new project (fire-and-forget)
-                StartPlanningWorkflowAsync(args, _emailMessageId);
+                // Auto-start the continuation workflow resolved by ProjectType
+                // (via ProjectWorkflowPolicyService). No silent fallback to a
+                // hardcoded PlanningWorkflow — if no mapping exists, log and skip.
+                StartContinuationWorkflowAsync(args, _emailMessageId);
 
                 DialogResult = true;
             };
@@ -165,64 +167,61 @@ public partial class WorkflowCreateProjectWindow : Window
     }
 
     /// <summary>
-    /// Starts the canonical PlanningWorkflow for a freshly-created project so it immediately
-    /// enters PLN.Intake (with initial stage tasks) and runs configured transition actions.
+    /// Starts the continuation workflow for a freshly-created project. The workflow
+    /// is resolved through <see cref="ProjectWorkflowPolicyService"/> based on the
+    /// project's ProjectType(s); the first allowed active definition (ordered by
+    /// SortOrder) is used. If no mapping exists, no workflow is started and a clear
+    /// warning is logged — there is intentionally NO silent fallback to PlanningWorkflow.
     /// Fire-and-forget — failures are logged but never block the dialog or the user.
     /// </summary>
-    private static async void StartPlanningWorkflowAsync(ProjectCreatedEventArgs args, int emailMessageId)
+    private static async void StartContinuationWorkflowAsync(ProjectCreatedEventArgs args, int emailMessageId)
     {
         try
         {
             var sp = App.ServiceProvider;
             if (sp == null) return;
 
-            var dbFactory = sp.GetService<IDbContextFactory<SiNetSQLDbContext>>();
             var orchestrator = sp.GetService<WorkflowTaskOrchestrator>();
-            if (dbFactory == null || orchestrator == null)
+            var policyService = sp.GetService<ProjectWorkflowPolicyService>();
+            if (orchestrator == null || policyService == null)
             {
                 SiNetSQL.Services.AppLogger.Warn(
                     "[WorkflowCreateProject] Workflow services unavailable — skipping auto-start");
                 return;
             }
 
-            int definitionId;
-            await using (var db = await dbFactory.CreateDbContextAsync())
-            {
-                definitionId = await db.WorkflowDefinitions
-                    .AsNoTracking()
-                    .Where(w => w.Code == WorkflowCodes.PlanningWorkflow && w.IsActive)
-                    .Select(w => w.Id)
-                    .FirstOrDefaultAsync();
-            }
-
-            if (definitionId == 0)
+            var allowed = await policyService.GetAllowedWorkflowsAsync(args.ProjectId, CancellationToken.None);
+            var definition = allowed.FirstOrDefault(d => d.IsActive);
+            if (definition is null)
             {
                 SiNetSQL.Services.AppLogger.Warn(
-                    "[WorkflowCreateProject] PlanningWorkflow definition not found — skipping auto-start");
+                    $"[WorkflowCreateProject] No default workflow mapping found for project {args.ProjectId} " +
+                    "(ProjectType has no ProjectTypeWorkflowDefinition). Skipping continuation auto-start — " +
+                    "no silent fallback to PlanningWorkflow.");
                 return;
             }
 
             var userId = SiNetSQL.Services.CurrentUserContext.Instance.CurrentUserId ?? 0;
 
             SiNetSQL.Services.AppLogger.Info(
-                $"[WorkflowCreateProject] Starting PlanningWorkflow for project {args.ProjectId}");
+                $"[WorkflowCreateProject] Starting continuation workflow '{definition.Code}' for project {args.ProjectId}");
 
             await orchestrator.StartWorkflowAsync(
-                definitionId,
+                definition.Id,
                 args.ProjectId,
                 WorkflowTriggerType.Email,
                 triggerEntityId: emailMessageId == 0 ? null : emailMessageId,
                 userId: userId,
-                notes: "Auto-started on project creation from email",
+                notes: $"Auto-started on project creation from email (continuation: {definition.Code})",
                 ct: CancellationToken.None);
 
             SiNetSQL.Services.AppLogger.Info(
-                $"[WorkflowCreateProject] ✅ PlanningWorkflow started for project {args.ProjectId}");
+                $"[WorkflowCreateProject] ✅ Continuation workflow '{definition.Code}' started for project {args.ProjectId}");
         }
         catch (Exception ex)
         {
             SiNetSQL.Services.AppLogger.Error(ex,
-                "[WorkflowCreateProject] Failed to auto-start PlanningWorkflow");
+                "[WorkflowCreateProject] Failed to auto-start continuation workflow");
         }
     }
 
