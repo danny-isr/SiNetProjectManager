@@ -633,14 +633,19 @@
                                         Margin="8,0,0,0"
                                         ToolTip="פתח את המשימה ברכיב המתאים (לפי סוג המשימה)"/>
 
-                                <!-- Workflow action button — visible only for legacy workflow tasks -->
-                                <Button Content="▶ פתח (Workflow)"
+                                <!-- LEGACY ACTIVE 2026-05-20: Stage-code based open workflow button.
+                                     New tasks should open through OpenSelectedTaskCommand (TaskNavigationRequest/ComponentKey).
+                                     Still reachable because WorkflowTaskOrchestrator.CreateGroupBasedTaskAsync creates
+                                     tasks WITHOUT a TaskTypeId, so TaskNavigationResolver fails and the UI falls back here.
+                                     Candidate for deletion after Proposal/Opinion tasks get explicit WorkflowStageTask
+                                     templates with TaskType + interaction definitions (ReviewTaskInteractionRegistry). -->
+                                <Button Content="▶ פתח (Workflow • LEGACY)"
                                         Command="{Binding DataContext.OpenWorkflowTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         Style="{StaticResource CardActionButton}"
                                         Background="#E3F2FD" Foreground="#1565C0"
                                         FontWeight="SemiBold"
                                         Margin="4,0,0,0"
-                                        ToolTip="פתח את הפעולה המשויכת למשימה (תהליך עבודה ישן מבוסס Stage)"
+                                        ToolTip="LEGACY: פתיחה מבוססת StageCode. המסלול החדש הוא 'פתח משימה' (TaskNavigationRequest/ComponentKey). כפתור זה מועמד למחיקה לאחר שמשימות Proposal/Opinion יקבלו WorkflowStageTask templates עם TaskType."
                                         Visibility="{Binding DataContext.IsWorkflowTask, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"/>
 
                                 <!-- Complete workflow task button -->

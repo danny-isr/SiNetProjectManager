@@ -154,7 +154,14 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     }
 
     /// <summary>
-    /// Handles workflow task action: routes to the appropriate dialog based on stage code.
+    /// LEGACY ACTIVE 2026-05-20: Stage-code based open handler. Routes by a hardcoded
+    /// stage-code string (e.g. "CreateProject", "FileAttachments") and on unknown codes
+    /// silently navigates to the source email. New path:
+    /// <see cref="OnOpenTaskNavigationRequested(SiNetSQL.Services.Tasks.TaskNavigationRequest)"/>
+    /// driven by <see cref="SiNetSQL.Services.Tasks.TaskNavigationRequest.ComponentKey"/>.
+    /// Still reachable because group-based tasks (Proposal/Opinion) lack TaskType and the
+    /// resolver falls back to this handler. Candidate for deletion after every workflow task
+    /// is created with a TaskType registered in <c>ReviewTaskInteractionRegistry</c>.
     /// </summary>
     private void OnOpenWorkflowTaskRequested(int emailId, string stageCode)
     {
@@ -182,7 +189,13 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             default:
-                // Fallback: navigate to the source email in the inbox
+                // LEGACY ACTIVE 2026-05-20: silent fallback for unknown stage codes —
+                // navigates to the source email and hides missing routing metadata.
+                // New tasks must declare a ComponentKey via ReviewTaskInteractionRegistry
+                // and be opened through OnOpenTaskNavigationRequested. Candidate for
+                // deletion once group-based fallback is replaced by explicit templates.
+                System.Diagnostics.Debug.WriteLine(
+                    $"[FloatingTasksView] LEGACY FALLBACK: unknown stageCode='{stageCode}' for emailId={emailId} — navigating to source email.");
                 mainWindow?.NavigateToEmail(emailId);
                 mainWindow?.Activate();
                 break;
