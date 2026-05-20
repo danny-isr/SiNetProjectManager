@@ -527,53 +527,41 @@ namespace SiNetProjectManagerV2
                 dbName = "(unknown)";
             }
 
-            // First confirmation — explicit warning with target DB name.
-            var firstConfirm = MessageBox.Show(
-                $"⚠️ אזהרה ⚠️\n\n" +
-                $"פעולה זו תמחק את כל המידע מכל הטבלאות החדשות שנוצרו במיגריישנים\n" +
-                $"(מיילים, ACC, סטטוסים, החלטות, ביקורות, תהליכי עבודה, משימות, קבוצות וכו').\n\n" +
-                $"מסד הנתונים: {dbName}\n" +
-                $"משתמש: {SiNetSQL.Services.DevDataResetService.CurrentWindowsUser}\n\n" +
-                $"האם להמשיך?",
-                "איפוס נתוני פיתוח",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
+            // ── Consolidated Reset Options Dialog ────────────────────────────
+            // LEGACY DISABLED 2026-05-20: reset confirmations were consolidated into
+            // ResetOptionsDialog. The previous three sequential MessageBox prompts
+            // (initial confirm / final irreversible confirm / wipe SystemSettings)
+            // are kept here as commented-out blocks for reference only and are
+            // candidates for deletion after validation.
+            //
+            //   1. var firstConfirm = MessageBox.Show("⚠️ אזהרה ⚠️ ...", default No);
+            //   2. var secondConfirm = MessageBox.Show("זו פעולה בלתי הפיכה ...", default No);
+            //   3. var wipeBootstrap = MessageBox.Show("האם למחוק גם את טבלת ה-Bootstrap ...", default No);
+            // ─────────────────────────────────────────────────────────────────
 
-            if (firstConfirm != MessageBoxResult.Yes)
+            var optionsDialog = new SiNetProjectManagerV2.Dialogs.ResetOptionsDialog(
+                dbName,
+                SiNetSQL.Services.DevDataResetService.CurrentWindowsUser)
+            {
+                Owner = this,
+            };
+
+            var dialogResult = optionsDialog.ShowDialog();
+            if (dialogResult != true || !optionsDialog.UserApproved)
                 return;
 
-            // Second confirmation — final.
-            var secondConfirm = MessageBox.Show(
-                $"זו פעולה בלתי הפיכה.\n\nלאשר מחיקה סופית של כל הנתונים מהטבלאות החדשות במסד '{dbName}'?",
-                "אישור סופי",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Stop,
-                MessageBoxResult.No);
-
-            if (secondConfirm != MessageBoxResult.Yes)
-                return;
-
-            // Third question — should the Bootstrap / SystemSettings table also be wiped?
-            // Default = No: keep configuration (ACC admin email, stamp paths, default project IDs,
-            // logging, etc.) so the app stays usable after the reset.
-            var wipeBootstrap = MessageBox.Show(
-                "האם למחוק גם את טבלת ה-Bootstrap / SystemSettings (הגדרות מערכת)?\n\n" +
-                "• ברירת מחדל: לא — ההגדרות יישמרו.\n" +
-                "• בחירה ב-'כן' תמחק גם הגדרות מערכת.",
-                "שמירת Bootstrap",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question,
-                MessageBoxResult.No);
-
-            bool preserveSystemSettings = wipeBootstrap != MessageBoxResult.Yes;
+            bool preserveSystemSettings = !optionsDialog.WipeSystemSettings;
+            bool resetUserSettings = optionsDialog.ResetUserSettings;
 
             try
             {
                 Mouse.OverrideCursor = Cursors.Wait;
 
                 var factory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-                var report = await SiNetSQL.Services.DevDataResetService.ResetAsync(factory, preserveSystemSettings);
+                var report = await SiNetSQL.Services.DevDataResetService.ResetAsync(
+                    factory,
+                    preserveSystemSettings,
+                    resetUserSettings);
 
                 var summary =
                     $"איפוס הסתיים.\n\n" +
@@ -582,7 +570,8 @@ namespace SiNetProjectManagerV2
                     $"שורות שנמחקו: {report.TotalRowsDeleted}\n" +
                     $"כשלים: {report.FailedTableCount}\n" +
                     $"משך: {report.Duration.TotalSeconds:F1} שניות\n" +
-                    $"Bootstrap/SystemSettings: {(report.SystemSettingsPreserved ? "נשמר ✅" : "נמחק")}";
+                    $"Bootstrap/SystemSettings: {(report.SystemSettingsPreserved ? "נשמר ✅" : "נמחק")}\n" +
+                    $"UserGroups/Memberships: {(report.UserSettingsPreserved ? "נשמרו ✅" : "נמחקו")}";
 
                 if (report.FailedTableCount > 0)
                 {
