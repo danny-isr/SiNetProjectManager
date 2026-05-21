@@ -1,0 +1,108 @@
+<UserControl x:Class="SiNetProjectManagerV2.Controls.SystemHealthIndicator"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:SiNetProjectManagerV2.Converters"
+             FlowDirection="RightToLeft"
+             Focusable="False">
+    <UserControl.Resources>
+        <conv:ServiceHealthStateToBrushConverter x:Key="StateToBrush"/>
+    </UserControl.Resources>
+
+    <Grid x:Name="HostGrid" Background="Transparent"
+          MouseEnter="Host_MouseEnter"
+          MouseLeave="Host_MouseLeave">
+        <ToggleButton x:Name="IndicatorButton"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="6,2"
+                      Cursor="Hand"
+                      ToolTip="מצב מערכת — לחץ לפרטים">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse x:Name="StatusDot" Width="10" Height="10" Margin="0,0,6,0"
+                         Fill="#9E9E9E"/>
+                <TextBlock Text="מצב מערכת" VerticalAlignment="Center" FontSize="12"/>
+            </StackPanel>
+        </ToggleButton>
+
+        <Popup x:Name="StatusPopup"
+               PlacementTarget="{Binding ElementName=IndicatorButton}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               IsOpen="{Binding IsChecked, ElementName=IndicatorButton, Mode=TwoWay}"
+               MouseLeave="Popup_MouseLeave">
+            <Border Background="White"
+                    BorderBrush="#CCCCCC"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10"
+                    MinWidth="380"
+                    MaxWidth="460">
+                <Border.Effect>
+                    <DropShadowEffect Color="#888" BlurRadius="8" ShadowDepth="1" Opacity="0.4"/>
+                </Border.Effect>
+                <DockPanel LastChildFill="True">
+                    <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,0,0,6">
+                        <TextBlock Text="מצב מערכת" FontWeight="Bold" FontSize="14"
+                                   VerticalAlignment="Center"/>
+                        <Button DockPanel.Dock="Left"
+                                x:Name="RefreshButton"
+                                Content="🔄 בדוק עכשיו"
+                                Padding="8,2"
+                                Click="RefreshButton_Click"/>
+                    </DockPanel>
+
+                    <TextBlock x:Name="LastUpdatedText" DockPanel.Dock="Bottom"
+                               Margin="0,6,0,0" FontSize="10" Foreground="Gray"/>
+
+                    <Button DockPanel.Dock="Bottom"
+                            x:Name="OpenDetailsButton"
+                            Content="פתח פירוט (חלון)"
+                            HorizontalAlignment="Left"
+                            Margin="0,6,0,0"
+                            Padding="6,1"
+                            FontSize="11"
+                            Click="OpenDetailsButton_Click"/>
+
+                    <ItemsControl x:Name="RowsList" MaxHeight="320">
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="ItemsControl">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="4,3" Margin="0,1" Background="Transparent">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="14"/>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="10" Height="10"
+                                                 VerticalAlignment="Center"
+                                                 Fill="{Binding State, Converter={StaticResource StateToBrush}}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
+                                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding Message}"
+                                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   Foreground="#444" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding TechnicalDetails}"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding LastCheckedLocal}"
+                                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   Foreground="Gray" FontSize="10"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

@@ -412,6 +412,22 @@ namespace SiNetProjectManagerV2
             DwfAnalysisHelper.RunInteractiveComparison();
         }
 
+        private void OpenSystemHealth_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var sp = App.ServiceProvider;
+                var health = sp.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
+                var window = new Views.SystemHealthWindow(health) { Owner = this };
+                window.Show();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "כשל בפתיחת חלון מצב המערכת:\n" + ex.Message,
+                    "מצב מערכת", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void AddUser_Click(object sender, RoutedEventArgs e)
         {
             // Double-check authorization (UI should already hide this for non-admins)

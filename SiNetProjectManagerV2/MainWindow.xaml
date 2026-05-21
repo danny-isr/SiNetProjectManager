@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:wpf="clr-namespace:SiNetProjectManagerV2.WPF"
     xmlns:uc="clr-namespace:SiNetProjectManagerV2.WPFUserControl"
+    xmlns:health="clr-namespace:SiNetProjectManagerV2.Controls"
     xmlns:vm="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
     mc:Ignorable="av"
     FlowDirection="RightToLeft"
@@ -33,7 +34,14 @@
         </DataTemplate>
     </wpf:BaseWindow.Resources>
     <DockPanel>
-        <Menu FlowDirection="RightToLeft" DockPanel.Dock="Top" HorizontalAlignment="Left">
+        <DockPanel DockPanel.Dock="Top" LastChildFill="True">
+            <!-- Persistent System Health indicator (primary UX). Lives in the top bar so the
+                 user sees the aggregate dot at all times. The DockPanel.Dock="Right" places
+                 it on the visual left edge of the RTL layout, opposite the menu. -->
+            <health:SystemHealthIndicator DockPanel.Dock="Right"
+                                          VerticalAlignment="Center"
+                                          Margin="6,0,6,0"/>
+            <Menu FlowDirection="RightToLeft" HorizontalAlignment="Left">
 
             <!-- Admins -->
             <MenuItem Header="מנהלה"
@@ -55,6 +63,10 @@
                 <Separator Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🔍 ניתוח DWF (Stamp Analysis)" Click="OpenDwfAnalysis_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
+                <Separator/>
+                <!-- Secondary entry only. Primary UX is the persistent SystemHealthIndicator
+                     in the top bar. This menu item opens the optional detailed window. -->
+                <MenuItem Header="🩺 מצב מערכת (חלון פירוט)" Click="OpenSystemHealth_Click"/>
                 <Separator x:Name="DevResetSeparator" Visibility="Collapsed"/>
                 <MenuItem x:Name="DevResetMenuItem"
                           Header="🧨 איפוס נתוני פיתוח (DEBUG בלבד)"
@@ -123,6 +135,7 @@
             </MenuItem>
 
         </Menu>
+        </DockPanel>
 
         <Grid Name="MainContentArea">
             <TextBlock Text="ברוך הבא לתוכנת הניהול"

@@ -513,6 +513,23 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.FileIndex.IAccItemMetadataService, SiNetSQL.FileIndex.AccItemMetadataService>();
             services.AddSingleton<SiNetSQL.Services.EmailIngestion.IAccInboxReconciliationService, SiNetSQL.Services.EmailIngestion.AccInboxReconciliationService>();
 
+            // System Health: lightweight in-memory aggregator + per-service safe checks.
+            // Read-only probes only (no writes, no OAuth popups). Reuses AppLogger for transitions.
+            services.AddSingleton<SiNetSQL.Services.Health.ISystemHealthService, SiNetSQL.Services.Health.SystemHealthService>();
+            services.AddSingleton<Lazy<SiNetSQL.Services.Health.ISystemHealthService>>(sp =>
+                new Lazy<SiNetSQL.Services.Health.ISystemHealthService>(
+                    () => sp.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>()));
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.DatabaseHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.OllamaHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.GoogleHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.AutodeskAccHealthCheck>();
+            // AutodeskAccHealthCheck takes Func<ITokenProvider> — DI doesn't synthesize Func<T> automatically.
+            services.AddSingleton<Func<MyOffice.AutodeskConnector.ITokenProvider>>(sp =>
+                () => sp.GetRequiredService<MyOffice.AutodeskConnector.ITokenProvider>());
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.FileServerHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.WorkflowHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.InternalAccServiceHealthCheck>();
+
             // File Index: unified scan/open/upload abstraction over FileServer / ACC / GoogleDrive.
             // Stores are registered as IFileStore so FileIndexService can enumerate them all.
             services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.FileServerStore>();

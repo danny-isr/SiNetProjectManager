@@ -196,8 +196,35 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
             case SiNetSQL.Services.Tasks.TaskComponentKeys.ReviewProjectSetupFromEmail:
                 if (primaryEmailId is int emailIdForCreate)
                 {
+                    // Pass the task context so the combined window can drive
+                    // MoveToProject after project creation and report task
+                    // completion through the existing coordinator path
+                    // (event ReviewMaterialFiled). Without this context the
+                    // window behaves in standalone mode and the originating
+                    // task would never close.
+                    var workTargetEmailIdsCreate = request.WorkTargetIds
+                        .Select(id => (int)id)
+                        .ToList();
+                    var pendingWorkTargetEmailIdsCreate = request.PendingWorkTargetIds
+                        .Select(id => (int)id)
+                        .ToList();
+
+                    var createTaskContext = new SiNetSQL.Services.Tasks.EmailFilingTaskContext(
+                        TaskId: request.TaskId,
+                        ComponentKey: request.ComponentKey,
+                        WorkTargetEmailIds: workTargetEmailIdsCreate,
+                        PendingWorkTargetEmailIds: pendingWorkTargetEmailIdsCreate,
+                        PrimaryWorkTargetEmailId: emailIdForCreate,
+                        OnTaskRefreshRequested: () =>
+                        {
+                            try { ViewModel.RefreshCommand.Execute(null); }
+                            catch { /* best-effort UI refresh */ }
+                        });
+
                     var createWindow = new Dialogs.WorkflowCreateProjectWindow(
-                        emailIdForCreate, mainWindow ?? Application.Current.MainWindow);
+                        emailIdForCreate,
+                        createTaskContext,
+                        mainWindow ?? Application.Current.MainWindow);
                     createWindow.ShowDialog();
                 }
                 break;
