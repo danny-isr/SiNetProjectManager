@@ -26,7 +26,11 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         // Derived-specific subscription
         viewModel.NavigateToEmailRequested += OnNavigateToEmailRequested;
-        viewModel.OpenWorkflowTaskRequested += OnOpenWorkflowTaskRequested;
+        // LEGACY DISABLED 2026-05-21: subscription to viewModel.OpenWorkflowTaskRequested removed.
+        // Reason: stage-code based open path is no longer the open mechanism. New path:
+        // OpenSelectedTaskCommand → TaskNavigationResolver → OpenTaskNavigationRequested.
+        // Phase: workflow/task navigation cleanup. Candidate for deletion after validation.
+        // viewModel.OpenWorkflowTaskRequested += OnOpenWorkflowTaskRequested;
         viewModel.OpenTaskNavigationRequested += OnOpenTaskNavigationRequested;
 
         // Initialize common floating behavior (opacity, settings, collapse)
@@ -79,7 +83,8 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         if (DataContext is FloatingProjectTasksViewModel vm)
         {
             vm.NavigateToEmailRequested -= OnNavigateToEmailRequested;
-            vm.OpenWorkflowTaskRequested -= OnOpenWorkflowTaskRequested;
+            // LEGACY DISABLED 2026-05-21: matching unsubscribe removed (handler no longer attached).
+            // vm.OpenWorkflowTaskRequested -= OnOpenWorkflowTaskRequested;
             vm.OpenTaskNavigationRequested -= OnOpenTaskNavigationRequested;
         }
 
@@ -154,52 +159,19 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     }
 
     /// <summary>
-    /// LEGACY ACTIVE 2026-05-20: Stage-code based open handler. Routes by a hardcoded
-    /// stage-code string (e.g. "CreateProject", "FileAttachments") and on unknown codes
-    /// silently navigates to the source email. New path:
-    /// <see cref="OnOpenTaskNavigationRequested(SiNetSQL.Services.Tasks.TaskNavigationRequest)"/>
-    /// driven by <see cref="SiNetSQL.Services.Tasks.TaskNavigationRequest.ComponentKey"/>.
-    /// Still reachable because group-based tasks (Proposal/Opinion) lack TaskType and the
-    /// resolver falls back to this handler. Candidate for deletion after every workflow task
-    /// is created with a TaskType registered in <c>ReviewTaskInteractionRegistry</c>.
+    /// LEGACY DISABLED 2026-05-21: Stage-code based open handler. No longer wired to the
+    /// view model event (subscription removed in the constructor). Kept as a stub so any
+    /// stray reference compiles but does nothing. Reason: Proposal/Opinion now use
+    /// WorkflowStageTask templates with TaskType + ComponentKey. New path:
+    /// OnOpenTaskNavigationRequested(TaskNavigationRequest). Phase: workflow/task
+    /// navigation cleanup. Candidate for deletion after validation.
     /// </summary>
     private void OnOpenWorkflowTaskRequested(int emailId, string stageCode)
     {
-        var mainWindow = Owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
-
-        switch (stageCode)
-        {
-            case "CreateProject":
-                // Combined window: email preview + project creation in one dialog
-                var createWindow = new Dialogs.WorkflowCreateProjectWindow(
-                    emailId, mainWindow ?? Application.Current.MainWindow);
-                createWindow.ShowDialog();
-                break;
-
-            case "FileAttachments":
-                // Route to the EmailManagement view (same flow as email tagging).
-                // That view owns the ProjectFile / ProjectAlternative pickers, duplicate
-                // validation, and post-filing picker lock. Opening a separate preview
-                // window would bypass those rules, so we reuse the canonical UI.
-                if (mainWindow != null)
-                {
-                    mainWindow.NavigateToEmail(emailId);
-                    mainWindow.Activate();
-                }
-                break;
-
-            default:
-                // LEGACY ACTIVE 2026-05-20: silent fallback for unknown stage codes —
-                // navigates to the source email and hides missing routing metadata.
-                // New tasks must declare a ComponentKey via ReviewTaskInteractionRegistry
-                // and be opened through OnOpenTaskNavigationRequested. Candidate for
-                // deletion once group-based fallback is replaced by explicit templates.
-                System.Diagnostics.Debug.WriteLine(
-                    $"[FloatingTasksView] LEGACY FALLBACK: unknown stageCode='{stageCode}' for emailId={emailId} — navigating to source email.");
-                mainWindow?.NavigateToEmail(emailId);
-                mainWindow?.Activate();
-                break;
-        }
+        System.Diagnostics.Debug.WriteLine(
+            $"[FloatingTasksView] LEGACY DISABLED 2026-05-21: OnOpenWorkflowTaskRequested called " +
+            $"(emailId={emailId}, stageCode='{stageCode}'). This handler is no longer the open path. " +
+            $"Use TaskNavigationResolver / OnOpenTaskNavigationRequested instead.");
     }
 
     /// <summary>
@@ -212,6 +184,11 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     {
         var mainWindow = Owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
         var primaryEmailId = (int?)request.PrimaryWorkTargetEntityId;
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[FloatingTasksView] OnOpenTaskNavigationRequested received. TaskId={request.TaskId}, " +
+            $"ComponentKey={request.ComponentKey}, OpenMode={request.OpenMode}, ProjectId={request.ProjectId}, " +
+            $"PrimaryWorkTargetEntityId={request.PrimaryWorkTargetEntityId}, MainWindow={(mainWindow != null ? "ok" : "null")}");
 
         switch (request.ComponentKey)
         {
@@ -226,6 +203,23 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             case SiNetSQL.Services.Tasks.TaskComponentKeys.EmailFiling:
+                if (primaryEmailId is null)
+                {
+                    // EmailFiling requires a primary email work target. Surface clearly
+                    // instead of silently no-op (per workflow/task navigation cleanup rules).
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[FloatingTasksView] EmailFiling task {request.TaskId} (TaskTypeCode={request.TaskTypeCode}) has no PrimaryWorkTargetEntityId. " +
+                        $"Cannot open EmailFiling host. ProjectId={request.ProjectId}. " +
+                        $"This indicates a data/seed issue: the task is mapped to ComponentKey=EmailFiling but has no email work target.");
+                    MessageBox.Show(
+                        $"לא ניתן לפתוח את המשימה (TaskId={request.TaskId}, סוג={request.TaskTypeCode}).\n" +
+                        $"המשימה מסווגת כסיווג מייל (EmailFiling) אך אינה משויכת למייל.\n" +
+                        $"יש לבדוק את הגדרת סוג המשימה ב-ReviewTaskInteractionRegistry או את נתוני המשימה.",
+                        "שגיאת ניווט משימה",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    break;
+                }
                 if (primaryEmailId is int emailIdForFiling && mainWindow != null)
                 {
                     // Same canonical flow as the inbox email tagging path —
@@ -258,7 +252,11 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             default:
-                // No specialized host yet — navigate to the task's project (if any).
+                // No specialized host yet — surface this clearly instead of silently no-op.
+                System.Diagnostics.Debug.WriteLine(
+                    $"[FloatingTasksView] No specialized host for ComponentKey='{request.ComponentKey}'. " +
+                    $"OpenMode={request.OpenMode}, ProjectId={request.ProjectId}, EmailId={primaryEmailId}. " +
+                    $"Activating MainWindow only.");
                 if (request.ProjectId is int projectId)
                 {
                     mainWindow?.Activate();
@@ -266,6 +264,10 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 else if (primaryEmailId is int fallbackEmailId)
                 {
                     mainWindow?.NavigateToEmail(fallbackEmailId);
+                    mainWindow?.Activate();
+                }
+                else
+                {
                     mainWindow?.Activate();
                 }
                 break;

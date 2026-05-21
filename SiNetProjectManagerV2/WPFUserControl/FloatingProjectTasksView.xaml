@@ -624,29 +624,24 @@
                                               SelectionChanged="StatusComboBox_SelectionChanged"/>
                                 </StackPanel>
 
-                                <!-- Resolver-driven open task button — preferred for tasks registered in TaskInteractionRegistry -->
-                                <Button Content="{Binding DataContext.OpenSelectedTaskLabel, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        Command="{Binding DataContext.OpenSelectedTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                <!-- Resolver-driven open task button — preferred for tasks registered in TaskInteractionRegistry.
+                                     2026-05-21: bindings switched from AncestorType=Window to
+                                     AncestorType={x:Type local:FloatingWindowBase}. Reason: inside a
+                                     ListBox DataTemplate the AncestorType=Window lookup occasionally
+                                     fails for the custom Window subclass, leaving Command unbound
+                                     and the click silently no-oping (no log, no resolver call).
+                                     The current task row is also passed as CommandParameter so the
+                                     command does not depend on ListBox.SelectedItem timing. -->
+                                <Button Content="{Binding DataContext.OpenSelectedTaskLabel, RelativeSource={RelativeSource AncestorType={x:Type local:FloatingWindowBase}}}"
+                                        Command="{Binding DataContext.OpenSelectedTaskCommand, RelativeSource={RelativeSource AncestorType={x:Type local:FloatingWindowBase}}}"
+                                        CommandParameter="{Binding}"
                                         Style="{StaticResource CardActionButton}"
                                         Background="#FFF3E0" Foreground="#E65100"
                                         FontWeight="SemiBold"
                                         Margin="8,0,0,0"
                                         ToolTip="פתח את המשימה ברכיב המתאים (לפי סוג המשימה)"/>
 
-                                <!-- LEGACY ACTIVE 2026-05-20: Stage-code based open workflow button.
-                                     New tasks should open through OpenSelectedTaskCommand (TaskNavigationRequest/ComponentKey).
-                                     Still reachable because WorkflowTaskOrchestrator.CreateGroupBasedTaskAsync creates
-                                     tasks WITHOUT a TaskTypeId, so TaskNavigationResolver fails and the UI falls back here.
-                                     Candidate for deletion after Proposal/Opinion tasks get explicit WorkflowStageTask
-                                     templates with TaskType + interaction definitions (ReviewTaskInteractionRegistry). -->
-                                <Button Content="▶ פתח (Workflow • LEGACY)"
-                                        Command="{Binding DataContext.OpenWorkflowTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        Style="{StaticResource CardActionButton}"
-                                        Background="#E3F2FD" Foreground="#1565C0"
-                                        FontWeight="SemiBold"
-                                        Margin="4,0,0,0"
-                                        ToolTip="LEGACY: פתיחה מבוססת StageCode. המסלול החדש הוא 'פתח משימה' (TaskNavigationRequest/ComponentKey). כפתור זה מועמד למחיקה לאחר שמשימות Proposal/Opinion יקבלו WorkflowStageTask templates עם TaskType."
-                                        Visibility="{Binding DataContext.IsWorkflowTask, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"/>
+                                <!-- LEGACY DISABLED 2026-05-21: Removed stage-code based open workflow button from UI. Reason: Proposal/Opinion now use explicit WorkflowStageTask templates with TaskType + ComponentKey. New path: OpenSelectedTaskCommand -> TaskNavigationResolver -> TaskNavigationRequest.ComponentKey -> OnOpenTaskNavigationRequested. Phase: workflow/task navigation cleanup. Candidate for deletion after validation. -->
 
                                 <!-- Complete workflow task button -->
                                 <Button Content="✅ סיום"
