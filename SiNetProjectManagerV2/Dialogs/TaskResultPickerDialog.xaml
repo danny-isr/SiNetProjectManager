@@ -19,7 +19,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#E8F5E9" Padding="12,8" CornerRadius="4" Margin="0,0,0,12">
+        <Border Grid.Row="0" x:Name="IntroBanner" Background="#E8F5E9" Padding="12,8" CornerRadius="4" Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock Text="✅ סגירת משימה — תוצאה מקצועית"
                            FontSize="15" FontWeight="Bold"
@@ -30,7 +30,7 @@
             </StackPanel>
         </Border>
 
-        <TextBlock Grid.Row="1" Text="קטגוריה:"
+        <TextBlock Grid.Row="1" x:Name="CategoryLabel" Text="קטגוריה:"
                    FontSize="12" FontWeight="SemiBold"
                    Foreground="#333" Margin="0,0,0,4"/>
         <ComboBox Grid.Row="2" x:Name="CategoryComboBox"
@@ -53,7 +53,7 @@
         <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
             <Button Content="אישור" Width="90" Height="32" Margin="0,0,8,0"
                     Click="Ok_Click" IsDefault="True"/>
-            <Button Content="ללא תוצאה" Width="100" Height="32" Margin="0,0,8,0"
+            <Button x:Name="NoResultButton" Content="ללא תוצאה" Width="100" Height="32" Margin="0,0,8,0"
                     Click="NoResult_Click"/>
             <Button Content="ביטול" Width="80" Height="32"
                     Click="Cancel_Click" IsCancel="True"/>

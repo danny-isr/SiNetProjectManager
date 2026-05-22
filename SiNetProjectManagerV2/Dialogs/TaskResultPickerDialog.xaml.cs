@@ -18,6 +18,7 @@ namespace SiNetProjectManagerV2.Dialogs;
 public partial class TaskResultPickerDialog : Window
 {
     private List<TaskResultDefinition> _allResults = [];
+    private readonly IReadOnlyCollection<string>? _allowedCodes;
 
     /// <summary>The selected result, or null if the user skipped / cancelled.</summary>
     public TaskResultDefinition? SelectedResult { get; private set; }
@@ -26,8 +27,27 @@ public partial class TaskResultPickerDialog : Window
     public bool Skipped { get; private set; }
 
     public TaskResultPickerDialog(int? taskTypeId = null)
+        : this(taskTypeId, allowedCodes: null, promptText: null)
+    {
+    }
+
+    /// <summary>
+    /// Constrained constructor: only results whose <see cref="TaskResultDefinition.Code"/>
+    /// is in <paramref name="allowedCodes"/> are shown. When supplied, the category
+    /// filter and the "ללא תוצאה" (skip) button are hidden because the picker is
+    /// driven by the task's allowed-result contract.
+    /// </summary>
+    public TaskResultPickerDialog(
+        int? taskTypeId,
+        IReadOnlyCollection<string>? allowedCodes,
+        string? promptText)
     {
         InitializeComponent();
+        _allowedCodes = allowedCodes;
+        if (!string.IsNullOrWhiteSpace(promptText))
+        {
+            HelpText.Text = promptText;
+        }
         LoadResults(taskTypeId);
     }
 
@@ -46,6 +66,22 @@ public partial class TaskResultPickerDialog : Window
                 .ThenBy(r => r.SortOrder)
                 .ThenBy(r => r.Name)
                 .ToList();
+
+            if (_allowedCodes is { Count: > 0 })
+            {
+                var allowSet = new HashSet<string>(_allowedCodes, StringComparer.Ordinal);
+                _allResults = _allResults.Where(r => r.Code != null && allowSet.Contains(r.Code)).ToList();
+
+                // Constrained mode: hide category selector and "no result" skip,
+                // and show every allowed result directly in the result combo.
+                CategoryComboBox.Visibility = Visibility.Collapsed;
+                CategoryLabel.Visibility = Visibility.Collapsed;
+                NoResultButton.Visibility = Visibility.Collapsed;
+                ResultComboBox.ItemsSource = _allResults;
+                if (_allResults.Count > 0)
+                    ResultComboBox.SelectedIndex = 0;
+                return;
+            }
 
             var categories = _allResults
                 .Select(r => r.Category ?? "כללי")

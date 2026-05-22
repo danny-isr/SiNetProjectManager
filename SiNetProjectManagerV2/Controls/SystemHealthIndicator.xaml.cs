@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManagerV2.Converters;
+using SiNetSQL.Services;
 using SiNetSQL.Services.Health;
 
 namespace SiNetProjectManagerV2.Controls;
@@ -77,8 +78,11 @@ public partial class SystemHealthIndicator : UserControl
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
+            var prev = ComputeAggregate();
             UpsertRow(s);
             UpdateAggregate();
+            var now = ComputeAggregate();
+            AppLogger.Info($"[Health][Indicator] OnStatusChanged key={s.Key} state={s.State} critical={s.IsCritical} aggregate {prev} -> {now}");
         }));
     }
 
@@ -100,6 +104,29 @@ public partial class SystemHealthIndicator : UserControl
     {
         var aggregate = ComputeAggregate();
         StatusDot.Fill = ServiceHealthStateToBrushConverter.BrushFor(aggregate);
+    }
+
+    /// <summary>
+    /// Authoritative recompute: rebuilds rows from <see cref="ISystemHealthService.Current"/>
+    /// and updates the aggregate brush. Used after a manual "בדוק עכשיו" so the top dot
+    /// can never lag behind the per-row colors.
+    /// </summary>
+    private void RebuildFromCurrent()
+    {
+        if (_health is null) return;
+        var snapshot = _health.Current;
+        foreach (var s in snapshot.Values)
+            UpsertRow(s);
+        // Drop rows whose key no longer exists (defensive).
+        for (int i = _rows.Count - 1; i >= 0; i--)
+        {
+            if (!snapshot.ContainsKey(_rows[i].Key))
+                _rows.RemoveAt(i);
+        }
+        var agg = ComputeAggregate();
+        StatusDot.Fill = ServiceHealthStateToBrushConverter.BrushFor(agg);
+        var dump = string.Join(", ", snapshot.Values.Select(v => $"{v.Key}={v.State}{(v.IsCritical?"*":"")}"));
+        AppLogger.Info($"[Health][Indicator] RebuildFromCurrent aggregate={agg} rows=[{dump}]");
     }
 
     /// <summary>Worst-state policy: Offline (critical) > Offline (any) > Warning/Auth > NotConfigured(critical) > Online > Unknown/Checking.</summary>
@@ -166,6 +193,10 @@ public partial class SystemHealthIndicator : UserControl
         finally
         {
             RefreshButton.IsEnabled = true;
+            // Authoritative recompute from Current — guarantees the top dot reflects
+            // the latest snapshot even if a per-service StatusChanged was missed/coalesced.
+            try { RebuildFromCurrent(); }
+            catch (Exception ex) { AppLogger.Warn($"[Health][Indicator] RebuildFromCurrent failed: {ex.Message}"); }
         }
     }
 

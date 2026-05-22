@@ -279,6 +279,59 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             default:
+                // Classification-only tasks (e.g. IdentifyQuoteRequest) ride the
+                // ProjectWork host slot but have no dedicated screen — they simply
+                // need the operator to pick one of the allowed task results and
+                // close via ITaskCompletionCoordinator. Detect this case by the
+                // resolver-supplied AllowedTaskResultCodes and route to the
+                // shared TaskResultPickerDialog instead of silently no-oping.
+                if (request.AllowedTaskResultCodes.Count > 0
+                    && request.CompletionPolicy == SiNetSQL.Services.Tasks.TaskCompletionPolicy.WorkflowResultRecorded)
+                {
+                    var completionEventCode = ResolveClassificationCompletionEventCode(request.TaskTypeCode);
+                    if (!string.IsNullOrEmpty(completionEventCode))
+                    {
+                        string? pickedCode = null;
+
+                        // IdentifyQuoteRequest gets a dedicated host that shows the
+                        // source email + attachments so the operator can classify
+                        // with full context. Other classification tasks fall back
+                        // to the generic result picker.
+                        if (request.TaskTypeCode == SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest
+                            && primaryEmailId is int classificationEmailId)
+                        {
+                            var dialog = new Dialogs.QuoteClassificationDialog(classificationEmailId)
+                            {
+                                Owner = mainWindow ?? Application.Current.MainWindow
+                            };
+                            if (dialog.ShowDialog() == true)
+                            {
+                                pickedCode = dialog.SelectedResultCode;
+                            }
+                        }
+                        else
+                        {
+                            var picker = new Dialogs.TaskResultPickerDialog(
+                                taskTypeId: null,
+                                allowedCodes: request.AllowedTaskResultCodes,
+                                promptText: BuildClassificationPrompt(request.TaskTypeCode))
+                            {
+                                Owner = mainWindow ?? Application.Current.MainWindow
+                            };
+                            if (picker.ShowDialog() == true)
+                            {
+                                pickedCode = picker.SelectedResult?.Code;
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(pickedCode))
+                        {
+                            _ = ViewModel.CompleteClassificationTaskAsync(request.TaskId, completionEventCode, pickedCode);
+                        }
+                        break;
+                    }
+                }
+
                 // No specialized host yet — surface this clearly instead of silently no-op.
                 System.Diagnostics.Debug.WriteLine(
                     $"[FloatingTasksView] No specialized host for ComponentKey='{request.ComponentKey}'. " +
@@ -300,6 +353,26 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
         }
     }
+
+    /// <summary>
+    /// Maps a classification task type code to the canonical completion event it
+    /// reports. Returns null when the task type is not a classification task.
+    /// </summary>
+    private static string? ResolveClassificationCompletionEventCode(string taskTypeCode) =>
+        taskTypeCode switch
+        {
+            SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest =>
+                SiNetSQL.Services.Tasks.ReviewCompletionEvents.ReviewQuoteRequestClassified,
+            _ => null,
+        };
+
+    /// <summary>Returns a Hebrew prompt explaining the choice for a classification task.</summary>
+    private static string BuildClassificationPrompt(string taskTypeCode) => taskTypeCode switch
+    {
+        SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest =>
+            "האם המייל מהווה פנייה להצעת מחיר? בחר תוצאה כדי לסגור את המשימה.",
+        _ => "בחר את תוצאת המשימה כדי לסגור אותה.",
+    };
 
     #endregion
 

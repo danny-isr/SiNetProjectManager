@@ -209,7 +209,23 @@ namespace SiNetProjectManagerV2
             // Gmail Service: Singleton (shared Gmail credential + throttle across all email views)
             // Ensures the user authenticates once per session instead of per-navigation.
             services.AddSingleton<IGmailThrottleService, GmailThrottleService>();
-            services.AddSingleton<GoogleService>();
+            services.AddSingleton<GoogleService>(sp =>
+            {
+                var throttle = sp.GetRequiredService<IGmailThrottleService>();
+                var gs = new GoogleService(throttle)
+                {
+                    // Single source of truth: same token store + application name used
+                    // by GoogleAuthService above and read by GoogleHealthCheck.
+                    TokenStorePath = AppConfiguration.GoogleTokenStorePath,
+                    ApplicationName = AppConfiguration.GoogleApplicationName,
+                    ClientSecretsPath = AppConfiguration.GetGoogleClientSecretsPath(),
+                };
+                AppLogger.Info(
+                    $"[Health][google] GoogleService DI-singleton built. " +
+                    $"instance#{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(gs)} " +
+                    $"TokenStorePath='{gs.TokenStorePath}' AppName='{gs.ApplicationName}'");
+                return gs;
+            });
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
@@ -738,6 +754,24 @@ namespace SiNetProjectManagerV2
 
                 // Initialize ServiceLocator for SiNetSQL library access
                 SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+
+                // Bridge: when the shared GoogleService toggles auth state (login/logout),
+                // ask the health service to re-check the "google" row immediately so the
+                // System Health indicator turns green without requiring "בדוק עכשיו".
+                try
+                {
+                    var googleSvc = ServiceProvider.GetRequiredService<GoogleService>();
+                    var healthSvc = ServiceProvider.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
+                    googleSvc.AuthStateChanged += (_, _) =>
+                    {
+                        AppLogger.Info("[Health][google] AuthStateChanged -> refreshing 'google' row");
+                        _ = healthSvc.RefreshAsync("google", System.Threading.CancellationToken.None);
+                    };
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Info($"[Health][google] failed to wire AuthStateChanged refresh: {ex.Message}");
+                }
 
                 // ── Step 4b: Load Management Settings from DB ────────────
                 Log.Information("[STARTUP] Step 4b: Loading management settings from DB...");
