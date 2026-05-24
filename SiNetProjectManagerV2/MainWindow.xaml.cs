@@ -30,6 +30,19 @@ namespace SiNetProjectManagerV2
         private ProjectWorkView? _cachedProjectWorkView;
         private EmailManagementView? _cachedEmailManagementView;
 
+        /// <summary>
+        /// Returns the cached <see cref="EmailManagementViewModel"/> if it has
+        /// already been created by a previous navigation, or <c>null</c> if
+        /// the view has not been opened yet. Used by project-creation flows
+        /// (e.g. <see cref="Dialogs.WorkflowCreateProjectWindow"/> after
+        /// OpenQuoteProject) to reuse the existing "שייך לפרויקט" local
+        /// refresh path (<see cref="EmailManagementViewModel.ApplyEmailAssignedToProjectLocalAsync"/>)
+        /// without creating a parallel refresh mechanism and without
+        /// triggering a Gmail or full-mailbox reload.
+        /// </summary>
+        public EmailManagementViewModel? TryGetCachedEmailManagementViewModel()
+            => _cachedEmailManagementView?.DataContext as EmailManagementViewModel;
+
         public MainWindow()
         {
             InitializeComponent(); // חובה כדי לטעון את ה־XAML
@@ -278,6 +291,15 @@ namespace SiNetProjectManagerV2
                 // is now handled inside the VM (via ActiveProjectContext sync), so we
                 // only need to await here for callers that rely on Title fallbacks.
                 await emailVm.DataLoadedTask;
+
+                // Task-mode targeted refresh: when opened from a task, reload only
+                // the task's email from the DB (not the entire mailbox) so stale
+                // cached state (e.g. IsFiledInGmail=false right after project
+                // creation + label apply) does not block tagging / MoveToProject.
+                if (taskContext != null)
+                {
+                    await emailVm.EnsureTaskEmailLoadedAsync(emailId);
+                }
             }
             catch (Exception ex)
             {

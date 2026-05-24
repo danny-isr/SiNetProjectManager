@@ -219,7 +219,8 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                         {
                             try { ViewModel.RefreshCommand.Execute(null); }
                             catch { /* best-effort UI refresh */ }
-                        });
+                        },
+                        ActiveTaskProjectId: request.ProjectId);
 
                     var createWindow = new Dialogs.WorkflowCreateProjectWindow(
                         emailIdForCreate,
@@ -271,7 +272,8 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                         {
                             try { ViewModel.RefreshCommand.Execute(null); }
                             catch { /* best-effort UI refresh */ }
-                        });
+                        },
+                        ActiveTaskProjectId: request.ProjectId);
 
                     mainWindow.NavigateToEmail(emailIdForFiling, taskContext);
                     mainWindow.Activate();

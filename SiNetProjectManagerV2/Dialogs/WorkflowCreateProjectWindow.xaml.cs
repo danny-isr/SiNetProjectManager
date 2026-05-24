@@ -237,7 +237,45 @@ public partial class WorkflowCreateProjectWindow : Window
             catch { /* best-effort */ }
         }
 
+        // Reuse the existing "שייך לפרויקט" local refresh path so the
+        // EmailManagementView (if already opened) updates the in-memory
+        // EmailInfo item from Unassigned → Assigned/Filed without any
+        // Gmail full refresh or full-mailbox reload. No parallel refresh
+        // mechanism is created. When the view has not been opened yet,
+        // there is nothing local to update — the standard load path will
+        // pick up the assignment from the DB / Gmail label on first open.
+        ApplyAssignedToProjectLocalRefresh(args, _emailMessageId);
+
         DialogResult = true;
+    }
+
+    private static void ApplyAssignedToProjectLocalRefresh(ProjectCreatedEventArgs args, int emailMessageId)
+    {
+        try
+        {
+            var emailVm = (Application.Current?.MainWindow as MainWindow)
+                ?.TryGetCachedEmailManagementViewModel();
+            if (emailVm == null)
+            {
+                AppLogger.LogDebug(
+                    "[WorkflowCreateProject] EmailManagementView not yet open — " +
+                    "skipping local refresh (no UI state to update).");
+                return;
+            }
+
+            var displayName = !string.IsNullOrWhiteSpace(args.ProjectName)
+                ? args.ProjectName
+                : $"#{args.ProjectId}";
+
+            // Fire and forget on the UI thread; the helper itself dispatches.
+            _ = emailVm.ApplyEmailAssignedToProjectLocalAsync(
+                args.ProjectId, emailMessageId, displayName);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.LogError(ex,
+                "[WorkflowCreateProject] Failed to apply local 'assign to project' refresh");
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════════
