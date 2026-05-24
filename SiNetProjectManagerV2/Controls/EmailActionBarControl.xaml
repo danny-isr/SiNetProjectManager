@@ -72,7 +72,7 @@
                         Content="📂 Move to Project"
                         Background="#C8E6C9"
                         BorderBrush="#66BB6A"
-                        ToolTip="העבר קבצים מתויגים לתיקיית הפרויקט"
+                        ToolTip="{Binding MoveToProjectBlockReason, TargetNullValue='העבר קבצים מתויגים לתיקיית הפרויקט'}"
                         Margin="0,0,8,0"/>
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding AreAllAttachmentsPlaced, Converter={StaticResource BoolToVis}}"

@@ -239,6 +239,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<Func<SiNetSQL.Domain.Actions.IProcessActionDispatcher>>(sp =>
                 () => sp.GetRequiredService<SiNetSQL.Domain.Actions.IProcessActionDispatcher>());
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionExecutor>();
+            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowStageTaskProvisioningService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowQueryService>();
