@@ -529,6 +529,7 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.FileIndex.IAccMetadataStatusReporter, SiNetSQL.FileIndex.AccMetadataStatusReporter>();
             services.AddSingleton<SiNetSQL.FileIndex.IAccItemMetadataService, SiNetSQL.FileIndex.AccItemMetadataService>();
             services.AddSingleton<SiNetSQL.Services.EmailIngestion.IAccInboxReconciliationService, SiNetSQL.Services.EmailIngestion.AccInboxReconciliationService>();
+            services.AddSingleton<SiNetSQL.Services.EmailIngestion.IAccInboxRecoveryService, SiNetSQL.Services.EmailIngestion.AccInboxRecoveryService>();
 
             // System Health: lightweight in-memory aggregator + per-service safe checks.
             // Read-only probes only (no writes, no OAuth popups). Reuses AppLogger for transitions.

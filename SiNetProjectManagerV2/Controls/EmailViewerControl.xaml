@@ -61,9 +61,35 @@
                                FontWeight="Bold"
                                VerticalAlignment="Center"
                                Margin="0,0,3,0"
-                               ToolTip="הקובץ הועלה ל-ACC — לחץ לפתיחה"
-                               Visibility="{Binding IsInAcc, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Text="{Binding FileName}" 
+                                           ToolTip="הקובץ הועלה ל-ACC — לחץ לפתיחה"
+                                          Visibility="{Binding IsInAcc, Converter={StaticResource BoolToVis}}"/>
+                               <!-- Per-attachment upload/recovery lifecycle badge.
+                                    Shown only when the attachment is mid-upload/recovery or in a failure
+                                    state; otherwise hidden so it doesn't clash with the steady-state ✓ badge. -->
+                               <TextBlock Text="{Binding UploadStatusDisplay}"
+                                          FontSize="10"
+                                          FontWeight="SemiBold"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,4,0"
+                                          ToolTip="{Binding UploadStatusText}">
+                                   <TextBlock.Style>
+                                       <Style TargetType="TextBlock">
+                                           <Setter Property="Visibility" Value="Collapsed"/>
+                                           <Setter Property="Foreground" Value="#555555"/>
+                                           <Style.Triggers>
+                                               <DataTrigger Binding="{Binding IsUploadingOrRecovering}" Value="True">
+                                                   <Setter Property="Visibility" Value="Visible"/>
+                                                   <Setter Property="Foreground" Value="#1565C0"/>
+                                               </DataTrigger>
+                                               <DataTrigger Binding="{Binding HasUploadFailure}" Value="True">
+                                                   <Setter Property="Visibility" Value="Visible"/>
+                                                   <Setter Property="Foreground" Value="#C62828"/>
+                                               </DataTrigger>
+                                           </Style.Triggers>
+                                       </Style>
+                                   </TextBlock.Style>
+                               </TextBlock>
+                               <TextBlock Text="{Binding FileName}" 
                                FontSize="11"
                                MaxWidth="160"
                                TextTrimming="CharacterEllipsis"
