@@ -15,12 +15,13 @@ Define how the desktop UI is built and where its responsibility ends.
 1. **MVVM** is mandatory. ViewModels expose state; views bind to it.
 2. **Never block the UI thread.** All I/O and heavy work use `async/await`; CPU-bound work uses `Task.Run`.
 3. **WebView2** is used to host Gmail and ACC views. Navigation safety helpers live in `WebView2Helper.cs`.
-4. Gmail WebView opens by **message** using `https://mail.google.com/mail/u/0/#all/{MessageId}`. Thread-based URLs are a fallback only.
+4. Gmail WebView opens locally by **Gmail API `message.id`** using `https://mail.google.com/mail/u/0/#all/{GmailMessageId}`. This `GmailMessageId` is **mailbox-local** and must **not** be used as a business identifier. For task-based opening, the app first resolves the stored **RFC822 Message-ID** against the current user's Gmail mailbox, obtains that user's local `GmailMessageId`, and only then opens `#all/{GmailMessageId}`. Thread-based URLs are **not** the preferred path and should be used only when explicitly approved or when documenting existing legacy behavior.
 5. **DOM is for display improvement only** (e.g. `ExecuteScriptAsync` cosmetic fixes). DOM is **never** a business source of truth (attachments, identity, status).
-6. Status visible to the user must come through proper UI surfaces, not just logs.
-7. Folder icons in the project tree are GREEN if any descendant subtree contains at least one file, GRAY if the entire subtree is empty (recursive).
-8. When an ACC file is selected, the ACC viewer URL must be exposed (e.g. copyable) so pasting it into a browser opens the file in ACC.
-9. Dependency Injection is mandatory for services and settings used from the UI.
+6. **Message focusing / expansion in WebView2 (display helper).** After Gmail is loaded in WebView2, the UI may use `ExecuteScriptAsync` to improve display by locating the selected message inside the Gmail conversation, scrolling to it, and expanding it if Gmail opened the thread on a different message. This is a **display-only helper**. It may use Gmail DOM attributes such as `data-legacy-message-id` when available, but those selectors are **not a stable public API** and may require maintenance if Gmail changes its DOM. This DOM-based focusing / expansion must **not** be used for business decisions, attachment detection, identity, upload state, ACC state, or workflow state.
+7. Status visible to the user must come through proper UI surfaces, not just logs.
+8. Folder icons in the project tree are GREEN if any descendant subtree contains at least one file, GRAY if the entire subtree is empty (recursive).
+9. When an ACC file is selected, the ACC viewer URL must be exposed (e.g. copyable) so pasting it into a browser opens the file in ACC.
+10. Dependency Injection is mandatory for services and settings used from the UI.
 
 ## What we do not do now
 - Do not use Gmail DOM to determine attachments or any business state.
@@ -30,11 +31,12 @@ Define how the desktop UI is built and where its responsibility ends.
 
 ## Dropped / cancelled / postponed
 - `GmailVisibleAttachmentsDomExtractor` as an active probe — dropped (disabled/no-op).
-- DOM-based attachment chip parsing as truth — dropped.
+- DOM-based attachment chip parsing as **business truth** — dropped.
+- DOM-based **message focusing / expansion for display** — **allowed as a UI helper**, with a maintenance warning (Gmail DOM selectors such as `data-legacy-message-id` are not a stable public API).
 - Deep UI redesign — postponed.
 
 ## Relevant terms / search terms
-WPF, MVVM, WebView2, WebView2Helper, ExecuteScriptAsync, GmailPopoutUrl, EmailManagementView, EmailViewerViewModel, UI-Consistency-System, project tree, folder icons.
+WPF, MVVM, WebView2, WebView2Helper, ExecuteScriptAsync, GmailPopoutUrl, EmailManagementView, EmailViewerViewModel, UI-Consistency-System, project tree, folder icons, `data-legacy-message-id`, message focusing, message expansion, Gmail conversation, mailbox-local `GmailMessageId`.
 
 ## Extracted from archived documents (Round C, 26.05.2026)
 
