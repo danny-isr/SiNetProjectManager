@@ -27,7 +27,7 @@
                                 <Setter Property="BorderBrush" Value="#90CAF9"/>
                                 <Setter Property="BorderThickness" Value="2,0,0,0"/>
                             </DataTrigger>
-                            <DataTrigger Binding="{Binding IsInAcc}" Value="True">
+                            <DataTrigger Binding="{Binding IsUploadConfirmed}" Value="True">
                                 <Setter Property="Background" Value="#E8F5E9"/>
                                 <Setter Property="BorderBrush" Value="#81C784"/>
                                 <Setter Property="BorderThickness" Value="2,0,0,0"/>
@@ -61,8 +61,8 @@
                                FontWeight="Bold"
                                VerticalAlignment="Center"
                                Margin="0,0,3,0"
-                                           ToolTip="הקובץ הועלה ל-ACC — לחץ לפתיחה"
-                                          Visibility="{Binding IsInAcc, Converter={StaticResource BoolToVis}}"/>
+                                                        ToolTip="הקובץ הועלה ל-ACC — לחץ לפתיחה"
+                                           Visibility="{Binding IsUploadConfirmed, Converter={StaticResource BoolToVis}}"/>
                                <!-- Per-attachment upload/recovery lifecycle badge.
                                     Shown only when the attachment is mid-upload/recovery or in a failure
                                     state; otherwise hidden so it doesn't clash with the steady-state ✓ badge. -->

@@ -190,6 +190,13 @@ namespace SiNetProjectManagerV2
             // PDF Renderer: Singleton (reused for all PDF generations)
             services.AddSingleton<WebView2PdfRenderer>();
 
+            // Gmail-visible attachments DOM extractor.
+            // DISABLED — diagnostic disabled — candidate for future removal.
+            // Gmail DOM exposes a thread/conversation view (not a clean message-scoped view),
+            // so DOM-derived attachment lists are unreliable. The service is still registered
+            // so existing call sites resolve, but ProbeAsync is a no-op (see class docs).
+            services.AddSingleton<GmailVisibleAttachmentsDomExtractor>();
+
             // ACC User Bootstrap Service: Transient (runs once at startup)
             services.AddTransient<IAccUserBootstrapService, AccUserBootstrapService>();
 

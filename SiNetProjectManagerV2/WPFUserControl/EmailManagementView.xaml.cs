@@ -25,6 +25,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
     {
         private EmailManagementViewModel? _subscribedVm;
         private WebView2PdfRenderer? _pdfRenderer;
+        private GmailVisibleAttachmentsDomExtractor? _gmailDomProbe;
         private ExternalBrowserWindow? _accViewerWindow;
         private EmailContextViewModel? _emailContextVm;
 
@@ -52,6 +53,11 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 _pdfRenderer = App.ServiceProvider?.GetService<WebView2PdfRenderer>();
                 _pdfRenderer?.RegisterLiveView(EmailViewerCtl.WebView);
             }
+
+            // Gmail DOM extractor is DISABLED (diagnostic disabled, candidate for future
+            // removal). The reference is left here so existing call sites compile, but the
+            // ProbeAsync method is now a no-op. Do not re-enable without an approved round.
+            _gmailDomProbe ??= App.ServiceProvider?.GetService<GmailVisibleAttachmentsDomExtractor>();
 
             // Initialize Email Context Panel via DI
             if (EmailContextPanel != null && _emailContextVm == null)
@@ -185,6 +191,15 @@ namespace SiNetProjectManagerV2.WPFUserControl
                         {
                             _emailContextVm.Clear();
                         }
+                    }
+
+                    // Gmail DOM probe is disabled (see GmailVisibleAttachmentsDomExtractor).
+                    // Instead, emit a [GmailOpenUrl] diagnostic log comparing the URL options
+                    // we can use to open Gmail in the WebView. No behavior change: the WebView
+                    // still navigates via EmailInfo.GmailPopoutUrl (OpenMode=Current).
+                    if (vm.SelectedEmail != null)
+                    {
+                        LogGmailOpenUrlOptions(vm.SelectedEmail);
                     }
                     break;
             }
@@ -791,6 +806,55 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 && cmd.CanExecute(attachment))
             {
                 cmd.Execute(attachment);
+            }
+        }
+
+        /// <summary>
+        /// Phase 1 diagnostic-only Gmail DOM attachment probe — DISABLED (no-op).
+        /// Kept only so any external caller compiles; the call site no longer invokes it.
+        /// </summary>
+        private async System.Threading.Tasks.Task ProbeGmailVisibleAttachmentsAsync(EmailInfo email)
+        {
+            // Disabled: the extractor itself is now a no-op. Awaiting completed task keeps
+            // the async signature stable for any legacy call site.
+            await System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Emits a single <c>[GmailOpenUrl]</c> diagnostic log that records the URL
+        /// actually used to open Gmail in the WebView for the selected message.
+        /// As of this round the default is <b>MessageIdAll</b> (<c>#all/{messageId}</c>)
+        /// produced by <see cref="EmailInfo.GmailPopoutUrl"/>; the legacy
+        /// <c>#inbox/{ThreadId}</c> URL is logged as <c>ThreadInbox</c> for reference
+        /// only and is never navigated to.
+        /// <para>RFC822 <c>Message-ID</c> (<c>#search/rfc822msgid:{...}</c>) is not
+        /// emitted &#8212; <see cref="EmailInfo"/> does not currently expose that
+        /// header in production.</para>
+        /// </summary>
+        private static void LogGmailOpenUrlOptions(EmailInfo email)
+        {
+            try
+            {
+                var messageId = email.MessageId ?? string.Empty;
+                var threadId = email.ThreadId ?? string.Empty;
+                var urlUsed = email.GmailPopoutUrl ?? "(null)";
+                var threadInboxUrl = !string.IsNullOrEmpty(threadId)
+                    ? $"https://mail.google.com/mail/u/0/#inbox/{threadId}"
+                    : "(no ThreadId)";
+
+                SiNetSQL.Services.AppLogger.Info(
+                    "[GmailOpenUrl] " +
+                    $"SelectedGmailMessageId={messageId}, ThreadId={threadId}, " +
+                    $"OpenMode=MessageIdAll, UrlUsed={urlUsed}");
+                SiNetSQL.Services.AppLogger.Info(
+                    "[GmailOpenUrl] " +
+                    $"SelectedGmailMessageId={messageId}, ThreadId={threadId}, " +
+                    $"OpenMode=ThreadInbox (reference-only, not navigated), UrlUsed={threadInboxUrl}");
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GmailOpenUrl] Failed to emit diagnostic log: {ex.Message}");
             }
         }
     }

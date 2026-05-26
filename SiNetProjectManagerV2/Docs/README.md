@@ -1,0 +1,89 @@
+# SiNet Project Manager — Documentation Index
+
+> **Created:** 26.05.2026
+> **Updated:** 26.05.2026
+> **Status:** Round B applied — domain skeleton + archive in place.
+> **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
+
+---
+
+## 1. Purpose
+
+`Docs\` is the central place for living documentation of the SiNet Project
+Manager application. It is meant for developers, AI assistants (e.g. GitHub
+Copilot) and technical reviewers who need to understand a domain, find the
+latest approved decisions, or trace where a mechanism is implemented.
+
+Active documentation lives under **`Domains\`** and **`Decisions\`**.
+Historical material lives under **`Archive\`** and is **not** authoritative.
+
+## 2. Document categories
+
+| Category | Location | Purpose |
+| --- | --- | --- |
+| Domain principles | `Docs\Domains\<Domain>\` | Approved principles per domain. Source of truth. |
+| Decisions / ADR | `Docs\Decisions\` | Dated decision records. |
+| Archive | `Docs\Archive\` | Historical material — not a source of truth. |
+| Feature notes (existing) | top of `Docs\` | Per-feature notes left in place pending review. |
+| Architecture (existing) | `Application-Architecture-Overview.md`, `Technical-Architecture-Design.md` | High-level architecture docs — **NeedsReview**, left in place. |
+
+## 3. Active domains
+
+| Domain | Principles document |
+| --- | --- |
+| Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
+| ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
+| Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
+| Project Files | [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md) |
+| Workflow | [`Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](Domains/Workflow/WorkflowPrinciples-2026-05-26.md) |
+| UI | [`Domains\UI\UiPrinciples-2026-05-26.md`](Domains/UI/UiPrinciples-2026-05-26.md) |
+| Deployment | [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md) |
+| Diagnostics | [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md) |
+| AI | [`Domains\AI\AiSystemPrinciples-2026-05-26.md`](Domains/AI/AiSystemPrinciples-2026-05-26.md) |
+| Plan Review | [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md) |
+
+## 4. Decisions
+
+See [`Decisions\README.md`](Decisions/README.md). Existing decision-style docs
+still in place (not yet relocated):
+
+- [`MoveToProject-Decisions-2026-05-24.md`](MoveToProject-Decisions-2026-05-24.md)
+- `SiNetSQL\docs\WorkflowDecisions.md` (in the SiNetSQL repository)
+
+## 5. Archive
+
+See [`Archive\README.md`](Archive/README.md). Archive is historical only.
+
+**Conflict rule:** if an Archive document contradicts a `Domains` or
+`Decisions` document, the `Domains` / `Decisions` document wins.
+
+## 6. Authoring rules for new documents
+
+- Every document includes a date (`DD.MM.YYYY`) and a `Status`.
+- Principles documents stay **short**; deep implementation detail goes into
+  sub-documents only when needed.
+- Each Principles document includes a **Dropped / cancelled / postponed**
+  section so disabled mechanisms are not silently revived.
+- A new decision that supersedes an older document **adds a pointer**; the
+  older document is moved to `Archive\` rather than being deleted.
+
+## 7. Things we deliberately do NOT do right now
+
+- Do **not** delete documents.
+- Do **not** edit code, DB, schema, migrations, or `ModelSnapshot` as part of documentation work.
+- Do **not** rewrite older feature notes; leave them in place or archive them.
+- Do **not** silently revive mechanisms listed as Dropped in any Principles document.
+
+## 8. Dropped / cancelled / postponed
+
+- `Docs\work` as an active source of truth — dropped (contents moved to `Archive\work\`).
+- Older fix / phase / test notes as active docs — dropped (moved to `Archive\`).
+- Deep merging of `Application-Architecture-Overview.md` and `Technical-Architecture-Design.md` — postponed (left in place, **NeedsReview**).
+- Full implementation detail inside Principles documents — postponed.
+
+## 9. Search terms
+
+`Docs index`, `documentation structure`, `SiNet Documentation`, `Domains`,
+`Decisions`, `Archive`, `EmailSystemPrinciples`, `AccSystemPrinciples`,
+`WorkflowPrinciples`, `MoveToProject-Decisions`, `ADR`, `source of truth`,
+`Approved principles`.
