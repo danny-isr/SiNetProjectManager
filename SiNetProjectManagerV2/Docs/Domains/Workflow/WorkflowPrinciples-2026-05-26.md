@@ -43,3 +43,18 @@ Task, Action, RuntimeAction, IProcessActionHandler, MoveToProject, AddMaterialTo
 - `SiNetSQL\SiNetSQL\Domain\Actions\Handlers`
 - `IProcessActionHandler` implementations
 - `WorkflowDecisions.md`
+
+## Extracted from archived documents (Round C, 26.05.2026)
+
+Sources (archived): `Action-Task-Workflow.md`, `Typed-Continuation-Design.md`, `ProjectWork-Documentation.md`.
+
+### Typed continuation paths — no legacy fallback
+- Migrated continuation actions (TaskCreation, FileImport) run on a **typed-only path**: application service → `IActionContinuationUiHost` → typed dialog → typed result → application service `ContinueAsync`. No `RequiresUI(...)` enum fallback.
+- Continuation requests and results are **typed models**, not an open `enum + props` bag.
+- The UI host is abstracted (e.g. `IActionContinuationUiHost`); ViewModels do not bind to dialogs directly.
+- Missing data, validation failure, or inability to open UI must **fail visibly** (clear error + log). No silent fallback.
+- Legacy paths still physically present (e.g. `AssignActionDialog`, `EmailManagementView.CreateActionTaskAsync` for migrated actions) are **not active** and are candidates for removal.
+
+### Project work and workflow boundary
+- `WorkflowManagementWindow` is the single management surface for the workflow engine (Builder, Visual Designer, Policy, Dashboard, Behaviors, Help). No parallel Builder/Policy windows.
+- The ProjectWork screen **does not** change `ProjectStatus` or `WorkflowStage` directly; such changes go only through workflow actions / engine transitions.

@@ -2,7 +2,7 @@
 
 > **Created:** 26.05.2026
 > **Updated:** 26.05.2026
-> **Status:** Round B applied — domain skeleton + archive in place.
+> **Status:** Round C-Apply applied — principles extracted, old NeedsReview docs archived.
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -24,13 +24,13 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Domain principles | `Docs\Domains\<Domain>\` | Approved principles per domain. Source of truth. |
 | Decisions / ADR | `Docs\Decisions\` | Dated decision records. |
 | Archive | `Docs\Archive\` | Historical material — not a source of truth. |
-| Feature notes (existing) | top of `Docs\` | Per-feature notes left in place pending review. |
-| Architecture (existing) | `Application-Architecture-Overview.md`, `Technical-Architecture-Design.md` | High-level architecture docs — **NeedsReview**, left in place. |
+| Feature notes (existing) | top of `Docs\` | A small number of per-feature notes still in place (e.g. `LOGGING.md`, `UI-Consistency-System.md`, `Inspection-Template-Guide.md`). |
 
 ## 3. Active domains
 
 | Domain | Principles document |
 | --- | --- |
+| Architecture | [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](Domains/Architecture/ArchitecturePrinciples-2026-05-26.md) |
 | Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
 | ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
 | Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
@@ -78,7 +78,11 @@ See [`Archive\README.md`](Archive/README.md). Archive is historical only.
 
 - `Docs\work` as an active source of truth — dropped (contents moved to `Archive\work\`).
 - Older fix / phase / test notes as active docs — dropped (moved to `Archive\`).
-- Deep merging of `Application-Architecture-Overview.md` and `Technical-Architecture-Design.md` — postponed (left in place, **NeedsReview**).
+- The 13 old architecture / workflow / import / style audit docs as active — dropped in Round C-Apply (moved to `Archive\`, principles extracted into the new `Architecture`, `Workflow`, `UI`, and `ProjectFiles` Principles).
+- Treating old long documents as authoritative — dropped. No active NeedsReview docs remain at the root of `Docs\`.
+- `Completed` as a `ProjectStatus` value — dropped (see `WorkflowPrinciples`).
+- `Google Drive upload` — postponed (see `ProjectFilesPrinciples`).
+- Legacy continuation `RequiresUI(...)` enum fallback — not active / candidate for removal (see `WorkflowPrinciples`).
 - Full implementation detail inside Principles documents — postponed.
 
 ## 9. Search terms

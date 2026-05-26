@@ -35,3 +35,12 @@ Define how the desktop UI is built and where its responsibility ends.
 
 ## Relevant terms / search terms
 WPF, MVVM, WebView2, WebView2Helper, ExecuteScriptAsync, GmailPopoutUrl, EmailManagementView, EmailViewerViewModel, UI-Consistency-System, project tree, folder icons.
+
+## Extracted from archived documents (Round C, 26.05.2026)
+
+Sources (archived): `ProjectWork-Documentation.md`, `Style-Compliance-Audit.md`.
+
+- The active TFM is **.NET 10**. Older `.NET 8` references in archived docs are historical.
+- `ProjectWorkView` ("בעבודה 2") is a central work screen — file tree on one side, ACC WebView2 viewer on the other.
+- XAML uses the **global** style resources `AppFontSize`, `AppFontFamily`, and `AppForeground`. Hard-coded `FontSize=` / `FontFamily=` / `Foreground=` in XAML are not allowed, except for **semantic** colors (status, alerts, badges).
+- Workflow management has a single window (`WorkflowManagementWindow`); UI does not introduce parallel Builder / Policy windows.

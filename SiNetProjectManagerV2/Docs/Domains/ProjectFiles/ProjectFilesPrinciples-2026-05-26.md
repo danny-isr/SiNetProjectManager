@@ -34,6 +34,7 @@ Define how files are filed into projects, how they relate to ACC, and how `MoveT
 - Filename-based version tracking — dropped.
 - DB-only fallback for "file exists" — dropped.
 - Deep refactor of refile pipeline — postponed.
+- **Google Drive upload — postponed.** Infrastructure may exist, but the specific Google Drive upload mechanism is not active. Do not add a new Google Drive upload mechanism and do not enable a new fallback for it.
 
 ## Relevant terms / search terms
 ProjectFile, ProjectAlternative, ProjectFileInstance, MoveToProject, OpenQuoteProject, IProcessActionHandler, UpsertInstanceAsync, AccInboxLayout, AccInboxReconciliationService, SiInbox.Move.TargetAltId.
