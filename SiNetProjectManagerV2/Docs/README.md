@@ -44,8 +44,12 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 
 ## 4. Decisions
 
-See [`Decisions\README.md`](Decisions/README.md). Existing decision-style docs
-still in place (not yet relocated):
+See [`Decisions\README.md`](Decisions/README.md). Active decision documents:
+
+- [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
+  — gap register between approved Principles and current implementation.
+
+Existing decision-style docs still in place (not yet relocated):
 
 - [`MoveToProject-Decisions-2026-05-24.md`](MoveToProject-Decisions-2026-05-24.md)
 - `SiNetSQL\docs\WorkflowDecisions.md` (in the SiNetSQL repository)
@@ -82,6 +86,10 @@ See [`Archive\README.md`](Archive/README.md). Archive is historical only.
 - Treating old long documents as authoritative — dropped. No active NeedsReview docs remain at the root of `Docs\`.
 - `Completed` as a `ProjectStatus` value — dropped (see `WorkflowPrinciples`).
 - `Google Drive upload` — postponed (see `ProjectFilesPrinciples`).
+- Persisting Gmail mailbox-local `message.id` / `threadId` as DB business data — dropped (see `EmailSystemPrinciples` §2.5 and `DatabaseIdentityPrinciples`).
+- ACC Inbox folder names derived from Gmail mailbox-local IDs — dropped; target layout is `THREAD_<ThreadKey>\MSG_<MessageKey>\…` (see `EmailSystemPrinciples` §6.3 and `AccSystemPrinciples`).
+- Gmail as a write / management Storage Destination — dropped (see `ProjectFilesPrinciples`).
+- Metadata without a defined source-of-truth owner — dropped (see Email / ACC / DatabaseIdentity / ProjectFiles principles).
 - Legacy continuation `RequiresUI(...)` enum fallback — not active / candidate for removal (see `WorkflowPrinciples`).
 - Full implementation detail inside Principles documents — postponed.
 

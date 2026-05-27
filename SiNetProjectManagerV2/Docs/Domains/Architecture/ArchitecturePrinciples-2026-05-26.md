@@ -20,9 +20,11 @@ Describe the shape of the system at a high level so domain documents can referen
    - **Privileged service** (`SiOffice.AccService`) — Windows Service for privileged ACC operations.
 3. **Service mode boundary:** when `AccService:BaseUrl` is configured, remote WPF clients call the service rather than running local privileged ACC orchestration.
 4. **Source-of-truth boundaries:**
-   - ACC is authoritative for uploaded files.
-   - Gmail (RFC822 `Message-ID`) is authoritative for email identity.
-   - DB is authoritative for project structure (`ProjectFile` → `ProjectAlternative` → `ProjectFileInstance`) and a cache/helper for ACC/Gmail state.
+   - ACC is authoritative for uploaded files (when ACC is the configured Storage Destination).
+   - Gmail (RFC822 `Message-ID`, `In-Reply-To`, `References`) is authoritative for email identity and global thread relations.
+   - DB is authoritative for project structure (`ProjectFile` → `ProjectAlternative` → `ProjectFileInstance`) and business workflow; it is a cache/helper for ACC/Gmail state.
+   - **Storage Destination** is authoritative for the physical existence of a file (ACC / File Server / Google Drive; Gmail is read-only ingestion only). See `ProjectFilesPrinciples`.
+   - Mailbox-local Gmail identifiers (`message.id`, `threadId`) are **not** persisted as business data and are resolved on demand per current user (see `EmailSystemPrinciples` and `DatabaseIdentityPrinciples`).
 5. **Dependency Injection is mandatory** across services and view-models.
 6. **No parallel mechanisms:** before adding a service, handler, or storage path, extend an existing one. Duplicates are rejected.
 7. **No silent fallbacks:** missing data or failed calls surface visibly (log + UI), they are not papered over.
