@@ -32,11 +32,92 @@ Define the binding principles for how the application interacts with ACC, what i
 6. Custom attribute definitions (`SiInbox.*`) are provisioned only in the dedicated ACC Inbox project / folder via the existing `Bim360Service.EnsureCustomAttributeDefinitionsAsync`. Definitions are not auto-created from `SetItemCustomAttributesAsync`.
 7. The move-target alternative attribute name is `SiInbox.Move.TargetAltId`. The legacy long form `SiInbox.Move.TargetProjectAlternativeId` must not be reintroduced.
 8. Service boundary:
-   - `SiOffice.AccService` is the central service for ACC operations in service mode.
+   - `SiOffice.AccService` is the central service for ACC operations in service mode (privileged operations, server-side / two-legged paths if any, ensure of projects / folders / resources per policy).
    - When `AccService:BaseUrl` is configured, remote WPF clients call the service instead of running local privileged ACC orchestration (no local `AccUserBootstrapService.ProvisionUsersAsync`).
-   - `SiOffice.AutodeskConnector` is the connector layer used by the service / privileged paths.
+   - `SiOffice.AutodeskConnector` is the **technical connector layer** (REST / API wrappers, token / API plumbing) used by the service / privileged paths. It is **not** a business engine.
+   - `AccInboxReconciliationService` is the **application/domain service** that verifies ACC Inbox reality (`MissingInAcc` / `StaleAccReference` decisions, merging DB + ACC info for status). It does **not** perform upload, project filing, ACC project creation, workflow decisions, or DB-only fallbacks.
+   - **UI / WPF must not bypass these boundaries** for business decisions. UI calls Application Services / ViewModels, which then call the appropriate service. UI does not call `SiOffice.AutodeskConnector` directly for business decisions.
+   - See [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Architecture/ServiceCatalog-2026-05-26.md) for the full service map.
 9. `OpenQuoteProject` does not have to create an ACC project. `MoveToProject` performs the ACC ensure at move time, and only required folders are created.
 10. Legacy DB-only open / move fallbacks are disabled or clearly marked; they are not re-enabled without explicit safety review.
+
+## ACC service boundaries (added 26.05.2026)
+
+This section is the authoritative split of responsibilities between the
+ACC-related services. It expands core principle §8 and is the ACC-domain
+companion to
+[`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Architecture/ServiceCatalog-2026-05-26.md).
+
+### `SiOffice.AccService`
+
+- **Role:** central service for ACC operations that require **elevated
+  privileges**, run in **service mode**, or should not run directly on a
+  user's machine.
+- **Responsibility:**
+  - Privileged ACC operations.
+  - Server-side / two-legged operations, where they exist.
+  - `ensure` of projects / folders / resources per policy.
+  - Serving remote WPF clients when `AccService:BaseUrl` is configured.
+- **Service-mode rule:** when `AccService:BaseUrl` is configured, a remote
+  WPF client **must not** run local privileged ACC orchestration; it calls
+  `SiOffice.AccService` instead.
+- **Does not do:** UI logic; business workflow decisions; Gmail decisions;
+  attachment identification; building or owning the `ProjectFileInstance`
+  runtime projection.
+
+### `SiOffice.AutodeskConnector`
+
+- **Role:** **technical connector** to Autodesk / ACC APIs. A tool, not a
+  business engine.
+- **Responsibility:**
+  - REST / API calls to Autodesk.
+  - Technical wrappers around Autodesk endpoints.
+  - Token / API plumbing within the defined boundaries.
+- **Does not do:** business decisions; source-of-truth decisions; workflow;
+  UI; filing policy.
+
+### `AccInboxReconciliationService`
+
+- **Role:** **application / domain service** that verifies ACC Inbox
+  reality.
+- **Responsibility:**
+  - Verify whether a file actually exists in ACC.
+  - Decide `MissingInAcc` / `StaleAccReference` based on the ACC result.
+  - Merge DB cache and ACC information into a coherent status.
+  - Return that status to the email layer / UI.
+- **Does not do:** new uploads; project filing; ACC project creation;
+  workflow decisions; DB-only fallback for existence or open.
+
+### UI / WPF boundary
+
+- The UI **does not** call `SiOffice.AutodeskConnector` directly for
+  business decisions.
+- The UI calls **Application Services / ViewModels**, and those call the
+  appropriate service (`SiOffice.AccService`,
+  `AccInboxReconciliationService`, `MoveToProject*` handler, etc.).
+- The split is:
+  - **UI** displays and triggers.
+  - **Services** decide and execute.
+  - **`SiOffice.AutodeskConnector`** performs technical API calls.
+  - **`SiOffice.AccService`** performs privileged / remote service-mode
+    operations.
+
+### Service-mode rule (recap)
+
+- `AccService:BaseUrl` configured → remote WPF client routes ACC privileged
+  work to `SiOffice.AccService`. No parallel local privileged path.
+- `AccService:BaseUrl` not configured → the allowed local path must be
+  explicit; **no new parallel path is created without an explicit
+  decision**.
+
+### Forbidden across these boundaries
+
+- Creating another parallel ACC service.
+- Bypassing `SiOffice.AccService` from the UI when in service mode.
+- Putting business decisions inside `SiOffice.AutodeskConnector`.
+- DB-only fallback to open or validate an ACC file.
+- Mixing **upload / reconciliation / filing** as if they were one service.
+- Using `AccInboxReconciliationService` to perform upload or filing.
 
 ## Storage Destination and ACC (added 26.05.2026)
 - ACC is one valid **Storage Destination** value for a managed file (see
@@ -61,6 +142,12 @@ Define the binding principles for how the application interacts with ACC, what i
 ## What we do not do now
 - Do not derive Viewer URLs from cached DB identifiers.
 - Do not auto-provision custom attribute definitions from generic write paths.
+- Do not create another parallel ACC service.
+- Do not bypass `SiOffice.AccService` from the UI when in service mode.
+- Do not put business decisions inside `SiOffice.AutodeskConnector`.
+- Do not use a DB-only fallback to open or validate an ACC file.
+- Do not mix upload / reconciliation / filing under one ambiguous service.
+- Do not use `AccInboxReconciliationService` to perform upload or filing.
 - Do not change schema, migrations, ModelSnapshot, `ProjectFileInstance`, `Refile`, `MoveToProject` service, ACC metadata write path, `SetItemCustomAttributesAsync`, or `TokenProvider` as part of ACC documentation/principles work.
 - Do not introduce new ACC bootstrap behavior at startup.
 
@@ -70,6 +157,11 @@ Define the binding principles for how the application interacts with ACC, what i
 - Reintroduction of `SiInbox.Move.TargetProjectAlternativeId` — dropped.
 - ACC Inbox folder names derived from Gmail mailbox-local `message.id` /
   `threadId` — dropped.
+- An additional parallel ACC service alongside `SiOffice.AccService` — **dropped** (not approved).
+- Bypassing `SiOffice.AccService` from the UI in service mode — **dropped**.
+- Business decisions inside `SiOffice.AutodeskConnector` — **dropped**.
+- DB-only fallback for opening / validating an ACC file — **dropped**.
+- Mixing upload / reconciliation / filing into one ambiguous service — **dropped**.
 - Flat `MSG_<MessageKey>\…` ACC Inbox layout as the **final** target —
   replaced in principle by `THREAD_<ThreadKey>\MSG_<MessageKey>\…`. Any
   current implementation difference is logged in
@@ -77,7 +169,7 @@ Define the binding principles for how the application interacts with ACC, what i
 - Deep documentation of every ACC API call — postponed.
 
 ## Relevant terms / search terms
-ACC, BIM 360, AccInboxLayout, AccInboxReconciliationService, Bim360Service, EnsureCustomAttributeDefinitionsAsync, SetItemCustomAttributesAsync, SiInbox.Move.TargetAltId, ProjectFileInstance, ShowAttachmentInAccAsync, MoveToProjectProcessActionHandler, MissingInAcc, StaleAccReference, AccService, TokenProvider, two-legged, three-legged.
+ACC, BIM 360, AccInboxLayout, AccInboxReconciliationService, Bim360Service, EnsureCustomAttributeDefinitionsAsync, SetItemCustomAttributesAsync, SiInbox.Move.TargetAltId, ProjectFileInstance, ShowAttachmentInAccAsync, MoveToProjectProcessActionHandler, MissingInAcc, StaleAccReference, AccService, AccService:BaseUrl, service mode, SiOffice.AccService, SiOffice.AutodeskConnector, ACC service boundary, technical connector, privileged ACC, TokenProvider, two-legged, three-legged.
 
 ## Relevant code areas (informational)
 - `SiOffice.AccService`

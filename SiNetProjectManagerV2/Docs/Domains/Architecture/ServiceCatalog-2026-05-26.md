@@ -87,9 +87,20 @@ changes in this round. Where appropriate, an entry is also linked from
   `DocumentationVsImplementationGaps-2026-05-26.md` when discovered.
 - **Service overlap candidates.** ACC operations are reachable from at
   least three places (`SiOffice.AccService`, `SiOffice.AutodeskConnector`,
-  `AccInboxReconciliationService`); make sure new ACC code routes through
-  the boundary defined in `ArchitecturePrinciples` §3 instead of adding a
-  fourth path.
+  `AccInboxReconciliationService`). The **authoritative split** is now
+  documented in
+  [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](../ACC/AccSystemPrinciples-2026-05-26.md)
+  § *ACC service boundaries*:
+  - `SiOffice.AccService` — privileged / service-mode ACC operations.
+  - `SiOffice.AutodeskConnector` — technical API connector only (no
+    business decisions).
+  - `AccInboxReconciliationService` — ACC Inbox existence / status
+    verification only (no upload / no filing / no ACC project creation /
+    no DB-only fallback).
+  - UI does **not** call `SiOffice.AutodeskConnector` directly for
+    business decisions. Make sure new ACC code routes through the
+    boundary defined in `ArchitecturePrinciples` §3 and `AccSystemPrinciples`
+    § *ACC service boundaries* instead of adding a fourth path.
 - **`MoveToProject` parallel paths.** Any code that performs ACC ensure /
   move outside `MoveToProjectProcessActionHandler` is a candidate overlap
   — **document, do not refactor in this round**.

@@ -399,6 +399,59 @@ or principles document.
     documented there under *Gaps / overlaps* and must be reconciled in
     follow-up rounds.
 
+### Gap 12 — ACC service boundary overlap and bypass risk
+
+- **Date identified:** 26.05.2026
+- **Domain:** ACC, Architecture.
+- **Desired principle:**
+  `SiOffice.AccService` handles privileged / service-mode ACC operations
+  (including remote service-mode usage when `AccService:BaseUrl` is
+  configured). `SiOffice.AutodeskConnector` is a **technical API
+  connector** only and must not host business decisions, workflow,
+  source-of-truth decisions, UI logic, or filing policy.
+  `AccInboxReconciliationService` verifies ACC Inbox existence / status
+  (`MissingInAcc`, `StaleAccReference`) and merges DB cache + ACC info
+  for status only; it must not perform upload, project filing, ACC
+  project creation, workflow decisions, or DB-only fallbacks. UI / WPF
+  must **not** bypass these boundaries to make business decisions; UI
+  goes through Application Services / ViewModels which in turn call the
+  appropriate service. See
+  [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](../Domains/ACC/AccSystemPrinciples-2026-05-26.md)
+  § *ACC service boundaries* and
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md).
+- **Current known / suspected state:**
+  Needs code verification. The Service Catalog identifies possible
+  overlap between `SiOffice.AccService`, `SiOffice.AutodeskConnector`,
+  and `AccInboxReconciliationService`. It has not been verified in this
+  round whether:
+  - All remote WPF callers honour `AccService:BaseUrl` and route
+    privileged ACC operations through `SiOffice.AccService`.
+  - No business decisions exist inside `SiOffice.AutodeskConnector`.
+  - `AccInboxReconciliationService` is used strictly for verification /
+    status (no upload / filing / project creation).
+  - No DB-only fallback path is used to open or validate an ACC file.
+  - UI / ViewModels never call `SiOffice.AutodeskConnector` directly for
+    business decisions.
+- **Impact / risk:**
+  Duplicate ACC paths; DB-only fallbacks; business logic embedded in a
+  technical connector; WPF clients bypassing service mode; inconsistent
+  ACC status; mixing of upload / reconciliation / filing under a single
+  ambiguous service.
+- **Status:** Needs code verification / Needs architecture alignment.
+- **Relevant areas (informational):**
+  `SiOffice.AccService`, `SiOffice.AutodeskConnector`,
+  `AccInboxReconciliationService`,
+  `MoveToProjectProcessActionHandler`, `ShowAttachmentInAccAsync`,
+  ACC-related ViewModels and Application Services, `AccService:BaseUrl`
+  configuration path.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, or service
+    creation change is made in this round.**
+  - This entry refines the ACC portion of Gap 11; Gap 11 remains the
+    broader architecture/service-boundary entry.
+  - No parallel ACC service is approved; no bypass of
+    `SiOffice.AccService` in service mode is approved.
+
 ---
 
 ## What we deliberately did NOT do while creating this register
