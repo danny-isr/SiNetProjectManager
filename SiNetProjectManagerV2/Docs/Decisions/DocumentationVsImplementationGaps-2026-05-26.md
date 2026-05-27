@@ -736,6 +736,255 @@ or principles document.
     logic) and Gap 14 (workflow / task / action handler boundary) and
     focuses the PlanReview / Inspection / Review / AI aspect.
 
+### Gap 17 — Deployment script and centralized authorization alignment
+
+- **Date identified:** 26.05.2026
+- **Domain:** Deployment, Architecture, UI, Diagnostics, ACC, Email.
+- **Desired principle:**
+  Deployment is documented from the **actual existing deployment
+  scripts / process** in this repository, not from a hypothetical one.
+  The four publish channels and the server install path are explicit:
+  [`publish-all.ps1`](../../../publish-all.ps1),
+  [`SiNetProjectManagerV2\publish-desktop.ps1`](../../publish-desktop.ps1),
+  [`SiOffice.AccService\publish-service.ps1`](../../../SiOffice.AccService/publish-service.ps1),
+  [`MasterPlan.SyncEngine\publish-console.ps1`](../../../MasterPlan.SyncEngine/publish-console.ps1),
+  [`SiNet.SecretImport\publish-tool.ps1`](../../../SiNet.SecretImport/publish-tool.ps1),
+  and the unified server installer
+  [`SiOffice.AccService\Install-OnServer.ps1`](../../../SiOffice.AccService/Install-OnServer.ps1).
+  Dependencies (ACC Service, DB, File Server, Google / Gmail / Drive /
+  Sheets, WebView2 Runtime, configuration), authorization stores
+  (per-user Windows Credential Manager / DPAPI vault on the server seeded
+  by `SiNet.SecretImport`; secure platform storage on the client),
+  WebView2 `UserDataFolder` / profile policy, and System Status health
+  coverage are explicit. **Autodesk and Google authorization are
+  centralized and reused** across windows; repeated per-window
+  authorization prompts and per-window token / `UserDataFolder` stores
+  are not allowed. If authorization is missing or expired, a **single
+  central flow** is invoked, **System Status** is updated, and a clear
+  message is shown to the user. At startup, only **lightweight
+  availability checks** and **`System Status`** updates are allowed; no
+  global scan, no migrations, no ACC project creation, no wide
+  provisioning, no automatic uploads, no workflow changes, and no silent
+  fallback from `AccService` to a local privileged path. See
+  [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](../Domains/Deployment/DeploymentPrinciples-2026-05-26.md),
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md),
+  [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md),
+  and
+  [`Domains\UI\UiPrinciples-2026-05-26.md`](../Domains/UI/UiPrinciples-2026-05-26.md).
+- **Current known / suspected state:**
+  Needs code verification. The deployment scripts exist and are
+  documented in
+  [`DEPLOYMENT.md`](../../../DEPLOYMENT.md) and the per-project
+  `DEPLOYMENT.md` files, but the application side has not been audited
+  in this round to confirm:
+  - Autodesk authorization is triggered from a **single central
+    flow** rather than from multiple windows / `ViewModel`s.
+  - Google authorization (Gmail / Drive / Sheets scopes) is triggered
+    from a **single central flow** rather than from multiple windows /
+    `ViewModel`s.
+  - All WebView2 hosts that need to share a login use the **same
+    `UserDataFolder` / profile policy**; any deliberate per-window
+    isolation is explicitly documented.
+  - `System Status` reflects auth / service health for ACC, Autodesk
+    auth, Google auth, DB, File Server, Gmail, WebView2 Runtime, and
+    AI (where applicable), and no parallel System Status mechanism has
+    been introduced.
+  - Startup performs only lightweight availability checks + System
+    Status updates (no global scan, no migrations, no wide
+    provisioning, no automatic uploads, no workflow changes, no silent
+    `AccService`→local fallback).
+  - The WPF client, in service mode (`AccService:BaseUrl` configured),
+    routes privileged ACC operations through `SiOffice.AccService` and
+    does **not** duplicate the service-side two-legged auth locally.
+- **Impact / risk:**
+  Office rollout breaks because dependencies and prerequisites are
+  unclear; repeated OAuth prompts from multiple windows; multiple token
+  stores; WebView2 sessions not shared correctly across windows that
+  should share a login (or accidentally shared across windows that
+  should be isolated); WPF bypassing service mode; parallel `System
+  Status` surfaces; startup performing forbidden wide work (global
+  scan / migrations / provisioning / uploads); silent fallback hiding
+  a missing dependency; support and debugging become hard because the
+  real deployment process and auth model are not documented in one
+  place.
+- **Status:** Needs deployment review / Needs auth architecture
+  verification.
+- **Relevant areas (informational):**
+  Deployment scripts and docs listed in the desired principle above;
+  `SiOffice.AccService`, `SiOffice.AutodeskConnector`,
+  `SiOffice.GoogleConnector` / `GoogleService`, `TokenProvider`,
+  `Bim360Service`, `AccUserBootstrapService`, WPF startup
+  (`App.xaml.cs`), Autodesk / Google login surfaces and any WebView2
+  hosts, existing System Status menu / window, `appsettings.*.json` /
+  `AccService:BaseUrl`, per-user Windows Credential Manager / DPAPI
+  vault on the server, `SiNet.SecretImport` + `Install-OnServer.ps1`.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, service
+    creation, script change, authorization-mechanism change, new
+    WebView2 profile, or re-enabling of disabled mechanisms is made
+    in this round.**
+  - Per-window Autodesk / Google authorization is **not approved**.
+  - Per-window token / `UserDataFolder` without a documented reason
+    is **not approved**.
+  - A parallel `System Status` mechanism is **not approved**.
+  - Startup-time global scan / migrations / ACC project creation /
+    wide provisioning / automatic uploads / workflow changes are
+    **not approved**.
+  - Silent fallback from `AccService` to a local privileged path is
+    **not approved**.
+  - Creating a new deployment script in this round is **not in this
+    round**.
+  - Fixing authorization code in this round is **not in this round**.
+  - This entry complements Gap 11 (service boundaries / ViewModel
+    logic), Gap 12 (ACC service boundary), Gap 13 (Google service
+    boundary), and Gap 15 (diagnostics / System Status) and focuses
+    the deployment / centralized authorization aspect.
+
+### Gap 18 — Secrets / credentials / token storage alignment
+
+- **Date identified:** 26.05.2026
+- **Domain:** Deployment, Architecture, Diagnostics, ACC, Email.
+- **Desired principle:**
+  **Service secrets**, **user OAuth tokens**, and **WebView2
+  session / profile** are **three separate concerns** with **central
+  ownership**. Service secrets are imported / stored through the
+  official secure vault path
+  (`CredentialVaultService` → Windows Credential Manager DPAPI, keyed
+  by `SecretKeys`, provisioned via `SecretSetupWindow` on the client and
+  `SiNet.SecretImport` + `Install-OnServer.ps1` on the server using the
+  encrypted `SiNet.secrets` artefact) and are **not** stored in `git`,
+  in `appsettings*.json`, or in `*.ps1` scripts. Autodesk and Google
+  **user authorization are centralized and reused across windows**;
+  Autodesk refresh tokens live in
+  `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json` (via
+  `TokenProvider`), Google user tokens live in the `FileDataStore`
+  under `GoogleReports:TokenStorePath` (default
+  `%APPDATA%\SiNet\GoogleTokens`, via
+  `GoogleAuthService` / `GoogleWebAuthorizationBroker`), and these
+  stores must **not** be mixed with service secrets. WebView2
+  `UserDataFolder` / profile policy is explicit
+  (`AppConfiguration.WebView2UserDataBasePath`, per-Google-account
+  subfolder via `WebView2Helper.CreateUserEnvironmentAsync()`, isolated
+  `acc_viewer` subfolder via `WebView2Helper.CreateAccEnvironmentAsync()`);
+  no random per-window `UserDataFolder` is created. `System Status`
+  reports auth / service health (configured / missing / expired /
+  unreachable) **without exposing secret values**. Logs never include
+  secrets, tokens, passwords, authorization codes, or cookies. See
+  [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](../Domains/Deployment/DeploymentPrinciples-2026-05-26.md)
+  § *Secrets / credentials / token storage*,
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md)
+  row *Secrets / credentials / token storage stack*, and
+  [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md).
+- **Current known / suspected state:**
+  Based on a **read-only scan** of the repository:
+  - **Service secrets — clear and centralized.** `CredentialVaultService`
+    (`SiNetSQL\Services\CredentialVaultService.cs`) is the single
+    read/write API to Windows Credential Manager via DPAPI;
+    `SecretKeys` is the single central key list;
+    `SecretProvisioningService` produces / consumes the encrypted
+    `SiNet.secrets` artefact (AES-256-CBC + PBKDF2, custom `SNET`
+    header); `SecretSetupWindow` provisions the vault on end-user
+    workstations; `SiNet.SecretImport.exe` +
+    `SiOffice.AccService\Install-OnServer.ps1` provision the per-user
+    DPAPI vault of the service account on the server.
+  - **No service secrets observed in `git`.**
+    `SiNetProjectManagerV2\appsettings.json` and
+    `SiOffice.AccService\appsettings.json` carry only non-secret
+    configuration plus explicit notes that secrets live in the vault
+    (`AccService:ApiKey` and `AccService:Certificate:Password` are
+    empty in source; `ConnectionStrings:SiNetDatabase` is empty in
+    source). Not exhaustively audited — Needs code verification across
+    all configuration / script files.
+  - **Autodesk user authorization** is implemented in
+    `SiOffice.AutodeskConnector\TokenProvider.cs`. `client_id` /
+    `client_secret` come from the vault; the **refresh token** is
+    stored at `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json` per
+    Windows user. **Whether all windows / `ViewModel`s share a single
+    `TokenProvider` instance / central flow** rather than instantiating
+    their own — **Needs code verification**.
+  - **Google user authorization** is implemented in
+    `SiOffice.GoogleConnector\Reports\GoogleAuthService.cs` via
+    `GoogleWebAuthorizationBroker` + `FileDataStore`, with the
+    token-store path configured by `GoogleReports:TokenStorePath`
+    (default `%APPDATA%\SiNet\GoogleTokens`). Drive and Sheets share
+    the same `GoogleAuthService` credential (same scopes, same store);
+    Gmail access used by the email surfaces has not been confirmed in
+    this round to share the same credential store rather than running
+    its own flow — **Needs code verification**.
+  - **WebView2 policy** is implemented in
+    `SiNetProjectManagerV2\WPFUserControl\WebView2Helper.cs` and
+    `SiNetProjectManagerV2\Services\AppConfiguration.cs`:
+    `WebView2UserDataBasePath` (configurable via
+    `WebView2:UserDataBasePath`), per-Google-account subfolder under
+    that base, and a deliberate `acc_viewer` subfolder for the ACC
+    document viewer. Whether **all** WebView2 hosts in the application
+    route through these helpers (no ad-hoc `CoreWebView2Environment`
+    creation with a random / default `UserDataFolder`) — **Needs code
+    verification**.
+  - **System Status** today is known to surface service-level health;
+    it has **not been verified in this round** that it also surfaces
+    Autodesk authorization status, Google authorization status, vault
+    status, WebView2 Runtime status, and File Server availability in a
+    single place, and that it does so **without** ever displaying
+    secret values.
+  - **Log hygiene** has not been audited in this round; it must be
+    verified that no code path logs secret values, OAuth tokens,
+    refresh tokens, authorization codes, passwords, or cookies.
+- **Impact / risk:**
+  Repeated authorization prompts from multiple windows; multiple token
+  stores; leaked secrets in config / scripts / logs; confusion between
+  service secrets and user OAuth tokens; broken office rollout when the
+  per-user DPAPI vault is not provisioned on the right account; WebView2
+  session inconsistency between windows that should share login or
+  between windows that should be isolated; `System Status` accidentally
+  exposing secret values.
+- **Status:** Needs security/auth review / Needs code verification.
+- **Relevant areas (informational):**
+  `SiNetSQL\Services\CredentialVaultService.cs`,
+  `SiNetSQL\Services\SecretKeys.cs`,
+  `SiNetProjectManagerV2\Services\SecretProvisioningService.cs`,
+  `SiNetProjectManagerV2\WPF Window\SecretSetupWindow.xaml.cs`,
+  `SiNetProjectManagerV2\Services\AppConfiguration.cs`
+  (`GetGoogleClientSecretsPath`, `GoogleTokenStorePath`,
+  `WebView2UserDataBasePath`),
+  `SiNetProjectManagerV2\WPFUserControl\WebView2Helper.cs`,
+  `SiOffice.AutodeskConnector\TokenProvider.cs`,
+  `SiOffice.AutodeskConnector\ITokenProvider.cs`,
+  `SiOffice.GoogleConnector\Reports\GoogleAuthService.cs`,
+  `SiNet.SecretImport\Program.cs`,
+  `SiOffice.AccService\Install-OnServer.ps1`,
+  `SiOffice.AccService\publish-service.ps1`,
+  `SiNetProjectManagerV2\appsettings.json`,
+  `SiOffice.AccService\appsettings.json`,
+  existing `System Status` menu / window, `AppLogger` and all
+  structured-log call sites.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, service
+    creation, script change, authorization-mechanism change, secret
+    movement, vault creation, or new WebView2 profile is made in this
+    round.**
+  - Per-window Autodesk / Google authorization flows are **not
+    approved**.
+  - Duplicate token stores without an explicit decision are **not
+    approved**.
+  - Storing secrets / tokens / passwords / authorization codes / cookies
+    in `git`, in `appsettings*.json`, in `*.ps1` scripts, or in any
+    plain-text location is **not approved**.
+  - Logging secrets / tokens / passwords / authorization codes /
+    cookies is **not approved**.
+  - Mixing service secrets with user OAuth tokens in a single store is
+    **not approved**.
+  - Showing secret values in `System Status` is **not approved**.
+  - Creating a per-window WebView2 `UserDataFolder` without a documented
+    isolation reason is **not approved**.
+  - Re-enabling disabled secret-handling mechanisms without an
+    approval round is **not approved**.
+  - This entry complements Gap 11 (service boundaries), Gap 12 (ACC
+    service boundary), Gap 13 (Google service boundary), Gap 15
+    (diagnostics / System Status), and Gap 17 (deployment / centralized
+    authorization), and focuses the secrets / credentials / token
+    storage aspect.
+
 ---
 
 ## What we deliberately did NOT do while creating this register
