@@ -185,7 +185,8 @@ namespace SiNetProjectManagerV2.WPFUserControl
                                 sel.MessageId,
                                 sel.Subject,
                                 sel.From,
-                                sel.ParsedDate != DateTime.MinValue ? sel.ParsedDate : null);
+                                sel.ParsedDate != DateTime.MinValue ? sel.ParsedDate : null,
+                                sel.InternetMessageId);
                         }
                         else
                         {

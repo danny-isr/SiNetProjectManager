@@ -942,7 +942,7 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// </summary>
         internal static string BuildAccMirroredPath(EmailInfo emailInfo, string sanitizedFileName)
         {
-            var uniqueId = MessageKeyGenerator.GetMessageUniqueId(null, emailInfo.MessageId);
+            var uniqueId = MessageKeyGenerator.GetMessageUniqueId(emailInfo.InternetMessageId, emailInfo.MessageId);
             var messageKey = MessageKeyGenerator.GetMessageKey(uniqueId);
 
             var date = emailInfo.ParsedDate != DateTime.MinValue ? emailInfo.ParsedDate : DateTime.Now;
