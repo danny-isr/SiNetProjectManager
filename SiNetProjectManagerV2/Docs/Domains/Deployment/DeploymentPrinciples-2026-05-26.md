@@ -14,7 +14,7 @@ Define how the application is installed and operated in a customer office.
 ## Core principles
 1. `SiOffice.AccService` is a privileged Windows Service. It requires Account Admin / Project Admin / Folder `CONTROL` rights on the ACC side and is reached over HTTPS.
 2. Remote WPF clients call the service when `AccService:BaseUrl` is configured. In that mode, local `AccUserBootstrapService.ProvisionUsersAsync` is skipped on startup.
-3. The Google connection (Gmail / Drive) is provided through `SiOffice.GoogleConnector` / `GoogleService`. Outbound Gmail API logic lives in the connector / service layer, not in configuration files.
+3. The Google connection (Gmail / Drive / Sheets) is provided through `SiOffice.GoogleConnector` / `GoogleService`. Outbound Gmail / Drive / Sheets API logic and OAuth / token handling live in the connector / service layer, not in configuration files. The connector / service does **not** host business rules of `ProjectFiles` / `Workflow` / `PlanReview` / AI / Storage Destination — see [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Architecture/ServiceCatalog-2026-05-26.md) and [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](../Email/EmailSystemPrinciples-2026-05-26.md) §11. Gmail is read-only ingestion; Google Drive upload remains **postponed**; Google Sheets is integration / reporting / template surface only.
 4. Office Inbox ensure is exposed through the service endpoint and is the central remote provisioning path.
 5. Default Office Management project ID is **136** (not 126), used for project-independent workflows.
 6. Authentication / token paths (`TokenProvider`, `Bim360Service`, service architecture) are not changed without explicit approval.
@@ -27,6 +27,8 @@ Define how the application is installed and operated in a customer office.
 
 ## Dropped / cancelled / postponed
 - Running privileged ACC orchestration locally on remote clients when service mode is configured — dropped.
+- New Google Drive upload mechanism / Google Drive fallback at deployment level without an explicit decision — not approved.
+- Using `SiOffice.GoogleConnector` / `GoogleService` as a general business engine in any deployment configuration — dropped.
 - Full step-by-step office install runbook in this document — postponed (lives in service-specific DEPLOYMENT docs).
 
 ## Relevant terms / search terms

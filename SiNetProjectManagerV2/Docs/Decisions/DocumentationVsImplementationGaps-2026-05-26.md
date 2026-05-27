@@ -452,6 +452,290 @@ or principles document.
   - No parallel ACC service is approved; no bypass of
     `SiOffice.AccService` in service mode is approved.
 
+### Gap 13 — Google service boundary and Storage Destination separation
+
+- **Date identified:** 26.05.2026
+- **Domain:** Email, Project Files, Architecture.
+- **Desired principle:**
+  `SiOffice.GoogleConnector` / `GoogleService` provides Google API access
+  (Gmail, Google Drive, Google Sheets) and OAuth / token handling only.
+  **Gmail** is **read-only ingestion** plus an authoritative RFC822 header
+  source; mailbox-local `message.id` / `threadId` are runtime-only and not
+  persisted as business data. **Google Drive** is a **possible Storage
+  Destination separate from Gmail**, but Drive **upload is postponed** and
+  no new Drive upload or Drive fallback may be added without an explicit
+  decision; Drive does **not** replace DB as a business source of truth.
+  **Google Sheets** is an integration / reporting / template surface only,
+  **not** a general business source of truth. Business decisions
+  (identity, workflow, filing, Storage Destination, PlanReview, AI) remain
+  in domain services. See
+  [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](../Domains/Email/EmailSystemPrinciples-2026-05-26.md)
+  §11,
+  [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md)
+  § *Google service boundary for project files*, and
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md).
+- **Current known / suspected state:**
+  Needs code verification. `GoogleService` may contain mixed
+  responsibilities across Gmail / Drive / Sheets, and may be called
+  directly by UI or non-domain code. It has not been verified in this
+  round whether:
+  - All Gmail business identity (`MessageUniqueId`, `MessageKey`,
+    `ThreadKey`) is derived in domain services rather than inside
+    `GoogleService`.
+  - No code persists Gmail mailbox-local `message.id` / `threadId` as
+    business identifiers (related to Gaps 1, 2).
+  - No code path writes back to Gmail.
+  - No active Google Drive upload mechanism / Drive fallback exists
+    beyond the postponed status.
+  - Google Sheets is not used as a business source of truth in any
+    domain without an explicit decision.
+  - UI / ViewModels do not bypass domain services to call `GoogleService`
+    for business decisions.
+- **Impact / risk:**
+  Business rules embedded in a connector; confusion between Gmail and
+  Google Drive as destinations; mailbox-local Gmail IDs leaking into the
+  DB as business identifiers; unsanctioned Google Drive upload / Drive
+  fallback paths; Google Sheets becoming an accidental business source of
+  truth; UI bypass of domain services through the Google connector.
+- **Status:** Needs code verification / Needs architecture alignment.
+- **Relevant areas (informational):**
+  `SiOffice.GoogleConnector\GoogleService.cs`,
+  `SiNetSQL\Services\EmailIngestion\EmailIngestionService.cs`,
+  `MessageKeyGenerator`, `EmailManagementView`,
+  `ProjectFileFilingService`, Storage Destination configuration paths,
+  any Google Drive / Sheets helpers within the connector.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, or service
+    creation change is made in this round.**
+  - This entry complements Gaps 1, 2, 5, 6, and 11. It does not replace
+    them; it focuses the Google connector / service boundary aspect.
+  - No new Google Drive upload mechanism, no Google Drive fallback, and
+    no general use of Google Sheets as a business source of truth are
+    approved in this round.
+
+### Gap 14 — Workflow / Task / Action handler boundary alignment
+
+- **Date identified:** 26.05.2026
+- **Domain:** Workflow, Architecture, UI.
+- **Desired principle:**
+  `Workflow` is the long-running business process (stages, transitions,
+  policy by project type, controlled advancement). `Task` is an
+  executable unit of work; it can be part of a `Workflow` but does not
+  replace it. `Action Handler`s execute business operations through the
+  approved dispatcher (e.g. `IProcessActionHandler`); existing handlers
+  must be reused or extended instead of creating parallel ad-hoc chains.
+  `RuntimeAction` is an action description / state, **not** a parallel
+  workflow engine, and must not bypass `Workflow` / `Task` /
+  `Action Handler` / `Completion`. `Completion` records the result,
+  invokes the handler when required, updates the workflow when required,
+  surfaces and logs failure, and must not silently mark success when the
+  handler failed. UI / `ViewModel`s must not bypass these boundaries:
+  they call Service / Dispatcher / Handler / Use Case and surface the
+  result to the user. See
+  [`Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](../Domains/Workflow/WorkflowPrinciples-2026-05-26.md)
+  § *Workflow / Task / Action handler boundaries*,
+  [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Domains/Architecture/ArchitecturePrinciples-2026-05-26.md)
+  § *Workflow vs Task*,
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md),
+  and
+  [`Domains\UI\UiPrinciples-2026-05-26.md`](../Domains/UI/UiPrinciples-2026-05-26.md).
+- **Current known / suspected state:**
+  Needs code verification. It has not been verified in this round
+  whether:
+  - Any `ViewModel` executes business actions
+    (`MoveToProject`, `ReviewTask`, `FileQuoteMaterial`,
+    `AddMaterialToProject`, `TaskCompletion`, `RuntimeAction`-related
+    operations) directly instead of going through a Service /
+    Dispatcher / Handler / Use Case.
+  - Any `ViewModel` changes `WorkflowStage` or `ProjectStatus` directly.
+  - Task completion always goes through the agreed completion / handler
+    path (records result, invokes handler, updates workflow, surfaces
+    and logs failure) rather than being a status-only shortcut.
+  - Any `RuntimeAction` path acts as a parallel workflow engine that
+    bypasses `Workflow` / `Task` / `Action Handler` / `Completion`.
+  - Any completion / handler path contains a fallback that signals
+    success even when the underlying business execution failed.
+  - New action chains have been added in parallel to an existing
+    handler that already covers the case (instead of extending the
+    existing handler).
+- **Impact / risk:**
+  Workflow stage changes outside the workflow engine; task closure
+  without business execution; duplicated action paths; hidden failures;
+  inconsistent UI status; `RuntimeAction` used as a second workflow
+  engine; `ProjectStatus` misused as a `WorkflowStage`.
+- **Status:** Needs code verification / Needs architecture alignment.
+- **Relevant areas (informational):**
+  `SiNetSQL` workflow services / `WorkflowEngine`,
+  `IProcessActionHandler` dispatcher and handlers
+  (`MoveToProjectProcessActionHandler`, `ReviewTask*`,
+  `FileQuoteMaterial*`, `AddMaterialToProject*`, `TaskCompletion*`,
+  `RuntimeAction`-related handlers), task services, completion paths,
+  `RuntimeAction` consumers, `SiNetProjectManagerV2` ViewModels for
+  workflow / tasks / actions, `WorkflowManagementWindow`.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, or service
+    creation change is made in this round.**
+  - This entry complements Gap 11 (service boundaries / ViewModel
+    logic) and focuses the workflow / task / action-handler /
+    runtime-action / completion aspect.
+  - Parallel action flow outside the agreed dispatcher, direct `Task`
+    closure that bypasses the agreed completion / service / handler
+    path, direct workflow stage changes from the UI / `ViewModel`,
+    `ProjectStatus` used as a `WorkflowStage`, `RuntimeAction` as an
+    additional workflow engine, and fallbacks that signal success
+    despite a failed handler are all **not approved**.
+
+### Gap 15 — Diagnostics, logging, and user-visible status alignment
+
+- **Date identified:** 26.05.2026
+- **Domain:** Diagnostics, UI, Architecture.
+- **Desired principle:**
+  Logs are for diagnostics, but **user-impacting problems must be
+  visible in the UI**. The application already has a **System Status**
+  menu / mechanism for service / system-level health; it must be
+  **reused or extended**, not duplicated by a parallel mechanism.
+  **Item-specific** problems (a specific file upload, a specific email
+  not found in Gmail, a specific handler failure, an invalid
+  alternative name) must appear as **local UI status** near the
+  relevant item, in addition to the structured log. `Recovery` and
+  `Reconciliation` check the relevant source of truth (ACC, current
+  user's Gmail mailbox, Storage Destination) and never introduce silent
+  fallbacks. **Disabled / postponed / candidate-for-removal** mechanisms
+  must remain documented with a stated status and reason, and must not
+  be silently revived. See
+  [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md),
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md),
+  [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Domains/Architecture/ArchitecturePrinciples-2026-05-26.md)
+  § *Diagnostics / user-visible status*, and
+  [`Domains\UI\UiPrinciples-2026-05-26.md`](../Domains/UI/UiPrinciples-2026-05-26.md).
+- **Current known / suspected state:**
+  Needs code verification. Some failures may currently be **log-only**
+  and not visible to the user; some user-facing errors may be ambiguous
+  (e.g. a bare `Metadata error`) without explaining what happened,
+  whether retry is possible, or whether manual action is required. The
+  existing System Status menu exists and should be reused / extended
+  rather than duplicated. It has not been verified in this round
+  whether all structured log lines use central logging (e.g.
+  `AppLogger`) with explicit tags (`[AccInboxReconciliation]`,
+  `[AttachmentUploadStatus]`, `[WorkflowCompletion]`,
+  `[ProjectFileInstanceRefresh]`), business identifiers, Storage
+  Destination, and status / reason / failure category, or whether any
+  silent fallback still marks a failed operation as success.
+- **Impact / risk:**
+  Users cannot understand the current state of their actions; support
+  and debugging rely only on logs; failures are hidden by silent
+  fallbacks; a parallel System Status mechanism is created instead of
+  extending the existing one; disabled / postponed mechanisms are
+  revived by accident; UI shows ambiguous messages that do not lead to
+  a clear next step.
+- **Status:** Needs code verification / Needs UX alignment.
+- **Relevant areas (informational):**
+  `AppLogger`, structured-log call sites
+  (`AccInboxReconciliationService`, attachment upload paths,
+  `IProcessActionHandler` handlers, `ProjectFileInstance` refresh
+  paths), existing System Status menu / window in
+  `SiNetProjectManagerV2`, error / status surfaces in `ViewModel`s and
+  views (`EmailManagementView`, `ProjectWorkView`,
+  `WorkflowManagementWindow`), recovery / reconciliation services.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, service
+    creation, or UI mechanism creation is made in this round.**
+  - A new System Status mechanism parallel to the existing one is
+    **not approved**.
+  - `log`-only error reporting when the failure affects the user is
+    **not approved**.
+  - Vague user messages such as a bare `Metadata error` without a
+    clear interpretation are **not approved**.
+  - Silent fallback that hides a failure (including marking success
+    when a handler failed) is **not approved**.
+  - Re-enabling disabled mechanisms without an explicit approval round
+    is **not approved**.
+  - This entry complements Gap 11 (service boundaries / ViewModel
+    logic) and Gap 14 (workflow / task / action handler boundary) and
+    focuses the diagnostics / user-visible status aspect.
+
+### Gap 16 — PlanReview / Inspection / Review / AI boundary alignment
+
+- **Date identified:** 26.05.2026
+- **Domain:** PlanReview, Workflow, AI, UI, Architecture.
+- **Desired principle:**
+  `PlanReview` is a **business `Workflow`** for reviewing plans and uses
+  the regular `Workflow` / `Task` / `Action Handler` mechanisms; it must
+  **not** become a parallel workflow engine and must **not** run as a
+  silent side effect of file filing. `Inspection` / `Review` is a
+  **reusable work component inside a `Workflow`** with a **dedicated UI
+  window**; inside `PlanReview` it may be a **stage**, a **`Task`**
+  (when assignment / tracking / completion are required), or an
+  **`Action`** (when a concrete operation is required via an agreed
+  `Action Handler` / `Service`). The dedicated UI is **not** a source
+  of truth and **not** a workflow engine. **`AI` is advisory only**: it
+  must not approve, reject, close a `Task`, advance a `Workflow` stage,
+  file a file, change business metadata, or write back to DB / ACC /
+  Storage Destination without **explicit user confirmation**, an
+  **agreed `Action Handler`**, or an **approved `Workflow` / `Task`
+  path**. DB is the source of truth for the business process; Storage
+  Destination is the source of truth for the physical existence of the
+  file under review; AI and UI are **not** sources of truth. See
+  [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](../Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md)
+  § *PlanReview / Inspection / Review / AI boundaries*,
+  [`Domains\AI\AiSystemPrinciples-2026-05-26.md`](../Domains/AI/AiSystemPrinciples-2026-05-26.md)
+  § *AI boundary inside business workflows*,
+  [`Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](../Domains/Workflow/WorkflowPrinciples-2026-05-26.md)
+  § *Workflow / Task / Action handler boundaries*,
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md),
+  and
+  [`Domains\UI\UiPrinciples-2026-05-26.md`](../Domains/UI/UiPrinciples-2026-05-26.md).
+- **Current known / suspected state:**
+  Needs code verification. The current implementation may mix Review UI,
+  Inspection logic, PlanReview flow, Tasks, Actions, and AI-related
+  ideas without clear boundaries. It has not been verified in this
+  round whether:
+  - `PlanReview` uses the regular `Workflow` / `Task` / `Action Handler`
+    mechanisms (and not a parallel engine).
+  - File filing avoids silently triggering plan review; any trigger
+    routes through `Task` / `Workflow` / `Action Handler`.
+  - The Inspection / Review UI window invokes Services / Handlers and
+    does not change `Review` / `Workflow` / `Task` state directly.
+  - Any AI integration is wired as advisory only, with no auto-approve /
+    auto-reject / auto-complete / auto-advance / autonomous state
+    writes.
+- **Impact / risk:**
+  Parallel workflow paths; UI-driven business state changes; AI
+  becoming an accidental decision maker; `Inspection` / `Review` logic
+  bypassing the `Workflow` / `Task` / `Action Handler` mechanisms;
+  silent side-effects from file filing; duplicate or shadow review
+  data stores.
+- **Status:** Needs code verification / Needs architecture alignment.
+- **Relevant areas (informational):**
+  PlanReview services and workflows, Inspection / Review dedicated UI
+  window, `IProcessActionHandler` handlers related to review / task
+  completion, AI integration points, `ProjectFileFilingService` and
+  `MoveToProjectProcessActionHandler` for the filing-vs-review boundary,
+  `WorkflowEngine`, task services, `EmailManagementView` /
+  `ProjectWorkView` / `WorkflowManagementWindow` surfaces.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, service
+    creation, or UI mechanism creation is made in this round.**
+  - `Inspection` / `Review` as a stand-alone workflow engine is **not
+    approved**.
+  - `PlanReview` as a silent side effect of file filing is **not
+    approved**.
+  - UI that changes `Review` / `Workflow` / `Task` state directly is
+    **not approved**.
+  - `AI` as an autonomous decision maker is **not approved**.
+  - `AI` auto-approve / auto-reject / auto-complete / auto-advance is
+    **not approved**.
+  - A parallel mechanism alongside `Workflow` / `Task` /
+    `Action Handler` for `PlanReview` / `Inspection` / `Review` is
+    **not approved**.
+  - Storing `AI` output as business truth without explicit user
+    confirmation is **not approved**.
+  - Sending secrets / tokens / credentials / sensitive data to AI
+    without an explicit decision is **not approved**.
+  - This entry complements Gap 11 (service boundaries / ViewModel
+    logic) and Gap 14 (workflow / task / action handler boundary) and
+    focuses the PlanReview / Inspection / Review / AI aspect.
+
 ---
 
 ## What we deliberately did NOT do while creating this register
@@ -472,3 +756,8 @@ or principles document.
 - [`Docs\Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md)
 - [`Docs\Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Domains/Architecture/ArchitecturePrinciples-2026-05-26.md)
 - [`Docs\Domains\UI\UiPrinciples-2026-05-26.md`](../Domains/UI/UiPrinciples-2026-05-26.md)
+- [`Docs\Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](../Domains/Workflow/WorkflowPrinciples-2026-05-26.md)
+- [`Docs\Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md)
+- [`Docs\Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md)
+- [`Docs\Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](../Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md)
+- [`Docs\Domains\AI\AiSystemPrinciples-2026-05-26.md`](../Domains/AI/AiSystemPrinciples-2026-05-26.md)

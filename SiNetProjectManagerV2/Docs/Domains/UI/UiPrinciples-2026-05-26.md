@@ -28,6 +28,14 @@ Define how the desktop UI is built and where its responsibility ends.
 - Do not build ACC Viewer URLs from DB identifiers as a UI fallback.
 - Do not introduce blocking calls on the UI thread.
 - Do not scatter inline formatting; use centralized helpers for labels/formats.
+- Do not close a `Task` from a `ViewModel` without going through the agreed completion / service / handler path (see `WorkflowPrinciples` § *Workflow / Task / Action handler boundaries*).
+- Do not change `WorkflowStage` or `ProjectStatus` directly from a `ViewModel`; transitions go through workflow actions / engine only.
+- Do not execute business actions (`MoveToProject`, `ReviewTask`, `FileQuoteMaterial`, `AddMaterialToProject`, `TaskCompletion`, `RuntimeAction`-related operations) directly from a `ViewModel`; call a Service / Dispatcher / Handler / Use Case.
+- Do not surface user-impacting failures as **log-only**; system-level health goes through the **existing System Status** menu and item-level problems go through **local UI status** near the relevant item (see [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Diagnostics/DiagnosticsPrinciples-2026-05-26.md)).
+- Do not create a new System Status / notifications mechanism in parallel to the existing one; use or extend it.
+- Do not show vague messages such as a bare `Metadata error`; the user must understand what happened, what it means, whether retry is possible, and whether a manual action is required.
+- Do not let the **Inspection / Review** UI window change `Review` / `Workflow` / `Task` state directly; the window invokes the agreed Services / Handlers (see [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](../PlanReview/PlanReviewPrinciples-2026-05-26.md) § *PlanReview / Inspection / Review / AI boundaries*).
+- Do not let `AI` output drive business actions from the UI (approve / reject / close / advance / write state) without explicit user confirmation or an agreed `Action Handler`.
 
 ## Dropped / cancelled / postponed
 - `GmailVisibleAttachmentsDomExtractor` as an active probe — dropped (disabled/no-op).

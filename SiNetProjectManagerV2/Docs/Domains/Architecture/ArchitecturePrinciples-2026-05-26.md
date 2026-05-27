@@ -19,15 +19,16 @@ Describe the shape of the system at a high level so domain documents can referen
    - **Connectors** (`SiOffice.GoogleConnector`, `SiOffice.AutodeskConnector`) — outbound API calls to Gmail and Autodesk.
    - **Privileged service** (`SiOffice.AccService`) — Windows Service for privileged ACC operations.
 3. **Service mode boundary:** when `AccService:BaseUrl` is configured, remote WPF clients call the service rather than running local privileged ACC orchestration.
-4. **Source-of-truth boundaries:**
+4. **Google service boundary:** `SiOffice.GoogleConnector` / `GoogleService` is the single connector / service layer for **Gmail**, **Google Drive**, and **Google Sheets** API access plus OAuth / token handling. **Gmail** is read-only ingestion + RFC822 header source (no write-back; mailbox-local IDs are not persisted). **Google Drive** is a possible Storage Destination separate from Gmail — but Drive **upload is postponed** and no new Drive upload or Drive fallback may be added without an explicit decision. **Google Sheets** is an integration / reporting / template surface only — not a general business source of truth. The Google connector / service must **not** host business rules of `ProjectFiles` / `Workflow` / `PlanReview` / AI / Storage Destination. See `EmailSystemPrinciples`, `ProjectFilesPrinciples`, and the Service Catalog.
+5. **Source-of-truth boundaries:**
    - ACC is authoritative for uploaded files (when ACC is the configured Storage Destination).
    - Gmail (RFC822 `Message-ID`, `In-Reply-To`, `References`) is authoritative for email identity and global thread relations.
    - DB is authoritative for project structure (`ProjectFile` → `ProjectAlternative`) and business workflow; `ProjectFileInstance` is a **runtime projection**, not a persisted placement tracker (see `ProjectFilesPrinciples`).
    - **Storage Destination** is authoritative for the physical existence of a file (ACC / File Server / Google Drive; Gmail is read-only ingestion only). See `ProjectFilesPrinciples`.
    - Mailbox-local Gmail identifiers (`message.id`, `threadId`) are **not** persisted as business data and are resolved on demand per current user (see `EmailSystemPrinciples` and `DatabaseIdentityPrinciples`).
-5. **Dependency Injection is mandatory** across services and view-models.
-6. **No parallel mechanisms:** before adding a service, handler, or storage path, extend an existing one. Duplicates are rejected.
-7. **No silent fallbacks:** missing data or failed calls surface visibly (log + UI), they are not papered over.
+6. **Dependency Injection is mandatory** across services and view-models.
+7. **No parallel mechanisms:** before adding a service, handler, or storage path, extend an existing one. Duplicates are rejected.
+8. **No silent fallbacks:** missing data or failed calls surface visibly (log + UI), they are not papered over.
 
 ## Business anchors (added 26.05.2026)
 
@@ -65,8 +66,22 @@ in code and documentation:
   so.
 - A task-only status shortcut that bypasses workflow stage rules is
   **forbidden**.
+- **Action Handlers** (e.g. `IProcessActionHandler` implementations) are
+  where business actions are actually executed; use / extend an existing
+  handler instead of creating a parallel ad-hoc chain.
+- **`RuntimeAction`** is an action description / state, **not** a parallel
+  workflow engine; it must not bypass `Workflow` / `Task` /
+  `Action Handler` / `Completion`.
+- **`Completion`** records the result, invokes the handler when needed,
+  updates the workflow when needed, surfaces failure to the user, logs
+  it, and never hides a handler failure behind a fallback.
+- UI / ViewModels do **not** close workflows, change stages directly, or
+  execute business actions; they call Service / Dispatcher / Handler /
+  Use Case and surface the result.
 
-See `WorkflowPrinciples` for the detailed workflow / task rules.
+See `WorkflowPrinciples` § *Workflow / Task / Action handler boundaries*
+for the detailed workflow / task / handler / runtime-action / completion
+rules.
 
 ## Service / Use Case boundaries (added 26.05.2026)
 
@@ -152,6 +167,39 @@ check.** A meaningful change includes, but is not limited to:
   without first updating that section.
 - Introducing a new fallback without explicit documentation and approval.
 
+## Diagnostics / user-visible status (added 26.05.2026)
+
+Logs alone are **not** an answer to the user. The system distinguishes
+four diagnostics layers:
+
+1. **Structured logs** via the central logging facility (e.g.
+   `AppLogger`) with explicit tags, business identifiers, Storage
+   Destination, and status / reason / failure category.
+2. **User-visible status** in the UI when a failure affects the user's
+   action. The user must understand what happened, what it means,
+   whether retry is possible, whether manual action is required, and
+   whether to contact the administrator / service.
+3. **The existing System Status menu** for system-level / service-level
+   health (e.g. `SiOffice.AccService`, Google / Gmail,
+   `SiOffice.AutodeskConnector`, DB, AI when applicable, ongoing
+   reconciliation / recovery state). **Extend** this existing mechanism;
+   do **not** create a parallel one.
+4. **Local UI status** for item-specific problems (a specific file,
+   email, task, handler action, alternative name) near the relevant
+   item.
+
+`Recovery` and `Reconciliation` check the relevant **source of truth**
+(ACC for ACC files, current user's Gmail mailbox for an email, the
+binding Storage Destination for physical existence) and update status
+accordingly. They never invent truth and must not introduce silent
+fallbacks. `Completion` (task / action) must record the result, invoke
+the handler, update the workflow, surface failure to the user, and log
+it; marking success when the handler failed is **forbidden**.
+
+Disabled / postponed / candidate-for-removal mechanisms must remain
+**documented** (status and reason) and must not be silently revived. See
+[`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Diagnostics/DiagnosticsPrinciples-2026-05-26.md).
+
 ## Manual migration rule (added 26.05.2026)
 
 Database schema migrations are **strictly manual** in this repository:
@@ -185,6 +233,16 @@ for the broader DB / migration policy.
 - Creating parallel services without checking the Service Catalog — dropped.
 - Bypassing connector / service boundary from the UI — dropped.
 - Copilot-generated EF migrations — dropped (manual only).
+- Gmail as a write Storage Destination — dropped (read-only ingestion).
+- Persisting Gmail local IDs in the DB as business data — dropped.
+- Google Drive fallback / new Google Drive upload mechanism without an explicit decision — not approved.
+- `GoogleService` as a general business engine — dropped.
+- Google Sheets as a general business source of truth — not approved.
+- `log`-only error reporting when the failure affects the user — **not approved**.
+- A new System Status / notifications mechanism in parallel to the existing one — **not approved**.
+- Vague user messages such as a bare `Metadata error` without a clear interpretation — **not approved**.
+- Silent fallback that hides a failure (including marking success when a handler failed) — **not approved**.
+- Re-enabling disabled diagnostic / fallback mechanisms without an approval round — **not approved**.
 - Deep architecture implementation detail in this document — postponed (kept short by design).
 
 ## Relevant terms / search terms

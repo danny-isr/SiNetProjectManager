@@ -327,6 +327,13 @@ Forbidden:
   `MoveToProject`, PDF rendering or attachment classification in this round.
 - Do **not** introduce a new fallback URL form or a parallel URL builder; the
   single approved property is `EmailInfo.GmailPopoutUrl`.
+- Do **not** write back to Gmail. Gmail is a read-only ingestion source.
+- Do **not** persist mailbox-local Gmail identifiers (`message.id` /
+  `threadId`) as business data (see §2.5).
+- Do **not** put business decisions (identity, workflow, filing, Storage
+  Destination, PlanReview, AI) inside `SiOffice.GoogleConnector` /
+  `GoogleService`; the connector / service layer provides API operations
+  only (see §11).
 
 ## 8. Things that were dropped / cancelled / postponed
 
@@ -355,6 +362,20 @@ Forbidden:
 - Reorganising `Docs\` (moving existing files into the new structure, marking
   older specs as `SUPERSEDED`, creating `Docs\Archive\`) is **postponed** to a
   separate approved round.
+- Mixing Gmail and Google Drive as the same Storage Destination —
+  **dropped**.
+- Writing back to Gmail — **dropped** (Gmail is read-only ingestion).
+- Persisting Gmail mailbox-local `message.id` / `threadId` in the DB as
+  business identifiers — **dropped**.
+- Adding a Google Drive upload mechanism for email attachments without an
+  explicit decision — **not approved**.
+- Google Drive fallback when the configured Storage Destination is missing
+  — **not approved**.
+- Using `SiOffice.GoogleConnector` / `GoogleService` as a general business
+  engine for email identity / workflow / filing / PlanReview / AI —
+  **dropped**.
+- Google Sheets as a general business source of truth for the email
+  domain — **not approved**.
 
 ## 9. Relevant files / classes / services
 
@@ -391,4 +412,65 @@ Forbidden:
 `AllDisplayableAttachments`, `AlreadyProcessed`, `MissingInAcc`,
 `StaleAccReference`, `JumboMail`, `WeTransfer`, `External downloads`,
 `Inline images`, `Hidden MIME part`, `EmailAttachment.IsInline`,
-`GmailVisibleAttachmentsDomExtractor`.
+`GmailVisibleAttachmentsDomExtractor`, `SiOffice.GoogleConnector`,
+`GoogleService`, `Google Drive`, `Google Sheets`, `Google service boundary`.
+
+## 11. Google service boundary (added 26.05.2026)
+
+This section is the email-domain companion to the Google service boundary
+documented in
+[`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Architecture/ServiceCatalog-2026-05-26.md)
+and
+[`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Architecture/ArchitecturePrinciples-2026-05-26.md).
+It clarifies what `SiOffice.GoogleConnector` / `GoogleService` does **for
+the email domain** and what it does not.
+
+### 11.1 Role
+
+- `SiOffice.GoogleConnector` / `GoogleService` is the **connector / service
+  layer** for Google API access: Gmail API, Google Drive API, Google Sheets
+  API, and OAuth / token handling per the existing structure.
+- For email, it provides: reading messages and headers, downloading
+  attachments, resolving `rfc822msgid:{Message-ID}` against the current
+  user's mailbox, surfacing thread membership.
+
+### 11.2 What the connector / service does NOT do for email
+
+- It does **not** decide the business identity of an email beyond returning
+  RFC822 headers.
+- It does **not** decide `MessageUniqueId` / `MessageKey` / `ThreadKey` by
+  itself — those derivations live in domain services
+  (`MessageKeyGenerator` and ingestion / identity services).
+- It does **not** decide workflow or tasks.
+- It does **not** file files into a project.
+- It does **not** decide Storage Destination.
+- It does **not** create `ProjectAlternative` rows by itself; if alternative
+  creation is needed it goes through the ProjectFiles services per
+  [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../ProjectFiles/ProjectFilesPrinciples-2026-05-26.md).
+- It does **not** decide whether AI is invoked.
+- It is **not** a general business source of truth.
+
+### 11.3 Gmail / Drive / Sheets separation
+
+- **Gmail** — read-only ingestion source for emails and RFC822 headers.
+  Gmail is **not** a write Storage Destination; the system does **not**
+  write back to Gmail.
+- **Google Drive** — separate from Gmail. Drive may be a Storage
+  Destination for project files (see `ProjectFilesPrinciples`), but Drive
+  **upload is postponed** and Drive is **not** an email destination.
+- **Google Sheets** — reporting / template integration only. Sheets is
+  **not** a business source of truth for email identity, ingestion, or
+  filing.
+
+### 11.4 Forbidden across the Google boundary (email view)
+
+- Mixing Gmail and Google Drive as the same Storage Destination.
+- Persisting Gmail mailbox-local identifiers (`message.id`, `threadId`) as
+  business data in the DB.
+- Writing back to Gmail.
+- Using `SiOffice.GoogleConnector` / `GoogleService` to bypass
+  `ProjectFiles` / `Workflow` / Storage Destination rules.
+- Using Google Sheets as a general business source of truth without an
+  explicit decision in the relevant domain.
+- Adding a Google Drive "fallback" for email attachments or project files
+  when the configured Storage Destination is missing.

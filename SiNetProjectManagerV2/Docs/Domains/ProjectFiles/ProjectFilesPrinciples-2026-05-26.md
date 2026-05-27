@@ -296,6 +296,60 @@ Forbidden:
 - UI / DOM as a source of truth.
 - Writing the same metadata to multiple owners without declaring source and copy.
 
+## Google service boundary for project files (added 26.05.2026)
+
+This section is the ProjectFiles-domain companion to the Google service
+boundary documented in
+[`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Architecture/ServiceCatalog-2026-05-26.md)
+and
+[`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Architecture/ArchitecturePrinciples-2026-05-26.md).
+
+### Role of `SiOffice.GoogleConnector` / `GoogleService` for project files
+
+- It is the **connector / service layer** for Google API access (Gmail,
+  Google Drive, Google Sheets, OAuth / token handling).
+- For project files, it provides API operations only: reading from Google
+  Drive, downloading attachments from Gmail for ingestion, etc.
+
+### Gmail vs Google Drive vs Google Sheets
+
+- **Gmail** — read-only ingestion source for email attachments. **Not** a
+  Storage Destination for project files. The system does **not** write
+  back to Gmail.
+- **Google Drive** — a **possible Storage Destination** for project files,
+  separate from Gmail. When Drive is the configured Storage Destination,
+  Drive is the **physical source of truth** for that file. However:
+  - Google Drive **upload remains postponed** — no new Drive upload
+    mechanism is added without an explicit decision.
+  - Google Drive is **not** a fallback when ACC / File Server is missing.
+  - Google Drive does **not** replace DB as the business source of truth.
+- **Google Sheets** — reporting / template integration surface only. It is
+  **not** a Storage Destination and **not** a general business source of
+  truth for project files or workflow.
+
+### What `GoogleService` does NOT do for project files
+
+- Does **not** decide Storage Destination.
+- Does **not** file files into a project.
+- Does **not** create `ProjectAlternative` rows by itself — alternative
+  creation runs through `ProjectFileFilingService` and the alternative
+  rules above (normalization, illegal-character cleanup, duplicate
+  prevention, user-visible warnings).
+- Does **not** decide workflow.
+- Does **not** decide whether AI is invoked on a file.
+- Is **not** a general business source of truth for project files.
+
+### Forbidden across the Google boundary (project files view)
+
+- Mixing Gmail and Google Drive as the same Storage Destination.
+- Treating Gmail as a write / management destination for project files.
+- Adding a new Google Drive upload mechanism without an explicit decision.
+- Adding a Google Drive fallback when the configured Storage Destination
+  is missing.
+- Using `SiOffice.GoogleConnector` / `GoogleService` to bypass
+  ProjectFiles / Workflow / Storage Destination rules.
+- Using Google Sheets as a business source of truth for project files.
+
 ## What we do not do now
 - Do not change `ProjectFileInstance` model, table, or FK layout in this round.
 - Do not add a new persistent DB table for `ProjectFileInstance` rows.
@@ -336,6 +390,18 @@ Forbidden:
   existence check — **dropped**.
 - Deep refactor of refile pipeline — postponed.
 - **Google Drive upload — postponed.** Infrastructure may exist, but the specific Google Drive upload mechanism is not active. Do not add a new Google Drive upload mechanism and do not enable a new fallback for it.
+- A new Google Drive upload mechanism without an explicit decision —
+  **not approved**.
+- Google Drive fallback when ACC / File Server is missing — **not approved**.
+- Mixing Gmail and Google Drive as the same Storage Destination —
+  **dropped**.
+- Treating Gmail as a write / management destination for project files —
+  **dropped** (Gmail is read-only ingestion).
+- Using `SiOffice.GoogleConnector` / `GoogleService` as a general business
+  engine for project files / Storage Destination / workflow / PlanReview /
+  AI — **dropped**.
+- Google Sheets as a Storage Destination or general business source of
+  truth for project files — **not approved**.
 
 ## Relevant terms / search terms
 ProjectFile, ProjectAlternative, ProjectFileInstance, runtime projection, ProjectWork, "בעבודה 2", Storage Destination, MoveToProject, OpenQuoteProject, IProcessActionHandler, UpsertInstanceAsync, AccInboxLayout, AccInboxReconciliationService, SiInbox.Move.TargetAltId, focused refresh, scoped polling, initial full scan, project entry scan, rescan, alternative normalization, illegal-character cleanup, duplicate prevention, name-based linkage, alternative merge, alternative delete, maintenance action, invalid alternative name warning.
