@@ -17,14 +17,14 @@ Define which identifier is authoritative for each entity, where it lives, and ho
 | Internal email row | DB | `MessageUniqueId` / `MessageKey` (derived; helper) |
 | Project file (logical) | DB | `ProjectFile` |
 | Project alternative | DB | `ProjectAlternative` |
-| Project file instance | DB | `ProjectFileInstance` (cache/helper for ACC item) |
+| Project file instance (runtime view) | Built at runtime by services | `ProjectFileInstance` (**runtime projection**, not a permanent DB row per instance) |
 | File (after upload) | ACC | ACC item URN + custom attributes |
 | Task | DB | Task identity (workflow domain) |
 
 ## Core principles
 1. **RFC822 `Message-ID` is the business identity** of an email. Gmail `message.id` is mailbox-local and must not be used as a stable cross-system identifier.
 2. `MessageKey` / `MessageUniqueId` are derived helpers; centralized formatting must remain the single source of truth (`MessageKeyGenerator`-style helpers).
-3. After upload, the **ACC item identity (URN) is authoritative** for the file. `ProjectFileInstance` is a cache.
+3. After upload, the **ACC item identity (URN) is authoritative** for the file (when ACC is the configured Storage Destination). `ProjectFileInstance` is **not** a cached identity row \u2014 it is a runtime projection of the current project's file state (see `ProjectFilesPrinciples`).
 4. DB never alone proves a file still exists in ACC (see ACC principles).
 5. Deduplication on import is based on RFC822 `Message-ID` + canonical key, never on Gmail `message.id` alone.
 6. `Version` segment in the file naming convention is **not** a version tracker. New files always get `Version = 1`. ACC manages version history natively.

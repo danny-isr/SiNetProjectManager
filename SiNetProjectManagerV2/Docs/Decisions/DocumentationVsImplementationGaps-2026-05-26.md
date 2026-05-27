@@ -205,6 +205,45 @@ or principles document.
 - **Relevant files / classes (informational):**
   `SiNetProjectManagerV2\Services\GmailVisibleAttachmentsDomExtractor.cs`.
 
+### Gap 9 — `ProjectFileInstance` is documented/implemented as DB/cache helper, but desired principle is runtime projection
+
+- **Date identified:** 26.05.2026
+- **Domain:** Project Files, Database Identity, UI (`ProjectWork`).
+- **Desired principle:**
+  `ProjectFileInstance` is a **runtime projection** for the selected project,
+  built from DB definitions (`Project`, `ProjectFolder`, `ProjectFile`,
+  `ProjectAlternative`, `Storage Destination`) plus the current Storage
+  Destination state (ACC / File Server / Google Drive). It is not a
+  permanent DB entity per file instance and not a source of truth.
+  See
+  [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md)
+  and
+  [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](../Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md).
+- **Current known / suspected state:**
+  Older documentation and parts of the code treat `ProjectFileInstance` as a
+  persisted model / DB cache helper (with `UpsertInstanceAsync`,
+  `ProjectFileInstanceId`, model/table/FK layout). It has not been verified
+  whether the runtime use in `ProjectWork` already behaves as a projection
+  or still depends on persisted instance rows.
+- **Impact / risk:**
+  - Creating too many persistent file-instance rows in the DB.
+  - Unclear source of truth between DB rows and the actual Storage
+    Destination state.
+  - Stale state shown to users when storage changes outside the app.
+  - Confusion between a runtime view and stable business data.
+- **Status:** Needs code verification / Needs architecture alignment.
+- **Relevant areas (informational):**
+  `ProjectWork` / `ProjectWorkView`, `ProjectFileFiling`,
+  `ProjectFileInstance` (model and consumers), `ProjectFileFilingService`,
+  `MoveToProject` / `MoveToProjectProcessActionHandler`,
+  `UpsertInstanceAsync`, Storage Destination services.
+- **Notes:**
+  - A future, **focused / scoped** refresh mechanism (current project,
+    open folders, active work area) may be needed for storage sources
+    without reliable events (e.g. Google Drive in its current state).
+  - **No new refresh / polling mechanism is added in this round.**
+  - Broad, system-wide polling is **not** approved.
+
 ---
 
 ## What we deliberately did NOT do while creating this register
