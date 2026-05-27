@@ -22,9 +22,106 @@ Define how files are filed into projects, how they relate to ACC, and how `MoveT
    - New enrichment fields are nullable / default-valued.
    - No schema, migration, or ModelSnapshot changes are required for enrichment.
 4. `ProjectFileInstance` is a **runtime projection** of the selected project's file state (see the dedicated section below). It is not a stable per-instance DB entity, not a permanent cache, and not a source of truth on its own.
-5. `Version` segment in the filename is not a version tracker.
+5. `ProjectFile` is a relatively stable DB entity that defines the **type / target / template** of a file (which file types or filing targets exist in the system); it is part of the stable business structure.
+6. `ProjectAlternative` is a persisted DB entity that is **dynamic per project**. It may be **auto-created** from a real file name or a filing action after **normalization and duplicate prevention**, but it is **not** auto-removed when files disappear (see the dedicated section below).
+7. `Version` segment in the filename is not a version tracker.
 7. External files and uploaded attachments share the same filing pipeline (`IProcessActionHandler` dispatcher), not parallel ad-hoc paths.
 8. Refile and MoveToProject paths are protected:
+
+## ProjectAlternative — persisted but dynamic per project (added 26.05.2026)
+
+`ProjectAlternative` is a **persisted DB entity**, but its lifecycle is
+**dynamic per project** and **discovered from actual project files / filing
+actions** rather than predefined up-front:
+
+- It belongs to a project.
+- It represents an alternative / variant of a `ProjectFile` within that
+  project.
+- It is stored in the DB.
+- It **can be created automatically** when the system detects a new
+  alternative from a **real file name** or from a **filing action**
+  (`MoveToProject`, refile, ingestion of an external/uploaded file).
+
+**Auto-creation is not blind — it must run through these steps in order:**
+
+1. **Normalization** — trim leading and trailing whitespace from the
+   candidate alternative name. Apply any other simple normalization
+   already defined by the existing alternative-name rules.
+2. **Illegal-character cleanup** — remove or handle characters that are
+   not allowed in an alternative name, according to the **existing**
+   alternative-name rules in the system. No new naming rule is introduced
+   in this documentation round.
+3. **Duplicate prevention** — after normalization + cleanup, check for an
+   existing alternative in the same project with the same effective name
+   and do **not** create a duplicate. Example: if `A1` already exists and a
+   filename contains `A1`, no new alternative is created.
+4. **User-visible warning on suspicious / invalid names** — if the
+   candidate name contains illegal characters or otherwise looks invalid:
+   - if it can be safely normalized per the existing rules, normalize it;
+   - otherwise, **do not silently ignore the issue** — surface a
+     user-visible warning / indication that the name needs handling.
+
+**Name-based linkage (added 26.05.2026):**
+
+- The link between a file and its `ProjectAlternative` is **name-based**:
+  it is derived from the alternative name as it appears in the file name /
+  file naming template, not from a hard ID relationship persisted on every
+  file path.
+- Therefore any **deletion, rename, or merge** of an alternative must
+  consider the **actual file names** in the project, not just the DB row.
+- Deleting a DB row is **not** sufficient if files in the project still
+  carry the alternative name.
+
+**Deletion of `ProjectAlternative` (maintenance action only):**
+
+- `ProjectAlternative` is **not** removed automatically just because no
+  file currently uses it. Absence at a given moment does not prove the
+  alternative is obsolete.
+- Deletion is a **dedicated maintenance action**, never an automatic side
+  effect of scanning or refresh.
+- Before deletion, the system must perform a **full scan of the project's
+  files** and verify that **no file / instance currently uses the
+  alternative name**.
+  - If the alternative is fully empty in the project, it may be deleted.
+  - If any file still uses the name, or if no full scan was performed, it
+    must **not** be deleted.
+- Reminder: deleting a `ProjectAlternative` while files still carry its
+  name will cause it to be **re-created automatically** on the next scan,
+  because alternative linkage is name-based.
+
+**Merging `ProjectAlternative` (maintenance action only):**
+
+- Merging alternatives is an **explicit, user-driven maintenance action**.
+  It is never automatic.
+- Required steps:
+  1. The user selects a **source** alternative.
+  2. The user selects a **target** alternative.
+  3. The system **remaps** usages from the source to the target.
+  4. Where required for consistency, the system **renames file names** so
+     they reflect the **target** alternative name (name-based linkage).
+  5. The source alternative may be **removed only after** it has **no
+     remaining file usage** in the project (verified by full project
+     scan).
+- No new merge mechanism is created in this documentation round; this
+  section only describes the required behavior for a future approved
+  implementation round.
+
+**Forbidden for `ProjectAlternative`:**
+
+- Creating duplicates that differ only by leading / trailing whitespace.
+- Creating an alternative with illegal characters without a user-visible
+  warning.
+- Silently ignoring an invalid / suspicious alternative name.
+- Auto-deleting alternatives because a file is missing / not found.
+- Deleting an alternative without a full scan of the project's files.
+- Assuming a DB-row deletion alone is sufficient when files still carry
+  the alternative name.
+- Auto-merging alternatives without an explicit user-selected source and
+  target.
+- Performing a merge without considering / updating the relevant file
+  names.
+- Treating the `ProjectAlternative` list as a runtime projection — it is
+  persisted business data, not a runtime view.
 
 ## ProjectFileInstance — runtime projection (added 26.05.2026)
 
@@ -68,6 +165,31 @@ currently exists in this project* — nothing more, nothing less.
   to the configured destination.
 - Gmail is read-only ingestion only.
 
+**Project entry — initial full scan (added 26.05.2026):**
+
+- When the user **enters a project**, the system performs a **full scan of
+  that project** in order to build the `ProjectFileInstance` runtime
+  projection for the current project.
+- This full scan is **scoped to the current project only** — it is never a
+  full scan of all projects or a system-wide scan.
+- During this initial scan, new `ProjectAlternative` rows may be created
+  automatically (per the `ProjectAlternative` rules above), but existing
+  alternatives are **not** removed.
+
+**After the initial scan:**
+
+- The projection is updated through **internal application events**
+  (file added / uploaded / filed / moved / deleted / metadata updated).
+- The projection may be refreshed through **focused / targeted refresh**
+  scoped to the current project, the open folders, and the active work
+  area.
+- A **full project rescan** is performed **only**:
+  - on **explicit user request** (e.g. a "refresh" / "rescan" action), or
+  - through a **dedicated maintenance / system action** that explicitly
+    requires it.
+- A full rescan is **not** scheduled automatically every few minutes on an
+  open project.
+
 **Refresh strategy (future, not implemented in this round):**
 
 The runtime projection must reflect events that change file state, for
@@ -84,13 +206,16 @@ Rules for a future refresh mechanism:
 
 - When the storage source supports reliable events, **use the events**.
 - When the storage source has no reliable event stream in the current
-  implementation (for example Google Drive in its current state), a future
-  **focused refresh / targeted polling** mechanism will be required.
+  implementation (for example Google Drive in its current state, or a
+  File Server without a reliable watcher, or ACC when explicit
+  reconciliation / validation is required), a future **focused refresh /
+  targeted polling** mechanism will be required.
 - Any future refresh must be **scoped**:
   - to the **current project**,
   - to the **open folders**,
   - to the **active work area**.
 - Broad, system-wide polling across all projects is **not** allowed.
+- Automatic full rescans on a timer for an open project are **not** allowed.
 - No new refresh / polling mechanism is added in this documentation round.
   It is described here as a principle for a future approved round.
 
@@ -174,14 +299,29 @@ Forbidden:
 ## What we do not do now
 - Do not change `ProjectFileInstance` model, table, or FK layout in this round.
 - Do not add a new persistent DB table for `ProjectFileInstance` rows.
+- Do not auto-delete or auto-merge `ProjectAlternative` rows.
+- Do not delete a `ProjectAlternative` without a full project scan verifying no file still uses its name.
+- Do not silently accept an invalid / illegal `ProjectAlternative` name — surface a user-visible warning.
+- Do not assume that deleting a `ProjectAlternative` DB row alone is sufficient when files still carry the alternative name.
+- Do not implement a merge/delete maintenance flow for `ProjectAlternative` in this round; only document it as a principle.
+- Do not perform a global / system-wide full scan across all projects.
+- Do not perform an automatic recurring full rescan on an already-open project.
 - Do not change refile flows or `UpsertInstanceAsync`.
 - Do not add a refresh / polling mechanism in this round.
+- Do not auto-change a file's Storage Destination based on where a copy was found during scan.
 - Do not add startup-time browser authorization or unrelated ACC bootstrap behavior for filing.
 - Do not write metadata that references missing definition IDs.
 
 ## Dropped / cancelled / postponed
 - `ProjectFileInstance` as a permanent DB entity / cache per every possible file instance — **dropped** as a principle (replaced by the runtime projection model above).
 - Persisting runtime projection state as if it were stable business data — **dropped**.
+- Automatic deletion of `ProjectAlternative` when no file currently uses it — **dropped** (removal / merge is a dedicated maintenance action only).
+- Deleting a `ProjectAlternative` without a full project scan — **dropped**.
+- Silently ignoring an invalid / illegal `ProjectAlternative` name — **dropped** (must surface a user-visible warning).
+- Automatic merge of `ProjectAlternative` rows without user-selected source / target — **dropped**.
+- Implementing the actual merge / delete maintenance flow for `ProjectAlternative` — **postponed** to a future approved round; only documented as a principle here.
+- Global / system-wide full scan across all projects — **dropped** (not approved).
+- Automatic recurring full rescan on an open project — **dropped** (full rescan only by explicit user request or dedicated maintenance/system action).
 - Broad, system-wide polling of file state — **dropped** (not approved).
 - New refresh / polling mechanism — **postponed** to a future approved round; must be scoped (current project / open folders / active work area).
 - Filename-based version tracking — dropped.
@@ -198,7 +338,7 @@ Forbidden:
 - **Google Drive upload — postponed.** Infrastructure may exist, but the specific Google Drive upload mechanism is not active. Do not add a new Google Drive upload mechanism and do not enable a new fallback for it.
 
 ## Relevant terms / search terms
-ProjectFile, ProjectAlternative, ProjectFileInstance, runtime projection, ProjectWork, "בעבודה 2", Storage Destination, MoveToProject, OpenQuoteProject, IProcessActionHandler, UpsertInstanceAsync, AccInboxLayout, AccInboxReconciliationService, SiInbox.Move.TargetAltId, focused refresh, scoped polling.
+ProjectFile, ProjectAlternative, ProjectFileInstance, runtime projection, ProjectWork, "בעבודה 2", Storage Destination, MoveToProject, OpenQuoteProject, IProcessActionHandler, UpsertInstanceAsync, AccInboxLayout, AccInboxReconciliationService, SiInbox.Move.TargetAltId, focused refresh, scoped polling, initial full scan, project entry scan, rescan, alternative normalization, illegal-character cleanup, duplicate prevention, name-based linkage, alternative merge, alternative delete, maintenance action, invalid alternative name warning.
 
 ## Relevant code areas (informational)
 - `ProjectWork` / `ProjectWorkView`

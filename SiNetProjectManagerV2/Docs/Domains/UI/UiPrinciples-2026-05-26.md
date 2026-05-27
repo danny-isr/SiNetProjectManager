@@ -43,6 +43,6 @@ WPF, MVVM, WebView2, WebView2Helper, ExecuteScriptAsync, GmailPopoutUrl, EmailMa
 Sources (archived): `ProjectWork-Documentation.md`, `Style-Compliance-Audit.md`.
 
 - The active TFM is **.NET 10**. Older `.NET 8` references in archived docs are historical.
-- `ProjectWorkView` ("בעבודה 2") is a central work screen — file tree on one side, ACC WebView2 viewer on the other. When the user enters a project, this screen drives the construction of the `ProjectFileInstance` **runtime projection** for the current project (see `ProjectFilesPrinciples`). The UI binds to that projection — it is not a permanent DB cache.
+- `ProjectWorkView` ("בעבודה 2") is a central work screen — file tree on one side, ACC WebView2 viewer on the other. When the user enters a project, this screen drives an **initial full scan of the current project** (scoped to that project only) to build the `ProjectFileInstance` **runtime projection** (see `ProjectFilesPrinciples`). After the initial scan, the projection is updated through internal events and focused refresh; a full rescan happens only on explicit user request or a dedicated maintenance action. The UI binds to the projection — it is not a permanent DB cache.
 - XAML uses the **global** style resources `AppFontSize`, `AppFontFamily`, and `AppForeground`. Hard-coded `FontSize=` / `FontFamily=` / `Foreground=` in XAML are not allowed, except for **semantic** colors (status, alerts, badges).
 - Workflow management has a single window (`WorkflowManagementWindow`); UI does not introduce parallel Builder / Policy windows.

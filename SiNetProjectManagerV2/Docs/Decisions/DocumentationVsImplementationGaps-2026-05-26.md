@@ -205,44 +205,199 @@ or principles document.
 - **Relevant files / classes (informational):**
   `SiNetProjectManagerV2\Services\GmailVisibleAttachmentsDomExtractor.cs`.
 
-### Gap 9 — `ProjectFileInstance` is documented/implemented as DB/cache helper, but desired principle is runtime projection
+### Gap 9 — `ProjectAlternative` lifecycle and `ProjectFileInstance` runtime-projection alignment
 
-- **Date identified:** 26.05.2026
+- **Date identified:** 26.05.2026 (extended same date to cover `ProjectAlternative` lifecycle and initial-full-scan-on-project-entry semantics).
 - **Domain:** Project Files, Database Identity, UI (`ProjectWork`).
 - **Desired principle:**
-  `ProjectFileInstance` is a **runtime projection** for the selected project,
-  built from DB definitions (`Project`, `ProjectFolder`, `ProjectFile`,
-  `ProjectAlternative`, `Storage Destination`) plus the current Storage
-  Destination state (ACC / File Server / Google Drive). It is not a
-  permanent DB entity per file instance and not a source of truth.
-  See
-  [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md)
-  and
-  [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](../Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md).
+  - `ProjectFile` is a relatively stable DB entity defining file type /
+    target / template.
+  - `ProjectAlternative` is a **persisted DB entity but dynamic per
+    project**. It **may** be auto-created from a real file name or a
+    filing action after **normalization + duplicate prevention**, but it
+    is **not** auto-removed when files disappear. Removal, merge, or
+    consolidation of alternatives is a **dedicated maintenance action**
+    only.
+  - `ProjectFileInstance` is a **runtime projection** built for the
+    selected project from DB definitions (`Project`, `ProjectFolder`,
+    `ProjectFile`, `ProjectAlternative`, `Storage Destination`) plus the
+    current Storage Destination state (ACC / File Server / Google Drive).
+    It is not a permanent DB entity per file instance and not a source of
+    truth.
+  - When entering a project, the system performs a **full scan scoped to
+    that project only** to build the projection. After the initial scan,
+    updates come from internal events and **focused / targeted refresh**;
+    a **full rescan** is performed only on **explicit user request** or a
+    **dedicated maintenance / system action**.
+  - See
+    [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md)
+    and
+    [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](../Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md).
 - **Current known / suspected state:**
-  Older documentation and parts of the code treat `ProjectFileInstance` as a
-  persisted model / DB cache helper (with `UpsertInstanceAsync`,
-  `ProjectFileInstanceId`, model/table/FK layout). It has not been verified
-  whether the runtime use in `ProjectWork` already behaves as a projection
-  or still depends on persisted instance rows.
+  - Older documentation and parts of the code treat `ProjectFileInstance`
+    as a persisted model / DB cache helper (with `UpsertInstanceAsync`,
+    `ProjectFileInstanceId`, model/table/FK layout). Not verified in this
+    round whether `ProjectWork` already behaves as a runtime projection or
+    still depends on persisted instance rows.
+  - It has **not been verified** whether `ProjectAlternative` creation in
+    code applies consistent normalization / trimming / duplicate
+    prevention, nor whether any path auto-deletes or auto-merges
+    alternatives. **Needs code verification.**
+  - It has **not been verified** whether project-entry triggers a single
+    scoped full scan, whether any recurring automatic full rescan exists
+    on an open project, and whether refresh paths are properly scoped.
+    **Needs code verification.**
 - **Impact / risk:**
   - Creating too many persistent file-instance rows in the DB.
-  - Unclear source of truth between DB rows and the actual Storage
-    Destination state.
-  - Stale state shown to users when storage changes outside the app.
-  - Confusion between a runtime view and stable business data.
+  - Stale project file state when storage changes outside the app.
+  - **Duplicate `ProjectAlternative` rows** under trivial formatting
+    differences.
+  - **Accidental deletion / merge of `ProjectAlternative` rows** based on
+    transient absence of files.
+  - Unclear source of truth between the runtime projection and DB
+    business data.
+  - Risk of unscoped or recurring full scans hurting performance and
+    blurring the runtime-projection boundary.
 - **Status:** Needs code verification / Needs architecture alignment.
 - **Relevant areas (informational):**
   `ProjectWork` / `ProjectWorkView`, `ProjectFileFiling`,
+  `ProjectFile`, `ProjectAlternative` (creation / normalization /
+  duplicate prevention / maintenance paths),
   `ProjectFileInstance` (model and consumers), `ProjectFileFilingService`,
   `MoveToProject` / `MoveToProjectProcessActionHandler`,
-  `UpsertInstanceAsync`, Storage Destination services.
+  `UpsertInstanceAsync`, Storage Destination services, project-entry /
+  initial-scan paths.
 - **Notes:**
   - A future, **focused / scoped** refresh mechanism (current project,
     open folders, active work area) may be needed for storage sources
-    without reliable events (e.g. Google Drive in its current state).
+    without reliable events (e.g. Google Drive in its current state, a
+    File Server without a reliable watcher, or ACC when explicit
+    reconciliation is required).
   - **No new refresh / polling mechanism is added in this round.**
   - Broad, system-wide polling is **not** approved.
+  - Automatic recurring full rescan of an already-open project is **not**
+    approved.
+  - Auto-removal / auto-merge of `ProjectAlternative` is **not** approved
+    (maintenance action only).
+
+### Gap 10 — `ProjectAlternative` maintenance: merge/delete requires dedicated flow and full project scan
+
+- **Date identified:** 26.05.2026
+- **Domain:** Project Files, Database Identity.
+- **Desired principle:**
+  `ProjectAlternative` is created automatically from real file names /
+  filing actions after **normalization** (trim leading / trailing
+  whitespace), **illegal-character cleanup** per existing alternative-name
+  rules, and **duplicate prevention** (no duplicate after normalization /
+  cleanup). Invalid or suspicious names must surface a **user-visible
+  warning**, not be ignored silently. `ProjectAlternative` is **not**
+  deleted automatically; deletion requires a **dedicated maintenance
+  action** and a **full project scan** verifying no file still uses that
+  alternative name. **Merge** is a dedicated user-driven operation with
+  user-selected **source** and **target** alternatives, **remap** of usages,
+  and **filename rename/remap** where required for consistency; the source
+  alternative may be removed only after it has no remaining file usage.
+  Alternative linkage is **name-based**, not a hard ID relationship, so
+  file names must be considered when merging or deleting alternatives.
+  See
+  [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md)
+  (sections "ProjectAlternative — persisted but dynamic per project" and
+  "Project entry — initial full scan").
+- **Current known / suspected state:**
+  - It has **not been verified** whether `ProjectAlternative` creation in
+    code consistently applies normalization, illegal-character cleanup,
+    and duplicate prevention.
+  - It has **not been verified** whether invalid / suspicious alternative
+    names surface a user-visible warning rather than being silently
+    accepted.
+  - It has **not been verified** whether any path auto-deletes
+    `ProjectAlternative` rows.
+  - **No dedicated maintenance flow** for deleting or merging
+    `ProjectAlternative` is known to exist today; in particular, no
+    user-driven merge UI with source/target selection and filename
+    rename/remap, and no delete flow guarded by a verified full project
+    scan, is known to be implemented.
+- **Impact / risk:**
+  - Duplicate `ProjectAlternative` rows under trivial formatting
+    differences.
+  - Invalid alternative names silently accepted into the DB.
+  - Accidental recreation of an alternative after deletion, because files
+    still carry its name (name-based linkage).
+  - Deleting a DB row while files still reference the alternative name.
+  - Unclear / inconsistent merge behavior when an admin attempts to
+    consolidate alternatives.
+- **Status:** Needs code verification / Needs maintenance-flow design.
+- **Relevant areas (informational):**
+  `ProjectFileFilingService`, `MoveToProject` /
+  `MoveToProjectProcessActionHandler`, external/uploaded file ingestion
+  paths, `ProjectAlternative` create/normalize/cleanup helpers,
+  project-entry / initial-scan paths, future `ProjectAlternative`
+  maintenance UI (not in this round).
+- **Notes:**
+  - **No new merge / delete mechanism is created in this round.** This
+    entry only documents the desired principle and the gap.
+  - Auto-removal / auto-merge of `ProjectAlternative` is **not** approved.
+  - Silent acceptance of invalid alternative names is **not** approved.
+
+### Gap 11 — Service boundaries, ViewModel logic, and Service Catalog alignment
+
+- **Date identified:** 26.05.2026
+- **Domain:** Architecture.
+- **Desired principle:**
+  Meaningful business logic lives in Services / Use Cases / Application
+  Services / Domain Services, not in `ViewModel`s. Before adding a new
+  service, the
+  [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md)
+  must be checked and an existing service reused or extended where
+  possible. `ProjectFileInstance` as a *persisted placement tracker* is
+  **superseded** by the runtime-projection principle and must not be
+  revived. See
+  [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Domains/Architecture/ArchitecturePrinciples-2026-05-26.md)
+  § *Service / Use Case boundaries*, § *Business anchors*, § *Workflow vs
+  Task*, § *Documentation alignment rule*, and § *Manual migration rule*.
+- **Current known / suspected state:**
+  - Several `ViewModel`s may still hold non-trivial business decisions
+    (filing routing, identity derivation, workflow shortcuts). **Needs
+    code verification.**
+  - The real code name behind the *concept name* `ProjectWorkService` (the
+    builder of the `ProjectFileInstance` runtime projection for the
+    selected project) has not been verified in this round. The
+    responsibility may be split across multiple services or partially
+    inside a `ViewModel`.
+  - ACC operations are reachable from at least three places
+    (`SiOffice.AccService`, `SiOffice.AutodeskConnector`,
+    `AccInboxReconciliationService`); it is not verified whether all
+    callers go through the boundary defined in `ArchitecturePrinciples`
+    §3 (service mode when `AccService:BaseUrl` is configured).
+  - Any remaining `UpsertInstanceAsync` / `ProjectFileInstanceId` paths
+    that imply persisted-placement-tracker semantics are legacy and
+    contradict the active runtime-projection principle (also tracked in
+    Gap 9 / 10).
+- **Impact / risk:**
+  - Business rules drift into the UI and become hard to test or reuse.
+  - Parallel / duplicate services appear because the Service Catalog is
+    not consulted.
+  - Reviving the old `ProjectFileInstance` placement-tracker semantics by
+    accident, contradicting the active principle.
+  - ACC operations bypass the service boundary in service mode.
+- **Status:** Needs code verification / Needs architecture alignment.
+- **Relevant areas (informational):**
+  `SiNetProjectManagerV2` ViewModels (filing / workflow / ACC / email
+  surfaces), `ProjectWork` / `ProjectWorkView` and its backing service(s),
+  `SiOffice.AccService`, `SiOffice.AutodeskConnector`,
+  `SiOffice.GoogleConnector` / `GoogleService`, `EmailIngestionService`,
+  `AccInboxReconciliationService`, `ProjectFileFilingService`,
+  `MoveToProjectProcessActionHandler`, `IProcessActionHandler` dispatcher
+  and handlers, workflow / task services, `PlanReview` services,
+  `AppLogger`.
+- **Notes:**
+  - **No code, DB, schema, migration, ModelSnapshot, DI, or service
+    creation change is made in this round.**
+  - Service Catalog
+    ([`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md))
+    is an **initial catalog**; concept-vs-real names and overlaps are
+    documented there under *Gaps / overlaps* and must be reconciled in
+    follow-up rounds.
 
 ---
 

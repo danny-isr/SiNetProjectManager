@@ -31,6 +31,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Domain | Principles document |
 | --- | --- |
 | Architecture | [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](Domains/Architecture/ArchitecturePrinciples-2026-05-26.md) |
+| Architecture — Service Catalog | [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](Domains/Architecture/ServiceCatalog-2026-05-26.md) |
 | Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
 | ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
 | Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
@@ -71,6 +72,25 @@ See [`Archive\README.md`](Archive/README.md). Archive is historical only.
 - A new decision that supersedes an older document **adds a pointer**; the
   older document is moved to `Archive\` rather than being deleted.
 
+## 6a. Documentation alignment rule (added 26.05.2026)
+
+**Every meaningful change in the system must include a documentation
+check.** Meaningful changes include changes to source of truth,
+identifiers, DB / schema / model, Storage Destination, a Service or
+Service boundary, Workflow / Task / Action, UI that alters business
+behavior, cancelling / postponing / replacing a mechanism, and adding or
+removing a fallback.
+
+- If active documentation requires an update, update the relevant
+  `Domains\<Domain>\...Principles-...md`, `Decisions\...md`, or the gap
+  register
+  [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](Decisions/DocumentationVsImplementationGaps-2026-05-26.md).
+- If no update is required, the change report must explicitly state:
+  **`Documentation checked — no update required`**.
+
+See `ArchitecturePrinciples` § *Documentation alignment rule* for the
+authoritative wording.
+
 ## 7. Things we deliberately do NOT do right now
 
 - Do **not** delete documents.
@@ -91,7 +111,13 @@ See [`Archive\README.md`](Archive/README.md). Archive is historical only.
 - Gmail as a write / management Storage Destination — dropped (see `ProjectFilesPrinciples`).
 - Metadata without a defined source-of-truth owner — dropped (see Email / ACC / DatabaseIdentity / ProjectFiles principles).
 - Legacy continuation `RequiresUI(...)` enum fallback — not active / candidate for removal (see `WorkflowPrinciples`).
+- **Business logic inside `ViewModel`s as an accepted pattern — dropped** (see `ArchitecturePrinciples` and `ServiceCatalog-2026-05-26.md`).
+- **Creating parallel / duplicate services without checking the Service Catalog — dropped**.
+- **Bypassing the connector / service boundary from the UI — dropped**.
+- **Copilot-generated EF migrations — dropped** (manual migration rule, see `ArchitecturePrinciples`).
+- **`ProjectFileInstance` as a persisted placement tracker — superseded** by the runtime-projection principle (see `ProjectFilesPrinciples`).
 - Full implementation detail inside Principles documents — postponed.
+- A fully-complete / exhaustive Service Catalog in one round — postponed (see `ServiceCatalog-2026-05-26.md`).
 
 ## 9. Search terms
 

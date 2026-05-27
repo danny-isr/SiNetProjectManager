@@ -15,9 +15,9 @@ Define which identifier is authoritative for each entity, where it lives, and ho
 | Email thread (mailbox-local, runtime only) | Gmail | Gmail `threadId` (mailbox-scoped; **not persisted as business data**) |
 | Email thread (global / business) | Derived from RFC822 headers | `ThreadKey` derived from `References` / `In-Reply-To` / `Message-ID` |
 | Internal email row | DB | `MessageUniqueId` / `MessageKey` (derived; helper) |
-| Project file (logical) | DB | `ProjectFile` |
-| Project alternative | DB | `ProjectAlternative` |
-| Project file instance (runtime view) | Built at runtime by services | `ProjectFileInstance` (**runtime projection**, not a permanent DB row per instance) |
+| Project file (logical) | DB | `ProjectFile` (stable definition of file type / target / template) |
+| Project alternative | DB | `ProjectAlternative` (persisted, **dynamic per project**, **name-based linkage** to files: may be auto-created from real file names / filing actions after normalization + illegal-character cleanup + duplicate prevention; **not** auto-removed; delete/merge only via dedicated maintenance action with full project scan and filename rename/remap as needed) |
+| Project file instance (runtime view) | Built at runtime by services | `ProjectFileInstance` (**runtime projection**, not a permanent DB row per instance; initial full scan on project entry, then events + focused refresh) |
 | File (after upload) | ACC | ACC item URN + custom attributes |
 | Task | DB | Task identity (workflow domain) |
 
