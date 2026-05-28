@@ -39,14 +39,19 @@ owns which responsibility** before adding new code, so that:
 - **Application / Domain services** own workflow, filing, identity,
   reconciliation, and Source-of-Truth decisions.
 - **DB** is authoritative for project structure (`ProjectFile` →
-  `ProjectAlternative`) and business workflow; `ProjectFileInstance` is a
-  **runtime projection**, not a persisted placement tracker (see
-  `ProjectFilesPrinciples`).
+  `ProjectAlternative`) and business workflow. **`ProjectFileInstance`
+  has been removed as an entity** (Stage 9E.4 — Gap 9); no DB row
+  represents per-instance file placement, and no DB row is used to prove
+  physical file existence (see `ProjectFilesPrinciples`).
 - **No silent fallbacks** across service boundaries; missing data / failed
   calls surface visibly.
 - **No parallel mechanisms**: see the rules in `ArchitecturePrinciples`.
-- **`ProjectFileInstance` is not a persisted placement tracker.** Any
-  legacy text describing it as such is superseded.
+- **`ProjectFileInstance` is removed.** Any remaining doc text that
+  describes it as a persisted placement tracker or as a runtime
+  projection entity is superseded. Runtime location resolution is done
+  by `IProjectFileLocationResolver` (session cache only); actual
+  storage state (ACC / File Server / Google Drive) is the source of
+  truth.
 
 ## Service table
 
@@ -58,12 +63,15 @@ owns which responsibility** before adding new code, so that:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `SiOffice.AccService` | ACC / Deployment | Privileged Windows Service | Privileged ACC operations; central remote ACC orchestration when `AccService:BaseUrl` is configured | Reads/writes ACC via Autodesk APIs; does not own DB business data | Remote WPF clients (`SiNetProjectManagerV2`), CI / deployment tools | UI business logic; Gmail operations; DB workflow decisions | `SiOffice.AccService` (repo: `AutodeskIntegration\SiOffice.AutodeskConnector` / dedicated service project) | Active. Service-mode boundary defined in `ArchitecturePrinciples` §3. |
 | `SiOffice.AutodeskConnector` | ACC | Connector | Outbound Autodesk / ACC API calls (items, folders, custom attributes, version history) | Reads/writes ACC; does not own DB business data | `SiOffice.AccService`, ACC-aware services (`AccInboxReconciliationService`, `MoveToProject*`) | UI logic; workflow decisions; DB source-of-truth decisions | `SiOffice.AutodeskConnector` (e.g. `Bim360Service`, `SetItemCustomAttributesAsync`) | Active. Connector only — no workflow rules here. |
-| `SiOffice.GoogleConnector` / `GoogleService` | Email / Google Drive / Google Sheets | Connector / service layer | Gmail / Drive / Sheets API access (messages, attachments, threads, drive items, sheets); OAuth / token handling per existing structure | Reads Google APIs; **does not** own DB business identity; **does not** decide Storage Destination | `EmailIngestionService`, UI email surfaces (`EmailManagementView`), domain services that need Google API access | Business identity decisions (`MessageUniqueId`, `ThreadKey`); workflow / filing / `ProjectFileInstance` decisions; PlanReview / AI decisions; Storage Destination decisions; persistence of mailbox-local Gmail IDs as business data; using Sheets as a general business source of truth | `SiOffice.GoogleConnector\GoogleService.cs` (`EmailInfo`, `MapMessageToInfo`, attachments helpers); Google Drive / Sheets helpers in the same connector | Active. Gmail is **read-only ingestion + RFC822 header source**. Google Drive is a **possible Storage Destination separate from Gmail**, but **upload is postponed** — no new Drive upload mechanism / fallback without an explicit decision. Google Sheets is **integration / reporting / template surface only**. See `EmailSystemPrinciples`, `ProjectFilesPrinciples`, and Gap Register. |
+| `SiOffice.GoogleConnector` / `GoogleService` | Email / Google Drive / Google Sheets | Connector / service layer | Gmail / Drive / Sheets API access (messages, attachments, threads, drive items, sheets); OAuth / token handling per existing structure | Reads Google APIs; **does not** own DB business identity; **does not** decide Storage Destination | `EmailIngestionService`, UI email surfaces (`EmailManagementView`), `GoogleDriveStore`, domain services that need Google API access | Business identity decisions (`MessageUniqueId`, `ThreadKey`); workflow / filing decisions; PlanReview / AI decisions; Storage Destination decisions; persistence of mailbox-local Gmail IDs as business data; using Sheets as a general business source of truth | `SiOffice.GoogleConnector\GoogleService.cs` (`EmailInfo`, `MapMessageToInfo`, attachments helpers); Google Drive / Sheets helpers in the same connector | Active. Gmail is **read-only ingestion + RFC822 header source**. Google Drive is an **active Storage Destination** reached through `GoogleDriveStore`; **delete** wiring in refile cleanup is postponed. Google Sheets is **integration / reporting / template surface only**. See `EmailSystemPrinciples`, `ProjectFilesPrinciples`, and Gap Register. |
 | `EmailIngestionService` | Email | Application service | Email ingestion, attachment handling, ACC Inbox ingestion flow, `MessageKey` / `MessageUniqueId` derivation via centralized helpers | Reads Gmail (via connector) + RFC822 headers (authoritative for email identity); writes DB email rows; coordinates ACC Inbox upload | Workflow entry points; email management UI; scheduled ingestion | Project filing decisions outside the approved workflow; deriving identity from mailbox-local Gmail IDs | `SiNetSQL\Services\EmailIngestion\EmailIngestionService.cs`, `MessageKeyGenerator.cs`, `SiNetSQL\Models\EmailInboxMessage.cs` | Active. See `EmailSystemPrinciples`, gaps 1–4, 6. |
 | `AccInboxReconciliationService` | ACC / Email | Application / Domain service | Verify physical existence in ACC; surface `MissingInAcc` / `StaleAccReference`; layout-aware lookup using `AccInboxLayout` | Reads ACC (authoritative for physical existence when ACC is the configured Storage Destination); reads DB cache; does not treat DB as proof of existence | `MoveToProjectProcessActionHandler`, ACC open / show flows, UI inspection of ACC files | DB-only proof of file existence; deriving viewer URLs from DB IDs; reading mailbox-local Gmail IDs as identity | `AccInboxReconciliationService`, `AccInboxLayout`, `ShowAttachmentInAccAsync` | Active. See `AccSystemPrinciples` and gaps 3, 5, 6. |
 | `ProjectFileFilingService` | ProjectFiles | Application / Domain service | File filing pipeline; routing to `ProjectFile` / `ProjectAlternative` / `Storage Destination`; normalization + duplicate prevention for alternative names | Reads/writes DB (`ProjectFile`, `ProjectAlternative`, links); reads Storage Destination state | `IProcessActionHandler` handlers (e.g. `MoveToProjectProcessActionHandler`), external/uploaded file ingestion | UI-only decisions; direct connector bypass; auto-deletion of `ProjectAlternative`; auto-change of Storage Destination based on found copies | `SiNetSQL\Services\ProjectFileFilingService.cs` (and related filing helpers) | Active. See `ProjectFilesPrinciples` and gaps 9, 10. |
 | `MoveToProject*` action handler | ProjectFiles / Workflow | Action handler (`IProcessActionHandler`) | Execute the approved `MoveToProject` action: ACC ensure at move time, only required folders created, outcome enrichment | Reads DB (project / file definitions); writes ACC via connector / service; writes DB business links and outcome enrichment | Workflow dispatcher / `IProcessActionHandler` pipeline | Parallel ad-hoc move pipelines; schema or model changes; bypassing the filing service | `MoveToProjectProcessActionHandler`, `MoveToProject-Decisions-2026-05-24.md` | Active. Outcome enrichment must remain backward compatible (see `ProjectFilesPrinciples` §3). |
-| `ProjectWorkService`* | ProjectFiles / UI | Application service | Build the `ProjectWork` context and the `ProjectFileInstance` **runtime projection** for the selected project; initial full scan on project entry; later updates via events + focused refresh | Reads DB definitions (`Project`, `ProjectFolder`, `ProjectFile`, `ProjectAlternative`, `Storage Destination`); reads Storage Destination state (authoritative for physical existence); does **not** persist the projection as a source of truth | `ProjectWorkView` ("בעבודה 2"), other UI surfaces consuming the projection | Persisting runtime projection state as permanent business data; broad / system-wide full scans; recurring automatic full rescan on an open project | Project-entry / scan code paths; consumers of `ProjectFileInstance` | Active concept. **Concept name** — verify actual service name in code; record alias under Gaps if it differs. See `ProjectFilesPrinciples` § *ProjectFileInstance — runtime projection*. |
+| `ProjectWorkService`* | ProjectFiles / UI | Application service | Build the `ProjectWork` context for the selected project from DB definitions (`Project`, `ProjectFolder`, `ProjectFile`, `ProjectAlternative`, `Storage Destination`) plus actual storage state resolved at runtime through `IProjectFileLocationResolver`; initial full scan on project entry; later updates via events + focused refresh | Reads DB definitions; reads actual storage state via `IProjectFileLocationResolver` / `IFileStore`; does **not** persist any per-file-instance projection as a source of truth (no `ProjectFileInstance` exists) | `ProjectWorkView` ("בעבודה 2"), other UI surfaces that need the per-project file view | Persisting runtime resolution state as permanent business data; broad / system-wide full scans; recurring automatic full rescan on an open project | Project-entry / scan code paths; consumers of `IProjectFileLocationResolver` | Active concept. **Concept name** — verify actual service name in code; record alias under Gaps if it differs. See `ProjectFilesPrinciples` § *Runtime resolver*. |
+| `IProjectFileLocationResolver` / `ProjectFileLocationResolver` | ProjectFiles | Runtime resolver (in-memory session cache) | Resolve, at runtime, where a project file currently lives across the configured Storage Destinations (ACC / File Server / Google Drive) using the `IFileStore` implementations; cache the result for the current session only | Reads actual storage state via `IFileStore`; **does not** own truth and **does not** persist anything; the cache is in-memory and session-scoped | `ProjectWorkService`, filing / refile / open / move flows that previously relied on `ProjectFileInstanceId` | Persist its cache to the DB; replace the removed `ProjectFileInstance` with a new persisted table; perform silent fallback between destinations; act as a source of truth | `SiNetSQL\Services\Files\IProjectFileLocationResolver.cs`, `ProjectFileLocationResolver.cs` | Active. Introduced as part of Stage 9E.1 → 9E.4 to replace `ProjectFileInstanceId` as a placement / filer-state signal. **Session cache only**; not a persisted replacement. |
+| `IFileStore` / `FileServerStore` / `AccFileStore` / `GoogleDriveStore` | ProjectFiles / Storage | Storage adapters (uniform store API) | Uniform read / list / upload / open / sidecar surface over actual storage state per Storage Destination: File Server path + sidecar; ACC item / folder / version / metadata; Google Drive file / folder + sidecar | Reads / writes the **actual** storage backend; the backend (and only the backend) is the source of truth for physical existence | `IProjectFileLocationResolver`, `ProjectFileFilingService`, `ProjectFileUploadService`, `IFileOpenService`, `FileIndexService` | Decide routing (that is `ProjectFile.StorageDestination`); silently fall back to another store; auto-pick on duplicate filename | `SiNetSQL\FileIndex\Stores\FileServerStore.cs`, `AccFileStore.cs`, `GoogleDriveStore.cs` | Active. **Google Drive duplicate filename is a conflict** (`FileStoreConflictException`), never an auto-pick. |
+| `FileIndexService` | ProjectFiles / Storage | Helper service | Sidecar / `*.si.json` helpers and per-file index utilities used by the stores and by callers that need metadata about a file in its Storage Destination | Reads / writes sidecar metadata next to the file in its backend; does not own placement truth | `IFileStore` implementations, filing / open / refile paths | Act as a source of truth for placement; replace the removed `ProjectFileInstance` | `SiNetSQL\FileIndex\FileIndexService.cs` and related sidecar helpers | Active. Helper layer over the stores; not authoritative on its own. |
 | Workflow services / `WorkflowEngine` | Workflow | Domain / Application service | Workflow stages, transitions, stage gating; task creation / advance via workflow definitions | Reads/writes DB workflow state, `WorkflowStageDefinition`, stage results | UI workflow surfaces; action handlers; task services | Task-only status shortcuts that bypass workflow stages; direct UI state changes; using `ProjectStatus` as a `WorkflowStage`; running as a `RuntimeAction`-only engine | `SiNetSQL` workflow services, `WorkflowStageDefinition` consumers | Active. See `WorkflowPrinciples` § *Workflow / Task / Action handler boundaries*. |
 | `IProcessActionHandler` dispatcher + handlers | Workflow / ProjectFiles / Email | Action handler layer | Execute approved workflow / task / file actions through a single dispatcher; one handler per action; extend existing handlers rather than adding parallel chains | Reads/writes per handler responsibility; does not own cross-domain truth | Workflow engine, task services, UI commands (via services), completion paths | Parallel ad-hoc handler chains; bypassing the dispatcher; new handler creation when an existing handler can be extended | `IProcessActionHandler` and concrete handlers (e.g. `MoveToProjectProcessActionHandler`, `ReviewTask*`, `FileQuoteMaterial*`, `AddMaterialToProject*`, `TaskCompletion*`, `RuntimeAction`-related handlers) | Active. See `WorkflowPrinciples` § *Workflow / Task / Action handler boundaries*. |
 | Task services | Workflow / Tasks | Application service | Task creation, assignment (incl. UserGroup default-assignee rules), completion (records result, invokes handler, updates workflow, surfaces and logs failure), priority (append at end of queue on open/reopen, re-rank on close) | Reads/writes DB task rows and assignments | Workflow engine, UI task surfaces, action handlers | Replace the workflow lifecycle; close a `Task` without going through the agreed completion / handler path; assign tasks to empty groups silently (must notify); mark success when the handler failed | `SiNetSQL` task services | Active. See `WorkflowPrinciples` § *Workflow / Task / Action handler boundaries* and `.github\copilot-instructions.md` §2. |
@@ -137,21 +145,26 @@ changes in this round. Where appropriate, an entry is also linked from
   - **Gmail** — read-only ingestion + RFC822 header source. Mailbox-local
     `message.id` / `threadId` are runtime only, not persisted as business
     data. Gmail is **not** a write Storage Destination.
-  - **Google Drive** — a **possible Storage Destination** separate from
-    Gmail. Drive **upload is postponed**; no new Drive upload mechanism
-    or fallback may be added without an explicit decision. Drive does
-    not replace DB as the business source of truth.
+  - **Google Drive** — an **active Storage Destination**. Drive uploads
+    go through `ProjectFileUploadService` → `GoogleDriveStore`.
+    Duplicate filename in the target folder is a **conflict** — no
+    silent auto-pick and no silent fallback. Drive **delete** wiring in
+    refile cleanup is **postponed**.
   - **Google Sheets** — integration / reporting / template surface only;
     not a general business source of truth.
   - `SiOffice.GoogleConnector` / `GoogleService` must **not** host
     business rules of `ProjectFiles` / `Workflow` / `PlanReview` / AI /
     Storage Destination. Domain services decide; the connector provides
     API operations.
-- **`ProjectFileInstance` legacy persistence.** Any remaining
-  `UpsertInstanceAsync` / `ProjectFileInstanceId` paths that imply a
-  persisted-placement-tracker semantics are legacy; the active principle
-  is runtime projection. Tracked in
-  `DocumentationVsImplementationGaps-2026-05-26.md` Gap 9 / 10.
+- **`ProjectFileInstance` removal.** `ProjectFileInstance` has been
+  **removed** as an entity / `DbSet` / table (Stage 9E.4 — Gap 9). Any
+  remaining `UpsertInstanceAsync` / `ProjectFileInstanceId` references in
+  older documentation are obsolete. Runtime resolution is performed by
+  `IProjectFileLocationResolver` (session cache only). Migration
+  `RemoveProjectFileInstanceTable` drops the table, the two FKs, the two
+  indexes, and the `EmailInboxAttachment.ProjectFileInstanceId` /
+  `InspectionReportDrawing.FileInstanceId` columns; `Update-Database` is
+  user-run. See `DocumentationVsImplementationGaps-2026-05-26.md` Gap 9.
 - **Diagnostics / user-visible status boundary.** Logs are a developer
   channel only. User-impacting failures must reach the UI via the
   **existing System Status** menu (system-level health) or **local UI
@@ -206,13 +219,19 @@ changes in this round. Where appropriate, an entry is also linked from
 - Bypassing the connector / service boundary from the UI — **dropped**.
 - Copilot-generated EF migrations — **dropped** (manual migration rule,
   see `ArchitecturePrinciples`).
-- `ProjectFileInstance` as a persisted placement tracker — **superseded**
-  by runtime projection (see `ProjectFilesPrinciples`).
+- `ProjectFileInstance` as a persisted placement tracker — **removed**
+  (Stage 9E.4 — Gap 9). Entity, `DbSet`, configuration, and
+  `ProjectFileUploadService` deleted; migration
+  `RemoveProjectFileInstanceTable` drops the table and related FKs /
+  columns; `Update-Database` is user-run. Runtime resolution is now done
+  by `IProjectFileLocationResolver` (session cache only).
 - Gmail as a write Storage Destination — **dropped** (read-only ingestion).
 - Persisting Gmail local IDs (`message.id` / `threadId`) in the DB as
   business identifiers — **dropped**.
 - A new Google Drive upload mechanism without an explicit decision —
-  **not approved**.
+  **completed** (Drive is now an active Storage Destination via
+  `GoogleDriveStore`; duplicate filename is a conflict; Drive delete
+  wiring in refile remains postponed).
 - Google Drive fallback when ACC / File Server is missing — **not approved**.
 - `GoogleService` as a general business engine (workflow / filing /
   PlanReview / AI) — **dropped**.

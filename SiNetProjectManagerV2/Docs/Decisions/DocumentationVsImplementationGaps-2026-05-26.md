@@ -487,7 +487,15 @@ or principles document.
     business data.
   - Risk of unscoped or recurring full scans hurting performance and
     blurring the runtime-projection boundary.
-- **Status:** Needs code verification / Needs architecture alignment.
+- **Status:** Implemented (Stage 9E.4 — `ProjectFileInstance` removed from active model; schema migration `RemoveProjectFileInstanceTable` prepared / user-run database update). See *Round update (Stage 9E.5 — `ProjectFileInstance` removal closure)* below.
+- **Resolution (Stage 9E.1 → 9E.4):**
+  - `ProjectFileInstance` source-of-truth usage removed (read-side, write-side, and routing).
+  - Runtime resolver introduced: `IProjectFileLocationResolver` / `ProjectFileLocationResolver` — in-memory **session cache only**, not a persisted replacement table.
+  - Contracts cleaned: `FileProjectFileResult`, `RefileAttachmentResult`, `MoveToProjectAttachmentOutcome`, and `MoveToProjectAttachmentHandlerOutcome` no longer carry `ProjectFileInstanceId` / `OldProjectFileInstanceId` / `NewProjectFileInstanceId`.
+  - Model/schema cleanup prepared: `ProjectFileInstance.cs`, `ProjectFileInstanceConfiguration.cs`, `ProjectFileUploadService.cs` physically deleted; `DbSet<ProjectFileInstance>`, `EmailInboxAttachment.ProjectFileInstanceId`, and `InspectionReportDrawing.FileInstanceId` removed from the model and its configurations.
+  - Migration `RemoveProjectFileInstanceTable` created (drops `ProjectFileInstance` table, both FKs/indexes, and both columns). `Update-Database` is **user-run**.
+  - Tests rewritten away from the removed entity; suite green (628 passed / 0 failed / 2 pre-existing skips, unrelated EF Core InMemory limitation).
+  - **Remaining future items (postponed, not in this round):** Google Drive delete wiring in refile cleanup; optional rename-warning replacement via `FileIndex` / sidecar; any audit mechanism replacing the old supersession fields.
 - **Relevant areas (informational):**
   `ProjectWork` / `ProjectWorkView`, `ProjectFileFiling`,
   `ProjectFile`, `ProjectAlternative` (creation / normalization /
@@ -1256,10 +1264,14 @@ remove entries — change status in place if they are resolved.
   approved layout is flat `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/`.
   Any future partitioning requires its own approval round.
 - **`ProjectFileInstanceId` as a required source of truth** —
-  *superseded / not approved*. ACC item / version / folder is the source
-  of truth for the physical existence of a file in MoveToProject and
-  similar flows. `ProjectFileInstanceId` is a runtime projection /
-  legacy fallback only. No new mandatory dependency on it may be added.
+  *removed (Stage 9E.1 → 9E.4)*. The runtime resolver
+  `IProjectFileLocationResolver` (session cache only) replaced any
+  remaining use of `ProjectFileInstanceId` as a placement / filing-state
+  signal. The entity, the `DbSet`, and both FK columns
+  (`EmailInboxAttachment.ProjectFileInstanceId`,
+  `InspectionReportDrawing.FileInstanceId`) were removed from the model;
+  migration `RemoveProjectFileInstanceTable` is prepared (user-run
+  `Update-Database`).
 - **Silent fallback to Gmail IDs as business identity** — *not
   approved*. RFC822 `InternetMessageId` is the business identifier;
   `gmail:{message.id}` remains only as a legacy / compatibility
@@ -1267,22 +1279,26 @@ remove entries — change status in place if they are resolved.
 - **Friendly handling for external upload missing `ThreadKey`** —
   *candidate*. The current behavior throws; the UX should be improved to
   guide the user instead of surfacing a bare exception.
-- **Google Drive upload activation** — *postponed*. `GoogleDrive` exists
-  in `FileStorageDestination` and in the `ProjectFileUploadService`
-  dispatch switch, but `UploadToGoogleDriveAsync` returns an explicit
-  failure. No silent fallback to Drive from ACC or File Server is
-  approved. Activation requires its own approval round (Gap 5).
+- **Google Drive upload activation** — *activated (round below)*.
+  `GoogleDrive` is now an active value in `FileStorageDestination` and
+  routes through `ProjectFileUploadService` →
+  `SiNetSQL.FileIndex.Stores.GoogleDriveStore`. Duplicate filename in
+  the target Drive folder is treated as a **conflict**
+  (`FileStoreConflictException`), never an auto-pick. No silent
+  fallback to or from Drive is allowed. **Delete wiring in refile
+  cleanup** remains *postponed* to a future approved round.
 - **Gmail as a Storage Destination** — *not approved / corrected*.
   Gmail is a read-only ingestion source represented by
   `EmailInboxMessage` / `EmailInboxAttachment`. It is not, and must not
   be added as, a value in `FileStorageDestination` (Gap 5).
-- **`ProjectFileInstance.StorageDestination` cleanup** — *postponed to
-  Gap 9*. The column remains persisted and is still read by
-  `ProjectFileRefileService` and `EmailMoveToProjectApplicationService`
-  for cleanup / classification, but it is legacy / transitional
-  projection state and not the architectural source of truth for
-  physical existence. No schema, model, or migration change is approved
-  in this round (Gap 5 / Gap 9).
+- **`ProjectFileInstance.StorageDestination` cleanup** — *removed
+  (Stage 9E.4)*. The column was removed together with the rest of the
+  `ProjectFileInstance` table via migration
+  `RemoveProjectFileInstanceTable`. Routing is now driven exclusively by
+  `ProjectFile.StorageDestination` in `ProjectFileFilingService` /
+  `ProjectFileUploadService` / `IFileOpenService`. No legacy reads from
+  `ProjectFileInstance.StorageDestination` remain in
+  `ProjectFileRefileService` or `EmailMoveToProjectApplicationService`.
 - **Gmail DOM attachment extraction** — *commented out / not active*
   (Gap 8). The extractor source, DI registration, and
   `EmailManagementView` field / no-op method are commented out and the
@@ -1397,6 +1413,98 @@ no fallback to ACC or the file server. Auth reuses the existing
   `ProjectFileUploadService`).
 - Any DB schema, migration, or ModelSnapshot change.
 - Re-enabling `GmailVisibleAttachmentsDomExtractor` (Gap 8).
+
+---
+
+## Round update (Stage 9E.5 — `ProjectFileInstance` removal closure)
+
+This round is **documentation-only**. No production code, DB schema,
+migration, `Update-Database`, or test change was made. It closes the
+documentation gap left by Stages 9E.1 → 9E.4, which physically removed
+`ProjectFileInstance` from the active model after the user verified
+runtime behavior manually (app starts, Gmail works, attachment
+detection works).
+
+### What changed in the implementation (already done in 9E.1 → 9E.4)
+- `ProjectFileInstance` is **no longer a persisted entity**. The
+  `ProjectFileInstance.cs` model, `ProjectFileInstanceConfiguration.cs`,
+  the `DbSet<ProjectFileInstance>`, and the legacy
+  `ProjectFileUploadService.cs` were physically deleted.
+- `EmailInboxAttachment.ProjectFileInstanceId` and
+  `InspectionReportDrawing.FileInstanceId` were removed from the model
+  and its configurations.
+- Migration `RemoveProjectFileInstanceTable`
+  (`SiNetSQL/Migrations/20260528153051_RemoveProjectFileInstanceTable.cs`)
+  drops the `ProjectFileInstance` table, both FKs
+  (`FK_EmailInboxAttachment_ProjectFileInstance`,
+  `FK_InspectionReportDrawing_FileInstance`), both indexes, and both
+  columns. **`Update-Database` is user-run** and is not executed by
+  this round.
+
+### Source-of-truth model after removal
+- **No source of truth lives in the DB instance row.** There is no
+  longer a per-instance DB entity. DB holds business slot data
+  (`ProjectFile`, `ProjectAlternative`) and email/attachment business
+  metadata, **not** physical-file truth.
+- **Physical existence is the actual storage state**, per Storage
+  Destination:
+  - **ACC** — actual ACC item / folder / version / custom-attribute
+    state.
+  - **File Server** — actual file path on disk + `*.si.json` sidecar.
+  - **Google Drive** — actual Drive file / folder + `*.si.json`
+    sidecar.
+- **Routing is by `ProjectFile.StorageDestination`** only, dispatched
+  in `ProjectFileFilingService` / `ProjectFileUploadService` /
+  `IFileOpenService`. There is no silent fallback between destinations.
+
+### Runtime resolver / session cache
+- Runtime resolution is performed via `IProjectFileLocationResolver`
+  (implementation `ProjectFileLocationResolver`).
+- The resolver is a **runtime / session resolver only**. It holds a
+  short-lived **in-memory cache** scoped to the current session — it is
+  **not** a persisted replacement table and **not** a source of truth.
+- The `IFileStore` implementations (`FileServerStore`, `AccFileStore`,
+  `GoogleDriveStore`) are the **uniform path** to actual storage state.
+  The resolver consults them; it does not duplicate their truth.
+- `FileIndexService` (sidecar / index helper) is a helper layer over
+  the stores and does not itself own placement truth.
+
+### Google Drive as an active Storage Destination
+- `FileStorageDestination.GoogleDrive` is an **active** destination.
+- Routing goes through `ProjectFileUploadService` →
+  `SiNetSQL.FileIndex.Stores.GoogleDriveStore` (see Round update —
+  *Gap 9 closure + Google Drive activation* above).
+- **Duplicate filename in the target Drive folder is a conflict**
+  (`FileStoreConflictException`); the system never auto-picks among
+  duplicates and never falls back silently to another destination.
+
+### Dropped / cancelled (now confirmed by removal)
+- `ProjectFileInstance` as a source of truth — **removed**.
+- `ProjectFileInstanceId` as file placement / filer state — **removed**.
+- `ProjectFileInstance.StorageDestination` as a routing source —
+  **removed** (routing is `ProjectFile.StorageDestination` only).
+- PFI supersession chain (`OldInstanceId` / `NewInstanceId` /
+  similar) — **removed**.
+- PFI-based rename warning (`CheckRenamedFileInstance` and its call
+  site) — **removed**.
+- `ProjectFileUploadService` PFI-era dead code — **removed** (file
+  deleted).
+
+### Postponed (not in this round; require explicit future approval)
+- Google Drive **delete** wiring in refile cleanup.
+- Future rename-warning replacement built on `FileIndex` / sidecar
+  rather than the removed PFI signal.
+- Any audit mechanism replacing the old PFI supersession fields.
+- Minor email-flow / UI bugs observed during manual verification —
+  intentionally **not** addressed in this documentation round.
+
+### Not done in this round (explicit)
+- **No** production code changes.
+- **No** DB schema changes.
+- **No** migration created.
+- **No** `Update-Database` executed.
+- **No** test changes.
+- **No** new gap opened.
 
 ---
 

@@ -221,14 +221,24 @@ Rules for a future refresh mechanism:
 
 **Forbidden:**
 
-- Creating a dedicated DB table that holds one row per every possible
-  `ProjectFileInstance`.
-- Treating `ProjectFileInstance` as a source of truth.
-- Using `ProjectFileInstance` instead of a Storage Destination existence
-  check.
-- Persisting runtime projection state as if it were permanent business data.
+- Recreating a `ProjectFileInstance` entity / DB table / `DbSet` (removed in Stage 9E.4 — see Gap 9).
+- Treating any DB row (current or future) as proof of physical file existence.
+- Using a persisted placement / instance row instead of a Storage Destination existence check.
+- Persisting the runtime resolver's cache as if it were stable business data.
 - Wide, system-wide polling.
 - Adding a new refresh mechanism in this documentation round.
+
+**Runtime resolver (post-Stage 9E.4):**
+
+- Runtime resolution is done by `IProjectFileLocationResolver`
+  (implementation `ProjectFileLocationResolver`).
+- The resolver is **runtime / session only**, holding a short-lived
+  **in-memory** cache. It is **not** a persisted replacement for
+  `ProjectFileInstance` and **not** a source of truth.
+- The actual storage state — ACC item / folder / version / metadata,
+  File Server path + sidecar, Google Drive file / folder + sidecar — is
+  the source of truth. The resolver consults the `IFileStore`
+  implementations; it does not duplicate their truth.
 
 ## Storage Destination (added 26.05.2026)
 
@@ -245,13 +255,18 @@ source of truth.
   configured server path is the physical source of truth.
 - **ACC** (`FileStorageDestination.Acc`) — ACC is the physical source of
   truth for the file.
-- **Google Drive** (`FileStorageDestination.GoogleDrive`) — **reserved /
-  postponed.** Present in the enum but Google Drive upload is **not active**.
-  The dispatcher in `ProjectFileUploadService` returns an explicit failure
-  for this destination and there is no silent fallback. Activating Google
-  Drive upload requires an explicit approval round — see
+- **Google Drive** (`FileStorageDestination.GoogleDrive`) — **active**.
+  Drive is an active Storage Destination. Routing goes through
+  `ProjectFileUploadService` → `SiNetSQL.FileIndex.Stores.GoogleDriveStore`,
+  which writes the data file plus a `*.si.json` sidecar under the
+  configured Shared Drive / projects-root folder. **Duplicate filename in
+  the target Drive folder is a conflict**
+  (`FileStoreConflictException`); the system never auto-picks among
+  duplicates and never falls back silently to another destination. Drive
+  **delete** wiring in refile cleanup remains *postponed*. See
   [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
-  (Gap 5 + *Cleanup / postponed items*).
+  (*Round update — Gap 9 closure + Google Drive activation* and
+  *Round update — Stage 9E.5*).
 
 **Gmail is NOT a Storage Destination.**
 
@@ -279,20 +294,20 @@ source of truth.
 - Do **not** create a fallback that picks a copy from another location when
   the configured destination is missing.
 
-**`ProjectFile.StorageDestination` vs `ProjectFileInstance.StorageDestination`:**
+**Routing source of truth (post-Stage 9E.4):**
 
-- `ProjectFile.StorageDestination` is the **slot-level configured
-  destination** and is the source of truth for routing
-  (`ProjectFileFilingService`, `ProjectFileUploadService`,
-  `IFileOpenService` all dispatch on it).
-- `ProjectFileInstance.StorageDestination` is a **legacy / transitional
-  persisted projection** kept on the instance row. It is **not** the
-  architectural source of truth for physical existence (ACC item / version
-  / folder is, per the ACC source-of-truth principle). It still appears in
-  `ProjectFileRefileService` and `EmailMoveToProjectApplicationService`
-  for cleanup / classification only. Its eventual cleanup is tracked
-  under Gap 9 (`ProjectFileInstance` as runtime projection) and is
-  **postponed** — no schema, model, or migration change in this round.
+- `ProjectFile.StorageDestination` is the **only** routing source.
+  `ProjectFileFilingService`, `ProjectFileUploadService`, and
+  `IFileOpenService` all dispatch strictly on it.
+- `ProjectFileInstance.StorageDestination` **no longer exists** —
+  the entity, the column, and all reads of it were removed in Stage 9E.4
+  (Gap 9). Migration `RemoveProjectFileInstanceTable` drops the table
+  and the related FK columns / indexes; `Update-Database` is user-run.
+- **Physical existence** of a file is established by the actual storage
+  backend (ACC item / version / folder; File Server path + sidecar;
+  Google Drive file / folder + sidecar), reached uniformly through the
+  `IFileStore` implementations (`AccFileStore`, `FileServerStore`,
+  `GoogleDriveStore`). The DB does **not** prove file existence.
 
 ## Metadata source of truth (added 26.05.2026)
 
@@ -375,8 +390,10 @@ and
 - Using Google Sheets as a business source of truth for project files.
 
 ## What we do not do now
-- Do not change `ProjectFileInstance` model, table, or FK layout in this round.
-- Do not add a new persistent DB table for `ProjectFileInstance` rows.
+- Do not reintroduce a `ProjectFileInstance` entity, `DbSet`, table, or FK (removed in Stage 9E.4 — see Gap 9).
+- Do not add a new persistent DB table that holds per-instance file-placement truth.
+- Do not persist the `IProjectFileLocationResolver` session cache to the DB.
+- Do not add a silent fallback between Storage Destinations (ACC ↔ File Server ↔ Google Drive).
 - Do not auto-delete or auto-merge `ProjectAlternative` rows.
 - Do not delete a `ProjectAlternative` without a full project scan verifying no file still uses its name.
 - Do not silently accept an invalid / illegal `ProjectAlternative` name — surface a user-visible warning.
@@ -391,8 +408,16 @@ and
 - Do not write metadata that references missing definition IDs.
 
 ## Dropped / cancelled / postponed
-- `ProjectFileInstance` as a permanent DB entity / cache per every possible file instance — **dropped** as a principle (replaced by the runtime projection model above).
-- Persisting runtime projection state as if it were stable business data — **dropped**.
+- `ProjectFileInstance` as a persisted entity / DB table / `DbSet` — **removed** (Stage 9E.4). The model file, configuration, and `ProjectFileUploadService` were physically deleted; migration `RemoveProjectFileInstanceTable` drops the table, both FKs, both indexes, and the `EmailInboxAttachment.ProjectFileInstanceId` / `InspectionReportDrawing.FileInstanceId` columns; `Update-Database` is user-run.
+- `ProjectFileInstanceId` as file placement / filer state — **removed** (Stage 9E.4). Replaced by `IProjectFileLocationResolver` (session cache only).
+- `ProjectFileInstance.StorageDestination` as a routing source — **removed** (Stage 9E.4). Routing is `ProjectFile.StorageDestination` only.
+- PFI supersession chain — **removed** (Stage 9E.4).
+- PFI-based rename warning (`CheckRenamedFileInstance`) — **removed** (Stage 9E.4).
+- Persisting the runtime resolver's cache as if it were stable business data — **dropped**.
+- Google Drive **upload** activation — **done** (Drive is now an active Storage Destination with duplicate-filename conflict semantics).
+- Google Drive **delete** wiring in refile cleanup — **postponed** to a future approved round.
+- Future rename-warning replacement via `FileIndex` / sidecar — **postponed**.
+- Any audit mechanism replacing the old PFI supersession fields — **not created**; postponed unless explicitly approved.
 - Automatic deletion of `ProjectAlternative` when no file currently uses it — **dropped** (removal / merge is a dedicated maintenance action only).
 - Deleting a `ProjectAlternative` without a full project scan — **dropped**.
 - Silently ignoring an invalid / illegal `ProjectAlternative` name — **dropped** (must surface a user-visible warning).
