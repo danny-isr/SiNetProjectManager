@@ -247,11 +247,85 @@ or principles document.
 - **Impact / risk:**
   Conflicting metadata between DB / ACC / `manifest.json`; risk of code
   treating an audit snapshot or a UI value as authoritative.
-- **Status:** Needs code verification.
+- **Status:** Confirmed in code — documentation alignment only (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  Code verification completed. Findings:
+  - `SiNetSQL\FileIndex\AccItemMetadataService.cs`
+    (`IAccItemMetadataService`) is the **single central facade** for ACC
+    Custom Attribute read / write. All callers
+    (`ProjectFileAccMetadataWriter`, `ProjectFileFilingService`,
+    `AttachmentTaggingService`, `AccInboxReconciliationService`,
+    `MoveToProjectProcessActionHandler`) go through it. Read / write
+    failures are reported via `IAccMetadataStatusReporter` and **must
+    not** be interpreted as proof the ACC file is missing.
+  - `SiNetSQL\FileIndex\SidecarMetadata.cs` centralizes all attribute
+    names: `AccAttributeNames` (project files: `SiLastFileName`,
+    `SiSourceFileNames`, …) and `InboxAccAttributeNames` (Office Inbox:
+    `SiInbox.Tag.*`, `SiInbox.Move.*`, `SiInbox.Lock.*`,
+    `SiInbox.Source.*`). No hard-coded attribute names are scattered.
+  - `SiNetSQL\Services\AccBootstrap\AccBootstrapService.cs`
+    (`EnsureInboxCustomAttributeDefinitionsAsync`) and
+    `AccProjectProvisioningService.EnsureCustomAttributeDefinitionsAsync`
+    are the **only** provisioning paths for Custom Attribute
+    *definitions*. `SetItemCustomAttributesAsync` does not auto-create
+    definitions.
+  - `manifest.json` is produced once per ingested message by
+    `EmailIngestionService.CreateManifest` and is treated as an **audit
+    snapshot only**. No code reads `manifest.json` to make business
+    decisions; no flow depends on it for routing, tagging, or
+    reconciliation.
+  - DB fields `AccItemId`, `AccVersionId`, `AccFolderId` on
+    `EmailInboxAttachment` and `ProjectFileInstance` are
+    **cache / helper / projection** of ACC state — they are written
+    *after* the ACC write succeeds (per the ACC source-of-truth
+    principle in `copilot-instructions.md` §9) and are not authoritative
+    for physical existence.
+  - UI / ViewModels (`ProjectWorkViewModel`,
+    `ProjectFolderTreeViewModel`, `EmailManagementViewModel`, …) read
+    metadata through service layers and never write metadata directly to
+    ACC. UI is **never** authoritative.
+  - `ProjectFileInstance.StorageDestination` remains a persisted
+    legacy / transitional projection and is read by
+    `ProjectFileRefileService` and `EmailMoveToProjectApplicationService`
+    for cleanup / classification only. Its cleanup is tracked under
+    **Gap 9** and is **postponed** in this round; no schema, model, or
+    migration change is made here.
+
+  **Metadata Owner Map (added 2026-05-26):**
+
+  | Metadata kind | Owner (source of truth) | Stored / cached in | Notes |
+  | --- | --- | --- | --- |
+  | Email / thread identity | RFC822 headers (`Message-ID`, `References`, `In-Reply-To`) | DB: `EmailInboxMessage.InternetMessageId`, `MessageUniqueId`, `ThreadUniqueId`, `ThreadKey` | Gmail local IDs (`GmailMessageId`, `GmailThreadId`) are adapter / runtime mirrors only (Gap 1, Gap 2, Gap 4). |
+  | Physical file existence | ACC item / version / folder | DB: `AccItemId`, `AccVersionId`, `AccFolderId` on `EmailInboxAttachment` / `ProjectFileInstance` (cache / helper only) | `ProjectFileInstanceId` is **not** source of truth; do not add new mandatory dependencies on it (Gap 9). |
+  | Inbox tag / move / lock state | ACC Custom Attributes `SiInbox.Tag.*` / `SiInbox.Move.*` / `SiInbox.Lock.*` | DB: cache / helper only | Read / write only via `AccItemMetadataService`; definitions provisioned via `AccBootstrapService` / `AccProjectProvisioningService`. |
+  | Project file routing (slot-level) | DB: `ProjectFile.StorageDestination` (`FileStorageDestination` enum) | DB (authoritative for slot routing) | `ProjectFileInstance.StorageDestination` is legacy / projection and tracked under Gap 9 (Gap 5). |
+  | Per-file metadata (notes, last name, source names, openWith) | File Server: `{fileName}.si.json` sidecar &nbsp;/&nbsp; ACC: Custom Attributes `Si*` (`SidecarMetadata.AccAttributeNames`) | Per-backend; no cross-backend authoritative copy | UI does **not** own this metadata. |
+  | Email message audit trail | None — audit snapshot only | `manifest.json` next to `00_Email.pdf` in the message folder | Never read by business logic; produced once by `EmailIngestionService.CreateManifest`. |
+  | UI / ViewModels | None | n/a | Never authoritative. Views render values produced by services. |
+
+  **Write ordering rule (re-stated):** ACC Custom Attribute writes happen
+  **before** updating the corresponding DB cache. If the ACC write fails,
+  the DB cache is not advanced. On ACC metadata *read* failure, callers
+  warn and continue (do not treat as proof of missing file) — see
+  `copilot-instructions.md` §9.
+
 - **Relevant files / classes (informational):**
-  ACC custom attribute write paths (`SetItemCustomAttributesAsync`),
-  `manifest.json` writers under `AccInboxLayout`-aware services, DB models
-  involved in email/file linking.
+  `SiNetSQL\FileIndex\AccItemMetadataService.cs` (read/write facade),
+  `SiNetSQL\FileIndex\SidecarMetadata.cs` (attribute name constants and
+  sidecar schema),
+  `SiNetSQL\Services\AccBootstrap\AccBootstrapService.cs`,
+  `SiNetSQL\Services\AccBootstrap\AccProjectProvisioningService.cs`
+  (definition provisioning),
+  `SiNetSQL\Services\EmailIngestion\EmailIngestionService.cs`
+  (`CreateManifest` — audit snapshot only),
+  `SiNetSQL\Services\EmailIngestion\AccInboxReconciliationService.cs`
+  (ACC-first reconciliation),
+  `SiNetSQL\Services\Files\ProjectFileAccMetadataWriter.cs`
+  (write-then-cache ordering),
+  `SiNetSQL\Services\Files\ProjectFileFilingService.cs`
+  (`SiInbox.Source.*` same-source detection from ACC),
+  `SiNetSQL\Services\Inbox\AttachmentTaggingService.cs`,
+  `SiNetSQL\Domain\Actions\Handlers\MoveToProjectProcessActionHandler.cs`.
 
 ### Gap 7 — Gmail WebView2 DOM focusing / expansion is principle only
 
@@ -267,10 +341,43 @@ or principles document.
 - **Impact / risk:**
   Low — display only. Risk would arise if DOM-derived data were promoted to
   a business decision source.
-- **Status:** Open.
+- **Status:** Confirmed — principle only; helper not implemented; no business-decision DOM usage found (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  Code verification completed. Findings:
+  - **No active Gmail DOM focusing / expansion helper exists.** Searches
+    for `FocusMessage`, `ExpandMessage`, `scrollIntoView`,
+    `aria-expanded`, `data-message-id`, `data-legacy-message-id` in
+    non-generated `.cs` returned no Gmail-related matches.
+    `EmailManagementView.xaml.cs` contains no DOM focusing / expansion
+    logic.
+  - **No DOM is used as a business source of truth.** All active
+    `ExecuteScriptAsync` callers are display / utility:
+    - `SiNetProjectManagerV2\WPFUserControl\WebView2Helper.cs` injects
+      `GmailCleanViewJs` and `CalendarCleanViewJs` (cosmetic clean view
+      only; no values returned to .NET for decisions).
+    - `SiNetProjectManagerV2\WPFUserControl\WebView2PdfRenderer.cs`
+      uses `ExecuteScriptAsync` for PDF load-state / rendering
+      utilities only.
+    - `EnableScrollWheelFocus` in `WebView2Helper.cs` is WPF control
+      focus (for mouse-wheel routing), **not** DOM focus.
+  - `GmailVisibleAttachmentsDomExtractor` is a **disabled no-op**: its
+    public `ProbeAsync` always returns `Skipped("DisabledForRound")` and
+    logs `[GmailVisibleAttachmentsDom] Disabled`. The legacy probe code
+    is parked behind `ProbeAsync_DisabledLegacy` and never runs. This
+    file is covered by **Gap 8** and is intentionally kept as-is.
+  - **Future helper constraint:** if a Gmail message focusing /
+    expansion helper is ever implemented, it must be **display-only**
+    (scroll to / expand the selected message inside the Gmail
+    conversation, e.g. via `data-legacy-message-id`) and must **not**
+    return business data (attachments, identity, status, ACC state,
+    workflow state) to .NET. This rule is already stated in
+    [`Domains\UI\UiPrinciples-2026-05-26.md`](../Domains/UI/UiPrinciples-2026-05-26.md)
+    §5 and §6.
 - **Relevant files / classes (informational):**
   `SiNetProjectManagerV2\WPFUserControl\WebView2Helper.cs`,
-  `SiNetProjectManagerV2\WPFUserControl\EmailManagementView.xaml.cs`.
+  `SiNetProjectManagerV2\WPFUserControl\WebView2PdfRenderer.cs`,
+  `SiNetProjectManagerV2\WPFUserControl\EmailManagementView.xaml.cs`,
+  `...\GmailVisibleAttachmentsDomExtractor.cs` (disabled — see Gap 8).
 
 ### Gap 8 — `GmailVisibleAttachmentsDomExtractor` must remain disabled
 
@@ -286,9 +393,46 @@ or principles document.
 - **Impact / risk:**
   Re-enabling would reintroduce DOM-based "truth" for attachments, in
   violation of the Email principles.
-- **Status:** Needs code verification.
+- **Status:** Confirmed — commented out / staged for future physical deletion (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  Code verification + staged-removal step completed without any production
+  behavior change:
+  - **Static facts before this round:** the public `ProbeAsync` was already
+    a no-op (`Skipped("DisabledForRound")`), the legacy probe was already
+    `private` (`ProbeAsync_DisabledLegacy`), and no caller invoked the
+    extractor on `_gmailDomProbe`. Build was green and tests were
+    `601 passed / 0 failed / 2 skipped`.
+  - **Staged removal applied (no physical deletion):**
+    - `SiNetProjectManagerV2\Services\GmailVisibleAttachmentsDomExtractor.cs`
+      — the entire source body (extractor class, the JS chip script,
+      `GmailVisibleAttachmentsDomResult`, `GmailVisibleDomAttachment`) is
+      now parked behind `#if false` with a clearly tagged
+      `DISABLED LEGACY — candidate for physical deletion` header that
+      explains the reason, the responsible gap, and the required
+      pre-conditions for physical deletion.
+    - `SiNetProjectManagerV2\App.xaml.cs` — the DI registration
+      `services.AddSingleton<GmailVisibleAttachmentsDomExtractor>();` is
+      commented out with a reference to Gap 8.
+    - `SiNetProjectManagerV2\WPFUserControl\EmailManagementView.xaml.cs`
+      — the `_gmailDomProbe` field, its `OnLoaded` assignment, and the
+      no-op `ProbeGmailVisibleAttachmentsAsync` method are commented
+      out with a reference to Gap 8.
+  - **Validation:** Build succeeded. `SiNetSQL.Tests` ran with the same
+    result as before the change: **601 passed / 0 failed / 2 skipped**.
+    This confirms no compilation or test dependency on the legacy DOM
+    extraction path.
+  - **Still to do (future approved cleanup round):** physical deletion of
+    the file `GmailVisibleAttachmentsDomExtractor.cs`, the commented DI
+    line in `App.xaml.cs`, and the commented `_gmailDomProbe` /
+    `ProbeGmailVisibleAttachmentsAsync` lines in
+    `EmailManagementView.xaml.cs`. No schema, model, migration, or
+    business-logic change is involved in that cleanup.
 - **Relevant files / classes (informational):**
-  `SiNetProjectManagerV2\Services\GmailVisibleAttachmentsDomExtractor.cs`.
+  `SiNetProjectManagerV2\Services\GmailVisibleAttachmentsDomExtractor.cs`
+  (parked behind `#if false`),
+  `SiNetProjectManagerV2\App.xaml.cs` (DI registration commented out),
+  `SiNetProjectManagerV2\WPFUserControl\EmailManagementView.xaml.cs`
+  (field / assignment / no-op method commented out).
 
 ### Gap 9 — `ProjectAlternative` lifecycle and `ProjectFileInstance` runtime-projection alignment
 
@@ -1139,6 +1283,120 @@ remove entries — change status in place if they are resolved.
   projection state and not the architectural source of truth for
   physical existence. No schema, model, or migration change is approved
   in this round (Gap 5 / Gap 9).
+- **Gmail DOM attachment extraction** — *commented out / not active*
+  (Gap 8). The extractor source, DI registration, and
+  `EmailManagementView` field / no-op method are commented out and the
+  extractor body is parked behind `#if false`. Build and tests pass
+  unchanged. **Physical deletion is postponed** to a future approved
+  cleanup round.
+- **`GmailVisibleAttachmentsDomExtractor` re-enable** — *not approved*.
+  Gmail DOM is not a source of truth for attachments; re-enabling
+  requires an explicit approved round (Gap 8).
+
+---
+
+## Round update (Gap 9 closure + Google Drive activation)
+
+This round implements the approved plan for Gap 9 (`ProjectFileInstance`
+dependency reduction) and the first real activation of Google Drive as a
+Storage Destination. **No DB schema, migration, or ModelSnapshot change
+was made.**
+
+### `ProjectFileInstance` dependency reduction
+- `MoveToProjectProcessActionHandler.IsAttachmentFiledAsync` now reads
+  ACC custom-attribute state first (`MoveMovedToProject`). When that
+  attribute is present, ACC is authoritative. When it is absent (or
+  the ACC read failed), the code falls back to `ProjectFileInstanceId`
+  presence — every such branch is marked
+  `LEGACY-INSTANCE-FALLBACK` and scoped to "until Move/Lock metadata
+  backfill is complete".
+- `MoveToProjectProcessActionHandler.TryLoadTargetAccInfoAsync` is now
+  explicitly marked `LEGACY-INSTANCE-FALLBACK` (post-filing metadata
+  enrichment only).
+- `EmailMoveToProjectApplicationService` "already filed" pre-handler
+  hint marked `LEGACY-INSTANCE-FALLBACK`. Authoritative decision lives
+  in the handler.
+- `ProjectFileRefileService` precondition (`att.ProjectFileInstanceId
+  is not int oldInstanceId`) marked `LEGACY-INSTANCE-FALLBACK` with
+  documented future direction (key on `att.AccItemId` / FS sidecar /
+  Drive file id). Old-storage cleanup snapshot annotated as a
+  *last-known projection*, not a routing source.
+
+### Storage routing
+- `ProjectFileFilingService.FileAsync` now switches strictly on
+  `ProjectFile.StorageDestination`. Unknown destinations and the
+  `GoogleDrive` slot (which is wired through `ProjectFileUploadService`,
+  not the filing service) **fail explicitly**. No silent fallback to a
+  different backend.
+- `ProjectFileInstance.StorageDestination` reads kept only as
+  *last-known cache / projection* (refile cleanup, VM display). Not a
+  routing source.
+
+### Google Drive activation
+- `SiOffice.GoogleConnector.GoogleDriveService` extended with a general
+  `IGoogleDriveService` surface (`FindFilesByNameAsync`,
+  `ListFilesAsync`, `UploadFileAsync`, `UploadStringAsync`,
+  `DownloadFileAsync`, `TrashFileAsync`, `GetFileInfoAsync`,
+  `CheckWriteAccessAsync`) — no parallel connector created.
+- `SiNetSQL.FileIndex.Stores.GoogleDriveStore` rewritten end-to-end:
+  - Resolves folder handles by walking `ProjectFolder` hierarchy and
+    calling `EnsureFolderPathAsync` under the configured
+    `ProjectsRootFolderId`.
+  - `ListFilesAsync` filters sidecar JSONs and **skips duplicate
+    filenames** (no auto-pick).
+  - `UploadAsync` refuses to upload when `FindFilesByNameAsync` returns
+    any existing file or sidecar with the same name in the target
+    folder — raises `FileStoreConflictException` with all candidates.
+  - Writes the data file then a `*.si.json` sidecar that reuses the
+    existing `SidecarMetadata` schema (no schema drift).
+  - Open path downloads by Drive `File.Id` to a temp path and hands off
+    to `FileHelpers.OpenFile`.
+  - No silent fallback: missing config / auth surfaces as
+    `InvalidOperationException` on write paths and empty results on
+    read paths.
+- `ProjectFileUploadService.UploadToGoogleDriveAsync` replaced the
+  `"העלאה ל-Google Drive טרם מיושמת"` stub with a real call to
+  `GoogleDriveStore`, surfacing duplicate-name conflicts as failures
+  rather than picking arbitrarily.
+- New DI wiring in `App.xaml.cs`: `GoogleDriveSettings`,
+  `IGoogleDriveServiceProvider` →
+  `SiNetProjectManagerV2.Services.GoogleDriveServiceProvider`,
+  `GoogleDriveStore` (already exposed as `IFileStore`).
+- New `AppConfiguration` accessors `GoogleDriveSharedDriveId` /
+  `GoogleDriveProjectsRootFolderId` reading the `GoogleDrive` section.
+
+### Config required to activate Google Drive
+The destination is treated as **unavailable** unless both
+appsettings keys are set:
+
+```json
+"GoogleDrive": {
+  "SharedDriveId": "<Shared Drive id>",
+  "ProjectsRootFolderId": "<folder id inside the Shared Drive>"
+}
+```
+
+If either is missing, every Drive operation fails explicitly — there is
+no fallback to ACC or the file server. Auth reuses the existing
+`GoogleAuthService` singleton (no new OAuth flow).
+
+### Tests
+- New file `SiNetSQL.Tests\FileIndex\GoogleDriveStoreTests.cs` covers:
+  destination identity, `IsConfigured` when settings are missing,
+  explicit failure on missing provider for both upload and open,
+  duplicate-data-file conflict, duplicate-sidecar conflict, happy-path
+  upload writes data + sidecar, and listing filters sidecars + skips
+  duplicates.
+- Full xUnit run: **611 tests, 609 passed, 0 failed, 2 pre-existing
+  skips** (EF Core InMemory limitation, unrelated).
+
+### Still postponed / not approved in this round
+- Physical deletion of `ProjectFileInstance` rows or columns.
+- Physical removal of any `LEGACY-INSTANCE-FALLBACK` branch.
+- Filing-service direct Google Drive path (currently routed through
+  `ProjectFileUploadService`).
+- Any DB schema, migration, or ModelSnapshot change.
+- Re-enabling `GmailVisibleAttachmentsDomExtractor` (Gap 8).
 
 ---
 

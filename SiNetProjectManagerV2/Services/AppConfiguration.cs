@@ -199,6 +199,39 @@ public static class AppConfiguration
     public static string GoogleApplicationName =>
         GoogleReports["ApplicationName"] ?? "SiNet Reports";
 
+    /// <summary>
+    /// Gets the Google Drive section of configuration (project-file storage destination).
+    /// Distinct from <see cref="GoogleReports"/>, which is the Reports/Sheets export feature.
+    /// Required keys (when GoogleDrive is used as a real storage destination):
+    /// <list type="bullet">
+    /// <item><c>GoogleDrive:SharedDriveId</c> — id of the Shared Drive holding project files.</item>
+    /// <item><c>GoogleDrive:ProjectsRootFolderId</c> — folder id under which project subtrees live.</item>
+    /// </list>
+    /// If either key is missing, the Drive destination is treated as unavailable
+    /// (operations fail explicitly; no fallback to FileServer / ACC).
+    /// </summary>
+    public static IConfigurationSection GoogleDrive => Configuration.GetSection("GoogleDrive");
+
+    /// <summary>Shared Drive id used for project-file storage, or null if unset.</summary>
+    public static string? GoogleDriveSharedDriveId
+    {
+        get
+        {
+            var v = GoogleDrive["SharedDriveId"];
+            return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        }
+    }
+
+    /// <summary>Drive folder id (inside the Shared Drive) under which project subtrees live, or null if unset.</summary>
+    public static string? GoogleDriveProjectsRootFolderId
+    {
+        get
+        {
+            var v = GoogleDrive["ProjectsRootFolderId"];
+            return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        }
+    }
+
     // === TEMP DEV: Autodesk Office Inbox configuration helpers ===
 
     /// <summary>

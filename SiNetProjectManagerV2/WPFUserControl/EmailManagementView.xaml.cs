@@ -25,7 +25,10 @@ namespace SiNetProjectManagerV2.WPFUserControl
     {
         private EmailManagementViewModel? _subscribedVm;
         private WebView2PdfRenderer? _pdfRenderer;
-        private GmailVisibleAttachmentsDomExtractor? _gmailDomProbe;
+        // DISABLED LEGACY — Gap 8. Commented out together with
+        // GmailVisibleAttachmentsDomExtractor (parked behind `#if false`).
+        // Candidate for physical deletion in a future approved cleanup round.
+        // private GmailVisibleAttachmentsDomExtractor? _gmailDomProbe;
         private ExternalBrowserWindow? _accViewerWindow;
         private EmailContextViewModel? _emailContextVm;
 
@@ -54,10 +57,12 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 _pdfRenderer?.RegisterLiveView(EmailViewerCtl.WebView);
             }
 
-            // Gmail DOM extractor is DISABLED (diagnostic disabled, candidate for future
-            // removal). The reference is left here so existing call sites compile, but the
-            // ProbeAsync method is now a no-op. Do not re-enable without an approved round.
-            _gmailDomProbe ??= App.ServiceProvider?.GetService<GmailVisibleAttachmentsDomExtractor>();
+            // Gmail DOM extractor is DISABLED LEGACY (Gap 8) — commented out
+            // together with the GmailVisibleAttachmentsDomExtractor source
+            // (parked behind `#if false`) and the DI registration. Candidate
+            // for physical deletion in a future approved cleanup round. Do not
+            // re-enable without explicit approval.
+            // _gmailDomProbe ??= App.ServiceProvider?.GetService<GmailVisibleAttachmentsDomExtractor>();
 
             // Initialize Email Context Panel via DI
             if (EmailContextPanel != null && _emailContextVm == null)
@@ -811,15 +816,16 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         /// <summary>
-        /// Phase 1 diagnostic-only Gmail DOM attachment probe — DISABLED (no-op).
-        /// Kept only so any external caller compiles; the call site no longer invokes it.
+        /// Phase 1 diagnostic-only Gmail DOM attachment probe — DISABLED LEGACY (Gap 8).
+        /// Commented out together with GmailVisibleAttachmentsDomExtractor.
+        /// Candidate for physical deletion in a future approved cleanup round.
         /// </summary>
-        private async System.Threading.Tasks.Task ProbeGmailVisibleAttachmentsAsync(EmailInfo email)
-        {
-            // Disabled: the extractor itself is now a no-op. Awaiting completed task keeps
-            // the async signature stable for any legacy call site.
-            await System.Threading.Tasks.Task.CompletedTask;
-        }
+        // private async System.Threading.Tasks.Task ProbeGmailVisibleAttachmentsAsync(EmailInfo email)
+        // {
+        //     // Disabled: the extractor itself is now a no-op. Awaiting completed task keeps
+        //     // the async signature stable for any legacy call site.
+        //     await System.Threading.Tasks.Task.CompletedTask;
+        // }
 
         /// <summary>
         /// Emits a single <c>[GmailOpenUrl]</c> diagnostic log that records the URL

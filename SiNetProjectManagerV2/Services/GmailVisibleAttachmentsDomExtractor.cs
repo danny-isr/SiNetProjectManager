@@ -1,3 +1,25 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// DISABLED LEGACY — candidate for physical deletion in a future approved round.
+//
+// Reason:        Gmail DOM is not a source of truth for attachments.
+//                The Gmail DOM shows a thread/conversation view, not a clean
+//                message-scoped view, so DOM-derived attachment lists are
+//                unreliable.
+// Disabled by:   Gap 8 (DocumentationVsImplementationGaps-2026-05-26.md)
+// Status:        Commented out / staged for future physical deletion.
+// Required before physical deletion:
+//                1. Confirmation that no future round re-introduces a DOM
+//                   probe at this location.
+//                2. Explicit approval to delete the file, the DI registration,
+//                   and the EmailManagementView field/no-op method.
+//                3. Verification that build + full test suite still pass with
+//                   the file physically removed.
+//
+// Do not re-enable without explicit approval. The entire body is parked behind
+// `#if false` so the symbols are not visible to the compiler but the source
+// history remains intact for the future cleanup round.
+// ─────────────────────────────────────────────────────────────────────────────
+#if false
 using System;
 using System.IO;
 using System.Linq;
@@ -463,3 +485,4 @@ public sealed class GmailVisibleDomAttachment
     public string? DownloadUrl { get; init; }
     public string? SelectorPath { get; init; }
 }
+#endif

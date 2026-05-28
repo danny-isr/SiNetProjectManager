@@ -190,12 +190,12 @@ namespace SiNetProjectManagerV2
             // PDF Renderer: Singleton (reused for all PDF generations)
             services.AddSingleton<WebView2PdfRenderer>();
 
-            // Gmail-visible attachments DOM extractor.
-            // DISABLED — diagnostic disabled — candidate for future removal.
-            // Gmail DOM exposes a thread/conversation view (not a clean message-scoped view),
-            // so DOM-derived attachment lists are unreliable. The service is still registered
-            // so existing call sites resolve, but ProbeAsync is a no-op (see class docs).
-            services.AddSingleton<GmailVisibleAttachmentsDomExtractor>();
+            // DISABLED LEGACY — Gap 8 (DocumentationVsImplementationGaps-2026-05-26.md).
+            // GmailVisibleAttachmentsDomExtractor is commented out (its source is
+            // parked behind `#if false`). Candidate for physical deletion in a
+            // future approved cleanup round. Do not re-enable without explicit
+            // approval — Gmail DOM is not a source of truth for attachments.
+            // services.AddSingleton<GmailVisibleAttachmentsDomExtractor>();
 
             // ACC User Bootstrap Service: Transient (runs once at startup)
             services.AddTransient<IAccUserBootstrapService, AccUserBootstrapService>();
@@ -559,8 +559,27 @@ namespace SiNetProjectManagerV2
             // Stores are registered as IFileStore so FileIndexService can enumerate them all.
             services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.FileServerStore>();
             services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.AccFileStore>();
+
+            // Google Drive: settings + lazy auth provider. Provider returns null when
+            // SharedDriveId / ProjectsRootFolderId / auth are unavailable — the Drive
+            // store then fails explicitly (no fallback to FileServer / ACC).
+            services.AddSingleton(sp => new SiNetSQL.FileIndex.Stores.GoogleDriveSettings
+            {
+                SharedDriveId = AppConfiguration.GoogleDriveSharedDriveId,
+                ProjectsRootFolderId = AppConfiguration.GoogleDriveProjectsRootFolderId,
+            });
+            services.AddSingleton<SiNetSQL.FileIndex.Stores.IGoogleDriveServiceProvider,
+                                  SiNetProjectManagerV2.Services.GoogleDriveServiceProvider>();
             services.AddSingleton<SiNetSQL.FileIndex.IFileStore, SiNetSQL.FileIndex.Stores.GoogleDriveStore>();
             services.AddSingleton<SiNetSQL.FileIndex.FileIndexService>();
+
+            // Stage 9E.1 — Runtime File Resolver / Session Cache.
+            // In-memory only; never persisted. Replaces ProjectFileInstance as the
+            // runtime answer to "does this expected file currently exist at its
+            // storage destination?". Authoritative state still lives in ACC / Drive
+            // / File Server — this is only a cache of recent checks.
+            services.AddSingleton<SiNetSQL.FileIndex.Resolution.IProjectFileLocationResolver,
+                                  SiNetSQL.FileIndex.Resolution.ProjectFileLocationResolver>();
 
             // Drag-and-drop "replace existing file" flow: stateless service +
             // WPF-backed prompt provider. Singleton because the dialogs are

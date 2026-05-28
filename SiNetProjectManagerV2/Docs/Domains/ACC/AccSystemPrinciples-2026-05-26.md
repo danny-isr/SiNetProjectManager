@@ -141,6 +141,22 @@ companion to
 - `manifest.json` written into ACC Inbox folders is an **audit snapshot**
   only — it does not replace the DB, Storage Destination existence checks,
   or Gmail RFC822 headers.
+- **Metadata Owner Map (cross-domain):** the authoritative per-kind owner
+  list (email/thread identity, physical file existence, Inbox tag / move /
+  lock, project file routing, per-file metadata, audit trail, UI) lives
+  in [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
+  under **Gap 6 — Metadata source-of-truth alignment**. This document does
+  not duplicate the table; it follows it.
+- ACC Custom Attribute read / write goes through the single facade
+  `SiNetSQL\FileIndex\AccItemMetadataService.cs`
+  (`IAccItemMetadataService`). Attribute names are centralized in
+  `SiNetSQL\FileIndex\SidecarMetadata.cs`
+  (`AccAttributeNames`, `InboxAccAttributeNames`). Definitions are
+  provisioned only via `AccBootstrapService` /
+  `AccProjectProvisioningService`.
+- Write ordering: ACC Custom Attribute write succeeds **before** the DB
+  cache (`AccItemId` / `AccVersionId` / `AccFolderId` on
+  `EmailInboxAttachment` / `ProjectFileInstance`) is advanced.
 
 ## What we do not do now
 - Do not derive Viewer URLs from cached DB identifiers.
