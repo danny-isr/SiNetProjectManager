@@ -57,7 +57,14 @@ or principles document.
   Cross-user inconsistency: the same physical email can be represented by
   different identifiers per mailbox. Risk of mis-deduplication, mis-linking
   of tasks to emails, and incorrect ACC Inbox folder naming.
-- **Status:** Needs code verification.
+- **Status:** Fixed — code, DB schema, and tests updated (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  RFC822 `InternetMessageId` is now persisted as the business identifier on
+  `EmailInboxMessage` with `NOT NULL` + `UNIQUE` and no empty default. The
+  Gmail local `message.id` is no longer used as a business identity in any
+  normal ingestion path; `GetMessageUniqueId(null, …)` no longer appears on
+  the regular work paths. Tests were updated to verify the principle, not
+  just compilation. No parallel mechanism was introduced.
 - **Relevant files / classes (informational):**
   `SiOffice.GoogleConnector\GoogleService.cs` (`EmailInfo`, `MapMessageToInfo`,
   `MapMessageToInfoMetadataOnly`),
@@ -81,7 +88,12 @@ or principles document.
   When the fallback is used in practice, the resulting identifier (and any
   derived `MessageKey` / ACC Inbox folder name) becomes mailbox-local in
   effect, undermining the cross-user identity guarantee.
-- **Status:** Needs code verification.
+- **Status:** Fixed — policy enforced (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  `MessageKeyGenerator` is RFC822-first. `gmail:{message.id}` remains only as
+  a legacy / compatibility fallback inside `MessageKeyGenerator` and is not
+  the normal production path. No new fallback was added; no silent fallback
+  to Gmail IDs is approved.
 - **Relevant files / classes (informational):**
   `SiNetSQL\Services\EmailIngestion\MessageKeyGenerator.cs`,
   `SiNetSQL\Services\EmailIngestion\EmailIngestionService.cs`.
@@ -102,7 +114,15 @@ or principles document.
   Messages belonging to the same business thread are not co-located in ACC,
   hindering thread-based navigation, audit, and future thread-level
   operations. Migration of existing folders will require a separate decision.
-- **Status:** Open — Needs migration decision.
+- **Status:** Fixed — new layout active (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  ACC Inbox layout is now `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/` with
+  `00_Email.pdf`, `manifest.json`, and an `Attachments/` child folder inside
+  each `MSG_` folder. `AccInboxLayout` is the single source of truth for the
+  layout. `InboxAccFolderId` is the `MSG_` folder id. The previous
+  `Year/Month` layout is superseded; no silent fallback to it remains. No
+  automatic migration of legacy ACC Inbox folders was performed and no
+  legacy folders were deleted — see *Cleanup / postponed items* below.
 - **Relevant files / classes (informational):**
   `AccInboxLayout`, `AccInboxReconciliationService`,
   `MoveToProjectProcessActionHandler`.
@@ -121,10 +141,23 @@ or principles document.
 - **Impact / risk:**
   Without a global `ThreadKey`, the target ACC Inbox layout (Gap 3) cannot be
   implemented, and cross-user thread identity cannot be guaranteed.
-- **Status:** Open.
+- **Status:** Fixed — thread identity implemented (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  `EmailInboxMessage` now carries `ThreadUniqueId` and `ThreadKey`.
+  `ThreadUniqueId` is derived from RFC822 threading headers in priority
+  `References[0]` → `In-Reply-To` → the message's own `InternetMessageId`.
+  `ThreadKey` is a short deterministic hash. `GmailThreadId` is no longer a
+  business source of truth for thread identity. `ThreadStatusMapping` was
+  restructured: `Id` is a surrogate technical primary key, `ThreadUniqueId`
+  is the business unique key, `ThreadId` is a nullable Gmail adapter /
+  runtime mirror, and `GmailLabelId` is an adapter / runtime field. The
+  migration and `Update-Database` were run by the user. A leftover default
+  constraint with empty `""` on `ThreadStatusMapping.ThreadUniqueId` is
+  acknowledged as a candidate for future cleanup before production — see
+  *Cleanup / postponed items* below.
 - **Relevant files / classes (informational):**
-  Future helper alongside `MessageKeyGenerator` (no new mechanism created in
-  this round).
+  Helper alongside `MessageKeyGenerator` (extended in place — no parallel
+  mechanism created).
 
 ### Gap 5 — Storage Destination model: documentation vs code alignment
 
@@ -629,6 +662,21 @@ or principles document.
   revived by accident; UI shows ambiguous messages that do not lead to
   a clear next step.
 - **Status:** Needs code verification / Needs UX alignment.
+- **Notes — Testing policy (added 2026-05-26 round):**
+  Tests are expected to be as comprehensive as possible and must verify
+  that the system actually upholds the principles documented in the
+  approved Domains documents. Whenever a material change is made to
+  identity, DB schema, workflow, storage layout, service boundaries, or
+  fallback policy, the corresponding tests must be updated or added.
+  Build-only validation is not sufficient. In the 2026-05-26 round the
+  full `SiNetSQL.Tests` suite was brought back to green (601 passed, 0
+  failed, 2 skipped, 603 total) by updating tests to reflect the new
+  approved principles — no test was deleted and no failure was marked as
+  unrelated. Remaining cleanup candidates (see *Cleanup / postponed
+  items* below) should be surfaced before production:
+  remove the default constraint on `ThreadStatusMapping.ThreadUniqueId`,
+  consider an optional legacy ACC Inbox folder migration tool, and add
+  user-friendly handling for an external upload missing `ThreadKey`.
 - **Relevant areas (informational):**
   `AppLogger`, structured-log call sites
   (`AccInboxReconciliationService`, attachment upload paths,
@@ -984,6 +1032,45 @@ or principles document.
     (diagnostics / System Status), and Gap 17 (deployment / centralized
     authorization), and focuses the secrets / credentials / token
     storage aspect.
+
+---
+
+## Cleanup / postponed items (2026-05-26 round)
+
+The following items were intentionally **not** addressed in the
+identity / thread / ACC layout / tests rounds and are recorded here as
+candidates for future approved rounds. They are append-only; do not
+remove entries — change status in place if they are resolved.
+
+- **`Year/Month` ACC Inbox layout** — *superseded* by
+  `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/`. No automatic legacy
+  folder migration is approved in this round; no silent fallback to the
+  old layout is approved.
+- **Legacy ACC Inbox folders migration tool** — *postponed / candidate*.
+  No existing ACC folders were moved or deleted. Any future migration
+  must be a dedicated, opt-in, audited tool — not an automatic startup
+  side effect.
+- **Default constraint on `ThreadStatusMapping.ThreadUniqueId`** —
+  *candidate for cleanup before production*. The column carries a
+  leftover default value of `""`. The business unique key should not
+  have an empty-string default; this must be removed in a dedicated
+  schema round before production.
+- **Prefix partition under `_Inbox`** (for example
+  `_Inbox/T4/THREAD_<ThreadKey>/...`) — *not approved / postponed*. The
+  approved layout is flat `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/`.
+  Any future partitioning requires its own approval round.
+- **`ProjectFileInstanceId` as a required source of truth** —
+  *superseded / not approved*. ACC item / version / folder is the source
+  of truth for the physical existence of a file in MoveToProject and
+  similar flows. `ProjectFileInstanceId` is a runtime projection /
+  legacy fallback only. No new mandatory dependency on it may be added.
+- **Silent fallback to Gmail IDs as business identity** — *not
+  approved*. RFC822 `InternetMessageId` is the business identifier;
+  `gmail:{message.id}` remains only as a legacy / compatibility
+  fallback inside `MessageKeyGenerator`.
+- **Friendly handling for external upload missing `ThreadKey`** —
+  *candidate*. The current behavior throws; the UX should be improved to
+  guide the user instead of surfacing a bare exception.
 
 ---
 

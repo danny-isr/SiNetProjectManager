@@ -229,13 +229,13 @@ https://mail.google.com/mail/u/0/#search/rfc822msgid:{EncodedMessageId}
   the main file. (Implementation of this rule is out of scope for this
   document; it is referenced here only for completeness.)
 
-### 6.3 ACC Inbox target layout — `THREAD_<ThreadKey>\MSG_<MessageKey>\` (added 26.05.2026)
+### 6.3 ACC Inbox active layout — `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/` (active 26.05.2026)
 
-The desired ACC Inbox structure is organised by **global email thread
+The ACC Inbox structure is organised by **global email thread
 identity**, not by Gmail mailbox-local `threadId`:
 
 ```
-ACC Inbox
+_Inbox\
   THREAD_<ThreadKey>\
     MSG_<MessageKey>\
       00_Email.pdf
@@ -264,10 +264,12 @@ ACC Inbox
 
 `MessageKey` is derived from the message's own RFC822 `Message-ID`.
 
-If the current implementation differs (for example, the layout is currently
-message-only without a `THREAD_<...>` parent), **no code change is made in
-this round**. The gap is recorded in
-[`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md).
+This layout is the **active implementation** as of the 2026-05-26 round.
+The previous flat `MSG_<MessageKey>\…` and `Year/Month\…` layouts are
+**superseded**; no silent fallback to them is allowed. Legacy ACC
+folders are not migrated automatically — see
+[`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
+(Gap 3 + *Cleanup / postponed items*).
 
 > Principle: *ACC Inbox is organised by global email thread identity, not
 > Gmail mailbox-local threadId. The desired structure is

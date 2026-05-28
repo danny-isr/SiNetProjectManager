@@ -17,17 +17,20 @@ Define the binding principles for how the application interacts with ACC, what i
 2. A failed metadata read from ACC is **not** proof that the file is missing. Reconciliation must confirm physical existence before marking `MissingInAcc` / `StaleAccReference`.
 3. Never build an ACC Viewer URL from DB identifiers as a fallback. Viewer / opening data must come from ACC reconciliation.
 4. ACC Inbox layout is centralized in `AccInboxLayout`:
-   - Message folders: `MSG_<MessageKey>`
-   - Message folder files: `00_Email.pdf`, `manifest.json`
-   - Regular attachments under the `Attachments` child folder
-   - **Target layout (added 26.05.2026):** `THREAD_<ThreadKey>\MSG_<MessageKey>\…`,
+   - **Active layout (2026-05-26 round):** `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/`,
      organised by global email thread identity. `ThreadKey` is derived from
      RFC822 threading headers (`References`, `In-Reply-To`, `Message-ID`) and
      `MessageKey` is derived from RFC822 `Message-ID`. **Folder names must
-     not be derived from Gmail mailbox-local `message.id` or `threadId`.** If
-     the current implementation is still message-only, no code change is made
-     in this round — the gap is logged in
-     [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md).
+     not be derived from Gmail mailbox-local `message.id` or `threadId`.**
+   - Inside each message folder: `00_Email.pdf`, `manifest.json`, and an
+     `Attachments/` child folder for regular attachments.
+   - The previous flat `MSG_<MessageKey>/…` layout (without the
+     `THREAD_<ThreadKey>` parent) is **superseded**. The previous
+     `Year/Month/...` partitioning is also **superseded**; no silent
+     fallback to it is allowed. Legacy ACC folders are not migrated
+     automatically \u2014 see
+     [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
+     (Gap 3 + *Cleanup / postponed items*).
 5. A sidecar `.json` (e.g. `<file>.pdf.json`) is **not** an extension conflict and must not be treated as such.
 6. Custom attribute definitions (`SiInbox.*`) are provisioned only in the dedicated ACC Inbox project / folder via the existing `Bim360Service.EnsureCustomAttributeDefinitionsAsync`. Definitions are not auto-created from `SetItemCustomAttributesAsync`.
 7. The move-target alternative attribute name is `SiInbox.Move.TargetAltId`. The legacy long form `SiInbox.Move.TargetProjectAlternativeId` must not be reintroduced.
@@ -163,9 +166,11 @@ companion to
 - DB-only fallback for opening / validating an ACC file — **dropped**.
 - Mixing upload / reconciliation / filing into one ambiguous service — **dropped**.
 - Flat `MSG_<MessageKey>\…` ACC Inbox layout as the **final** target —
-  replaced in principle by `THREAD_<ThreadKey>\MSG_<MessageKey>\…`. Any
-  current implementation difference is logged in
-  [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md).
+  replaced by the active `_Inbox/THREAD_<ThreadKey>/MSG_<MessageKey>/`
+  layout (2026-05-26 round). `Year/Month` partitioning is also
+  superseded. Legacy ACC folders are not migrated automatically; see
+  [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
+  (Gap 3 + *Cleanup / postponed items*).
 - Deep documentation of every ACC API call — postponed.
 
 ## Relevant terms / search terms

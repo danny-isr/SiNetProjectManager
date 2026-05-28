@@ -84,6 +84,12 @@
     - Do not change refile flows, broad UI/inspection behavior, `UpsertInstanceAsync`, or the `ProjectFileInstance` model/table/foreign-key layout.
     - Use application-level handling (nullable fields and fallback logic) to support new fields while guaranteeing no breaking schema or model changes.
     - Do not change TokenProvider, Bim360Service, service architecture, or unrelated areas when implementing enrichment changes.
+  - **ACC physical-existence source of truth (MoveToProject and similar flows)**
+    - In MoveToProject and similar flows, the ACC item / version / folder is the source of truth for the physical existence of a file.
+    - `ProjectFileInstanceId` is a runtime projection / legacy fallback and is NOT a persisted source of truth.
+    - Do not add a new mandatory dependency on `ProjectFileInstanceId` for filed-state, task-completion, or open/view decisions.
+    - Do not introduce parallel fallback mechanisms; reuse the existing ACC reconciliation / `AccItemId` path.
+    - Task-completion reporting (e.g. `ReviewMaterialFiled`) must be able to fire from ACC state alone, even when no new `ProjectFileInstance` is created in the current run.
   - ACC Inbox custom attribute definition provisioning (STRICT POLICY)
     - Implement only a small, approved fix in the Inbox provisioning path.
     - Create/ensure SiInbox.* definitions only in the ACC Inbox project/folder via the existing Bim360Service.EnsureCustomAttributeDefinitionsAsync.
