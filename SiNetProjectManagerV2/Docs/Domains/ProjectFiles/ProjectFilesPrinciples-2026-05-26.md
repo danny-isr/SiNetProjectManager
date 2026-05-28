@@ -238,23 +238,32 @@ and to be treated as "the correct file" by the system. Even when copies
 exist elsewhere, only the configured Storage Destination is the physical
 source of truth.
 
-**Valid Storage Destination values:**
+**Valid Storage Destination values** (mirrored by the
+`FileStorageDestination` enum in `SiNetSQL\Models\FileStorageDestination.cs`):
 
-- **ACC** — ACC is the physical source of truth for the file.
-- **File Server** — the configured server path is the physical source of truth.
-- **Google Drive** — Google Drive is the physical source of truth (note:
-  Google Drive upload itself remains **postponed**, see below).
-- **Gmail** — *read-only ingestion source only.* Gmail is not a write/management
-  target.
+- **File Server** (`FileStorageDestination.FileServer`, default) — the
+  configured server path is the physical source of truth.
+- **ACC** (`FileStorageDestination.Acc`) — ACC is the physical source of
+  truth for the file.
+- **Google Drive** (`FileStorageDestination.GoogleDrive`) — **reserved /
+  postponed.** Present in the enum but Google Drive upload is **not active**.
+  The dispatcher in `ProjectFileUploadService` returns an explicit failure
+  for this destination and there is no silent fallback. Activating Google
+  Drive upload requires an explicit approval round — see
+  [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md)
+  (Gap 5 + *Cleanup / postponed items*).
 
-**Gmail is different from the other destinations:**
+**Gmail is NOT a Storage Destination.**
 
-- Gmail is a read-only ingestion source.
+- Gmail is **not** a value in `FileStorageDestination` and **not** a
+  managed-file destination.
+- Gmail is a **read-only ingestion source** only, represented by
+  `EmailInboxMessage` / `EmailInboxAttachment` and the
+  `EmailIngestionService` path.
 - The system does **not** write back to Gmail.
-- Gmail is **not** a permanent management destination for project files.
-- A file that arrives via Gmail must be ingested into a write-capable
-  Storage Destination (ACC / File Server / Google Drive) according to the
-  configured destination for that file.
+- A file that arrives via Gmail is managed after ingestion through its
+  configured Storage Destination (typically ACC Inbox, then ACC project
+  folders, or File Server), never through Gmail itself.
 
 **Rules:**
 
@@ -269,6 +278,21 @@ source of truth.
 - Do **not** auto-change Storage Destination.
 - Do **not** create a fallback that picks a copy from another location when
   the configured destination is missing.
+
+**`ProjectFile.StorageDestination` vs `ProjectFileInstance.StorageDestination`:**
+
+- `ProjectFile.StorageDestination` is the **slot-level configured
+  destination** and is the source of truth for routing
+  (`ProjectFileFilingService`, `ProjectFileUploadService`,
+  `IFileOpenService` all dispatch on it).
+- `ProjectFileInstance.StorageDestination` is a **legacy / transitional
+  persisted projection** kept on the instance row. It is **not** the
+  architectural source of truth for physical existence (ACC item / version
+  / folder is, per the ACC source-of-truth principle). It still appears in
+  `ProjectFileRefileService` and `EmailMoveToProjectApplicationService`
+  for cleanup / classification only. Its eventual cleanup is tracked
+  under Gap 9 (`ProjectFileInstance` as runtime projection) and is
+  **postponed** — no schema, model, or migration change in this round.
 
 ## Metadata source of truth (added 26.05.2026)
 

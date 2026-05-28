@@ -164,21 +164,73 @@ or principles document.
 - **Date identified:** 26.05.2026
 - **Domain:** Project Files, Database Identity, ACC.
 - **Desired principle:**
-  Every managed file has one binding Storage Destination value: `ACC`,
-  `File Server`, `Google Drive`, or `Gmail` (read-only ingestion only).
+  Every managed file has one binding Storage Destination value from the
+  `FileStorageDestination` enum: `FileServer` (default), `Acc`, or
+  `GoogleDrive` (reserved / postponed). Gmail is **not** a Storage
+  Destination — it is a read-only ingestion source only.
   See [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](../Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md).
 - **Current known / suspected state:**
-  Where Storage Destination is represented in the DB / code (table / column /
-  enum), and whether all four values are correctly modelled with Gmail as
-  read-only, has not been verified in this round. Google Drive upload is
-  postponed.
+  Verified in 2026-05-26 round. The DB / code model uses
+  `ProjectFile.StorageDestination` (slot-level) as the source of truth and
+  the `FileStorageDestination` enum already excludes Gmail. The previous
+  documentation wording that listed Gmail as a fourth enum value has been
+  corrected. Google Drive upload remains postponed.
 - **Impact / risk:**
   Without a single, explicit Storage Destination per file, the system may
   rely on heuristics ("where we found a copy") instead of authoritative
   configuration, leading to ambiguous "source of truth" for physical files.
-- **Status:** Needs code verification.
+- **Status:** Partially confirmed — documentation alignment needed; `ProjectFileInstance.StorageDestination` follow-up tracked under Gap 9 (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  Code verification completed. Findings:
+  - `ProjectFile.StorageDestination` (column on `ProjectFile`, typed
+    `FileStorageDestination`) is the **slot-level source of truth** for
+    routing. `ProjectFileFilingService`, `ProjectFileUploadService`, and
+    `IFileOpenService` all dispatch on it explicitly; no destination is
+    inferred from "where we found a copy".
+  - The enum `SiNetSQL\Models\FileStorageDestination.cs` contains
+    `FileServer = 0` (default), `Acc = 1`, `GoogleDrive = 2`.
+    **`Gmail` is not, and must not be, a value of the enum.** Gmail is a
+    read-only ingestion source represented separately by
+    `EmailInboxMessage` / `EmailInboxAttachment` and the
+    `EmailIngestionService` path; the system does not write back to
+    Gmail.
+  - **`GoogleDrive` is reserved / postponed.** It exists in the enum and
+    in the `ProjectFileUploadService` switch, but the
+    `UploadToGoogleDriveAsync` method returns an explicit failure
+    (`"העלאה ל-Google Drive טרם מיושמת"`). There is no silent fallback
+    from ACC or File Server to Google Drive. Activating Drive upload
+    requires an explicit approval round.
+  - **No silent fallback** between destinations was found. Default
+    `switch` branches return explicit failures
+    (e.g. `"סוג אחסון לא נתמך"`, `Unsupported StorageDestination`).
+  - `ProjectFileInstance.StorageDestination` is still a persisted column
+    on the instance row and is read by `ProjectFileRefileService` and
+    `EmailMoveToProjectApplicationService` for cleanup / classification.
+    Per the ACC source-of-truth principle and the
+    runtime-projection contract, this column is **legacy / transitional
+    persisted projection** and **not** the architectural source of truth
+    for physical existence. Its cleanup is tracked under **Gap 9** and is
+    **postponed** in this round; no schema, model, or migration change is
+    made here.
+  - The previous documentation listed "Gmail" as a fourth Storage
+    Destination value. That wording has been corrected in
+    `Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`
+    (Gmail removed from the enum-value list, marked explicitly as
+    *not a Storage Destination*; `GoogleDrive` marked as
+    *reserved / postponed*; the `ProjectFile.StorageDestination` vs
+    `ProjectFileInstance.StorageDestination` distinction made explicit).
 - **Relevant files / classes (informational):**
-  `ProjectFileFilingService`, `ProjectFileInstance` model, ACC upload paths.
+  `SiNetSQL\Models\FileStorageDestination.cs`,
+  `SiNetSQL\Models\ProjectFile.cs`,
+  `SiNetSQL\Models\ProjectFileInstance.cs`,
+  `SiNetSQL\Services\Files\ProjectFileFilingService.cs`,
+  `SiNetSQL\Services\Files\ProjectFileRefileService.cs`,
+  `SiNetSQL\Services\Coordinators\ProjectFileUploadService.cs`,
+  `SiNetSQL\Services\Coordinators\AccFileSyncService.cs`,
+  `SiNetSQL\Services\MoveToProject\EmailMoveToProjectApplicationService.cs`,
+  `SiNetSQL\Services\FileOpen\IFileOpenService.cs`,
+  `SiOffice.GoogleConnector\Reports\GoogleDriveService.cs` (used by
+  Reports only, not by managed-file filing).
 
 ### Gap 6 — Metadata source-of-truth alignment
 
@@ -1071,6 +1123,22 @@ remove entries — change status in place if they are resolved.
 - **Friendly handling for external upload missing `ThreadKey`** —
   *candidate*. The current behavior throws; the UX should be improved to
   guide the user instead of surfacing a bare exception.
+- **Google Drive upload activation** — *postponed*. `GoogleDrive` exists
+  in `FileStorageDestination` and in the `ProjectFileUploadService`
+  dispatch switch, but `UploadToGoogleDriveAsync` returns an explicit
+  failure. No silent fallback to Drive from ACC or File Server is
+  approved. Activation requires its own approval round (Gap 5).
+- **Gmail as a Storage Destination** — *not approved / corrected*.
+  Gmail is a read-only ingestion source represented by
+  `EmailInboxMessage` / `EmailInboxAttachment`. It is not, and must not
+  be added as, a value in `FileStorageDestination` (Gap 5).
+- **`ProjectFileInstance.StorageDestination` cleanup** — *postponed to
+  Gap 9*. The column remains persisted and is still read by
+  `ProjectFileRefileService` and `EmailMoveToProjectApplicationService`
+  for cleanup / classification, but it is legacy / transitional
+  projection state and not the architectural source of truth for
+  physical existence. No schema, model, or migration change is approved
+  in this round (Gap 5 / Gap 9).
 
 ---
 
