@@ -333,6 +333,12 @@ namespace SiNetProjectManagerV2.WPFUserControl
         // ══════════════════════════════════════════════════════════════════
         // ATTACHED PROPERTY: IsAccViewer (marks WebView2 as ACC document viewer)
         // Disables Gmail navigation guard and keeps new-window requests in-place.
+        //
+        // NOTE (Gap 18F): As of the unified WebView2 profile change, this property
+        // NO LONGER affects which CoreWebView2Environment / UserDataFolder is used.
+        // All WebView2 instances now share a single persistent profile created by
+        // <see cref="CreateSharedEnvironmentAsync"/>. IsAccViewer is retained only
+        // to drive navigation / new-window behavior (see <see cref="ConfigureBrowserBehavior"/>).
         // ══════════════════════════════════════════════════════════════════
 
         public static readonly DependencyProperty IsAccViewerProperty =
@@ -493,11 +499,12 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 if (webView.CoreWebView2 == null)
                 {
                     bool isAcc = GetIsAccViewer(webView);
-                    var environment = isAcc
-                        ? await CreateAccEnvironmentAsync()
-                        : await CreateUserEnvironmentAsync();
+                    // Gap 18F: unified profile — both ACC and non-ACC viewers share the same
+                    // persistent UserDataFolder so Autodesk/Google sessions are reused across windows.
+                    var environment = await CreateSharedEnvironmentAsync(
+                        source: isAcc ? "ProjectWork.AccViewer" : "Gmail/User WebView2");
                     await webView.EnsureCoreWebView2Async(environment);
-                    System.Diagnostics.Debug.WriteLine($"WebView2: Core initialization completed (ACC={isAcc})");
+                    System.Diagnostics.Debug.WriteLine($"WebView2: Core initialization completed (ACC={isAcc}, shared profile)");
                 }
 
                 // Phase 1.1: One-time browser configuration (UA masking, popup interception)
@@ -1157,44 +1164,67 @@ namespace SiNetProjectManagerV2.WPFUserControl
         }
 
         // ══════════════════════════════════════════════════════════════════
-        // Phase 1: Persistent UserDataFolder per Google account
+        // Phase 1 / Gap 18F: Unified persistent UserDataFolder for all WebView2 windows
         // ══════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Creates a CoreWebView2Environment with a persistent UserDataFolder
-        /// mapped to the current user's email address. This preserves the Google
-        /// SSO session across app restarts, eliminating repeated login prompts.
-        /// Falls back to default (temp) if no user email is set yet.
+        /// Fixed subfolder name (under <see cref="AppConfiguration.WebView2UserDataBasePath"/>)
+        /// used as the single shared WebView2 profile for the entire app.
+        /// Every WebView2 window (Gmail, Calendar, ExternalBrowserWindow, ACC viewer)
+        /// shares this profile, so cookies / SSO state behave like one browser.
         /// </summary>
-        internal static async Task<CoreWebView2Environment?> CreateUserEnvironmentAsync()
-        {
-            if (string.IsNullOrWhiteSpace(CurrentUserEmail))
-            {
-                System.Diagnostics.Debug.WriteLine("WebView2: No CurrentUserEmail set, using default UserDataFolder");
-                return null;
-            }
+        internal const string SharedUserDataFolderName = "Default";
 
-            var sanitized = SanitizeEmailForPath(CurrentUserEmail);
-            var userDataFolder = Path.Combine(AppConfiguration.WebView2UserDataBasePath, sanitized);
+        /// <summary>
+        /// Creates (or reuses) a CoreWebView2Environment backed by a single, app-wide
+        /// persistent UserDataFolder: <c>{WebView2UserDataBasePath}\Default</c>.
+        /// All WebView2 windows in the app share this environment so Gmail, Calendar,
+        /// Autodesk/ACC and external links behave like the same browser — one cookie jar,
+        /// one login state, persistent across app restarts.
+        /// </summary>
+        internal static async Task<CoreWebView2Environment> CreateSharedEnvironmentAsync(string source = "unspecified")
+        {
+            var userDataFolder = Path.Combine(
+                AppConfiguration.WebView2UserDataBasePath,
+                SharedUserDataFolderName);
 
             Directory.CreateDirectory(userDataFolder);
-            System.Diagnostics.Debug.WriteLine($"WebView2: Using persistent UserDataFolder: {userDataFolder}");
 
-            return await CoreWebView2Environment.CreateAsync(
-                userDataFolder: userDataFolder);
+            // Minimal Gap 18F logging — no tokens, no full URLs.
+            try
+            {
+                AppLogger.Info($"[WebView2][SharedProfile] source={source} kind=Unified folder={userDataFolder}");
+            }
+            catch
+            {
+                System.Diagnostics.Debug.WriteLine($"WebView2: Using shared UserDataFolder: {userDataFolder} (source={source})");
+            }
+
+            return await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
         }
 
         /// <summary>
-        /// Creates a CoreWebView2Environment for the ACC document viewer.
-        /// Uses a separate UserDataFolder ('acc_viewer') to isolate the ACC
-        /// browser session from the Gmail session.
+        /// Legacy entry point. Previously created a per-Google-account UserDataFolder.
+        /// Gap 18F: now delegates to <see cref="CreateSharedEnvironmentAsync"/> so all
+        /// WebView2 windows share a single persistent profile. Kept for source compatibility;
+        /// callers should prefer <see cref="CreateSharedEnvironmentAsync"/>.
+        /// </summary>
+        internal static async Task<CoreWebView2Environment?> CreateUserEnvironmentAsync()
+        {
+            return await CreateSharedEnvironmentAsync(source: "Legacy.User");
+        }
+
+        /// <summary>
+        /// Legacy entry point for a separate ACC viewer profile ('acc_viewer').
+        /// Gap 18F: STAGED REMOVAL — disabled/postponed because the app now uses a unified
+        /// WebView2 browser profile. Currently delegates to <see cref="CreateSharedEnvironmentAsync"/>
+        /// so any remaining callers transparently share the unified profile.
+        /// Candidate for future physical deletion (and removal of the on-disk 'acc_viewer'
+        /// folder) after testing.
         /// </summary>
         private static async Task<CoreWebView2Environment> CreateAccEnvironmentAsync()
         {
-            var userDataFolder = Path.Combine(AppConfiguration.WebView2UserDataBasePath, "acc_viewer");
-            Directory.CreateDirectory(userDataFolder);
-            System.Diagnostics.Debug.WriteLine($"WebView2: Using ACC UserDataFolder: {userDataFolder}");
-            return await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+            return await CreateSharedEnvironmentAsync(source: "Legacy.Acc");
         }
 
         /// <summary>

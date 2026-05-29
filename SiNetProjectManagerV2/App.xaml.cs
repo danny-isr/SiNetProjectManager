@@ -98,6 +98,13 @@ namespace SiNetProjectManagerV2
             // Wire AppLog to Serilog
             AppLog.ErrorHandler = (ex, op, ctx) => Log.Error(ex, "Operation {Operation} failed. Context={@Context}", op, ctx ?? new { });
             AppLog.FatalHandler = (ex, op, ctx) => Log.Fatal(ex, "Operation {Operation} failed. Context={@Context}", op, ctx ?? new { });
+
+            // Wire TokenProvider diagnostics (Gap 18B/18C) to AppLogger so its [TokenProvider]
+            // lines reach the central log on the client side. Static delegates are process-wide
+            // and apply to every `new TokenProvider(...)` instance (DI + direct construction).
+            MyOffice.AutodeskConnector.TokenProvider.LogInfo = msg => AppLogger.Info(msg);
+            MyOffice.AutodeskConnector.TokenProvider.LogWarn = msg => AppLogger.Warn(msg);
+            MyOffice.AutodeskConnector.TokenProvider.LogError = msg => AppLogger.Error(msg);
         }
 
         public static void ApplySettings()

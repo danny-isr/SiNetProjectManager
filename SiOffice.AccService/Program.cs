@@ -77,6 +77,15 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 builder.Host.UseSerilog();
 
+// Wire TokenProvider diagnostics (Gap 18B/18C) to the service's Serilog logger so
+// [TokenProvider] lines (path, windows user, pid, clientIdTail, refreshTokenFileExists,
+// browser-auth trigger, safe-delete decisions) reach the central log on the service side
+// — including when the service runs under LocalSystem / a different Windows user than
+// the WPF client and therefore resolves a different %LOCALAPPDATA% token store.
+MyOffice.AutodeskConnector.TokenProvider.LogInfo = msg => Log.Information("{Msg}", msg);
+MyOffice.AutodeskConnector.TokenProvider.LogWarn = msg => Log.Warning("{Msg}", msg);
+MyOffice.AutodeskConnector.TokenProvider.LogError = msg => Log.Error("{Msg}", msg);
+
 // ─── Kestrel HTTPS ──────────────────────────────────────────────────────────
 // Internal-network service. HTTPS port + optional cert path/password are
 // driven from configuration so production can swap in a real PFX without
@@ -181,6 +190,42 @@ try
     if (CentralLoggingBuilder.CentralSinkBootstrapError is { } centralErr)
     {
         Log.Warning("SiOffice.AccService: {Detail}", centralErr);
+    }
+
+    // [AccService][TokenProvider] startup diagnostics — answers the cross-process
+    // questions raised in Gap 18A/18C: which Windows user the service runs as,
+    // which %LOCALAPPDATA% it sees, and whether the Autodesk refresh_token.json is
+    // already present on disk for it. No secrets are printed (only last 4 chars of
+    // the configured client_id, and only whether the file exists — never its content).
+    try
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var tokenDir = System.IO.Path.Combine(localAppData, "SiNet", "Autodesk");
+        var tokenPath = System.IO.Path.Combine(tokenDir, "refresh_token.json");
+        var clientIdRaw = CredentialProvider.AutodeskClientId ?? string.Empty;
+        var clientIdTail = clientIdRaw.Length < 4 ? "(empty)" : "***" + clientIdRaw[^4..];
+        string windowsUser;
+        try { windowsUser = Environment.UserDomainName + "\\" + Environment.UserName; }
+        catch { windowsUser = "(unknown)"; }
+        Log.Warning(
+            "[AccService][TokenProvider] startup diagnostics — windowsUser={WindowsUser}, " +
+            "process={Process} (pid={Pid}), environment={EnvName}, " +
+            "currentDirectory={Cwd}, baseDirectory={BaseDir}, localAppData={LocalAppData}, " +
+            "tokenStoragePath={TokenPath}, refreshTokenFileExists={Exists}, clientIdTail={ClientIdTail}.",
+            windowsUser,
+            System.Diagnostics.Process.GetCurrentProcess().ProcessName,
+            Environment.ProcessId,
+            builder.Environment.EnvironmentName,
+            Environment.CurrentDirectory,
+            AppContext.BaseDirectory,
+            localAppData,
+            tokenPath,
+            System.IO.File.Exists(tokenPath),
+            clientIdTail);
+    }
+    catch (Exception diagEx)
+    {
+        Log.Warning("[AccService][TokenProvider] startup diagnostics failed: {Error}", diagEx.Message);
     }
 
     // Hook the host lifetime so we get explicit started / stopping / stopped lines.

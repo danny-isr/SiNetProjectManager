@@ -10,7 +10,9 @@ namespace SiNetProjectManagerV2.Dialogs;
 /// <summary>
 /// Floating browser window for viewing external links clicked from emails.
 /// Uses a clean WebView2 instance (no Gmail/Calendar clean-view scripts) that shares
-/// the user's persistent session. Downloads are intercepted and routed via the
+/// the app-wide unified WebView2 profile (see <see cref="WebView2Helper.CreateSharedEnvironmentAsync"/>),
+/// so cookies / login state (Gmail, Autodesk, ACC, etc.) are reused across windows.
+/// Downloads are intercepted and routed via the
 /// <see cref="DownloadAssociationDialog"/> for project association.
 /// <para>
 /// The user can close this window manually after browsing/downloading.
@@ -36,7 +38,11 @@ public partial class ExternalBrowserWindow : Window
     {
         try
         {
-            var environment = await WebView2Helper.CreateUserEnvironmentAsync();
+            // Gap 18F: use the unified shared WebView2 profile so this floating
+            // browser shares cookies / login state (Gmail, Autodesk, ACC, etc.)
+            // with every other WebView2 window in the app.
+            var environment = await WebView2Helper.CreateSharedEnvironmentAsync(
+                source: "ExternalBrowserWindow");
             await BrowserWebView.EnsureCoreWebView2Async(environment);
 
             ConfigureBrowser(BrowserWebView.CoreWebView2);

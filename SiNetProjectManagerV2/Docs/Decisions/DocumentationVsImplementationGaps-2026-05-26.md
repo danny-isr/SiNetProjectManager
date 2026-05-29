@@ -674,13 +674,27 @@ or principles document.
   technical connector; WPF clients bypassing service mode; inconsistent
   ACC status; mixing of upload / reconciliation / filing under a single
   ambiguous service.
-- **Status:** Needs code verification / Needs architecture alignment.
-- **Relevant areas (informational):**
-  `SiOffice.AccService`, `SiOffice.AutodeskConnector`,
-  `AccInboxReconciliationService`,
-  `MoveToProjectProcessActionHandler`, `ShowAttachmentInAccAsync`,
-  ACC-related ViewModels and Application Services, `AccService:BaseUrl`
-  configuration path.
+- **Status:** Confirmed — Boundary intact; follow-ups documented (Round A.1, post-Stage 9E.5). See *Round update (Round A.1 — Gap 12 / Gap 13 boundary audit closure)* below.
+- **Resolution (Round A audit, read-only):**
+  - ACC metadata writes go through the approved surfaces only: `IAccItemMetadataService` (sole owner of `Bim360Service.SetItemCustomAttributesAsync`) and `IProjectFileAccMetadataWriter` (post-upload SiInbox/ProjectFile attributes).
+  - Canonical single-file filing path is `IProjectFileFilingService.FileAsync` (`ProjectFileFilingService.FileToAccAsync`); ACC calls route through `IAccFileClient` (`EnsureFolderPathAsync`, `GetFolderItemsAsync`, `UploadFileFinalAsync`, `UploadNewVersionAsync`).
+  - `AccFileStore` is the canonical ACC storage adapter (`IFileStore`); `MoveToProjectProcessActionHandler` consumes `IAccFileClient` + `IAccItemMetadataService` only.
+  - `AccInboxReconciliationService` performs read-only existence/status checks via `IAccItemMetadataService`.
+  - No ViewModel writes ACC metadata directly. `EmailManagementViewModel` has zero direct `Bim360Service` / `SetItemCustomAttributesAsync` calls.
+  - No silent fallback between ACC ↔ File Server ↔ Google Drive: `ProjectFileFilingService` routes strictly on `ProjectFile.StorageDestination` and throws `NotSupportedException` for unrouted destinations.
+  - `AccItemId` / `AccVersionId` flow only as hints/targets in result records; physical existence is established via `IAccFileClient.GetFolderItemsAsync` + `IAccItemMetadataService.ReadAttributesAsync`, never from the IDs alone.
+  - Startup correctly skips local `AccUserBootstrapService.ProvisionUsersAsync` when `AccService:BaseUrl` is configured (`App.xaml.cs` `StartAccUserBootstrap`).
+  - **Follow-ups documented only (not approved for action in this round):**
+    1. `EmailIngestionService` (~7 sites: message folder / attachments / `00_Email.pdf` / `manifest.json` / ZIP children) uses `_bim360Service.UploadFileFinalAsync` directly for ACC Inbox uploads. Not a dangerous bypass — it stays inside the connector boundary and owns the Inbox-side upload — but it does not use the newer `IAccFileClient` abstraction. **Candidate for future unification** once a matching Inbox API on `IAccFileClient` is defined.
+    2. `AccFileSyncService` is already marked **deprecated for single-file filing** in its XML doc and kept only for the batch `SyncMessageAttachmentsAsync` entry consumed by `EmailManagementViewModel.TryAutoSyncToProjectAsync`. **Candidate for staged removal** after that one consumer is migrated to `IProjectFileFilingService.FileAsync`.
+    3. `ProjectWorkViewModel` and `ProjectFolderNode` resolve `AccFileStore` from `ServiceLocator.GetService<IEnumerable<IFileStore>>().OfType<AccFileStore>()` via a concrete-type cast. Not a bypass — the store is the right layer — but a low-severity boundary smell to clean up opportunistically.
+- **Relevant areas (informational):**  configuration path.
+  Audit-relevant call sites: `ProjectFileFilingService.FileToAccAsync`,
+  `AccFileStore.UploadAsync` / `Resolve*`, `AccItemMetadataService`,
+  `ProjectFileAccMetadataWriter`, `MoveToProjectProcessActionHandler`,
+  `EmailIngestionService` (Inbox-side direct `Bim360Service` use —
+  follow-up only), `AccFileSyncService` (deprecated batch path —
+  follow-up only).
 - **Notes:**
   - **No code, DB, schema, migration, ModelSnapshot, DI, or service
     creation change is made in this round.**
@@ -734,13 +748,25 @@ or principles document.
   DB as business identifiers; unsanctioned Google Drive upload / Drive
   fallback paths; Google Sheets becoming an accidental business source of
   truth; UI bypass of domain services through the Google connector.
-- **Status:** Needs code verification / Needs architecture alignment.
-- **Relevant areas (informational):**
-  `SiOffice.GoogleConnector\GoogleService.cs`,
-  `SiNetSQL\Services\EmailIngestion\EmailIngestionService.cs`,
-  `MessageKeyGenerator`, `EmailManagementView`,
-  `ProjectFileFilingService`, Storage Destination configuration paths,
-  any Google Drive / Sheets helpers within the connector.
+- **Status:** Confirmed — Boundary intact; follow-up documented (Round A.1, post-Stage 9E.5). See *Round update (Round A.1 — Gap 12 / Gap 13 boundary audit closure)* below.
+- **Resolution (Round A audit, read-only):**
+  - **Gmail** is used as an ingestion source only. `GoogleService` exposes read-only Gmail / RFC822 surfaces (`Get*EmailsAsync`, `LoadFullEmailBodyAsync`, label management). `EmailManagementViewModel`'s 52 `_googleService` call sites are all read / label / auth — no Drive uploads, no filing decisions, no Storage-Destination decisions.
+  - **Gmail is not** registered or used as a Storage Destination anywhere.
+  - **Google Drive is an active Storage Destination** routed only through `GoogleDriveStore` (`IFileStore`) backed by `IGoogleDriveServiceProvider` / `GoogleAuthService`; DI wires it exactly once in `App.xaml.cs`.
+  - **Routing is strictly by `ProjectFile.StorageDestination`** (`ProjectFileFilingService` `switch`, with `NotSupportedException` for unrouted destinations and explicit "Use ProjectFileUploadService for Drive-targeted ProjectFiles" for `GoogleDrive`). Drive uploads go through `ProjectFileUploadService` → `GoogleDriveStore`.
+  - **Duplicate filename in the target Drive folder is a conflict** — `GoogleDriveStore.UploadAsync` throws `FileStoreConflictException` for data file and sidecar duplicates; no auto-pick, no silent fallback. `GoogleDriveStore` upload failure is re-thrown (“Do NOT swallow as a silent fallback”).
+  - **Sidecar metadata** (`SidecarMetadata`) is consumed symmetrically by `AccFileStore` and `GoogleDriveStore`; sidecar write failure is logged as warn, never auto-retried via another store.
+  - **Google Drive delete wiring in refile cleanup is still postponed and explicitly marked**: `ProjectFileRefileService` returns a clear skip reason for `FileStorageDestination.GoogleDrive` rather than silently dropping the artifact. Status remains *postponed*.
+  - **No routing-decision-in-wrong-layer found:** no `_googleService.*Drive*Upload*` call sites outside the connector, and no `UploadToGoogleDrive` callers anywhere. Drive `Files.*` direct use in reporting / templates / inspection-screenshot services is **not** a Storage-Destination path and is allowed by the Service Catalog.
+  - **Follow-up documented only (not approved for action in this round):**
+    1. `EmailAttachment` DTO inside `SiOffice.GoogleConnector\GoogleService.cs` carries business-shaped fields (`ProjectFileId`, `ProjectAlternativeId`, `IsFilingInProgress`, `IsLocked`, `CanEditTarget`). The connector still does not make filing / routing decisions — it just hosts a DTO that knows about project-file IDs. **Medium-severity boundary smell, not a runtime bypass.** Candidate for relocation if and when a future connector-cleanup round is opened. **Postponed.**
+- **Relevant areas (informational):**  any Google Drive / Sheets helpers within the connector.
+  Audit-relevant call sites: `GoogleDriveStore` (upload / conflict /
+  re-throw), `IGoogleDriveServiceProvider` / `GoogleAuthService`,
+  `ProjectFileFilingService` (routing switch), `ProjectFileRefileService`
+  (Drive cleanup skip), `EmailManagementViewModel` (Gmail-only `_googleService`
+  usage), reporting / template / screenshot services using `driveService.Files.*`
+  for non-Storage-Destination purposes.
 - **Notes:**
   - **No code, DB, schema, migration, ModelSnapshot, DI, or service
     creation change is made in this round.**
@@ -1190,7 +1216,13 @@ or principles document.
   session inconsistency between windows that should share login or
   between windows that should be isolated; `System Status` accidentally
   exposing secret values.
-- **Status:** Needs security/auth review / Needs code verification.
+- **Status:** Partially resolved / Verified — repeated Autodesk authorization
+  during email attachment preview is fixed and confirmed by user manual
+  verification (see *Round update — Gap 18F / 18G closure (preview
+  authorization)* below). Broader auth cleanup (TokenProvider singleton /
+  DI lifetime, AccService metadata-read endpoint, full auth-flow review,
+  log-hygiene audit) remains **Needs security/auth review / Needs code
+  verification**.
 - **Relevant areas (informational):**
   `SiNetSQL\Services\CredentialVaultService.cs`,
   `SiNetSQL\Services\SecretKeys.cs`,
@@ -1508,13 +1540,420 @@ detection works).
 
 ---
 
-## What we deliberately did NOT do while creating this register
+## Round update (Round A.1 — Gap 12 / Gap 13 boundary audit closure)
+
+This round is **documentation-only**. No production code, DB schema,
+migration, `Update-Database`, or test change was made. It records the
+result of the read-only Round A audit of the ACC (Gap 12) and Google /
+Gmail / Drive (Gap 13) service boundaries performed after Stage 9E.5.
+
+### Outcome
+- **Gap 12 status: Confirmed — ACC boundary intact; follow-ups documented.**
+  No metadata-corruption risk found, no silent fallback between Storage
+  Destinations, no ViewModel writes ACC metadata directly, and
+  `AccItemId` / `AccVersionId` are not used as DB-side source of truth.
+- **Gap 13 status: Confirmed — Google / Gmail / Drive boundary intact;
+  follow-up documented.** Gmail stays ingestion-only, Google Drive is
+  routed only through `GoogleDriveStore` / `IFileStore` with duplicate
+  filename = conflict and no silent fallback, routing is decided strictly
+  by `ProjectFile.StorageDestination`, and Drive delete wiring in refile
+  cleanup remains explicitly *postponed* (clear skip reason, not silent).
+
+### Documented follow-ups (no action approved in this round)
+1. **`EmailIngestionService` direct `Bim360Service` use for ACC Inbox
+   uploads** (message folder / attachments / `00_Email.pdf` /
+   `manifest.json` / ZIP children, ~7 sites). Stays inside the connector
+   boundary and owns the Inbox-side upload; does not use the newer
+   `IAccFileClient` abstraction. **Candidate for future unification**
+   once a matching Inbox API on `IAccFileClient` is defined.
+2. **`AccFileSyncService` batch path** — already marked *deprecated for
+   single-file filing* in its XML doc; kept only for
+   `EmailManagementViewModel.TryAutoSyncToProjectAsync`. **Candidate for
+   staged removal** after that one consumer is migrated to
+   `IProjectFileFilingService.FileAsync`.
+3. **`ProjectWorkViewModel` / `ProjectFolderNode` resolve `AccFileStore`
+   via `ServiceLocator` + concrete-type cast** (`OfType<AccFileStore>()`).
+   Not a bypass — the store is the right layer — low-severity boundary
+   smell to clean up opportunistically.
+4. **`EmailAttachment` DTO lives inside
+   `SiOffice.GoogleConnector\GoogleService.cs`** with business-shaped
+   fields (`ProjectFileId`, `ProjectAlternativeId`,
+   `IsFilingInProgress`, `IsLocked`, `CanEditTarget`). Medium-severity
+   boundary smell, **not** a runtime bypass — the connector still does
+   not make filing / routing decisions. Candidate for relocation if and
+   when a future connector-cleanup round is opened.
+
+### Dropped / cancelled / postponed (this round)
+- ACC boundary refactor — **not approved** in this round.
+- Google connector DTO refactor (`EmailAttachment` relocation) —
+  **postponed**.
+- `AccFileSyncService` staged removal — **postponed**.
+- `ServiceLocator` + concrete `AccFileStore` cast cleanup in
+  `ProjectWorkViewModel` / `ProjectFolderNode` — **postponed**.
+- Google Drive delete wiring in refile cleanup — remains **postponed**
+  (already marked).
+- Replacing `Bim360Service` direct usage in `EmailIngestionService` with
+  `IAccFileClient` — **postponed** pending an Inbox-shaped API.
+
+### Not done in this round (explicit)
+- **No** production code changes.
+- **No** DB schema changes.
+- **No** migration created.
+- **No** `Update-Database` executed.
+- **No** test changes.
+- **No** new gap opened.
+- **No** parallel mechanism / service / DTO introduced — only existing
+  surfaces (`IAccItemMetadataService`, `IProjectFileAccMetadataWriter`,
+  `IAccFileClient`, `IFileStore`, `GoogleDriveStore`,
+  `IGoogleDriveServiceProvider`, `ProjectFileFilingService`,
+  `ProjectFileRefileService`, `MoveToProjectProcessActionHandler`) were
+  referenced.
+
+---
+
+## Round update (Gap 18F / 18G closure — preview authorization)
+
+This round closes the **specific** symptom under Gap 18 where the Autodesk
+"Authorize application" window appeared on every click on an email
+attachment that was already in ACC. The broader Gap 18 (secrets /
+credentials / token storage alignment) remains open and unchanged.
+
+### Symptom that was fixed
+
+- Clicking an attachment in the email screen to preview/open it in ACC
+  triggered the Autodesk OAuth "Authorize application" browser window
+  on every click, even though upload / filing worked silently.
+- Logs showed, per click, repeated `[TokenProvider] Authorization URL: …`
+  lines, `Starting localhost listener on port 8080`, occasional
+  `HttpListener FAILED`, and `Browser authorization timed out after 180 seconds`
+  surfaced from `AccItemMetadata ReadAttributes`.
+
+### Real root cause (two parts)
+
+1. **WebView2 profile split (Gap 18F).** Before the round, the app had
+   distinct WebView2 `UserDataFolder`s:
+   - Gmail / Calendar profile: `%LOCALAPPDATA%\SiNetProjectManagerV2\WebView2UserData\{user_at_domain}`
+   - ACC viewer profile: `%LOCALAPPDATA%\SiNetProjectManagerV2\WebView2UserData\acc_viewer`
+   - `ExternalBrowserWindow` (email attachment ACC preview) used the
+     Gmail profile, and could fall back to a per-instance temp profile
+     when `CurrentUserEmail` was not yet set.
+   These three profiles each had their own Autodesk cookie jar, so an
+   Autodesk login in one window did not carry over to the others.
+2. **Interactive OAuth during metadata read (Gap 18G).** The preview
+   path executed:
+   `EmailManagementViewModel.ShowAttachmentInAccAsync` →
+   `IAccInboxReconciliationService.ReconcileByMessageIdAsync` →
+   `AccInboxReconciliationService.ReadAttributesOrEmptyAsync` →
+   `AccItemMetadataService.ReadAttributesAsync` →
+   `Bim360Service.GetItemCustomAttributesAsync` →
+   `TokenProvider.GetThreeLeggedAdminTokenAsync`. When the cached
+   access token was expired and refresh failed, that path went straight
+   into `PerformBrowserAuthorizationAsync` → built the Autodesk
+   `authorize?...` URL → started `HttpListener` on port 8080 → blocked
+   for up to 180 seconds, on every preview click. Concurrent previews
+   could even race two `HttpListener` binds on port 8080.
+
+### What changed (production code)
+
+- **Gap 18F — unified WebView2 profile.** All in-app WebView2 windows
+  now share a single persistent profile via the existing
+  `WebView2Helper` infrastructure:
+  - New `WebView2Helper.CreateSharedEnvironmentAsync(string source)`
+    rooted at `{AppConfiguration.WebView2UserDataBasePath}\Default`.
+  - `CreateUserEnvironmentAsync()` and the legacy
+    `CreateAccEnvironmentAsync()` now delegate to it (kept for source
+    compatibility; `CreateAccEnvironmentAsync` is **staged removal** in
+    docs — see Postponed below).
+  - `WebView2Helper.InitializeCoreWebView2Async` and
+    `ExternalBrowserWindow.OnLoaded` use the shared environment.
+  - The `IsAccViewer` attached property is retained for
+    navigation / new-window behavior; it **no longer** drives profile
+    selection (documented inline).
+  - A minimal one-line log per environment creation
+    (`[WebView2][SharedProfile] source=… kind=Unified folder=…`).
+  - No new configuration key, no new path concept (reused
+    `AppConfiguration.WebView2UserDataBasePath`).
+- **Gap 18G — suppress interactive OAuth during preview/metadata read.**
+  Surgical additions, no auth-flow rewrite:
+  - `TokenProvider` adds an `AsyncLocal<bool>`-backed scope:
+    `TokenProvider.SuppressInteractiveBrowserAuthScope()` and a new
+    `TokenProvider.InteractiveAuthSuppressedException`. When the scope
+    is active and no valid cached/refresh token is available,
+    `GetThreeLeggedAdminTokenAsync` throws the suppression exception
+    instead of opening the browser / `HttpListener`.
+  - `TokenProvider` adds a process-wide `SemaphoreSlim _browserAuthGate`
+    around `PerformBrowserAuthorizationAsync` so concurrent callers do
+    not both pop the browser or both bind `HttpListener` on port 8080;
+    callers that wake up after the winner reuse the freshly cached /
+    refreshed token.
+  - `AccItemMetadataService.ReadAttributesAsync` wraps its work in
+    `using TokenProvider.SuppressInteractiveBrowserAuthScope()`,
+    converts `InteractiveAuthSuppressedException` into the existing
+    failure result (`http=401`), and logs
+    `[AccItemMetadata][Auth] ReadAttributes interactive-auth=SUPPRESSED`.
+    The existing `MetadataReadFailed=true` path is unchanged; the
+    viewer still opens from the verified
+    `AccItemId / OpenAccFolderId / OpenAccItemId`.
+  - `EmailManagementViewModel.ShowAttachmentInAccAsync` also opens the
+    suppression scope around `ReconcileByMessageIdAsync` as a
+    belt-and-braces guarantee and adds a `[ShowInACC][Auth]` log line.
+  - The write path (`WriteAttributesAsync`) was **not** changed —
+    explicit user actions (filing, project actions) may still trigger
+    Autodesk authorization where it is acceptable.
+
+### User verification — passed
+
+- The user manually clicked multiple email attachments that already
+  exist in ACC.
+- The ACC preview opened.
+- The Autodesk "Authorize application" window **no longer appears**
+  on each click.
+- This confirms both Gap 18F (shared WebView2 session) and Gap 18G
+  (no interactive OAuth on the preview/metadata-read path).
+
+### Follow-ups / postponed (no action approved in this round)
+
+- **AccService metadata-read endpoint** — `SiOffice.AccService`
+  currently has no endpoint for ACC item custom-attribute reads. A
+  future round can add one so the client offloads metadata reads and
+  never touches Autodesk OAuth in preview paths. Out of scope here.
+- **`TokenProvider` lifetime cleanup** — make `ITokenProvider` a
+  singleton in DI and replace direct `new TokenProvider(...)`
+  call sites (notably `AccItemMetadataService.CreateBim360Service`).
+  Postponed.
+- **Full Autodesk auth architecture review** — not approved.
+- **WebView2 legacy profile cleanup** —
+  `WebView2Helper.CreateAccEnvironmentAsync` and the on-disk
+  `…\WebView2UserData\acc_viewer` folder are **staged removal**
+  candidates after a testing period; not deleted in this round.
+- **Auth log hygiene hardening** — verify that no code path prints the
+  full Autodesk `client_id`, OAuth tokens, authorization codes, or
+  cookies. Existing diagnostics use `clientIdTail` only; a follow-up
+  pass should sweep all `[TokenProvider]` / `[AccService]` /
+  `[Bim360Service]` log call sites.
+
+### Not done in this round (explicit)
+
+- **No** DB / schema changes.
+- **No** migration created.
+- **No** `Update-Database` executed.
+- **No** test changes.
+- **No** new gap opened.
+- **No** new mechanism / endpoint / service / DTO introduced —
+  changes reused existing surfaces (`TokenProvider`,
+  `IAccItemMetadataService`, `IAccInboxReconciliationService`,
+  `WebView2Helper`, `AppConfiguration.WebView2UserDataBasePath`).
+- **No** change to `TokenProvider` token storage path, `ClientId`,
+  `ClientSecret`, scopes, redirect URI, callback port, refresh logic.
+- **No** change to upload / filing flow.
+- **No** physical deletion of `CreateAccEnvironmentAsync` or the
+  `acc_viewer` folder.
+- **No** new fallback added (failures still flow through the existing
+  `MetadataReadFailed` path).
+
+### Recommended next round — Application functional testing
+
+Pause cleanup / refactor and run a real-usage validation sweep:
+
+- App startup.
+- Gmail load.
+- Email attachment detection.
+- Open attachment preview from email (verify no repeated Autodesk
+  authorization).
+- File attachment to project / MoveToProject.
+- Verify file appears in the project tree / list.
+- Open filed project file.
+- ACC storage flow.
+- File Server storage flow.
+- Google Drive storage flow (where configured).
+- Status indicators / metadata status.
+- Confirm no `ProjectFileInstance` dependency regression.
+- Confirm no repeated Autodesk authorization during preview.
+
+---
+
+
 
 - Did **not** change code.
 - Did **not** change DB / schema / migrations / ModelSnapshot.
 - Did **not** create a new mechanism, service, handler, or storage path.
 - Did **not** re-enable any disabled mechanism.
 - Did **not** edit EF migration files, Designer.cs, or ModelSnapshot.
+
+---
+
+## Round update (Gap 18H closure — ACC Inbox identity widening)
+
+**Status proposed:** *Resolved / Verified for ACC Inbox folder key length —
+16-char keys implemented; migration prepared; existing folders not
+migrated.*
+
+This round closes the **specific** symptom under Gap 18H where ACC Inbox
+`THREAD_*` / `MSG_*` folder names were derived from only 8 hex chars of
+SHA256, raising a long-term collision-risk concern. The broader Gap 18
+(secrets / credentials / token storage alignment) remains open.
+
+### What changed (production code)
+
+- **`MessageKeyGenerator.GetMessageKey`** — output widened from
+  `fullHash[..8]` to `fullHash[..16]` (64 bits of uniqueness).
+- **`MessageKeyGenerator.GetThreadKey`** — output widened from
+  `fullHash[..8]` to `fullHash[..16]` (64 bits of uniqueness).
+- **`EmailInboxMessageConfiguration.ThreadKey`** — EF column configuration
+  changed from `HasMaxLength(8)` to `HasMaxLength(16)`. `IsRequired()`,
+  `IsUnicode(false)`, and the existing `IX_EmailInboxMessage_ThreadKey`
+  index were preserved.
+- **`EmailIngestionService.CreateManifest`** — `manifest.json` now
+  includes the full identity surface:
+  - `internetMessageId`
+  - `messageUniqueId`
+  - `threadUniqueId` *(newly added)*
+  - `messageKey`
+  - `threadKey` *(newly added)*
+  - `gmailMessageId`
+  - `gmailThreadId`
+
+  Existing field names were not renamed or removed; only the missing
+  identity fields were added.
+
+### Identity / fallback rules — unchanged
+
+- `MessageKeyGenerator.GetMessageUniqueId` still prefers the RFC 2822
+  `Message-ID` and only falls back to `gmail:{gmailMessageId}` when no
+  `InternetMessageId` exists.
+- `MessageKeyGenerator.GetThreadUniqueId` still derives from
+  `References` / `In-Reply-To` / `InternetMessageId` and explicitly
+  avoids using Gmail `threadId` as the business identity.
+- No new identity mechanism was introduced and no new fallback was added.
+
+### Migration
+
+- Migration **created and reviewed**:
+  `20260528210621_WidenEmailInboxThreadKeyTo16` (context
+  `SiNetSQLDbContext`, project `SiNetSQL`).
+- Migration content verified clean — only an `AlterColumn` on
+  `EmailInboxMessage.ThreadKey` from `varchar(8)` to `varchar(16)`. The
+  existing `IX_EmailInboxMessage_ThreadKey` index is preserved.
+- No other column / table / index / seed changes were introduced.
+- `Update-Database` is **not** part of this documentation round; it will
+  be executed manually by the user against the relevant environments.
+
+### Existing ACC folders — explicitly not touched
+
+- Existing `THREAD_<8 hex>` / `MSG_<8 hex>` folders in ACC were **not**
+  renamed, **not** moved, and **not** deleted by code.
+- The user confirmed that the old content is not important and may be
+  removed manually or in a separate, dedicated cleanup round.
+- Legacy 8-char prefix detection in `AccInboxLayout`
+  (`IsThreadFolderName`, `IsLegacyMessageFolderName`) was kept in place
+  so old folders continue to be recognized.
+
+### What was not done in this round (explicit)
+
+- Did **not** rename / move / delete existing ACC folders from code.
+- Did **not** create a new identity mechanism or add any fallback.
+- Did **not** change `AccInboxLayout` naming logic (it consumes the
+  longer keys transparently).
+- Did **not** touch `ProjectFileInstance`, refile, MoveToProject
+  service, ACC metadata write path, `SetItemCustomAttributesAsync`, or
+  `TokenProvider`.
+- Did **not** edit `ModelSnapshot.cs` manually; the migration
+  regenerated it through the standard EF workflow.
+
+---
+
+## Round closure (ProjectFileInstance / Auth Preview / ACC Inbox Identity)
+
+This documentation-only round closes the three implementation lines that
+have been completed and verified, and explicitly hands off to an
+application functional testing round. No production code, schema,
+migration, or test changes were made in this round.
+
+### Gaps closed / updated in this round
+
+- **`ProjectFileInstance` removal** — already implemented and documented
+  in *Round update (Stage 9E.5 — `ProjectFileInstance` removal closure)*
+  above. Confirmed as the source-of-truth state going forward; runtime
+  resolver / session cache remains the only projection path.
+- **Gap 18F / 18G — Autodesk authorization during ACC preview** —
+  already implemented and user-verified; see *Round update (Gap 18F /
+  18G closure — preview authorization)* above. Unified WebView2 profile
+  and interactive-OAuth suppression during preview metadata reads
+  remain in effect.
+- **Gap 18H — ACC Inbox key widening to 16 chars + manifest identity
+  fields** — implemented this round and documented in the section
+  immediately above.
+
+### Final status of Gap 18 after this round
+
+**Status proposed:** *Partially resolved / usage blockers fixed; broader
+auth cleanup postponed.*
+
+The usage-blocking symptoms under Gap 18 are resolved and verified:
+
+- Repeated Autodesk authorization during ACC preview — **fixed and
+  manually verified**.
+- WebView2 split profile — **resolved** via the unified profile.
+- Interactive OAuth during preview metadata read — **suppressed**.
+- ACC Inbox short-key collision risk — **mitigated** by 16-char keys and
+  manifest identity hardening.
+
+The broader Gap 18 (secrets / credentials / token storage alignment and
+the full Autodesk auth architecture) remains open as a tracked, lower-
+urgency cleanup. Nothing in the current application flow is blocked on
+it.
+
+### Follow-ups / postponed (no action approved; tracked only)
+
+- `AccService` metadata-read endpoint (move client-side metadata reads
+  behind the service boundary).
+- `TokenProvider` singleton / DI cleanup; replace direct
+  `new TokenProvider(...)` instantiations.
+- Full Autodesk auth architecture review.
+- Auth log hygiene sweep (centralize and trim `[Auth]` logs).
+- `CreateAccEnvironmentAsync` / `acc_viewer` physical cleanup —
+  postponed until after functional testing confirms the unified profile
+  is stable.
+- Google Drive delete wiring in refile cleanup.
+- Cleanup of old ACC `_Inbox` `THREAD_<8>` / `MSG_<8>` folders —
+  **manual / separate cleanup only**, not from code in this round.
+
+### Recommended next round — Application Functional Testing
+
+Pause cleanup / refactor and run a real-usage validation sweep before
+opening any new gap:
+
+- Application startup.
+- DB connection.
+- Gmail login / session restore.
+- Gmail load.
+- Email attachment detection.
+- Open attachment preview from email.
+- Verify **no repeated Autodesk authorization** during preview.
+- MoveToProject / file attachment to project.
+- Verify file appears in the project tree / list.
+- Open filed project file from the project.
+- ACC storage flow.
+- File Server storage flow.
+- Google Drive storage flow (where configured).
+- Metadata / status indicators.
+- System status / notifications.
+- Verify no `ProjectFileInstance` dependency / regression.
+- Verify new ACC Inbox folders use 16-char `THREAD_*` / `MSG_*` names.
+- Verify the new `manifest.json` includes the full identity fields
+  (`internetMessageId`, `messageUniqueId`, `threadUniqueId`,
+  `messageKey`, `threadKey`, `gmailMessageId`, `gmailThreadId`).
+
+### What was not done in this round (explicit)
+
+- Did **not** change production code.
+- Did **not** change DB / schema.
+- Did **not** create a migration.
+- Did **not** run `Update-Database`.
+- Did **not** change tests.
+- Did **not** change auth flow.
+- Did **not** delete old ACC folders from code.
+- Did **not** open a new gap or start a new refactor.
 
 ## Pointers
 
