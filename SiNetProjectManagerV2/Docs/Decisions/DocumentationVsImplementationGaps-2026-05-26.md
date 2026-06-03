@@ -617,7 +617,7 @@ or principles document.
   - Reviving the old `ProjectFileInstance` placement-tracker semantics by
     accident, contradicting the active principle.
   - ACC operations bypass the service boundary in service mode.
-- **Status:** Needs code verification / Needs architecture alignment.
+- **Status:** In progress — pilot done (`CompanyViewModel`); ~28 ViewModels remain (each a separate approved round).
 - **Relevant areas (informational):**
   `SiNetProjectManagerV2` ViewModels (filing / workflow / ACC / email
   surfaces), `ProjectWork` / `ProjectWorkView` and its backing service(s),
@@ -628,13 +628,47 @@ or principles document.
   and handlers, workflow / task services, `PlanReview` services,
   `AppLogger`.
 - **Notes:**
-  - **No code, DB, schema, migration, ModelSnapshot, DI, or service
-    creation change is made in this round.**
   - Service Catalog
     ([`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Domains/Architecture/ServiceCatalog-2026-05-26.md))
     is an **initial catalog**; concept-vs-real names and overlaps are
     documented there under *Gaps / overlaps* and must be reconciled in
     follow-up rounds.
+
+#### Round update — ViewModel → Service extraction pilot (`CompanyViewModel`)
+
+- **Scope of this round:** a single, contained **pilot** to establish the
+  canonical ViewModel → Service pattern. An audit found **29 ViewModels**
+  with direct DB / connector access (top offenders:
+  `EmailManagementViewModel` ~76, `FloatingInspectionViewModel` ~67). The
+  full set is **not** refactored at once (Safety & Stability:
+  *do not break working code*); each remaining ViewModel is a separate
+  approved round.
+- **What was done:**
+  - New application service `ICompanyService` / `CompanyService`
+    (`SiNetSQL\Services\Companies\`) now owns **all** `Company` / `Contact`
+    persistence: `GetCompaniesWithContactsAsync`, `SaveCompaniesAsync`,
+    `AddCompanyAsync`, `RemoveCompanyAsync` (async + `CancellationToken`,
+    short-lived `DbContext` per operation via `IDbContextFactory`).
+  - `CompanyViewModel` no longer touches the DB. It receives
+    `ICompanyService` by DI and keeps **UI state only** (observable
+    collections, filtering `ApplyFilter*`, selection). `SaveChanges()` is
+    retained as a thin sync wrapper to preserve the existing
+    `WindowCompany.OK_Click` call site; `Add`/`Remove` became `async`
+    (no external callers).
+  - DI registration added in `App.xaml.cs`
+    (`AddTransient<ICompanyService, CompanyService>()`).
+  - Service Catalog updated with the new service row.
+- **Canonical pattern established (to be reused in follow-up rounds):**
+  *ViewModel holds UI display state and calls a service; the service owns
+  DB / connector access and business logic. Filtering, selection, and
+  observable collections stay in the ViewModel.*
+- **Validation:** Build succeeded. `SiNetSQL.Tests` =
+  **628 passed / 0 failed / 2 pre-existing skips**. No schema, migration,
+  ModelSnapshot, or `DbSet` change.
+- **Remaining (future approved rounds):** the other ~28 ViewModels,
+  prioritised by size / risk (e.g. `EmailManagementViewModel`,
+  `FloatingInspectionViewModel`, `CreateProjectViewModel`,
+  `TaskPanelViewModel`, `AddUserViewModel`, …).
 
 ### Gap 12 — ACC service boundary overlap and bypass risk
 
@@ -1954,6 +1988,95 @@ opening any new gap:
 - Did **not** change auth flow.
 - Did **not** delete old ACC folders from code.
 - Did **not** open a new gap or start a new refactor.
+
+### Gap 19 — `GmailPopoutUrl` used a live `#inbox/{ThreadId}` fallback (violates EmailSystemPrinciples §4.3)
+
+- **Date identified:** 26.05.2026
+- **Domain:** Email, UI.
+- **Desired principle:**
+  The Gmail WebView2 local-open URL is `#all/{message.id}`. The legacy
+  `#inbox/{threadId}` form **must not** be used as the default open URL; it
+  remains available as a **logged reference only**. See
+  [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](../Domains/Email/EmailSystemPrinciples-2026-05-26.md) §4.1 and §4.3.
+- **Current known / suspected state (before fix):**
+  `EmailInfo.GmailPopoutUrl` preferred `#all/{MessageId}` but **fell back**
+  to a live `#inbox/{ThreadId}` open URL when `MessageId` was empty. That
+  fallback is an active open path, not a logged reference, contradicting
+  §4.3.
+- **Impact / risk:**
+  When the local Gmail `message.id` is unavailable, the UI would silently
+  open a thread-level URL derived from the mailbox-local `ThreadId`,
+  blurring the message-level / global-identity contract of the email
+  domain.
+- **Status:** Fixed — code aligned (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  `EmailInfo.GmailPopoutUrl` now returns `#all/{MessageId}` when a local
+  `MessageId` is present and `null` otherwise. The `#inbox/{ThreadId}`
+  fallback was removed from the open path; the legacy thread URL form is
+  still emitted **only** as a `[GmailOpenUrl]` diagnostic reference by
+  `EmailManagementView.LogGmailOpenUrlOptions`. Consumers already guard on
+  `string.IsNullOrEmpty(GmailPopoutUrl)`, so the `null` result is handled
+  safely. Build succeeded; no schema, model, migration, or test change was
+  required.
+- **Relevant files / classes (informational):**
+  `SiOffice.GoogleConnector\GoogleService.cs` (`EmailInfo.GmailPopoutUrl`),
+  `SiNetProjectManagerV2\WPFUserControl\EmailManagementView.xaml.cs`
+  (`LogGmailOpenUrlOptions` — logged reference only),
+  `SiNetSQL\MVVM\EmailManagementViewModel.cs` (consumer, null-guarded).
+
+### Gap 20 — Opening an email from a task did not resolve `rfc822msgid` to a local `message.id`
+
+- **Date identified:** 26.05.2026
+- **Domain:** Email, UI.
+- **Desired principle:**
+  When opening an email from a task, the DB-persisted identifier is the global
+  RFC 2822 `Message-ID`. The system searches the current user's Gmail with
+  `rfc822msgid:{Message-ID}` to obtain the **mailbox-local** `message.id` for
+  local actions (open in WebView2 via `#all/{message.id}`, read, download). If
+  no match is found, show the user a message — do not create records or
+  fabricate identifiers. See
+  [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](../Domains/Email/EmailSystemPrinciples-2026-05-26.md) §3 and §4.2.
+- **Current known / suspected state (before fix):**
+  When the email was not on the current page/filter,
+  `EmailManagementViewModel.EnsureTaskEmailLoadedAsync` synthesized an
+  `EmailInfo` shell via `BuildSynthesizedTaskEmail`, which set
+  `EmailInfo.MessageId` to the **global** `MessageUniqueId` (RFC 2822
+  Message-ID). That value then fed `GmailPopoutUrl` as `#all/{global-id}`,
+  producing a broken open URL and violating §4.3 (no RFC 2822 id in `#all/`).
+  No `rfc822msgid` resolution existed.
+- **Impact / risk:**
+  Opening a task-linked email that was not already loaded produced an invalid
+  Gmail open URL, and cross-mailbox opening (different user / machine) could
+  not work because no global→local translation was performed.
+- **Status:** Fixed — code aligned + tests (2026-05-26 round).
+- **Resolution (2026-05-26):**
+  - Added connector primitive
+    `GoogleService.ResolveLocalMessageIdByRfc822Async(internetMessageId, ct)`
+    — runs `Users.Messages.List` with `q = rfc822msgid:{cleaned-id}`
+    (throttled), returns the first local `message.id` or `null`. It performs
+    only the Gmail API lookup and makes no business decision (per §11.2); it
+    does not throw on "not found" and does not fabricate an id.
+  - `BuildSynthesizedTaskEmail` now takes an optional `localGmailMessageId`,
+    sets `EmailInfo.MessageId` **only** from the resolved local id (never the
+    global Message-ID), and carries the RFC 2822 identity on
+    `EmailInfo.InternetMessageId`. When unresolved, `MessageId` stays empty so
+    `GmailPopoutUrl` is `null` (consistent with Gap 19).
+  - `EnsureTaskEmailLoadedAsync` checks the in-memory list first (cheap), then
+    resolves `rfc822msgid` against the current mailbox only when needed, and
+    shows a "not found in this mailbox" `StatusMessage` when there is no match.
+  - The `#search/rfc822msgid` open URL *inside the WebView2* remains postponed;
+    the implemented path resolves to a local `message.id` and uses the existing
+    `#all/{message.id}` form. Build succeeded; the
+    `EmailManagementViewModel_TaskFilingTests` suite passed (20/20), including a
+    new test asserting the global Message-ID never feeds `MessageId`. No schema,
+    model, or migration change was required.
+- **Relevant files / classes (informational):**
+  `SiOffice.GoogleConnector\GoogleService.cs`
+  (`ResolveLocalMessageIdByRfc822Async`),
+  `SiNetSQL\MVVM\EmailManagementViewModel.cs`
+  (`EnsureTaskEmailLoadedAsync`, `BuildSynthesizedTaskEmail`),
+  `SiNetProjectManagerV2\MainWindow.xaml.cs` (`NavigateToEmailAsync` caller),
+  `SiNetSQL.Tests\MVVM\EmailManagementViewModel_TaskFilingTests.cs`.
 
 ## Pointers
 

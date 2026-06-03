@@ -107,3 +107,24 @@
 ## 10. Project Management
 - **Default Office Management Project ID:** The default project ID for Office Management is 136, not 126. This ID is used for project-independent workflows.
 - **Workflow File Classification:** Filing of files can only happen AFTER project creation. During the "פתיחת פרויקט" stage, the user should open the source email to view attachments (already uploaded to ACC Inbox), but actual filing occurs after the project exists. The task should instruct the user to open the email, review files, and create the project before filing.
+
+## 11. Documentation-Driven Development Workflow
+
+**The documentation is the source of truth.** All work follows this cycle:
+
+1. **Update documentation first** — Before changing code, update the relevant 
+   Principles document or gap register to reflect the desired state.
+2. **Implement to match documentation** — Write/modify code to align with 
+   the documented principles.
+3. **Test the implementation** — Verify the code works as documented.
+4. **If issues arise, fix documentation first** — When testing reveals a 
+   gap or incorrect assumption, update the documentation to be more precise, 
+   then fix the code to match.
+
+**Key rule:** Never leave code that contradicts documentation. If code must 
+differ from docs temporarily, add an explicit gap entry with status and timeline.
+
+**Copilot behavior:** When asked to implement a feature or fix:
+- First check if relevant documentation exists in `Docs\Domains\` or `Docs\Decisions\`
+- If documentation is missing or unclear, propose documentation updates before code
+- After code changes, verify documentation alignment per §6a in `Docs\README.md`

@@ -706,6 +706,9 @@ namespace SiNetProjectManagerV2
             services.AddTransient<FloatingInspectionViewModel>();
             services.AddTransient<ProjectTypeRulesViewModel>();
             services.AddTransient<ProjectTypeViewModel>();
+            // Company persistence is owned by CompanyService (ViewModel → Service
+            // boundary, gap register Gap 11 / pilot). The ViewModel holds UI state only.
+            services.AddTransient<SiNetSQL.Services.Companies.ICompanyService, SiNetSQL.Services.Companies.CompanyService>();
             services.AddTransient<CompanyViewModel>();
             services.AddTransient<ContactViewModel>();
             services.AddTransient<PlaceViewModel>();

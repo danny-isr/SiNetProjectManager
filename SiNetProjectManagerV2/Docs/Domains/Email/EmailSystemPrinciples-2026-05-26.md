@@ -353,8 +353,15 @@ Forbidden:
   `EmailInfo` is **postponed** to a separate approved round (requires
   exposing it via `GoogleService.MapMessageToInfo` / `MapMessageToInfoMetadataOnly`
   from `payload.headers`).
-- A `#search/rfc822msgid:{...}` open path in the WebView2 is **postponed**
-  until §2's identity work is in place.
+- The on-demand `rfc822msgid:{Message-ID}` **resolution to a local Gmail
+  `message.id`** (the §3 open-from-task procedure) is **implemented** as of
+  the 2026-05-26 round: `GoogleService.ResolveLocalMessageIdByRfc822Async`
+  performs the lookup and `EmailManagementViewModel.EnsureTaskEmailLoadedAsync`
+  uses it to build the synthesized email's `MessageId` (and otherwise shows a
+  "not found in this mailbox" message). See Gap 20.
+- A `#search/rfc822msgid:{...}` open URL *inside the WebView2 itself* (§4.2)
+  remains **postponed**; the implemented path resolves to a local
+  `message.id` and uses the existing `#all/{message.id}` form instead.
 - DOM-based "expand the specific message in a thread" via
   `data-legacy-message-id` is **postponed**; only documented here as a
   candidate, not implemented.
