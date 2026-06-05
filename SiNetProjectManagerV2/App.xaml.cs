@@ -681,32 +681,91 @@ namespace SiNetProjectManagerV2
                     }
                 }
 
+                // ─── SSL Certificate Validation for AccService ───────────────────
                 // SiOffice.AccService presents a self-signed cert (accservice.pfx, CN=<MachineName>)
-                // that is NOT in the local trust store. For localhost/loopback we accept that cert
-                // explicitly — production deployments should set AccService:Certificate:Path on the
-                // service to a CA-issued cert instead. Non-loopback hosts still go through normal
-                // chain validation.
+                // that is NOT in the local trust store. We accept self-signed certificates ONLY for:
+                //   1. Loopback addresses (localhost, 127.0.0.1)
+                //   2. Explicitly approved internal hosts (SI-WIN-2K19, *.si-eng.local, 192.168.x.x)
+                // This is a TEMPORARY rollout mechanism until a proper organizational certificate is deployed.
+                // Production deployments should set AccService:Certificate:Path on the service to a CA-issued cert.
                 var accServiceUri = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
-                var allowSelfSignedForLoopback = accServiceUri.IsLoopback;
-                var allowSelfSignedForNonLoopback = true; // Accept self-signed for internal network servers too
+                var accServiceHost = accServiceUri.Host;
+
+                // Approved internal hosts for self-signed certificate acceptance
+                // TODO: Move to appsettings.json when ready for production configuration
+                var approvedInternalHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "SI-WIN-2K19",
+                    "localhost",
+                    "127.0.0.1"
+                };
+
+                // Also allow any host in the si-eng.local domain or 192.168.x.x range
+                bool IsApprovedInternalHost(string host)
+                {
+                    if (approvedInternalHosts.Contains(host))
+                        return true;
+                    if (host.EndsWith(".si-eng.local", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                    if (host.StartsWith("192.168.", StringComparison.Ordinal))
+                        return true;
+                    return false;
+                }
+
+                var isApprovedHost = accServiceUri.IsLoopback || IsApprovedInternalHost(accServiceHost);
+
+                if (isApprovedHost)
+                {
+                    Log.Warning(
+                        "[AccService] SSL: Accepting self-signed certificate for approved internal host '{Host}'. " +
+                        "This is a temporary rollout mechanism — deploy organizational certificate for production.",
+                        accServiceHost);
+                }
 
                 Action<HttpClient> configure = ConfigureAccServiceClient;
                 Action<IHttpClientBuilder> configureHandler = b =>
                 {
-                    // Always configure custom SSL validation for AccService (internal network uses self-signed certs)
                     b.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
                     {
-                        ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
-                            errors == System.Net.Security.SslPolicyErrors.None ||
-                            (allowSelfSignedForNonLoopback && errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
+                        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
+                        {
+                            // No errors = valid certificate, always accept
+                            if (errors == System.Net.Security.SslPolicyErrors.None)
+                                return true;
+
+                            // Self-signed certificate (chain errors) — only accept for approved internal hosts
+                            if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
+                            {
+                                var requestHost = message?.RequestUri?.Host ?? "";
+                                if (IsApprovedInternalHost(requestHost))
+                                {
+                                    Log.Debug(
+                                        "[AccService] SSL: Accepted self-signed certificate for approved host '{Host}'.",
+                                        requestHost);
+                                    return true;
+                                }
+
+                                Log.Warning(
+                                    "[AccService] SSL: Rejected self-signed certificate for non-approved host '{Host}'. " +
+                                    "Add host to approved list or deploy valid certificate.",
+                                    requestHost);
+                                return false;
+                            }
+
+                            // Any other SSL error (name mismatch, expired, etc.) — reject
+                            Log.Warning(
+                                "[AccService] SSL: Certificate validation failed for '{Host}'. Errors: {Errors}.",
+                                message?.RequestUri?.Host ?? "(unknown)", errors);
+                            return false;
+                        }
                     });
                 };
 
                 configureHandler(services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure));
                 configureHandler(services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure));
                 Log.Information(
-                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (self-signed cert accepted: {AllowSelfSigned}).",
-                    accServiceBaseUrl, allowSelfSignedForNonLoopback);
+                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (host={Host}, approvedForSelfSigned={IsApproved}).",
+                    accServiceBaseUrl, accServiceHost, isApprovedHost);
             }
             else
             {

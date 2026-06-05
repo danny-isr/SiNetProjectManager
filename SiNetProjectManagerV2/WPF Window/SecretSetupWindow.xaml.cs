@@ -707,14 +707,34 @@ public partial class SecretSetupWindow : Window
                 localHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
             }
 
+            // Approved internal hosts for self-signed certificate acceptance
+            var baseUri = new Uri(baseUrl.TrimEnd('/') + "/");
+            var targetHost = baseUri.Host;
+            var approvedHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "SI-WIN-2K19", "localhost", "127.0.0.1"
+            };
+            bool IsApprovedHost(string? host) =>
+                !string.IsNullOrEmpty(host) &&
+                (approvedHosts.Contains(host) ||
+                 host.EndsWith(".si-eng.local", StringComparison.OrdinalIgnoreCase) ||
+                 host.StartsWith("192.168.", StringComparison.Ordinal));
+
             // Call the diagnostic endpoint
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            // Accept self-signed certs for internal servers
+            // Accept self-signed certs ONLY for approved internal hosts
             using var handler = new HttpClientHandler
             {
-                ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
-                    errors == System.Net.Security.SslPolicyErrors.None ||
-                    errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors
+                ServerCertificateCustomValidationCallback = (msg, _, _, errors) =>
+                {
+                    if (errors == System.Net.Security.SslPolicyErrors.None)
+                        return true;
+                    if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
+                    {
+                        var host = msg?.RequestUri?.Host;
+                        return msg?.RequestUri?.IsLoopback == true || IsApprovedHost(host);
+                    }
+                    return false;
+                }
             };
             using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
 

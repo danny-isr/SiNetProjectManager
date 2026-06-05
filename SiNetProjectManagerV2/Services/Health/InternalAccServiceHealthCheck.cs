@@ -78,24 +78,42 @@ public sealed class InternalAccServiceHealthCheck : IServiceHealthCheck
         return status;
     }
 
+    // Approved internal hosts for self-signed certificate acceptance (same list as App.xaml.cs)
+    private static readonly HashSet<string> _approvedInternalHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SI-WIN-2K19",
+        "localhost",
+        "127.0.0.1"
+    };
+
+    private static bool IsApprovedInternalHost(string? host)
+    {
+        if (string.IsNullOrEmpty(host)) return false;
+        if (_approvedInternalHosts.Contains(host)) return true;
+        if (host.EndsWith(".si-eng.local", StringComparison.OrdinalIgnoreCase)) return true;
+        if (host.StartsWith("192.168.", StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     private static HttpClient CreateClient()
     {
-        // Mirror the production AccService client policy: accept self-signed
-        // certs only on loopback so a localhost /acc/health probe works without
-        // requiring the cert in the trust store.
+        // Accept self-signed certificates ONLY for approved internal hosts.
+        // This mirrors the policy in App.xaml.cs for AccService typed clients.
         var handler = new HttpClientHandler
         {
             ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) =>
             {
-                if (errors == System.Net.Security.SslPolicyErrors.None) return true;
-                try
+                if (errors == System.Net.Security.SslPolicyErrors.None)
+                    return true;
+
+                // Self-signed (chain errors) — only accept for loopback or approved hosts
+                if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
                 {
-                    return msg?.RequestUri is { IsLoopback: true };
+                    var host = msg?.RequestUri?.Host;
+                    return msg?.RequestUri?.IsLoopback == true || IsApprovedInternalHost(host);
                 }
-                catch
-                {
-                    return false;
-                }
+
+                return false;
             }
         };
         return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
