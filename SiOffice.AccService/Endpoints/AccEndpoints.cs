@@ -30,6 +30,40 @@ internal static class AccEndpoints
             utcNow = DateTime.UtcNow
         }));
 
+        // ── Diagnostics (auth-exempt — see ApiKeyMiddleware) ─────────────────
+        // Safe metadata for cross-machine API key mismatch debugging.
+        // NEVER returns the actual key value. Returns: hasApiKey, keyLength, keySource, keyHashPrefix.
+        // Clients can compare their keyHashPrefix with this to verify key match.
+        v1.MapGet("/diag", (IConfiguration configuration) =>
+        {
+            var apiKeyFromVault = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
+            var apiKeyFromConfig = configuration["AccService:ApiKey"];
+            var effectiveKey = apiKeyFromVault ?? apiKeyFromConfig;
+            var keySource = apiKeyFromVault != null ? "CredentialManager" : (apiKeyFromConfig != null ? "appsettings" : "none");
+            var keyLength = effectiveKey?.Length ?? 0;
+            var keyHashPrefix = "(none)";
+            if (!string.IsNullOrEmpty(effectiveKey))
+            {
+                var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(effectiveKey));
+                keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+            }
+            string windowsUser;
+            try { windowsUser = Environment.UserDomainName + "\\" + Environment.UserName; }
+            catch { windowsUser = "(unknown)"; }
+
+            return Results.Ok(new
+            {
+                status = "ok",
+                windowsUser,
+                hasApiKey = effectiveKey != null,
+                keySource,
+                keyLength,
+                keyHashPrefix,
+                buildVersion = typeof(AccEndpoints).Assembly.GetName().Version?.ToString() ?? "?",
+                utcNow = DateTime.UtcNow
+            });
+        });
+
         // ── Templates ───────────────────────────────────────────────────────
         v1.MapGet("/templates", async (
             IAccProjectProvisioningService svc,
