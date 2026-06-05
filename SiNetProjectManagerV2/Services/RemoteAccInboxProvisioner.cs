@@ -1,5 +1,8 @@
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using Serilog;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
 
@@ -26,26 +29,114 @@ public sealed class RemoteAccInboxProvisioner : IAccInboxProvisioner
     /// <inheritdoc/>
     public async Task<(string AccProjectId, string AccInboxFolderId)> EnsureAsync(CancellationToken cancellationToken)
     {
-        // Empty body = let the service resolve everything from SystemSettings + vault.
-        using var resp = await _http.PostAsJsonAsync(
-            "v1/acc/inbox/ensure",
-            new EnsureInboxRequest(),
-            cancellationToken);
+        const string operation = "EnsureInboxAsync";
+        const string relativeUrl = "v1/acc/inbox/ensure";
+        LogRequestStart(operation, "POST", relativeUrl);
 
-        if (!resp.IsSuccessStatusCode)
+        try
         {
-            ErrorDto? err = null;
-            try { err = await resp.Content.ReadFromJsonAsync<ErrorDto>(cancellationToken: cancellationToken); }
-            catch { /* fall through to status-code-only message */ }
+            // Empty body = let the service resolve everything from SystemSettings + vault.
+            using var resp = await _http.PostAsJsonAsync(
+                relativeUrl,
+                new EnsureInboxRequest(),
+                cancellationToken);
 
-            throw new InvalidOperationException(
-                $"AccService returned {(int)resp.StatusCode} {resp.ReasonPhrase}" +
-                (err is null ? "" : $": {err.Error}{(err.Detail is null ? "" : $" — {err.Detail}")}"));
+            if (!resp.IsSuccessStatusCode)
+            {
+                ErrorDto? err = null;
+                string rawBody = "";
+                try
+                {
+                    rawBody = await resp.Content.ReadAsStringAsync(cancellationToken);
+                    err = System.Text.Json.JsonSerializer.Deserialize<ErrorDto>(rawBody);
+                }
+                catch { /* fall through to status-code-only message */ }
+
+                var truncatedBody = rawBody.Length > 500 ? rawBody[..500] + "..." : rawBody;
+                var errorCategory = (int)resp.StatusCode switch
+                {
+                    401 or 403 => "ApiKeyRejected",
+                    400 => "BadRequest",
+                    404 => "NotFound",
+                    >= 500 and < 600 => "ServerError",
+                    _ => $"Http{(int)resp.StatusCode}"
+                };
+
+                Log.Error(
+                    "[AccService] {Operation} FAILED — category={Category}, http={StatusCode}, " +
+                    "method=POST, url={Url}, baseAddress={BaseAddress}, responseBody={ResponseBody}.",
+                    operation, errorCategory, (int)resp.StatusCode, relativeUrl,
+                    _http.BaseAddress?.ToString() ?? "(null)", truncatedBody);
+
+                throw new InvalidOperationException(
+                    $"AccService returned {(int)resp.StatusCode} {resp.ReasonPhrase}" +
+                    (err is null ? "" : $": {err.Error}{(err.Detail is null ? "" : $" — {err.Detail}")}"));
+            }
+
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+
+            var body = await resp.Content.ReadFromJsonAsync<EnsureInboxResponse>(cancellationToken: cancellationToken)
+                ?? throw new InvalidOperationException("AccService returned empty inbox-ensure response.");
+
+            return (body.AccProjectId, body.AccInboxFolderId);
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Diagnostic logging helpers (same pattern as RemoteAccProjectProvisioningService)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private void LogRequestStart(string operation, string method, string relativeUrl)
+    {
+        var baseAddress = _http.BaseAddress?.ToString() ?? "(null)";
+        var hasApiKeyHeader = _http.DefaultRequestHeaders.Contains(AccServiceContracts.ApiKeyHeader);
+        var keyHashPrefix = "(none)";
+        if (hasApiKeyHeader && _http.DefaultRequestHeaders.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values))
+        {
+            var key = values.FirstOrDefault();
+            if (!string.IsNullOrEmpty(key))
+            {
+                var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key));
+                keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+            }
         }
 
-        var body = await resp.Content.ReadFromJsonAsync<EnsureInboxResponse>(cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException("AccService returned empty inbox-ensure response.");
+        Log.Information(
+            "[AccService] {Operation} START — method={Method}, url={RelativeUrl}, baseAddress={BaseAddress}, " +
+            "hasApiKeyHeader={HasApiKeyHeader}, keyHashPrefix={KeyHashPrefix}.",
+            operation, method, relativeUrl, baseAddress, hasApiKeyHeader, keyHashPrefix);
+    }
 
-        return (body.AccProjectId, body.AccInboxFolderId);
+    private static void LogRequestSuccess(string operation, int statusCode)
+    {
+        Log.Information("[AccService] {Operation} SUCCESS — http={StatusCode}.", operation, statusCode);
+    }
+
+    private void LogRequestException(string operation, Exception ex, CancellationToken ct)
+    {
+        var errorCategory = ex switch
+        {
+            TaskCanceledException when ct.IsCancellationRequested => "Cancelled",
+            TaskCanceledException or OperationCanceledException => "Timeout",
+            HttpRequestException { InnerException: SocketException { SocketErrorCode: SocketError.ConnectionRefused } }
+                => "ConnectionRefused",
+            HttpRequestException { InnerException: SocketException { SocketErrorCode: SocketError.HostNotFound } }
+                => "DnsResolutionFailed",
+            HttpRequestException { InnerException: AuthenticationException } => "SslCertificateError",
+            HttpRequestException hre => $"HttpError_{(int?)hre.StatusCode}",
+            _ => "UnknownError"
+        };
+        var innerMsg = ex.InnerException?.Message;
+
+        Log.Error(ex,
+            "[AccService] {Operation} FAILED — category={Category}, exceptionType={ExType}, message={Message}, " +
+            "innerException={InnerMessage}, baseAddress={BaseAddress}.",
+            operation, errorCategory, ex.GetType().Name, ex.Message, innerMsg ?? "(none)",
+            _http.BaseAddress?.ToString() ?? "(null)");
     }
 }

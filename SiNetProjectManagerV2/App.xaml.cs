@@ -640,6 +640,26 @@ namespace SiNetProjectManagerV2
                 var apiKey = SiNetSQL.Services.CredentialVaultService.GetSecret(
                     SiNetSQL.Services.SecretKeys.AccServiceApiKey);
 
+                // ─── [AccService] Diagnostic logging for remote mode ───────────────
+                // Logs safe metadata to help diagnose connectivity issues without exposing secrets.
+                string clientUser;
+                try { clientUser = Environment.UserDomainName + "\\" + Environment.UserName; }
+                catch { clientUser = "(unknown)"; }
+                var hasApiKey = !string.IsNullOrWhiteSpace(apiKey);
+                var keyLength = apiKey?.Length ?? 0;
+                var keyHashPrefix = "(none)";
+                if (hasApiKey)
+                {
+                    var hashBytes = System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(apiKey!));
+                    keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+                }
+                Log.Warning(
+                    "[AccService] DI registration — mode=REMOTE, baseUrl={BaseUrl}, " +
+                    "clientUser={ClientUser}, hasApiKey={HasApiKey}, keyLength={KeyLength}, keyHashPrefix={KeyHashPrefix}, " +
+                    "services=[RemoteAccProjectProvisioningService, RemoteAccInboxProvisioner].",
+                    accServiceBaseUrl, clientUser, hasApiKey, keyLength, keyHashPrefix);
+
                 // Shared HttpClient configurator — same base address, header and
                 // infinite timeout for both the project-provisioning and the
                 // inbox-provisioning typed clients.
@@ -655,6 +675,10 @@ namespace SiNetProjectManagerV2
                             SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiKeyHeader,
                             apiKey);
                     }
+                    else
+                    {
+                        Log.Warning("[AccService] HttpClient configured WITHOUT X-AccService-Key header — API key is missing from vault.");
+                    }
                 }
 
                 // SiOffice.AccService presents a self-signed cert (accservice.pfx, CN=<MachineName>)
@@ -664,33 +688,34 @@ namespace SiNetProjectManagerV2
                 // chain validation.
                 var accServiceUri = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
                 var allowSelfSignedForLoopback = accServiceUri.IsLoopback;
+                var allowSelfSignedForNonLoopback = true; // Accept self-signed for internal network servers too
 
                 Action<HttpClient> configure = ConfigureAccServiceClient;
                 Action<IHttpClientBuilder> configureHandler = b =>
                 {
-                    if (allowSelfSignedForLoopback)
+                    // Always configure custom SSL validation for AccService (internal network uses self-signed certs)
+                    b.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
                     {
-                        b.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-                        {
-                            ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
-                                errors == System.Net.Security.SslPolicyErrors.None ||
-                                errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors
-                        });
-                    }
+                        ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
+                            errors == System.Net.Security.SslPolicyErrors.None ||
+                            (allowSelfSignedForNonLoopback && errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
+                    });
                 };
 
                 configureHandler(services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure));
                 configureHandler(services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure));
                 Log.Information(
-                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (loopback self-signed accepted: {AllowSelfSigned}).",
-                    accServiceBaseUrl, allowSelfSignedForLoopback);
+                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (self-signed cert accepted: {AllowSelfSigned}).",
+                    accServiceBaseUrl, allowSelfSignedForNonLoopback);
             }
             else
             {
                 services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
                 services.AddTransient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner,
                                       SiNetSQL.Services.AccBootstrap.LocalAccInboxProvisioner>();
-                Log.Information("ACC Provisioning: using LOCAL in-process AccProjectProvisioningService (AccService:BaseUrl not configured).");
+                Log.Warning(
+                    "[AccService] DI registration — mode=LOCAL/InProcess, baseUrl=<empty>, " +
+                    "services=[AccProjectProvisioningService, LocalAccInboxProvisioner].");
             }
 
             // ACC Membership Reconciler: Singleton (single background worker, debounced Channel).

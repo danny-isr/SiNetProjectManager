@@ -1,5 +1,8 @@
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using Serilog;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
 
@@ -36,58 +39,117 @@ public sealed class RemoteAccProjectProvisioningService : IAccProjectProvisionin
     /// <inheritdoc/>
     public async Task<ProjectAccTargets> EnsureProjectMappingAsync(int projectId, CancellationToken cancellationToken)
     {
-        using var resp = await _http.PostAsJsonAsync(
-            "v1/acc/projects/ensure-mapping",
-            new EnsureProjectMappingRequest(projectId),
-            cancellationToken);
-        await EnsureSuccessAsync(resp, cancellationToken);
-        return await resp.Content.ReadFromJsonAsync<ProjectAccTargets>(cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException("AccService returned an empty body for ensure-mapping.");
+        const string operation = "EnsureProjectMappingAsync";
+        const string relativeUrl = "v1/acc/projects/ensure-mapping";
+        LogRequestStart(operation, "POST", relativeUrl);
+
+        try
+        {
+            using var resp = await _http.PostAsJsonAsync(
+                relativeUrl,
+                new EnsureProjectMappingRequest(projectId),
+                cancellationToken);
+            await EnsureSuccessAsync(resp, operation, cancellationToken);
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+            return await resp.Content.ReadFromJsonAsync<ProjectAccTargets>(cancellationToken: cancellationToken)
+                ?? throw new InvalidOperationException("AccService returned an empty body for ensure-mapping.");
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task ReconcileProjectMembersAsync(string accProjectId, CancellationToken cancellationToken)
     {
-        using var resp = await _http.PostAsync(
-            $"v1/acc/projects/{Uri.EscapeDataString(accProjectId)}/members/reconcile",
-            content: null,
-            cancellationToken);
-        await EnsureSuccessAsync(resp, cancellationToken);
+        const string operation = "ReconcileProjectMembersAsync";
+        var relativeUrl = $"v1/acc/projects/{Uri.EscapeDataString(accProjectId)}/members/reconcile";
+        LogRequestStart(operation, "POST", relativeUrl);
+
+        try
+        {
+            using var resp = await _http.PostAsync(relativeUrl, content: null, cancellationToken);
+            await EnsureSuccessAsync(resp, operation, cancellationToken);
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task<string> ReconcileAllProjectsAsync(CancellationToken cancellationToken)
     {
-        using var resp = await _http.PostAsync(
-            "v1/acc/projects/reconcile-all",
-            content: null,
-            cancellationToken);
-        await EnsureSuccessAsync(resp, cancellationToken);
-        var dto = await resp.Content.ReadFromJsonAsync<SummaryDto>(cancellationToken: cancellationToken);
-        return dto?.Summary ?? string.Empty;
+        const string operation = "ReconcileAllProjectsAsync";
+        const string relativeUrl = "v1/acc/projects/reconcile-all";
+        LogRequestStart(operation, "POST", relativeUrl);
+
+        try
+        {
+            using var resp = await _http.PostAsync(relativeUrl, content: null, cancellationToken);
+            await EnsureSuccessAsync(resp, operation, cancellationToken);
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+            var dto = await resp.Content.ReadFromJsonAsync<SummaryDto>(cancellationToken: cancellationToken);
+            return dto?.Summary ?? string.Empty;
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task<bool> EnsureCustomAttributeDefinitionsAsync(
         string accProjectId, string accFolderId, int? siProjectId, CancellationToken cancellationToken)
     {
-        using var resp = await _http.PostAsJsonAsync(
-            $"v1/acc/projects/{Uri.EscapeDataString(accProjectId)}/attribute-defs/ensure",
-            new EnsureAttributeDefsRequest(accFolderId, siProjectId),
-            cancellationToken);
-        await EnsureSuccessAsync(resp, cancellationToken);
-        var dto = await resp.Content.ReadFromJsonAsync<BoolResultDto>(cancellationToken: cancellationToken);
-        return dto?.Success == true;
+        const string operation = "EnsureCustomAttributeDefinitionsAsync";
+        var relativeUrl = $"v1/acc/projects/{Uri.EscapeDataString(accProjectId)}/attribute-defs/ensure";
+        LogRequestStart(operation, "POST", relativeUrl);
+
+        try
+        {
+            using var resp = await _http.PostAsJsonAsync(
+                relativeUrl,
+                new EnsureAttributeDefsRequest(accFolderId, siProjectId),
+                cancellationToken);
+            await EnsureSuccessAsync(resp, operation, cancellationToken);
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+            var dto = await resp.Content.ReadFromJsonAsync<BoolResultDto>(cancellationToken: cancellationToken);
+            return dto?.Success == true;
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<(string Id, string Name)>> ListAvailableTemplatesAsync(CancellationToken cancellationToken)
     {
-        using var resp = await _http.GetAsync("v1/acc/templates", cancellationToken);
-        await EnsureSuccessAsync(resp, cancellationToken);
-        var list = await resp.Content.ReadFromJsonAsync<List<AccTemplateDto>>(cancellationToken: cancellationToken)
-            ?? new List<AccTemplateDto>();
-        return list.Select(t => (t.Id, t.Name)).ToList();
+        const string operation = "ListAvailableTemplatesAsync";
+        const string relativeUrl = "v1/acc/templates";
+        LogRequestStart(operation, "GET", relativeUrl);
+
+        try
+        {
+            using var resp = await _http.GetAsync(relativeUrl, cancellationToken);
+            await EnsureSuccessAsync(resp, operation, cancellationToken);
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+            var list = await resp.Content.ReadFromJsonAsync<List<AccTemplateDto>>(cancellationToken: cancellationToken)
+                ?? new List<AccTemplateDto>();
+            return list.Select(t => (t.Id, t.Name)).ToList();
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -107,7 +169,65 @@ public sealed class RemoteAccProjectProvisioningService : IAccProjectProvisionin
         => throw new NotSupportedException(
             "ProbeFolderPermissionsFromTemplateAsync is a diagnostic-only API and is not exposed by SiOffice.AccService.");
 
-    private static async Task EnsureSuccessAsync(HttpResponseMessage resp, CancellationToken ct)
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Diagnostic logging helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private void LogRequestStart(string operation, string method, string relativeUrl)
+    {
+        var baseAddress = _http.BaseAddress?.ToString() ?? "(null)";
+        var hasApiKeyHeader = _http.DefaultRequestHeaders.Contains(AccServiceContracts.ApiKeyHeader);
+        var keyHashPrefix = "(none)";
+        if (hasApiKeyHeader && _http.DefaultRequestHeaders.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values))
+        {
+            var key = values.FirstOrDefault();
+            if (!string.IsNullOrEmpty(key))
+            {
+                var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key));
+                keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+            }
+        }
+
+        Log.Information(
+            "[AccService] {Operation} START — method={Method}, url={RelativeUrl}, baseAddress={BaseAddress}, " +
+            "hasApiKeyHeader={HasApiKeyHeader}, keyHashPrefix={KeyHashPrefix}.",
+            operation, method, relativeUrl, baseAddress, hasApiKeyHeader, keyHashPrefix);
+    }
+
+    private static void LogRequestSuccess(string operation, int statusCode)
+    {
+        Log.Information("[AccService] {Operation} SUCCESS — http={StatusCode}.", operation, statusCode);
+    }
+
+    private void LogRequestException(string operation, Exception ex, CancellationToken ct)
+    {
+        var errorCategory = ClassifyException(ex, ct);
+        var innerMsg = ex.InnerException?.Message;
+
+        Log.Error(ex,
+            "[AccService] {Operation} FAILED — category={Category}, exceptionType={ExType}, message={Message}, " +
+            "innerException={InnerMessage}, baseAddress={BaseAddress}.",
+            operation, errorCategory, ex.GetType().Name, ex.Message, innerMsg ?? "(none)",
+            _http.BaseAddress?.ToString() ?? "(null)");
+    }
+
+    private static string ClassifyException(Exception ex, CancellationToken ct)
+    {
+        return ex switch
+        {
+            TaskCanceledException when ct.IsCancellationRequested => "Cancelled",
+            TaskCanceledException or OperationCanceledException => "Timeout",
+            HttpRequestException { InnerException: SocketException { SocketErrorCode: SocketError.ConnectionRefused } }
+                => "ConnectionRefused",
+            HttpRequestException { InnerException: SocketException { SocketErrorCode: SocketError.HostNotFound } }
+                => "DnsResolutionFailed",
+            HttpRequestException { InnerException: AuthenticationException } => "SslCertificateError",
+            HttpRequestException hre => $"HttpError_{(int?)hre.StatusCode}",
+            _ => "UnknownError"
+        };
+    }
+
+    private async Task EnsureSuccessAsync(HttpResponseMessage resp, string operation, CancellationToken ct)
     {
         if (resp.IsSuccessStatusCode) return;
 
@@ -123,11 +243,20 @@ public sealed class RemoteAccProjectProvisioningService : IAccProjectProvisionin
             detail = await resp.Content.ReadAsStringAsync(ct);
         }
 
-        // Friendly hint so the UI can tell the user *where* the failure originated:
-        //   504 → ACC itself was slow/timed-out (upstream Autodesk).
-        //   409 + FOLDER_ALREADY_EXIST → ACC says the resource already exists; usually benign.
-        //   401/403 → AccService rejected our X-AccService-Key.
-        //   anything else → bubble up the body so we can diagnose.
+        // Truncate response body for logging (max 500 chars)
+        var truncatedDetail = detail.Length > 500 ? detail[..500] + "..." : detail;
+
+        // Friendly hint so the UI can tell the user *where* the failure originated
+        var errorCategory = (int)resp.StatusCode switch
+        {
+            401 or 403 => "ApiKeyRejected",
+            400 => "BadRequest",
+            404 => "NotFound",
+            504 => "AccUpstreamTimeout",  // Must come before the 5xx range
+            >= 500 and < 600 => "ServerError",
+            _ => $"Http{(int)resp.StatusCode}"
+        };
+
         var hint = (int)resp.StatusCode switch
         {
             504 => "ACC (Autodesk) timed out responding to the service. Retry in a moment.",
@@ -136,6 +265,14 @@ public sealed class RemoteAccProjectProvisioningService : IAccProjectProvisionin
             401 or 403 => "SiOffice.AccService rejected the API key (X-AccService-Key). Verify the secret in Credential Manager.",
             _ => "Unexpected response from SiOffice.AccService."
         };
+
+        Log.Error(
+            "[AccService] {Operation} FAILED — category={Category}, http={StatusCode}, " +
+            "method={Method}, url={Url}, responseBody={ResponseBody}.",
+            operation, errorCategory, (int)resp.StatusCode,
+            resp.RequestMessage?.Method.ToString() ?? "?",
+            resp.RequestMessage?.RequestUri?.ToString() ?? "?",
+            truncatedDetail);
 
         throw new HttpRequestException(
             $"{hint} (HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} from " +
