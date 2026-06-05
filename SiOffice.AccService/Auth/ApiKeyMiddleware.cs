@@ -5,7 +5,8 @@ namespace SiOffice.AccService.Auth;
 
 /// <summary>
 /// Validates the <c>X-AccService-Key</c> header against the shared service API key.
-/// Health endpoint (<c>/v1/acc/health</c>) is exempt so monitors can poll without the key.
+/// Health and diag endpoints (<c>/v1/acc/health</c>, <c>/v1/acc/diag</c>) are exempt
+/// so monitors can poll without the key and operators can verify key configuration.
 /// </summary>
 /// <remarks>
 /// Resolution order — same vault → appsettings fallback as the WPF client uses
@@ -19,6 +20,7 @@ public sealed class ApiKeyMiddleware
 {
     private static readonly string HeaderName = AccServiceContracts.ApiKeyHeader;
     private const string HealthPath = "/v1/acc/health";
+    private const string DiagPath = "/v1/acc/diag";
 
     private readonly RequestDelegate _next;
     private readonly string? _expectedKey;
@@ -46,7 +48,9 @@ public sealed class ApiKeyMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context.Request.Path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase))
+        // Health and diag endpoints are exempt from API key validation
+        if (context.Request.Path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase) ||
+            context.Request.Path.StartsWithSegments(DiagPath, StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

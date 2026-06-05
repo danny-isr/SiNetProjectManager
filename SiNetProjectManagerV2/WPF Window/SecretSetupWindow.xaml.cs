@@ -674,4 +674,135 @@ public partial class SecretSetupWindow : Window
             "לחץ 'שמור' כדי לאחסן ב-Credential Manager.",
             "מפתח AccService חדש", MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    /// <summary>
+    /// Tests connectivity to SiOffice.AccService and compares API key SHA256 hash prefixes
+    /// to verify that both sides are using the same key — without ever transmitting the key itself.
+    /// </summary>
+    private async void BtnTestAccService_Click(object sender, RoutedEventArgs e)
+    {
+        BtnTestAccService.IsEnabled = false;
+        Cursor = System.Windows.Input.Cursors.Wait;
+
+        try
+        {
+            var baseUrl = AppConfiguration.Configuration["AccService:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                MessageBox.Show(
+                    "AccService:BaseUrl לא מוגדר ב-appsettings.json.\n" +
+                    "בדיקה זו מיועדת רק כאשר AccService מרוחק מוגדר.",
+                    "AccService לא מוגדר", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Compute local key hash prefix
+            var localKey = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
+            var localHashPrefix = "(none)";
+            var localKeyLength = 0;
+            if (!string.IsNullOrEmpty(localKey))
+            {
+                localKeyLength = localKey.Length;
+                var hashBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(localKey));
+                localHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+            }
+
+            // Call the diagnostic endpoint
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            // Accept self-signed certs for internal servers
+            using var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
+                    errors == System.Net.Security.SslPolicyErrors.None ||
+                    errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors
+            };
+            using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+
+            var diagUrl = baseUrl.TrimEnd('/') + "/v1/acc/diag";
+            var response = await httpClient.GetAsync(diagUrl);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                MessageBox.Show(
+                    $"שגיאה בקריאה ל-{diagUrl}:\n\n" +
+                    $"HTTP {(int)response.StatusCode}\n{Truncate(body, 300)}",
+                    "בדיקת AccService נכשלה", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Parse the diagnostic response
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var serverUser = root.TryGetProperty("windowsUser", out var u) ? u.GetString() : "(unknown)";
+            var serverHasKey = root.TryGetProperty("hasApiKey", out var h) && h.GetBoolean();
+            var serverKeySource = root.TryGetProperty("keySource", out var s) ? s.GetString() : "(unknown)";
+            var serverKeyLength = root.TryGetProperty("keyLength", out var l) ? l.GetInt32() : 0;
+            var serverHashPrefix = root.TryGetProperty("keyHashPrefix", out var p) ? p.GetString() : "(none)";
+            var buildVersion = root.TryGetProperty("buildVersion", out var v) ? v.GetString() : "?";
+
+            // Compare
+            var keysMatch = localHashPrefix == serverHashPrefix && localHashPrefix != "(none)";
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"═══ AccService Diagnostic ═══");
+            sb.AppendLine($"URL: {baseUrl}");
+            sb.AppendLine($"Build: {buildVersion}");
+            sb.AppendLine();
+            sb.AppendLine($"── שרת (AccService) ──");
+            sb.AppendLine($"  Windows User: {serverUser}");
+            sb.AppendLine($"  Has API Key: {serverHasKey}");
+            sb.AppendLine($"  Key Source: {serverKeySource}");
+            sb.AppendLine($"  Key Length: {serverKeyLength}");
+            sb.AppendLine($"  Key Hash Prefix: {serverHashPrefix}");
+            sb.AppendLine();
+            sb.AppendLine($"── לקוח (WPF) ──");
+            sb.AppendLine($"  Has API Key: {!string.IsNullOrEmpty(localKey)}");
+            sb.AppendLine($"  Key Length: {localKeyLength}");
+            sb.AppendLine($"  Key Hash Prefix: {localHashPrefix}");
+            sb.AppendLine();
+
+            if (keysMatch)
+            {
+                sb.AppendLine("✅ המפתחות תואמים!");
+                StatusAccServiceApiKey.Fill = _greenBrush;
+                StatusAccServiceApiKey.ToolTip = $"✅ מפתח תואם לשרת (hash: {localHashPrefix})";
+            }
+            else if (string.IsNullOrEmpty(localKey))
+            {
+                sb.AppendLine("❌ מפתח לא מוגדר בלקוח.");
+                StatusAccServiceApiKey.Fill = _redBrush;
+            }
+            else if (!serverHasKey)
+            {
+                sb.AppendLine("❌ מפתח לא מוגדר בשרת.");
+                sb.AppendLine($"   הסיבה: {serverKeySource}");
+                StatusAccServiceApiKey.Fill = _orangeBrush;
+                StatusAccServiceApiKey.ToolTip = "⚠ מפתח קיים בלקוח אך חסר בשרת";
+            }
+            else
+            {
+                sb.AppendLine("❌ המפתחות לא תואמים!");
+                sb.AppendLine("   ייתכן שה-Credential Manager בשרת לא עודכן");
+                sb.AppendLine("   או שהשירות רץ תחת משתמש שונה מזה שייבא את הסודות.");
+                StatusAccServiceApiKey.Fill = _orangeBrush;
+                StatusAccServiceApiKey.ToolTip = $"⚠ Hash mismatch: local={localHashPrefix}, server={serverHashPrefix}";
+            }
+
+            MessageBox.Show(sb.ToString(), "בדיקת AccService",
+                keysMatch ? MessageBoxButton.OK : MessageBoxButton.OK,
+                keysMatch ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"שגיאה בבדיקת AccService:\n{ex.Message}",
+                "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnTestAccService.IsEnabled = true;
+            Cursor = System.Windows.Input.Cursors.Arrow;
+        }
+    }
 }

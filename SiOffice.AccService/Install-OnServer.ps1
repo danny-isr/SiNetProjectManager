@@ -39,6 +39,12 @@
 #
 #    # If service already correct, just re-import secrets:
 #    .\Install-OnServer.ps1 -SecretsFile <...> -SkipService
+#
+#  TROUBLESHOOTING:
+#    If you get "The term '-SkipService' is not recognized", this usually means
+#    PowerShell split your command line incorrectly. Make sure to run as a single
+#    line, or use backticks (`) for line continuation. Avoid copy-pasting commands
+#    with invisible characters from web pages or rich-text editors.
 # ════════════════════════════════════════════════════════════════════════════
 
 [CmdletBinding()]

@@ -137,11 +137,10 @@ builder.Services.AddDbContextFactory<SiNetSQLDbContext>(options =>
 builder.Services.AddSingleton<SystemSettingsService>();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
 
-// ─── Autodesk credentials bridge ────────────────────────────────────────────
-// Wire the static CredentialProvider used by AccProjectProvisioningService /
-// Bim360Service. Reads from configuration first (Secrets:<key>), then falls
-// back to environment variables (built-in to CredentialProvider).
-CredentialProvider.GetSecret = key => builder.Configuration[$"Secrets:{key}"];
+// NOTE: CredentialProvider.GetSecret was already set to CredentialVaultService.GetSecret
+// at line 58 above. That wiring is correct and must NOT be overwritten here.
+// The previous code (CredentialProvider.GetSecret = key => builder.Configuration[$"Secrets:{key}"])
+// was a BUG that caused the service to read from empty appsettings instead of the vault.
 
 var app = builder.Build();
 
@@ -190,6 +189,34 @@ try
     if (CentralLoggingBuilder.CentralSinkBootstrapError is { } centralErr)
     {
         Log.Warning("SiOffice.AccService: {Detail}", centralErr);
+    }
+
+    // [AccService][ApiKey] startup diagnostics — safe metadata for cross-machine key mismatch debugging.
+    // NEVER logs the actual key value. Logs: hasKey, keyLength, SHA256 hash prefix (first 12 chars).
+    try
+    {
+        var apiKeyRaw = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
+        var apiKeyFromConfig = builder.Configuration["AccService:ApiKey"];
+        var effectiveKey = apiKeyRaw ?? apiKeyFromConfig;
+        var keySource = apiKeyRaw != null ? "CredentialManager" : (apiKeyFromConfig != null ? "appsettings" : "none");
+        var keyLength = effectiveKey?.Length ?? 0;
+        var keyHashPrefix = "(none)";
+        if (!string.IsNullOrEmpty(effectiveKey))
+        {
+            var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(effectiveKey));
+            keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+        }
+        string windowsUserForKey;
+        try { windowsUserForKey = Environment.UserDomainName + "\\" + Environment.UserName; }
+        catch { windowsUserForKey = "(unknown)"; }
+        Log.Warning(
+            "[AccService][ApiKey] startup diagnostics — windowsUser={WindowsUser}, hasApiKey={HasKey}, " +
+            "keySource={KeySource}, keyLength={KeyLength}, keyHashPrefix={KeyHashPrefix}.",
+            windowsUserForKey, effectiveKey != null, keySource, keyLength, keyHashPrefix);
+    }
+    catch (Exception apiKeyDiagEx)
+    {
+        Log.Warning("[AccService][ApiKey] startup diagnostics failed: {Error}", apiKeyDiagEx.Message);
     }
 
     // [AccService][TokenProvider] startup diagnostics — answers the cross-process
