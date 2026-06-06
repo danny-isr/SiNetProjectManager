@@ -1,8 +1,7 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using System.IO;
-using System.Net.NetworkInformation;
 
 namespace SiNetProjectManagerV2.Services;
 
@@ -23,8 +22,6 @@ namespace SiNetProjectManagerV2.Services;
 /// </summary>
 public static class AppConfiguration
 {
-    private const string OfficeAccServiceBaseUrl = "https://SI-WIN-2K19:8443";
-
     private static IConfiguration? _configuration;
     private static readonly object _lock = new();
 
@@ -63,73 +60,7 @@ public static class AppConfiguration
             // Environment variables (prefix: SINET_ to avoid conflicts)
             .AddEnvironmentVariables(prefix: "SINET_");
 
-        var configuration = builder.Build();
-        var accServiceBootstrapUrl = GetAccServiceBootstrapUrl(configuration);
-        if (!string.IsNullOrWhiteSpace(accServiceBootstrapUrl))
-        {
-            builder.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["AccService:BaseUrl"] = accServiceBootstrapUrl
-            });
-            configuration = builder.Build();
-        }
-
-        return configuration;
-    }
-
-    private static string? GetAccServiceBootstrapUrl(IConfiguration configuration)
-    {
-        var configured = configuration["AccService:BaseUrl"];
-        if (!string.IsNullOrWhiteSpace(configured))
-            return null;
-
-        var disableBootstrap = configuration["AccService:DisableOfficeBootstrap"];
-        if (bool.TryParse(disableBootstrap, out var disabled) && disabled)
-            return null;
-
-        return IsSiEngDomainEnvironment() ? OfficeAccServiceBaseUrl : null;
-    }
-
-    private static bool IsSiEngDomainEnvironment()
-    {
-        var candidates = new[]
-        {
-            Environment.UserDomainName,
-            Environment.GetEnvironmentVariable("USERDOMAIN"),
-            Environment.GetEnvironmentVariable("USERDNSDOMAIN"),
-            GetMachineDnsDomainName()
-        };
-
-        foreach (var candidate in candidates)
-        {
-            if (IsSiEngDomainName(candidate))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static string? GetMachineDnsDomainName()
-    {
-        try
-        {
-            return IPGlobalProperties.GetIPGlobalProperties().DomainName;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool IsSiEngDomainName(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        var normalized = value.Trim();
-        return normalized.Equals("SI-ENG", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("SI-ENG.local", StringComparison.OrdinalIgnoreCase)
-            || normalized.EndsWith(".SI-ENG.local", StringComparison.OrdinalIgnoreCase);
+        return builder.Build();
     }
 
     /// <summary>
