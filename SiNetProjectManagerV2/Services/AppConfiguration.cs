@@ -90,7 +90,7 @@ public static class AppConfiguration
         try
         {
             var accServiceBaseUrl = ReadSystemSetting(connectionString, SystemSettingKeys.AccServiceBaseUrl);
-            if (!string.IsNullOrWhiteSpace(accServiceBaseUrl))
+            if (accServiceBaseUrl is not null)
             {
                 values[AccServiceBaseUrlConfigurationKey] = accServiceBaseUrl.Trim();
             }
