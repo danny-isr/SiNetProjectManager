@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using System.IO;
@@ -9,19 +9,22 @@ namespace SiNetProjectManagerV2.Services;
 /// Provides centralized access to application configuration.
 /// 
 /// CONFIGURATION LOADING ORDER (later overrides earlier):
-/// 1. Windows Credential Manager (vault) - Encrypted secrets per-user (highest priority)
-/// 2. appsettings.json - Base configuration (checked into source control, no secrets)
-/// 3. appsettings.local.json - Local overrides (NOT in source control)
-/// 4. Environment variables - Runtime overrides
+/// 1. appsettings.json - Base configuration (checked into source control, no secrets)
+/// 2. appsettings.local.json - Local overrides (NOT in source control)
+/// 3. Environment variables - Runtime overrides
+/// 4. SystemSettings DB overrides - selected admin-managed settings, when DB is reachable
 /// 
 /// USAGE:
 /// - Vault: API keys, client secrets, connection strings (encrypted per Windows user)
 /// - appsettings.json: Contains non-sensitive configuration only
 /// - appsettings.local.json: Contains environment-specific overrides
 /// - Environment variables: For CI/CD and containerized deployments
+/// - SystemSettings: Admin-managed operational settings shared by all clients
 /// </summary>
 public static class AppConfiguration
 {
+    private const string AccServiceBaseUrlConfigurationKey = "AccService:BaseUrl";
+
     private static IConfiguration? _configuration;
     private static readonly object _lock = new();
 
@@ -60,7 +63,56 @@ public static class AppConfiguration
             // Environment variables (prefix: SINET_ to avoid conflicts)
             .AddEnvironmentVariables(prefix: "SINET_");
 
-        return builder.Build();
+        var configuration = builder.Build();
+        var databaseOverrides = LoadDatabaseConfigurationOverrides(configuration);
+        if (databaseOverrides.Count > 0)
+        {
+            builder.AddInMemoryCollection(databaseOverrides);
+            configuration = builder.Build();
+        }
+
+        return configuration;
+    }
+
+    /// <summary>
+    /// Loads selected DB-backed configuration values that must be available during
+    /// early DI bootstrap, before SystemSettingsService can be resolved.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string?> LoadDatabaseConfigurationOverrides(IConfiguration baseConfiguration)
+    {
+        var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var connectionString = CredentialVaultService.GetSecret($"{SecretKeys.ConnectionStringPrefix}SiNetDatabase")
+            ?? baseConfiguration.GetSection("ConnectionStrings")["SiNetDatabase"];
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return values;
+
+        try
+        {
+            var accServiceBaseUrl = ReadSystemSetting(connectionString, SystemSettingKeys.AccServiceBaseUrl);
+            if (!string.IsNullOrWhiteSpace(accServiceBaseUrl))
+            {
+                values[AccServiceBaseUrlConfigurationKey] = accServiceBaseUrl.Trim();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Configuration must remain bootable even if DB-backed settings are unavailable.
+            System.Diagnostics.Debug.WriteLine($"[AppConfiguration] Failed to load DB-backed settings: {ex.Message}");
+        }
+
+        return values;
+    }
+
+    private static string? ReadSystemSetting(string connectionString, string key)
+    {
+        using var connection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT TOP (1) [SettingValue] FROM [SystemSettings] WHERE [SettingKey] = @key";
+        command.Parameters.AddWithValue("@key", key);
+
+        connection.Open();
+        return command.ExecuteScalar() as string;
     }
 
     /// <summary>
@@ -111,6 +163,19 @@ public static class AppConfiguration
     /// Gets the Logging section of configuration.
     /// </summary>
     public static IConfigurationSection Logging => Configuration.GetSection("Logging");
+
+    /// <summary>
+    /// Gets the ACC service base URL after DB-backed SystemSettings overrides are applied.
+    /// Empty/null = local in-process ACC provisioning mode.
+    /// </summary>
+    public static string? AccServiceBaseUrl
+    {
+        get
+        {
+            var value = Configuration[AccServiceBaseUrlConfigurationKey];
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+    }
 
     /// <summary>
     /// Gets the UNC or local path for centralized error logging across all deployed instances.
