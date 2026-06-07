@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManagerV2;
 using SiNetSQL.MVVM;
 using System.Windows;
@@ -27,9 +27,9 @@ namespace WpfSiData.WPFUserControl
                 _viewModel.SetEmailContext(emailMessageId.Value);
             }
         }
-        private void OK_Click(object sender, RoutedEventArgs e)
+        private async void OK_Click(object sender, RoutedEventArgs e)
         {
-            if (_viewModel.SaveChanges())
+            if (await _viewModel.SaveChangesAsync())
             {
                 _viewModel.Reload();
             }

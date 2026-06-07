@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
@@ -16,6 +16,7 @@ public partial class StatusMappingWindow : Window
         InitializeComponent();
 
         var dbContextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-        DataContext = new StatusMappingViewModel(dbContextFactory);
+        var statusMappingService = App.ServiceProvider.GetRequiredService<SiNetSQL.Services.IStatusMappingService>();
+        DataContext = new StatusMappingViewModel(dbContextFactory, statusMappingService);
     }
 }
