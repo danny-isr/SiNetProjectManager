@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManagerV2;
 using SiNetSQL.Models;
 using SiNetSQL.MVVM;
@@ -29,9 +29,9 @@ namespace WpfSiData.WPF_Window
             }
         }
 
-        private void OK_Click(object sender, RoutedEventArgs e)
+        private async void OK_Click(object sender, RoutedEventArgs e)
         {
-            _viewModel.SaveChanges();
+            await _viewModel.SaveChangesAsync();
 
             if (_viewModel.SelectedPlace != null && _viewModel.SelectedPlace.InUse != true)
             {

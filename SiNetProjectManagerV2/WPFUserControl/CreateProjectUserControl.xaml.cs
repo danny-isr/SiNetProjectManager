@@ -35,7 +35,7 @@ namespace WpfSiData.WPFUserControl
             }
         }
 
-        private void Button_Click(object sender, RoutedEventArgs e)
+        private async void Button_Click(object sender, RoutedEventArgs e)
         {
             var window = new WindowPlace();
             if (window.ShowDialog() == true)
@@ -43,7 +43,7 @@ namespace WpfSiData.WPFUserControl
                 var selectedPlace = window.SelectedPlace;
                 if (selectedPlace != null && DataContext is CreateProjectViewModel viewModel)
                 {
-                    viewModel.LoadPlaces();
+                    await viewModel.LoadPlacesAsync();
                     var freshPlace = viewModel.Places?.FirstOrDefault(p => p.Id == selectedPlace.Id);
                     if (freshPlace != null)
                         viewModel.SelectedPlace = freshPlace;
@@ -51,7 +51,7 @@ namespace WpfSiData.WPFUserControl
             }
         }
 
-        private void Button_Click_1(object sender, RoutedEventArgs e)
+        private async void Button_Click_1(object sender, RoutedEventArgs e)
         {
             var window = new WindowCompany();
             if (window.ShowDialog() == true)
@@ -59,9 +59,9 @@ namespace WpfSiData.WPFUserControl
                 var selectedContact = window.SelectedContact;
                 if (selectedContact != null && DataContext is CreateProjectViewModel viewModel)
                 {
-                    viewModel.LoadCompany();
-                    viewModel.LoadContact();
-                    var freshCompany = selectedContact.Company != null ? viewModel.Companies?.FirstOrDefault(p => p.Id == selectedContact.Company.Id) : null;
+                    await viewModel.LoadCompanyAsync();
+                    var companyId = selectedContact.CompanyId ?? selectedContact.Company?.Id;
+                    var freshCompany = companyId != null ? viewModel.Companies?.FirstOrDefault(p => p.Id == companyId) : null;
                     if (freshCompany != null)
                         viewModel.SelectedCompany = freshCompany;
                     var freshContact = viewModel.Contacts?.FirstOrDefault(p => p.Id == selectedContact.Id);
