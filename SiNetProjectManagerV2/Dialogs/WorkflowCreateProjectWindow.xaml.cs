@@ -226,8 +226,9 @@ public partial class WorkflowCreateProjectWindow : Window
         // Standalone callers (no _taskContext) still auto-start the
         // continuation workflow — that path predates Proposal and is not in
         // scope for this fix.
-        var isProposalProjectCreation = _taskContext is { ComponentKey: TaskComponentKeys.ProjectCreationFromEmail };
-        if (!isProposalProjectCreation)
+        var isParentDrivenProjectCreation = _taskContext is { ComponentKey: TaskComponentKeys.ProjectCreationFromEmail }
+            || _taskContext is { ComponentKey: TaskComponentKeys.ReviewProjectSetupFromEmail };
+        if (!isParentDrivenProjectCreation)
         {
             StartContinuationWorkflowAsync(args, _emailMessageId);
         }
@@ -235,8 +236,8 @@ public partial class WorkflowCreateProjectWindow : Window
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[WorkflowCreateProject] Skipping continuation workflow for project {args.ProjectId}: " +
-                $"opened from Proposal task ({_taskContext!.ComponentKey}). " +
-                $"Proposal advances to PRP.FileMaterial via the existing workflow engine.");
+                $"opened from parent-driven task ({_taskContext!.ComponentKey}). " +
+                $"The parent workflow advances the stages via the existing workflow engine.");
         }
 
         // Ask the task host to refresh its list so the closed task and the

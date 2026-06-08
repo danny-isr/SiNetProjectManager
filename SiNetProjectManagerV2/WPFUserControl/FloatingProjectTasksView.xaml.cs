@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -365,6 +365,8 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         {
             SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest =>
                 SiNetSQL.Services.Tasks.ReviewCompletionEvents.ReviewQuoteRequestClassified,
+            SiNetSQL.Constants.TaskTypeCodes.ClassifyRequestSource =>
+                SiNetSQL.Services.Tasks.ReviewCompletionEvents.RequestSourceClassified,
             _ => null,
         };
 
@@ -373,6 +375,8 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     {
         SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest =>
             "האם המייל מהווה פנייה להצעת מחיר? בחר תוצאה כדי לסגור את המשימה.",
+        SiNetSQL.Constants.TaskTypeCodes.ClassifyRequestSource =>
+            "בחר את מקור הפנייה כדי לסווג את הפרויקט ולסגור את המשימה:",
         _ => "בחר את תוצאת המשימה כדי לסגור אותה.",
     };
 
