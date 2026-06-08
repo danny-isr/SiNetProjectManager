@@ -226,8 +226,7 @@ public partial class WorkflowCreateProjectWindow : Window
         // Standalone callers (no _taskContext) still auto-start the
         // continuation workflow — that path predates Proposal and is not in
         // scope for this fix.
-        var isParentDrivenProjectCreation = _taskContext is { ComponentKey: TaskComponentKeys.ProjectCreationFromEmail }
-            || _taskContext is { ComponentKey: TaskComponentKeys.ReviewProjectSetupFromEmail };
+        var isParentDrivenProjectCreation = _taskContext is { ComponentKey: TaskComponentKeys.ProjectCreationFromEmail };
         if (!isParentDrivenProjectCreation)
         {
             StartContinuationWorkflowAsync(args, _emailMessageId);

@@ -280,6 +280,55 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 }
                 break;
 
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.EmailComposeToPlanner:
+                if (primaryEmailId is int emailIdForCompose && mainWindow != null)
+                {
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var composerService = App.ServiceProvider.GetRequiredService<SiNetSQL.Services.EmailOutbound.IEmailComposerService>();
+                            var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                            await using var db = await dbFactory.CreateDbContextAsync();
+                            var email = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                                db.EmailInboxMessages.AsNoTracking(), e => e.Id == emailIdForCompose);
+                            if (email != null)
+                            {
+                                var subject = email.Subject ?? "";
+                                if (!subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    subject = "Re: " + subject;
+                                }
+
+                                var context = new SiNetSQL.DTOs.Email.EmailComposerContext
+                                {
+                                    EntityType = "Task",
+                                    EntityId = request.TaskId,
+                                    TaskId = request.TaskId,
+                                    WorkflowId = request.WorkflowInstanceId,
+                                    To = new System.Collections.Generic.List<string> { email.FromAddress ?? "" },
+                                    Subject = subject,
+                                    Body = "שלום, \n\nבהמשך לפנייתך, נשמח לקבלת בקשה/הזמנה רשמית מהרשות על מנת להתחיל בתהליך הבדיקה. \n\nבברכה,\nצוות המשרד"
+                                };
+
+                                await Application.Current.Dispatcher.InvokeAsync(async () =>
+                                {
+                                    var result = await composerService.ComposeAndSendAsync(context);
+                                    if (result != null && result.Success)
+                                    {
+                                        ViewModel.RefreshCommand.Execute(null);
+                                    }
+                                });
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[FloatingTasks] Error opening EmailComposer: {ex}");
+                        }
+                    });
+                }
+                break;
+
             default:
                 // Classification-only tasks (e.g. IdentifyQuoteRequest) ride the
                 // ProjectWork host slot but have no dedicated screen — they simply
