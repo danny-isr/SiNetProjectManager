@@ -13,7 +13,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <!-- Email + Attachments panel (collapsible) -->
-            <RowDefinition Height="Auto" MaxHeight="280"/>
+            <RowDefinition Height="Auto" MaxHeight="400"/>
             <RowDefinition Height="Auto"/>
             <!-- Project creation form -->
             <RowDefinition Height="*"/>
@@ -23,6 +23,7 @@
         <Border Grid.Row="0" Background="#FFF8E1" BorderBrush="#FFD54F" BorderThickness="0,0,0,1" Padding="12,10">
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -38,12 +39,16 @@
                     </StackPanel>
                 </StackPanel>
 
+                <!-- Email Body Browser -->
+                <WebBrowser Grid.Row="1" x:Name="EmailBodyBrowser" Height="120" Margin="0,6,0,6"
+                            Visibility="Collapsed" Navigated="EmailBodyBrowser_Navigated"/>
+
                 <!-- Attachments header -->
-                <TextBlock Grid.Row="1" x:Name="AttachmentsHeader"
+                <TextBlock Grid.Row="2" x:Name="AttachmentsHeader"
                            Text="📎 קבצים מצורפים:" FontWeight="SemiBold" Margin="0,8,0,4"/>
 
                 <!-- Attachments list (scrollable) -->
-                <ScrollViewer Grid.Row="2" MaxHeight="130" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer Grid.Row="3" MaxHeight="130" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="AttachmentsList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>

@@ -80,7 +80,7 @@ public partial class WorkflowCreateProjectWindow : Window
             var email = db.EmailInboxMessages
                 .AsNoTracking()
                 .Where(m => m.Id == _emailMessageId)
-                .Select(m => new { m.Id, m.Subject, m.FromAddress, m.ReceivedUtc })
+                .Select(m => new { m.Id, m.Subject, m.FromAddress, m.ReceivedUtc, m.MessageUniqueId })
                 .FirstOrDefault();
 
             if (email != null)
@@ -89,6 +89,11 @@ public partial class WorkflowCreateProjectWindow : Window
                 SubjectText.Text = $"📧 {email.Subject ?? "(ללא נושא)"}";
                 FromText.Text = $"מאת: {email.FromAddress}";
                 DateText.Text = $"תאריך: {email.ReceivedUtc.ToLocalTime():dd/MM/yyyy HH:mm}";
+
+                if (!string.IsNullOrEmpty(email.MessageUniqueId))
+                {
+                    LoadEmailBodyAsync(email.MessageUniqueId);
+                }
             }
 
             var message = db.EmailInboxMessages
@@ -359,6 +364,63 @@ public partial class WorkflowCreateProjectWindow : Window
         {
             AppLogger.Error(ex,
                 "[WorkflowCreateProject] Failed to apply Gmail label");
+        }
+    }
+
+    private async void LoadEmailBodyAsync(string messageUniqueId)
+    {
+        try
+        {
+            var google = App.ServiceProvider?.GetService<SiOffice.GoogleConnector.GoogleService>();
+            if (google == null) return;
+
+            string? gmailMessageId = messageUniqueId;
+            if (!messageUniqueId.StartsWith("gmail:", StringComparison.Ordinal))
+            {
+                gmailMessageId = await google.ResolveLocalMessageIdByRfc822Async(messageUniqueId);
+            }
+            else
+            {
+                gmailMessageId = messageUniqueId["gmail:".Length..];
+            }
+
+            if (string.IsNullOrEmpty(gmailMessageId))
+            {
+                AppLogger.Warn($"Could not resolve Gmail message ID for unique ID: {messageUniqueId}");
+                return;
+            }
+
+            var fullEmail = await google.LoadFullEmailBodyAsync(gmailMessageId);
+            if (fullEmail != null && !string.IsNullOrEmpty(fullEmail.HtmlBody))
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    EmailBodyBrowser.Visibility = Visibility.Visible;
+                    EmailBodyBrowser.NavigateToString(fullEmail.HtmlBody);
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"Failed to load email body in CreateProjectWindow: {ex.Message}");
+        }
+    }
+
+    private void EmailBodyBrowser_Navigated(object sender, System.Windows.Navigation.NavigationEventArgs e)
+    {
+        SuppressScriptErrors(EmailBodyBrowser, true);
+    }
+
+    private static void SuppressScriptErrors(WebBrowser wb, bool Hide)
+    {
+        var fi = typeof(WebBrowser).GetField("_axIWebBrowser2", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (fi != null)
+        {
+            var browser = fi.GetValue(wb);
+            if (browser != null)
+            {
+                browser.GetType().InvokeMember("Silent", System.Reflection.BindingFlags.SetProperty, null, browser, new object[] { Hide });
+            }
         }
     }
 }
