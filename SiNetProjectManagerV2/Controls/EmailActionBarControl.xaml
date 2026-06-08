@@ -91,11 +91,6 @@
                     <TextBlock Text="✓ " Foreground="#2E7D32" FontWeight="Bold" VerticalAlignment="Center"/>
                     <TextBlock Text="הקבצים כבר הועברו לפרויקט" Foreground="#2E7D32" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
-                <Button Command="{Binding UnfileEmailCommand}"
-                        Padding="12,5"
-                        FontWeight="Bold"
-                        Content="Unfile Email"
-                        Background="#FFCDD2"/>
             </StackPanel>
         </Grid>
     </Border>
