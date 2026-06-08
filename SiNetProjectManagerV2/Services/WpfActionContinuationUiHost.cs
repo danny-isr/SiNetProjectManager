@@ -280,7 +280,7 @@ public sealed class WpfActionContinuationUiHost : IActionContinuationUiHost
             try
             {
                 var owner = Application.Current?.MainWindow;
-                var dialog = new ProjectSelectorDialog();
+                var dialog = new ProjectSelectorDialog(request.SuggestedActionType);
                 if (!string.IsNullOrWhiteSpace(request.Reason))
                 {
                     dialog.Title = request.Reason!;
