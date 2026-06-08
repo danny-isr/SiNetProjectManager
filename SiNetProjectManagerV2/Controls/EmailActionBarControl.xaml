@@ -5,11 +5,13 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
+             xmlns:conv="clr-namespace:SiNetProjectManagerV2.Converters"
              mc:Ignorable="d"
              d:DesignHeight="60" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance Type=vm:EmailManagementViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:NotNullToVisibilityConverter x:Key="NotNullToVis"/>
     </UserControl.Resources>
 
     <Border Padding="8,5">
@@ -66,14 +68,23 @@
             <!-- Assigned email buttons: Move to Project + Unfile -->
             <StackPanel Grid.Column="1" Orientation="Horizontal"
                         Visibility="{Binding IsSelectedEmailAssigned, Converter={StaticResource BoolToVis}}">
-                <Button Command="{Binding MoveToProjectCommand}"
-                        Padding="12,5"
-                        FontWeight="Bold"
-                        Content="📂 Move to Project"
-                        Background="#C8E6C9"
-                        BorderBrush="#66BB6A"
-                        ToolTip="{Binding MoveToProjectBlockReason, TargetNullValue='העבר קבצים מתויגים לתיקיית הפרויקט'}"
-                        Margin="0,0,8,0"/>
+                <StackPanel Orientation="Vertical" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <Button Command="{Binding MoveToProjectCommand}"
+                            Padding="12,5"
+                            FontWeight="Bold"
+                            Content="📂 Move to Project"
+                            Background="#C8E6C9"
+                            BorderBrush="#66BB6A"
+                            ToolTip="{Binding MoveToProjectBlockReason, TargetNullValue='העבר קבצים מתויגים לתיקיית הפרויקט'}"/>
+                    <!-- Inline warning / block reason display -->
+                    <TextBlock Text="{Binding MoveToProjectBlockReason}"
+                               Foreground="#D32F2F"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Margin="0,2,0,0"
+                               Visibility="{Binding MoveToProjectBlockReason, Converter={StaticResource NotNullToVis}}"/>
+                </StackPanel>
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding AreAllAttachmentsPlaced, Converter={StaticResource BoolToVis}}"
                             Margin="0,0,8,0">
