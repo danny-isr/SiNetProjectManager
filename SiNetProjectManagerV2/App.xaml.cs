@@ -425,7 +425,7 @@ namespace SiNetProjectManagerV2
             // credentials from CredentialProvider, mirroring the pattern used in
             // AccProjectProvisioningService and the legacy VM code.
             // ---------------------------------------------------------------------
-            services.AddTransient<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
+            services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
             {
                 var clientId = SiNetSQL.Services.CredentialProvider.AutodeskClientId ?? string.Empty;
                 var clientSecret = SiNetSQL.Services.CredentialProvider.AutodeskClientSecret ?? string.Empty;

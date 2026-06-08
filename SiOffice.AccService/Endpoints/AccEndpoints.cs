@@ -34,7 +34,8 @@ internal static class AccEndpoints
         // Safe metadata for cross-machine API key mismatch debugging.
         // NEVER returns the actual key value. Returns: hasApiKey, keyLength, keySource, keyHashPrefix.
         // Clients can compare their keyHashPrefix with this to verify key match.
-        v1.MapGet("/diag", (IConfiguration configuration) =>
+        // Also performs active database and Autodesk connectivity checks.
+        v1.MapGet("/diag", async (IConfiguration configuration, IDbContextFactory<SiNetSQLDbContext> dbContextFactory) =>
         {
             var apiKeyFromVault = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
             var apiKeyFromConfig = configuration["AccService:ApiKey"];
@@ -51,6 +52,63 @@ internal static class AccEndpoints
             try { windowsUser = Environment.UserDomainName + "\\" + Environment.UserName; }
             catch { windowsUser = "(unknown)"; }
 
+            // Active Autodesk Check
+            var autodeskOk = false;
+            string? autodeskDetail = null;
+            var clientId = CredentialProvider.AutodeskClientId;
+            var clientSecret = CredentialProvider.AutodeskClientSecret;
+
+            if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+            {
+                autodeskDetail = "Autodesk credentials are not provisioned in the server vault.";
+            }
+            else
+            {
+                try
+                {
+                    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                    var authBytes = System.Text.Encoding.ASCII.GetBytes($"{clientId}:{clientSecret}");
+                    using var req = new HttpRequestMessage(HttpMethod.Post, "https://developer.api.autodesk.com/authentication/v2/token");
+                    req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(authBytes));
+                    req.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                    {
+                        ["grant_type"] = "client_credentials",
+                        ["scope"] = "data:read"
+                    });
+                    var resp = await client.SendAsync(req);
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        autodeskOk = true;
+                        autodeskDetail = "Autodesk token retrieved successfully.";
+                    }
+                    else
+                    {
+                        var body = await resp.Content.ReadAsStringAsync();
+                        autodeskDetail = $"HTTP {(int)resp.StatusCode}: {body}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    autodeskDetail = ex.Message;
+                }
+            }
+
+            // Active Database Check
+            var dbOk = false;
+            string? dbDetail = null;
+            try
+            {
+                using var db = dbContextFactory.CreateDbContext();
+                await db.Database.OpenConnectionAsync();
+                await db.Database.CloseConnectionAsync();
+                dbOk = true;
+                dbDetail = "Database connection successful.";
+            }
+            catch (Exception ex)
+            {
+                dbDetail = ex.Message;
+            }
+
             return Results.Ok(new
             {
                 status = "ok",
@@ -59,6 +117,10 @@ internal static class AccEndpoints
                 keySource,
                 keyLength,
                 keyHashPrefix,
+                autodeskStatus = autodeskOk,
+                autodeskDetail,
+                dbStatus = dbOk,
+                dbDetail,
                 buildVersion = typeof(AccEndpoints).Assembly.GetName().Version?.ToString() ?? "?",
                 utcNow = DateTime.UtcNow
             });
