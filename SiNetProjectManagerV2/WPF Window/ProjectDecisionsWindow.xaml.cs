@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
@@ -17,8 +17,7 @@ public partial class ProjectDecisionsWindow : Window
     {
         InitializeComponent();
 
-        var dbContextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-        _viewModel = new ProjectDecisionsViewModel(dbContextFactory);
+        _viewModel = App.ServiceProvider.GetRequiredService<ProjectDecisionsViewModel>();
         DataContext = _viewModel;
     }
 
