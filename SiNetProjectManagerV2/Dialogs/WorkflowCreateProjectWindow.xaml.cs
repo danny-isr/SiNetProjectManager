@@ -187,6 +187,11 @@ public partial class WorkflowCreateProjectWindow : Window
         {
             _createProjectVm = vm;
             vm.ProjectCreated += OnProjectCreated;
+
+            if (_taskContext != null && _taskContext.ActiveTaskProjectId.HasValue)
+            {
+                vm.PreselectParentProject(_taskContext.ActiveTaskProjectId.Value);
+            }
         }
     }
 
