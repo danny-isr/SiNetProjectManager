@@ -1,4 +1,4 @@
-﻿using SiNetSQL.MVVM;
+using SiNetSQL.MVVM;
 using System.Windows;
 
 namespace SiNetProjectManagerV2.WPF_Window
@@ -16,6 +16,11 @@ namespace SiNetProjectManagerV2.WPF_Window
 
         private void Ok_Click(object sender, RoutedEventArgs e)
         {
+            if (sender is UIElement element)
+            {
+                element.Focus();
+            }
+
             if (DataContext is AlternativeNameViewModel vm && vm.IsOkEnabled)
             {
                 vm.DialogResult = true;
