@@ -132,11 +132,35 @@ public sealed class EmailComposerViewModel : INotifyPropertyChanged
         }
     }
 
-    public bool IsToRecipientSuggestionsOpen => IsRecipientSuggestionsOpen && _activeRecipientField == RecipientField.To;
+    public bool IsToRecipientSuggestionsOpen
+    {
+        get => IsRecipientSuggestionsOpen && _activeRecipientField == RecipientField.To;
+        set
+        {
+            if (!value && _activeRecipientField == RecipientField.To)
+                IsRecipientSuggestionsOpen = false;
+        }
+    }
 
-    public bool IsCcRecipientSuggestionsOpen => IsRecipientSuggestionsOpen && _activeRecipientField == RecipientField.Cc;
+    public bool IsCcRecipientSuggestionsOpen
+    {
+        get => IsRecipientSuggestionsOpen && _activeRecipientField == RecipientField.Cc;
+        set
+        {
+            if (!value && _activeRecipientField == RecipientField.Cc)
+                IsRecipientSuggestionsOpen = false;
+        }
+    }
 
-    public bool IsBccRecipientSuggestionsOpen => IsRecipientSuggestionsOpen && _activeRecipientField == RecipientField.Bcc;
+    public bool IsBccRecipientSuggestionsOpen
+    {
+        get => IsRecipientSuggestionsOpen && _activeRecipientField == RecipientField.Bcc;
+        set
+        {
+            if (!value && _activeRecipientField == RecipientField.Bcc)
+                IsRecipientSuggestionsOpen = false;
+        }
+    }
 
     public bool IsSending
     {

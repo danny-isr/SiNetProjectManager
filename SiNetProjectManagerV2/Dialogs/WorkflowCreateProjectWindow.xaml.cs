@@ -324,6 +324,12 @@ public partial class WorkflowCreateProjectWindow : Window
             AppLogger.Info(
                 $"[WorkflowCreateProject] Starting continuation workflow '{definition.Code}' for project {args.ProjectId}");
 
+            string? initialStageCode = null;
+            if (string.Equals(definition.Code, "Review", StringComparison.OrdinalIgnoreCase))
+            {
+                initialStageCode = "REV.MaterialIntake";
+            }
+
             await orchestrator.StartWorkflowAsync(
                 definition.Id,
                 args.ProjectId,
@@ -331,7 +337,8 @@ public partial class WorkflowCreateProjectWindow : Window
                 triggerEntityId: emailMessageId == 0 ? null : emailMessageId,
                 userId: userId,
                 notes: $"Auto-started on project creation from email (continuation: {definition.Code})",
-                ct: CancellationToken.None);
+                ct: CancellationToken.None,
+                initialStageCode: initialStageCode);
 
             AppLogger.Info(
                 $"[WorkflowCreateProject] ✅ Continuation workflow '{definition.Code}' started for project {args.ProjectId}");

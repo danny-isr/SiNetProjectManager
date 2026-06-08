@@ -281,7 +281,6 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             case SiNetSQL.Services.Tasks.TaskComponentKeys.EmailComposeToPlanner:
-                if (primaryEmailId is int emailIdForCompose && mainWindow != null)
                 {
                     _ = System.Threading.Tasks.Task.Run(async () =>
                     {
@@ -290,35 +289,48 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                             var composerService = App.ServiceProvider.GetRequiredService<SiNetSQL.Services.EmailOutbound.IEmailComposerService>();
                             var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
                             await using var db = await dbFactory.CreateDbContextAsync();
-                            var email = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-                                db.EmailInboxMessages.AsNoTracking(), e => e.Id == emailIdForCompose);
-                            if (email != null)
+
+                            int? emailIdForCompose = primaryEmailId;
+                            if (emailIdForCompose == null || emailIdForCompose == 0)
                             {
-                                var subject = email.Subject ?? "";
-                                if (!subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    subject = "Re: " + subject;
-                                }
+                                var link = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                                    Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.TaskLinks)
+                                        .Where(l => l.TaskId == request.TaskId && l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage));
+                                emailIdForCompose = (int?)link?.LinkedEntityId;
+                            }
 
-                                var context = new SiNetSQL.DTOs.Email.EmailComposerContext
+                            if (emailIdForCompose is int validEmailId && validEmailId > 0)
+                            {
+                                var email = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                                    Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.EmailInboxMessages), e => e.Id == validEmailId);
+                                if (email != null)
                                 {
-                                    EntityType = "Task",
-                                    EntityId = request.TaskId,
-                                    TaskId = request.TaskId,
-                                    WorkflowId = request.WorkflowInstanceId,
-                                    To = new System.Collections.Generic.List<string> { email.FromAddress ?? "" },
-                                    Subject = subject,
-                                    Body = "שלום, \n\nבהמשך לפנייתך, נשמח לקבלת בקשה/הזמנה רשמית מהרשות על מנת להתחיל בתהליך הבדיקה. \n\nבברכה,\nצוות המשרד"
-                                };
-
-                                await Application.Current.Dispatcher.InvokeAsync(async () =>
-                                {
-                                    var result = await composerService.ComposeAndSendAsync(context);
-                                    if (result != null && result.Success)
+                                    var subject = email.Subject ?? "";
+                                    if (!subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase))
                                     {
-                                        ViewModel.RefreshCommand.Execute(null);
+                                        subject = "Re: " + subject;
                                     }
-                                });
+
+                                    var context = new SiNetSQL.DTOs.Email.EmailComposerContext
+                                    {
+                                        EntityType = "Task",
+                                        EntityId = request.TaskId,
+                                        TaskId = request.TaskId,
+                                        WorkflowId = request.WorkflowInstanceId,
+                                        To = new System.Collections.Generic.List<string> { email.FromAddress ?? "" },
+                                        Subject = subject,
+                                        Body = "שלום, \n\nבהמשך לפנייתך, נשמח לקבלת בקשה/הזמנה רשמית מהרשות על מנת להתחיל בתהליך הבדיקה. \n\nבברכה,\nצוות המשרד"
+                                    };
+
+                                    await Application.Current.Dispatcher.InvokeAsync(async () =>
+                                    {
+                                        var result = await composerService.ComposeAndSendAsync(context);
+                                        if (result != null && result.Success)
+                                        {
+                                            ViewModel.RefreshCommand.Execute(null);
+                                        }
+                                    });
+                                }
                             }
                         }
                         catch (System.Exception ex)
