@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManagerV2;
 using SiNetSQL.Models;
 using SiNetSQL.MVVM;
@@ -30,14 +30,14 @@ namespace WpfSiData.WPF_Window
                 return null;
             }
         }
-        private void OK_Click(object sender, RoutedEventArgs e)
+        private async void OK_Click(object sender, RoutedEventArgs e)
         {
             if (SelectedContact == null)
             {
                 MessageBox.Show("יש לבחור איש קשר.", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            _companyViewModel.SaveChanges();
+            await _companyViewModel.SaveChangesAsync();
             DialogResult = true;
             Close();
         }
