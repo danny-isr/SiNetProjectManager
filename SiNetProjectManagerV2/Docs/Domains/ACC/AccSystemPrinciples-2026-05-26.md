@@ -169,6 +169,7 @@ companion to
 - Do not use `AccInboxReconciliationService` to perform upload or filing.
 - Do not change schema, migrations, ModelSnapshot, `ProjectFileInstance`, `Refile`, `MoveToProject` service, ACC metadata write path, `SetItemCustomAttributesAsync`, or `TokenProvider` as part of ACC documentation/principles work.
 - Do not introduce new ACC bootstrap behavior at startup.
+- Do not treat an attachment as physically placed (`IsPlaced = true` or showing the Update button in the UI instead of the tag selector) until its parent email message status is successfully transitioned to `Moved` (indicating that filing/project movement has occurred). Prior to that, the UI must show the selected tag metadata and keep the Update/Refile option hidden.
 
 ## Dropped / cancelled / postponed
 - DOM / scraped UI of ACC web as a source of truth — dropped.

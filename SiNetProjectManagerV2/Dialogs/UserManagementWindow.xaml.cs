@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,8 +17,7 @@ public partial class UserManagementWindow : Window
     {
         InitializeComponent();
 
-        var dbContextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-        DataContext = new UserManagementViewModel(dbContextFactory);
+        DataContext = App.ServiceProvider.GetRequiredService<UserManagementViewModel>();
     }
 
     /// <summary>

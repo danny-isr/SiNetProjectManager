@@ -135,6 +135,12 @@ builder.Services.AddDbContextFactory<SiNetSQLDbContext>(options =>
 
 // ─── Application services from SiNetSQL ─────────────────────────────────────
 builder.Services.AddSingleton<SystemSettingsService>();
+builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
+{
+    var clientId = SiNetSQL.Services.CredentialProvider.AutodeskClientId ?? string.Empty;
+    var clientSecret = SiNetSQL.Services.CredentialProvider.AutodeskClientSecret ?? string.Empty;
+    return new MyOffice.AutodeskConnector.TokenProvider(clientId, clientSecret);
+});
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
 
 // NOTE: CredentialProvider.GetSecret was already set to CredentialVaultService.GetSecret

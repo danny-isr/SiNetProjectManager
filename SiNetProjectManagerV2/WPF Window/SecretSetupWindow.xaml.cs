@@ -1,4 +1,4 @@
-﻿using System.DirectoryServices.AccountManagement;
+using System.DirectoryServices.AccountManagement;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -761,6 +761,12 @@ public partial class SecretSetupWindow : Window
             var serverHashPrefix = root.TryGetProperty("keyHashPrefix", out var p) ? p.GetString() : "(none)";
             var buildVersion = root.TryGetProperty("buildVersion", out var v) ? v.GetString() : "?";
 
+            // Server active integration health statuses
+            var serverAutodeskOk = root.TryGetProperty("autodeskStatus", out var adOkProp) && adOkProp.GetBoolean();
+            var serverAutodeskDetail = root.TryGetProperty("autodeskDetail", out var adDetProp) ? adDetProp.GetString() : "(none)";
+            var serverDbOk = root.TryGetProperty("dbStatus", out var dbOkProp) && dbOkProp.GetBoolean();
+            var serverDbDetail = root.TryGetProperty("dbDetail", out var dbDetProp) ? dbDetProp.GetString() : "(none)";
+
             // Compare
             var keysMatch = localHashPrefix == serverHashPrefix && localHashPrefix != "(none)";
 
@@ -773,8 +779,9 @@ public partial class SecretSetupWindow : Window
             sb.AppendLine($"  Windows User: {serverUser}");
             sb.AppendLine($"  Has API Key: {serverHasKey}");
             sb.AppendLine($"  Key Source: {serverKeySource}");
-            sb.AppendLine($"  Key Length: {serverKeyLength}");
             sb.AppendLine($"  Key Hash Prefix: {serverHashPrefix}");
+            sb.AppendLine($"  Autodesk Connection: {(serverAutodeskOk ? "✅ תקין" : $"❌ שגיאה: {serverAutodeskDetail}")}");
+            sb.AppendLine($"  Database Connection: {(serverDbOk ? "✅ תקין" : $"❌ שגיאה: {serverDbDetail}")}");
             sb.AppendLine();
             sb.AppendLine($"── לקוח (WPF) ──");
             sb.AppendLine($"  Has API Key: {!string.IsNullOrEmpty(localKey)}");

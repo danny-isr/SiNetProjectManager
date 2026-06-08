@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -186,12 +186,14 @@ namespace SiNetProjectManagerV2.WPFUserControl
                         var sel = vm.SelectedEmail;
                         if (sel != null && !string.IsNullOrEmpty(sel.MessageId))
                         {
+                            var effectiveProjectId = sel.AssignedProjectId ?? sel.LabelProjectId ?? vm.ActiveTaskContext?.ActiveTaskProjectId;
                             _ = _emailContextVm.SetEmailByGmailIdAsync(
                                 sel.MessageId,
                                 sel.Subject,
                                 sel.From,
                                 sel.ParsedDate != DateTime.MinValue ? sel.ParsedDate : null,
-                                sel.InternetMessageId);
+                                sel.InternetMessageId,
+                                effectiveProjectId);
                         }
                         else
                         {

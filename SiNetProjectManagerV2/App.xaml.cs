@@ -277,6 +277,8 @@ namespace SiNetProjectManagerV2
             // Task Status Service: Transient. Owns regular (non-completion) status updates from UI.
             // Completing a task must instead go through ITaskCompletionCoordinator.
             services.AddTransient<SiNetSQL.Services.Tasks.TaskStatusService>();
+            services.AddTransient<SiNetSQL.Services.IStatusMappingService, SiNetSQL.Services.StatusMappingService>();
+            services.AddTransient<SiNetSQL.Services.Projects.IProjectService, SiNetSQL.Services.Projects.ProjectService>();
 
             // Task Workflow Resolver: Transient (single source of truth for "is this task workflow-bound?",
             // process context lookup, and guard predicates used by Task* commands).
@@ -423,7 +425,7 @@ namespace SiNetProjectManagerV2
             // credentials from CredentialProvider, mirroring the pattern used in
             // AccProjectProvisioningService and the legacy VM code.
             // ---------------------------------------------------------------------
-            services.AddTransient<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
+            services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
             {
                 var clientId = SiNetSQL.Services.CredentialProvider.AutodeskClientId ?? string.Empty;
                 var clientSecret = SiNetSQL.Services.CredentialProvider.AutodeskClientSecret ?? string.Empty;
@@ -787,23 +789,32 @@ namespace SiNetProjectManagerV2
             // ═══════════════════════════════════════════════════════════════════
             services.AddTransient<TaskPanelViewModel>();
             services.AddTransient<FloatingProjectTasksViewModel>();
+            services.AddTransient<SiNetSQL.Services.InspectionSync.IInspectionReportService, SiNetSQL.Services.InspectionSync.InspectionReportService>();
             services.AddTransient<FloatingInspectionViewModel>();
             services.AddTransient<ProjectTypeRulesViewModel>();
+            services.AddTransient<SiNetSQL.Services.ProjectTypes.IProjectTypeService, SiNetSQL.Services.ProjectTypes.ProjectTypeService>();
+            services.AddTransient<SiNetSQL.Services.InspectionSync.TemplateSyncService>();
             services.AddTransient<ProjectTypeViewModel>();
             // Company persistence is owned by CompanyService (ViewModel → Service
             // boundary, gap register Gap 11 / pilot). The ViewModel holds UI state only.
             services.AddTransient<SiNetSQL.Services.Companies.ICompanyService, SiNetSQL.Services.Companies.CompanyService>();
             services.AddTransient<CompanyViewModel>();
+            services.AddTransient<SiNetSQL.Services.Contacts.IContactService, SiNetSQL.Services.Contacts.ContactService>();
             services.AddTransient<ContactViewModel>();
+            services.AddTransient<SiNetSQL.Services.Places.IPlaceService, SiNetSQL.Services.Places.PlaceService>();
             services.AddTransient<PlaceViewModel>();
             services.AddTransient<CreateProjectViewModel>();
             services.AddTransient<EditProjectViewModel>();
+            services.AddTransient<SiNetSQL.Services.Users.IUserService, SiNetSQL.Services.Users.UserService>();
             services.AddTransient<AddUserViewModel>();
+            services.AddTransient<UserManagementViewModel>();
             services.AddTransient<MasterPlanMappingViewModel>();
             services.AddTransient<EmailContextViewModel>();
             services.AddTransient<WorkflowDashboardViewModel>();
             services.AddTransient<WorkflowInstanceViewModel>();
             services.AddTransient<WorkflowDesignerViewModel>();
+            services.AddTransient<SiNetSQL.Services.IProjectDecisionService, SiNetSQL.Services.ProjectDecisionService>();
+            services.AddTransient<ProjectDecisionsViewModel>();
 
             return services.BuildServiceProvider();
         }
