@@ -311,15 +311,111 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                                         subject = "Re: " + subject;
                                     }
 
+                                    string toAddress = "";
+                                    if (!string.IsNullOrWhiteSpace(email.FromAddress))
+                                    {
+                                        try
+                                        {
+                                            var addr = new System.Net.Mail.MailAddress(email.FromAddress);
+                                            toAddress = addr.Address;
+                                        }
+                                        catch
+                                        {
+                                            var match = System.Text.RegularExpressions.Regex.Match(email.FromAddress, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
+                                            toAddress = match.Success ? match.Value : email.FromAddress;
+                                        }
+                                    }
+
+                                    var ccAddresses = new System.Collections.Generic.List<string>();
+                                    var bccAddresses = new System.Collections.Generic.List<string>();
+                                    SiOffice.GoogleConnector.EmailInfo? originalEmailInfo = null;
+                                    var googleService = App.ServiceProvider.GetService<SiOffice.GoogleConnector.GoogleService>();
+                                    if (googleService != null)
+                                    {
+                                        string? gmailMessageId = null;
+                                        if (!string.IsNullOrEmpty(email.InternetMessageId))
+                                        {
+                                            gmailMessageId = await googleService.ResolveLocalMessageIdByRfc822Async(email.InternetMessageId);
+                                        }
+
+                                        if (string.IsNullOrEmpty(gmailMessageId) && email.MessageUniqueId != null && email.MessageUniqueId.StartsWith("gmail:"))
+                                        {
+                                            gmailMessageId = email.MessageUniqueId.Substring(6);
+                                        }
+
+                                        if (!string.IsNullOrEmpty(gmailMessageId))
+                                        {
+                                            try
+                                            {
+                                                originalEmailInfo = await googleService.LoadFullEmailBodyAsync(gmailMessageId);
+                                                if (originalEmailInfo != null)
+                                                {
+                                                    if (!string.IsNullOrWhiteSpace(originalEmailInfo.Cc))
+                                                    {
+                                                        var parts = originalEmailInfo.Cc.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                                        foreach (var part in parts)
+                                                        {
+                                                            string cleanCc = "";
+                                                            try
+                                                            {
+                                                                var addr = new System.Net.Mail.MailAddress(part);
+                                                                cleanCc = addr.Address;
+                                                            }
+                                                            catch
+                                                            {
+                                                                var match = System.Text.RegularExpressions.Regex.Match(part, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
+                                                                cleanCc = match.Success ? match.Value : part;
+                                                            }
+                                                            if (!string.IsNullOrWhiteSpace(cleanCc))
+                                                            {
+                                                                ccAddresses.Add(cleanCc);
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if (!string.IsNullOrWhiteSpace(originalEmailInfo.Bcc))
+                                                    {
+                                                        var parts = originalEmailInfo.Bcc.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                                        foreach (var part in parts)
+                                                        {
+                                                            string cleanBcc = "";
+                                                            try
+                                                            {
+                                                                var addr = new System.Net.Mail.MailAddress(part);
+                                                                cleanBcc = addr.Address;
+                                                            }
+                                                            catch
+                                                            {
+                                                                var match = System.Text.RegularExpressions.Regex.Match(part, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
+                                                                cleanBcc = match.Success ? match.Value : part;
+                                                            }
+                                                            if (!string.IsNullOrWhiteSpace(cleanBcc))
+                                                            {
+                                                                bccAddresses.Add(cleanBcc);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                System.Diagnostics.Debug.WriteLine($"[FloatingTasks] Load CC/BCC error: {ex}");
+                                            }
+                                        }
+                                    }
+
                                     var context = new SiNetSQL.DTOs.Email.EmailComposerContext
                                     {
                                         EntityType = "Task",
                                         EntityId = request.TaskId,
                                         TaskId = request.TaskId,
                                         WorkflowId = request.WorkflowInstanceId,
-                                        To = new System.Collections.Generic.List<string> { email.FromAddress ?? "" },
+                                        To = new System.Collections.Generic.List<string> { toAddress },
+                                        Cc = ccAddresses,
+                                        Bcc = bccAddresses,
                                         Subject = subject,
-                                        Body = "שלום, \n\nבהמשך לפנייתך, נשמח לקבלת בקשה/הזמנה רשמית מהרשות על מנת להתחיל בתהליך הבדיקה. \n\nבברכה,\nצוות המשרד"
+                                        OriginalEmail = originalEmailInfo,
+                                        Body = "\u05e9\u05dc\u05d5\u05dd, \n\n\u05d1\u05d4\u05de\u05e9\u05da \u05dc\u05e4\u05e0\u05d9\u05d9\u05ea\u05da, \u05e0\u05e9\u05de\u05d7 \u05dc\u05e7\u05d1\u05dc\u05ea \u05d1\u05e7\u05e9\u05d4/\u05d4\u05d6\u05de\u05e0\u05d4 \u05e8\u05e9\u05de\u05d9\u05ea \u05de\u05d4\u05e8\u05e9\u05d5\u05ea \u05e2\u05dc \u05de\u05e0\u05ea \u05dc\u05d4\u05ea\u05d7\u05d9\u05dc \u05d1\u05ea\u05d4\u05dc\u05d9\u05da \u05d4\u05d1\u05d3\u05d9\u05e7\u05d4. \n\n\u05d1\u05d1\u05e8\u05db\u05d4,\n\u05e6\u05d5\u05d5\u05ea \u05d4\u05de\u05e9\u05e8\u05d3"
                                     };
 
                                     await Application.Current.Dispatcher.InvokeAsync(async () =>

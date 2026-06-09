@@ -255,19 +255,34 @@
 
             <!-- Row 0: Email Header -->
             <Border Grid.Row="0" Background="#F5F5F5" Padding="10,6">
-                <StackPanel>
-                    <TextBlock Text="{Binding Subject}" 
-                               FontWeight="Bold"
-                               TextWrapping="NoWrap"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Subject}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <TextBlock Text="From: " Opacity="0.7" FontSize="11"/>
-                        <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Text="  |  Date: " Opacity="0.7" FontSize="11"/>
-                        <TextBlock Text="{Binding DateDisplay}" FontSize="11"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="{Binding Subject}" 
+                                   FontWeight="Bold"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Subject}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                            <TextBlock Text="From: " Opacity="0.7" FontSize="11"/>
+                            <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="11"/>
+                            <TextBlock Text="  |  Date: " Opacity="0.7" FontSize="11"/>
+                            <TextBlock Text="{Binding DateDisplay}" FontSize="11"/>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <TextBlock Text="קידוד:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11"/>
+                        <ComboBox x:Name="EncodingComboBox" Width="140" Height="22" FontSize="11" SelectedIndex="0" SelectionChanged="EncodingComboBox_SelectionChanged">
+                            <ComboBoxItem Content="UTF-8" Tag="utf-8"/>
+                            <ComboBoxItem Content="Windows-1255 (Hebrew)" Tag="windows-1255"/>
+                            <ComboBoxItem Content="ISO-8859-8 (Hebrew)" Tag="iso-8859-8"/>
+                            <ComboBoxItem Content="Windows-1252" Tag="windows-1252"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Row 1: Attachments Bar -->
@@ -305,10 +320,23 @@
             <!-- Row 2: Email Body (WebView2) -->
             <wv2:WebView2 x:Name="EmailWebView"
                           Grid.Row="2"
-                          uc:WebView2Helper.NavigateUrl="{Binding Email.GmailPopoutUrl}"
-                          uc:WebView2Helper.FallbackHtml="{Binding Email.HtmlBodyForDisplay}"
                           uc:WebView2Helper.SelectedEmailInfo="{Binding Email}"
-                          Visibility="{Binding HasEmail, Converter={StaticResource BoolToVis}}"/>
+                          Visibility="{Binding HasEmail, Converter={StaticResource BoolToVis}}">
+                <wv2:WebView2.Style>
+                    <Style TargetType="wv2:WebView2">
+                        <!-- Default mode: Navigate to Gmail popout and fallback to HTML -->
+                        <Setter Property="uc:WebView2Helper.NavigateUrl" Value="{Binding Email.GmailPopoutUrl}"/>
+                        <Setter Property="uc:WebView2Helper.FallbackHtml" Value="{Binding Email.HtmlBodyForDisplay}"/>
+                        <Style.Triggers>
+                            <!-- Static Mode: Bypass URL navigation and render HTML directly -->
+                            <DataTrigger Binding="{Binding ElementName=Root, Path=ForceHtmlOnly}" Value="True">
+                                <Setter Property="uc:WebView2Helper.NavigateUrl" Value="{x:Null}"/>
+                                <Setter Property="uc:WebView2Helper.HtmlSource" Value="{Binding Email.HtmlBodyForDisplay}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </wv2:WebView2.Style>
+            </wv2:WebView2>
 
             <!-- Body loading overlay -->
             <Border Grid.Row="2" Background="#80FFFFFF"

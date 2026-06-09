@@ -1,4 +1,4 @@
-﻿using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using SiNetProjectManagerV2.Dialogs;
 using SiNetProjectManagerV2.Services;
@@ -1769,6 +1769,12 @@ namespace SiNetProjectManagerV2.WPFUserControl
                 // Navigate to content or empty placeholder
                 if (!string.IsNullOrEmpty(htmlContent))
                 {
+                    // Ensure UTF-8 charset exists so WebView2 renders Hebrew correctly
+                    if (!htmlContent.Contains("charset=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        htmlContent = "<meta charset=\"utf-8\">" + htmlContent;
+                    }
+
                     // Log size for debugging large content issues
                     int lengthKb = htmlContent.Length / 1024;
                     System.Diagnostics.Debug.WriteLine(

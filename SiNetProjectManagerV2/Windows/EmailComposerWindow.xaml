@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="שליחת מייל"
-        Width="760"
-        Height="680"
-        MinWidth="620"
-        MinHeight="520"
+        Width="600"
+        Height="620"
+        MinWidth="500"
+        MinHeight="500"
         WindowStartupLocation="CenterOwner"
         FlowDirection="RightToLeft">
     <Grid Margin="12">

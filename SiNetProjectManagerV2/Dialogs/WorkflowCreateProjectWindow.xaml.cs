@@ -3,12 +3,19 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNetSQL.MVVM;
+using SiNetSQL.MVVM.Components;
 using SiNetSQL.Services;
 using SiNetSQL.Services.Tasks;
 using SiNetSQL.Services.Workflow;
+using SiOffice.GoogleConnector;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+
+using SiNetProjectManagerV2.WPFUserControl;
 
 namespace SiNetProjectManagerV2.Dialogs;
 
@@ -35,6 +42,7 @@ public partial class WorkflowCreateProjectWindow : Window
 
     private bool _projectCreated;
     private CreateProjectViewModel? _createProjectVm;
+    private readonly EmailViewerViewModel _emailViewerVm;
 
     /// <summary>Standalone constructor (no task context).</summary>
     public WorkflowCreateProjectWindow(int emailMessageId, Window? owner = null)
@@ -54,11 +62,16 @@ public partial class WorkflowCreateProjectWindow : Window
         EmailFilingTaskContext? taskContext,
         Window? owner = null)
     {
+        _emailViewerVm = new EmailViewerViewModel();
         InitializeComponent();
+        EmailViewer.ViewModel = _emailViewerVm;
+
         _emailMessageId = emailMessageId;
         _taskContext = taskContext;
 
         if (owner != null) Owner = owner;
+
+        _emailViewerVm.AttachmentClicked += OnViewerAttachmentClicked;
 
         LoadEmailData();
         LoadProjectForm();
@@ -80,63 +93,52 @@ public partial class WorkflowCreateProjectWindow : Window
             var email = db.EmailInboxMessages
                 .AsNoTracking()
                 .Where(m => m.Id == _emailMessageId)
-                .Select(m => new { m.Id, m.Subject, m.FromAddress, m.ReceivedUtc, m.MessageUniqueId })
                 .FirstOrDefault();
 
             if (email != null)
             {
                 Title = $"🆕 יצירת פרויקט — {email.Subject}";
-                SubjectText.Text = $"📧 {email.Subject ?? "(ללא נושא)"}";
-                FromText.Text = $"מאת: {email.FromAddress}";
-                DateText.Text = $"תאריך: {email.ReceivedUtc.ToLocalTime():dd/MM/yyyy HH:mm}";
+
+                var emailInfo = new EmailInfo
+                {
+                    Subject = email.Subject ?? "",
+                    From = email.FromAddress ?? "",
+                    Date = email.ReceivedUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm"),
+                    MessageId = email.MessageUniqueId ?? ""
+                };
+
+                var attachments = db.EmailInboxAttachments
+                    .AsNoTracking()
+                    .Where(a => a.MessageId == _emailMessageId)
+                    .OrderBy(a => a.AttachmentIndex)
+                    .ToList();
+
+                emailInfo.Attachments = attachments.Select(a => new EmailAttachment
+                {
+                    InboxAttachmentId = a.Id,
+                    FileName = a.OriginalFileName ?? a.SavedFileName ?? $"קובץ #{a.AttachmentIndex}",
+                    AccItemId = a.AccItemId,
+                    IsInline = false,
+                    Size = 0,
+                    MimeType = ""
+                }).ToList();
+
+                _emailViewerVm.Email = emailInfo;
 
                 if (!string.IsNullOrEmpty(email.MessageUniqueId))
                 {
                     LoadEmailBodyAsync(email.MessageUniqueId);
                 }
             }
-
-            var message = db.EmailInboxMessages
-                .AsNoTracking()
-                .Where(m => m.Id == _emailMessageId)
-                .Select(m => new { m.InboxAccProjectId, m.InboxAccFolderId })
-                .FirstOrDefault();
-
-            var attachments = db.EmailInboxAttachments
-                .AsNoTracking()
-                .Where(a => a.MessageId == _emailMessageId)
-                .OrderBy(a => a.AttachmentIndex)
-                .Select(a => new AttachmentDisplayItem
-                {
-                    Id = a.Id,
-                    FileName = a.OriginalFileName ?? a.SavedFileName ?? $"קובץ #{a.AttachmentIndex}",
-                    AccItemId = a.AccItemId,
-                    AccVersionId = a.AccVersionId,
-                    InboxAccProjectId = message!.InboxAccProjectId,
-                    InboxAccFolderId = message.InboxAccFolderId,
-                })
-                .ToList();
-
-            if (attachments.Count > 0)
-            {
-                AttachmentsHeader.Text = $"📎 קבצים מצורפים ({attachments.Count}):";
-                AttachmentsList.ItemsSource = attachments;
-            }
-            else
-            {
-                AttachmentsHeader.Text = "📎 אין קבצים מצורפים";
-            }
         }
         catch (Exception ex)
         {
-            SubjectText.Text = $"שגיאה: {ex.Message}";
+            AppLogger.Warn($"Failed to load email data: {ex.Message}");
         }
     }
 
-    private void OpenAttachment_Click(object sender, RoutedEventArgs e)
+    private void OnViewerAttachmentClicked(EmailAttachment att)
     {
-        if (sender is not Button { Tag: AttachmentDisplayItem att }) return;
-
         if (string.IsNullOrEmpty(att.AccItemId))
         {
             MessageBox.Show("הקובץ עדיין לא הועלה ל-ACC.", "לא זמין",
@@ -144,33 +146,50 @@ public partial class WorkflowCreateProjectWindow : Window
             return;
         }
 
-        if (string.IsNullOrEmpty(att.InboxAccProjectId))
-        {
-            MessageBox.Show("מזהה פרויקט ACC לא נמצא.", "לא זמין",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var projectGuid = att.InboxAccProjectId.StartsWith("b.", StringComparison.Ordinal)
-            ? att.InboxAccProjectId[2..] : att.InboxAccProjectId;
-
-        var url = $"https://acc.autodesk.com/docs/files/projects/{projectGuid}";
-        if (!string.IsNullOrEmpty(att.InboxAccFolderId))
-            url += $"?folderUrn={Uri.EscapeDataString(att.InboxAccFolderId)}&entityId={Uri.EscapeDataString(att.AccItemId)}";
-
         try
         {
-            var viewer = new ExternalBrowserWindow(url, null)
+            var dbFactory = App.ServiceProvider?.GetService<IDbContextFactory<SiNetSQLDbContext>>();
+            if (dbFactory == null) return;
+
+            using var db = dbFactory.CreateDbContext();
+            var message = db.EmailInboxMessages
+                .AsNoTracking()
+                .Where(m => m.Id == _emailMessageId)
+                .Select(m => new { m.InboxAccProjectId, m.InboxAccFolderId })
+                .FirstOrDefault();
+
+            if (message == null || string.IsNullOrEmpty(message.InboxAccProjectId))
             {
-                Title = $"📄 {att.FileName}",
-                Width = 1200,
-                Height = 800
-            };
-            viewer.Show();
+                MessageBox.Show("מזהה פרויקט ACC לא נמצא.", "לא זמין",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var projectGuid = message.InboxAccProjectId.StartsWith("b.", StringComparison.Ordinal)
+                ? message.InboxAccProjectId[2..] : message.InboxAccProjectId;
+
+            var url = $"https://acc.autodesk.com/docs/files/projects/{projectGuid}";
+            if (!string.IsNullOrEmpty(message.InboxAccFolderId))
+                url += $"?folderUrn={Uri.EscapeDataString(message.InboxAccFolderId)}&entityId={Uri.EscapeDataString(att.AccItemId)}";
+
+            try
+            {
+                var viewer = new ExternalBrowserWindow(url, null)
+                {
+                    Title = $"📄 {att.FileName}",
+                    Width = 1200,
+                    Height = 800
+                };
+                viewer.Show();
+            }
+            catch
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            MessageBox.Show($"שגיאה בפתיחת הקובץ: {ex.Message}", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -403,36 +422,38 @@ public partial class WorkflowCreateProjectWindow : Window
             }
 
             var fullEmail = await google.LoadFullEmailBodyAsync(gmailMessageId);
-            if (fullEmail != null && !string.IsNullOrEmpty(fullEmail.HtmlBody))
+            if (fullEmail != null && _emailViewerVm.Email != null)
             {
+                string cleanHtml = fullEmail.HtmlBody ?? "";
+                if (!string.IsNullOrEmpty(cleanHtml))
+                {
+                    string cleanCss = @"<style>
+body { font-family: 'Segoe UI', Tahoma, sans-serif !important; padding: 15px !important; margin: 0 !important; max-width: 100% !important; word-wrap: break-word !important; }
+.gmail_signature, .gmail_quote { display: none !important; }
+</style>";
+                    if (cleanHtml.Contains("<head>", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cleanHtml = cleanHtml.Replace("<head>", "<head>" + cleanCss, StringComparison.OrdinalIgnoreCase);
+                    }
+                    else
+                    {
+                        cleanHtml = cleanCss + cleanHtml;
+                    }
+                }
+
                 Dispatcher.Invoke(() =>
                 {
-                    EmailBodyBrowser.Visibility = Visibility.Visible;
-                    EmailBodyBrowser.NavigateToString(fullEmail.HtmlBody);
+                    _emailViewerVm.Email.HtmlBody = cleanHtml;
+                    _emailViewerVm.Email.Body = fullEmail.Body ?? "";
+
+                    _emailViewerVm.RefreshDisplay();
+                    _emailViewerVm.Email.RefreshAttachmentDisplay();
                 });
             }
         }
         catch (Exception ex)
         {
             AppLogger.Warn($"Failed to load email body in CreateProjectWindow: {ex.Message}");
-        }
-    }
-
-    private void EmailBodyBrowser_Navigated(object sender, System.Windows.Navigation.NavigationEventArgs e)
-    {
-        SuppressScriptErrors(EmailBodyBrowser, true);
-    }
-
-    private static void SuppressScriptErrors(WebBrowser wb, bool Hide)
-    {
-        var fi = typeof(WebBrowser).GetField("_axIWebBrowser2", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        if (fi != null)
-        {
-            var browser = fi.GetValue(wb);
-            if (browser != null)
-            {
-                browser.GetType().InvokeMember("Silent", System.Reflection.BindingFlags.SetProperty, null, browser, new object[] { Hide });
-            }
         }
     }
 }

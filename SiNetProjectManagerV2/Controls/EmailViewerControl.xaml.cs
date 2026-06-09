@@ -20,7 +20,35 @@ public partial class EmailViewerControl : UserControl
         nameof(ViewModel),
         typeof(EmailViewerViewModel),
         typeof(EmailViewerControl),
-        new PropertyMetadata(null));
+        new PropertyMetadata(null, OnViewModelChanged));
+
+    private static void OnViewModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is EmailViewerControl control)
+        {
+            if (e.OldValue is EmailViewerViewModel oldVm)
+            {
+                oldVm.PropertyChanged -= control.Vm_PropertyChanged;
+            }
+            if (e.NewValue is EmailViewerViewModel newVm)
+            {
+                newVm.PropertyChanged += control.Vm_PropertyChanged;
+            }
+        }
+    }
+
+    private void Vm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(EmailViewerViewModel.Email))
+        {
+            if (EncodingComboBox != null)
+            {
+                EncodingComboBox.SelectionChanged -= EncodingComboBox_SelectionChanged;
+                EncodingComboBox.SelectedIndex = 0;
+                EncodingComboBox.SelectionChanged += EncodingComboBox_SelectionChanged;
+            }
+        }
+    }
 
     public EmailViewerViewModel? ViewModel
     {
@@ -42,6 +70,21 @@ public partial class EmailViewerControl : UserControl
     {
         get => (ObservableCollection<ProjectFile>?)GetValue(TagTargetsProperty);
         set => SetValue(TagTargetsProperty, value);
+    }
+
+    public static readonly DependencyProperty ForceHtmlOnlyProperty = DependencyProperty.Register(
+        nameof(ForceHtmlOnly),
+        typeof(bool),
+        typeof(EmailViewerControl),
+        new PropertyMetadata(false));
+
+    /// <summary>
+    /// When true, the viewer bypasses URL navigation to Gmail and directly displays the static HTML body.
+    /// </summary>
+    public bool ForceHtmlOnly
+    {
+        get => (bool)GetValue(ForceHtmlOnlyProperty);
+        set => SetValue(ForceHtmlOnlyProperty, value);
     }
 
     /// <summary>
@@ -90,5 +133,37 @@ public partial class EmailViewerControl : UserControl
             else
                 ViewModel?.RaiseShowInAccRequested(attachment);
         }
+    }
+
+    private void EncodingComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ViewModel?.Email == null) return;
+        if (sender is ComboBox comboBox && comboBox.SelectedItem is ComboBoxItem selectedItem)
+        {
+            string encoding = selectedItem.Tag?.ToString() ?? "utf-8";
+            ReloadWithEncoding(encoding);
+        }
+    }
+
+    public void ReloadWithEncoding(string encoding)
+    {
+        if (ViewModel?.Email == null) return;
+        
+        string htmlContent = ViewModel.Email.HtmlBodyForDisplay;
+        if (string.IsNullOrEmpty(htmlContent)) return;
+
+        // Try to replace existing meta charset
+        htmlContent = System.Text.RegularExpressions.Regex.Replace(
+            htmlContent,
+            @"<meta\s+charset=[""'][^""']+[""']\s*/?>",
+            $"<meta charset=\"{encoding}\">",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        if (!htmlContent.Contains($"charset=\"{encoding}\"", StringComparison.OrdinalIgnoreCase))
+        {
+            htmlContent = $"<meta charset=\"{encoding}\">" + htmlContent;
+        }
+
+        EmailWebView.NavigateToString(htmlContent);
     }
 }
