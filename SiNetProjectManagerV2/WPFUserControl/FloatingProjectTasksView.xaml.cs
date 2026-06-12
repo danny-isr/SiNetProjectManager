@@ -192,6 +192,67 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         switch (request.ComponentKey)
         {
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.InspectionReport:
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.ManagerReviewApproval:
+                if (request.ProjectId is int inspectionProjectId)
+                {
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                            await using var db = await dbFactory.CreateDbContextAsync();
+                            var project = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Projects), p => p.Id == inspectionProjectId);
+                            if (project != null)
+                            {
+                                SiNetSQL.Services.ActiveProjectContext.Instance.SetActiveProject(project);
+                            }
+                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                mainWindow?.ShowFloatingInspection();
+                                mainWindow?.Activate();
+                            });
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[FloatingTasksView] Error loading project for InspectionReport/ManagerReviewApproval: {ex}");
+                        }
+                    });
+                }
+                break;
+
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.PoliceSubmission:
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.MaterialChecklist:
+            case SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectWork:
+                if (request.ProjectId is int workProjectId)
+                {
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                            await using var db = await dbFactory.CreateDbContextAsync();
+                            var project = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Projects), p => p.Id == workProjectId);
+                            if (project != null)
+                            {
+                                SiNetSQL.Services.ActiveProjectContext.Instance.SetActiveProject(project);
+                            }
+                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                mainWindow?.ShowProjectWork();
+                                mainWindow?.Activate();
+                            });
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[FloatingTasksView] Error loading project for PoliceSubmission/MaterialChecklist/ProjectWork: {ex}");
+                        }
+                    });
+                }
+                break;
+
             case SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectCreationFromEmail:
             case SiNetSQL.Services.Tasks.TaskComponentKeys.ReviewProjectSetupFromEmail:
                 if (primaryEmailId is int emailIdForCreate)

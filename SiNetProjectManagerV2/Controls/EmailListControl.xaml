@@ -35,7 +35,9 @@
             </Setter>
         </Style>
 
-        <!-- Email list item style -->
+        <!-- Email list item style — custom ControlTemplate eliminates WPF theme
+             binding errors for HorizontalContentAlignment / VerticalContentAlignment
+             that fire during ListBoxItem virtualization recycling. -->
         <Style x:Key="EmailListItemStyle" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -44,6 +46,23 @@
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="Background" Value="{Binding RowBackgroundBrush}"/>
             <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=controls:EmailListControl}, FallbackValue={x:Null}}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">

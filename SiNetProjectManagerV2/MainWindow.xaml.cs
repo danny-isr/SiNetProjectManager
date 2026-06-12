@@ -1,4 +1,4 @@
-﻿using SiNetProjectManagerV2.WPF;
+using SiNetProjectManagerV2.WPF;
 
 using SiNetProjectManagerV2.WPFUserControl;
 using SiNetProjectManagerV2.Dialogs;
@@ -359,6 +359,25 @@ namespace SiNetProjectManagerV2
         {
             var window = new WPF_Window.QuickStampWindow { Owner = this };
             window.ShowDialog();
+        }
+
+        public void ShowFloatingInspection()
+        {
+            if (_floatingInspectionWindow is { IsLoaded: true })
+            {
+                _floatingInspectionWindow.Activate();
+                return;
+            }
+
+            _floatingInspectionWindow = new FloatingInspectionView();
+            _floatingInspectionWindow.Owner = this;
+            _floatingInspectionWindow.Closed += (_, _) => _floatingInspectionWindow = null;
+            _floatingInspectionWindow.Show();
+        }
+
+        public void ShowProjectWork()
+        {
+            NavigateToView(_cachedProjectWorkView ??= new ProjectWorkView());
         }
 
         // ─────────────────────────────────────────────────────────────

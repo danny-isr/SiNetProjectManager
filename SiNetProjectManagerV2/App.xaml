@@ -1,4 +1,4 @@
-﻿<Application x:Class="SiNetProjectManagerV2.App"
+<Application x:Class="SiNetProjectManagerV2.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
@@ -102,6 +102,8 @@
             <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
             <Setter Property="FontSize" Value="{DynamicResource AppFontSize}" />
             <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
         <!-- CheckBox -->

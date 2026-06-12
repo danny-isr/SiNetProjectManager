@@ -173,3 +173,20 @@ Sources (archived): `Action-Task-Workflow.md`, `Typed-Continuation-Design.md`, `
 ### Project work and workflow boundary
 - `WorkflowManagementWindow` is the single management surface for the workflow engine (Builder, Visual Designer, Policy, Dashboard, Behaviors, Help). No parallel Builder/Policy windows.
 - The ProjectWork screen **does not** change `ProjectStatus` or `WorkflowStage` directly; such changes go only through workflow actions / engine transitions.
+
+## WPF Component Routing, Floating Task Completion, and Virtual Association (added 12.06.2026)
+
+### WPF Component Routing
+- Every workflow task component key (e.g., `InspectionReport`, `ManagerReviewApproval`, `PoliceSubmission`, `MaterialChecklist`) must map to a dedicated UI routing or view in `FloatingProjectTasksView.xaml.cs`.
+- Fallback/default UI behavior must not silence unmapped tasks; any unmapped component key should be explicitly handled or raise an appropriate developer alert/logging if triggered.
+
+### Floating Task Completion
+- Floating tasks (e.g. email intake, files verification) require explicit completion signals rather than implicit background closure.
+- For tasks like email filing, the task completes when the user initiates a transition action (e.g., "Move to Project" or a dedicated "Finish Task" button).
+- The completion system must guarantee task state persistence and invoke the workflow engine transition.
+
+### Virtual Parent Project Association (Option 1)
+- For planner-initiated requests starting at `REV.AwaitingMunicipalityRequest`, files/emails are virtually linked to the parent project since no child project directory exists yet.
+- When the invitation is received, the child project is created (`REV.ProjectSetup`), at which point the virtual association is promoted to a physical association.
+- The system must retroactively file any virtually associated files/emails into the newly created child project directory.
+
