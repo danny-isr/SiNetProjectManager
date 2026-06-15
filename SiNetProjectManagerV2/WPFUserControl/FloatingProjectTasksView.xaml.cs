@@ -465,6 +465,22 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                                         }
                                     }
 
+                                    if (originalEmailInfo != null)
+                                    {
+                                        if (string.IsNullOrEmpty(originalEmailInfo.ThreadId)) originalEmailInfo.ThreadId = email.GmailThreadId ?? "";
+                                        if (string.IsNullOrEmpty(originalEmailInfo.InternetMessageId)) originalEmailInfo.InternetMessageId = email.InternetMessageId;
+                                        if (string.IsNullOrEmpty(originalEmailInfo.References)) originalEmailInfo.References = email.References;
+                                    }
+                                    else
+                                    {
+                                        originalEmailInfo = new SiOffice.GoogleConnector.EmailInfo
+                                        {
+                                            ThreadId = email.GmailThreadId ?? "",
+                                            InternetMessageId = email.InternetMessageId,
+                                            References = email.References
+                                        };
+                                    }
+
                                     var context = new SiNetSQL.DTOs.Email.EmailComposerContext
                                     {
                                         EntityType = "Task",
@@ -484,7 +500,32 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                                         var result = await composerService.ComposeAndSendAsync(context);
                                         if (result != null && result.Success)
                                         {
-                                            ViewModel.RefreshCommand.Execute(null);
+                                            var completionEventCode = request.TaskTypeCode switch
+                                            {
+                                                SiNetSQL.Constants.TaskTypeCodes.SendInternalApproval => SiNetSQL.Services.Tasks.ReviewCompletionEvents.ReviewPrincipallyApproved,
+                                                SiNetSQL.Constants.TaskTypeCodes.SendReportToPlanner => SiNetSQL.Services.Tasks.ReviewCompletionEvents.ReviewCommentsSentToPlanner,
+                                                SiNetSQL.Constants.TaskTypeCodes.ForwardPoliceCommentsToPlanner => SiNetSQL.Services.Tasks.ReviewCompletionEvents.ReviewCommentsSentToPlanner,
+                                                SiNetSQL.Constants.TaskTypeCodes.RequestMunicipalityInvitation => SiNetSQL.Services.Tasks.ReviewCompletionEvents.RequestSourceClassified,
+                                                _ => null
+                                            };
+
+                                            var taskResultCode = request.TaskTypeCode switch
+                                            {
+                                                SiNetSQL.Constants.TaskTypeCodes.SendInternalApproval => SiNetSQL.Constants.TaskResultCodes.PrincipallyApproved,
+                                                SiNetSQL.Constants.TaskTypeCodes.SendReportToPlanner => SiNetSQL.Constants.TaskResultCodes.CommentsSentToPlanner,
+                                                SiNetSQL.Constants.TaskTypeCodes.ForwardPoliceCommentsToPlanner => SiNetSQL.Constants.TaskResultCodes.CommentsSentToPlanner,
+                                                SiNetSQL.Constants.TaskTypeCodes.RequestMunicipalityInvitation => SiNetSQL.Constants.TaskResultCodes.RequestFromPlanner,
+                                                _ => null
+                                            };
+
+                                            if (completionEventCode != null && taskResultCode != null)
+                                            {
+                                                await ViewModel.CompleteClassificationTaskAsync(request.TaskId, completionEventCode, taskResultCode);
+                                            }
+                                            else
+                                            {
+                                                ViewModel.RefreshCommand.Execute(null);
+                                            }
                                         }
                                     });
                                 }

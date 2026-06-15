@@ -113,6 +113,10 @@ public sealed class GmailOutboundMailService : IOutboundMailService
         {
             var rawMessage = BuildRawMessage(request);
             var gmailMessage = new Message { Raw = rawMessage };
+            if (!string.IsNullOrEmpty(request.ThreadId))
+            {
+                gmailMessage.ThreadId = request.ThreadId;
+            }
 
             var sent = await _googleService.SendRawMessageAsync(
                 gmailMessage,
@@ -238,6 +242,10 @@ public sealed class GmailOutboundMailService : IOutboundMailService
             if (request.Cc.Count > 0) writer.WriteLine($"Cc: {string.Join(", ", request.Cc)}");
             if (request.Bcc.Count > 0) writer.WriteLine($"Bcc: {string.Join(", ", request.Bcc)}");
             writer.WriteLine($"Subject: {EncodeHeader(request.Subject.Trim())}");
+            if (!string.IsNullOrWhiteSpace(request.InReplyTo))
+                writer.WriteLine($"In-Reply-To: {request.InReplyTo.Trim()}");
+            if (!string.IsNullOrWhiteSpace(request.References))
+                writer.WriteLine($"References: {request.References.Trim()}");
             writer.WriteLine("MIME-Version: 1.0");
 
             if (request.Attachments.Count == 0)

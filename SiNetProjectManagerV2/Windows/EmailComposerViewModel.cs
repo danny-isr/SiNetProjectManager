@@ -247,7 +247,12 @@ public sealed class EmailComposerViewModel : INotifyPropertyChanged
                 BodyText = Body,
                 Attachments = Attachments.ToList(),
                 RelatedEntityType = _context.EntityType,
-                RelatedEntityId = _context.EntityId
+                RelatedEntityId = _context.EntityId,
+                ThreadId = _context.OriginalEmail?.ThreadId,
+                InReplyTo = _context.OriginalEmail?.InternetMessageId,
+                References = string.IsNullOrWhiteSpace(_context.OriginalEmail?.References)
+                    ? _context.OriginalEmail?.InternetMessageId
+                    : $"{_context.OriginalEmail.References.Trim()} {_context.OriginalEmail.InternetMessageId}"
             };
 
             SendResult = await _mailService.SendAsync(request, CancellationToken.None);
