@@ -56,7 +56,14 @@ namespace SiNetProjectManagerV2
             GlobalFontSettings.FontResolver = new WindowsFontResolver();
 
             _logDir = GetLogDirectory();
-            try { Directory.CreateDirectory(_logDir); } catch { }
+            try
+            {
+                Directory.CreateDirectory(_logDir);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"Failed to create log directory: {ex.Message}");
+            }
 
             // Sync AppLogger's display directory with the resolved local log directory.
             AppLogger.LogDirectory = _logDir;

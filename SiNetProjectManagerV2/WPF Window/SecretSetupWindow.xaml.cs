@@ -217,10 +217,10 @@ public partial class SecretSetupWindow : Window
             await Task.WhenAll(connSiNetTask, connReplicaTask, connMasterPlanTask, geminiTask, autodeskTask, adTask);
 
             // Apply results to UI dots (must run on UI thread)
-            ApplyResult(StatusCsSiNet, "SiNet DB", connSiNetTask.Result, passed, failed);
-            ApplyResult(StatusCsReplica, "Replica DB", connReplicaTask.Result, passed, failed);
-            ApplyResult(StatusCsMasterPlan, "MasterPlan DB", connMasterPlanTask.Result, passed, failed);
-            ApplyResult(StatusGemini, "Gemini API", geminiTask.Result, passed, failed);
+            ApplyResult(StatusCsSiNet, "SiNet DB", await connSiNetTask, passed, failed);
+            ApplyResult(StatusCsReplica, "Replica DB", await connReplicaTask, passed, failed);
+            ApplyResult(StatusCsMasterPlan, "MasterPlan DB", await connMasterPlanTask, passed, failed);
+            ApplyResult(StatusGemini, "Gemini API", await geminiTask, passed, failed);
             ApplyResult(StatusGoogleSecrets, "Google OAuth", googleResult, passed, failed);
 
                 // AccService API key — local-only (no network test); just check vault presence
@@ -236,11 +236,11 @@ public partial class SecretSetupWindow : Window
             // Paired secrets: both dots share the validation result
             ApplyPairResult(StatusAdClientId, StatusAdClientSecret,
                 SecretKeys.AutodeskClientId, SecretKeys.AutodeskClientSecret,
-                "Autodesk APS", autodeskTask.Result, passed, failed);
+                "Autodesk APS", await autodeskTask, passed, failed);
 
             ApplyPairResult(StatusAdUser, StatusAdPass,
                 SecretKeys.AdUsername, SecretKeys.AdPassword,
-                "Active Directory", adTask.Result, passed, failed);
+                "Active Directory", await adTask, passed, failed);
 
             // Build validation summary
             var sb = new System.Text.StringBuilder();

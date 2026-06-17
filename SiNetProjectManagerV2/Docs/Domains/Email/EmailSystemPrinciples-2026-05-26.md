@@ -483,3 +483,111 @@ the email domain** and what it does not.
   explicit decision in the relevant domain.
 - Adding a Google Drive "fallback" for email attachments or project files
   when the configured Storage Destination is missing.
+
+
+
+# Task-Driven Email Filing
+
+This document describes how the **EmailFiling** family of tasks (`TaskTypeCodes.FileInitialMaterials`, `FileCorrectedMaterials`, `TrackMissingMaterial`, etc.) integrates with the email filing UI and the central task completion pipeline. It is maintained as a single, cohesive explanation of the current system design, with inline annotations showing where and when specific design decisions were modified.
+
+## 1. UI host
+
+When a task with `ComponentKey = TaskComponentKeys.EmailFiling` is opened from `FloatingProjectTasksView`, the host navigates the user to **`EmailManagementView`** (the same canonical UI used by the inbox tagging flow). The legacy `EmailPreviewWindow` is **not** used for filing — it is a read-only preview reserved for the `NewProjectDialog` follow-up only.
+
+The picker / duplicate-validation / placement-lock rules of the email tagging UI therefore apply uniformly to both:
+
+- Inbox-originated MoveToProject.
+- Task-originated MoveToProject.
+
+## 2. Granularity: TaskLink is per email, completion is per attachment-set
+
+`TaskLink.LinkedEntityType = EmailInboxMessage` for every EmailFiling task work-target. There is **no** per-attachment TaskLink.
+
+A `TaskLink` is marked **Done** only when the email it points to has reached the state:
+
+> Every relevant attachment of the email has `EmailInboxAttachment.ProjectFileInstanceId != null`.
+
+"Relevant" starts from the eligibility filter used by `MoveToProjectAsync`: `ProjectFileId != null && AccItemId != null`. The `AccItemId` stored in SQL is cache/helper state only; MoveToProject still verifies the physical source item in ACC before filing. Regular attachments are resolved from the centralized ACC Inbox layout under `MSG_{messageKey}/Attachments`, while `00_Email.pdf` is resolved from the message folder.
+
+## 3. Partial filing does not close the task
+
+If a `MoveToProjectAsync` run files only part of the relevant attachments of an email (e.g. the user retried after a previous failure), the email's `TaskLink` stays open. The task stays in progress, and the user can return to finish filing on a later run.
+
+Closure of the task as a whole is decided exclusively by `TaskCompletionCoordinator.EvaluateClosureAsync`, which closes the task only when **all** `IsWorkTarget` links are `Done` or `Skipped`.
+
+## 4. Completion path
+
+UI components MUST NOT close tasks, set `ProjectStatus`, or advance the workflow directly. The single completion entry point is **`ITaskCompletionCoordinator.CompleteAsync`**.
+
+The flow on a successful `EmailManagementViewModel.MoveToProjectAsync` run:
+
+```
+EmailManagementViewModel.MoveToProjectAsync
+  └─ FileAsync (per attachment) → ProjectFileInstanceId persisted
+       └─ if ActiveTaskContext != null
+            └─ ReportTaskCompletionAsync
+                 └─ resolve filed attachments → MessageId set
+                 └─ per-email gate: all relevant attachments filed?
+                 └─ map qualifying MessageIds → TaskLink ids on the task
+                 └─ ITaskCompletionCoordinator.CompleteAsync(
+                        taskId,
+                        completionEventCode: ReviewCompletionEvents.ReviewMaterialFiled,
+                        taskResultCode: null,
+                        completedTaskLinkIds: resolvedTaskLinkIds,
+                        payload: null,
+                        userId,
+                        ct)
+```
+
+Behaviour rules:
+
+- `Success = false` returned by the coordinator: logged with `AppLogger.Warn`; **MoveToProject does not fail**.
+- Any exception inside `ReportTaskCompletionAsync`: caught and logged with `AppLogger.LogError`; **MoveToProject does not fail**.
+- `TaskClosed = true`: the floating task list is refreshed via `EmailFilingTaskContext.OnTaskRefreshRequested` (dispatched to the UI thread).
+- Inbox-originated navigation: `ActiveTaskContext` is null, the coordinator is **not** called, behaviour is identical to the historical inbox path.
+
+## 5. Runtime context
+
+`SiNetSQL.Services.Tasks.EmailFilingTaskContext` is a runtime-only record (no DB, no migration) carried from `FloatingProjectTasksView` into `EmailManagementViewModel.ActiveTaskContext` via the new `MainWindow.NavigateToEmail(int, EmailFilingTaskContext?)` overload.
+
+Fields:
+
+| Field | Source | Purpose |
+|---|---|---|
+| `TaskId` | `TaskNavigationRequest.TaskId` | Coordinator call target. |
+| `ComponentKey` | `TaskNavigationRequest.ComponentKey` | Diagnostics only. |
+| `WorkTargetEmailIds` | `TaskNavigationRequest.WorkTargetIds` (cast to `int`) | Limits completion to emails the task actually owns. |
+| `PendingWorkTargetEmailIds` | `TaskNavigationRequest.PendingWorkTargetIds` | Informational only. |
+| `PrimaryWorkTargetEmailId` | `TaskNavigationRequest.PrimaryWorkTargetEntityId` | Convenience for single-target tasks. |
+| `OnTaskRefreshRequested` | UI callback | Refreshes the floating task list after closure. |
+
+## 6. Non-goals / what is intentionally NOT done
+
+- No new completion service is introduced — `ITaskCompletionCoordinator` is the single source of truth.
+- No DB schema changes; no EF Core migrations.
+- No `WorkflowDesigner` changes.
+- No manual task closure from the UI.
+- No task advancement on "email opened" or "attachment tagged" — only on durable filing (`ProjectFileInstanceId != null`).
+- `ProjectAlternative` is project-scoped; alternatives are **not** filtered by `JobType` / `TypeOfProjectInProjectId`. The pre-2026 model that associated alternatives with `TypeOfProjectInProject` is retired in code; remaining references survive only in historical EF migrations.
+- Auto-sync to the final project after tagging is **disabled by design** (`EmailManagementViewModel.EnableAutoSyncToProject = false`). Tagging is metadata-only; `MoveToProject` is the sole transfer path.
+- ACC is the source of truth for Inbox file existence. DB-only identifiers must not be used to open or move Inbox files without ACC reconciliation/layout-aware verification.
+
+## 7. Files
+
+| File | Role |
+|---|---|
+| `SiNetSQL/Services/Tasks/EmailFilingTaskContext.cs` | Runtime context record. |
+| `SiNetSQL/Services/Tasks/ITaskCompletionCoordinator.cs` | Central completion API. |
+| `SiNetSQL/Services/Tasks/TaskCompletionCoordinator.cs` | Coordinator implementation; closure policy. |
+| `SiNetSQL/Services/Tasks/ReviewCompletionEvents.cs` | `ReviewMaterialFiled` event constant. |
+| `SiNetSQL/Services/Tasks/ReviewCompletionEventBehavior.cs` | Event-to-task-type mapping. |
+| `SiNetSQL/MVVM/EmailManagementViewModel.cs` | `ActiveTaskContext`, `MoveToProjectAsync`, `ReportTaskCompletionAsync`. |
+| `SiNetProjectManagerV2/App.xaml.cs` | DI registration of `ITaskCompletionCoordinator`. |
+| `SiNetProjectManagerV2/MainWindow.xaml.cs` | Task-aware `NavigateToEmail` overload. |
+| `SiNetProjectManagerV2/WPFUserControl/FloatingProjectTasksView.xaml.cs` | Builds `EmailFilingTaskContext` from `TaskNavigationRequest`. |
+
+## 8. Physical Filing and Project Association
+[Modified 2026-06-15 — Immediate Child Project creation]
+Previously, planner-originated requests used a "Virtual Association" to link emails to the Parent Project via `TaskLink` without physical download, because child projects were not created until a municipality invitation was received.
+This approach has been deprecated and removed. Child project creation (`REV.ProjectSetup`) is now **always the first stage** of the workflow, meaning the target child project folder structures in ACC are immediately available regardless of the request source. Emails and files are always physically filed directly into the child project without requiring virtual association or deferred filing.
+

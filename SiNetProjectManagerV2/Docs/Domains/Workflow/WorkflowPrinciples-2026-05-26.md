@@ -185,8 +185,81 @@ Sources (archived): `Action-Task-Workflow.md`, `Typed-Continuation-Design.md`, `
 - For tasks like email filing, the task completes when the user initiates a transition action (e.g., "Move to Project" or a dedicated "Finish Task" button).
 - The completion system must guarantee task state persistence and invoke the workflow engine transition.
 
-### Virtual Parent Project Association (Option 1)
+### Association for Planner Requests
+[Modified 2026-06-15 � Dropped Virtual Association]
+Child project creation (REV.ProjectSetup) is now always the first stage of the workflow, meaning the target child project folder structures in ACC are immediately available regardless of the request source. Emails and files are always physically filed directly into the child project without requiring virtual association or deferred filing.
+
 - For planner-initiated requests starting at `REV.AwaitingMunicipalityRequest`, files/emails are virtually linked to the parent project since no child project directory exists yet.
 - When the invitation is received, the child project is created (`REV.ProjectSetup`), at which point the virtual association is promoted to a physical association.
 - The system must retroactively file any virtually associated files/emails into the newly created child project directory.
+
+
+
+# Architectural Decisions — SiNetSQL Workflow Runtime
+
+This document describes the design, principles, and runtime contracts of the SiNetSQL workflow engine. It is maintained as a single, cohesive explanation of the current system design, with inline annotations showing where and when specific design decisions were modified.
+
+---
+
+## 1. Core Workflow Design Principles
+
+### Continuous Task Chain
+[Added 2026-06-15 — Continuous Task Chain Principle]
+Every task initiated by a workflow or a suggested action must have a defined successor or transition. A project/workflow must never have zero open tasks unless it has reached a terminal (final) state. If a stage transition or task completion does not immediately produce a domain task (due to waiting for external events or documents), a dedicated tracking/follow-up task (such as `TrackMunicipalityInvitation`) must be active, ensuring the process is never "lost" or without an owner.
+
+---
+
+## 2. Workflow Entry and Project Association
+
+### Unified Workflow Initiation
+[Modified 2026-06-15 — Immediate Workflow Initiation]
+Every process started from a suggested action on an email must immediately initiate a workflow. The system does not create standalone tasks outside of workflows.
+For the **Review (בדיקת תוכנית)** workflow, all starts (whether planner-initiated or municipality-initiated) begin by starting the `Review` workflow on the parent project:
+1. The suggested action **"בדיקה חדשה" (New Review)** (`CreateNewReview`) starts the `Review` workflow immediately on the parent project.
+2. The initial stage is **`REV.ProjectSetup` (פתיחת פרויקט בדיקה)**.
+
+### Stage Sequencing and Classification Flow
+[Modified 2026-06-15 — Reordered Project Setup and Intake Classification]
+To ensure order and clarity, the project is always created at the very beginning of the flow, followed by the intake classification. The sequence of stages is:
+
+```mermaid
+graph TD
+    ParentEmail[Email Ingestion] -->|CreateNewReview Suggested Action| ProjectSetupStage[REV.ProjectSetup: OpenReviewProject Task]
+    ProjectSetupStage -->|Project Created / Completed| IntakeStage[REV.Intake: ClassifyRequestSource Task]
+    IntakeStage -->|RequestFromPlanner| AwaitingRequestStage[REV.AwaitingMunicipalityRequest: TrackMunicipalityInvitation Task]
+    IntakeStage -->|RequestFromMunicipality| MaterialIntakeStage[REV.MaterialIntake: Sub-Workflow MAT.*]
+    AwaitingRequestStage -->|MunicipalityRequestReceived| MaterialIntakeStage
+```
+
+1. **REV.ProjectSetup (פתיחת פרויקט בדיקה)**:
+   * **Task**: `OpenReviewProject` (פתיחת בדיקה חדשה).
+   * **Action**: User opens this task and creates the child project.
+   * **Transition**: Completion of `OpenReviewProject` (result `ProjectOpened`) automatically transitions the workflow to `REV.Intake`.
+
+2. **REV.Intake (קליטת בקשה לבדיקה)**:
+   * **Task**: `ClassifyRequestSource` (סיווג מקור הפנייה).
+   * **Action**: In this stage, the user classifies whether they need to wait for the official invitation.
+   * **Transition**:
+     * Result `RequestFromPlanner` (needs invitation) transitions the workflow to `REV.AwaitingMunicipalityRequest`.
+     * Result `RequestFromMunicipality` (official invitation exists) transitions the workflow to `REV.MaterialIntake`.
+
+3. **REV.AwaitingMunicipalityRequest (המתנה לפנייה רשמית מהרשות)**:
+   * **Task**: `TrackMunicipalityInvitation` (מעקב פנייה מהרשות).
+   * **Action**: Tracks receipt of the official invitation.
+   * **Transition**: Result `MunicipalityRequestReceived` transitions the workflow to `REV.MaterialIntake`.
+
+---
+
+## 3. Sub-Workflows and Nesting
+
+### Parent/Child Nesting via Persisted Links
+[Added 2026-05-23]
+Parent workflows (Planning, Review) delegate work to reusable child workflows (such as `MaterialIntake`) and resume when the child completes. This relationship is modeled via explicit, persisted links:
+* `WorkflowInstance.ParentWorkflowInstanceId` (nullable `int`, self-referencing foreign key).
+* Navigation properties `ParentWorkflowInstance` and `ChildWorkflowInstances` in EF Core.
+
+### Nesting Runtime Contract
+1. **Sub-Workflow Startup**: `StartSubWorkflowProcessActionHandler` calls `WorkflowEngine.StartAsync(..., parentWorkflowInstanceId: parentInstance.Id)`.
+2. **Auto-Advance on Child Completion**: When a child workflow reaches a completed state, `WorkflowTaskOrchestrator.AdvanceWithTasksAsync` automatically triggers `NotifyParentOfSubWorkflowCompletionAsync` to find the parent, evaluate transition rules (trigger type `SubWorkflowCompleted`), and auto-advance the parent.
+3. **Task Provisioning Avoidance**: `WorkflowTaskOrchestrator.CreateStageTasksAsync` returns an empty list when the stage's `NodeType == "SubWorkflow"`. The child workflow owns the active tasks; the parent stage must not materialize its own tasks.
 

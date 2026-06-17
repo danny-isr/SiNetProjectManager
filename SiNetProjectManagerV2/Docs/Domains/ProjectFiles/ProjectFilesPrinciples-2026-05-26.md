@@ -460,3 +460,67 @@ ProjectFile, ProjectAlternative, ProjectFileInstance, runtime projection, Projec
 - `ProjectFileFilingService`
 - `MoveToProjectProcessActionHandler`
 - `AccInboxReconciliationService`
+
+
+
+# Project File Filing Architecture
+
+This document describes the architecture, decisions, and state of the single-file filing pipeline used by `MoveToProject` and `AddMaterialToProject`. It is maintained as a single, cohesive explanation of the current system design, with inline annotations showing where and when specific design decisions were modified.
+
+## 1. MoveToProject Flow (Canonical Pipeline)
+
+The `MoveToProject` action transfers tagged attachments from the ACC Inbox into the actual project storage (ACC and FileServer). 
+`EmailManagementViewModel.MoveToProjectAsync` is a thin bridge that filters tagged attachments, downloads them, and delegates to the canonical service.
+
+```
+Email attachment (tagged, has AccItemId)
+  -> IAccFileClient.DownloadFileToTempAsync(...)   // download from ACC Inbox to local temp
+  -> FileProjectFileRequest                         // built by the VM bridge
+  -> IProjectFileFilingService.FileAsync(...)       // central single-file filing
+       -> FileToFileServerAsync (FileServer path)
+            - StageWithConventionName
+            - FileServerVersionArchiver.ArchiveIfExists (hidden .versions)
+            - FileServerMetadataStore.Write (companion JSON)
+       -> FileToAccAsync (ACC path)
+            - IAccProjectProvisioningService.EnsureProjectMappingAsync
+            - IAccFileClient.UploadFileFinalAsync  OR  UploadNewVersionAsync
+       -> UpsertInstanceAsync -> ProjectFileInstance
+       -> Link back: EmailInboxAttachment.ProjectFileInstanceId = instance.Id
+  -> EmailInboxMessage.Status = Moved  (only if ALL tagged attachments succeed)
+```
+
+### 1.1 MoveToProject Idempotency
+[Modified 2026-06-15 — Idempotency Hardening]
+To prevent re-uploading the same file after a UI reload, a DB-first pre-check is performed: if `EmailInboxAttachment.ProjectFileInstanceId` is not null, the download and file generation steps are skipped entirely. `EmailInboxAttachment.ProjectFileInstanceId` is the durable already-filed marker.
+
+## 2. AddMaterialToProject Flow
+
+`AddMaterialToProject` is a dedicated `ProcessAction` for filing an explicit local file directly to a project.
+- It is routed via the `IProcessActionDispatcher` to `AddMaterialToProjectProcessActionHandler`.
+- If required inputs are missing, it returns `Deferred + RequiresUi`. The executor then surfaces a `FileImportDialog` to collect them.
+- Once the user fills the inputs in the dialog, the dialog re-dispatches the action with full data, which successfully routes through `IProjectFileFilingService.FileAsync`.
+
+## 3. Versioning Decisions
+
+[Modified 2026-06-15 — File Versioning Policy]
+- `ProjectFileInstance.Version` is **always 1** in the current flows. The DB row represents the *active* placement.
+- File history is natively managed by ACC and the FileServer:
+  - **FileServer rules:** Hidden `.versions` folder lives at the project root. Companion JSON (`<file>.json`) sits next to the active file and is the source of truth for version metadata.
+  - **ACC rules:** ACC manages versions natively (`UploadNewVersionAsync`). `ProjectFileInstance.AccItemId` is stable across versions.
+- `ProjectFileNameBuilder.Build(...)` preserves the version segment only for backwards compatibility. New active files are written with version segment = `1`.
+
+## 4. Multi-User ACC Inbox Ingestion (Single-Writer Lease)
+
+[Added 2026-06-15 — Central ACC Inbox Lease]
+Email ingestion to the central ACC Inbox project operates under a single-writer lease to prevent duplicate uploads:
+- `EmailIngestionService.TryAcquireLeaseAsync` uses an atomic SQL UPDATE on `EmailInboxMessage` with conditions `(Pending OR Error OR (Processing AND stale))`.
+- If another user tries to ingest the same email, it returns `InProgress` and polls the database until the other worker completes.
+- Ingestion to ACC Inbox is automatic and idempotent per MessageUniqueId. Tagging writes only `EmailInboxAttachment.ProjectFileId / ProjectAlternativeId` (metadata only).
+
+## 5. Deprecated and Cleaned Components
+
+[Modified 2026-06-15 — Component Cleanup]
+Several legacy components have been deprecated or removed in favor of the canonical `IProjectFileFilingService`:
+- **DELETED**: `FileImportCoordinator`, `ProjectFileUploadService`, `EmailManagementViewModel.DeleteCompanionJson`.
+- **DEPRECATED**: `AccFileSyncService` is retained only for the `TryAutoSyncToProjectAsync` batch flow, which is **disabled by design** (`EnableAutoSyncToProject = false`). Tagging is metadata-only; `MoveToProject` is the sole transfer path.
+

@@ -1,0 +1,45 @@
+# AI Coding Assistant Rules for SiNetProjectManager
+
+You are assisting with the SiNetProjectManager C# project. ALWAYS follow these core principles:
+
+## 1. Service-Oriented Architecture & Dependency Injection (Core Tenet)
+- **Service-Oriented Design:** All major business logic, data access, and API integrations MUST be encapsulated within dedicated Services (e.g., `SiOffice.AccService`, Settings Services).
+- **Dependency Injection (DI):** Mandatory use of DI for all services, view models, and settings. NEVER use scattered static variables for state or configuration.
+- **Centralization (DRY):** Zero tolerance for code duplication. Centralize logic and formatting helpers. Do not re-implement existing processes.
+
+## 2. Error Handling & Logging
+- **Logging Infrastructure:** We use a dedicated logging software with distinct logging levels. Some logs are sent directly to the network, while others are stored locally.
+- **Structured Logging:** Use structured logging with scopes and useful context. Avoid log spam.
+- **No Silent Catches:** Never swallow errors. Always log them appropriately using the existing logging infrastructure and either rethrow or let them bubble up.
+- **Null Checks & Exceptions:** Use `ArgumentNullException.ThrowIfNull(x)` and `string.IsNullOrWhiteSpace(x)`. Throw precise exception types (e.g., `ArgumentException`, `InvalidOperationException`); do not throw or catch the base `Exception`. Guard early.
+
+## 3. C# Code Design Rules & Safety
+- **Access Modifiers (Least Exposure):** Default to the most restrictive visibility (`private` > `internal` > `protected` > `public`).
+- **Abstractions:** DON'T add interfaces/abstractions unless used for external dependencies or testing. Do not wrap existing abstractions.
+- **Immutability:** Prefer records to classes for DTOs.
+- **Code Integrity:** Never delete or refactor operational functions unless specifically instructed. Only suggest deleting dead code after 100% certainty.
+
+## 4. Database & Entity Framework Migrations (STRICT PROTOCOL)
+- **NO DIRECT MIGRATIONS:** You are strictly forbidden from executing migrations automatically.
+- **NEVER Manually Edit Migrations:** Only change EF models/configurations and let EF Core generate the migration.
+- **Workflow:** When a schema change is made, provide the user with the exact 'Package Manager Console' command (e.g., `Add-Migration [Name] -Context [Context]`). Then STOP and wait for user confirmation.
+
+## 5. Multi-threading, Performance & UI
+- **Responsive UI:** Never block the UI thread. Use `async/await` for all I/O or heavy computations.
+- **Background Work:** Offload CPU-intensive tasks using `Task.Run()`.
+- **Thread Safety:** Ensure thread-safe access to shared resources using `SemaphoreSlim` or `lock`.
+- **Async Best Practices:** All async methods end with `Async`. Always await (no fire-and-forget). Always implement and propagate `CancellationToken`. Timeouts should cancel the work.
+- **Resource Management:** Use `ReadOnlySpan<T>` for data parsing and `ValueTask` for high-frequency async methods where appropriate.
+
+## 6. Architecture Boundaries (ACC / SiOffice)
+- **ACC Service Boundary:** `SiOffice.AccService` is the central boundary for Autodesk Construction Cloud operations.
+- **Source of Truth:** Treat ACC and its custom attributes as the absolute source of truth. Database fields are merely a cache/helper. Write ACC metadata first; if it fails, roll back the DB cache.
+
+## 7. Testing Practices
+- **Structure:** Use the existing testing framework (xUnit/NUnit/MSTest). Name tests by behavior (e.g., `WhenCatMeowsThenCatDoorOpens`).
+- **Assertions:** Follow Arrange-Act-Assert (AAA). One behavior per test. Avoid multiple assertions per test. 
+- **Mocking:** Avoid mocks/Fakes if possible. External dependencies can be mocked, but NEVER mock code whose implementation is part of the solution under test.
+
+## 8. Documentation-Driven Development
+- **Docs First:** The documentation is the source of truth. Always check `Docs\Domains\` or `Docs\Decisions\` before implementing features.
+- If documentation is missing or code contradicts docs, update the documentation FIRST.
