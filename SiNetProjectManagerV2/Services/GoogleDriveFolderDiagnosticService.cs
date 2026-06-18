@@ -118,36 +118,52 @@ public class GoogleDriveFolderDiagnosticService
                 listRequest.PageSize = 1;
 
                 var listResult = await listRequest.ExecuteAsync(ct);
-                if (listResult.Files == null || listResult.Files.Count == 0)
-                {
-                    result.Status = DiagnosticStatus.EmptyFolder;
-                    return result;
-                }
-                
-                result.Status = DiagnosticStatus.OK;
+                result.Status = GoogleDriveDiagnosticStatusMapper.MapFolderState(
+                    fileInfo.MimeType, 
+                    listResult?.Files?.Count ?? 0, 
+                    isTemplateFolder);
             }
             else
             {
-                // For reports folder, we just test access. Write validation is postponed.
-                result.Status = DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission;
+                result.Status = GoogleDriveDiagnosticStatusMapper.MapFolderState(
+                    fileInfo.MimeType, 
+                    -1, 
+                    isTemplateFolder);
             }
-        }
-        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden)
-        {
-            result.Status = DiagnosticStatus.NoAccess;
-            result.TechnicalDetails = "403 Forbidden: " + ex.Message;
-        }
-        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            result.Status = DiagnosticStatus.NotFound;
-            result.TechnicalDetails = "404 Not Found: " + ex.Message;
         }
         catch (Exception ex)
         {
-            result.Status = DiagnosticStatus.Error;
+            result.Status = GoogleDriveDiagnosticStatusMapper.MapExceptionToStatus(ex);
             result.TechnicalDetails = ex.Message;
         }
 
         return result;
+    }
+}
+
+public static class GoogleDriveDiagnosticStatusMapper
+{
+    public static DiagnosticStatus MapExceptionToStatus(Exception ex)
+    {
+        if (ex is Google.GoogleApiException gex)
+        {
+            if (gex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden) return DiagnosticStatus.NoAccess;
+            if (gex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) return DiagnosticStatus.NotFound;
+        }
+        return DiagnosticStatus.Error;
+    }
+
+    public static DiagnosticStatus MapFolderState(string mimeType, int fileCount, bool isTemplateFolder)
+    {
+        if (mimeType != "application/vnd.google-apps.folder")
+            return DiagnosticStatus.InvalidType;
+
+        if (isTemplateFolder)
+        {
+            if (fileCount == 0) return DiagnosticStatus.EmptyFolder;
+            return DiagnosticStatus.OK;
+        }
+        
+        return DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission;
     }
 }
