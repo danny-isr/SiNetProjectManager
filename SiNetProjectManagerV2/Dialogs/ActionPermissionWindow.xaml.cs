@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
+using SiNetSQL.Services;
 using SiNetSQL.Services.EmailContext;
 
 namespace SiNetProjectManagerV2.Dialogs;
@@ -87,6 +88,16 @@ public partial class ActionPermissionWindow : Window
     public ActionPermissionWindow()
     {
         InitializeComponent();
+
+        // AUTH-06: Only administrators may manage action permissions
+        if (!CurrentUserContext.Instance.IsAdmin)
+        {
+            MessageBox.Show("אין לך הרשאה לניהול הרשאות פעולה.", "גישה נדחתה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            Loaded += (_, _) => Close();
+            return;
+        }
+
         LoadData();
     }
 
@@ -103,9 +114,10 @@ public partial class ActionPermissionWindow : Window
 
             using var context = dbFactory.CreateDbContext();
 
-            // Load all active employees
+            // Load all active employees with valid role (exclude Unauthorized)
             _allEmployees = context.Siusers
-                .Where(u => u.IsActive && u.Email != null && u.Email != "")
+                .Where(u => u.IsActive && u.Email != null && u.Email != ""
+                         && u.Role >= AppUserRole.Employee)
                 .OrderBy(u => u.Name)
                 .AsNoTracking()
                 .ToList();
@@ -234,6 +246,14 @@ public partial class ActionPermissionWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        // AUTH-06: Double-check admin at save time (defense in depth)
+        if (!CurrentUserContext.Instance.IsAdmin)
+        {
+            MessageBox.Show("אין לך הרשאה לשמור הרשאות.", "גישה נדחתה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         try
         {
             var dbFactory = App.ServiceProvider?.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();

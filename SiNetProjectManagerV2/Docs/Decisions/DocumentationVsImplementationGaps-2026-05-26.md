@@ -2078,6 +2078,34 @@ opening any new gap:
   `SiNetProjectManagerV2\MainWindow.xaml.cs` (`NavigateToEmailAsync` caller),
   `SiNetSQL.Tests\MVVM\EmailManagementViewModel_TaskFilingTests.cs`.
 
+---
+
+## Round update — Authorization Alignment Round 1 (2026-06-18)
+
+**Scope:** Close critical internal authorization gaps per [`AuthorizationPrinciples-2026-06-18.md`](../Domains/Authorization/AuthorizationPrinciples-2026-06-18.md).
+
+### Closed gaps
+
+| ID | Gap | Fix |
+|----|-----|-----|
+| AUTH-01 | `CurrentUserContext.Initialize()` did not check `IsActive` or `Role == Unauthorized`. Inactive/unauthorized users could gain `HasAccess == true`. | Added `IsActive` and `Role != Unauthorized` checks in `Initialize()`. Blocked users get `_currentUser = null`, `HasAccess = false`. |
+| AUTH-02 | `RequireAdminAccess` helper in `MainWindow` checked `IsFullAccess` (= Management) instead of `IsAdmin`. 11 of ~15 admin/management handlers had no authorization check at all. | Fixed helper to check `IsAdmin`. Added `RequireManagementAccess` helper. Added guards to all 11 unprotected handlers. |
+| AUTH-03 | `UserService.UpdateUsersAsync` had no admin check (unlike `AddUserAsync`). No self-protection against admin self-deactivation or self-demotion. | Added `RequireAdmin()` check. Added self-protection (`InvalidOperationException` on self-deactivate/self-demote). Added audit logging for Role, IsActive, AccUserType changes. |
+| AUTH-04 | `ActionPermission` model XML docs stated "open access when no rows" — contradicting deny-by-default principle. No centralized `ActionPermissionService` existed. | Updated XML docs. Created `IActionPermissionService` / `ActionPermissionService` with deny-by-default, admin bypass, structured logging. Registered in DI. |
+| AUTH-05 | `ActionPermissionWindow` had no admin guard. `AssignActionDialog` showed all employees when no permission rows existed (open access). | Added admin guards to `ActionPermissionWindow` (constructor + Save). Changed `AssignActionDialog` to deny-by-default (empty list when no rows, admin override). |
+
+### Open authorization gaps (candidates for future rounds)
+
+| ID | Gap | Domain |
+|----|-----|--------|
+| AUTH-O1 | `ProjectService` / project creation has no service-level authorization check. | Authorization / Projects |
+| AUTH-O2 | `StatusMappingService` has no admin check on save operations. | Authorization / StatusMapping |
+| AUTH-O3 | Task ownership/permission — no per-task authorization model beyond role-level. | Authorization / Tasks |
+| AUTH-O4 | `ActionExecutor` / `ProcessActionDispatcher` does not enforce `ActionPermission` before dispatching. | Authorization / Workflow |
+| AUTH-O5 | Email/File action handlers do not check `ActionPermission` at execution time. | Authorization / Email |
+| AUTH-O6 | Full audit model — no centralized audit log for authorization decisions. | Authorization / Diagnostics |
+| AUTH-O7 | Project-level permissions — deferred per scope constraints. | Authorization / Projects |
+
 ## Pointers
 
 - [`Docs\README.md`](../README.md) — documentation index.
@@ -2093,3 +2121,4 @@ opening any new gap:
 - [`Docs\Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](../Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md)
 - [`Docs\Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](../Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md)
 - [`Docs\Domains\AI\AiSystemPrinciples-2026-05-26.md`](../Domains/AI/AiSystemPrinciples-2026-05-26.md)
+- [`Docs\Domains\Authorization\AuthorizationPrinciples-2026-06-18.md`](../Domains/Authorization/AuthorizationPrinciples-2026-06-18.md)

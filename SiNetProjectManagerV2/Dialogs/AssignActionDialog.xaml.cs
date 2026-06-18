@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,7 +34,8 @@ public sealed class AssignActionResult
 /// <summary>
 /// Dialog for assigning an email-based action to an employee.
 /// The employee list is filtered by <see cref="ActionPermission"/> rows for the given action.
-/// When no permission rows exist for the action, all active employees are shown (open access).
+/// Deny-by-default: when no permission rows exist for the action, no employees are shown.
+/// Administrators bypass action-level checks and are always included.
 /// The user can choose to execute immediately (if they are authorized) or delegate a task.
 /// </summary>
 public partial class AssignActionDialog : Window
@@ -72,8 +73,8 @@ public partial class AssignActionDialog : Window
 
     /// <summary>
     /// Loads employees authorized for the given action.
-    /// If <see cref="ActionPermission"/> rows exist for this action code, only those users are shown.
-    /// Otherwise all active employees are shown (open access — no restrictions configured yet).
+    /// Deny-by-default: when no <see cref="ActionPermission"/> rows exist, no users are shown.
+    /// Administrators bypass action-level checks and are always included.
     /// </summary>
     private void LoadAuthorizedEmployees(ActionFollowUp followUp)
     {
@@ -96,25 +97,45 @@ public partial class AssignActionDialog : Window
 
             if (authorizedUserIds.Count > 0)
             {
-                // Restricted: only authorized users
+                // Restricted: only authorized users who are active and have a valid role
                 employees = context.Siusers
-                    .Where(u => u.IsActive && authorizedUserIds.Contains(u.Id))
+                    .Where(u => u.IsActive && u.Role >= AppUserRole.Employee
+                             && authorizedUserIds.Contains(u.Id))
                     .OrderBy(u => u.Name)
                     .AsNoTracking()
                     .ToList();
             }
             else
             {
-                // Open access: no restrictions configured — show all active employees
-                employees = context.Siusers
-                    .Where(u => u.IsActive && u.Email != null && u.Email != "")
-                    .OrderBy(u => u.Name)
-                    .AsNoTracking()
-                    .ToList();
+                // AUTH-07: Deny-by-default — no permission rows means action is blocked
+                employees = [];
+            }
+
+            // AUTH-07: Admin override — always include current user if they are admin
+            var currentUser = CurrentUserContext.Instance;
+            if (currentUser.IsAdmin && currentUser.CurrentUserId.HasValue)
+            {
+                var adminId = currentUser.CurrentUserId.Value;
+                if (!employees.Any(e => e.Id == adminId))
+                {
+                    var adminUser = context.Siusers
+                        .AsNoTracking()
+                        .FirstOrDefault(u => u.Id == adminId && u.IsActive);
+                    if (adminUser != null)
+                        employees.Insert(0, adminUser);
+                }
             }
 
             _employees = new ObservableCollection<Siuser>(employees);
             EmployeeComboBox.ItemsSource = _employees;
+
+            // AUTH-07: Show message when no users are authorized
+            if (_employees.Count == 0)
+            {
+                InfoText.Text = "אין משתמשים מורשים לפעולה זו. יש לפנות למנהל המערכת.";
+                ExecuteNowButton.IsEnabled = false;
+                CreateTaskButton.IsEnabled = false;
+            }
         }
         catch (Exception ex)
         {

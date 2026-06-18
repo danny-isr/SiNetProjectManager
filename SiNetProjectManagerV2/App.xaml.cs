@@ -813,6 +813,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<CreateProjectViewModel>();
             services.AddTransient<EditProjectViewModel>();
             services.AddTransient<SiNetSQL.Services.Users.IUserService, SiNetSQL.Services.Users.UserService>();
+            services.AddTransient<SiNetSQL.Services.Authorization.IActionPermissionService, SiNetSQL.Services.Authorization.ActionPermissionService>();
             services.AddTransient<AddUserViewModel>();
             services.AddTransient<UserManagementViewModel>();
             services.AddTransient<MasterPlanMappingViewModel>();

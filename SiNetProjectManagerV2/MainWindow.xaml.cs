@@ -129,13 +129,27 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// Verifies the current user has full (admin) access.
+        /// AUTH-02: Verifies the current user has Administrator role.
         /// Shows a localized denial message if not authorized.
         /// </summary>
-        /// <returns>True if user has admin access, false if denied.</returns>
+        /// <returns>True if user is Administrator, false if denied.</returns>
         private static bool RequireAdminAccess(string deniedMessage)
         {
-            if (CurrentUserContext.Instance.IsFullAccess)
+            if (CurrentUserContext.Instance.IsAdmin)
+                return true;
+
+            MessageBox.Show(deniedMessage, "גישה נדחתה", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        /// <summary>
+        /// AUTH-02: Verifies the current user has Management or above role.
+        /// Shows a localized denial message if not authorized.
+        /// </summary>
+        /// <returns>True if user is Management or above, false if denied.</returns>
+        private static bool RequireManagementAccess(string deniedMessage)
+        {
+            if (CurrentUserContext.Instance.IsManagement)
                 return true;
 
             MessageBox.Show(deniedMessage, "גישה נדחתה", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -162,16 +176,27 @@ namespace SiNetProjectManagerV2
 
         private void OpenManagementSettings_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה להגדרות ניהול."))
+                return;
+
             var dialog = new ManagementSettingsWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
         }
 
         private void OpenNewProject_Click(object sender, RoutedEventArgs e)
-            => NavigateToView(new CreateProjectUserControl());
+        {
+            if (!RequireManagementAccess("אין לך הרשאה ליצירת פרויקט חדש."))
+                return;
+            NavigateToView(new CreateProjectUserControl());
+        }
 
         private void OpenTemplate_Click(object sender, RoutedEventArgs e)
-            => NavigateToView(new WindowEditProject());
+        {
+            if (!RequireManagementAccess("אין לך הרשאה לעריכת תבניות."))
+                return;
+            NavigateToView(new WindowEditProject());
+        }
 
         private void Approve_Click(object sender, RoutedEventArgs e)
             => NavigateToView(new ProjectFolderTreeView());
@@ -386,6 +411,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenProjectTypeRules_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה לכללי סוגי פרויקט."))
+                return;
+
             var dialog = new ProjectTypeRulesWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -393,6 +421,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenStatusMapping_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה למיפוי סטטוסים."))
+                return;
+
             var dialog = new StatusMappingWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -400,6 +431,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenActionPermissions_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה לניהול הרשאות פעולה."))
+                return;
+
             var dialog = new ActionPermissionWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -407,6 +441,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenMigrationPoc_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה לכלי מיגרציה."))
+                return;
+
             var dialog = new MigrationPocWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -421,6 +458,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenR01Report_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireManagementAccess("אין לך הרשאה לדוחות."))
+                return;
+
             var dialog = new R01ReportDialog();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -428,6 +468,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenR02Report_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireManagementAccess("אין לך הרשאה לדוחות."))
+                return;
+
             var dialog = new R02ReportDialog();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -435,6 +478,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenR03Report_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireManagementAccess("אין לך הרשאה לדוחות."))
+                return;
+
             var dialog = new R03ReportDialog();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -510,6 +556,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenSecretSetup_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה להגדרת סודות."))
+                return;
+
             var dialog = new SecretSetupWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
@@ -529,6 +578,9 @@ namespace SiNetProjectManagerV2
 
         private void OpenWorkflowManagement_Click(object sender, RoutedEventArgs e)
         {
+            if (!RequireAdminAccess("אין לך הרשאה לניהול תהליכים."))
+                return;
+
             var dialog = new WorkflowManagementWindow();
             dialog.Owner = this;
             dialog.ShowDialog();
