@@ -43,6 +43,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Diagnostics | [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md) |
 | AI | [`Domains\AI\AiSystemPrinciples-2026-05-26.md`](Domains/AI/AiSystemPrinciples-2026-05-26.md) |
 | Plan Review | [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md) |
+| Configuration | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
 
 ## 4. Decisions
 
