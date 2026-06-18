@@ -40,6 +40,12 @@ You are assisting with the SiNetProjectManager C# project. ALWAYS follow these c
 - **Assertions:** Follow Arrange-Act-Assert (AAA). One behavior per test. Avoid multiple assertions per test. 
 - **Mocking:** Avoid mocks/Fakes if possible. External dependencies can be mocked, but NEVER mock code whose implementation is part of the solution under test.
 
-## 8. Documentation-Driven Development
-- **Docs First:** The documentation is the source of truth. Always check `Docs\Domains\` or `Docs\Decisions\` before implementing features.
-- If documentation is missing or code contradicts docs, update the documentation FIRST.
+## 8. Documentation-Driven Development Workflow (Strict Process)
+- **Step 1: Document the Target State First:** Before making any code changes, update the relevant documentation (e.g. in `Docs\Domains\`, `Docs\Decisions\`, or specific markdown files) to describe how the application should work and what principles it follows.
+- **Step 2: Get Approval on Documentation:** Present the updated documentation/architecture change to the user and wait for explicit approval of the design/principles.
+- **Step 3: Perform Risk & Complexity Assessment:** Before writing any code, analyze and present to the user:
+  - The complexity of the implementation.
+  - The estimated effort/steps involved.
+  - Any potential risks or breaking changes.
+  Wait for the user's decision to proceed with the code changes.
+- **Step 4: Align Application with Approved Docs:** Once confirmed, implement the necessary code changes to bring the application into 100% alignment with the documented principles. The documentation remains the absolute source of truth.

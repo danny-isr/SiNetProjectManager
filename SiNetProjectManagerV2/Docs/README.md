@@ -35,6 +35,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
 | ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
 | Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
+| Authorization | [`Domains\Authorization\AuthorizationPrinciples-2026-06-18.md`](Domains/Authorization/AuthorizationPrinciples-2026-06-18.md) |
 | Project Files | [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md) |
 | Workflow | [`Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](Domains/Workflow/WorkflowPrinciples-2026-05-26.md) |
 | UI | [`Domains\UI\UiPrinciples-2026-05-26.md`](Domains/UI/UiPrinciples-2026-05-26.md) |
