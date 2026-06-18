@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetProjectManagerV2.Services;
@@ -48,9 +48,24 @@ public partial class TemplateValidationWindow : Window
             var folderId = await settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InspectionTemplatesFolderId, string.Empty);
 
-            if (string.IsNullOrWhiteSpace(folderId))
+            var diagnosticService = new GoogleDriveFolderDiagnosticService(authService);
+            StatusText.Text = "🔄 בודק גישה לתיקיית תבניות...";
+            var diagResult = await diagnosticService.DiagnoseAsync(folderId, isTemplateFolder: true, CancellationToken.None);
+            
+            if (diagResult.Status != DiagnosticStatus.OK)
             {
-                StatusText.Text = "❌ תיקיית תבניות לא מוגדרת — הגדר InspectionTemplatesFolderId בהגדרות ניהול.";
+                string msg = diagResult.Status switch
+                {
+                    DiagnosticStatus.NotConfigured => "תיקיית תבניות לא מוגדרת — הגדר InspectionTemplatesFolderId בהגדרות ניהול.",
+                    DiagnosticStatus.GoogleNotConfigured => "חיבור Google לא מוגדר במערכת.",
+                    DiagnosticStatus.NotAuthenticated => "משתמש לא מחובר לחשבון Google.",
+                    DiagnosticStatus.NoAccess => $"אין הרשאת גישה לתיקייה. משתמש מחובר: {diagResult.ConnectedEmail}",
+                    DiagnosticStatus.NotFound => "התיקייה לא נמצאה ב-Google Drive. ייתכן שנמחקה.",
+                    DiagnosticStatus.InvalidType => "ה-ID שהוגדר אינו שייך לתיקייה.",
+                    DiagnosticStatus.EmptyFolder => "לא נמצאו תבניות (Spreadsheets) בתיקייה.",
+                    _ => $"שגיאה בגישה לתיקייה: {diagResult.TechnicalDetails}"
+                };
+                StatusText.Text = $"❌ {msg}";
                 return;
             }
 

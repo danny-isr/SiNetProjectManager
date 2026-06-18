@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -454,6 +454,29 @@ public partial class FloatingInspectionView : FloatingWindowBase
             var reportsFolderId = await settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InspectionReportsFolderId, string.Empty);
             exportService.ReportsFolderId = reportsFolderId;
+
+            // -- Background Diagnostic Checks --
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var diagnosticService = new GoogleDriveFolderDiagnosticService(authService);
+                    
+                    var templateResult = await diagnosticService.DiagnoseAsync(folderId, isTemplateFolder: true, CancellationToken.None);
+                    System.Diagnostics.Debug.WriteLine($"[InspectionView] Template Folder Diagnostic: {templateResult.Status}");
+                    if (templateResult.Status != DiagnosticStatus.OK)
+                        System.Diagnostics.Debug.WriteLine($"[InspectionView] Template Folder Diagnostic Details: {templateResult.TechnicalDetails}");
+
+                    var reportsResult = await diagnosticService.DiagnoseAsync(reportsFolderId, isTemplateFolder: false, CancellationToken.None);
+                    System.Diagnostics.Debug.WriteLine($"[InspectionView] Reports Folder Diagnostic: {reportsResult.Status}");
+                    if (reportsResult.Status != DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission && reportsResult.Status != DiagnosticStatus.OK)
+                        System.Diagnostics.Debug.WriteLine($"[InspectionView] Reports Folder Diagnostic Details: {reportsResult.TechnicalDetails}");
+                }
+                catch (Exception diagEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[InspectionView] Background Diagnostic Exception: {diagEx.Message}");
+                }
+            });
 
             // ?? Inject into ViewModel ??
             viewModel.SetTemplateProvider(provider, folderId);

@@ -99,9 +99,9 @@ This catalog is a documentation-first artifact. It is not a new runtime authoriz
 
 ## 6. Documentation Gaps / Implementation Gaps
 
-- **Write Authorization:** `SystemSettingsService.SetAsync` should require Administrator role inside the service, but currently write authorization may be enforced only by UI.
+- **Write Authorization:** [Resolved] `SystemSettingsService.SetAsync` now requires Administrator role inside the service.
 - **External Health Checks:** Some settings require external permissions that are not yet natively health-checked by the app at startup.
-- **Google Drive Error Precision:** Google Drive folder access failure (`403 Forbidden`) is not clearly separated from “no templates found” (`404 Not Found` or empty list).
+- **Google Drive Error Precision:** [Resolved] Google Drive folder access failure (`403 Forbidden`) is now clearly separated from “no templates found” (`404 Not Found` or empty list) using `GoogleDriveFolderDiagnosticService`.
 - **Local Path Risks:** Office-wide local path settings (like `C:\Reports` instead of `\\SERVER\Reports`) can fail on user machines if they point to a local admin path not present on other machines.
 - **System Status UI:** Full system status window integration is not yet implemented to show the results of the Health Checks in one place.
 - **No DB schema change:** is proposed in this round for settings validation or metadata.
