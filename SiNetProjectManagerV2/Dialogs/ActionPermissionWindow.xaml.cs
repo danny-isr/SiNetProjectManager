@@ -244,7 +244,7 @@ public partial class ActionPermissionWindow : Window
     // Save — diff in-memory map against DB and apply changes
     // ═══════════════════════════════════════════════════════════════════════
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object sender, RoutedEventArgs e)
     {
         // AUTH-06: Double-check admin at save time (defense in depth)
         if (!CurrentUserContext.Instance.IsAdmin)
@@ -256,64 +256,34 @@ public partial class ActionPermissionWindow : Window
 
         try
         {
-            var dbFactory = App.ServiceProvider?.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-            if (dbFactory == null) return;
+            var service = App.ServiceProvider?.GetRequiredService<SiNetSQL.Services.Authorization.IActionPermissionService>();
+            if (service == null) return;
 
-            using var context = dbFactory.CreateDbContext();
-
-            // Load all existing permission rows
-            var existing = context.ActionPermissions.ToList();
-            var existingLookup = existing
-                .ToLookup(p => p.ActionCode, StringComparer.Ordinal);
-
-            int added = 0, removed = 0;
+            int totalAdded = 0, totalRemoved = 0;
 
             foreach (var (actionCode, desiredUserIds) in _permissionMap)
             {
-                var currentRows = existingLookup[actionCode].ToList();
-                var currentUserIds = currentRows
-                    .Where(r => r.IsActive)
-                    .Select(r => r.UserId)
-                    .ToHashSet();
+                var displayName = ActionDefinitions
+                    .FirstOrDefault(a => a.Code == actionCode).Display ?? actionCode;
 
-                // Users to ADD (in desired but not in current)
-                foreach (var userId in desiredUserIds.Except(currentUserIds))
-                {
-                    // Check if inactive row exists — reactivate it
-                    var inactive = currentRows.FirstOrDefault(r => r.UserId == userId && !r.IsActive);
-                    if (inactive != null)
-                    {
-                        inactive.IsActive = true;
-                    }
-                    else
-                    {
-                        var displayName = ActionDefinitions
-                            .FirstOrDefault(a => a.Code == actionCode).Display ?? actionCode;
-
-                        context.ActionPermissions.Add(new ActionPermission
-                        {
-                            ActionCode = actionCode,
-                            ActionDisplayName = displayName,
-                            UserId = userId,
-                            IsActive = true,
-                            CreatedAtUtc = DateTime.UtcNow,
-                        });
-                    }
-                    added++;
-                }
-
-                // Users to REMOVE (in current but not in desired) — soft delete
-                foreach (var userId in currentUserIds.Except(desiredUserIds))
-                {
-                    var row = currentRows.First(r => r.UserId == userId && r.IsActive);
-                    row.IsActive = false;
-                    removed++;
-                }
+                var (added, removed) = await service.SaveActionPermissionsAsync(
+                    actionCode, displayName, desiredUserIds.ToList());
+                totalAdded += added;
+                totalRemoved += removed;
             }
 
-            context.SaveChanges();
-
-            StatusText.Text = $"✅ נשמר — {added} נוספו, {removed} הוסרו";
+            StatusText.Text = $"✅ נשמר — {totalAdded} נוספו, {totalRemoved} הוסרו";
+        }
+        catch (ArgumentException ex)
+        {
+            // Validation error from service (invalid user IDs)
+            MessageBox.Show($"שגיאה בתיקוף: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            MessageBox.Show("אין לך הרשאה לשמור הרשאות.", "גישה נדחתה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {

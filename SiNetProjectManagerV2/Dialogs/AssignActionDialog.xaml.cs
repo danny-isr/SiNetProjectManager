@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNetSQL.Services;
+using SiNetSQL.Services.Authorization;
 using SiNetSQL.Services.EmailContext;
 
 namespace SiNetProjectManagerV2.Dialogs;
@@ -33,7 +34,7 @@ public sealed class AssignActionResult
 
 /// <summary>
 /// Dialog for assigning an email-based action to an employee.
-/// The employee list is filtered by <see cref="ActionPermission"/> rows for the given action.
+/// Uses <see cref="IActionPermissionService"/> for authorization.
 /// Deny-by-default: when no permission rows exist for the action, no employees are shown.
 /// Administrators bypass action-level checks and are always included.
 /// The user can choose to execute immediately (if they are authorized) or delegate a task.
@@ -43,6 +44,7 @@ public partial class AssignActionDialog : Window
     private readonly int _currentUserId;
     private readonly bool _currentUserIsAuthorized;
     private readonly ActionFollowUp _followUp;
+    private readonly IActionPermissionService? _permissionService;
     private ObservableCollection<Siuser> _employees = [];
 
     /// <summary>The dialog result containing the user's choice.</summary>
@@ -57,6 +59,7 @@ public partial class AssignActionDialog : Window
         ActionDescriptionText.Text = actionDescription;
         _currentUserId = CurrentUserContext.Instance.CurrentUserId ?? 0;
         _followUp = followUp;
+        _permissionService = App.ServiceProvider?.GetService<IActionPermissionService>();
 
         LoadAuthorizedEmployees(followUp);
 
@@ -72,64 +75,58 @@ public partial class AssignActionDialog : Window
     }
 
     /// <summary>
-    /// Loads employees authorized for the given action.
-    /// Deny-by-default: when no <see cref="ActionPermission"/> rows exist, no users are shown.
+    /// Loads employees authorized for the given action via <see cref="IActionPermissionService"/>.
+    /// Deny-by-default: when no permission rows exist, no users are shown.
     /// Administrators bypass action-level checks and are always included.
     /// </summary>
     private void LoadAuthorizedEmployees(ActionFollowUp followUp)
     {
         try
         {
-            var dbFactory = App.ServiceProvider?.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-            if (dbFactory == null) return;
-
-            using var context = dbFactory.CreateDbContext();
             var actionCode = followUp.ToString();
 
-            // Check if any permission rows exist for this action
-            var authorizedUserIds = context.ActionPermissions
-                .AsNoTracking()
-                .Where(p => p.ActionCode == actionCode && p.IsActive)
-                .Select(p => p.UserId)
-                .ToHashSet();
-
-            List<Siuser> employees;
-
-            if (authorizedUserIds.Count > 0)
+            if (_permissionService != null)
             {
-                // Restricted: only authorized users who are active and have a valid role
-                employees = context.Siusers
-                    .Where(u => u.IsActive && u.Role >= AppUserRole.Employee
-                             && authorizedUserIds.Contains(u.Id))
-                    .OrderBy(u => u.Name)
-                    .AsNoTracking()
-                    .ToList();
+                // Use the centralized authorization service
+                var authorizedUsers = _permissionService
+                    .GetAuthorizedUsersForActionAsync(actionCode)
+                    .GetAwaiter().GetResult();
+
+                var employees = authorizedUsers.ToList();
+
+                // Admin override — always include current user if they are admin
+                var currentUser = CurrentUserContext.Instance;
+                if (currentUser.IsAdmin && currentUser.CurrentUserId.HasValue)
+                {
+                    var adminId = currentUser.CurrentUserId.Value;
+                    if (!employees.Any(e => e.Id == adminId))
+                    {
+                        // Admin not in authorized list — load from DB for display
+                        var dbFactory = App.ServiceProvider?
+                            .GetService<IDbContextFactory<SiNetSQLDbContext>>();
+                        if (dbFactory != null)
+                        {
+                            using var ctx = dbFactory.CreateDbContext();
+                            var adminUser = ctx.Siusers
+                                .AsNoTracking()
+                                .FirstOrDefault(u => u.Id == adminId && u.IsActive);
+                            if (adminUser != null)
+                                employees.Insert(0, adminUser);
+                        }
+                    }
+                }
+
+                _employees = new ObservableCollection<Siuser>(employees);
             }
             else
             {
-                // AUTH-07: Deny-by-default — no permission rows means action is blocked
-                employees = [];
+                // Fallback: service not available — deny by default
+                _employees = [];
             }
 
-            // AUTH-07: Admin override — always include current user if they are admin
-            var currentUser = CurrentUserContext.Instance;
-            if (currentUser.IsAdmin && currentUser.CurrentUserId.HasValue)
-            {
-                var adminId = currentUser.CurrentUserId.Value;
-                if (!employees.Any(e => e.Id == adminId))
-                {
-                    var adminUser = context.Siusers
-                        .AsNoTracking()
-                        .FirstOrDefault(u => u.Id == adminId && u.IsActive);
-                    if (adminUser != null)
-                        employees.Insert(0, adminUser);
-                }
-            }
-
-            _employees = new ObservableCollection<Siuser>(employees);
             EmployeeComboBox.ItemsSource = _employees;
 
-            // AUTH-07: Show message when no users are authorized
+            // Show message when no users are authorized
             if (_employees.Count == 0)
             {
                 InfoText.Text = "אין משתמשים מורשים לפעולה זו. יש לפנות למנהל המערכת.";
@@ -171,6 +168,23 @@ public partial class AssignActionDialog : Window
 
     private void ExecuteNow_Click(object sender, RoutedEventArgs e)
     {
+        // Defense-in-depth: re-check that the current user is still authorized
+        if (_permissionService != null && _currentUserId > 0)
+        {
+            var actionCode = _followUp.ToString();
+            var isAllowed = _permissionService
+                .IsUserAllowedForActionAsync(actionCode, _currentUserId)
+                .GetAwaiter().GetResult();
+
+            if (!isAllowed)
+            {
+                MessageBox.Show("ההרשאה שלך לפעולה זו בוטלה. לא ניתן לבצע.",
+                    "גישה נדחתה", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ExecuteNowButton.IsEnabled = false;
+                return;
+            }
+        }
+
         AssignResult = new AssignActionResult
         {
             ExecuteDirectly = true,
@@ -188,6 +202,22 @@ public partial class AssignActionDialog : Window
         {
             MessageBox.Show("יש לבחור עובד.", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
+        }
+
+        // Defense-in-depth: re-check that the selected employee is still authorized
+        if (_permissionService != null)
+        {
+            var actionCode = _followUp.ToString();
+            var isAllowed = _permissionService
+                .IsUserAllowedForActionAsync(actionCode, selected.Id)
+                .GetAwaiter().GetResult();
+
+            if (!isAllowed)
+            {
+                MessageBox.Show($"העובד {selected.Name} אינו מורשה עוד לפעולה זו.",
+                    "גישה נדחתה", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
         }
 
         AssignResult = new AssignActionResult

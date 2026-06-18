@@ -478,9 +478,8 @@ namespace SiNetProjectManagerV2
 
         private void OpenR03Report_Click(object sender, RoutedEventArgs e)
         {
-            if (!RequireManagementAccess("אין לך הרשאה לדוחות."))
-                return;
-
+            // R03 is available to all employees (Employee, Management, Administrator)
+            // — no Management/Admin guard required per Authorization Principles.
             var dialog = new R03ReportDialog();
             dialog.Owner = this;
             dialog.ShowDialog();
