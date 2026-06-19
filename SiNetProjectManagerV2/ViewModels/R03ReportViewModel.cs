@@ -1,4 +1,4 @@
-﻿using SiNetSQL.MVVM;
+using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiOffice.GoogleConnector.Reports;
 using SiOffice.GoogleConnector.Reports.Data;
@@ -128,8 +128,17 @@ public class R03ReportViewModel : INotifyPropertyChanged
     public bool IsAdminMode
     {
         get => _isAdminMode;
-        set { _isAdminMode = value; OnPropertyChanged(); }
+        set 
+        { 
+            _isAdminMode = value; 
+            OnPropertyChanged(); 
+            OnPropertyChanged(nameof(IsNotAdminMode)); 
+        }
     }
+
+    public bool IsNotAdminMode => !IsAdminMode;
+
+    public string CurrentUserEmployeeText => $"הדוח ייבדק עבור המשתמש הנוכחי: {CurrentUserContext.Instance.DisplayName}";
 
     #endregion
 
@@ -435,6 +444,25 @@ public class R03ReportViewModel : INotifyPropertyChanged
         {
             foreach (var id in _selectedEmployeeIds)
                 request.EmployeeIds.Add(id);
+        }
+
+        var ctx = CurrentUserContext.Instance;
+        if (!ctx.IsManagement)
+        {
+            if (ctx.MasterPlanEmployeeId.HasValue)
+            {
+                if (request.EmployeeIds.Count > 0 && (request.EmployeeIds.Count > 1 || request.EmployeeIds.First() != ctx.MasterPlanEmployeeId.Value))
+                {
+                    throw new InvalidOperationException("משתמש רגיל יכול לבדוק רק את הדוח של עצמו.");
+                }
+                
+                request.EmployeeIds.Clear();
+                request.EmployeeIds.Add(ctx.MasterPlanEmployeeId.Value);
+            }
+            else
+            {
+                throw new InvalidOperationException("לא נמצא זיהוי עובד מקושר למשתמש הנוכחי.");
+            }
         }
 
         return request;

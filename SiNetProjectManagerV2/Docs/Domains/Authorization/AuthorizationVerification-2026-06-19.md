@@ -99,6 +99,15 @@ To facilitate manual testing of roles without needing to change Windows users or
   - Includes a "Restore Original Role" button that reads the cached original state from a local `.json` file (`%LocalAppData%\SiNetProjectManagerV2\debug_original_role.json`).
   - Does NOT alter DB schema, introduce a new Auth model, or modify project-level permissions.
 
+### 4.6 Manual Execution / Findings
+- **RF03/R03 עבור Employee** משתמש אוטומטית ב־CurrentUser.
+- **Employee** בוחר רק חודש.
+- **Employee** לא יכול לבחור עובד אחר. רשימת העובדים מוסתרת ומוצג טקסט ברור במקום ("הדוח ייבדק עבור המשתמש הנוכחי...").
+- קיימת חסימה גם ברמת ה־ViewModel לפני ביצוע (`BuildRequest`) שזורקת שגיאה אם מנסים להעביר `userId` שונה.
+- **Admin/Management behavior unchanged**. מנהל ואדמין ממשיכים לראות ולבחור עובדים מהרשימה המלאה.
+- **הערת כיסוי בדיקות (Test Coverage):** הלוגיקה של `R03ReportViewModel` דורשת שימוש ב־WPF Dispatcher וקשורה חזק לממשק המשתמש (UI). מכיוון שאין תשתית בדיקות UI, מנגנון זה תועד פה כ־Manual covered בשלב זה.
+- לא שונה DB / Migration / roles.
+
 ---
 
 ## 5. Automated Test Plan
