@@ -943,6 +943,12 @@ namespace SiNetProjectManagerV2
                     return;
                 }
 
+#if DEBUG
+                // ── Step 6b: Debug Role Selector ──────────────────────────
+                Log.Information("[STARTUP] Step 6b: Checking Debug Authorization Role Selector...");
+                RunDebugAuthorizationRoleSelector();
+#endif
+
                 // ── Step 7: User Authorization ────────────────────────────
                 Log.Information("[STARTUP] Step 7: Authorizing current user...");
                 if (!AuthorizeCurrentUser())
@@ -1402,6 +1408,31 @@ namespace SiNetProjectManagerV2
                 return false;
             }
         }
+
+#if DEBUG
+        /// <summary>
+        /// Shows the debug authorization role selector if enabled in AppSettings.
+        /// This modifies the current user's role in the DB strictly for testing.
+        /// </summary>
+        private static void RunDebugAuthorizationRoleSelector()
+        {
+            if (AppSettings?.EnableAuthorizationTestMode == true)
+            {
+                try
+                {
+                    var dbContextFactory = ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                    using var context = dbContextFactory.CreateDbContext();
+
+                    var selectorWindow = new SiNetProjectManagerV2.Dialogs.Debug.DebugAuthorizationRoleSelectorWindow(context);
+                    selectorWindow.ShowDialog();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Failed to run Debug Authorization Role Selector.");
+                }
+            }
+        }
+#endif
 
         /// <summary>
         /// Initializes the StatusColorService cache for the current user.

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace SiNetProjectManagerV2
@@ -167,6 +167,16 @@ namespace SiNetProjectManagerV2
                 floatingWindowIdleOpacity = clamped;
                 OnPropertyChanged();
             }
+        }
+
+        private bool enableAuthorizationTestMode;
+        /// <summary>
+        /// DEBUG ONLY: Enables the Authorization Role Selector on startup. Default: false.
+        /// </summary>
+        public bool EnableAuthorizationTestMode
+        {
+            get => enableAuthorizationTestMode;
+            set { if (value == enableAuthorizationTestMode) return; enableAuthorizationTestMode = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

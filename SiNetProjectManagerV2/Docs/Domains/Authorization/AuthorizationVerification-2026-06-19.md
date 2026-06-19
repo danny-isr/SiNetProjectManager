@@ -87,6 +87,18 @@
 5. **Self-Demotion Check:** Log in as `TestAdmin`. Go to User Management. Try to change `TestAdmin`'s role to Employee.
    - *Expected:* Friendly error, operation blocked.
 
+## 4.5 Debug Current User Role Selector
+*Debug only. לא Production. משנה את DB לצורך בדיקה בלבד.*
+To facilitate manual testing of roles without needing to change Windows users or build a production impersonation feature, a debug-only tool was added:
+- **Enable via `AppSettings`:** Set `"EnableAuthorizationTestMode": true` in local settings or edit it in memory during debug. By default, it is turned off.
+- **Hook Location:** `App.xaml.cs` injects the call right after DB validation and right before `AuthorizeCurrentUser()` (`Step 6b`).
+- **Features:** 
+  - Only works in `#if DEBUG` builds.
+  - Presents a UI displaying the current Windows user's Role and Active status.
+  - Allows overriding the DB record to quickly test Employee, Management, Administrator, Unauthorized, and Inactive states.
+  - Includes a "Restore Original Role" button that reads the cached original state from a local `.json` file (`%LocalAppData%\SiNetProjectManagerV2\debug_original_role.json`).
+  - Does NOT alter DB schema, introduce a new Auth model, or modify project-level permissions.
+
 ---
 
 ## 5. Automated Test Plan
