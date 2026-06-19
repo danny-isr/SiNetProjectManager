@@ -44,7 +44,7 @@ public class GoogleDriveFolderDiagnosticService
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
     }
 
-    public async Task<GoogleDriveFolderDiagnosticResult> DiagnoseAsync(string folderId, bool isTemplateFolder, CancellationToken ct = default)
+    public async Task<GoogleDriveFolderDiagnosticResult> DiagnoseAsync(string folderId, bool isTemplateFolder, CancellationToken ct = default, bool silentOnly = false)
     {
         var result = new GoogleDriveFolderDiagnosticResult();
 
@@ -67,6 +67,12 @@ public class GoogleDriveFolderDiagnosticService
 
         if (!_authService.IsAuthenticated)
         {
+            if (silentOnly)
+            {
+                result.Status = DiagnosticStatus.NotAuthenticated;
+                return result;
+            }
+
             bool ok = false;
             try
             {

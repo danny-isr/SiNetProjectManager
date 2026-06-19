@@ -570,6 +570,12 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.FileServerHealthCheck>();
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.WorkflowHealthCheck>();
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.InternalAccServiceHealthCheck>();
+            
+            // Google Drive Diagnostics Health Checks
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.GoogleAuthConfigHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.GoogleAccountHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.GoogleTemplatesFolderHealthCheck>();
+            services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.GoogleReportsFolderHealthCheck>();
 
             // File Index: unified scan/open/upload abstraction over FileServer / ACC / GoogleDrive.
             // Stores are registered as IFileStore so FileIndexService can enumerate them all.
