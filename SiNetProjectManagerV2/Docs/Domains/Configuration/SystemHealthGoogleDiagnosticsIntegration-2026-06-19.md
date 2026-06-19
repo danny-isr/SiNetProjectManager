@@ -68,7 +68,7 @@ Future rows to be added to System Health:
    - Technical details: Postponed
 4. **Google Drive inspection reports folder**
    - Source: `GoogleDriveFolderDiagnosticService`
-   - Key: `ReportsOutputRootId`
+   - Key: `InspectionReportsFolderId`
    - Possible statuses: AccessibleReadOnlyOrUnknownWritePermission, NoAccess, NotFound
    - Severity mapping: AccessibleReadOnlyOrUnknownWritePermission -> Warning, NoAccess -> Warning, NotFound -> Warning
    - User-facing message: “תיקיית הדוחות נגישה, אך הרשאת כתיבה לא נבדקה בסבב זה.”
