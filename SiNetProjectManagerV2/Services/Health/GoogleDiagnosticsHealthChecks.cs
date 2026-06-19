@@ -37,15 +37,22 @@ public sealed class GoogleAuthConfigHealthCheck : IServiceHealthCheck
     public Task<ServiceHealthStatus> CheckAsync(CancellationToken ct)
     {
         var status = new ServiceHealthStatus { Key = Key, DisplayName = DisplayName, Category = Category, IsCritical = IsCritical };
-        if (File.Exists("client_secrets.json"))
-        {
-            status.State = ServiceHealthState.Online;
-            status.Message = "קובץ הגדרות חיבור קיים";
-        }
-        else
+        var path = AppConfiguration.GetGoogleClientSecretsPath();
+        
+        if (string.IsNullOrWhiteSpace(path))
         {
             status.State = ServiceHealthState.Warning;
             status.Message = "חיבור Google לא מוגדר בתחנה זו. יש לפנות למנהל מערכת.";
+        }
+        else if (!File.Exists(path))
+        {
+            status.State = ServiceHealthState.Warning;
+            status.Message = "חיבור Google לא מוגדר בתחנה זו (קובץ הגדרות חסר). יש לפנות למנהל מערכת.";
+        }
+        else
+        {
+            status.State = ServiceHealthState.Online;
+            status.Message = "קובץ הגדרות חיבור קיים";
         }
         return Task.FromResult(status);
     }

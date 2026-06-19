@@ -571,6 +571,8 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetSQL.Services.Health.Checks.WorkflowHealthCheck>();
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.InternalAccServiceHealthCheck>();
             
+            services.AddSingleton<SiNetProjectManagerV2.Services.GoogleDriveFolderDiagnosticService>();
+
             // Google Drive Diagnostics Health Checks
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.GoogleAuthConfigHealthCheck>();
             services.AddSingleton<SiNetSQL.Services.Health.IServiceHealthCheck, SiNetProjectManagerV2.Services.Health.GoogleAccountHealthCheck>();
