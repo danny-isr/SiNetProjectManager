@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using SiNetProjectManagerV2.Services;
 using SiNetSQL.Services;
 using SiNetSQL.Services.Health;
-using SiOffice.GoogleConnector.Reports;
+using SiOffice.GoogleConnector;
 
 namespace SiNetProjectManagerV2.Services.Health;
 
@@ -60,9 +60,9 @@ public sealed class GoogleAuthConfigHealthCheck : IServiceHealthCheck
 
 public sealed class GoogleAccountHealthCheck : IServiceHealthCheck
 {
-    private readonly GoogleAuthService _auth;
+    private readonly GoogleService _auth;
 
-    public GoogleAccountHealthCheck(GoogleAuthService auth)
+    public GoogleAccountHealthCheck(GoogleService auth)
     {
         _auth = auth;
     }
@@ -72,13 +72,13 @@ public sealed class GoogleAccountHealthCheck : IServiceHealthCheck
     public string Category => "Google";
     public bool IsCritical => false;
 
-    public async Task<ServiceHealthStatus> CheckAsync(CancellationToken ct)
+    public Task<ServiceHealthStatus> CheckAsync(CancellationToken ct)
     {
         var status = new ServiceHealthStatus { Key = Key, DisplayName = DisplayName, Category = Category, IsCritical = IsCritical };
         if (_auth.IsAuthenticated)
         {
             status.State = ServiceHealthState.Online;
-            var email = await _auth.GetCurrentUserEmailAsync();
+            var email = string.IsNullOrWhiteSpace(_auth.CurrentUserEmail) ? "Unknown" : _auth.CurrentUserEmail;
             status.Message = $"מחובר ({email})";
         }
         else
@@ -86,7 +86,7 @@ public sealed class GoogleAccountHealthCheck : IServiceHealthCheck
             status.State = ServiceHealthState.RequiresAuthorization;
             status.Message = "יש להתחבר לחשבון Google כדי להשתמש בשירותי Google באפליקציה.";
         }
-        return status;
+        return Task.FromResult(status);
     }
 }
 

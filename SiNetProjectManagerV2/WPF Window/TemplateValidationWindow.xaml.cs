@@ -48,7 +48,7 @@ public partial class TemplateValidationWindow : Window
             var folderId = await settingsService.GetOrDefaultAsync(
                 SystemSettingKeys.InspectionTemplatesFolderId, string.Empty);
 
-            var diagnosticService = new GoogleDriveFolderDiagnosticService(authService);
+            var diagnosticService = App.ServiceProvider.GetRequiredService<GoogleDriveFolderDiagnosticService>();
             StatusText.Text = "🔄 בודק גישה לתיקיית תבניות...";
             var diagResult = await diagnosticService.DiagnoseAsync(folderId, isTemplateFolder: true, CancellationToken.None);
             

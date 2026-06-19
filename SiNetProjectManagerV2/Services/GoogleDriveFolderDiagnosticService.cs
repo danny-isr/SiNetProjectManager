@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Google.Apis.Drive.v3;
 using Google.Apis.Requests;
 using SiNetSQL.Services;
-using SiOffice.GoogleConnector.Reports;
+using SiOffice.GoogleConnector;
 
 namespace SiNetProjectManagerV2.Services;
 
@@ -37,9 +37,9 @@ public class GoogleDriveFolderDiagnosticResult
 
 public class GoogleDriveFolderDiagnosticService
 {
-    private readonly GoogleAuthService _authService;
+    private readonly GoogleService _authService;
 
-    public GoogleDriveFolderDiagnosticService(GoogleAuthService authService)
+    public GoogleDriveFolderDiagnosticService(GoogleService authService)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
     }
@@ -56,14 +56,7 @@ public class GoogleDriveFolderDiagnosticService
 
         result.FolderIdSnippet = folderId.Length > 8 ? folderId.Substring(0, 8) + "..." : folderId;
 
-        try
-        {
-            result.ConnectedEmail = await _authService.GetCurrentUserEmailAsync();
-        }
-        catch
-        {
-            result.ConnectedEmail = "Unknown";
-        }
+        result.ConnectedEmail = string.IsNullOrWhiteSpace(_authService.CurrentUserEmail) ? "Unknown" : _authService.CurrentUserEmail;
 
         if (!_authService.IsAuthenticated)
         {
@@ -76,7 +69,8 @@ public class GoogleDriveFolderDiagnosticService
             bool ok = false;
             try
             {
-                ok = await _authService.EnsureAuthenticatedAsync(ct).ConfigureAwait(false);
+                var credentialsPath = AppConfiguration.GetGoogleClientSecretsPath() ?? "client_secrets.json";
+                ok = await _authService.TryRestoreSessionAsync(credentialsPath, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -88,6 +82,8 @@ public class GoogleDriveFolderDiagnosticService
                 result.Status = DiagnosticStatus.NotAuthenticated;
                 return result;
             }
+            
+            result.ConnectedEmail = string.IsNullOrWhiteSpace(_authService.CurrentUserEmail) ? "Unknown" : _authService.CurrentUserEmail;
         }
 
         var drive = _authService.DriveService;

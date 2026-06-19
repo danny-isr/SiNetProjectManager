@@ -43,14 +43,14 @@ It supports the following diagnostic statuses:
 ## 5. Planned Health Check Rows
 Future rows to be added to System Health:
 1. **Google configuration / OAuth readiness**
-   - Source: `GoogleAuthService` checks
+   - Source: `AppConfiguration.GetGoogleClientSecretsPath()` (file existence check)
    - Key: N/A
    - Possible statuses: OK, GoogleNotConfigured
    - Severity mapping: OK -> Online, GoogleNotConfigured -> Warning
    - User-facing message: “חיבור Google לא מוגדר בתחנה זו. יש לפנות למנהל מערכת.”
    - Technical details: Postponed
 2. **Google connected account**
-   - Source: `GoogleAuthService`
+   - Source: `GoogleService` (same DI singleton used by the existing `GoogleHealthCheck`)
    - Key: N/A
    - Possible statuses: OK, NotAuthenticated
    - Severity mapping: OK -> Online, NotAuthenticated -> RequiresAuthorization (Warning)
@@ -124,6 +124,10 @@ Approved mapping from `DiagnosticStatus` to `ServiceHealthState`:
 - Per-user settings
 - Google auth model changes
 - Google Drive write test for reports folder
+
+## 12a. Implementation Notes (updated 2026-06-19)
+
+**Auth source unification**: All new Google health checks (`GoogleAccountHealthCheck`, `GoogleTemplatesFolderHealthCheck`, `GoogleReportsFolderHealthCheck`) and `GoogleDriveFolderDiagnosticService` use the same `GoogleService` DI singleton that the existing `GoogleHealthCheck` (Gmail) uses. This ensures a single source of truth for auth state. The original design referenced `GoogleAuthService`, which is a separate service with its own runtime state — using it caused false `RequiresAuthorization` status even when the user was already authenticated via `GoogleService`. The `GoogleAuthService` is no longer used by health checks or diagnostics.
 
 ## 11. Future Implementation Checklist
 - [ ] Create/extend `IServiceHealthCheck` implementation for Google config

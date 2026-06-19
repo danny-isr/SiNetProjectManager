@@ -460,7 +460,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
             {
                 try
                 {
-                    var diagnosticService = new GoogleDriveFolderDiagnosticService(authService);
+                    var diagnosticService = App.ServiceProvider.GetRequiredService<GoogleDriveFolderDiagnosticService>();
                     
                     var templateResult = await diagnosticService.DiagnoseAsync(folderId, isTemplateFolder: true, CancellationToken.None);
                     System.Diagnostics.Debug.WriteLine($"[InspectionView] Template Folder Diagnostic: {templateResult.Status}");
