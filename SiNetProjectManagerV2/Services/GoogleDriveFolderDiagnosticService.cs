@@ -60,12 +60,6 @@ public class GoogleDriveFolderDiagnosticService
 
         if (!_authService.IsAuthenticated)
         {
-            if (silentOnly)
-            {
-                result.Status = DiagnosticStatus.NotAuthenticated;
-                return result;
-            }
-
             bool ok = false;
             try
             {

@@ -913,8 +913,11 @@ namespace SiNetProjectManagerV2
                     var healthSvc = ServiceProvider.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
                     googleSvc.AuthStateChanged += (_, _) =>
                     {
-                        AppLogger.Info("[Health][google] AuthStateChanged -> refreshing 'google' row");
+                        AppLogger.Info("[Health][google] AuthStateChanged -> refreshing all Google rows");
                         _ = healthSvc.RefreshAsync("google", System.Threading.CancellationToken.None);
+                        _ = healthSvc.RefreshAsync("google_account", System.Threading.CancellationToken.None);
+                        _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionTemplatesFolderId, System.Threading.CancellationToken.None);
+                        _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionReportsFolderId, System.Threading.CancellationToken.None);
                     };
                 }
                 catch (Exception ex)

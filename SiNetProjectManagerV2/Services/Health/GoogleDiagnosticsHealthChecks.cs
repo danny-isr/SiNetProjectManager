@@ -72,9 +72,19 @@ public sealed class GoogleAccountHealthCheck : IServiceHealthCheck
     public string Category => "Google";
     public bool IsCritical => false;
 
-    public Task<ServiceHealthStatus> CheckAsync(CancellationToken ct)
+    public async Task<ServiceHealthStatus> CheckAsync(CancellationToken ct)
     {
         var status = new ServiceHealthStatus { Key = Key, DisplayName = DisplayName, Category = Category, IsCritical = IsCritical };
+        
+        if (!_auth.IsAuthenticated)
+        {
+            var credentialsPath = AppConfiguration.GetGoogleClientSecretsPath() ?? "client_secrets.json";
+            var restored = await _auth.TryRestoreSessionAsync(credentialsPath, ct).ConfigureAwait(false);
+            AppLogger.Info($"[Health][google_account] silent restore attempted -> {restored}");
+        }
+
+        AppLogger.Info($"[Health][google_account] IsAuthenticated = {_auth.IsAuthenticated}");
+
         if (_auth.IsAuthenticated)
         {
             status.State = ServiceHealthState.Online;
@@ -86,7 +96,9 @@ public sealed class GoogleAccountHealthCheck : IServiceHealthCheck
             status.State = ServiceHealthState.RequiresAuthorization;
             status.Message = "יש להתחבר לחשבון Google כדי להשתמש בשירותי Google באפליקציה.";
         }
-        return Task.FromResult(status);
+        
+        AppLogger.Info($"[Health][google_account] returning state = {status.State}");
+        return status;
     }
 }
 
@@ -112,6 +124,8 @@ public sealed class GoogleTemplatesFolderHealthCheck : IServiceHealthCheck
         
         var folderId = await _settings.GetOrDefaultAsync(Key, "");
         var result = await _diagnostic.DiagnoseAsync(folderId, isTemplateFolder: true, silentOnly: true, ct: ct);
+        
+        AppLogger.Info($"[Health][InspectionTemplatesFolderId] DiagnosticStatus = {result.Status}");
 
         status.State = GoogleHealthStatusMapper.Map(result.Status);
 
@@ -152,6 +166,8 @@ public sealed class GoogleReportsFolderHealthCheck : IServiceHealthCheck
         
         var folderId = await _settings.GetOrDefaultAsync(Key, "");
         var result = await _diagnostic.DiagnoseAsync(folderId, isTemplateFolder: false, silentOnly: true, ct: ct);
+        
+        AppLogger.Info($"[Health][InspectionReportsFolderId] DiagnosticStatus = {result.Status}");
 
         status.State = GoogleHealthStatusMapper.Map(result.Status);
 
