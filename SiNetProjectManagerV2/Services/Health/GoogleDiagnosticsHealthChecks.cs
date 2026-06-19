@@ -88,7 +88,9 @@ public sealed class GoogleAccountHealthCheck : IServiceHealthCheck
         if (_auth.IsAuthenticated)
         {
             status.State = ServiceHealthState.Online;
-            var email = string.IsNullOrWhiteSpace(_auth.CurrentUserEmail) ? "Unknown" : _auth.CurrentUserEmail;
+            var email = await _auth.GetCurrentUserEmailAsync().ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(email) || email.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+                email = "לא ידוע";
             status.Message = $"מחובר ({email})";
         }
         else
@@ -169,13 +171,15 @@ public sealed class GoogleReportsFolderHealthCheck : IServiceHealthCheck
         
         AppLogger.Info($"[Health][InspectionReportsFolderId] DiagnosticStatus = {result.Status}");
 
-        status.State = GoogleHealthStatusMapper.Map(result.Status);
+        status.State = result.Status == DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission 
+            ? ServiceHealthState.Online 
+            : GoogleHealthStatusMapper.Map(result.Status);
 
         status.Message = result.Status switch
         {
             DiagnosticStatus.NoAccess => "תיקיית הדוחות מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה.",
             DiagnosticStatus.NotFound => "תיקיית הדוחות לא נמצאה או אינה גלויה לחשבון Google המחובר.",
-            DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission => "תיקיית הדוחות נגישה, אך הרשאת כתיבה לא נבדקה בסבב זה.",
+            DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission => "תיקיית הדוחות נגישה.",
             DiagnosticStatus.NotConfigured => "לא הוגדרה תיקיית דוחות במערכת.",
             DiagnosticStatus.NotAuthenticated => "נדרש חיבור ל-Google.",
             DiagnosticStatus.OK => "תקין",

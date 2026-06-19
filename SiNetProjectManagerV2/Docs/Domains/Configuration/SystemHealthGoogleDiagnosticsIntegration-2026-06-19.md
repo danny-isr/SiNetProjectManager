@@ -70,14 +70,14 @@ Future rows to be added to System Health:
    - Source: `GoogleDriveFolderDiagnosticService`
    - Key: `InspectionReportsFolderId`
    - Possible statuses: AccessibleReadOnlyOrUnknownWritePermission, NoAccess, NotFound
-   - Severity mapping: AccessibleReadOnlyOrUnknownWritePermission -> Warning, NoAccess -> Warning, NotFound -> Warning
-   - User-facing message: “תיקיית הדוחות נגישה, אך הרשאת כתיבה לא נבדקה בסבב זה.”
+   - Severity mapping: AccessibleReadOnlyOrUnknownWritePermission -> Online, NoAccess -> Warning, NotFound -> Warning
+   - User-facing message: “תיקיית הדוחות נגישה.”
    - Technical details: Postponed
 
 ## 6. Severity Mapping
 Approved mapping from `DiagnosticStatus` to `ServiceHealthState`:
 - OK → Online / Green
-- AccessibleReadOnlyOrUnknownWritePermission → Warning
+- AccessibleReadOnlyOrUnknownWritePermission → Online / Green (for reports folder)
 - NotConfigured → Warning
 - GoogleNotConfigured → Warning
 - NotAuthenticated → RequiresAuthorization (Warning)
@@ -95,7 +95,7 @@ Approved mapping from `DiagnosticStatus` to `ServiceHealthState`:
 - **Templates folder no access**: “תיקיית תבניות הביקורת מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה.”
 - **Templates folder not found**: “תיקיית תבניות הביקורת לא נמצאה או אינה גלויה לחשבון Google המחובר.”
 - **Templates folder empty**: “תיקיית תבניות הביקורת נגישה, אך לא נמצאו בה קבצי Google Sheets.”
-- **Reports folder accessible but write not checked**: “תיקיית הדוחות נגישה, אך הרשאת כתיבה לא נבדקה בסבב זה.”
+- **Reports folder accessible but write not checked**: “תיקיית הדוחות נגישה.”
 
 ## 8. Admin vs User
 - In the current round, we do not add separate hiding/filtering for Admin vs. User.
