@@ -39,6 +39,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Authorization — Verification Matrix | [`Domains\Authorization\AuthorizationVerification-2026-06-19.md`](Domains/Authorization/AuthorizationVerification-2026-06-19.md) |
 | Project Files | [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md) |
 | Workflow | [`Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](Domains/Workflow/WorkflowPrinciples-2026-05-26.md) |
+| Workflow — Tasking Coexistence | [`Domains\Workflow\TaskingWorkflowCoexistence-2026-06-19.md`](Domains/Workflow/TaskingWorkflowCoexistence-2026-06-19.md) |
 | UI | [`Domains\UI\UiPrinciples-2026-05-26.md`](Domains/UI/UiPrinciples-2026-05-26.md) |
 | Deployment | [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md) |
 | Diagnostics | [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md) |

@@ -1,27 +1,27 @@
 # Workflow Principles
 
 - **Decision date / Updated date:** 26.05.2026
-- **Status:** Active — source of truth for tasks, actions, and runtime workflow.
+- **Status:** Active â€” source of truth for tasks, actions, and runtime workflow.
 - **Scope:** Tasks, Actions, RuntimeActions, action handlers, task completion, ReviewTask, FileQuoteMaterial, workflow advance, FloatingTasks, `PRP.MaterialCheck`.
 
 ## Purpose
 Define how tasks and actions move the system forward, who is responsible for what, and what must not be duplicated.
 
 ## Source of truth
-- `SiNetSQL\docs\WorkflowDecisions.md` — append-only workflow decision log.
-- `SiNetSQL\docs\ProjectFileFiling.md` — filing pipeline architecture and `IProcessActionHandler` dispatcher.
+- `SiNetSQL\docs\WorkflowDecisions.md` â€” append-only workflow decision log.
+- `SiNetSQL\docs\ProjectFileFiling.md` â€” filing pipeline architecture and `IProcessActionHandler` dispatcher.
 
 ## Core principles
 1. Tasks drive the workflow. Actions are triggered through task completion and the action handler dispatcher.
-2. Workflow stages use the `PLN.*` codes (e.g. `PLN.Approval.AuthorityApproved`). `ProjectStatus` is a separate broad list — do not use `Completed` as `ProjectStatus`.
+2. Workflow stages use the `PLN.*` codes (e.g. `PLN.Approval.AuthorityApproved`). `ProjectStatus` is a separate broad list â€” do not use `Completed` as `ProjectStatus`.
 3. `ProjectStatus` values are limited to: LeadReceived, QuotePreparation, WaitingForQuoteApproval, WaitingForWorkOrder, Active, WaitingForClient, WaitingForAuthority, WaitingForMaterial, BillingPending, Closed, ClosedLost, Cancelled.
 4. Design stages and disciplines depend on `ProjectType`.
 5. Gmail labels are not statuses; they represent responsible assignee only.
 6. Task assignment to a UserGroup:
-   - 1 member → auto-assign.
-   - Multiple members → use group default assignee.
-   - No default → user must pick. Each group should have a default assignee setting.
-   - Empty group / no default → workflow notifies the user and does not proceed without an assignee.
+   - 1 member â†’ auto-assign.
+   - Multiple members â†’ use group default assignee.
+   - No default â†’ user must pick. Each group should have a default assignee setting.
+   - Empty group / no default â†’ workflow notifies the user and does not proceed without an assignee.
 7. New open tasks are appended to the **end** of the queue (Max+1). Reopened tasks also go to the end. On close, clear priority and re-rank.
 8. Do not invent a new handler if a suitable mechanism (e.g. an existing `IProcessActionHandler`) already exists. Extend, do not duplicate.
 9. Runtime action state snapshots (e.g. `RuntimeActions-CurrentState.md`) are informational; binding decisions live in `WorkflowDecisions.md`.
@@ -32,7 +32,7 @@ This section is the authoritative split between `Workflow`, `Task`,
 `Action Handler`, `RuntimeAction`, and `Completion`. It complements the
 architecture rules in
 [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](../Architecture/ArchitecturePrinciples-2026-05-26.md)
-§ *Workflow vs Task* and the service map in
+Â§ *Workflow vs Task* and the service map in
 [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](../Architecture/ServiceCatalog-2026-05-26.md).
 
 ### Workflow
@@ -125,6 +125,18 @@ architecture rules in
   stage, or write business state on its own (see
   [`Domains\AI\AiSystemPrinciples-2026-05-26.md`](../AI/AiSystemPrinciples-2026-05-26.md)).
 
+## Workflow-first architecture and task model coexistence
+
+Workflow-first is the preferred architecture:
+- Suggested actions and project processes should start workflows.
+- Workflow stages create tasks through `WorkflowStageTask` templates, provisioned by `WorkflowStageTaskProvisioningService` via `TaskFactory.CreateAsync()`.
+- Task completion should go through the centralized workflow-aware path (`TaskCompletionCoordinator`), which signals `WorkflowTaskOrchestrator.CheckAndAutoAdvanceAsync()` for automatic workflow advancement.
+- Projects and workflows must not be left without open tasks unless they have reached a terminal (final) state.
+
+An older task management model (`ProjectTypeTaskType`, `ProjectTypeStatus`, `TaskBehaviorDefinition` with trigger and completion rules) remains active. These mechanisms handle event-driven micro-tasks and admin-configurable project-type filtering. They are complementary to the workflow engine, not redundant with it.
+
+For the full analysis of the coexistence between the old and new models, including known risks and alignment plan, see [`TaskingWorkflowCoexistence-2026-06-19.md`](TaskingWorkflowCoexistence-2026-06-19.md).
+
 ## What we do not do now
 - Do not bypass the action handler dispatcher for new actions.
 - Do not change workflow designer or migrations as part of documentation work.
@@ -137,19 +149,19 @@ architecture rules in
 - Do not create a new handler before checking whether an existing handler can be extended.
 
 ## Dropped / cancelled / postponed
-- `Completed` as a `ProjectStatus` value — dropped.
-- Parallel ad-hoc handler chains — dropped.
-- Parallel action flow outside the agreed dispatcher — **not approved**.
-- Direct `Task` closure that bypasses the agreed completion / service / handler path — **not approved**.
-- Direct workflow stage changes from the UI / `ViewModel` — **not approved**.
-- `ProjectStatus` used as a `WorkflowStage` — **not approved**.
-- `RuntimeAction` as an additional workflow engine — **not approved**.
-- Fallback that signals success despite a failed handler — **not approved**.
-- `Inspection` / `Review` as a stand-alone workflow engine — **not approved**.
-- `PlanReview` as a silent side effect of file filing — **not approved**.
-- `AI` as an autonomous decision maker inside workflow — **not approved**.
-- `AI` auto-approve / auto-reject / auto-complete / auto-advance — **not approved**.
-- Deep per-handler documentation — postponed.
+- `Completed` as a `ProjectStatus` value â€” dropped.
+- Parallel ad-hoc handler chains â€” dropped.
+- Parallel action flow outside the agreed dispatcher â€” **not approved**.
+- Direct `Task` closure that bypasses the agreed completion / service / handler path â€” **not approved**.
+- Direct workflow stage changes from the UI / `ViewModel` â€” **not approved**.
+- `ProjectStatus` used as a `WorkflowStage` â€” **not approved**.
+- `RuntimeAction` as an additional workflow engine â€” **not approved**.
+- Fallback that signals success despite a failed handler â€” **not approved**.
+- `Inspection` / `Review` as a stand-alone workflow engine â€” **not approved**.
+- `PlanReview` as a silent side effect of file filing â€” **not approved**.
+- `AI` as an autonomous decision maker inside workflow â€” **not approved**.
+- `AI` auto-approve / auto-reject / auto-complete / auto-advance â€” **not approved**.
+- Deep per-handler documentation â€” postponed.
 
 ## Relevant terms / search terms
 Task, Action, RuntimeAction, IProcessActionHandler, MoveToProject, AddMaterialToProject, ReviewTask, FileQuoteMaterial, FloatingTask, PRP.MaterialCheck, WorkflowStageDefinition, PLN.Approval.AuthorityApproved, ProjectStatus, UserGroup, default assignee, Workflow vs Task, Action Handler boundary, Completion boundary, RuntimeAction boundary, ViewModel boundary, dispatcher, handler extension.
@@ -163,8 +175,8 @@ Task, Action, RuntimeAction, IProcessActionHandler, MoveToProject, AddMaterialTo
 
 Sources (archived): `Action-Task-Workflow.md`, `Typed-Continuation-Design.md`, `ProjectWork-Documentation.md`.
 
-### Typed continuation paths — no legacy fallback
-- Migrated continuation actions (TaskCreation, FileImport) run on a **typed-only path**: application service → `IActionContinuationUiHost` → typed dialog → typed result → application service `ContinueAsync`. No `RequiresUI(...)` enum fallback.
+### Typed continuation paths â€” no legacy fallback
+- Migrated continuation actions (TaskCreation, FileImport) run on a **typed-only path**: application service â†’ `IActionContinuationUiHost` â†’ typed dialog â†’ typed result â†’ application service `ContinueAsync`. No `RequiresUI(...)` enum fallback.
 - Continuation requests and results are **typed models**, not an open `enum + props` bag.
 - The UI host is abstracted (e.g. `IActionContinuationUiHost`); ViewModels do not bind to dialogs directly.
 - Missing data, validation failure, or inability to open UI must **fail visibly** (clear error + log). No silent fallback.
@@ -186,7 +198,7 @@ Sources (archived): `Action-Task-Workflow.md`, `Typed-Continuation-Design.md`, `
 - The completion system must guarantee task state persistence and invoke the workflow engine transition.
 
 ### Association for Planner Requests
-[Modified 2026-06-15 � Dropped Virtual Association]
+[Modified 2026-06-15 — Dropped Virtual Association]
 Child project creation (REV.ProjectSetup) is now always the first stage of the workflow, meaning the target child project folder structures in ACC are immediately available regardless of the request source. Emails and files are always physically filed directly into the child project without requiring virtual association or deferred filing.
 
 - For planner-initiated requests starting at `REV.AwaitingMunicipalityRequest`, files/emails are virtually linked to the parent project since no child project directory exists yet.
@@ -195,7 +207,7 @@ Child project creation (REV.ProjectSetup) is now always the first stage of the w
 
 
 
-# Architectural Decisions — SiNetSQL Workflow Runtime
+# Architectural Decisions â€” SiNetSQL Workflow Runtime
 
 This document describes the design, principles, and runtime contracts of the SiNetSQL workflow engine. It is maintained as a single, cohesive explanation of the current system design, with inline annotations showing where and when specific design decisions were modified.
 
@@ -204,7 +216,7 @@ This document describes the design, principles, and runtime contracts of the SiN
 ## 1. Core Workflow Design Principles
 
 ### Continuous Task Chain
-[Added 2026-06-15 — Continuous Task Chain Principle]
+[Added 2026-06-15 â€” Continuous Task Chain Principle]
 Every task initiated by a workflow or a suggested action must have a defined successor or transition. A project/workflow must never have zero open tasks unless it has reached a terminal (final) state. If a stage transition or task completion does not immediately produce a domain task (due to waiting for external events or documents), a dedicated tracking/follow-up task (such as `TrackMunicipalityInvitation`) must be active, ensuring the process is never "lost" or without an owner.
 
 ---
@@ -212,14 +224,14 @@ Every task initiated by a workflow or a suggested action must have a defined suc
 ## 2. Workflow Entry and Project Association
 
 ### Unified Workflow Initiation
-[Modified 2026-06-15 — Immediate Workflow Initiation]
+[Modified 2026-06-15 â€” Immediate Workflow Initiation]
 Every process started from a suggested action on an email must immediately initiate a workflow. The system does not create standalone tasks outside of workflows.
-For the **Review (בדיקת תוכנית)** workflow, all starts (whether planner-initiated or municipality-initiated) begin by starting the `Review` workflow on the parent project:
-1. The suggested action **"בדיקה חדשה" (New Review)** (`CreateNewReview`) starts the `Review` workflow immediately on the parent project.
-2. The initial stage is **`REV.ProjectSetup` (פתיחת פרויקט בדיקה)**.
+For the **Review (×‘×“×™×§×ª ×ª×•×›× ×™×ª)** workflow, all starts (whether planner-initiated or municipality-initiated) begin by starting the `Review` workflow on the parent project:
+1. The suggested action **"×‘×“×™×§×” ×—×“×©×”" (New Review)** (`CreateNewReview`) starts the `Review` workflow immediately on the parent project.
+2. The initial stage is **`REV.ProjectSetup` (×¤×ª×™×—×ª ×¤×¨×•×™×§×˜ ×‘×“×™×§×”)**.
 
 ### Stage Sequencing and Classification Flow
-[Modified 2026-06-15 — Reordered Project Setup and Intake Classification]
+[Modified 2026-06-15 â€” Reordered Project Setup and Intake Classification]
 To ensure order and clarity, the project is always created at the very beginning of the flow, followed by the intake classification. The sequence of stages is:
 
 ```mermaid
@@ -231,20 +243,20 @@ graph TD
     AwaitingRequestStage -->|MunicipalityRequestReceived| MaterialIntakeStage
 ```
 
-1. **REV.ProjectSetup (פתיחת פרויקט בדיקה)**:
-   * **Task**: `OpenReviewProject` (פתיחת בדיקה חדשה).
+1. **REV.ProjectSetup (×¤×ª×™×—×ª ×¤×¨×•×™×§×˜ ×‘×“×™×§×”)**:
+   * **Task**: `OpenReviewProject` (×¤×ª×™×—×ª ×‘×“×™×§×” ×—×“×©×”).
    * **Action**: User opens this task and creates the child project.
    * **Transition**: Completion of `OpenReviewProject` (result `ProjectOpened`) automatically transitions the workflow to `REV.Intake`.
 
-2. **REV.Intake (קליטת בקשה לבדיקה)**:
-   * **Task**: `ClassifyRequestSource` (סיווג מקור הפנייה).
+2. **REV.Intake (×§×œ×™×˜×ª ×‘×§×©×” ×œ×‘×“×™×§×”)**:
+   * **Task**: `ClassifyRequestSource` (×¡×™×•×•×’ ×ž×§×•×¨ ×”×¤× ×™×™×”).
    * **Action**: In this stage, the user classifies whether they need to wait for the official invitation.
    * **Transition**:
      * Result `RequestFromPlanner` (needs invitation) transitions the workflow to `REV.AwaitingMunicipalityRequest`.
      * Result `RequestFromMunicipality` (official invitation exists) transitions the workflow to `REV.MaterialIntake`.
 
-3. **REV.AwaitingMunicipalityRequest (המתנה לפנייה רשמית מהרשות)**:
-   * **Task**: `TrackMunicipalityInvitation` (מעקב פנייה מהרשות).
+3. **REV.AwaitingMunicipalityRequest (×”×ž×ª× ×” ×œ×¤× ×™×™×” ×¨×©×ž×™×ª ×ž×”×¨×©×•×ª)**:
+   * **Task**: `TrackMunicipalityInvitation` (×ž×¢×§×‘ ×¤× ×™×™×” ×ž×”×¨×©×•×ª).
    * **Action**: Tracks receipt of the official invitation.
    * **Transition**: Result `MunicipalityRequestReceived` transitions the workflow to `REV.MaterialIntake`.
 
