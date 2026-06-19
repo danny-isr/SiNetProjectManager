@@ -1,77 +1,77 @@
-# 📂 ProjectWork / חלון עבודה 2
+# 📂 ProjectWork / Window 2
 
 - **Updated date:** 19.06.2026
 - **Status:** Active — Source of truth
-- **Scope:** מסך "בעבודה 2" (ProjectWorkView), טעינת עץ התיקיות והקבצים המאוחד, מנגנון Drag & Drop, צפייה ב-ACC דרך WebView2, ופקודות תלויות הקשר לפרויקט.
+- **Scope:** The `ProjectWorkView` screen, unified file and folder tree loading, Drag & Drop mechanics, ACC viewing via WebView2, and project-contextual commands.
 
-## 1. מטרת החלון
-מסך **ProjectWorkView** הוא חלון העבודה המרכזי שבו משתמש מנהל את תיקיות וקבצי הפרויקט.
-- **מה המשתמש עושה בחלון:**
-  - בוחר פרויקט וצופה בעץ היררכי מאוחד של תיקיות (ממערכת הקבצים ומה-DB).
-  - צופה באלטרנטיבות ובגרסאות של קבצים שזוהו.
-  - פותח קבצים, יוצר תיקיות, משנה שמות אלטרנטיבות, גורר ומשחרר (Drag & Drop) קבצים פנימה והחוצה.
-  - צופה בקבצי הפרויקט דרך Autodesk Construction Cloud (ACC) באזור ה-WebView2 השמאלי.
-- **מה החלון כן אחראי לעשות:**
-  - לתזמר את ה-UI של העץ (TreeView) וה-Viewer.
-  - להאזין לשינויים ב-FileSystem (FileSystemWatcher) ולרענן את התצוגה המקומית בהתאם.
-- **מה החלון לא אחראי לעשות:**
-  - החלון אינו אחראי ללוגיקת ניהול Workflow.
-  - החלון אינו אחראי להעתקת קבצים ממייל לפרויקט (`MoveToProject`); זהו תפקיד של `ProjectFileFilingService`.
+## 1. Purpose
+The **ProjectWorkView** screen is the main workspace where a user manages project folders and files.
+- **Main UI responsibilities:**
+  - Selecting a project and viewing a unified hierarchical tree of folders (from the filesystem and the DB).
+  - Viewing alternatives and versions of identified project files.
+  - Opening files, creating folders, renaming alternatives, and dragging and dropping files in and out.
+  - Viewing project files through Autodesk Construction Cloud (ACC) in the left WebView2 area.
+- **What the window is responsible for:**
+  - Orchestrating the TreeView UI and the Viewer.
+  - Listening to filesystem changes (`FileSystemWatcher`) and refreshing the local view accordingly.
+- **What the window is not responsible for:**
+  - It does not handle Workflow management logic.
+  - It is not responsible for copying files from emails into the project (`MoveToProject`); this is the role of the `ProjectFileFilingService`.
 
-## 2. קבצים ומחלקות מרכזיות
-- **View:** `ProjectWorkView.xaml` (מכיל את ה-TreeView המאוחד ואת רכיבי ה-WebView2).
-- **Code-behind:** `ProjectWorkView.xaml.cs` (מכיל את אירועי ה-Drag & Drop וקישור ל-ViewModel).
-- **ViewModel:** `ProjectWorkViewModel` (אחראי לטעינת הפרויקטים, הפילטרים, האזנה למערכת הקבצים, ובניית העץ).
+## 2. Main files and classes
+- **View:** `ProjectWorkView.xaml` (Contains the unified TreeView and WebView2 components).
+- **Code-behind:** `ProjectWorkView.xaml.cs` (Contains Drag & Drop events and ViewModel binding).
+- **ViewModel:** `ProjectWorkViewModel` (Responsible for loading projects, applying filters, listening to the filesystem, and building the tree).
 - **Node classes:** 
-  - `ProjectFolderNode` (מייצג תיקייה)
-  - `ProjectFileNode` (מייצג קובץ אב)
-  - `AlternativeNode` (מייצג עותק אלטרנטיבה)
-  - `VersionNode` (מייצג גרסה פיזית ספציפית של הקובץ)
-- **Helper classes:** `FileHelpers` (CRUD על קבצים), `FolderOpener` (פתיחה וניהול תיקיות), `CompositeChildrenConverter` (לשילוב תיקיות וקבצים לעץ אחד).
-- **Services / contexts:** `ActiveProjectContext` (שומר את מזהה הפרויקט הפעיל כ-Singleton), מודל ה-WebView2 מתבסס על ניווט `AccViewerUrl`.
+  - `ProjectFolderNode` (Represents a folder)
+  - `ProjectFileNode` (Represents a parent file definition)
+  - `AlternativeNode` (Represents a file variant/copy)
+  - `VersionNode` (Represents a specific physical version of the file)
+- **Helper classes:** `FileHelpers` (CRUD operations on files), `FolderOpener` (opening and managing folders), `CompositeChildrenConverter` (for merging folders and files into a single tree).
+- **Services / contexts:** `ActiveProjectContext` (Maintains the active project ID as a Singleton). The WebView2 model relies on `AccViewerUrl` navigation.
 
-## 3. מבנה UI
-- **בחירת פרויקט:** דרך ComboBox חכם עם חיפוש.
-- **פילטרים:** סינון לפי סוג פרויקט, סטטוס, ומשתמש (עובד מוגדר מול `TypeOfProjectInProjects`).
-- **עץ תיקיות וקבצים:** ה-TreeView מימין מציג מבנה מאוחד שממזג נתוני DB ותיקיות מקומיות ב-FileServer.
-- **אזור צפייה / ACC viewer:** WebView2 משמאל מציג תוכן אינטרנטי מקושר ל-ACC (תמיכה בטאבים מרובים).
-- **פעולות Context Menu:** פקודות דינמיות לפי סוג הצומת (פתח, שנה שם, מחק, הוסף אלטרנטיבה).
+## 3. Architecture and UI layout
+- **Project selection:** Via a smart ComboBox with search capabilities.
+- **Filters:** Filtering by project type, status, and assigned user (mapped against `TypeOfProjectInProjects`).
+- **Folder and file tree:** The right-hand TreeView displays a unified structure merging DB data and local FileServer folders.
+- **ACC viewer area:** A WebView2 control on the left displays web content linked to ACC (supports multiple tabs).
+- **Context Menu actions:** Dynamic commands based on node type (open, rename, delete, add alternative).
 
-## 4. זרימת עבודה מרכזית
-1. **בחירת פרויקט:** בחירת הפרויקט מעדכנת את ה-`ActiveProjectContext`, מבטלת האזנות ישנות (`StopWatchingAll`), וטוענת עץ חדש.
-2. **טעינת עץ וסריקת תיקיות:** רקורסיה שבונה את התיקיות מתוך ה-DB ומהדיסק (`LoadUnifiedTree`), תוך כדי סינון בסיומות לא רצויות.
-3. **זיהוי קבצים לפי Naming Convention:** מבוסס על המחלקה `BaseFileVersion` שגוזרת את הנתונים (פרויקט, אלטרנטיבה, גרסה) מתוך שם הקובץ על הדיסק, וממפה אותם ל-`ProjectFile` מתוך ה-DB. קובץ שלא מתאים לתבנית נחשב לקובץ "לא משויך" (external).
-4. **Drag & Drop:** נעשה שימוש ב-`FileDropBehavior` לקליטת קבצים נגררים. המערכת מחכה שהקובץ יהיה מוכן (`WaitUntilFileReadyAsync`), ומשייכת אותו כאלטרנטיבה/גרסה לפי ההקשר או מציגה דיאלוג יצירת אלטרנטיבה חדשה (`AlternativeNameDialog`).
-5. **פתיחת קובץ וייצור תבנית:** דאבל קליק על גרסה מבצע `OpenFile`. גרירת תבנית מייצרת עותק עם השם המתאים.
+## 4. Main data flow and execution
+1. **Project selection:** Selecting a project updates the `ActiveProjectContext`, cancels previous filesystem watchers (`StopWatchingAll`), and loads a new tree.
+2. **Tree loading and folder scanning:** A recursive process builds folders from both the DB and the local disk (`LoadUnifiedTree`), filtering out unwanted extensions.
+3. **File scanning and indexing (Naming Convention):** Powered by the `BaseFileVersion` class which extracts metadata (project, alternative, version) from the physical file name and maps it to a `ProjectFile` from the DB. A file that does not match the naming convention is considered an "unassigned" (external) file.
+4. **Drag and drop behavior:** Utilizes `FileDropBehavior` for receiving dragged files. The system waits until the file is ready (`WaitUntilFileReadyAsync`), then associates it as an alternative/version based on the drop target context, or presents a dialog to create a new alternative (`AlternativeNameDialog`).
+5. **Opening files and templating:** Double-clicking a version triggers `OpenFile`. Dragging a template creates a copy with the appropriate naming convention.
 
-## 5. מודלים רלוונטיים
-*המודלים מתוארים כאן כפי שהם משמשים כיום בחלון ProjectWork.*
-- `ProjectFolder`: מגדיר את תיקיות המערכת ההיררכיות (לפני סריקת תיקיות המשתמש).
-- `ProjectFile`: מגדיר את ה-Metadata הבסיסי (סוג קובץ) שמשמש לזיהוי קבצים מהתבנית בשם.
-- `ProjectAlternative`: מייצג וריאנט מוכר של הקובץ (שמופיע כצומת אב לגרסאות). שדות אלה נוצרים או מתקיימים באופן דינמי כפי שהוסבר ב-`ProjectFilesPrinciples`.
-- `TypeOfProjectInProject`: מחבר פרויקטים לסוגיהם ולעובדים (משמש לפילטרים בחלון).
+## 5. Relevant models
+*The models are described here as they are currently utilized within the ProjectWork window.*
+- `ProjectFolder`: Defines the hierarchical system folders (prior to scanning user-created folders).
+- `ProjectFile`: Defines the basic metadata (file type) used to identify files from their naming convention.
+- `ProjectAlternative`: Represents a recognized variant of a file (appearing as a parent node to versions). These fields are dynamically created or maintained as explained in the `ProjectFilesPrinciples`.
+- `TypeOfProjectInProject`: Connects projects to their types and assigned workers (used for filtering).
 
 > [!WARNING]
-> **שימו לב לגבי ProjectFileInstance:**
-> במסמך הארכיון, `ProjectFileInstance` תואר כטבלת DB ששומרת כל עותק ומיקומו. מודל זה **אינו פעיל יותר** במתכונתו הישנה (הוסר בשלב 9E.4). 
-> כיום, `ProjectFileInstance` הוא אך ורק **השתקפות בזמן ריצה (Runtime Projection)** כפי שמתואר במסמך `ProjectFilesPrinciples`. אין לצפות למצוא עבורו רשומה קבועה ב-DB.
+> **Important note regarding ProjectFileInstance:**
+> In the legacy archive document, `ProjectFileInstance` was described as a DB table acting as a source of truth for every file placement. That model is **no longer active** in its old form (removed in Stage 9E.4). 
+> Today, `ProjectFileInstance` is exclusively a **Runtime Projection** built dynamically when viewing the project, as described in `ProjectFilesPrinciples`. It does not exist as a permanent record in the database.
 
-## 6. שילוב עם מערכות משיקות
-- **שילוב עם ProjectFiles:** 
-  החלון קורא את הקבצים ויוצר אלטרנטיבות על בסיס העקרונות שמתוארים ב-`ProjectFilesPrinciples`. בניית שם הקובץ מתבססת על התבנית, והרזולוציה מתרחשת בזמן אמת ב-FileServer (או ACC) מבלי לייצר רשומות PFI אקטיביות ב-DB.
-- **שילוב עם ACC:**
-  אזור צפייה מבוסס `WebView2` קיים ופעיל בממשק (תומך בכרטיסיות). התצוגה המקדימה מסתמכת על `AccViewerUrl`.
-- **שילוב עם Workflow / Tasks:** 
-  החלון עצמו משמש רק להצגה ועריכה של הקבצים ו**אינו** מעביר סטטוסים של Workflow או סוגר משימות. (כפי שמצוין בארכיטקטורה, ניהול משימות מטופל בחלון נפרד כמו WorkflowManagementWindow או Dialogs אחרים).
+## 6. Integration with adjacent systems
+- **Integration with ProjectFiles:** 
+  The window reads files and creates alternatives based on the principles outlined in `ProjectFilesPrinciples`. File name construction relies on the naming convention, and resolution occurs in real-time against the FileServer (or ACC) without creating active PFI records in the DB.
+- **Integration with ACC:**
+  A `WebView2` viewer is active in the interface (supporting tabs). The preview relies on `AccViewerUrl`.
+- **Integration with Workflow / Tasks:** 
+  The window itself is only used for viewing and editing files; it **does not** transition Workflow statuses or close tasks. (As noted in the architecture, task management is handled in a separate window, such as WorkflowManagementWindow).
 
-## 7. מגבלות ידועות / Needs Review
-- מנגנון הרענון `FileSystemWatcher` מיועד בעיקר לדיסק רשת (FileServer), ויש לערוך סקירה בהמשך איך רענון זה אמור להשתלב מול ACC או Google Drive ללא האזנה ישירה. ייתכן ויידרש "Focused Refresh".
-- טעינת עץ תיקיות עלולה להשתהות מעט בפרויקטים כבדים — יש לנטר את הביצועים של ה-`Task.Run` בשילוב יצירת קבצים רבה.
+## 7. Known limitations / Needs review
+- The `FileSystemWatcher` refresh mechanism is primarily designed for local network drives (FileServer). A future review is needed to determine how this refresh mechanism should integrate with ACC or Google Drive without direct filesystem listening (e.g., implementing a "Focused Refresh").
+- Loading the folder tree can experience slight delays in heavy projects — performance monitoring of the `Task.Run` logic combined with heavy file creation may be necessary.
 
-## 8. דברים שירדו / בוטלו / הושהו (Dropped / Cancelled / Postponed)
-- שימוש במסמך `Docs/Archive/ProjectWork-Documentation.md` כמקור אמת פעיל — **מבוטל**. המסמך בארכיון נשמר למטרות היסטוריה בלבד, אך התיעוד הפעיל הוא מסמך זה.
-- מחיקת מסמך הארכיון — **לא בוצעה / לא מאושר**. נשמר כהיסטוריה כפי שהוגדר בבקשה.
-- העתקת המסמך הישן כמו שהוא — **לא מאושר ולא בוצעה**. המסמך ההיסטורי הכיל מידע שהתיישן (כדוגמת ההתייחסות לטבלת ה-DB של `ProjectFileInstance`) שלפי עקרונות ה-ProjectFiles הוסר.
-- שינוי קוד במסגרת סבב התיעוד — **מבוטל / לא מאושר**. התיעוד משקף נאמנה את הקוד הקיים.
-- החזרת מנגנונים ישנים מהארכיון — **לא מאושר** ללא החלטה מפורשת.
-- תיקון מנגנונים בחלון עבודה 2 — **מושהה** עד שנזהה פערים ונחליט עליהם בנפרד במסגרת אימות מול משתמש.
+## 8. Dropped / cancelled / postponed
+- Using the document `Docs/Archive/ProjectWork-Documentation.md` as an active source of truth — **cancelled**. The archived document is retained for historical purposes only; the active documentation is this document.
+- Deleting the archive document — **not approved**. It is kept for historical reference.
+- Copying the old archive document as-is — **cancelled**. The historical document contained outdated information (such as references to the `ProjectFileInstance` DB table) which was removed according to the `ProjectFilesPrinciples`.
+- Changing code as part of documentation updates — **cancelled / not approved**. This documentation accurately reflects the existing codebase.
+- Reviving old mechanisms from the archive — **not approved** without an explicit decision.
+- Fixing mechanisms within Window 2 — **postponed** until gaps are identified and handled separately during user validation.
