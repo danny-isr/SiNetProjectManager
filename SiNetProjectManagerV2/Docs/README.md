@@ -1,8 +1,8 @@
 # SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 26.05.2026
-> **Status:** Round C-Apply applied — principles extracted, old NeedsReview docs archived.
+> **Updated:** 19.06.2026
+> **Status:** Active documentation index — Configuration health diagnostics documentation added.
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -43,7 +43,8 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Diagnostics | [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md) |
 | AI | [`Domains\AI\AiSystemPrinciples-2026-05-26.md`](Domains/AI/AiSystemPrinciples-2026-05-26.md) |
 | Plan Review | [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md) |
-| Configuration | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
+| Configuration — System Settings Catalog | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
+| Configuration — System Health Google Diagnostics Integration | [`Domains\Configuration\SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md`](Domains/Configuration/SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md) |
 
 ## 4. Decisions
 
@@ -126,4 +127,6 @@ authoritative wording.
 `Docs index`, `documentation structure`, `SiNet Documentation`, `Domains`,
 `Decisions`, `Archive`, `EmailSystemPrinciples`, `AccSystemPrinciples`,
 `WorkflowPrinciples`, `MoveToProject-Decisions`, `ADR`, `source of truth`,
-`Approved principles`.
+`Approved principles`, `Configuration`, `SystemSettingsCatalog`,
+`SystemHealthGoogleDiagnosticsIntegration`, `SystemHealthWindow`,
+`GoogleDriveFolderDiagnosticService`, `IServiceHealthCheck`, `HealthRow`.
