@@ -114,3 +114,5 @@ This catalog is a documentation-first artifact. It is not a new runtime authoriz
 - לא משנים Google/ACC authorization model בסבב הזה.
 - לא משנים SystemSettingsService.SetAsync בסבב התיעוד הזה.
 - לא מוחקים פרמטרים גם אם הם נראים לא בשימוש.
+
+Google Drive settings are also planned to be surfaced through the existing SystemHealthWindow. See [SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md](SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md).

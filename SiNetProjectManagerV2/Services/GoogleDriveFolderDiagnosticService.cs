@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Google.Apis.Drive.v3;
 using Google.Apis.Requests;
 using SiNetSQL.Services;
-using SiOffice.GoogleConnector;
+using SiOffice.GoogleConnector.Reports;
 
 namespace SiNetProjectManagerV2.Services;
 
