@@ -129,3 +129,15 @@ To facilitate manual testing of roles without needing to change Windows users or
 - **Role changes:** Not approved and not implemented.
 - **DB / Migration changes:** Not approved and not implemented.
 - **Authorization Code fixes:** No fixes were applied in this round; this round was exclusively for mapping and matrix creation.
+
+---
+
+## 7. MasterPlan Employee UI Extension
+
+As part of completing manual verification (specifically testing the R03 report with non-Admin users), we required the ability to link an App User to a MasterPlan Employee. This was added to the existing `User Management` dialog:
+  - **Column Header:** "בחירת עובד מאסטר פלן"
+  - **Dropdown List:** Displays the employee's full name (from the `Name` field in `R03EmployeeInfo`), including a default option "-- ללא קישור --" which maps properly to a `null` ID.
+  - **Data Saved:** The underlying saved value is the `MasterPlanEmployeeId` field in the database.
+  - **Display Mode:** The full name is also shown in read-only mode using the matched dictionary, correctly reacting to `INotifyPropertyChanged` upon concluding the edit operation or reloading the DB users list.
+- **Database:** No database or migration changes were made, as the field `MasterPlanEmployeeId` already existed.
+- **Role Permissions:** This operation reuses the existing `UpdateUsersAsync` method, which enforces the `RequireAdmin` check.

@@ -46,6 +46,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Plan Review | [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md) |
 | Configuration — System Settings Catalog | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
 | Configuration — System Health Google Diagnostics Integration | [`Domains\Configuration\SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md`](Domains/Configuration/SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md) |
+| Project Work / חלון עבודה 2 | [`Domains\ProjectWork\ProjectWorkWindow2-2026-06-19.md`](Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md) |
 
 ## 4. Decisions
 

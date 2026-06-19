@@ -28,20 +28,50 @@ public partial class UserManagementWindow : Window
     {
         try
         {
-            var reportService = App.ServiceProvider.GetRequiredService<R03ReportService>();
-            var employees = await reportService.GetEmployeesAsync(activeOnly: false);
+            System.Diagnostics.Debug.WriteLine("[UserManagement][MasterPlanEmployees] Loading from ReplicaR03Repository...");
             
-            // Add a null/empty option for "No Mapping"
-            vm.MasterPlanEmployees.Add(new UserManagementViewModel.MasterPlanEmployeeDto(0, "-- ללא קישור --"));
-
-            foreach (var emp in employees.OrderBy(e => e.Name))
+            string replicaCs = SiNetProjectManagerV2.Services.AppConfiguration.GetConnectionString("ReplicaDatabase") ?? "";
+            if (string.IsNullOrEmpty(replicaCs))
             {
-                vm.MasterPlanEmployees.Add(new UserManagementViewModel.MasterPlanEmployeeDto(emp.Id, emp.Name));
+                string configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                if (System.IO.File.Exists(configPath))
+                {
+                    string json = System.IO.File.ReadAllText(configPath);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("ConnectionStrings", out var connStrings) && 
+                        connStrings.TryGetProperty("ReplicaDatabase", out var repDb))
+                    {
+                        replicaCs = repDb.GetString() ?? "";
+                    }
+                }
             }
+
+            var repo = new SiOffice.GoogleConnector.Reports.Data.ReplicaR03Repository(replicaCs);
+            var employees = await repo.GetEmployeesAsync(activeOnly: false);
+            
+            System.Diagnostics.Debug.WriteLine($"[UserManagement][MasterPlanEmployees] Loaded count={employees.Count}");
+            if (employees.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UserManagement][MasterPlanEmployees] First item: Id={employees[0].Id}, Display={employees[0].Name}");
+            }
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                // Add a null/empty option for "No Mapping"
+                vm.MasterPlanEmployees.Add(new UserManagementViewModel.MasterPlanEmployeeDto(null, "-- ללא קישור --"));
+
+                foreach (var emp in employees.OrderBy(e => e.Name))
+                {
+                    vm.MasterPlanEmployees.Add(new UserManagementViewModel.MasterPlanEmployeeDto(emp.Id, emp.Name));
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[UserManagement][MasterPlanEmployees] Assigned to ViewModel count={vm.MasterPlanEmployees.Count}");
+                vm.UpdateMasterPlanEmployeeNames();
+            });
         }
         catch (Exception ex)
         {
-            SiNetSQL.Diagnostics.AppLogger.Error(ex, "Failed to load MasterPlan employees for User Management.");
+            System.Diagnostics.Debug.WriteLine($"Failed to load MasterPlan employees for User Management: {ex.Message}");
         }
     }
 

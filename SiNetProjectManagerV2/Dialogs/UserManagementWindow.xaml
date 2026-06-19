@@ -234,11 +234,11 @@
                 </DataGridTemplateColumn>
 
                 <!-- MasterPlan Employee (display / edit) -->
-                <DataGridTemplateColumn Header="קישור נוכחות" Width="140" CanUserSort="True" SortMemberPath="MasterPlanEmployeeId">
+                <DataGridTemplateColumn Header="בחירת עובד מאסטר פלן" Width="170" CanUserSort="True" SortMemberPath="MasterPlanEmployeeName">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Grid>
-                                <TextBlock Text="{Binding MasterPlanEmployeeId}" VerticalAlignment="Center" Margin="4,0" Foreground="Gray">
+                                <TextBlock Text="{Binding MasterPlanEmployeeName}" VerticalAlignment="Center" Margin="4,0" Foreground="Gray">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
