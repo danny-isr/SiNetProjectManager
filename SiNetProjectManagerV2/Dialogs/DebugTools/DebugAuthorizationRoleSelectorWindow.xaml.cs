@@ -72,10 +72,10 @@ namespace SiNetProjectManagerV2.Dialogs.DebugTools
 
         private void WireWarnings()
         {
-            RbUnauthorized.Checked += (s, e) => WarningText.Visibility = Visibility.Visible;
-            RbUnauthorized.Unchecked += (s, e) => WarningText.Visibility = Visibility.Collapsed;
-            RbInactive.Checked += (s, e) => WarningText.Visibility = Visibility.Visible;
-            RbInactive.Unchecked += (s, e) => WarningText.Visibility = Visibility.Collapsed;
+            RbUnauthorized.Checked += (s, e) => WarningTextUnauthorized.Visibility = Visibility.Visible;
+            RbUnauthorized.Unchecked += (s, e) => WarningTextUnauthorized.Visibility = Visibility.Collapsed;
+            RbInactive.Checked += (s, e) => WarningTextInactive.Visibility = Visibility.Visible;
+            RbInactive.Unchecked += (s, e) => WarningTextInactive.Visibility = Visibility.Collapsed;
         }
 
         private void BackupOriginalState()
