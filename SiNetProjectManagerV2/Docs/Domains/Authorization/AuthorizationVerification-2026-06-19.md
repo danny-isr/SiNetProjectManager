@@ -41,14 +41,16 @@
 | **Startup / Login** | Unauthorized User Login | Blocked (`CurrentUserContext.Initialize` returns false) |
 | | Inactive User Login | Blocked |
 | | Employee / Management / Admin | Allowed |
-| **User Management** | Admin updates users | Allowed |
-| | Employee / Management updates users | Blocked (Throws `UnauthorizedAccessException`) |
+| **User Management** | Admin updates users | Allowed (Automated covered) |
+| | Employee updates users | Blocked (Automated covered) |
+| | Management updates users | Blocked (Automated covered) |
 | | Admin deactivates self | Blocked (`InvalidOperationException`) |
 | | Admin demotes self | Blocked (`InvalidOperationException`) |
 | | Admin changes own LoginName | Blocked (`InvalidOperationException`) |
 | **System Settings** | Read settings (Employee/Mgmt/Admin) | Allowed |
-| | Write settings (Employee/Management) | Blocked (Throws `UnauthorizedAccessException` via `RequireAdmin`) |
-| | Write settings (Admin) | Allowed |
+| | Write settings (Employee) | Blocked (Automated covered) |
+| | Write settings (Management) | Blocked (Automated covered) |
+| | Write settings (Admin) | Allowed (Automated covered) |
 | **Action Permissions**| Deny-by-default (No row exists) | Blocked |
 | | Admin bypass (No row exists) | Allowed |
 | | R01 / R02 | (Configured via DB) Usually requires Management |
@@ -91,8 +93,8 @@
 
 **Recommendations for next steps:**
 - Expand the existing `ActionPermissionServiceTests` project (no new test projects).
-- Add integration-style tests for `SystemSettingsService` to verify that `RequireAdmin` actually throws when `CurrentUserContext` simulates an `Employee`.
-- Add similar integration tests for `UserService.UpdateUsersAsync` to ensure the self-demotion logic works securely against an in-memory test DB.
+- Add integration-style tests for `SystemSettingsService` to verify that `RequireAdmin` actually throws when `CurrentUserContext` simulates an `Employee`. (Done in Round 2)
+- Add similar integration tests for `UserService.UpdateUsersAsync` to ensure the self-demotion logic works securely against an in-memory test DB. (Verified present in Round 2)
 - **Do not** introduce UI Automation (e.g., Appium) at this stage. Stick to service-layer verification.
 
 ---
