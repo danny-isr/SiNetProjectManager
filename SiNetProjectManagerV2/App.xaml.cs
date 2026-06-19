@@ -1423,7 +1423,7 @@ namespace SiNetProjectManagerV2
                     var dbContextFactory = ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
                     using var context = dbContextFactory.CreateDbContext();
 
-                    var selectorWindow = new SiNetProjectManagerV2.Dialogs.Debug.DebugAuthorizationRoleSelectorWindow(context);
+                    var selectorWindow = new SiNetProjectManagerV2.Dialogs.DebugTools.DebugAuthorizationRoleSelectorWindow(context);
                     selectorWindow.ShowDialog();
                 }
                 catch (Exception ex)
