@@ -45,8 +45,7 @@ The tree nodes provide context-specific actions:
 - **ProjectFolderNode:** 
   - Open folder.
   - Create folder.
-  - Rename folder (for user-created folders).
-  - Delete folder.
+  - Rename and delete are available for user-created folders. DB-defined folders can be opened and can host created subfolders, but they are not treated as freely deletable user folders.
 - **ProjectFileNode:** 
   - Add alternative.
   - Add alternative from template (available when `TemplateLocation` exists and conditions allow).
@@ -84,7 +83,7 @@ Sidecar metadata files are JSON companion files used behind the scenes. They are
 - A `FileSystemWatcher` watches the file-server roots for changes.
 - Sidecar metadata files are explicitly ignored during the watching process.
 - Changes detected by the watcher schedule a debounced in-place rescan.
-- The tree is not completely rebuilt from scratch during these rescans; the in-place rescan carefully preserves the TreeView expansion state for a seamless user experience.
+- After FileSystemWatcher events, the system schedules a debounced in-place rescan rather than rebuilding the whole tree. Project selection still loads a new tree. The in-place rescan carefully preserves the TreeView expansion state for a seamless user experience.
 
 ### 4.7. File placement / upload pipeline
 When adding an alternative or version, the system utilizes an active pipeline:
@@ -121,7 +120,8 @@ The system governs how files are opened:
 
 ### 4.11. Storage destinations and storage badges
 The system natively recognizes multiple storage destinations:
-- **FileServer**, **ACC**, and **GoogleDrive**.
+- **FileServer** and **ACC**.
+- **GoogleDrive** is represented as a storage destination in the model/UI where the corresponding `IFileStore` implementation is available.
 - Destinations are represented with specific storage destination icons/labels.
 - **Storage badges** appear on the tree nodes. Crucially, the color of these badges reflects the *actual scanned/uploaded state* of the files, not merely the configured destination. 
 - If no version is found, the badge displays a grey / unavailable state.
@@ -195,3 +195,6 @@ When testing or validating the behavior of the ProjectWork window, ensure the fo
 - [ ] Upload status and in-flight count display accurately.
 - [ ] Extension conflict badge appears when relevant.
 - [ ] ACC metadata badge functions correctly.
+- [ ] Local version deletion refreshes/removes the node.
+- [ ] ACC version delete routes through the ACC delete/hide path.
+- [ ] Alternative deletion removes all related files only after confirmation.
