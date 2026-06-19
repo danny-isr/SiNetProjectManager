@@ -1,4 +1,4 @@
-﻿<Window x:Class="SiNetProjectManagerV2.Dialogs.UserManagementWindow"
+<Window x:Class="SiNetProjectManagerV2.Dialogs.UserManagementWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:SiNetSQL.MVVM;assembly=SiNetSQL"
@@ -227,6 +227,35 @@
                                             <TextBlock Text="{Binding Converter={x:Static vm:UserManagementConverters.RoleToHebrew}}"/>
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- MasterPlan Employee (display / edit) -->
+                <DataGridTemplateColumn Header="קישור נוכחות" Width="140" CanUserSort="True" SortMemberPath="MasterPlanEmployeeId">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <TextBlock Text="{Binding MasterPlanEmployeeId}" VerticalAlignment="Center" Margin="4,0" Foreground="Gray">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <ComboBox ItemsSource="{Binding DataContext.MasterPlanEmployees, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedValuePath="Id"
+                                          DisplayMemberPath="Name"
+                                          SelectedValue="{Binding EditMasterPlanEmployeeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectionChanged="OnEditComboBoxSelectionChanged"
+                                          VerticalContentAlignment="Center" Margin="2,0"
+                                          Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
                                 </ComboBox>
                             </Grid>
                         </DataTemplate>

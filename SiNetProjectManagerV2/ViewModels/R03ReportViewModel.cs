@@ -138,7 +138,16 @@ public class R03ReportViewModel : INotifyPropertyChanged
 
     public bool IsNotAdminMode => !IsAdminMode;
 
-    public string CurrentUserEmployeeText => $"הדוח ייבדק עבור המשתמש הנוכחי: {CurrentUserContext.Instance.DisplayName}";
+    public string CurrentUserEmployeeText
+    {
+        get
+        {
+            var ctx = CurrentUserContext.Instance;
+            if (ctx.MasterPlanEmployeeId.HasValue)
+                return $"הדוח ייבדק עבור המשתמש הנוכחי: {ctx.DisplayName}";
+            return "לא מוגדר קישור בין המשתמש שלך לבין עובד במערכת נוכחות. יש לפנות למנהל מערכת.";
+        }
+    }
 
     #endregion
 
@@ -262,7 +271,18 @@ public class R03ReportViewModel : INotifyPropertyChanged
             var ctx = CurrentUserContext.Instance;
             IsAdminMode = ctx.IsManagement;
 
-            var employees = await _reportService.GetEmployeesAsync(activeOnly: true);
+            SiNetSQL.Services.AppLogger.Debug($"[R03][Auth] UserId={ctx.CurrentUserId}, DisplayName={ctx.DisplayName}, Role={ctx.Role}, IsAdminMode={IsAdminMode}, MasterPlanEmployeeId={ctx.MasterPlanEmployeeId}");
+
+            // Non-admin doesn't need to load the full employee list from the server
+            List<R03EmployeeInfo> employees = [];
+            if (IsAdminMode)
+            {
+                employees = await _reportService.GetEmployeesAsync(activeOnly: true);
+            }
+            else if (ctx.MasterPlanEmployeeId.HasValue)
+            {
+                employees = [new R03EmployeeInfo(ctx.MasterPlanEmployeeId.Value, ctx.DisplayName ?? "Current User")];
+            }
 
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
@@ -289,6 +309,8 @@ public class R03ReportViewModel : INotifyPropertyChanged
                     var match = _allEmployees.FirstOrDefault(e => e.Id == ctx.MasterPlanEmployeeId.Value);
                     if (match != null)
                         match.IsSelected = true;
+                    
+                    SiNetSQL.Services.AppLogger.Debug($"[R03][Employees] Current user employee found={(match != null)}, EmployeeId={ctx.MasterPlanEmployeeId.Value}, Name={ctx.DisplayName}");
                 }
 
                 _selectedEmployeeIds.Clear();
@@ -297,6 +319,8 @@ public class R03ReportViewModel : INotifyPropertyChanged
 
                 ApplyEmployeeFilter();
                 OnPropertyChanged(nameof(SelectedEmployeesSummary));
+                
+                SiNetSQL.Services.AppLogger.Debug($"[R03][Employees] Loaded count={_allEmployees.Count}");
             });
         }
         catch (Exception ex)
@@ -434,6 +458,9 @@ public class R03ReportViewModel : INotifyPropertyChanged
 
     private R03ReportRequest BuildRequest()
     {
+        var ctx = CurrentUserContext.Instance;
+        SiNetSQL.Services.AppLogger.Debug($"[R03][BuildRequest] IsAdminMode={IsAdminMode}, MasterPlanEmployeeId={ctx.MasterPlanEmployeeId}, SelectedEmployeeIdsBefore=[{string.Join(",", _selectedEmployeeIds)}]");
+
         var request = new R03ReportRequest
         {
             Year = SelectedYear,
@@ -446,7 +473,6 @@ public class R03ReportViewModel : INotifyPropertyChanged
                 request.EmployeeIds.Add(id);
         }
 
-        var ctx = CurrentUserContext.Instance;
         if (!ctx.IsManagement)
         {
             if (ctx.MasterPlanEmployeeId.HasValue)
@@ -465,6 +491,7 @@ public class R03ReportViewModel : INotifyPropertyChanged
             }
         }
 
+        SiNetSQL.Services.AppLogger.Debug($"[R03][BuildRequest] EmployeeIdsFinal=[{string.Join(",", request.EmployeeIds)}]");
         return request;
     }
 

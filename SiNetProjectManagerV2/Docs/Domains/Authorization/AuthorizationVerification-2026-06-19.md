@@ -102,8 +102,9 @@ To facilitate manual testing of roles without needing to change Windows users or
 ### 4.6 Manual Execution / Findings
 - **RF03/R03 עבור Employee** משתמש אוטומטית ב־CurrentUser.
 - **Employee** בוחר רק חודש.
-- **Employee** לא יכול לבחור עובד אחר. רשימת העובדים מוסתרת ומוצג טקסט ברור במקום ("הדוח ייבדק עבור המשתמש הנוכחי...").
-- קיימת חסימה גם ברמת ה־ViewModel לפני ביצוע (`BuildRequest`) שזורקת שגיאה אם מנסים להעביר `userId` שונה.
+- **Employee** לא יכול לבחור עובד אחר. רשימת העובדים מוסתרת ומוצג טקסט ברור במקום ("הדוח ייבדק עבור המשתמש הנוכחי..."). אם למשתמש אין עובד מקושר (`MasterPlanEmployeeId`), מוצגת הודעת שגיאה ברורה: "לא מוגדר קישור בין המשתמש שלך לבין עובד במערכת נוכחות."
+- קיימת חסימה גם ברמת ה־ViewModel לפני ביצוע (`BuildRequest`) שזורקת שגיאה אם מנסים להעביר `userId` שונה, והבקשה נבנית אך ורק סביב ה־`MasterPlanEmployeeId`.
+- **ייעול ביצועים ואבטחה:** עובד רגיל לא טוען יותר את כל 28+ העובדים מהשרת (GetEmployeesAsync). רשימת העובדים בזיכרון (`_allEmployees`) מכילה רק את העובד הנוכחי.
 - **Admin/Management behavior unchanged**. מנהל ואדמין ממשיכים לראות ולבחור עובדים מהרשימה המלאה.
 - **הערת כיסוי בדיקות (Test Coverage):** הלוגיקה של `R03ReportViewModel` דורשת שימוש ב־WPF Dispatcher וקשורה חזק לממשק המשתמש (UI). מכיוון שאין תשתית בדיקות UI, מנגנון זה תועד פה כ־Manual covered בשלב זה.
 - לא שונה DB / Migration / roles.

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 using SiNetSQL.MVVM;
+using SiOffice.GoogleConnector.Reports;
 
 namespace SiNetProjectManagerV2.Dialogs;
 
@@ -17,7 +18,31 @@ public partial class UserManagementWindow : Window
     {
         InitializeComponent();
 
-        DataContext = App.ServiceProvider.GetRequiredService<UserManagementViewModel>();
+        var vm = App.ServiceProvider.GetRequiredService<UserManagementViewModel>();
+        DataContext = vm;
+
+        _ = LoadMasterPlanEmployeesAsync(vm);
+    }
+
+    private async Task LoadMasterPlanEmployeesAsync(UserManagementViewModel vm)
+    {
+        try
+        {
+            var reportService = App.ServiceProvider.GetRequiredService<R03ReportService>();
+            var employees = await reportService.GetEmployeesAsync(activeOnly: false);
+            
+            // Add a null/empty option for "No Mapping"
+            vm.MasterPlanEmployees.Add(new UserManagementViewModel.MasterPlanEmployeeDto(0, "-- ללא קישור --"));
+
+            foreach (var emp in employees.OrderBy(e => e.Name))
+            {
+                vm.MasterPlanEmployees.Add(new UserManagementViewModel.MasterPlanEmployeeDto(emp.Id, emp.Name));
+            }
+        }
+        catch (Exception ex)
+        {
+            SiNetSQL.Diagnostics.AppLogger.Error(ex, "Failed to load MasterPlan employees for User Management.");
+        }
     }
 
     /// <summary>
