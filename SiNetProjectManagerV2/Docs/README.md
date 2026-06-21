@@ -1,8 +1,8 @@
 # SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 19.06.2026
-> **Status:** Active documentation index — Authorization Verification added.
+> **Updated:** 21.06.2026
+> **Status:** Active documentation index — Migration domain added.
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -48,6 +48,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Configuration — System Settings Catalog | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
 | Configuration — System Health Google Diagnostics Integration | [`Domains\Configuration\SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md`](Domains/Configuration/SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md) |
 | Project Work | [`Domains\ProjectWork\ProjectWorkWindow2-2026-06-19.md`](Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md) |
+| Migration — Google Sheet Review | [`Domains\Migration\GoogleSheetReviewMigrationDesign-2026-06-21.md`](Domains/Migration/GoogleSheetReviewMigrationDesign-2026-06-21.md) |
 
 ## 4. Decisions
 
