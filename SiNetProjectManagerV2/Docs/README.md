@@ -2,7 +2,7 @@
 
 > **Created:** 26.05.2026
 > **Updated:** 21.06.2026
-> **Status:** Active documentation index — Migration domain added.
+> **Status:** Active documentation index — Priority 1 UI documentation added.
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -33,6 +33,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Architecture | [`Domains\Architecture\ArchitecturePrinciples-2026-05-26.md`](Domains/Architecture/ArchitecturePrinciples-2026-05-26.md) |
 | Architecture — Service Catalog | [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](Domains/Architecture/ServiceCatalog-2026-05-26.md) |
 | Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
+| Email — Management View and Actions Tree | [`Domains\Email\EmailManagementViewAndActionsTree-2026-06-21.md`](Domains/Email/EmailManagementViewAndActionsTree-2026-06-21.md) |
 | ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
 | Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
 | Authorization | [`Domains\Authorization\AuthorizationPrinciples-2026-06-18.md`](Domains/Authorization/AuthorizationPrinciples-2026-06-18.md) |
@@ -40,11 +41,13 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Project Files | [`Domains\ProjectFiles\ProjectFilesPrinciples-2026-05-26.md`](Domains/ProjectFiles/ProjectFilesPrinciples-2026-05-26.md) |
 | Workflow | [`Domains\Workflow\WorkflowPrinciples-2026-05-26.md`](Domains/Workflow/WorkflowPrinciples-2026-05-26.md) |
 | Workflow — Tasking Coexistence | [`Domains\Workflow\TaskingWorkflowCoexistence-2026-06-19.md`](Domains/Workflow/TaskingWorkflowCoexistence-2026-06-19.md) |
+| Workflow — UI Screens | [`Domains\Workflow\WorkflowUiScreens-2026-06-21.md`](Domains/Workflow/WorkflowUiScreens-2026-06-21.md) |
 | UI | [`Domains\UI\UiPrinciples-2026-05-26.md`](Domains/UI/UiPrinciples-2026-05-26.md) |
 | Deployment | [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md) |
 | Diagnostics | [`Domains\Diagnostics\DiagnosticsPrinciples-2026-05-26.md`](Domains/Diagnostics/DiagnosticsPrinciples-2026-05-26.md) |
 | AI | [`Domains\AI\AiSystemPrinciples-2026-05-26.md`](Domains/AI/AiSystemPrinciples-2026-05-26.md) |
 | Plan Review | [`Domains\PlanReview\PlanReviewPrinciples-2026-05-26.md`](Domains/PlanReview/PlanReviewPrinciples-2026-05-26.md) |
+| Plan Review — Inspection Report UI and Lifecycle | [`Domains\PlanReview\InspectionReportUiAndLifecycle-2026-06-21.md`](Domains/PlanReview/InspectionReportUiAndLifecycle-2026-06-21.md) |
 | Configuration — System Settings Catalog | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
 | Configuration — System Health Google Diagnostics Integration | [`Domains\Configuration\SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md`](Domains/Configuration/SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md) |
 | Project Work | [`Domains\ProjectWork\ProjectWorkWindow2-2026-06-19.md`](Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md) |
