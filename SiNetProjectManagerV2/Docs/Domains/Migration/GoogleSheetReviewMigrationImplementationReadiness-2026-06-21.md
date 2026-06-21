@@ -10,16 +10,14 @@
 
 **Overall readiness level:** Mostly ready with gaps
 
-**Recommended next step:** Implementation can start with blockers resolved.
+**Recommended next step:** Implementation can start with Phase 0 and Phase 1.
 
-The core infrastructure for the migration (Inspection Reports, Workflow Engine, UI components) is robust and functional. However, there are specific implementation gaps, particularly around the read-only preview guarantees and workflow advancement rules, that must be addressed before coding the actual commit pipeline.
+The core infrastructure for the migration (Inspection Reports, Workflow Engine, UI components) is robust and functional. Following user decisions on the migration blockers, we have a clear path forward. The migration will use a new read-only Preview, a user-approved reviewer mapping step, and strict workflow advancement rules.
 
-**Top 5 blockers / gaps:**
-1. Verifying same-group constraint for reviewer reassignment.
-2. Workflow advancement rules (skipping stages) if no direct transition exists.
-3. Guaranteeing the new Preview is truly read-only (unlike the legacy `BuildPreviewAsync`).
-4. Comparing existing report versions with JSON cleanly without relying on brittle string comparisons.
-5. Creating placeholder notes for skipped numbering.
+**Top remaining blockers / gaps:**
+1. Creating placeholder notes for skipped numbering cleanly.
+2. Determining how to enforce Alternative 1 without duplicating alternatives.
+3. Defining the exact migration outcome log storage mechanism.
 
 ---
 
@@ -30,11 +28,11 @@ The core infrastructure for the migration (Inspection Reports, Workflow Engine, 
 | Read Index Sheet | `IndexSheetReader.ReadAsync()` | Ready as-is | Use existing service | `IndexSheetReader.cs` |
 | Resolve Project | `MigrationTaskService.ResolveProjectAsync` logic | Needs small extension | Extract read-only resolution logic | `MigrationTaskService.cs` |
 | Detect duplicate project rows | None (assumes unique per project) | Needs new integration | Add grouping/validation in preview builder | Preview logic |
-| Resolve reviewer / בודק | `TaskPriorityEngine.BuildUserLookupCachesAsync` | Ready as-is | Use existing lookup | `TaskPriorityEngine.cs` |
+| Resolve reviewer / בודק | `TaskPriorityEngine.BuildUserLookupCachesAsync` | Needs new integration | Build mapping UI for user approval | `TaskPriorityEngine.cs` + new UI |
 | Resolve or create Alternative 1 | `ProjectAlternativeService` | Needs small extension | Add `EnsureAlternativeAsync` helper | `ProjectAlternativeService.cs` |
 | Read AI JSON cache | `ExtractionCacheService.LoadAsync()` | Ready as-is | Use existing service | `ExtractionCacheService.cs` |
-| Export/import JSON cache ZIP | None | Gap / risk | Evaluate if needed for Phase 1. If yes, implement. | `ExtractionCacheService.cs` |
-| Validate JSON envelope | `ExtractionCacheService` serialization | Needs small extension | Add structural validation on load | `ExtractionCacheService.cs` |
+| Export/import JSON cache ZIP | None | Postponed | Not needed for Phase 1 | `ExtractionCacheService.cs` |
+| Validate JSON envelope | `ExtractionCacheService` serialization | Ready as-is | Envelope schema is stable | `ExtractionCacheService.cs` |
 | Build main sections from JSON | `TemplateSyncService.SyncAsync()` | Ready as-is | Map JSON codes to `TemplateSyncRow` | `TemplateSyncService.cs` |
 | Create InspectionSeries | `TemplateSyncService.EnsureSeriesAsync()` / manual creation | Needs small extension | Ensure series creation before reports | `InspectionReportService.cs` |
 | Create InspectionReport versions | `InspectionReportService.CreateReportAsync()` | Ready as-is | Call per version | `InspectionReportService.cs` |
@@ -43,15 +41,16 @@ The core infrastructure for the migration (Inspection Reports, Workflow Engine, 
 | Populate note text/status/planner response | `InspectionReportService.SaveNotesAsync()` / direct DB | Needs small extension | Map JSON data to note entities | `InspectionReportService.cs` |
 | Lock non-latest reports | `InspectionReportService.MarkReportAsSentAsync()` | Ready as-is | Call for historical versions | `InspectionReportService.cs` |
 | Decide latest report open/closed state | Logic based on status | Ready as-is | Implement mapping rules | Migration logic |
-| Compare existing report version with JSON | DB query `(SeriesId, ReportNumber)` + `SentSpreadsheetId` | Needs small extension | Add robust conflict detection | Migration logic |
+| Compare existing report version with JSON | `SentSpreadsheetId` | Ready as-is | Compare with JSON `ReportSpreadsheetId` | Migration logic |
 | Detect report version conflict | DB query | Needs small extension | Surface in preview | Migration logic |
 | Start Review Workflow at mapped stage | `WorkflowTaskOrchestrator.StartWorkflowAsync(initialStageCode)` | Ready as-is | Call with target stage | `WorkflowTaskOrchestrator.cs` |
 | Complete final-status Workflow | `WorkflowEngine.CompleteAsync()` | Ready as-is | Call after start | `WorkflowEngine.cs` |
-| Advance existing Workflow forward | `WorkflowTaskOrchestrator.AdvanceWithTasksAsync()` | Blocked | Verify if skipping stages is allowed | `WorkflowTaskOrchestrator.cs` |
+| Advance existing Workflow forward | `WorkflowTaskOrchestrator.AdvanceWithTasksAsync()` | Blocked | Direct jumps not supported. Must classify as Manager Review. | `WorkflowTaskOrchestrator.cs` |
 | Prevent backward Workflow movement | `WorkflowStageDefinition.SortOrder` comparison | Needs small extension | Add validation in preview | Migration logic |
-| Reassign workflow-created task to Sheet reviewer | `TaskService.ReassignTask()` | Blocked | Verify same-group constraint | `TaskService.cs` |
+| Reassign workflow-created task to Sheet reviewer | `TaskService.ReassignTask()` | Needs new integration | Classify Group Mismatches and use UI mapping | `TaskService.cs` |
 | Report reassignment failure clearly | None | Needs new integration | Add explicit logging/UI feedback | Migration commit logic |
 | Classify Preview row | None | Needs new integration | Implement classification logic | Preview logic |
+| Read-only preview | None | Needs new integration | Build new preview logic without DB writes | Preview logic |
 | Commit ready rows | None | Needs new integration | Implement commit pipeline | Commit logic |
 | Manager Review rows | None | Needs new integration | Surface in UI | Preview logic |
 | Log migration outcomes | `IActionLifecycleReporter` (maybe) | Needs design decision | Decide log storage mechanism | Logging logic |
@@ -74,7 +73,7 @@ The following existing mechanisms must be reused before writing new code:
 - `InspectionReportService.MarkReportAsSentAsync`: To lock historical versions.
 - `WorkflowTaskOrchestrator.StartWorkflowAsync`: To start the workflow at the correct stage.
 - `WorkflowEngine.CompleteAsync`: To finalize completed workflows.
-- `WorkflowTaskOrchestrator.AdvanceWithTasksAsync`: To move existing workflows forward.
+- `WorkflowTaskOrchestrator.AdvanceWithTasksAsync`: To move existing workflows forward (if direct transition exists).
 - `WorkflowQueryService`: For finding existing workflows and stages.
 - `WorkflowStageTaskProvisioningService`: To create workflow tasks.
 - `TaskFactory`: Centralized task creation.
@@ -92,7 +91,7 @@ These old mechanisms still exist and **must not be deleted yet**:
 
 | Mechanism | Current status | Why it remains | Can be touched in phase 1? |
 |---|---|---|---|
-| `MigrationTaskService.BuildPreviewAsync` | Active legacy | Used by the current active migration path | No. Must be preserved. |
+| `MigrationTaskService.BuildPreviewAsync` | Active legacy | Used by the current active migration path (writes to DB) | No. Must be preserved. |
 | `MigrationTaskService.CommitTasksAsync` | Active legacy | Creates standalone ProjectAssignment tasks for current path | No. Must be preserved. |
 | Old standalone task creation path | Active legacy | Still actively used across the system | No. |
 | R01ReportDialog / R01 path | Active, separate | Separate workflow from standard Inspection Reports | No. |
@@ -107,14 +106,11 @@ These old mechanisms still exist and **must not be deleted yet**:
 
 The following issues must be resolved before implementation starts:
 
-1. **Same-group constraint for reviewer reassignment:** Verify if `TaskService.ReassignTask()` will block reassignment if the Sheet reviewer is not in the same `UserGroup` as the workflow default assignee.
-2. **Workflow advancement without transition rules:** Verify if `WorkflowTaskOrchestrator.AdvanceWithTasksAsync()` can advance an existing workflow from stage A to stage C (skipping B) if no direct transition exists.
-3. **Read-only preview:** Verify that `MigrationTaskService.BuildPreviewAsync` currently writes to the DB (it does) and therefore cannot be reused as-is. A new, truly read-only preview builder is required.
-4. **Comparing existing report versions:** Verify the existing clean way to compare JSON report content with existing `InspectionReport` versions (likely using `SentSpreadsheetId`).
-5. **Placeholder notes:** Verify the acceptable way to create placeholder notes for skipped numbering (e.g., calling `AddNoteAsync` with empty text).
-6. **Ensure Alternative 1:** Verify if there is an existing mechanism to ensure Alternative "1" without duplicating alternatives.
-7. **JSON cache ZIP export/import:** Verify if this exists or needs implementation.
-8. **Migration outcome logging:** Verify if a mechanism already exists or if a new documentation-approved mechanism is needed.
+1. **Placeholder notes:** Verify the acceptable way to create placeholder notes for skipped numbering (e.g., calling `AddNoteAsync` with empty text).
+2. **Ensure Alternative 1:** Verify if there is an existing mechanism to ensure Alternative "1" without duplicating alternatives.
+3. **Migration outcome logging:** Verify if a mechanism already exists or if a new documentation-approved mechanism is needed.
+
+*(Note: Reviewer reassignment, workflow skipping, read-only preview, and report comparison blockers were resolved by User Decisions. See Section 13.)*
 
 ---
 
@@ -128,6 +124,7 @@ These gaps should be documented but do not block the first implementation phase:
 - No migration mode in UI.
 - No dedicated diagnostics for every Preview classification.
 - No dedicated Migration dashboard yet.
+- JSON cache ZIP export/import is postponed.
 
 ---
 
@@ -139,15 +136,16 @@ These gaps should be documented but do not block the first implementation phase:
 - Define new Preview row model.
 - Define classification enum.
 
-**Phase 1 — Read-only Preview:**
+**Phase 1 — Read-only Preview & Mapping:**
 - Read Index Sheet.
-- Resolve project exactly.
+- Resolve project exactly (read-only).
 - Detect duplicate rows.
-- Read JSON cache.
-- Resolve reviewer.
+- Read JSON cache (read-only).
+- Build Reviewer Mapping UI (User maps Sheet reviewers to System Users).
+- Apply mapped reviewers.
 - Determine workflow target stage.
 - Determine report action.
-- Classify rows.
+- Classify rows strictly based on new classification definitions.
 - Show warnings/conflicts.
 
 **Phase 2 — Report import only:**
@@ -162,7 +160,7 @@ These gaps should be documented but do not block the first implementation phase:
 **Phase 3 — Workflow reconstruction:**
 - Start Workflow at mapped stage.
 - Complete final-status workflows.
-- Reassign task to reviewer.
+- Reassign task to reviewer (based on mapped user).
 - Handle reassignment failures.
 - Do not move backwards.
 - Manager Review for unclear existing workflows.
@@ -186,15 +184,15 @@ These gaps should be documented but do not block the first implementation phase:
 | Commit Ready | Exact project, valid status, no conflicts, reviewer resolved | No | "Ready to commit" | Yes |
 | Commit Ready with warning | Same as above, but missing JSON | No | "Workflow only; missing JSON" | Yes |
 | Already Done | Existing workflow at same/later stage + matching reports | Yes (Skip) | "Already up to date" | Yes (Skip) |
-| Manager Review | Likely project match, existing workflow needs advancing, reviewer group mismatch | Yes | "Requires review: [Reason]" | No |
+| Manager Review | Likely project match, existing workflow needs advancing without direct rules | Yes | "Requires review: [Reason]" | No |
 | Conflict | Incompatible existing workflow, differing reports | Yes | "Conflict: [Reason]" | No |
 | No Match | Project not found | Yes | "Project not found" | No |
 | Missing Data | Insufficient Sheet data | Yes | "Insufficient data" | No |
 | JSON Missing | Required for action, but missing | Yes | "Missing required JSON" | No |
-| Reviewer Not Found | Reviewer lookup failed | No (Warning) | "Reviewer not found; using default" | Yes (Fallback) |
-| Reviewer Group Mismatch | Reviewer found but not in group | Yes (Unless accepted) | "Reviewer group mismatch" | No (Requires accept) |
+| Reviewer Not Mapped | Reviewer missing from User Mapping | Yes | "Reviewer mapping required" | No (Requires Map) |
+| Reviewer Group Mismatch | Reviewer mapped but not in required group | Yes | "Reviewer group mismatch" | No (Requires Accept) |
 | Existing Workflow Conflict | Multiple workflows, or backward movement | Yes | "Workflow conflict" | No |
-| Existing Report Conflict | Differing versions | Yes | "Report version conflict" | No |
+| Existing Report Conflict | Differing versions (Sheet vs DB) | Yes | "Report version conflict" | No |
 | Duplicate Project Row | Multiple rows for same project | Yes | "Duplicate project row" | No |
 | Backward Movement | Target stage < Current stage | Yes | "Backward movement" | No |
 
@@ -206,7 +204,7 @@ These gaps should be documented but do not block the first implementation phase:
 - **Same report version with same source:** Classified as `Already Done`.
 - **Same report version with different source/content:** Classified as `Conflict`.
 - **Existing workflow same stage:** Classified as `Already Done` or no-op.
-- **Existing workflow behind target:** Forward advancement only if valid and clear.
+- **Existing workflow behind target:** Forward advancement only if valid direct rule exists. If no direct rule exists, classify as `Manager Review`.
 - **Existing workflow ahead or backward movement:** Classified as `Manager Review` / `Conflict`.
 - **Duplicate Sheet rows for same project:** Classified as `Manager Review` / `Conflict`.
 - **Missing JSON but valid Sheet data:** Workflow-only creation allowed with warning.
@@ -216,14 +214,10 @@ These gaps should be documented but do not block the first implementation phase:
 
 ## 10. Open decisions
 
-1. Should reviewer reassignment be allowed across groups for migration, or should users/groups be fixed before migration?
-2. If Workflow cannot advance from stage A to C directly, should migration:
-   - create Workflow directly at target stage when no existing workflow exists only,
-   - leave existing unclear workflow for Manager Review,
-   - or add a documented migration-only advancement helper?
-3. Should placeholder notes for skipped numbering be preserved permanently or allowed to be reindexed by UI later?
-4. What is the exact migration outcome log storage mechanism?
-5. Should JSON ZIP export/import be implemented in phase 1 or later?
+1. Should placeholder notes for skipped numbering be preserved permanently or allowed to be reindexed by UI later?
+2. What is the exact migration outcome log storage mechanism?
+
+*(Note: Open decisions regarding Reviewer Group Bypass, Workflow Stage Jumping, and JSON zip export were resolved by User Decisions. See Section 13.)*
 
 ---
 
@@ -246,6 +240,15 @@ These gaps should be documented but do not block the first implementation phase:
 
 | Item | Status |
 |---|---|
+| Reusing legacy `BuildPreviewAsync` as new Preview | Cancelled |
+| Silent fallback to default reviewer | Cancelled |
+| Bypassing same-group reassignment rules | Not approved |
+| Automatic stage jump helper | Not approved |
+| Running extraction again in this task | Not approved |
+| JSON ZIP import/export | Undecided; likely postponed unless needed |
+| Full migration commit | Postponed |
+| DB schema changes | Not approved |
+| Code implementation | Not approved in this investigation task |
 | Creating a parallel report mechanism | Cancelled |
 | Creating migration-only standalone tasks | Cancelled |
 | Deleting old migration task path now | Not approved |
@@ -257,5 +260,56 @@ These gaps should be documented but do not block the first implementation phase:
 | Refactoring oversized ViewModels before migration | Postponed |
 | Creating bulk note API before proving need | Postponed |
 | Direct report-to-workflow link | Postponed unless proven necessary |
-| DB migrations | Not approved |
-| Code changes | Not approved in this readiness task |
+
+---
+
+## 13. User decisions after blocker review
+
+### Decision 1 — New read-only Preview is required
+- The migration must use a **new, purely read-only Preview mechanism**.
+- It must not reuse `MigrationTaskService.BuildPreviewAsync` as-is, because the legacy code writes to the DB (it creates `ProjectAssignment` tasks directly, sets status, and creates historical records).
+- The new Preview must not create `TaskType`, `Status`, `ProjectAssignment`, `WorkflowInstance`, `TaskLink`, `InspectionReport`, etc.
+- `MigrationTaskService.BuildPreviewAsync` remains **active legacy** and must not be deleted.
+
+### Decision 2 — Reviewer / בודק mapping will be user-approved
+- Do not solve reviewer assignment by bypassing the same-group constraint.
+- A **Reviewer Mapping Step** must be built before the migration commit phase.
+- The UI will present all distinct reviewer names from the Sheet, allowing the user to map them to internal system users.
+- If unmapped, classify as `Reviewer Not Mapped`.
+- If mapped but group rules prevent assignment, classify as `Reviewer Group Mismatch`.
+- **No automatic fallback to default user.**
+
+---
+
+## 14. Workflow advancement research result
+
+**Result:** Only direct transition supported (for existing workflows).
+
+**Findings:**
+1. `WorkflowEngine.AdvanceStageAsync` strictly validates that a transition rule exists between the current stage and the target stage. It cannot jump stages.
+2. `WorkflowTaskOrchestrator.AdvanceWithTasksAsync` relies on `AdvanceStageAsync`, meaning it also cannot skip stages.
+3. If we advance step-by-step, it will create tasks for all intermediate stages, creating false history.
+4. However, `StartWorkflowAsync(initialStageCode)` **does** allow starting a brand-new workflow directly at the requested stage, and it provisions only that stage's tasks. For final statuses, `CompleteAsync()` must be called separately.
+
+**Recommendation:**
+- For brand-new workflows: Use `StartWorkflowAsync(initialStageCode)` safely.
+- For existing workflows behind the target stage: **Do not jump stages.** Classify the row as `Manager Review` / `Conflict`.
+- Do not implement a migration-only stage-jump helper unless explicitly approved later.
+
+---
+
+## 15. JSON cache and report comparison research result
+
+**Result:** Current JSON is sufficient for both Preview and Import. The deterministic comparison rule is clear.
+
+**Findings:**
+1. **Cache Path:** `%APPDATA%\SiNet\ExtractionCache\{project_number}\`
+2. **File Naming Convention:** `R{reportNumber}_V{versionIndex}.json` (e.g., `R1_V2.json`). Duplicate handling adds suffixes (e.g., `.1.json`).
+3. **JSON Structure:** `ExtractionCacheEnvelope` contains `ProjectNumber`, `ReportNumber`, `VersionIndex`, `TemplateSpreadsheetId`, `ReportSpreadsheetId`, `ExtractedAtUtc`, `Sections`, `GeneralFields`, and `Warnings`.
+4. **Report Comparison Rule (Phase 1 & 2):** Use the `ReportSpreadsheetId` from the JSON to compare with the `SentSpreadsheetId` on the existing `InspectionReport` in the DB. This is a robust and deterministic key.
+5. **Missing JSON:** If JSON is missing for a valid sheet row, we classify it as `Commit Ready with warning` ("Workflow only; missing JSON").
+6. **ZIP Export/Import:** Not necessary for Phase 1 since the cache is on disk and Phase 1 only reads it. It is postponed.
+
+**Recommendation:**
+- Phase 1 can read the existing JSON cache via `ExtractionCacheService.LoadAsync()` without changing it.
+- Use `ReportSpreadsheetId` vs `SentSpreadsheetId` as the primary conflict-detection rule.
