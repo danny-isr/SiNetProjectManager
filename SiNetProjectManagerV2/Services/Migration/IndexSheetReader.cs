@@ -39,8 +39,16 @@ public sealed class IndexSheetReader
         [ColInspector] = ["בודק", "שם בודק", "מבקר", "בודק/ת", "Inspector",
                           "בודק/ת:", "שם הבודק", "שם המבקר", "שם הבודקת",
                           "בודקת", "מבקר/ת", "ביצוע", "ביצוע ע\"י", "מבצע",
-                          "עורך הביקורת", "עורך", "פקח", "שם פקח"],
-        [ColEmail] = ["אימייל", "דוא\"ל", "מייל", "Email", "דואר אלקטרוני", "כתובת מייל", "mail"],
+                          "עורך הביקורת", "עורך", "פקח", "שם פקח",
+                          // ממלא דוח אחרון variants — used when no explicit בודק column exists
+                          "ממלא דוח אחרון", "ממלא הדוח האחרון",
+                          "שם ממלא דוח אחרון", "שם ממלא הדוח האחרון",
+                          "עורך דוח אחרון", "עורך הדוח האחרון",
+                          "אחראי דוח אחרון", "אחראי הדוח האחרון"],
+        [ColEmail] = ["אימייל", "דוא\"ל", "מייל", "Email", "דואר אלקטרוני", "כתובת מייל", "mail",
+                      // ממלא דוח אחרון email variants
+                      "מייל ממלא הדוח האחרון", "מייל ממלא דוח אחרון",
+                      "אימייל ממלא הדוח האחרון", "דוא\"ל ממלא הדוח האחרון"],
         [ColStatus] = ["סטטוס", "מצב", "Status", "סטאטוס"],
         [ColLink] = ["קישור", "קישור לדוח", "לינק", "Link", "URL"],
         [ColLinkVersions] = ["גרסאות הגליון", "קישורים לגרסאות הגליון"],
@@ -388,11 +396,20 @@ public sealed class IndexSheetReader
         columnMapping.TryGetValue(ColInspector, out var reviewerCol);
         var hasReviewerCol = columnMapping.ContainsKey(ColInspector);
 
+        // Resolve the actual header name used for the reviewer column so the log is actionable
+        string? reviewerHeaderName = null;
+        if (hasReviewerCol && headerRowIndex >= 0)
+        {
+            var headerRow = textRows[headerRowIndex];
+            if (reviewerCol < headerRow.Count)
+                reviewerHeaderName = headerRow[reviewerCol]?.ToString()?.Trim();
+        }
+
         columnMapping.TryGetValue(ColStatus, out var statusCol);
         var hasStatusCol = columnMapping.ContainsKey(ColStatus);
 
         if (hasReviewerCol)
-            log?.Invoke($"✅ Reviewer column detected at col {reviewerCol}.");
+            log?.Invoke($"✅ Reviewer column detected: '{reviewerHeaderName}' (col{reviewerCol}).");
         else
             log?.Invoke("⚠ Reviewer (Inspector) column NOT detected — reviewer field will be empty for all rows.");
 
