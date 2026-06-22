@@ -286,10 +286,16 @@ public sealed class IndexSheetReader
     /// where each number is a clickable link to a report version).
     /// </summary>
     /// <param name="log">Optional logging callback for diagnostics.</param>
+    /// <param name="includeRowsWithoutLinks">
+    /// When <c>true</c>, rows that have valid project/status/reviewer data but no report
+    /// hyperlinks are still included with empty <see cref="IndexSheetReportLink.ReportSpreadsheetIds"/>.
+    /// Default is <c>false</c> to preserve legacy extraction behavior.
+    /// </param>
     public async Task<List<IndexSheetReportLink>> ReadReportHyperlinksAsync(
         string spreadsheetId,
         Action<string>? log = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeRowsWithoutLinks = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(spreadsheetId);
 
@@ -399,16 +405,32 @@ public sealed class IndexSheetReader
 
             if (hyperlinks.Count == 0)
             {
-                skippedNoHyperlinks++;
-                // Log the first few skipped rows for diagnostics
-                if (skippedNoHyperlinks <= 3)
+                if (includeRowsWithoutLinks && !string.IsNullOrWhiteSpace(projectText))
                 {
-                    var cellText = linkCell?.FormattedValue ?? "(null)";
-                    var hasRuns = linkCell?.TextFormatRuns?.Count ?? 0;
-                    var hasHyperlink = linkCell?.Hyperlink ?? "(null)";
-                    var hasEffectiveLink = linkCell?.EffectiveFormat?.TextFormat?.Link?.Uri ?? "(null)";
-                    log?.Invoke($"  Row {r + 1} '{projectText}': no hyperlinks extracted. " +
-                        $"Cell text='{cellText}', textFormatRuns={hasRuns}, hyperlink='{hasHyperlink}', effectiveLink='{hasEffectiveLink}'");
+                    // Row has project/status data but no report link — include for Phase 1 Preview
+                    results.Add(new IndexSheetReportLink
+                    {
+                        RowIndex = r,
+                        ProjectRef = projectText,
+                        ReportNumber = reportNum,
+                        ReportSpreadsheetIds = [],
+                        Reviewer = reviewerText,
+                        Status = statusText,
+                    });
+                }
+                else
+                {
+                    skippedNoHyperlinks++;
+                    // Log the first few skipped rows for diagnostics
+                    if (skippedNoHyperlinks <= 3)
+                    {
+                        var cellText = linkCell?.FormattedValue ?? "(null)";
+                        var hasRuns = linkCell?.TextFormatRuns?.Count ?? 0;
+                        var hasHyperlink = linkCell?.Hyperlink ?? "(null)";
+                        var hasEffectiveLink = linkCell?.EffectiveFormat?.TextFormat?.Link?.Uri ?? "(null)";
+                        log?.Invoke($"  Row {r + 1} '{projectText}': no hyperlinks extracted. " +
+                            $"Cell text='{cellText}', textFormatRuns={hasRuns}, hyperlink='{hasHyperlink}', effectiveLink='{hasEffectiveLink}'");
+                    }
                 }
                 continue;
             }
@@ -428,6 +450,19 @@ public sealed class IndexSheetReader
                     ProjectRef = projectText,
                     ReportNumber = reportNum,
                     ReportSpreadsheetIds = spreadsheetIds,
+                    Reviewer = reviewerText,
+                    Status = statusText,
+                });
+            }
+            else if (includeRowsWithoutLinks && !string.IsNullOrWhiteSpace(projectText))
+            {
+                // Had hyperlinks but none parsed to valid spreadsheet IDs — include with empty IDs
+                results.Add(new IndexSheetReportLink
+                {
+                    RowIndex = r,
+                    ProjectRef = projectText,
+                    ReportNumber = reportNum,
+                    ReportSpreadsheetIds = [],
                     Reviewer = reviewerText,
                     Status = statusText,
                 });

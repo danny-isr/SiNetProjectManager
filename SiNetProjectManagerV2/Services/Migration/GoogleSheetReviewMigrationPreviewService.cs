@@ -40,7 +40,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
     public async Task<List<string>> GetDistinctReviewersAsync(string indexSheetId, Action<string>? log = null)
     {
         var reader = new IndexSheetReader(_authService);
-        var links = await reader.ReadReportHyperlinksAsync(indexSheetId, log);
+        var links = await reader.ReadReportHyperlinksAsync(indexSheetId, log, includeRowsWithoutLinks: true);
 
         return links
             .Select(l => l.Reviewer?.Trim())
@@ -60,12 +60,15 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         CancellationToken ct = default)
     {
         var reader = new IndexSheetReader(_authService);
-        var links = await reader.ReadReportHyperlinksAsync(indexSheetId, log);
+        var links = await reader.ReadReportHyperlinksAsync(indexSheetId, log, ct, includeRowsWithoutLinks: true);
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        
+
+        // Pre-load all projects once for efficient in-memory matching across all rows
+        var allProjects = await db.Projects.AsNoTracking().ToListAsync(ct);
+
         var results = new List<GoogleSheetReviewMigrationPreviewRow>();
-        
+
         // Find duplicates in advance by ProjectRef
         var duplicateRefs = links
             .GroupBy(l => l.ProjectRef)
@@ -77,12 +80,12 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         foreach (var link in links)
         {
             var isDuplicateProjectRow = duplicateRefs.Contains(link.ProjectRef);
-            
+
             // Generate rows per version
             var versionCount = link.ReportSpreadsheetIds.Count;
             if (versionCount == 0)
             {
-                var row = await ProcessSingleRowAsync(db, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, 1, null, ct);
+                var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, 1, null, ct);
                 results.Add(row);
             }
             else
@@ -90,7 +93,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 for (int i = 0; i < versionCount; i++)
                 {
                     var spreadsheetId = link.ReportSpreadsheetIds[i];
-                    var row = await ProcessSingleRowAsync(db, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, i + 1, spreadsheetId, ct);
+                    var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, i + 1, spreadsheetId, ct);
                     results.Add(row);
                 }
             }
@@ -101,6 +104,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 
     private async Task<GoogleSheetReviewMigrationPreviewRow> ProcessSingleRowAsync(
         SiNetSQLDbContext db,
+        IReadOnlyList<Project> allProjects,
         IndexSheetReportLink link,
         int rowIndex,
         bool isDuplicateProjectRow,
@@ -119,8 +123,8 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             IsDuplicateProjectRow = isDuplicateProjectRow
         };
 
-        // 1. Resolve Project (Read Only)
-        var (resolvedId, resolvedNumber, resolvedName) = await ResolveProjectReadOnlyAsync(db, link.ProjectRef, ct);
+        // 1. Resolve Project (Read Only) — in-memory, no DB queries
+        var (resolvedId, resolvedNumber, resolvedName) = ResolveProjectReadOnly(allProjects, link.ProjectRef);
         row.ResolvedProjectId = resolvedId;
         row.ResolvedProjectDisplayName = resolvedName;
         
@@ -137,6 +141,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         }
 
         // 2. Reviewer Mapping
+        bool hasReviewerGroupWarning = false;
         if (reviewerMapping.TryGetValue(row.ReviewerNameFromSheet, out var mappedUserId))
         {
             row.MappedReviewerUserId = mappedUserId;
@@ -144,6 +149,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             row.MappedReviewerDisplayName = user?.Name;
             row.ReviewerMappingStatus = "Mapped";
             row.WarningMessages = "Reviewer mapped — group validation not verified in Phase 1";
+            hasReviewerGroupWarning = true;
         }
         else
         {
@@ -166,7 +172,10 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 
                 if (!string.IsNullOrWhiteSpace(reportSpreadsheetId) && jsonCache.ReportSpreadsheetId != reportSpreadsheetId)
                 {
-                    row.WarningMessages += " | JSON Source ID mismatch with sheet link";
+                    row.JsonCacheStatus += " [Source mismatch — blocked]";
+                    row.Classification = MigrationPreviewClassification.ExistingReportConflict;
+                    row.BlockingReason = "JSON cache source does not match Sheet report link.";
+                    return row;
                 }
             }
             else
@@ -304,7 +313,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             row.ExistingReportStatus = "No source ID to match against.";
         }
 
-        // 7. Final Classification
+        // 7. Final Classification — workflow action and report action composed separately
         if (row.IsDuplicateProjectRow)
         {
             row.Classification = MigrationPreviewClassification.DuplicateProjectRow;
@@ -315,20 +324,44 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             row.Classification = MigrationPreviewClassification.AlreadyDone;
             row.ProposedAction = "Nothing to do.";
         }
-        else if (isWorkflowAlreadyDone && jsonCache == null)
+        else if (isWorkflowAlreadyDone && !isReportAlreadyDone && jsonCache != null)
         {
-            row.Classification = MigrationPreviewClassification.AlreadyDone;
-            row.ProposedAction = "Workflow is already at target stage. No JSON available to import report.";
+            // Workflow at target, JSON available — import report only
+            row.ProposedAction = "Import report only (workflow already at target stage)";
+            row.Classification = hasReviewerGroupWarning
+                ? MigrationPreviewClassification.CommitReadyWithWarning
+                : MigrationPreviewClassification.CommitReady;
+            row.IsCommitAllowed = true;
+        }
+        else if (isWorkflowAlreadyDone)
+        {
+            // Workflow at target, no JSON and report not done — nothing to import
+            row.Classification = MigrationPreviewClassification.CommitReadyWithWarning;
+            row.ProposedAction = "Workflow already at target stage. No JSON available to import report.";
+            row.IsCommitAllowed = false;
+        }
+        else if (isReportAlreadyDone)
+        {
+            // Workflow needed, report already done — create workflow only
+            row.ProposedAction = row.ProposedAction + " (Report already done — workflow only)";
+            row.Classification = hasReviewerGroupWarning
+                ? MigrationPreviewClassification.CommitReadyWithWarning
+                : MigrationPreviewClassification.CommitReady;
+            row.IsCommitAllowed = true;
         }
         else if (jsonCache == null)
         {
+            // Workflow needed, report missing, no JSON — create workflow only
             row.Classification = MigrationPreviewClassification.CommitReadyWithWarning;
             row.ProposedAction = row.ProposedAction + " (Workflow only; missing JSON)";
             row.IsCommitAllowed = true;
         }
         else
         {
-            row.Classification = MigrationPreviewClassification.CommitReady;
+            // Workflow needed + JSON available — create workflow + import report
+            row.Classification = hasReviewerGroupWarning
+                ? MigrationPreviewClassification.CommitReadyWithWarning
+                : MigrationPreviewClassification.CommitReady;
             row.ProposedAction = row.ProposedAction + " + Import Report";
             row.IsCommitAllowed = true;
         }
@@ -337,32 +370,63 @@ public sealed class GoogleSheetReviewMigrationPreviewService
     }
 
     /// <summary>
-    /// Purely read-only project resolution logic.
+    /// Purely read-only project resolution against a pre-loaded project list.
+    /// Strategies (in order of precedence):
+    /// 1. Leading number from projectRef matches project.Number.
+    /// 2. Project number appears inside projectRef at a word boundary.
+    /// 3. Exact NameAndNumber match (case-insensitive).
+    /// 4. Exact Title match (case-insensitive).
     /// </summary>
-    private static async Task<(int? Id, string Number, string Name)> ResolveProjectReadOnlyAsync(
-        SiNetSQLDbContext context, string projectRef, CancellationToken ct)
+    private static (int? Id, string Number, string Name) ResolveProjectReadOnly(
+        IReadOnlyList<Project> allProjects, string projectRef)
     {
         if (string.IsNullOrWhiteSpace(projectRef))
             return (null, string.Empty, string.Empty);
 
         Project? project = null;
 
-        var match = System.Text.RegularExpressions.Regex.Match(projectRef.Trim(), @"^\d+");
-        if (match.Success && int.TryParse(match.Value, out var numericId))
+        // Strategy 1: extract leading number from projectRef, match against project.Number
+        var leadingMatch = System.Text.RegularExpressions.Regex.Match(projectRef.Trim(), @"^\d+");
+        if (leadingMatch.Success)
         {
-            project = await context.Projects.AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == numericId || p.Number == numericId, ct);
+            var leadingStr = leadingMatch.Value;
+            project = allProjects.FirstOrDefault(p =>
+                p.Number.HasValue && p.Number.Value.ToString("0") == leadingStr);
         }
 
-        project ??= await context.Projects.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Title != null && p.Title == projectRef, ct);
+        // Strategy 2: project number appears inside projectRef using word-boundary regex
+        // (handles e.g. "פרויקט 2774" where the number is not the leading token)
+        if (project == null)
+        {
+            foreach (var p in allProjects)
+            {
+                if (!p.Number.HasValue) continue;
+                var numStr = p.Number.Value.ToString("0");
+                if (string.IsNullOrEmpty(numStr)) continue;
+                var pattern = new System.Text.RegularExpressions.Regex(
+                    @"(?<!\d)" + System.Text.RegularExpressions.Regex.Escape(numStr) + @"(?!\d)");
+                if (pattern.IsMatch(projectRef))
+                {
+                    project = p;
+                    break;
+                }
+            }
+        }
 
-        project ??= await context.Projects.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.NameAndNumber != null && p.NameAndNumber == projectRef, ct);
+        // Strategy 3: exact NameAndNumber match
+        project ??= allProjects.FirstOrDefault(p =>
+            !string.IsNullOrEmpty(p.NameAndNumber) &&
+            p.NameAndNumber.Equals(projectRef, StringComparison.OrdinalIgnoreCase));
+
+        // Strategy 4: exact Title match
+        project ??= allProjects.FirstOrDefault(p =>
+            !string.IsNullOrEmpty(p.Title) &&
+            p.Title.Equals(projectRef, StringComparison.OrdinalIgnoreCase));
 
         if (project != null)
         {
-            return (project.Id, project.Number?.ToString("0") ?? string.Empty, project.NameAndNumber ?? project.Title ?? project.Id.ToString());
+            return (project.Id, project.Number?.ToString("0") ?? string.Empty,
+                    project.NameAndNumber ?? project.Title ?? project.Id.ToString());
         }
 
         return (null, string.Empty, string.Empty);
