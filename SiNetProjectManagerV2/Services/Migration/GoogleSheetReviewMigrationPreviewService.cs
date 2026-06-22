@@ -21,12 +21,12 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly WorkflowQueryService _workflowQueryService;
-    private readonly IGoogleAuthService _authService;
+    private readonly GoogleAuthService _authService;
 
     public GoogleSheetReviewMigrationPreviewService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         WorkflowQueryService workflowQueryService,
-        IGoogleAuthService authService)
+        GoogleAuthService authService)
     {
         _dbFactory = dbFactory;
         _workflowQueryService = workflowQueryService;
@@ -141,7 +141,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         {
             row.MappedReviewerUserId = mappedUserId;
             var user = await db.Siusers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == mappedUserId, ct);
-            row.MappedReviewerDisplayName = user?.DisplayName ?? user?.Name;
+            row.MappedReviewerDisplayName = user?.Name;
             row.ReviewerMappingStatus = "Mapped";
             row.WarningMessages = "Reviewer mapped — group validation not verified in Phase 1";
         }
@@ -190,7 +190,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         }
 
         var targetStage = await db.WorkflowStageDefinitions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Code == targetStageCode && s.IsActive && s.WorkflowDefinition.IsActive, ct);
+            .FirstOrDefaultAsync(s => s.Code == targetStageCode && s.WorkflowDefinition.IsActive, ct);
 
         if (targetStage == null)
         {
@@ -205,7 +205,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         row.TargetWorkflowStageDisplay = targetStage.Name;
 
         // 5. Existing Workflows
-        var existingWorkflows = await _workflowQueryService.GetActiveWorkflowsForProjectAsync(resolvedId.Value, ct);
+        var existingWorkflows = await _workflowQueryService.GetActiveByProjectAsync(resolvedId.Value, ct);
         var reviewWorkflows = existingWorkflows.Where(w => w.WorkflowDefinitionId == targetStage.WorkflowDefinitionId).ToList();
 
         if (reviewWorkflows.Count > 1)
@@ -259,18 +259,19 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 
         // 6. Existing Reports
         bool isReportAlreadyDone = false;
+        int.TryParse(link.ReportNumber, out var linkReportNumberInt);
         var existingReports = await db.InspectionReports.AsNoTracking()
-            .Where(r => r.ProjectId == resolvedId.Value && r.ReportNumber == link.ReportNumber)
+            .Where(r => r.ProjectId == resolvedId.Value && r.ReportNumber == linkReportNumberInt)
             .ToListAsync(ct);
 
-        string effectiveSourceId = jsonCache?.ReportSpreadsheetId ?? reportSpreadsheetId;
+        string? effectiveSourceId = jsonCache?.ReportSpreadsheetId ?? reportSpreadsheetId;
 
         if (!string.IsNullOrWhiteSpace(effectiveSourceId))
         {
             var matchingReport = existingReports.FirstOrDefault(r => r.SentSpreadsheetId == effectiveSourceId);
             if (matchingReport != null)
             {
-                row.ExistingReportStatus = $"Found matching report (ID: {matchingReport.Id})";
+                row.ExistingReportStatus = $"Found matching report (ID: {matchingReport.ReportId})";
                 isReportAlreadyDone = true;
             }
             else
@@ -279,7 +280,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 var conflictReport = existingReports.FirstOrDefault(r => !string.IsNullOrEmpty(r.SentSpreadsheetId) && r.SentSpreadsheetId != effectiveSourceId);
                 if (conflictReport != null)
                 {
-                    row.ExistingReportStatus = $"Conflict (ID: {conflictReport.Id} has different source)";
+                    row.ExistingReportStatus = $"Conflict (ID: {conflictReport.ReportId} has different source)";
                     row.Classification = MigrationPreviewClassification.ExistingReportConflict;
                     row.BlockingReason = "Existing report has a different JSON source ID.";
                     return row;
@@ -289,7 +290,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 var unknownSourceReport = existingReports.FirstOrDefault(r => string.IsNullOrEmpty(r.SentSpreadsheetId));
                 if (unknownSourceReport != null)
                 {
-                    row.ExistingReportStatus = $"Unlinked existing report (ID: {unknownSourceReport.Id})";
+                    row.ExistingReportStatus = $"Unlinked existing report (ID: {unknownSourceReport.ReportId})";
                     row.Classification = MigrationPreviewClassification.ExistingReportConflict;
                     row.BlockingReason = "Found existing report without SentSpreadsheetId link.";
                     return row;
@@ -361,7 +362,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 
         if (project != null)
         {
-            return (project.Id, project.Number?.ToString("0") ?? string.Empty, project.NameAndNumber ?? project.Title ?? project.Name ?? project.Id.ToString());
+            return (project.Id, project.Number?.ToString("0") ?? string.Empty, project.NameAndNumber ?? project.Title ?? project.Id.ToString());
         }
 
         return (null, string.Empty, string.Empty);

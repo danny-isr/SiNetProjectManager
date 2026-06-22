@@ -1,4 +1,4 @@
-﻿namespace SiNetProjectManagerV2.Services.Migration;
+namespace SiNetProjectManagerV2.Services.Migration;
 
 /// <summary>
 /// DTO for a single row from a Google Sheets report index/tracking sheet.
@@ -148,6 +148,12 @@ public sealed class IndexSheetReportLink
 
     /// <summary>Report number from the sheet (e.g. "1", "2").</summary>
     public string ReportNumber { get; init; } = "";
+
+    /// <summary>Inspector/reviewer name.</summary>
+    public string? Reviewer { get; init; }
+
+    /// <summary>Status text.</summary>
+    public string? Status { get; init; }
 
     /// <summary>
     /// Google Sheets spreadsheet IDs extracted from hyperlinks in the links column, in order of appearance.

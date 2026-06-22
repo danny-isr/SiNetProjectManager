@@ -1,4 +1,4 @@
-﻿using Google.Apis.Sheets.v4;
+using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
 using SiOffice.GoogleConnector.Reports;
 
@@ -361,6 +361,12 @@ public sealed class IndexSheetReader
 
         columnMapping.TryGetValue(ColReportNumber, out var reportNumCol);
         var hasReportNumCol = columnMapping.ContainsKey(ColReportNumber);
+        
+        columnMapping.TryGetValue(ColInspector, out var reviewerCol);
+        var hasReviewerCol = columnMapping.ContainsKey(ColInspector);
+        
+        columnMapping.TryGetValue(ColStatus, out var statusCol);
+        var hasStatusCol = columnMapping.ContainsKey(ColStatus);
 
         var results = new List<IndexSheetReportLink>();
         int skippedNoHyperlinks = 0;
@@ -377,6 +383,14 @@ public sealed class IndexSheetReader
 
             var reportNum = hasReportNumCol && reportNumCol < rowData.Values.Count
                 ? rowData.Values[reportNumCol]?.FormattedValue?.Trim() ?? ""
+                : "";
+                
+            var reviewerText = hasReviewerCol && reviewerCol < rowData.Values.Count
+                ? rowData.Values[reviewerCol]?.FormattedValue?.Trim() ?? ""
+                : "";
+                
+            var statusText = hasStatusCol && statusCol < rowData.Values.Count
+                ? rowData.Values[statusCol]?.FormattedValue?.Trim() ?? ""
                 : "";
 
             // Extract hyperlink URLs from the link cell
@@ -414,6 +428,8 @@ public sealed class IndexSheetReader
                     ProjectRef = projectText,
                     ReportNumber = reportNum,
                     ReportSpreadsheetIds = spreadsheetIds,
+                    Reviewer = reviewerText,
+                    Status = statusText,
                 });
             }
         }

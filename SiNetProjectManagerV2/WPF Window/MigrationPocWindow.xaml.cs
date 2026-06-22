@@ -12,6 +12,8 @@ using SiNetSQL.Services;
 using SiNetSQL.Services.InspectionSync;
 using SiNetSQL.Models;
 using SiOffice.GoogleConnector.Reports;
+using SiNetProjectManagerV2.Services.Migration.Models;
+using SiNetSQL.Services.Workflow;
 
 namespace SiNetProjectManagerV2;
 
@@ -70,7 +72,7 @@ public partial class MigrationPocWindow : Window
             await using var context = await contextFactory.CreateDbContextAsync();
             var allUsers = await context.Siusers
                 .Where(u => u.IsActive && u.IsDomainGroup != true)
-                .Select(u => new SystemUserLookupItem { UserId = u.Id, DisplayName = u.DisplayName ?? u.Name ?? string.Empty })
+                .Select(u => new SystemUserLookupItem { UserId = u.Id, DisplayName = u.Name ?? string.Empty })
                 .OrderBy(u => u.DisplayName)
                 .ToListAsync();
             
@@ -1228,7 +1230,7 @@ public partial class MigrationPocWindow : Window
 
             var previewService = new GoogleSheetReviewMigrationPreviewService(contextFactory, workflowQueryService, authService);
 
-            var reviewers = await previewService.GetDistinctReviewersAsync(indexSheetId, msg => AppendToLog($"[Preview] {msg}"));
+            var reviewers = await previewService.GetDistinctReviewersAsync(indexSheetId!, msg => AppendToLog($"[Preview] {msg}"));
 
             _reviewerMappings.Clear();
             foreach (var r in reviewers)
@@ -1289,7 +1291,7 @@ public partial class MigrationPocWindow : Window
 
             var previewService = new GoogleSheetReviewMigrationPreviewService(contextFactory, workflowQueryService, authService);
 
-            var rows = await previewService.BuildPreviewAsync(indexSheetId, mappingDict, msg => AppendToLog($"[Preview] {msg}"));
+            var rows = await previewService.BuildPreviewAsync(indexSheetId!, mappingDict, msg => AppendToLog($"[Preview] {msg}"));
 
             NewPreviewGrid.ItemsSource = null;
             NewPreviewGrid.ItemsSource = rows;
