@@ -98,7 +98,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             var versionCount = link.ReportSpreadsheetIds.Count;
             if (versionCount == 0)
             {
-                var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, 1, null, ct);
+                var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, 1, 1, null, ct);
                 results.Add(row);
             }
             else
@@ -106,11 +106,56 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 for (int i = 0; i < versionCount; i++)
                 {
                     var spreadsheetId = link.ReportSpreadsheetIds[i];
-                    var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, i + 1, spreadsheetId, ct);
+                    bool isLatest = (i == versionCount - 1);
+                    var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, i + 1, versionCount, spreadsheetId, ct);
                     results.Add(row);
                 }
             }
         }
+
+        // ── Preview Summary ────────────────────────────────────────────
+        int distinctSheetRows        = links.Count;
+        int distinctResolvedProjects = results.Where(r => r.ResolvedProjectId.HasValue)
+                                              .Select(r => r.ResolvedProjectId!.Value)
+                                              .Distinct().Count();
+        int versionRows              = results.Count(r => r.VersionIndex > 1);
+
+        // Count workflow creations only on the latest version row of each group,
+        // where the row actually proposes creation and is not in a blocked/conflict state.
+        static bool IsBlockedClassification(MigrationPreviewClassification c) =>
+            c is MigrationPreviewClassification.NoMatch
+              or MigrationPreviewClassification.ExistingWorkflowConflict
+              or MigrationPreviewClassification.ExistingReportConflict
+              or MigrationPreviewClassification.MissingData
+              or MigrationPreviewClassification.DuplicateProjectRow
+              or MigrationPreviewClassification.ManagerReview
+              or MigrationPreviewClassification.BackwardMovement;
+
+        int proposedWorkflowCreations = results.Count(r =>
+            r.IsLatestVersion &&
+            r.ProposedWorkflowAction.StartsWith("Create workflow", StringComparison.OrdinalIgnoreCase) &&
+            !IsBlockedClassification(r.Classification));
+
+        int proposedReportImports    = results.Count(r => r.ProposedReportAction.StartsWith("Import report", StringComparison.OrdinalIgnoreCase));
+        int noMatch                  = results.Count(r => r.Classification == MigrationPreviewClassification.NoMatch);
+        int reviewerNotMapped        = results.Count(r => r.Classification == MigrationPreviewClassification.ReviewerNotMapped);
+        int jsonMissing              = results.Count(r => r.JsonCacheStatus.StartsWith("Missing", StringComparison.OrdinalIgnoreCase));
+        int workflowConflict         = results.Count(r => r.Classification == MigrationPreviewClassification.ExistingWorkflowConflict);
+        int reportConflict           = results.Count(r => r.Classification == MigrationPreviewClassification.ExistingReportConflict);
+
+        log?.Invoke("── Preview Summary ──────────────────────────────────");
+        log?.Invoke($"  Total preview rows:              {results.Count}");
+        log?.Invoke($"  Distinct sheet rows:             {distinctSheetRows}");
+        log?.Invoke($"  Distinct resolved projects:      {distinctResolvedProjects}");
+        log?.Invoke($"  Report-version rows (V2+):       {versionRows}");
+        log?.Invoke($"  Proposed workflow creations:     {proposedWorkflowCreations}");
+        log?.Invoke($"  Proposed report imports:         {proposedReportImports}");
+        log?.Invoke($"  NoMatch rows:                    {noMatch}");
+        log?.Invoke($"  ReviewerNotMapped rows:          {reviewerNotMapped}");
+        log?.Invoke($"  JSON Missing rows:               {jsonMissing}");
+        log?.Invoke($"  ExistingWorkflowConflict rows:   {workflowConflict}");
+        log?.Invoke($"  ExistingReportConflict rows:     {reportConflict}");
+        log?.Invoke("─────────────────────────────────────────────────────");
 
         return results;
     }
@@ -123,9 +168,12 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         bool isDuplicateProjectRow,
         IReadOnlyDictionary<string, int> reviewerMapping,
         int versionIndex,
+        int totalVersions,
         string? reportSpreadsheetId,
         CancellationToken ct)
     {
+        bool isLatestVersion = (versionIndex == totalVersions);
+
         var row = new GoogleSheetReviewMigrationPreviewRow
         {
             SheetRowIndex = rowIndex,
@@ -133,7 +181,9 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             ProjectNameFromSheet = link.ProjectRef,
             SheetStatus = link.Status ?? "Unknown",
             ReviewerNameFromSheet = link.Reviewer ?? "Unknown",
-            IsDuplicateProjectRow = isDuplicateProjectRow
+            IsDuplicateProjectRow = isDuplicateProjectRow,
+            VersionIndex = versionIndex,
+            IsLatestVersion = isLatestVersion,
         };
 
         // 1. Resolve Project (Read Only) — in-memory, no DB queries
@@ -237,32 +287,33 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             row.BlockingReason = "Multiple active review workflows found.";
             return row;
         }
-        
+
         var existingWorkflow = reviewWorkflows.FirstOrDefault();
         bool isWorkflowAlreadyDone = false;
 
         if (existingWorkflow == null)
         {
             row.ExistingWorkflowStatus = "None";
-            row.ProposedAction = $"Create workflow at stage: {row.TargetWorkflowStageDisplay}";
+            // Workflow action is scoped to the project/review process — recorded here, surfaced in ProposedAction only on the latest version row
+            row.ProposedWorkflowAction = $"Create workflow at stage: {row.TargetWorkflowStageDisplay}";
         }
         else
         {
             row.ExistingWorkflowStatus = $"Stage: {existingWorkflow.CurrentStage?.Name ?? "Unknown"}";
-            
+
             if (existingWorkflow.CurrentStageId == targetStage.Id)
             {
-                row.ProposedAction = "Workflow already at target stage";
+                row.ProposedWorkflowAction = "Workflow already at target stage";
                 isWorkflowAlreadyDone = true;
             }
             else if (existingWorkflow.CurrentStage?.SortOrder < targetStage.SortOrder)
             {
                 var hasDirectTransition = await db.WorkflowTransitionRules.AsNoTracking()
                     .AnyAsync(r => r.FromStageId == existingWorkflow.CurrentStageId && r.ToStageId == targetStage.Id, ct);
-                    
+
                 if (hasDirectTransition)
                 {
-                    row.ProposedAction = $"Advance workflow to {row.TargetWorkflowStageDisplay} (Direct transition exists)";
+                    row.ProposedWorkflowAction = $"Advance workflow to {row.TargetWorkflowStageDisplay} (Direct transition exists)";
                 }
                 else
                 {
@@ -335,12 +386,14 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         else if (isWorkflowAlreadyDone && isReportAlreadyDone)
         {
             row.Classification = MigrationPreviewClassification.AlreadyDone;
+            row.ProposedReportAction = "Nothing to do.";
             row.ProposedAction = "Nothing to do.";
         }
         else if (isWorkflowAlreadyDone && !isReportAlreadyDone && jsonCache != null)
         {
             // Workflow at target, JSON available — import report only
-            row.ProposedAction = "Import report only (workflow already at target stage)";
+            row.ProposedReportAction = $"Import report V{versionIndex}";
+            row.ProposedAction = row.ProposedReportAction;
             row.Classification = hasReviewerGroupWarning
                 ? MigrationPreviewClassification.CommitReadyWithWarning
                 : MigrationPreviewClassification.CommitReady;
@@ -349,14 +402,23 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         else if (isWorkflowAlreadyDone)
         {
             // Workflow at target, no JSON and report not done — nothing to import
+            row.ProposedReportAction = $"No JSON available for V{versionIndex}.";
+            row.ProposedAction = $"Workflow already at target stage. No JSON available for V{versionIndex}.";
             row.Classification = MigrationPreviewClassification.CommitReadyWithWarning;
-            row.ProposedAction = "Workflow already at target stage. No JSON available to import report.";
             row.IsCommitAllowed = false;
         }
         else if (isReportAlreadyDone)
         {
-            // Workflow needed, report already done — create workflow only
-            row.ProposedAction = row.ProposedAction + " (Report already done — workflow only)";
+            // Workflow needed, report already done — workflow action only (on latest version row)
+            row.ProposedReportAction = $"Report V{versionIndex} already done.";
+            if (isLatestVersion)
+            {
+                row.ProposedAction = row.ProposedWorkflowAction + " (Report already done — workflow only)";
+            }
+            else
+            {
+                row.ProposedAction = $"Report V{versionIndex} already done. Workflow action handled on latest version row.";
+            }
             row.Classification = hasReviewerGroupWarning
                 ? MigrationPreviewClassification.CommitReadyWithWarning
                 : MigrationPreviewClassification.CommitReady;
@@ -364,18 +426,36 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         }
         else if (jsonCache == null)
         {
-            // Workflow needed, report missing, no JSON — create workflow only
+            // Workflow needed, report missing, no JSON — workflow action only on latest version row
+            row.ProposedReportAction = $"No JSON for V{versionIndex} — report import not possible.";
+            if (isLatestVersion)
+            {
+                row.ProposedAction = row.ProposedWorkflowAction + $" (Workflow only; missing JSON for V{versionIndex})";
+            }
+            else
+            {
+                row.ProposedAction = $"Import V{versionIndex}: no JSON. Workflow action handled on latest version row.";
+            }
             row.Classification = MigrationPreviewClassification.CommitReadyWithWarning;
-            row.ProposedAction = row.ProposedAction + " (Workflow only; missing JSON)";
             row.IsCommitAllowed = true;
         }
         else
         {
-            // Workflow needed + JSON available — create workflow + import report
+            // Workflow needed + JSON available — compose action depending on version scope
+            row.ProposedReportAction = $"Import report V{versionIndex}";
+            if (isLatestVersion)
+            {
+                // Latest version: show full workflow + report action
+                row.ProposedAction = row.ProposedWorkflowAction + $" + Import report V{versionIndex}";
+            }
+            else
+            {
+                // Earlier version: report import only; workflow is handled on the latest version row
+                row.ProposedAction = $"Import report V{versionIndex} only. Workflow action handled on latest version row.";
+            }
             row.Classification = hasReviewerGroupWarning
                 ? MigrationPreviewClassification.CommitReadyWithWarning
                 : MigrationPreviewClassification.CommitReady;
-            row.ProposedAction = row.ProposedAction + " + Import Report";
             row.IsCommitAllowed = true;
         }
 

@@ -409,7 +409,18 @@ public sealed class IndexSheetReader
         var hasStatusCol = columnMapping.ContainsKey(ColStatus);
 
         if (hasReviewerCol)
-            log?.Invoke($"✅ Reviewer column detected: '{reviewerHeaderName}' (col{reviewerCol}).");
+        {
+            // Determine whether the reviewer column was matched via an email alias or a name alias,
+            // so the caller can understand the data source being used for reviewer mapping.
+            bool reviewerIsFromEmailAlias = reviewerHeaderName != null
+                && ColumnAliases.TryGetValue(ColEmail, out var emailAliases)
+                && emailAliases.Any(a => a.Equals(reviewerHeaderName, StringComparison.OrdinalIgnoreCase));
+
+            if (reviewerIsFromEmailAlias)
+                log?.Invoke($"✅ Reviewer source detected from email column: '{reviewerHeaderName}' (col{reviewerCol}). Email values will be used as reviewer identifiers.");
+            else
+                log?.Invoke($"✅ Reviewer source detected from name column: '{reviewerHeaderName}' (col{reviewerCol}).");
+        }
         else
             log?.Invoke("⚠ Reviewer (Inspector) column NOT detected — reviewer field will be empty for all rows.");
 

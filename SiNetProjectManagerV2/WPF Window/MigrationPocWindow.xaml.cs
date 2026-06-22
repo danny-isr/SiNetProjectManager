@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -45,6 +45,9 @@ public partial class MigrationPocWindow : Window
     // ── New Migration Preview State ──
     private List<SystemUserLookupItem> _systemUsers = [];
     private List<ReviewerMappingItem> _reviewerMappings = [];
+
+    // ── Deterministic Extraction Preview state ──
+    private ReportExtractionResult? _lastDeterministicResult;
 
     public MigrationPocWindow()
     {
@@ -546,6 +549,37 @@ public partial class MigrationPocWindow : Window
         var templateId = ReportContentExtractor.ExtractSpreadsheetId(templateInput);
         var reportId = ReportContentExtractor.ExtractSpreadsheetId(reportInput);
 
+        // ── Cache reuse check ──────────────────────────────────────────────
+        // Before sending to AI, check if a valid JSON already exists for this
+        // report+template combination. If found, show the cached result instead.
+        var cachedEnvelope = await ExtractionCacheService.FindBySpreadsheetIdsAsync(reportId, templateId);
+        if (cachedEnvelope != null)
+        {
+            AppendToLog($"[Cache] ✅ Valid cache found for report={reportId}");
+            AppendToLog($"[Cache]    Project: {cachedEnvelope.ProjectNumber}, Report: {cachedEnvelope.ReportNumber}, Version: {cachedEnvelope.VersionIndex}");
+            AppendToLog($"[Cache]    Extracted: {cachedEnvelope.ExtractedAtUtc:yyyy-MM-dd HH:mm} UTC, Sections: {cachedEnvelope.SectionCount}");
+            AppendToLog($"[Cache] ⏭ Skipping AI extraction — reusing cached result.");
+
+            ResultsGrid.ItemsSource = cachedEnvelope.Sections;
+            StatusLabel.Text = $"✅ [מטמון] {cachedEnvelope.SectionCount} סעיפים (פרויקט {cachedEnvelope.ProjectNumber}, דוח {cachedEnvelope.ReportNumber} גרסה {cachedEnvelope.VersionIndex})";
+
+            var cacheMsg = $"נמצא מטמון JSON תקין עבור הדוח הזה:\n" +
+                           $"  פרויקט: {cachedEnvelope.ProjectNumber}\n" +
+                           $"  דוח: {cachedEnvelope.ReportNumber}, גרסה: {cachedEnvelope.VersionIndex}\n" +
+                           $"  תאריך חילוץ: {cachedEnvelope.ExtractedAtUtc:yyyy-MM-dd HH:mm} UTC\n" +
+                           $"  סעיפים: {cachedEnvelope.SectionCount}\n\n" +
+                           $"לא נשלח ל-AI. להפעיל AI מחדש בכל זאת?";
+            var rerun = MessageBox.Show(cacheMsg, "מטמון קיים — AI לא נדרש", MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (rerun != MessageBoxResult.Yes) return;
+
+            AppendToLog($"[Cache] User chose to re-run AI extraction despite valid cache.");
+        }
+        else
+        {
+            AppendToLog($"[Cache] No valid cache for report={reportId} + template={templateId}. Sending to AI.");
+        }
+        // ──────────────────────────────────────────────────────────────────
+
         ExtractButton.IsEnabled = false;
         AiExtractButton.IsEnabled = false;
         StatusLabel.Text = "🤖 מתחיל חילוץ AI...";
@@ -695,6 +729,289 @@ public partial class MigrationPocWindow : Window
         }
     }
 
+    // ════════════════════════════════════════════════════
+    //  TAB 3: Deterministic Extraction Preview (read-only, no DB, no AI)
+    // ════════════════════════════════════════════════════
+
+    private async void DeterministicExtractButton_Click(object sender, RoutedEventArgs e)
+    {
+        var templateInput = DetTemplateIdBox.Text.Trim();
+        var reportInput   = DetReportIdBox.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(templateInput) || string.IsNullOrWhiteSpace(reportInput))
+        {
+            MessageBox.Show("יש להזין מזהה/קישור גם לתבנית וגם לדוח הסופי.",
+                "שדות חסרים", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var templateId = ReportContentExtractor.ExtractSpreadsheetId(templateInput);
+        var reportId   = ReportContentExtractor.ExtractSpreadsheetId(reportInput);
+
+        DeterministicExtractButton.IsEnabled = false;
+        SaveDeterministicCacheButton.IsEnabled = false;
+        _lastDeterministicResult = null;
+        DeterministicResultsGrid.ItemsSource = null;
+        DetSummaryLabel.Text = "";
+        DetStatusLabel.Text = "🔄 מתחבר ל-Google Sheets...";
+
+        try
+        {
+            var authService = CreateGoogleAuthService();
+            if (authService == null) return;
+
+            DetStatusLabel.Text = "🔍 שלב 1: סורק תבנית...";
+
+            var extractor = new ReportContentExtractor(authService);
+            var result = await extractor.ExtractAsync(templateId, reportId);
+
+            if (result.IsSuccess)
+            {
+                _lastDeterministicResult = result;
+                DeterministicResultsGrid.ItemsSource = result.Sections;
+
+                var splitCount    = result.Sections.Count(s => s.WasSplit);
+                var resolvedCount = result.Sections.Count(s => s.IsResolved);
+                var datedCount    = result.Sections.Count(s => s.ClosedDate != null);
+
+                DetStatusLabel.Text = $"✅ חולצו {result.Sections.Count} שורות";
+
+                var summary = new System.Text.StringBuilder();
+                summary.Append($"סה\"כ: {result.Sections.Count} שורות");
+                summary.Append($"  |  פוצלו: {splitCount}");
+                summary.Append($"  |  נסגרו (אפור): {resolvedCount}");
+                summary.Append($"  |  עם תאריך: {datedCount}");
+                summary.Append($"  |  שדות כלליים: {result.GeneralFields.Count}");
+                if (result.Warnings.Count > 0)
+                    summary.Append($"  |  ⚠ {result.Warnings.Count} אזהרות");
+                DetSummaryLabel.Text = summary.ToString();
+
+                SaveDeterministicCacheButton.IsEnabled = true;
+
+                AppendToLog($"[Det] חולץ דטרמיניסטי: {result.Sections.Count} שורות | " +
+                            $"פוצלו={splitCount} נסגרו={resolvedCount} תאריכים={datedCount}");
+                if (result.Warnings.Count > 0)
+                {
+                    AppendToLog("[Det] אזהרות:");
+                    foreach (var w in result.Warnings)
+                        AppendToLog($"  ⚠ {w}");
+                }
+            }
+            else
+            {
+                DetStatusLabel.Text = $"❌ שגיאה: {result.ErrorMessage}";
+                DetSummaryLabel.Text = "";
+                AppendToLog($"[Det] שגיאה בחילוץ: {result.ErrorMessage}");
+                foreach (var w in result.Warnings)
+                    AppendToLog($"  ⚠ {w}");
+            }
+        }
+        catch (Exception ex)
+        {
+            DetStatusLabel.Text = $"❌ שגיאה: {ex.Message}";
+            DetSummaryLabel.Text = "";
+            AppendToLog($"[Det] EXCEPTION: {ex.Message}");
+            AppLogger.Error(ex, "[Det-UI] Unhandled exception in DeterministicExtractButton_Click");
+        }
+        finally
+        {
+            DeterministicExtractButton.IsEnabled = true;
+        }
+    }
+
+    private async void SaveDeterministicCacheButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastDeterministicResult == null)
+        {
+            MessageBox.Show("אין תוצאת חילוץ בזיכרון. יש לחלץ תחילה.",
+                "אין נתונים", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var projectNumber = DetProjectNumberBox.Text.Trim();
+        var reportNumber  = DetReportNumberBox.Text.Trim();
+        var versionText   = DetVersionIndexBox.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(projectNumber) ||
+            string.IsNullOrWhiteSpace(reportNumber)  ||
+            !int.TryParse(versionText, out var versionIndex) || versionIndex < 1)
+        {
+            MessageBox.Show("יש למלא מספר פרויקט, מספר דוח, ואינדקס גרסה (מספר שלם ≥ 1).",
+                "שדות חסרים", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Guard: warn if a file with this key already exists (no silent overwrite)
+        var existing = await ExtractionCacheService.LoadAsync(projectNumber, versionIndex, reportNumber);
+        if (existing != null)
+        {
+            var answer = MessageBox.Show(
+                $"קובץ JSON עבור פרויקט {projectNumber}, דוח {reportNumber}, גרסה {versionIndex} כבר קיים.\n" +
+                "הקובץ החדש יישמר עם סיומת מספרית (לא יידרס). להמשיך?",
+                "קובץ קיים", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes) return;
+        }
+
+        SaveDeterministicCacheButton.IsEnabled = false;
+        try
+        {
+            var savedPath = await ExtractionCacheService.SaveAsync(
+                _lastDeterministicResult, projectNumber, versionIndex, reportNumber);
+
+            DetSummaryLabel.Text = $"💾 נשמר: {savedPath}";
+            AppendToLog($"[Det] JSON נשמר: {savedPath}");
+
+            MessageBox.Show($"הקובץ נשמר בהצלחה:\n{savedPath}",
+                "שמירה הושלמה", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            DetSummaryLabel.Text = $"❌ שגיאת שמירה: {ex.Message}";
+            AppendToLog($"[Det] שגיאה בשמירת JSON: {ex.Message}");
+            AppLogger.Error(ex, "[Det-UI] Exception in SaveDeterministicCacheButton_Click");
+        }
+        finally
+        {
+            SaveDeterministicCacheButton.IsEnabled = _lastDeterministicResult != null;
+        }
+    }
+
+    // ════════════════════════════════════════════════════
+    //  TAB 1: JSON Cache Management
+    // ════════════════════════════════════════════════════
+
+    private async void ExportJsonCacheButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "ייצוא מטמון JSON",
+            Filter = "ZIP Archive (*.zip)|*.zip",
+            FileName = $"ExtractionCache_{DateTime.Now:yyyyMMdd_HHmm}.zip"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        var targetPath = dlg.FileName;
+        if (File.Exists(targetPath))
+        {
+            MessageBox.Show($"הקובץ כבר קיים: {targetPath}\nמחק אותו קודם או בחר שם אחר.", "קובץ קיים", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ExportJsonCacheButton.IsEnabled = false;
+        StatusLabel.Text = "📦 מייצא מטמון...";
+        AppendToLog($"[Cache] Export started → {targetPath}");
+        AppendToLog($"[Cache] Cache root: {ExtractionCacheService.GetCacheRoot()}");
+
+        try
+        {
+            int count = await ExtractionCacheService.ExportToZipAsync(targetPath);
+            StatusLabel.Text = $"✅ יוצאו {count} קבצים.";
+            AppendToLog($"[Cache] ✅ Export complete: {count} files → {targetPath}");
+            MessageBox.Show($"יוצאו {count} קבצי JSON ל:\n{targetPath}", "ייצוא הושלם", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = "⚠ שגיאה בייצוא";
+            AppendToLog($"[Cache] ❌ Export error: {ex.Message}");
+            MessageBox.Show(ex.Message, "שגיאה בייצוא", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ExportJsonCacheButton.IsEnabled = true;
+        }
+    }
+
+    private async void ImportJsonCacheButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "ייבוא מטמון JSON",
+            Filter = "ZIP Archive (*.zip)|*.zip"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        var sourcePath = dlg.FileName;
+        var confirm = MessageBox.Show(
+            $"ייבוא מטמון JSON מ:\n{sourcePath}\n\nקבצים קיימים לא יוחלפו (יידלגו).\nהמשך?",
+            "אישור ייבוא", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        ImportJsonCacheButton.IsEnabled = false;
+        StatusLabel.Text = "📥 מייבא מטמון...";
+        AppendToLog($"[Cache] Import started ← {sourcePath}");
+
+        try
+        {
+            var result = await ExtractionCacheService.ImportFromZipAsync(sourcePath);
+            StatusLabel.Text = $"✅ יובאו {result.Imported}, דולגו {result.Skipped}.";
+            AppendToLog($"[Cache] ✅ Import complete: {result.Imported} imported, {result.Skipped} skipped (already exist), {result.Invalid} invalid.");
+            if (result.Skipped > 0)
+                AppendToLog($"[Cache] Skipped: {string.Join(", ", result.SkippedPaths.Take(10))}{(result.SkippedPaths.Count > 10 ? " ..." : "")}");
+
+            MessageBox.Show(
+                $"ייבוא הושלם:\n  יובאו: {result.Imported}\n  דולגו (קיימים): {result.Skipped}\n  לא תקינים: {result.Invalid}",
+                "ייבוא הושלם", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = "⚠ שגיאה בייבוא";
+            AppendToLog($"[Cache] ❌ Import error: {ex.Message}");
+            MessageBox.Show(ex.Message, "שגיאה בייבוא", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ImportJsonCacheButton.IsEnabled = true;
+        }
+    }
+
+    private async void ValidateJsonCacheButton_Click(object sender, RoutedEventArgs e)
+    {
+        ValidateJsonCacheButton.IsEnabled = false;
+        StatusLabel.Text = "🔍 בודק מטמון...";
+        AppendToLog($"[Cache] Validate started. Root: {ExtractionCacheService.GetCacheRoot()}");
+
+        try
+        {
+            var (total, valid, invalid, invalidPaths) = await ExtractionCacheService.ValidateCacheAsync();
+            StatusLabel.Text = $"🔍 {total} קבצים: {valid} תקינים, {invalid} פגומים.";
+            AppendToLog($"[Cache] Validate: {total} total, {valid} valid, {invalid} invalid.");
+            if (invalid > 0)
+            {
+                AppendToLog("[Cache] Invalid files:");
+                foreach (var p in invalidPaths.Take(20))
+                    AppendToLog($"  ❌ {p}");
+                if (invalidPaths.Count > 20)
+                    AppendToLog($"  ... and {invalidPaths.Count - 20} more.");
+            }
+            MessageBox.Show(
+                $"אימות מטמון הושלם:\n  סך הכל: {total}\n  תקינים: {valid}\n  פגומים: {invalid}",
+                "אימות מטמון", MessageBoxButton.OK,
+                invalid > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = "⚠ שגיאה באימות";
+            AppendToLog($"[Cache] ❌ Validate error: {ex.Message}");
+            MessageBox.Show(ex.Message, "שגיאה באימות", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ValidateJsonCacheButton.IsEnabled = true;
+        }
+    }
+
+    private void OpenCacheFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        var cacheRoot = ExtractionCacheService.GetCacheRoot();
+        AppendToLog($"[Cache] Cache root: {cacheRoot}");
+        if (!Directory.Exists(cacheRoot))
+        {
+            MessageBox.Show($"תיקיית המטמון עדיין לא קיימת:\n{cacheRoot}",
+                "תיקייה לא קיימת", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        System.Diagnostics.Process.Start("explorer.exe", cacheRoot);
+    }
     // ════════════════════════════════════════════════════════════════
     //  TAB 1: Batch AI Extraction (all projects × all versions)
     // ════════════════════════════════════════════════════════════════

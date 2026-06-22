@@ -26,9 +26,25 @@ public class GoogleSheetReviewMigrationPreviewRow
     public string ExistingReportStatus { get; set; } = string.Empty;
     public string ExistingWorkflowStatus { get; set; } = string.Empty;
     
+    /// <summary>1-based index of this version row within its sheet row group (1 = V1, 2 = V2, …).</summary>
+    public int VersionIndex { get; set; } = 1;
+
+    /// <summary>
+    /// True when this is the latest (highest-index) version row for the sheet row.
+    /// The workflow action is proposed only on this row; earlier version rows carry a report-only action.
+    /// </summary>
+    public bool IsLatestVersion { get; set; } = true;
+
+    /// <summary>Workflow-scoped action (once per project/review process).</summary>
+    public string ProposedWorkflowAction { get; set; } = string.Empty;
+
+    /// <summary>Report-scoped action (per report version).</summary>
+    public string ProposedReportAction { get; set; } = string.Empty;
+
     public MigrationPreviewClassification Classification { get; set; }
     public string BlockingReason { get; set; } = string.Empty;
     public string WarningMessages { get; set; } = string.Empty;
+    /// <summary>Human-readable combined action shown in the preview grid.</summary>
     public string ProposedAction { get; set; } = string.Empty;
     public bool IsCommitAllowed { get; set; }
 }

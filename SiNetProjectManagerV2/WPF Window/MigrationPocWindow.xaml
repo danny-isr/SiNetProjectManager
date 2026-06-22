@@ -26,6 +26,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
@@ -122,8 +123,32 @@
                                    Margin="12,0,0,0" FontSize="12" Foreground="#555"/>
                     </StackPanel>
 
-                    <!-- Results -->
-                    <DataGrid Grid.Row="3" x:Name="ResultsGrid"
+                    <!-- JSON Cache Management -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="מטמון JSON:" VerticalAlignment="Center" Margin="0,0,8,0"
+                                   FontWeight="SemiBold" Foreground="#555" FontSize="12"/>
+                        <Button x:Name="ExportJsonCacheButton" Content="📦 ייצא מטמון ל-ZIP"
+                                Click="ExportJsonCacheButton_Click" Padding="10,5" FontSize="12"
+                                Background="#0277BD" Foreground="White" Cursor="Hand"
+                                BorderThickness="0"
+                                ToolTip="ייצוא כל קבצי JSON של המטמון לקובץ ZIP (ללא אישורים)"/>
+                        <Button x:Name="ImportJsonCacheButton" Content="📥 ייבא מטמון מ-ZIP"
+                                Click="ImportJsonCacheButton_Click" Padding="10,5" FontSize="12"
+                                Background="#00695C" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="8,0,0,0"
+                                ToolTip="ייבוא קבצי JSON ממטמון שיוצא. קבצים קיימים לא יוחלפו."/>
+                        <Button x:Name="ValidateJsonCacheButton" Content="🔍 אמת מטמון"
+                                Click="ValidateJsonCacheButton_Click" Padding="10,5" FontSize="12"
+                                Background="#4527A0" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="8,0,0,0"
+                                ToolTip="בדיקת תקינות כל קבצי JSON במטמון"/>
+                        <Button x:Name="OpenCacheFolderButton" Content="📂 פתח תיקיית מטמון"
+                                Click="OpenCacheFolderButton_Click" Padding="10,5" FontSize="12"
+                                Background="#424242" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="8,0,0,0"
+                                ToolTip="פתח את תיקיית המטמון ב-Explorer"/>
+                    </StackPanel>
+                    <DataGrid Grid.Row="4" x:Name="ResultsGrid"
                               AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserSortColumns="True" CanUserResizeColumns="True"
                               VerticalScrollBarVisibility="Auto"
@@ -358,6 +383,8 @@
                               BorderBrush="#D0D0D0" BorderThickness="1">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="שורה" Binding="{Binding SheetRowIndex}" Width="45"/>
+                            <DataGridTextColumn Header="V#" Binding="{Binding VersionIndex}" Width="30"/>
+                            <DataGridCheckBoxColumn Header="Latest" Binding="{Binding IsLatestVersion}" Width="45"/>
                             <DataGridTextColumn Header="פרויקט (גיליון)" Binding="{Binding ProjectNameFromSheet}" Width="110"/>
                             <DataGridTextColumn Header="פרויקט (DB)" Binding="{Binding ResolvedProjectDisplayName}" Width="140">
                                 <DataGridTextColumn.ElementStyle>
@@ -411,6 +438,152 @@
                                 Background="#B0BEC5" Foreground="White" Cursor="No"
                                 BorderThickness="0" IsEnabled="False" ToolTip="Commit מבוטל בשלב 1"/>
                     </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- ══════════════════════════════════════════════════════════════════
+                 TAB 3: Deterministic Extraction Preview
+                 ══════════════════════════════════════════════════════════════════ -->
+            <TabItem Header="🔬 חילוץ דטרמיניסטי (Preview)">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <TextBlock Grid.Row="0" FontSize="14" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,0,8">
+                        תצוגה מקדימה — חילוץ דטרמיניסטי (ללא AI, קריאה בלבד)
+                    </TextBlock>
+
+                    <!-- Inputs: Template + Report -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="תבנית (ID/קישור):"
+                                   VerticalAlignment="Center" Margin="0,0,8,6" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="DetTemplateIdBox"
+                                 FlowDirection="LeftToRight" Margin="0,0,0,6"
+                                 ToolTip="הדביקו מזהה גיליון תבנית (Spreadsheet ID) או קישור מלא"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="דוח סופי (ID/קישור):"
+                                   VerticalAlignment="Center" Margin="0,0,8,6" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="DetReportIdBox"
+                                 FlowDirection="LeftToRight" Margin="0,0,0,6"
+                                 ToolTip="הדביקו מזהה גיליון הדוח הסופי (שכבר יוצא) או קישור מלא"/>
+                    </Grid>
+
+                    <!-- Action buttons -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button x:Name="DeterministicExtractButton"
+                                Content="🔬 חלץ דטרמיניסטי"
+                                Click="DeterministicExtractButton_Click"
+                                Padding="14,6" FontWeight="Bold"
+                                Background="#1565C0" Foreground="White" Cursor="Hand"
+                                BorderThickness="0"
+                                ToolTip="חילוץ מהגיליון — ללא AI, ללא כתיבה ל-DB"/>
+                        <TextBlock x:Name="DetStatusLabel" Text="" VerticalAlignment="Center"
+                                   Margin="12,0,0,0" FontSize="12" Foreground="#555"/>
+                    </StackPanel>
+
+                    <!-- Save to JSON cache -->
+                    <Border Grid.Row="3" BorderBrush="#CFD8DC" BorderThickness="1"
+                            CornerRadius="3" Padding="8,6" Margin="0,0,0,8"
+                            Background="#F5F5F5">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="שמירה למטמון JSON:" VerticalAlignment="Center"
+                                       FontWeight="SemiBold" Foreground="#555" FontSize="12" Margin="0,0,10,0"/>
+                            <TextBlock Text="מספר פרויקט:" VerticalAlignment="Center" Margin="0,0,4,0" FontSize="12"/>
+                            <TextBox x:Name="DetProjectNumberBox" Width="80" Margin="0,0,8,0"
+                                     FlowDirection="LeftToRight" FontSize="12"
+                                     ToolTip="מספר הפרויקט (שם תיקיית המטמון)"/>
+                            <TextBlock Text="מספר דוח:" VerticalAlignment="Center" Margin="0,0,4,0" FontSize="12"/>
+                            <TextBox x:Name="DetReportNumberBox" Width="60" Margin="0,0,8,0"
+                                     FlowDirection="LeftToRight" FontSize="12"
+                                     ToolTip="מספר הדוח (למשל 1, 2, 3)"/>
+                            <TextBlock Text="גרסה:" VerticalAlignment="Center" Margin="0,0,4,0" FontSize="12"/>
+                            <TextBox x:Name="DetVersionIndexBox" Width="45" Margin="0,0,8,0"
+                                     FlowDirection="LeftToRight" FontSize="12"
+                                     ToolTip="אינדקס גרסה (1-based, לפי מיקום בקישורים)"/>
+                            <Button x:Name="SaveDeterministicCacheButton"
+                                    Content="💾 שמור ל-JSON Cache"
+                                    Click="SaveDeterministicCacheButton_Click"
+                                    Padding="10,4" FontSize="12"
+                                    Background="#2E7D32" Foreground="White" Cursor="Hand"
+                                    BorderThickness="0" IsEnabled="False"
+                                    ToolTip="שמור את תוצאת החילוץ הנוכחית לקובץ JSON במטמון. לא כותב ל-DB."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Results grid -->
+                    <DataGrid Grid.Row="4" x:Name="DeterministicResultsGrid"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserSortColumns="True" CanUserResizeColumns="True"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              FlowDirection="RightToLeft"
+                              GridLinesVisibility="Horizontal"
+                              AlternatingRowBackground="#F5F5F5"
+                              BorderBrush="#D0D0D0" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="קוד סעיף"    Binding="{Binding SectionCode}"      Width="65"/>
+                            <DataGridTextColumn Header="פרק"          Binding="{Binding ChapterTitle}"     Width="75"/>
+                            <DataGridTextColumn Header="שם סעיף"      Binding="{Binding SectionTitle}"     Width="130">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight" Value="60"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="סטטוס"        Binding="{Binding StatusKey}"        Width="110"/>
+                            <DataGridTextColumn Header="טקסט סטטוס"   Binding="{Binding StatusText}"       Width="80"/>
+                            <DataGridTextColumn Header="צבע"          Binding="{Binding StatusColorHex}"   Width="65"/>
+                            <DataGridTextColumn Header="טקסט הערה"    Binding="{Binding NoteText}"         Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight" Value="120"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="תגובת מתכנן"  Binding="{Binding DesignerResponse}" Width="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight" Value="80"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="אינדקס"       Binding="{Binding NoteSubIndex}"     Width="55"/>
+                            <DataGridTextColumn Header="שורת מקור"    Binding="{Binding ReportRow}"        Width="55"/>
+                            <DataGridTextColumn Header="תא מקור"      Binding="{Binding OriginalCellRef}"  Width="60"/>
+                            <DataGridCheckBoxColumn Header="פוצל"     Binding="{Binding WasSplit}"         Width="45"/>
+                            <DataGridTextColumn Header="מס׳ פיצול"    Binding="{Binding SplitIndex}"       Width="50"/>
+                            <DataGridCheckBoxColumn Header="נסגר"     Binding="{Binding IsResolved}"       Width="45"/>
+                            <DataGridTextColumn Header="תאריך סגירה"  Binding="{Binding ClosedDate, StringFormat=dd/MM/yyyy}" Width="85"/>
+                            <DataGridTextColumn Header="אימות כותרת"  Binding="{Binding HeaderValidation}" Width="90"/>
+                            <DataGridTextColumn Header="שיטת זיהוי"   Binding="{Binding DetectionMethod}"  Width="75"/>
+                            <DataGridTextColumn Header="תגית סטטוס"   Binding="{Binding TemplateStatusTag}" Width="180"/>
+                            <DataGridTextColumn Header="תגית הערה"    Binding="{Binding TemplateNoteTag}"  Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Summary bar -->
+                    <TextBlock Grid.Row="5" x:Name="DetSummaryLabel"
+                               Text="" FontSize="11" Foreground="#555"
+                               Margin="0,4,0,0" TextWrapping="Wrap"/>
                 </Grid>
             </TabItem>
 

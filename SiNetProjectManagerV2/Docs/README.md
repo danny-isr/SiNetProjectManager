@@ -1,4 +1,4 @@
-# SiNet Project Manager — Documentation Index
+﻿# SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
 > **Updated:** 21.06.2026
@@ -53,6 +53,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Project Work | [`Domains\ProjectWork\ProjectWorkWindow2-2026-06-19.md`](Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md) |
 | Migration — Google Sheet Review | [`Domains\Migration\GoogleSheetReviewMigrationDesign-2026-06-21.md`](Domains/Migration/GoogleSheetReviewMigrationDesign-2026-06-21.md) |
 | Migration — Implementation Readiness | [`Domains\Migration\GoogleSheetReviewMigrationImplementationReadiness-2026-06-21.md`](Domains/Migration/GoogleSheetReviewMigrationImplementationReadiness-2026-06-21.md) |
+| Migration — Phase 2 Plan (Report Import) | [\Domains\\Migration\\GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md\](Domains/Migration/GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md) |
 
 ## 4. Decisions
 
