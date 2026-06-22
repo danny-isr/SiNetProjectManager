@@ -36,7 +36,10 @@ public sealed class IndexSheetReader
         [ColProject] = ["פרויקט", "שם פרויקט", "מספר פרויקט", "מס׳ פרויקט", "מס' פרויקט", "Project", "ProjectId", "פרויקט/מתחם"],
         [ColReportNumber] = ["מס׳ ביקורת", "מס' ביקורת", "מספר ביקורת", "ביקורת מס", "מס׳ דוח", "מס' דוח", "מספר דוח", "#"],
         [ColDate] = ["תאריך", "תאריך ביקורת", "תאריך בדיקה", "Date"],
-        [ColInspector] = ["בודק", "שם בודק", "מבקר", "בודק/ת", "Inspector"],
+        [ColInspector] = ["בודק", "שם בודק", "מבקר", "בודק/ת", "Inspector",
+                          "בודק/ת:", "שם הבודק", "שם המבקר", "שם הבודקת",
+                          "בודקת", "מבקר/ת", "ביצוע", "ביצוע ע\"י", "מבצע",
+                          "עורך הביקורת", "עורך", "פקח", "שם פקח"],
         [ColEmail] = ["אימייל", "דוא\"ל", "מייל", "Email", "דואר אלקטרוני", "כתובת מייל", "mail"],
         [ColStatus] = ["סטטוס", "מצב", "Status", "סטאטוס"],
         [ColLink] = ["קישור", "קישור לדוח", "לינק", "Link", "URL"],
@@ -355,24 +358,46 @@ public sealed class IndexSheetReader
         }
 
         // Use the specific versions column (קישורים לגרסאות הגליון), fall back to generic Link
-        if (!columnMapping.TryGetValue(ColLinkVersions, out var linkCol))
+        bool hasLinkCol;
+        int linkCol = -1;
+        if (columnMapping.TryGetValue(ColLinkVersions, out var linkColVersions))
         {
-            if (!columnMapping.TryGetValue(ColLink, out linkCol))
+            linkCol = linkColVersions;
+            hasLinkCol = true;
+        }
+        else if (columnMapping.TryGetValue(ColLink, out var linkColGeneric))
+        {
+            linkCol = linkColGeneric;
+            hasLinkCol = true;
+            log?.Invoke("⚠ 'LinkVersions' column not found, falling back to 'Link' column.");
+        }
+        else
+        {
+            hasLinkCol = false;
+            if (!includeRowsWithoutLinks)
             {
                 log?.Invoke("❌ Neither 'LinkVersions' nor 'Link' column detected in header.");
                 return [];
             }
-            log?.Invoke("⚠ 'LinkVersions' column not found, falling back to 'Link' column.");
+            log?.Invoke("⚠ Neither 'LinkVersions' nor 'Link' column detected — continuing without link extraction (includeRowsWithoutLinks=true).");
         }
 
         columnMapping.TryGetValue(ColReportNumber, out var reportNumCol);
         var hasReportNumCol = columnMapping.ContainsKey(ColReportNumber);
-        
+
         columnMapping.TryGetValue(ColInspector, out var reviewerCol);
         var hasReviewerCol = columnMapping.ContainsKey(ColInspector);
-        
+
         columnMapping.TryGetValue(ColStatus, out var statusCol);
         var hasStatusCol = columnMapping.ContainsKey(ColStatus);
+
+        if (hasReviewerCol)
+            log?.Invoke($"✅ Reviewer column detected at col {reviewerCol}.");
+        else
+            log?.Invoke("⚠ Reviewer (Inspector) column NOT detected — reviewer field will be empty for all rows.");
+
+        int dataRowCount = gridData.Count - (headerRowIndex + 1);
+        log?.Invoke($"Scanning {dataRowCount} data rows (rows {headerRowIndex + 2}–{gridData.Count}).");
 
         var results = new List<IndexSheetReportLink>();
         int skippedNoHyperlinks = 0;
@@ -399,8 +424,8 @@ public sealed class IndexSheetReader
                 ? rowData.Values[statusCol]?.FormattedValue?.Trim() ?? ""
                 : "";
 
-            // Extract hyperlink URLs from the link cell
-            var linkCell = linkCol < rowData.Values.Count ? rowData.Values[linkCol] : null;
+            // Extract hyperlink URLs from the link cell (only if a link column was detected)
+            var linkCell = hasLinkCol && linkCol < rowData.Values.Count ? rowData.Values[linkCol] : null;
             var hyperlinks = ExtractHyperlinksFromCell(linkCell);
 
             if (hyperlinks.Count == 0)
@@ -472,7 +497,9 @@ public sealed class IndexSheetReader
         if (skippedNoHyperlinks > 0)
             log?.Invoke($"Skipped {skippedNoHyperlinks} rows with no extractable hyperlinks in link column.");
 
-        log?.Invoke($"Result: {results.Count} rows with hyperlinks. Projects: [{string.Join(", ", results.Select(r => r.ProjectRef).Distinct().Take(10))}]");
+        int withReviewer = results.Count(r => !string.IsNullOrWhiteSpace(r.Reviewer));
+        log?.Invoke($"Result: {results.Count} rows returned ({withReviewer} have reviewer text). " +
+            $"Projects: [{string.Join(", ", results.Select(r => r.ProjectRef).Distinct().Take(10))}]");
 
         return results;
     }

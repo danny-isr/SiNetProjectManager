@@ -39,15 +39,28 @@ public sealed class GoogleSheetReviewMigrationPreviewService
     /// </summary>
     public async Task<List<string>> GetDistinctReviewersAsync(string indexSheetId, Action<string>? log = null)
     {
+        log?.Invoke($"Starting reviewer scan for sheet: {indexSheetId}");
         var reader = new IndexSheetReader(_authService);
         var links = await reader.ReadReportHyperlinksAsync(indexSheetId, log, includeRowsWithoutLinks: true);
 
-        return links
-            .Select(l => l.Reviewer?.Trim())
-            .Where(r => !string.IsNullOrEmpty(r))
+        log?.Invoke($"Reader returned {links.Count} rows total.");
+
+        var withReviewer = links.Where(l => !string.IsNullOrWhiteSpace(l.Reviewer)).ToList();
+        log?.Invoke($"Rows with reviewer text: {withReviewer.Count}");
+
+        if (withReviewer.Count == 0)
+        {
+            log?.Invoke("⚠ No reviewer names found in any row. Check that the sheet has a recognized reviewer/inspector column (בודק, שם בודק, מבקר, etc.).");
+        }
+
+        var distinct = withReviewer
+            .Select(l => l.Reviewer!.Trim())
             .Distinct()
             .OrderBy(r => r)
-            .ToList()!;
+            .ToList();
+
+        log?.Invoke($"Distinct reviewers ({distinct.Count}): [{string.Join(", ", distinct.Take(15))}]");
+        return distinct;
     }
 
     /// <summary>

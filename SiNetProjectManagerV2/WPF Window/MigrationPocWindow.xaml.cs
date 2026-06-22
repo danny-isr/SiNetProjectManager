@@ -75,8 +75,13 @@ public partial class MigrationPocWindow : Window
                 .Select(u => new SystemUserLookupItem { UserId = u.Id, DisplayName = u.Name ?? string.Empty })
                 .OrderBy(u => u.DisplayName)
                 .ToListAsync();
-            
+
             _systemUsers = allUsers;
+
+            if (_systemUsers.Count == 0)
+                AppendToLog("[Users] ⚠ No active system users loaded — reviewer auto-matching will not work.");
+            else
+                AppendToLog($"[Users] Loaded {_systemUsers.Count} active system users.");
         }
         catch (Exception ex)
         {
@@ -1221,7 +1226,17 @@ public partial class MigrationPocWindow : Window
             }
 
             ScanReviewersButton.IsEnabled = false;
+            BuildPreviewButton.IsEnabled = false;
+            _reviewerMappings.Clear();
+            ReviewerMappingGrid.ItemsSource = null;
             NewPreviewStatusLabel.Text = "🔄 סורק בודקים מהגיליון...";
+
+            AppendToLog($"[Preview] ── סרוק בודקים ──");
+            AppendToLog($"[Preview] Sheet ID: {indexSheetId}");
+            AppendToLog($"[Preview] System users loaded: {_systemUsers.Count}");
+
+            if (_systemUsers.Count == 0)
+                AppendToLog("[Preview] ⚠ אין משתמשי מערכת טעונים — auto-match לא יפעל. נסה לפתוח את החלון מחדש.");
 
             var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
             var workflowQueryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
@@ -1232,12 +1247,28 @@ public partial class MigrationPocWindow : Window
 
             var reviewers = await previewService.GetDistinctReviewersAsync(indexSheetId!, msg => AppendToLog($"[Preview] {msg}"));
 
-            _reviewerMappings.Clear();
+            if (reviewers.Count == 0)
+            {
+                NewPreviewStatusLabel.Text = "⚠ לא נמצאו בודקים בגיליון. בדוק את ה-LogBox לפרטים.";
+                AppendToLog("[Preview] ⚠ אפס בודקים נמצאו — ה-Preview לא יכול להמשיך ללא מיפוי. בדוק שעמודת הבודק קיימת בגיליון.");
+                BuildPreviewButton.IsEnabled = false;
+                return;
+            }
+
+            int autoMatchCount = 0;
             foreach (var r in reviewers)
             {
-                // Simple auto-match heuristic by name exact match
                 var autoMatch = _systemUsers.FirstOrDefault(u => u.DisplayName.Equals(r, StringComparison.OrdinalIgnoreCase));
-                
+                if (autoMatch == null)
+                {
+                    // Partial-word match fallback: find a user whose display name contains the sheet name or vice versa
+                    autoMatch = _systemUsers.FirstOrDefault(u =>
+                        u.DisplayName.Contains(r, StringComparison.OrdinalIgnoreCase) ||
+                        r.Contains(u.DisplayName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (autoMatch != null) autoMatchCount++;
+
                 _reviewerMappings.Add(new ReviewerMappingItem
                 {
                     SheetReviewerName = r,
@@ -1249,10 +1280,10 @@ public partial class MigrationPocWindow : Window
                 });
             }
 
-            ReviewerMappingGrid.ItemsSource = null;
             ReviewerMappingGrid.ItemsSource = _reviewerMappings;
 
-            NewPreviewStatusLabel.Text = $"✅ נמצאו {_reviewerMappings.Count} בודקים ייחודיים. נא למפות למשתמשי מערכת.";
+            AppendToLog($"[Preview] מיפוי: {autoMatchCount}/{reviewers.Count} בודקים זוהו אוטומטית.");
+            NewPreviewStatusLabel.Text = $"✅ נמצאו {_reviewerMappings.Count} בודקים ({autoMatchCount} זוהו אוטומטית). נא למפות את הנותרים ולחץ Build Preview.";
             BuildPreviewButton.IsEnabled = true;
         }
         catch (Exception ex)
@@ -1260,6 +1291,7 @@ public partial class MigrationPocWindow : Window
             NewPreviewStatusLabel.Text = "⚠ שגיאה בסריקת בודקים";
             AppendToLog($"[Preview] Error scanning reviewers: {ex.Message}");
             MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            BuildPreviewButton.IsEnabled = false;
         }
         finally
         {
