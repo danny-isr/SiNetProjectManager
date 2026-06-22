@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -40,6 +40,10 @@ public partial class MigrationPocWindow : Window
     // ── Index sheet cache (loaded once, reused for project filtering + report resolution) ──
     private List<IndexSheetReportLink> _indexSheetLinks = [];
 
+    // ── New Migration Preview State ──
+    private List<SystemUserLookupItem> _systemUsers = [];
+    private List<ReviewerMappingItem> _reviewerMappings = [];
+
     public MigrationPocWindow()
     {
         InitializeComponent();
@@ -55,6 +59,27 @@ public partial class MigrationPocWindow : Window
         await LoadProjectsAsync();
         await LoadTemplatesAsync();
         await PreFillDefaultReportAsync();
+        await LoadSystemUsersAsync();
+    }
+
+    private async Task LoadSystemUsersAsync()
+    {
+        try
+        {
+            var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+            await using var context = await contextFactory.CreateDbContextAsync();
+            var allUsers = await context.Siusers
+                .Where(u => u.IsActive && u.IsDomainGroup != true)
+                .Select(u => new SystemUserLookupItem { UserId = u.Id, DisplayName = u.DisplayName ?? u.Name ?? string.Empty })
+                .OrderBy(u => u.DisplayName)
+                .ToListAsync();
+            
+            _systemUsers = allUsers;
+        }
+        catch (Exception ex)
+        {
+            AppendToLog($"[Users] Error loading system users: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -1171,6 +1196,114 @@ public partial class MigrationPocWindow : Window
     private void AppendToLog(string line)
     {
         LogBox.Text += line + "\n";
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  TAB 3: New Google Sheet Review Migration Preview (Phase 1)
+    // ════════════════════════════════════════════════════════════════
+
+    private async void ScanReviewersButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var indexSheetId = NewIndexSheetIdBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(indexSheetId))
+            {
+                indexSheetId = GetIndexSheetId();
+            }
+
+            if (string.IsNullOrWhiteSpace(indexSheetId))
+            {
+                MessageBox.Show("נא להזין מזהה גיליון אינדקס או להגדיר בהגדרות המערכת.", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            ScanReviewersButton.IsEnabled = false;
+            NewPreviewStatusLabel.Text = "🔄 סורק בודקים מהגיליון...";
+
+            var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+            var workflowQueryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+            var authService = CreateGoogleAuthService();
+            if (authService == null) return;
+
+            var previewService = new GoogleSheetReviewMigrationPreviewService(contextFactory, workflowQueryService, authService);
+
+            var reviewers = await previewService.GetDistinctReviewersAsync(indexSheetId, msg => AppendToLog($"[Preview] {msg}"));
+
+            _reviewerMappings.Clear();
+            foreach (var r in reviewers)
+            {
+                // Simple auto-match heuristic by name exact match
+                var autoMatch = _systemUsers.FirstOrDefault(u => u.DisplayName.Equals(r, StringComparison.OrdinalIgnoreCase));
+                
+                _reviewerMappings.Add(new ReviewerMappingItem
+                {
+                    SheetReviewerName = r,
+                    AvailableUsers = _systemUsers,
+                    SelectedUserId = autoMatch?.UserId
+                });
+            }
+
+            ReviewerMappingGrid.ItemsSource = null;
+            ReviewerMappingGrid.ItemsSource = _reviewerMappings;
+
+            NewPreviewStatusLabel.Text = $"✅ נמצאו {_reviewerMappings.Count} בודקים ייחודיים. נא למפות למשתמשי מערכת.";
+            BuildPreviewButton.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            NewPreviewStatusLabel.Text = "⚠ שגיאה בסריקת בודקים";
+            AppendToLog($"[Preview] Error scanning reviewers: {ex.Message}");
+            MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ScanReviewersButton.IsEnabled = true;
+        }
+    }
+
+    private async void BuildPreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var indexSheetId = NewIndexSheetIdBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(indexSheetId))
+            {
+                indexSheetId = GetIndexSheetId();
+            }
+
+            BuildPreviewButton.IsEnabled = false;
+            NewPreviewStatusLabel.Text = "🔄 מנתח ויוצר Preview קריאה בלבד...";
+
+            var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+            var workflowQueryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+            var authService = CreateGoogleAuthService();
+            if (authService == null) return;
+
+            var mappingDict = _reviewerMappings
+                .Where(m => m.SelectedUserId.HasValue)
+                .ToDictionary(m => m.SheetReviewerName, m => m.SelectedUserId!.Value);
+
+            var previewService = new GoogleSheetReviewMigrationPreviewService(contextFactory, workflowQueryService, authService);
+
+            var rows = await previewService.BuildPreviewAsync(indexSheetId, mappingDict, msg => AppendToLog($"[Preview] {msg}"));
+
+            NewPreviewGrid.ItemsSource = null;
+            NewPreviewGrid.ItemsSource = rows;
+
+            var readyCount = rows.Count(r => r.IsCommitAllowed);
+            NewPreviewStatusLabel.Text = $"✅ הניתוח הושלם. {readyCount} שורות מוכנות (אך Commit לא ממומש בשלב 1).";
+        }
+        catch (Exception ex)
+        {
+            NewPreviewStatusLabel.Text = "⚠ שגיאה ביצירת Preview";
+            AppendToLog($"[Preview] Error building preview: {ex.Message}");
+            MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BuildPreviewButton.IsEnabled = true;
+        }
     }
 
     /// <summary>Minimal config class for GoogleReports section deserialization.</summary>

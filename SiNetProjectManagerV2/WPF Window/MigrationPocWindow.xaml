@@ -1,4 +1,4 @@
-﻿<Window x:Class="SiNetProjectManagerV2.MigrationPocWindow"
+<Window x:Class="SiNetProjectManagerV2.MigrationPocWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="🔬 Migration PoC — Extraction &amp; Task Generation"
@@ -264,6 +264,152 @@
                             </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
+                </Grid>
+            <!-- ═══════════════════════════════════════════════════════════
+                 TAB 3: Google Sheet Review Migration Preview (New)
+                 ═══════════════════════════════════════════════════════════ -->
+            <TabItem Header="📋 מיגרציית ביקורת מגיליון — Preview בלבד">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <TextBlock Grid.Row="0" FontSize="14" FontWeight="Bold" Foreground="#4A148C" Margin="0,0,0,8">
+                        שלב 1: מיפוי בודקים
+                    </TextBlock>
+
+                    <!-- Input -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="מזהה/קישור גיליון אינדקס:" 
+                                   VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                        <TextBox Grid.Column="1" x:Name="NewIndexSheetIdBox"
+                                 FlowDirection="LeftToRight"
+                                 ToolTip="הדביקו את מזהה הגיליון או קישור מלא לגיליון האינדקס (מעקב ביקורות)"/>
+                        <Button Grid.Column="2" x:Name="ScanReviewersButton" Content="🔍 סרוק בודקים" 
+                                Click="ScanReviewersButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#4A148C" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" Margin="10,0,0,0"/>
+                    </Grid>
+
+                    <!-- Mapping DataGrid -->
+                    <DataGrid Grid.Row="2" x:Name="ReviewerMappingGrid"
+                              AutoGenerateColumns="False" IsReadOnly="False"
+                              MaxHeight="150"
+                              CanUserSortColumns="False" CanUserResizeColumns="True"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              FlowDirection="RightToLeft"
+                              GridLinesVisibility="Horizontal"
+                              AlternatingRowBackground="#F5F5F5"
+                              BorderBrush="#D0D0D0" BorderThickness="1" Margin="0,0,0,8">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="בודק (בגיליון)" Binding="{Binding SheetReviewerName}" Width="200" IsReadOnly="True" FontWeight="Bold"/>
+                            <DataGridTemplateColumn Header="שיוך למשתמש מערכת" Width="250">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding AvailableUsers}" 
+                                                  DisplayMemberPath="DisplayName" 
+                                                  SelectedValuePath="UserId" 
+                                                  SelectedValue="{Binding SelectedUserId, UpdateSourceTrigger=PropertyChanged}" 
+                                                  Padding="4,2"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Header 2 -->
+                    <TextBlock Grid.Row="3" FontSize="14" FontWeight="Bold" Foreground="#004D40" Margin="0,10,0,8">
+                        שלב 2: תצוגה מקדימה (Read-Only)
+                    </TextBlock>
+                    
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button x:Name="BuildPreviewButton" Content="⚡ צור Preview" 
+                                Click="BuildPreviewButton_Click" Padding="14,6" FontWeight="Bold"
+                                Background="#004D40" Foreground="White" Cursor="Hand"
+                                BorderThickness="0" IsEnabled="False"/>
+                        <TextBlock x:Name="NewPreviewStatusLabel" Text="" VerticalAlignment="Center" 
+                                   Margin="12,0,0,0" FontSize="12" Foreground="#555"/>
+                    </StackPanel>
+
+                    <!-- Preview DataGrid -->
+                    <DataGrid Grid.Row="5" x:Name="NewPreviewGrid"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserSortColumns="True" CanUserResizeColumns="True"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              FlowDirection="RightToLeft"
+                              GridLinesVisibility="Horizontal"
+                              AlternatingRowBackground="#F5F5F5"
+                              BorderBrush="#D0D0D0" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="שורה" Binding="{Binding SheetRowIndex}" Width="45"/>
+                            <DataGridTextColumn Header="פרויקט (גיליון)" Binding="{Binding ProjectNameFromSheet}" Width="110"/>
+                            <DataGridTextColumn Header="פרויקט (DB)" Binding="{Binding ResolvedProjectDisplayName}" Width="140">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#333"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ResolvedProjectId}" Value="{x:Null}">
+                                                <Setter Property="Foreground" Value="#D32F2F"/>
+                                                <Setter Property="FontWeight" Value="Bold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="סטטוס (גיליון)" Binding="{Binding SheetStatus}" Width="100"/>
+                            <DataGridTextColumn Header="סיווג" Binding="{Binding Classification}" Width="120" FontWeight="Bold"/>
+                            <DataGridTextColumn Header="בודק ממפוי" Binding="{Binding MappedReviewerDisplayName}" Width="100"/>
+                            <DataGridTextColumn Header="JSON" Binding="{Binding JsonCacheStatus}" Width="60"/>
+                            <DataGridTextColumn Header="Workflow קיים" Binding="{Binding ExistingWorkflowStatus}" Width="120"/>
+                            <DataGridTextColumn Header="דוח קיים" Binding="{Binding ExistingReportStatus}" Width="120"/>
+                            <DataGridTextColumn Header="סיבה חוסמת" Binding="{Binding BlockingReason}" Width="150">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#D32F2F"/>
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="אזהרות" Binding="{Binding WarningMessages}" Width="150">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#E65100"/>
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="פעולה מתוכננת" Binding="{Binding ProposedAction}" Width="250">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Commit Actions -->
+                    <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Left">
+                        <Button x:Name="CommitPhase1Button" Content="Commit not implemented in Phase 1" 
+                                Padding="14,6" FontWeight="Bold"
+                                Background="#B0BEC5" Foreground="White" Cursor="No"
+                                BorderThickness="0" IsEnabled="False" ToolTip="Commit מבוטל בשלב 1"/>
+                    </StackPanel>
                 </Grid>
             </TabItem>
 
