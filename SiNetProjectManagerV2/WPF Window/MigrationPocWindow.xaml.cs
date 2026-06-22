@@ -1240,7 +1240,10 @@ public partial class MigrationPocWindow : Window
                 {
                     SheetReviewerName = r,
                     AvailableUsers = _systemUsers,
-                    SelectedUserId = autoMatch?.UserId
+                    SelectedUserId = autoMatch?.UserId,
+                    SelectedUserDisplayName = autoMatch?.DisplayName,
+                    MappingStatus = autoMatch != null ? "AutoMatched" : "NotMapped",
+                    WarningMessage = autoMatch == null ? "ManualRequired" : ""
                 });
             }
 

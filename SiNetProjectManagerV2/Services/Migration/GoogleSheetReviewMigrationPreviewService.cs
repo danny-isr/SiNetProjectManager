@@ -66,229 +66,286 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         
         var results = new List<GoogleSheetReviewMigrationPreviewRow>();
         
-        // Track seen projects to detect duplicates
-        var seenProjectIds = new HashSet<int>();
+        // Find duplicates in advance by ProjectRef
+        var duplicateRefs = links
+            .GroupBy(l => l.ProjectRef)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet();
 
-        int rowIndex = 1; // Assuming 1-based indexing for display
+        int rowIndex = 1;
         foreach (var link in links)
         {
-            var row = new GoogleSheetReviewMigrationPreviewRow
-            {
-                SheetRowIndex = rowIndex++,
-                ProjectNumberFromSheet = link.ProjectRef,
-                ProjectNameFromSheet = link.ProjectRef,
-                SheetStatus = link.Status ?? "Unknown",
-                ReviewerNameFromSheet = link.Reviewer ?? "Unknown"
-            };
-
-            // 1. Resolve Project (Read Only)
-            var (resolvedId, resolvedName) = await ResolveProjectReadOnlyAsync(db, link.ProjectRef, ct);
-            row.ResolvedProjectId = resolvedId;
-            row.ResolvedProjectDisplayName = resolvedName;
+            var isDuplicateProjectRow = duplicateRefs.Contains(link.ProjectRef);
             
-            if (resolvedId.HasValue)
+            // Generate rows per version
+            var versionCount = link.ReportSpreadsheetIds.Count;
+            if (versionCount == 0)
             {
-                row.ProjectMatchStatus = "Found";
-                if (!seenProjectIds.Add(resolvedId.Value))
-                {
-                    row.IsDuplicateProjectRow = true;
-                }
+                var row = await ProcessSingleRowAsync(db, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, 1, null, ct);
+                results.Add(row);
             }
             else
             {
-                row.ProjectMatchStatus = "Not Found";
-                row.Classification = MigrationPreviewClassification.NoMatch;
-                row.BlockingReason = "Project not found in DB.";
-                results.Add(row);
-                continue;
-            }
-
-            // 2. Reviewer Mapping
-            if (reviewerMapping.TryGetValue(row.ReviewerNameFromSheet, out var mappedUserId))
-            {
-                row.MappedReviewerUserId = mappedUserId;
-                var user = await db.Siusers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == mappedUserId, ct);
-                row.MappedReviewerDisplayName = user?.DisplayName ?? user?.Name;
-                row.ReviewerMappingStatus = "Mapped";
-                
-                // Group validation would go here. Since we can't easily validate workflow stage group without resolving workflow first,
-                // we will flag as "Group validation not verified in Phase 1"
-                row.WarningMessages = "Reviewer mapped — group validation not verified in Phase 1";
-            }
-            else
-            {
-                row.ReviewerMappingStatus = "Not Mapped";
-                row.Classification = MigrationPreviewClassification.ReviewerNotMapped;
-                row.BlockingReason = "Reviewer mapping required.";
-                results.Add(row);
-                continue;
-            }
-
-            // 3. JSON Cache
-            var jsonCache = await ExtractionCacheService.LoadAsync(resolvedId.Value.ToString(), 1, link.ReportNumber, ct);
-            if (jsonCache != null)
-            {
-                row.JsonCacheStatus = "Found";
-                row.JsonReportSpreadsheetId = jsonCache.ReportSpreadsheetId;
-                row.JsonPath = ExtractionCacheService.GetProjectCacheFolder(resolvedId.Value.ToString());
-            }
-            else
-            {
-                row.JsonCacheStatus = "Missing";
-                // JSON is missing. This might be just a workflow start without a report.
-            }
-
-            // 4. Resolve Existing Workflows and Target Stage
-            // We need to determine the target stage based on the Sheet Status.
-            // For PoC, let's assume we want to start a default Review workflow.
-            var targetStageId = await DetermineTargetStageIdAsync(db, link.Status, ct);
-            if (!targetStageId.HasValue)
-            {
-                row.TargetWorkflowStageDisplay = "Unknown Stage";
-                row.Classification = MigrationPreviewClassification.MissingData;
-                row.BlockingReason = $"Cannot determine workflow stage for status: {link.Status}";
-                results.Add(row);
-                continue;
-            }
-
-            var targetStage = await db.WorkflowStageDefinitions.AsNoTracking().FirstOrDefaultAsync(s => s.Id == targetStageId.Value, ct);
-            row.TargetWorkflowStageCode = targetStage?.Code ?? "";
-            row.TargetWorkflowStageDisplay = targetStage?.Name ?? "";
-
-            var existingWorkflows = await _workflowQueryService.GetActiveWorkflowsForProjectAsync(resolvedId.Value, ct);
-            var reviewWorkflows = existingWorkflows.Where(w => w.WorkflowDefinitionId == targetStage?.WorkflowDefinitionId).ToList();
-
-            if (reviewWorkflows.Count > 1)
-            {
-                row.ExistingWorkflowStatus = $"Multiple active ({reviewWorkflows.Count})";
-                row.Classification = MigrationPreviewClassification.ExistingWorkflowConflict;
-                row.BlockingReason = "Multiple active review workflows found.";
-                results.Add(row);
-                continue;
-            }
-            
-            var existingWorkflow = reviewWorkflows.FirstOrDefault();
-            bool isWorkflowAlreadyDone = false;
-
-            if (existingWorkflow == null)
-            {
-                row.ExistingWorkflowStatus = "None";
-                row.ProposedAction = $"Create workflow at stage: {row.TargetWorkflowStageDisplay}";
-            }
-            else
-            {
-                row.ExistingWorkflowStatus = $"Stage: {existingWorkflow.CurrentStage?.Name ?? "Unknown"}";
-                
-                if (existingWorkflow.CurrentStageId == targetStageId.Value)
+                for (int i = 0; i < versionCount; i++)
                 {
-                    row.ProposedAction = "Workflow already at target stage";
-                    isWorkflowAlreadyDone = true;
-                }
-                else if (targetStage != null && existingWorkflow.CurrentStage?.SortOrder < targetStage.SortOrder)
-                {
-                    // Existing workflow is behind target stage.
-                    // Check if direct transition exists.
-                    var hasDirectTransition = await db.WorkflowTransitionRules.AsNoTracking()
-                        .AnyAsync(r => r.FromStageId == existingWorkflow.CurrentStageId && r.ToStageId == targetStageId.Value, ct);
-                        
-                    if (hasDirectTransition)
-                    {
-                        row.ProposedAction = $"Advance workflow to {row.TargetWorkflowStageDisplay} (Direct transition exists)";
-                    }
-                    else
-                    {
-                        row.Classification = MigrationPreviewClassification.ManagerReview;
-                        row.BlockingReason = "Workflow needs advancing, but no direct transition exists.";
-                        results.Add(row);
-                        continue;
-                    }
-                }
-                else
-                {
-                    // Existing workflow is ahead or parallel.
-                    row.Classification = MigrationPreviewClassification.BackwardMovement;
-                    row.BlockingReason = "Existing workflow is ahead of target stage.";
+                    var spreadsheetId = link.ReportSpreadsheetIds[i];
+                    var row = await ProcessSingleRowAsync(db, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, i + 1, spreadsheetId, ct);
                     results.Add(row);
-                    continue;
                 }
             }
-
-            // 5. Resolve Existing Reports
-            bool isReportAlreadyDone = false;
-            var existingReports = await db.InspectionReports.AsNoTracking()
-                .Where(r => r.ProjectId == resolvedId.Value)
-                .ToListAsync(ct);
-
-            if (jsonCache != null)
-            {
-                var matchingReport = existingReports.FirstOrDefault(r => r.SentSpreadsheetId == jsonCache.ReportSpreadsheetId);
-                if (matchingReport != null)
-                {
-                    row.ExistingReportStatus = $"Found matching report (ID: {matchingReport.Id})";
-                    isReportAlreadyDone = true;
-                }
-                else
-                {
-                    row.ExistingReportStatus = $"No matching SentSpreadsheetId (Found {existingReports.Count} other reports)";
-                    row.Classification = MigrationPreviewClassification.ExistingReportConflict;
-                    row.BlockingReason = "Existing reports do not match JSON source ID.";
-                    results.Add(row);
-                    continue;
-                }
-            }
-            else
-            {
-                row.ExistingReportStatus = "No JSON to compare against.";
-            }
-
-            // 6. Final Classification
-            if (row.IsDuplicateProjectRow)
-            {
-                row.Classification = MigrationPreviewClassification.DuplicateProjectRow;
-                row.BlockingReason = "Duplicate project row in sheet.";
-            }
-            else if (isWorkflowAlreadyDone && isReportAlreadyDone)
-            {
-                row.Classification = MigrationPreviewClassification.AlreadyDone;
-                row.ProposedAction = "Nothing to do.";
-            }
-            else if (isWorkflowAlreadyDone && jsonCache == null)
-            {
-                row.Classification = MigrationPreviewClassification.AlreadyDone;
-                row.ProposedAction = "Workflow is already at target stage. No JSON available to import report.";
-            }
-            else if (jsonCache == null)
-            {
-                row.Classification = MigrationPreviewClassification.CommitReadyWithWarning;
-                row.ProposedAction = row.ProposedAction + " (Workflow only; missing JSON)";
-                row.IsCommitAllowed = true;
-            }
-            else
-            {
-                row.Classification = MigrationPreviewClassification.CommitReady;
-                row.ProposedAction = row.ProposedAction + " + Import Report";
-                row.IsCommitAllowed = true;
-            }
-
-            results.Add(row);
         }
 
         return results;
     }
 
+    private async Task<GoogleSheetReviewMigrationPreviewRow> ProcessSingleRowAsync(
+        SiNetSQLDbContext db,
+        IndexSheetReportLink link,
+        int rowIndex,
+        bool isDuplicateProjectRow,
+        IReadOnlyDictionary<string, int> reviewerMapping,
+        int versionIndex,
+        string? reportSpreadsheetId,
+        CancellationToken ct)
+    {
+        var row = new GoogleSheetReviewMigrationPreviewRow
+        {
+            SheetRowIndex = rowIndex,
+            ProjectNumberFromSheet = link.ProjectRef,
+            ProjectNameFromSheet = link.ProjectRef,
+            SheetStatus = link.Status ?? "Unknown",
+            ReviewerNameFromSheet = link.Reviewer ?? "Unknown",
+            IsDuplicateProjectRow = isDuplicateProjectRow
+        };
+
+        // 1. Resolve Project (Read Only)
+        var (resolvedId, resolvedNumber, resolvedName) = await ResolveProjectReadOnlyAsync(db, link.ProjectRef, ct);
+        row.ResolvedProjectId = resolvedId;
+        row.ResolvedProjectDisplayName = resolvedName;
+        
+        if (resolvedId.HasValue)
+        {
+            row.ProjectMatchStatus = "Found";
+        }
+        else
+        {
+            row.ProjectMatchStatus = "Not Found";
+            row.Classification = MigrationPreviewClassification.NoMatch;
+            row.BlockingReason = "Project not found in DB.";
+            return row;
+        }
+
+        // 2. Reviewer Mapping
+        if (reviewerMapping.TryGetValue(row.ReviewerNameFromSheet, out var mappedUserId))
+        {
+            row.MappedReviewerUserId = mappedUserId;
+            var user = await db.Siusers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == mappedUserId, ct);
+            row.MappedReviewerDisplayName = user?.DisplayName ?? user?.Name;
+            row.ReviewerMappingStatus = "Mapped";
+            row.WarningMessages = "Reviewer mapped — group validation not verified in Phase 1";
+        }
+        else
+        {
+            row.ReviewerMappingStatus = "Not Mapped";
+            row.Classification = MigrationPreviewClassification.ReviewerNotMapped;
+            row.BlockingReason = "Reviewer mapping required.";
+            return row;
+        }
+
+        // 3. JSON Cache
+        ExtractionCacheEnvelope? jsonCache = null;
+        if (!string.IsNullOrWhiteSpace(resolvedNumber))
+        {
+            jsonCache = await ExtractionCacheService.LoadAsync(resolvedNumber, versionIndex, link.ReportNumber, ct);
+            if (jsonCache != null)
+            {
+                row.JsonCacheStatus = $"Found (V{versionIndex})";
+                row.JsonReportSpreadsheetId = jsonCache.ReportSpreadsheetId;
+                row.JsonPath = ExtractionCacheService.GetProjectCacheFolder(resolvedNumber);
+                
+                if (!string.IsNullOrWhiteSpace(reportSpreadsheetId) && jsonCache.ReportSpreadsheetId != reportSpreadsheetId)
+                {
+                    row.WarningMessages += " | JSON Source ID mismatch with sheet link";
+                }
+            }
+            else
+            {
+                row.JsonCacheStatus = $"Missing (V{versionIndex})";
+            }
+        }
+        else
+        {
+            row.JsonCacheStatus = "Missing (No Project Number)";
+        }
+
+        // 4. Resolve Target Stage
+        var targetStageCode = DetermineTargetStageCode(link.Status);
+        if (string.IsNullOrWhiteSpace(targetStageCode))
+        {
+            row.TargetWorkflowStageDisplay = "Unknown Stage";
+            row.Classification = MigrationPreviewClassification.MissingData;
+            row.BlockingReason = $"Cannot determine workflow stage for status: {link.Status}";
+            return row;
+        }
+
+        var targetStage = await db.WorkflowStageDefinitions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Code == targetStageCode && s.IsActive && s.WorkflowDefinition.IsActive, ct);
+
+        if (targetStage == null)
+        {
+            row.TargetWorkflowStageCode = targetStageCode;
+            row.TargetWorkflowStageDisplay = targetStageCode;
+            row.Classification = MigrationPreviewClassification.MissingData;
+            row.BlockingReason = $"Target stage code '{targetStageCode}' not found in DB.";
+            return row;
+        }
+
+        row.TargetWorkflowStageCode = targetStage.Code;
+        row.TargetWorkflowStageDisplay = targetStage.Name;
+
+        // 5. Existing Workflows
+        var existingWorkflows = await _workflowQueryService.GetActiveWorkflowsForProjectAsync(resolvedId.Value, ct);
+        var reviewWorkflows = existingWorkflows.Where(w => w.WorkflowDefinitionId == targetStage.WorkflowDefinitionId).ToList();
+
+        if (reviewWorkflows.Count > 1)
+        {
+            row.ExistingWorkflowStatus = $"Multiple active ({reviewWorkflows.Count})";
+            row.Classification = MigrationPreviewClassification.ExistingWorkflowConflict;
+            row.BlockingReason = "Multiple active review workflows found.";
+            return row;
+        }
+        
+        var existingWorkflow = reviewWorkflows.FirstOrDefault();
+        bool isWorkflowAlreadyDone = false;
+
+        if (existingWorkflow == null)
+        {
+            row.ExistingWorkflowStatus = "None";
+            row.ProposedAction = $"Create workflow at stage: {row.TargetWorkflowStageDisplay}";
+        }
+        else
+        {
+            row.ExistingWorkflowStatus = $"Stage: {existingWorkflow.CurrentStage?.Name ?? "Unknown"}";
+            
+            if (existingWorkflow.CurrentStageId == targetStage.Id)
+            {
+                row.ProposedAction = "Workflow already at target stage";
+                isWorkflowAlreadyDone = true;
+            }
+            else if (existingWorkflow.CurrentStage?.SortOrder < targetStage.SortOrder)
+            {
+                var hasDirectTransition = await db.WorkflowTransitionRules.AsNoTracking()
+                    .AnyAsync(r => r.FromStageId == existingWorkflow.CurrentStageId && r.ToStageId == targetStage.Id, ct);
+                    
+                if (hasDirectTransition)
+                {
+                    row.ProposedAction = $"Advance workflow to {row.TargetWorkflowStageDisplay} (Direct transition exists)";
+                }
+                else
+                {
+                    row.Classification = MigrationPreviewClassification.ManagerReview;
+                    row.BlockingReason = "Workflow needs advancing, but no direct transition exists.";
+                    return row;
+                }
+            }
+            else
+            {
+                row.Classification = MigrationPreviewClassification.BackwardMovement;
+                row.BlockingReason = "Existing workflow is ahead of target stage.";
+                return row;
+            }
+        }
+
+        // 6. Existing Reports
+        bool isReportAlreadyDone = false;
+        var existingReports = await db.InspectionReports.AsNoTracking()
+            .Where(r => r.ProjectId == resolvedId.Value && r.ReportNumber == link.ReportNumber)
+            .ToListAsync(ct);
+
+        string effectiveSourceId = jsonCache?.ReportSpreadsheetId ?? reportSpreadsheetId;
+
+        if (!string.IsNullOrWhiteSpace(effectiveSourceId))
+        {
+            var matchingReport = existingReports.FirstOrDefault(r => r.SentSpreadsheetId == effectiveSourceId);
+            if (matchingReport != null)
+            {
+                row.ExistingReportStatus = $"Found matching report (ID: {matchingReport.Id})";
+                isReportAlreadyDone = true;
+            }
+            else
+            {
+                // Check if there are other reports with a different SentSpreadsheetId
+                var conflictReport = existingReports.FirstOrDefault(r => !string.IsNullOrEmpty(r.SentSpreadsheetId) && r.SentSpreadsheetId != effectiveSourceId);
+                if (conflictReport != null)
+                {
+                    row.ExistingReportStatus = $"Conflict (ID: {conflictReport.Id} has different source)";
+                    row.Classification = MigrationPreviewClassification.ExistingReportConflict;
+                    row.BlockingReason = "Existing report has a different JSON source ID.";
+                    return row;
+                }
+                
+                // Check if there's a report with missing source ID but we can't reliably map it
+                var unknownSourceReport = existingReports.FirstOrDefault(r => string.IsNullOrEmpty(r.SentSpreadsheetId));
+                if (unknownSourceReport != null)
+                {
+                    row.ExistingReportStatus = $"Unlinked existing report (ID: {unknownSourceReport.Id})";
+                    row.Classification = MigrationPreviewClassification.ExistingReportConflict;
+                    row.BlockingReason = "Found existing report without SentSpreadsheetId link.";
+                    return row;
+                }
+
+                row.ExistingReportStatus = "None (Will Import)";
+            }
+        }
+        else
+        {
+            row.ExistingReportStatus = "No source ID to match against.";
+        }
+
+        // 7. Final Classification
+        if (row.IsDuplicateProjectRow)
+        {
+            row.Classification = MigrationPreviewClassification.DuplicateProjectRow;
+            row.BlockingReason = "Duplicate project row in sheet.";
+        }
+        else if (isWorkflowAlreadyDone && isReportAlreadyDone)
+        {
+            row.Classification = MigrationPreviewClassification.AlreadyDone;
+            row.ProposedAction = "Nothing to do.";
+        }
+        else if (isWorkflowAlreadyDone && jsonCache == null)
+        {
+            row.Classification = MigrationPreviewClassification.AlreadyDone;
+            row.ProposedAction = "Workflow is already at target stage. No JSON available to import report.";
+        }
+        else if (jsonCache == null)
+        {
+            row.Classification = MigrationPreviewClassification.CommitReadyWithWarning;
+            row.ProposedAction = row.ProposedAction + " (Workflow only; missing JSON)";
+            row.IsCommitAllowed = true;
+        }
+        else
+        {
+            row.Classification = MigrationPreviewClassification.CommitReady;
+            row.ProposedAction = row.ProposedAction + " + Import Report";
+            row.IsCommitAllowed = true;
+        }
+
+        return row;
+    }
+
     /// <summary>
     /// Purely read-only project resolution logic.
-    /// Extracts leading digits or matches exact Title/NameAndNumber.
     /// </summary>
-    private static async Task<(int? Id, string Name)> ResolveProjectReadOnlyAsync(
+    private static async Task<(int? Id, string Number, string Name)> ResolveProjectReadOnlyAsync(
         SiNetSQLDbContext context, string projectRef, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(projectRef))
-            return (null, string.Empty);
+            return (null, string.Empty, string.Empty);
 
         Project? project = null;
 
-        // Try as numeric ID
         var match = System.Text.RegularExpressions.Regex.Match(projectRef.Trim(), @"^\d+");
         if (match.Success && int.TryParse(match.Value, out var numericId))
         {
@@ -296,33 +353,39 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 .FirstOrDefaultAsync(p => p.Id == numericId || p.Number == numericId, ct);
         }
 
-        // Try by Title (exact)
         project ??= await context.Projects.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Title != null && p.Title == projectRef, ct);
 
-        // Try by NameAndNumber (exact)
         project ??= await context.Projects.AsNoTracking()
             .FirstOrDefaultAsync(p => p.NameAndNumber != null && p.NameAndNumber == projectRef, ct);
 
         if (project != null)
         {
-            return (project.Id, project.NameAndNumber ?? project.Title ?? project.Name ?? project.Id.ToString());
+            return (project.Id, project.Number?.ToString("0") ?? string.Empty, project.NameAndNumber ?? project.Title ?? project.Name ?? project.Id.ToString());
         }
 
-        return (null, string.Empty);
+        return (null, string.Empty, string.Empty);
     }
 
     /// <summary>
-    /// Dummy implementation for determining target stage ID based on sheet status.
-    /// In a real scenario, this would map the Hebrew status to a WorkflowStageDefinition.
+    /// Maps the Hebrew sheet status to the corresponding Workflow Stage Code.
     /// </summary>
-    private async Task<int?> DetermineTargetStageIdAsync(SiNetSQLDbContext db, string sheetStatus, CancellationToken ct)
+    private static string? DetermineTargetStageCode(string? sheetStatus)
     {
-        // For PoC, just find the first active stage in any active Review workflow.
-        // In real implementation, you'd map the string `sheetStatus` to the correct stage Code.
-        var stage = await db.WorkflowStageDefinitions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.IsActive && s.WorkflowDefinition.IsActive, ct);
-            
-        return stage?.Id;
+        if (string.IsNullOrWhiteSpace(sheetStatus)) return null;
+        
+        var trimmed = sheetStatus.Trim();
+        return trimmed switch
+        {
+            "בתהליך בדיקה" => "REV.ProfessionalReview",
+            "נבדק- ממתין לבדיקה פנימית" => "REV.AwaitingManagerApproval",
+            "ממתין לתיקון הערות" => "REV.AwaitingPlannerCorrections",
+            "ממתין לתיקון הערות משטרה" => "REV.AwaitingPoliceCorrections",
+            "בתהליך בדיקה הערות משטרה" => "REV.AwaitingPoliceApproval",
+            "נבדק- ממתין לתשובה מהרשויות" => "REV.AwaitingPoliceApproval",
+            "מאושר תנועתית" => "REV.Completed",
+            "מאושר תנועתית לאחר משטרה" => "REV.Completed",
+            _ => null
+        };
     }
 }

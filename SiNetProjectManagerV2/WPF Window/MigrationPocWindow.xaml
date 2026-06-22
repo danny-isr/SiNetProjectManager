@@ -265,6 +265,7 @@
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
+            </TabItem>
             <!-- ═══════════════════════════════════════════════════════════
                  TAB 3: Google Sheet Review Migration Preview (New)
                  ═══════════════════════════════════════════════════════════ -->
