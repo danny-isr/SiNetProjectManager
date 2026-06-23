@@ -33,7 +33,7 @@ Document the Email Management screen and the context-aware actions system as cur
 
 | ViewModel | File | Purpose |
 |---|---|---|
-| EmailManagementViewModel | `SiNetSQL\MVVM\EmailManagementViewModel.cs` (~8000+ lines, 347KB) | Main email tab logic — Gmail OAuth, loading, filing, tagging, ACC upload |
+| EmailManagementViewModel | `SiNetSQL\MVVM\EmailManagementViewModel.cs` (~6,100 lines, ~340KB) | Main email tab logic — Gmail OAuth, loading, filing, tagging, ACC upload |
 | EmailContextViewModel | `SiNetSQL\MVVM\EmailContextViewModel.cs` (1629 lines) | Context analysis → suggested actions → action execution |
 | EmailViewerViewModel | `SiNetSQL\MVVM\Components\EmailViewerViewModel.cs` (192 lines) | Single email display |
 

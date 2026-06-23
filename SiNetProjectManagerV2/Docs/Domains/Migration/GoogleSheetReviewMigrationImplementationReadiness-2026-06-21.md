@@ -23,38 +23,41 @@ The core infrastructure for the migration (Inspection Reports, Workflow Engine, 
 
 ## 2. Readiness matrix
 
-| Requirement | Current existing mechanism | Ready status | Recommended action | Files/services involved |
-|---|---|---|---|---|
-| Read Index Sheet | `IndexSheetReader.ReadAsync()` | Ready as-is | Use existing service | `IndexSheetReader.cs` |
-| Resolve Project | `MigrationTaskService.ResolveProjectAsync` logic | Needs small extension | Extract read-only resolution logic | `MigrationTaskService.cs` |
-| Detect duplicate project rows | None (assumes unique per project) | Needs new integration | Add grouping/validation in preview builder | Preview logic |
-| Resolve reviewer / בודק | `TaskPriorityEngine.BuildUserLookupCachesAsync` | Needs new integration | Build mapping UI for user approval | `TaskPriorityEngine.cs` + new UI |
-| Resolve or create Alternative 1 | `ProjectAlternativeService` | Needs small extension | Add `EnsureAlternativeAsync` helper | `ProjectAlternativeService.cs` |
-| Read AI JSON cache | `ExtractionCacheService.LoadAsync()` | Ready as-is | Use existing service | `ExtractionCacheService.cs` |
-| Export/import JSON cache ZIP | None | Postponed | Not needed for Phase 1 | `ExtractionCacheService.cs` |
-| Validate JSON envelope | `ExtractionCacheService` serialization | Ready as-is | Envelope schema is stable | `ExtractionCacheService.cs` |
-| Build main sections from JSON | `TemplateSyncService.SyncAsync()` | Ready as-is | Map JSON codes to `TemplateSyncRow` | `TemplateSyncService.cs` |
-| Create InspectionSeries | `TemplateSyncService.EnsureSeriesAsync()` / manual creation | Needs small extension | Ensure series creation before reports | `InspectionReportService.cs` |
-| Create InspectionReport versions | `InspectionReportService.CreateReportAsync()` | Ready as-is | Call per version | `InspectionReportService.cs` |
-| Add detailed sub-notes from JSON | `InspectionReportService.AddNoteAsync()` | Ready as-is | Call per sub-note | `InspectionReportService.cs` |
-| Create placeholder notes for numbering gaps | `AddNoteAsync` | Needs design decision | Decide if empty notes are acceptable long-term | `InspectionReportService.cs` |
-| Populate note text/status/planner response | `InspectionReportService.SaveNotesAsync()` / direct DB | Needs small extension | Map JSON data to note entities | `InspectionReportService.cs` |
-| Lock non-latest reports | `InspectionReportService.MarkReportAsSentAsync()` | Ready as-is | Call for historical versions | `InspectionReportService.cs` |
-| Decide latest report open/closed state | Logic based on status | Ready as-is | Implement mapping rules | Migration logic |
-| Compare existing report version with JSON | `SentSpreadsheetId` | Ready as-is | Compare with JSON `ReportSpreadsheetId` | Migration logic |
-| Detect report version conflict | DB query | Needs small extension | Surface in preview | Migration logic |
-| Start Review Workflow at mapped stage | `WorkflowTaskOrchestrator.StartWorkflowAsync(initialStageCode)` | Ready as-is | Call with target stage | `WorkflowTaskOrchestrator.cs` |
-| Complete final-status Workflow | `WorkflowEngine.CompleteAsync()` | Ready as-is | Call after start | `WorkflowEngine.cs` |
-| Advance existing Workflow forward | `WorkflowTaskOrchestrator.AdvanceWithTasksAsync()` | Blocked | Direct jumps not supported. Must classify as Manager Review. | `WorkflowTaskOrchestrator.cs` |
-| Prevent backward Workflow movement | `WorkflowStageDefinition.SortOrder` comparison | Needs small extension | Add validation in preview | Migration logic |
-| Reassign workflow-created task to Sheet reviewer | `TaskService.ReassignTask()` | Needs new integration | Classify Group Mismatches and use UI mapping | `TaskService.cs` |
-| Report reassignment failure clearly | None | Needs new integration | Add explicit logging/UI feedback | Migration commit logic |
-| Classify Preview row | None | Needs new integration | Implement classification logic | Preview logic |
-| Read-only preview | None | Needs new integration | Build new preview logic without DB writes | Preview logic |
-| Commit ready rows | None | Needs new integration | Implement commit pipeline | Commit logic |
-| Manager Review rows | None | Needs new integration | Surface in UI | Preview logic |
-| Log migration outcomes | `IActionLifecycleReporter` (maybe) | Needs design decision | Decide log storage mechanism | Logging logic |
-| Ensure idempotency / rerun safety | DB unique constraints | Needs small extension | Wrap in transaction, verify existing | Commit logic |
+> **Phase key:** P1 = Phase 1 (read-only Preview), P2 = Phase 2 (Report import), P3 = Phase 3 (Workflow reconstruction), P4 = Phase 4 (Combined commit).
+> Phase 1 Preview does not require any write-side services. It only reads from DB, Google Sheets, and the local JSON cache.
+
+| Requirement | Phase | Current existing mechanism | Ready status | Recommended action | Files/services involved |
+|---|---|---|---|---|---|
+| Read Index Sheet | P1 | `IndexSheetReader.ReadAsync()` | Ready as-is | Use existing service | `IndexSheetReader.cs` |
+| Resolve Project | P1 | `MigrationTaskService.ResolveProjectAsync` logic | Needs small extension | Extract read-only resolution logic | `MigrationTaskService.cs` |
+| Detect duplicate project rows | P1 | None (assumes unique per project) | Needs new integration | Add grouping/validation in preview builder | Preview logic |
+| Resolve reviewer / בודק | P1 | `TaskPriorityEngine.BuildUserLookupCachesAsync` | Needs new integration | Build mapping UI for user approval | `TaskPriorityEngine.cs` + new UI |
+| Resolve or create Alternative 1 | P2 | `ProjectAlternativeService` | Needs small extension | Add `EnsureAlternativeAsync` helper | `ProjectAlternativeService.cs` |
+| Read AI JSON cache | P1 | `ExtractionCacheService.LoadAsync()` | Ready as-is | Use existing service | `ExtractionCacheService.cs` |
+| Export/import JSON cache ZIP | P2+ | None | Postponed | Not needed for Phase 1 | `ExtractionCacheService.cs` |
+| Validate JSON envelope | P1 | `ExtractionCacheService` serialization | Ready as-is | Envelope schema is stable | `ExtractionCacheService.cs` |
+| Build main sections from JSON | P2 | `TemplateSyncService.SyncAsync()` | Ready as-is | Map JSON codes to `TemplateSyncRow` | `TemplateSyncService.cs` |
+| Create InspectionSeries | P2 | `TemplateSyncService.EnsureSeriesAsync()` / manual creation | Needs small extension | Ensure series creation before reports | `InspectionReportService.cs` |
+| Create InspectionReport versions | P2 | `InspectionReportService.CreateReportAsync()` | Ready as-is | Call per version | `InspectionReportService.cs` |
+| Add detailed sub-notes from JSON | P2 | `InspectionReportService.AddNoteAsync()` | Ready as-is | Call per sub-note | `InspectionReportService.cs` |
+| Create placeholder notes for numbering gaps | P2 | `AddNoteAsync` | Needs design decision | Decide if empty notes are acceptable long-term | `InspectionReportService.cs` |
+| Populate note text/status/planner response | P2 | `InspectionReportService.SaveNotesAsync()` / direct DB | Needs small extension | Map JSON data to note entities | `InspectionReportService.cs` |
+| Lock non-latest reports | P2 | `InspectionReportService.MarkReportAsSentAsync()` | Ready as-is | Call for historical versions | `InspectionReportService.cs` |
+| Decide latest report open/closed state | P1 | Logic based on status | Ready as-is | Implement mapping rules | Migration logic |
+| Compare existing report version with JSON | P1 | `SentSpreadsheetId` | Ready as-is | Compare with JSON `ReportSpreadsheetId` | Migration logic |
+| Detect report version conflict | P1 | DB query | Needs small extension | Surface in preview | Migration logic |
+| Start Review Workflow at mapped stage | P3 | `WorkflowTaskOrchestrator.StartWorkflowAsync(initialStageCode)` | Ready as-is | Call with target stage | `WorkflowTaskOrchestrator.cs` |
+| Complete final-status Workflow | P3 | `WorkflowEngine.CompleteAsync()` | Ready as-is | Call after start | `WorkflowEngine.cs` |
+| Advance existing Workflow forward | P3 | `WorkflowTaskOrchestrator.AdvanceWithTasksAsync()` | Blocked | Direct jumps not supported. Must classify as Manager Review. | `WorkflowTaskOrchestrator.cs` |
+| Prevent backward Workflow movement | P1 | `WorkflowStageDefinition.SortOrder` comparison | Needs small extension | Add validation in preview | Migration logic |
+| Reassign workflow-created task to Sheet reviewer | P3 | `TaskService.ReassignTask()` | Needs new integration | Classify Group Mismatches and use UI mapping | `TaskService.cs` |
+| Report reassignment failure clearly | P3 | None | Needs new integration | Add explicit logging/UI feedback | Migration commit logic |
+| Classify Preview row | P1 | None | Needs new integration | Implement classification logic | Preview logic |
+| Read-only preview | P1 | None | Needs new integration | Build new preview logic without DB writes | Preview logic |
+| Commit ready rows | P4 | None | Needs new integration | Implement commit pipeline | Commit logic |
+| Manager Review rows | P1 | None | Needs new integration | Surface in UI | Preview logic |
+| Log migration outcomes | P4 | `IActionLifecycleReporter` (maybe) | Needs design decision | Decide log storage mechanism | Logging logic |
+| Ensure idempotency / rerun safety | P4 | DB unique constraints | Needs small extension | Wrap in transaction, verify existing | Commit logic |
 
 ---
 

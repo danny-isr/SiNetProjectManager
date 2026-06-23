@@ -7,6 +7,9 @@
 ## 1. Purpose
 The system currently operates two complementary task management models. This document defines their relationship, explains why both are active, identifies the highest-risk integration gaps, and outlines the alignment plan. It serves as the authoritative reference for any developer or AI assistant working on task creation, task completion, or workflow advancement.
 
+> **Cross-reference — Google Sheet Review Migration Preview (added 23.06.2026):**
+> `GoogleSheetReviewMigrationPreviewService` is a **read-only consumer** of workflow and task infrastructure. In Phase 1 Preview, it reads workflow state through `WorkflowQueryService` and `WorkflowStageDefinition` / `WorkflowTransitionRule` tables to classify migration rows. It does **not** create, advance, or complete workflows or tasks. See `Docs/Domains/Migration/GoogleSheetReviewMigrationDesign-2026-06-21.md` for details.
+
 ## 2. Current old tasking model
 
 The old model uses junction tables to define which task types and statuses are allowed per project type. It is an **active legacy mechanism** — not dead code.

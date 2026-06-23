@@ -37,6 +37,15 @@ After migration, users continue working through the standard `FloatingInspection
 | `IndexSheetRow` | `Services\Migration\IndexSheetRow.cs` | DTOs |
 | `ExtractedSectionData` | `Services\Migration\ExtractedSectionData.cs` | Section-level extraction result model |
 
+#### Phase 1 Preview files (added 22.06.2026)
+
+| Component | File | Purpose |
+|---|---|---|
+| `GoogleSheetReviewMigrationPreviewService` | `Services\Migration\GoogleSheetReviewMigrationPreviewService.cs` | Read-only preview: scans reviewers, resolves projects, checks workflows/reports, classifies rows |
+| `GoogleSheetReviewMigrationPreviewRow` | `Services\Migration\Models\GoogleSheetReviewMigrationPreviewRow.cs` | DTO for a single preview result row |
+| `MigrationPreviewClassification` | `Services\Migration\Models\MigrationPreviewClassification.cs` | Enum: CommitReady, CommitReadyWithWarning, NoMatch, ManagerReview, ExistingReportConflict, etc. |
+| `ReviewerMappingItem` | `Services\Migration\Models\ReviewerMappingItem.cs` | DTO for the reviewer mapping UI (Sheet name → system user) |
+
 ### 2.2. Active legacy path
 
 The current `MigrationTaskService` is **active legacy** and is **not deleted now**:
@@ -98,6 +107,18 @@ The Sheet field בודק represents the person responsible for the Review task.
 2. Same-group constraint may block reassignment if the Sheet reviewer is not in the same group as the workflow-provisioned default assignee.
 
 > **Related design:** Gap 1 is also referenced by `Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md`. That design widens the fix scope: once per-employee task-size buckets exist, the reassignment compact/insert must operate within `AssignedToId + WorkQueueBucket`, not just per employee.
+
+### Decision 6 — Phase 1 reviewer group validation deferral (decided 23.06.2026)
+
+Phase 1 Preview is strictly read-only and does not perform actual commit or task reassignment. Therefore:
+
+- **Phase 1 may classify mapped reviewers as `CommitReadyWithWarning`** even when group membership has not been validated. This is acceptable because Phase 1 does not commit or reassign.
+- The warning message `"Reviewer mapped — group validation not verified in Phase 1"` is shown on every mapped-reviewer row.
+- **Before any real commit/reassignment is implemented (Phase 3+), group-membership validation is mandatory:**
+  - The Preview must query the mapped user's `UserGroup` and compare it to the workflow stage's default assignee group.
+  - If group validation fails, the row must be classified as `ManagerReview` or require explicit user acceptance before proceeding.
+  - `CommitReady` (full, no warning) is allowed only when group membership is verified and matches.
+- This decision does not change the design intent of Decision 1. It only defers the validation code to the phase where it is functionally needed.
 
 ### Decision 2 — Final statuses create Completed Workflow
 
@@ -348,6 +369,34 @@ The new migration Preview must be **truly read-only**:
 - Clear forward advancement is `Commit Ready` if no other conflicts exist.
 - Preview clearly shows: current stage → target stage → proposed action.
 - Backward movement or unclear state requires `Manager Review`.
+
+### 8.4. Phase 1 Preview UI — Tab 3 (added 23.06.2026)
+
+`MigrationPocWindow` Tab 3 (`"📋 מיגרציית ביקורת מגיליון — Preview בלבד"`) is the read-only Preview UI for Phase 1. It does not appear in the legacy Tab 1 (Extraction) or Tab 2 (Task Generation).
+
+**Step 1 — Reviewer scan and mapping:**
+
+| Control | `x:Name` | Purpose |
+|---|---|---|
+| TextBox | `NewIndexSheetIdBox` | Input for Google Sheet ID or full URL |
+| Button | `ScanReviewersButton` | Triggers `GetDistinctReviewersAsync` to scan the sheet for unique reviewer names |
+| DataGrid | `ReviewerMappingGrid` | Displays each sheet reviewer name with a ComboBox to map to a system user |
+
+**Step 2 — Preview build:**
+
+| Control | `x:Name` | Purpose |
+|---|---|---|
+| Button | `BuildPreviewButton` | Triggers `BuildPreviewAsync` — enabled only after reviewer mapping is populated |
+| TextBlock | `NewPreviewStatusLabel` | Displays progress/status messages during preview build |
+
+**Step 3 — Results display:**
+
+| Control | `x:Name` | Purpose |
+|---|---|---|
+| DataGrid | `NewPreviewGrid` | Read-only preview results grid (17 columns: row index, version, project, status, classification, reviewer, JSON, workflow, report, blocking reason, warnings, proposed actions, etc.) |
+| TextBlock | `NewPreviewLogBox` | Scrollable diagnostic log output |
+
+All controls are read-only in Phase 1. No commit button exists. Double-clicking a preview row opens JSON cache content (if available) for inspection.
 
 ---
 
@@ -621,7 +670,7 @@ Not reconstructed individually. Single `WorkflowStageTransition` entry: `FromSta
 | Moving Workflow backwards automatically | **Not approved** |
 | JSON storage in DB or Google Drive | **Cancelled** — local filesystem only |
 | DB migrations | **Not approved** in this phase |
-| Code changes | **Not approved** in this phase |
+| Code changes in design phase | **Historical** — Code changes were not approved in the original design-only session (21.06.2026). Phase 1 Preview code was subsequently implemented on 22.06.2026 and is tracked in §2.1 above. |
 | Deleting or disabling old migration path | **Not approved** |
 | Queue frequency design (daily/weekly follow-up) | **Postponed** |
 | Adding fallback follow-up tasks | **Not approved** |
@@ -639,24 +688,21 @@ Not reconstructed individually. Single `WorkflowStageTransition` entry: `FromSta
 
 ## 19. Out of Scope
 
-- Implementing the migration code (documentation only in this phase).
 - Modifying existing workflow engine behavior.
 - Creating new workflow stages.
 - Changing the Google Sheet Index Sheet structure.
 - Migrating existing open DB tasks (separate analysis exists as background).
 - Automating Manager Review resolution.
 - Building a migration scheduling/queue system.
+- Phase 2 (Report import) — see separate plan document.
+- Phase 3 (Workflow reconstruction) — not yet planned.
+- Group-membership validation code (deferred to Phase 3 per Decision 6).
 
 ---
 
-## 20. No-code-change confirmation
+## 20. No-code-change confirmation — historical note
 
-- **No code was changed.**
-- **No DB was changed.**
-- **No Google Sheet was changed.**
-- **No data was imported.**
-- **No reports were created.**
-- **No tasks were created.**
-- **No workflows were created.**
-- **No TaskLinks were created.**
-- **No old mechanisms were deleted or disabled.**
+> This section applied to the original documentation-only design session of **21.06.2026**.
+> Phase 1 Preview code was subsequently implemented on **22.06.2026** and is tracked in the file table (§2.1 — "Phase 1 Preview files").
+> The implementation includes: `GoogleSheetReviewMigrationPreviewService`, preview model/enum files, `MigrationPocWindow` Tab 3 XAML + code-behind handlers, and extensions to `IndexSheetReader.ReadReportHyperlinksAsync`.
+> No DB schema changes, no migrations, no data imports, and no old mechanisms were deleted or disabled.

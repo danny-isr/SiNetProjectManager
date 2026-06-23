@@ -1,8 +1,8 @@
-﻿# SiNet Project Manager — Documentation Index
+# SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 21.06.2026
-> **Status:** Active documentation index — Priority 1 UI documentation added.
+> **Updated:** 23.06.2026
+> **Status:** Active documentation index — documentation alignment round completed.
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -51,9 +51,11 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Configuration — System Settings Catalog | [`Domains\Configuration\SystemSettingsCatalog-2026-06-18.md`](Domains/Configuration/SystemSettingsCatalog-2026-06-18.md) |
 | Configuration — System Health Google Diagnostics Integration | [`Domains\Configuration\SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md`](Domains/Configuration/SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md) |
 | Project Work | [`Domains\ProjectWork\ProjectWorkWindow2-2026-06-19.md`](Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md) |
+| Project Work — Personal Work Queues by Task Size | [`Domains\ProjectWork\PersonalWorkQueuesByTaskSize-2026-06-23.md`](Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md) |
+| Security — User Roles and Permissions | [`Domains\Security\UserRolesAndPermissions-2026-06-17.md`](Domains/Security/UserRolesAndPermissions-2026-06-17.md) |
 | Migration — Google Sheet Review | [`Domains\Migration\GoogleSheetReviewMigrationDesign-2026-06-21.md`](Domains/Migration/GoogleSheetReviewMigrationDesign-2026-06-21.md) |
 | Migration — Implementation Readiness | [`Domains\Migration\GoogleSheetReviewMigrationImplementationReadiness-2026-06-21.md`](Domains/Migration/GoogleSheetReviewMigrationImplementationReadiness-2026-06-21.md) |
-| Migration — Phase 2 Plan (Report Import) | [\Domains\\Migration\\GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md\](Domains/Migration/GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md) |
+| Migration — Phase 2 Plan (Report Import) | [`Domains\Migration\GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md`](Domains/Migration/GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md) |
 
 ## 4. Decisions
 

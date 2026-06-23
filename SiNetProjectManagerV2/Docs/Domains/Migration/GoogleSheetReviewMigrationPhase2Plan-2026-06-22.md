@@ -4,7 +4,7 @@
 - **Status:** Plan only — NOT yet implemented. Awaiting review and approval before starting.
 - **Scope:** Import `InspectionReport` structures from existing JSON cache into the DB.  
   Phase 2 does **not** reconstruct workflows. Phase 3 handles Workflow reconstruction.
-- **Prerequisites:** Phase 1 Preview is complete and validated (read-only; ✅ done).  
+- **Prerequisites:** Phase 1 Preview code is implemented (read-only). Functional testing against real Google Sheet data is pending.  
   JSON cache is populated and validated via ExtractionCacheService.
 
 ---

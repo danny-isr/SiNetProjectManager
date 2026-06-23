@@ -35,7 +35,7 @@ Document the Inspection Report UI and lifecycle as currently implemented. This d
 
 | Model | File | Key fields |
 |---|---|---|
-| InspectionReport | `SiNetSQL\Models\InspectionReport.cs` | ReportId, ProjectId, SeriesId, ReportNumber, InspectorId, InspectorName, SentAt, SentByUserId, SentSpreadsheetId, SentSpreadsheetUrl, IsLockedAfterSend, ReviewedVersion |
+| InspectionReport | `SiNetSQL\Models\InspectionReport.cs` | ReportId, ProjectId, SeriesId, ReportNumber, InspectorId, InspectorName, SentAt, SentByUserId, SentSpreadsheetId, SentSpreadsheetUrl, IsLockedAfterSend, ReviewedVersion, SourceFileUrn, SourceFileVersion, LastSnapshotAt. **Navigation properties:** Project, Series, Inspector, SentByUser, InspectionNotes, Drawings, Snapshots, ReviewedFiles |
 | InspectionSeries | `SiNetSQL\Models\InspectionSeries.cs` | SeriesId, ProjectId, SeriesName, TemplateSpreadsheetId |
 | InspectionNote | `SiNetSQL\Models\InspectionNote.cs` | NoteId, ReportId, SectionId (non-nullable FK), NoteSubIndex, NoteText, NoteStatus, NoteStatusId, PlannerResponseText, PreviousNoteId, AccMarkupLink, LinkedFileName, LinkedAlternative, LinkedVersion |
 | Section | `SiNetSQL\Models\Section.cs` | SectionId, ChapterId, SectionNameId, SectionCode, Version, IsActive |

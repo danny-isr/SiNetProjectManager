@@ -27,6 +27,7 @@ Document the current Workflow UI screens and how they relate to Workflow definit
 | WorkflowDesignerHelpWindow | Dialog | `WPF Window/` | Active / Admin | Designer help content |
 | FloatingProjectTasksView | UserControl | `WPFUserControl/` | Active | Project-centric task view (workflow + standalone) |
 | TaskPanelView | UserControl | `WPFUserControl/` | Active | Employee-centric task queue |
+| MigrationPocWindow Tab 3 | TabItem (within Dialog) | `WPF Window/` | Active | Migration Preview: reads workflow state via `WorkflowQueryService` to classify migration rows. **Owned by Migration domain** — see `GoogleSheetReviewMigrationDesign-2026-06-21.md` §8.4. |
 
 ---
 
