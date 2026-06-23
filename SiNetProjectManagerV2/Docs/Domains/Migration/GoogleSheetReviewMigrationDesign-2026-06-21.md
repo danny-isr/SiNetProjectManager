@@ -97,6 +97,8 @@ The Sheet field בודק represents the person responsible for the Review task.
 1. `ReassignTask` does not update `WorkPriority` — the task retains its old queue position after reassignment.
 2. Same-group constraint may block reassignment if the Sheet reviewer is not in the same group as the workflow-provisioned default assignee.
 
+> **Related design:** Gap 1 is also referenced by `Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md`. That design widens the fix scope: once per-employee task-size buckets exist, the reassignment compact/insert must operate within `AssignedToId + WorkQueueBucket`, not just per employee.
+
 ### Decision 2 — Final statuses create Completed Workflow
 
 For final statuses (מאושר תנועתית, מאושר תנועתית לאחר משטרה), the migration creates a Review Workflow in Completed state.

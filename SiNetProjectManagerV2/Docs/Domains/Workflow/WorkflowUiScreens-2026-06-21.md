@@ -236,6 +236,8 @@ Employee-centric task management panel. Primary entity is Employee — shows the
 - Row details: Open Action button (workflow tasks), Event History, Add Note, TaskLinks display.
 - Task row visual states: Active / Waiting (yellow) / Closed (gray).
 
+> **Planned (design):** The single work queue is proposed to split into three personal task-size buckets (Quick / Medium / Long) shown as tabs or a filter, each ordered by `WorkPriority` within `AssignedToId + WorkQueueBucket`. See `Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md`.
+
 **Dependencies:** `ITaskCompletionCoordinator`, `TaskStatusService`.
 
 ---
