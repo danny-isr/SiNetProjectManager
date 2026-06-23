@@ -172,6 +172,11 @@ Once all task creation goes through `TaskFactory` and all completion goes throug
 
 Completing a workflow task is only half of the integration. The other half is **opening** the task on the exact entity it targets. This uses a single, read-only resolution path — never a per-feature router.
 
+> Related doc: the inspection report window itself (open modes, creation rules,
+> task context, link service, and completion) is documented in
+> `Docs/Domains/PlanReview/InspectionReportUiAndLifecycle-2026-06-21.md` §3.1.2–§3.1.6.
+> The two documents must stay consistent.
+
 ### Single resolution path
 
 | Component | Role |

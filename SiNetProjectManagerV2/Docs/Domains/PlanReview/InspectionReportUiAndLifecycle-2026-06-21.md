@@ -2,7 +2,7 @@
 
 - **Date:** 21.06.2026
 - **Status:** Active
-- **Scope:** FloatingInspectionView, InspectionReportService, TemplateSyncService, report creation / versioning / export / locking lifecycle, section and sub-note architecture
+- **Scope:** FloatingInspectionView, InspectionReportService, TemplateSyncService, report creation / versioning / export / locking lifecycle, section and sub-note architecture, and workflow task-driven opening/completion of the report window
 
 ---
 
@@ -60,7 +60,96 @@ Document the Inspection Report UI and lifecycle as currently implemented. This d
 
 ### 3.1. How a user opens the report UI
 
-The `FloatingInspectionView` is a floating WPF `UserControl` that opens as an overlay within the main application. When loaded, the code-behind injects WPF-specific services (Google Drive integrations, screenshot upload, email workflow, etc.) into the ViewModel via `OnLoaded`. The view subscribes to `ActiveProjectContext` — changing the active project automatically reloads the report data.
+The `FloatingInspectionView` is a floating WPF `UserControl` (a reused **singleton** window hosted by `MainWindow`) that opens as an overlay within the main application. When loaded, the code-behind injects WPF-specific services (Google Drive integrations, screenshot upload, email workflow, **task-completion services**) into the ViewModel via `OnLoaded`.
+
+There are **two distinct open modes**. They must stay separated so the singleton window never mixes project and task state:
+
+#### 3.1.1. Normal / project-centric open
+
+- The window opens against `ActiveProjectContext`; changing the active project automatically reloads report data.
+- `FloatingInspectionViewModel.ApplyActiveProject(...)` loads the project's series and reports.
+- **At the very start of `ApplyActiveProject(...)`, `ClearTaskMode()` runs** so the singleton window never keeps a `_taskContext` from a previous workflow task. After this, `IsTaskMode` is `false` and the window behaves purely project-centric.
+
+#### 3.1.2. Workflow-task open
+
+When a user clicks a workflow review task, the window is opened on the **exact** report the task targets — not the project's generic report list:
+
+1. Opening goes through `FloatingProjectTasksView.OnOpenTaskNavigationRequested(...)`.
+2. The UI uses `TaskNavigationResolver` (the single, read-only resolver) to turn the `taskId` into a `TaskNavigationRequest`. The UI never bypasses it.
+3. When `request.ComponentKey` is `InspectionReport` or `ManagerReviewApproval`, the window is obtained via `MainWindow.ShowFloatingInspectionWindow()` (the singleton accessor).
+4. An `InspectionReportTaskContext` is built from the resolved request (report id comes only from `request.PrimaryWorkTargetEntityId`).
+5. `FloatingInspectionViewModel.OpenForTaskAsync(context)` is called to open the exact report (or enter creation mode — see §3.1.4).
+
+> Cross-reference: the task-navigation/completion contract is documented in
+> `Docs/Domains/Workflow/TaskingWorkflowCoexistence-2026-06-19.md` §8a.
+> This document and that one must stay consistent.
+
+#### 3.1.3. `InspectionReportTaskContext` (runtime-only)
+
+`InspectionReportTaskContext` is a **runtime context only** — it is **not** a new table and is not persisted. It mirrors `EmailFilingTaskContext` and carries from the task shell into the VM:
+
+| Field | Meaning |
+|---|---|
+| `TaskId` | The `ProjectAssignment` task that triggered navigation. |
+| `ComponentKey` | The component key (expected `InspectionReport`). |
+| `TaskTypeCode` | The task type code (e.g. `PerformProfessionalReview`). |
+| `ProjectId` | Task-supplied authoritative project id. |
+| `PrimaryReportId` | The exact `InspectionReport.ReportId` from the work-target `TaskLink`; **`null` only when the task is allowed to create a new report** (see §3.1.4). |
+| `WorkflowInstanceId` | Active workflow instance id, when known. |
+| `CurrentStageId` | Current workflow stage id, when known. |
+| `AllowedTaskResultCodes` | Allowed task-result codes for this task type, surfaced for completion. |
+| `CompletionPolicy` | The task's completion policy. |
+
+`PrimaryReportId = null` is valid **only** for task types permitted to create a report; for all other report task types it is a hard error condition (no report is opened).
+
+#### 3.1.4. Creation rules when no report is linked
+
+`OpenForTaskAsync` decides whether creation mode is allowed via `ReportTaskAllowsCreationWhenMissing(taskTypeCode)`:
+
+| Task type | `PrimaryReportId = null` allowed? | Behavior when no report is linked |
+|---|---|---|
+| `PerformProfessionalReview` | ✅ Allowed | Enters report-creation mode; after the report is created, a `TaskLink` is established (see §3.1.5). |
+| `FixReportPerManager` | ❌ Not allowed | Existing report required; shows a clear error and does NOT enter creation mode. |
+| `RecheckPlan` | ❌ Not allowed | Existing report required; shows a clear error. |
+| `ApproveReviewReport` | ❌ Not allowed | Existing report required; shows a clear error. |
+| `ResubmitToManager` | ❌ Not allowed | Existing report required; shows a clear error. |
+
+**There is never a fallback to the first or last report in the project.** If a task that requires an existing report has no `InspectionReport` `TaskLink`, the window surfaces the clear Hebrew "task is not linked to an existing report" message instead of opening anything.
+
+#### 3.1.5. `InspectionReportTaskLinkService` (task ↔ report link)
+
+`InspectionReportTaskLinkService` links a review task to its concrete report using the **existing `TaskLink` table only** — there is **no new link table**:
+
+- The required link shape is:
+  - `LinkedEntityType = TaskLinkEntityType.InspectionReport`
+  - `Role = TaskLinkRole.Related`
+  - `IsWorkTarget = true`
+  - `WorkStatus = WorkTargetStatus.Pending`
+- The service is **idempotent**: calling it again for the same `(TaskId, ReportId)` does not create duplicate rows.
+- If a **stale** link to the same report exists with the **wrong `Role`** (e.g. `Source` or `Trigger`), the service **repairs it in place** to `Related` (and fixes `IsWorkTarget`/`WorkStatus`) rather than creating a duplicate.
+- Reason for the repair: `TaskNavigationResolver` filters candidate links by `RequiredTaskLinkRole == Related`, so a wrong-role link would be invisible to a future open. Repairing the role keeps the task resolvable.
+
+#### 3.1.6. Completion from the report window
+
+When the window was opened from a task, after a successful **export/send** the VM calls `TaskCompletionCoordinator.CompleteAsync(...)`. The coordinator:
+
+1. Marks the report work-target `TaskLink` as Done.
+2. Records the `TaskResult`.
+3. Closes the task per its completion policy.
+4. Triggers workflow auto-advance.
+
+The VM **never** mutates `WorkflowStage` directly.
+
+Which task types are auto-completed from a plain export:
+
+| Task type | Auto-completed from export? | Completion event / result |
+|---|---|---|
+| `PerformProfessionalReview` | ✅ | `ReviewProfessionalReviewCompleted` / `ProfessionalReviewCompleted` |
+| `FixReportPerManager` | ✅ | `ReviewProfessionalReviewCompleted` / `ProfessionalReviewCompleted` |
+| `RecheckPlan` | ❌ (by design) | Has two outcomes (`ReviewRecheckPassed` vs `ReviewRecheckRequiresMoreCorrections`) that a plain export cannot disambiguate; completed via its own decision flow. |
+| `ApproveReviewReport` / `ResubmitToManager` | ❌ | Require a manager-approval decision flow; not closed from export. |
+
+A re-completion guard ensures the same task is not reported complete twice if the user exports/sends again in the same window.
 
 ### 3.2. How a new report is created
 
@@ -295,7 +384,7 @@ For the Google Sheet Review Migration, the following existing mechanisms should 
 | # | Gap | Severity |
 |---|---|---|
 | 1 | No placeholder notes for skipped numbering | LOW — only matters for migration |
-| 2 | No direct report-to-workflow link | LOW — indirect via shared ProjectId is sufficient |
+| 2 | Direct report-to-task/workflow link now exists through `TaskLinkEntityType.InspectionReport` and `InspectionReportTaskLinkService`. Remaining limitations: `RecheckPlan` and manager approval tasks require dedicated decision flows and are not auto-completed from plain export. | LOW — resolved; remaining items are by design |
 | 3 | `AddNoteAsync` does not populate note content | LOW — migration must update notes separately after creation |
 | 4 | `CanAddNoteToSection` blocks if last note is empty | LOW — migration creates notes programmatically, not via UI guard |
 | 5 | No bulk note creation API | MEDIUM — migration must call `AddNoteAsync` per sub-note |
@@ -335,15 +424,34 @@ The migration design (see `Docs/Domains/Migration/GoogleSheetReviewMigrationDesi
 | Inventing missing section content | **Not approved** |
 | Silent overwrite of report versions | **Not approved** |
 | DB schema changes | **Not approved** |
-| Code changes | **Not approved** |
+| Creating a new task↔report link table | **Not done** — reuses the existing `TaskLink` table (`TaskLinkEntityType.InspectionReport`) |
+| Creating a new navigation router for report tasks | **Not done** — uses the single `TaskNavigationResolver` |
+| Fallback to first/last report when no `TaskLink` exists | **Not added** — surfaces a clear error instead |
+| Auto-closing `RecheckPlan` from export | **Postponed by design** — needs explicit pass/needs-corrections decision |
+| Direct unit tests for `FloatingInspectionViewModel` task mode | **Postponed** — no existing VM harness; not creating a new mechanism only for tests. Backed instead by resolver/link-service tests |
 
 ---
 
-## 10. No-code-change confirmation
+## 10. Historical note (original no-code pass)
 
-- **No code was changed.**
-- **No DB was changed.**
-- **No Google Sheet was changed.**
-- **No data was imported.**
-- **No reports, tasks, workflows, or TaskLinks were created.**
-- **No old mechanisms were deleted or disabled.**
+> **Historical note:** This document was originally created as a no-code documentation pass
+> (no code, DB, Google Sheet, or data changes; no reports/tasks/workflows/`TaskLink`s created).
+> Since then, **workflow task-driven opening** and **task ↔ report linking** were implemented and
+> are documented above (see §3.1.2–§3.1.6). The descriptions in this document now reflect that
+> implemented behavior, not a documentation-only snapshot.
+
+---
+
+## 11. Release readiness checklist
+
+Validate before release:
+
+- [ ] Normal report-window open via `ActiveProjectContext` works (series + reports load).
+- [ ] Normal open clears task mode first (`ClearTaskMode()` at the start of `ApplyActiveProject`).
+- [ ] Opening a `PerformProfessionalReview` task with a linked report opens the **exact** report (series + report selected), not the generic project list.
+- [ ] Opening a `PerformProfessionalReview` task with **no** linked report enters report-creation mode.
+- [ ] Creating a report from a task establishes a valid `InspectionReport` work-target `TaskLink` (`Role=Related`, `IsWorkTarget=true`, `WorkStatus=Pending`) via `InspectionReportTaskLinkService`.
+- [ ] Exporting/sending from a task-opened window closes the task through `TaskCompletionCoordinator` (and advances the workflow).
+- [ ] Opening `FixReportPerManager` / `RecheckPlan` / `ApproveReviewReport` / `ResubmitToManager` with no linked report shows a clear error and does NOT create a report.
+- [ ] Exporting a `RecheckPlan` task does NOT auto-close it.
+- [ ] No first/last report is ever auto-picked as a fallback.
