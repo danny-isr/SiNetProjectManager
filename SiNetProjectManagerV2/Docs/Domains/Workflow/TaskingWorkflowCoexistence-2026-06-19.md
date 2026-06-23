@@ -187,15 +187,50 @@ Tasks whose component key is `InspectionReport` / `ManagerReviewApproval` open i
 1. `FloatingProjectTasksView.OnOpenTaskNavigationRequested(...)` switches on `request.ComponentKey` and delegates to `OpenInspectionReportTask(...)`.
 2. The helper checks `request.IsSuccess`. If the resolver could not resolve a work target (e.g. **no `InspectionReport` `TaskLink`**), it shows a clear Hebrew message and does **not** open a report. There is **no first/last-report fallback**.
 3. It sets the active project, obtains the window via `MainWindow.ShowFloatingInspectionWindow()`, builds an `InspectionReportTaskContext` (report id taken only from `request.PrimaryWorkTargetEntityId`; `null` when no report exists yet), and calls `FloatingInspectionViewModel.OpenForTaskAsync(context)`.
-4. When `PrimaryReportId` is `null`, the VM enters **creation mode**; after the report is created, `InspectionReportTaskLinkService` idempotently creates the `TaskLinkEntityType.InspectionReport` work-target link so the task now points at the concrete report.
+4. When `PrimaryReportId` is `null`, creation mode is **only** allowed for task types whose first action is producing the report (`PerformProfessionalReview`). Follow-up report tasks (`FixReportPerManager`, `RecheckPlan`, `ApproveReviewReport`, `ResubmitToManager`) require an already-linked report; if none exists the VM shows the clear Hebrew "task is not linked to an existing report" message and does **not** enter creation mode. After a report is created in an allowed creation-mode task, `InspectionReportTaskLinkService` idempotently creates the `TaskLinkEntityType.InspectionReport` work-target link so the task now points at the concrete report.
 5. On export/send, the VM calls `TaskCompletionCoordinator.CompleteAsync(...)` with the resolved work-target link id. The coordinator marks the link Done, closes the task per policy, and signals workflow auto-advance. The VM never mutates `WorkflowStage` directly.
+
+### Creation-mode rules by task type
+
+`OpenForTaskAsync` decides creation mode via `ReportTaskAllowsCreationWhenMissing(taskTypeCode)`:
+
+| Task type | `PrimaryReportId = null` allowed? | Behavior when no report linked |
+|---|---|---|
+| `PerformProfessionalReview` | ✅ Yes | Enter creation mode; link is created on report creation. |
+| `FixReportPerManager` | ❌ No | Clear error; existing report required. |
+| `RecheckPlan` | ❌ No | Clear error; existing report required. |
+| `ApproveReviewReport` | ❌ No | Clear error; existing report required. |
+| `ResubmitToManager` | ❌ No | Clear error; existing report required. |
+
+There is never a first/last-report fallback for any task type.
+
+### Task-mode lifecycle in the singleton window
+
+`FloatingInspectionView` is a reused singleton, so task context must not leak between opens:
+
+- `_taskContext` is set only by `OpenForTaskAsync(...)`; `IsTaskMode` reflects it.
+- `ClearTaskMode()` nulls `_taskContext` (and the completion guard) and is called at the **start of `ApplyActiveProject(...)`** — the normal/project-centric open path — so reusing the window for a project drops any prior task.
+- After a successful completion, `TryCompleteReportTaskAsync(...)` records `_completedTaskId`, nulls `_taskContext`, and refuses to complete the same task again if the user exports/sends a second time.
+
+### Completion mapping scope
+
+`ResolveCompletionForTaskType(...)` only auto-completes single-outcome report tasks from export/send:
+
+| Task type | Auto-completed from export? | Completion event / result |
+|---|---|---|
+| `PerformProfessionalReview` | ✅ | `ReviewProfessionalReviewCompleted` / `ProfessionalReviewCompleted` |
+| `FixReportPerManager` | ✅ | `ReviewProfessionalReviewCompleted` / `ProfessionalReviewCompleted` |
+| `RecheckPlan` | ❌ (by design) | Two outcomes (`ReviewRecheckPassed` vs `ReviewRecheckRequiresMoreCorrections`) cannot be chosen from a plain export; handled by its own decision flow. |
+| `ApproveReviewReport` / `ResubmitToManager` | ❌ | Approval decisions handled by the manager-approval flow. |
+
+Unmapped types return `(null, null)`, so `TryCompleteReportTaskAsync` no-ops and the task is simply not closed from export.
 
 ### Supporting services (task-open path)
 
 | Service | Role |
 |---|---|
 | `InspectionReportTaskContext` | Runtime context passed from the task shell into `FloatingInspectionViewModel.OpenForTaskAsync(...)`. Mirrors `EmailFilingTaskContext`. `PrimaryReportId` is nullable to support creation mode. |
-| `InspectionReportTaskLinkService` | Idempotently creates/repairs the `InspectionReport` work-target `TaskLink` (`Role=Related`, `IsWorkTarget=true`, `WorkStatus=Pending`) and resolves its id for completion. Uses the **existing** `TaskLink` table — no new link table. |
+| `InspectionReportTaskLinkService` | Idempotently creates/repairs the `InspectionReport` work-target `TaskLink` (`Role=Related`, `IsWorkTarget=true`, `WorkStatus=Pending`) and resolves its id for completion. If a stale link to the same report exists with the **wrong `Role`** (e.g. `Source`/`Trigger`), it repairs the `Role` to `Related` in place rather than creating a duplicate, so `TaskNavigationResolver` (which filters by `RequiredTaskLinkRole == Related`) can still resolve it. Uses the **existing** `TaskLink` table — no new link table. |
 
 ### Constraints (must not regress)
 
@@ -203,6 +238,8 @@ Tasks whose component key is `InspectionReport` / `ManagerReviewApproval` open i
 - Do **not** create a new task↔report link table; reuse `TaskLink` with `TaskLinkEntityType.InspectionReport`.
 - Do **not** auto-pick a report when no `TaskLink` exists; surface the clear "task is not linked to a report" message instead.
 - Do **not** close tasks or advance workflow from the inspection window; go through `TaskCompletionCoordinator`.
+- Do **not** let the reused singleton window keep a previous task's context; the normal open path (`ApplyActiveProject`) must clear task mode.
+- Do **not** auto-complete multi-outcome tasks (`RecheckPlan`) or approval tasks from a plain export; only single-outcome review tasks are mapped.
 - The normal project-centric way of opening `FloatingInspectionView` (not task-driven) remains unchanged; task-completion services are optional and only used when a task context is supplied.
 
 ## 9. Dropped / cancelled / postponed
@@ -233,4 +270,8 @@ When validating the tasking/workflow integration, verify:
 - [ ] Opening an inspection-report review task with **no** `InspectionReport` `TaskLink` shows the clear "task is not linked to a report" message and does NOT auto-pick a report.
 - [ ] Opening an inspection-report review task before a report exists enters creation mode, and creating the report establishes the `InspectionReport` work-target `TaskLink` via `InspectionReportTaskLinkService`.
 - [ ] Exporting/sending the report from a task-opened inspection window closes the task through `TaskCompletionCoordinator` and advances the workflow.
-- [ ] Opening `FloatingInspectionView` the normal (non-task) project-centric way is unchanged.
+- [ ] Opening `FloatingInspectionView` the normal (non-task) project-centric way is unchanged, and clears any prior task context (`ClearTaskMode` on `ApplyActiveProject`).
+- [ ] Opening a `FixReportPerManager` / `RecheckPlan` / `ApproveReviewReport` / `ResubmitToManager` task with **no** linked report shows the clear error and does NOT enter creation mode (only `PerformProfessionalReview` may).
+- [ ] Exporting/sending the same task-opened report twice completes the task only once (re-completion guard).
+- [ ] A stale `InspectionReport` `TaskLink` with the wrong `Role` is repaired to `Related` by `InspectionReportTaskLinkService` and remains resolvable by `TaskNavigationResolver`.
+- [ ] A `RecheckPlan` task is NOT silently closed by export (no completion mapping); its decision flow remains responsible for completion.
