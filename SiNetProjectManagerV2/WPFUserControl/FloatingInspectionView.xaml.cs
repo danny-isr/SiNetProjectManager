@@ -51,6 +51,14 @@ public partial class FloatingInspectionView : FloatingWindowBase
         // Wire the first-stage inspection report email workflow.
         viewModel.SetInspectionReportEmailWorkflow(App.ServiceProvider.GetRequiredService<SiNetSQL.Services.EmailOutbound.IInspectionReportEmailWorkflow>());
 
+        // Wire the central task-completion services so this window can open a
+        // specific report for a workflow review task and report completion through
+        // the existing ITaskCompletionCoordinator (see OpenForTaskAsync). Optional
+        // for normal project-based use, but always available when present in DI.
+        viewModel.SetTaskCompletionServices(
+            App.ServiceProvider.GetRequiredService<SiNetSQL.Services.Tasks.ITaskCompletionCoordinator>(),
+            App.ServiceProvider.GetRequiredService<SiNetSQL.Services.Tasks.InspectionReportTaskLinkService>());
+
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
 

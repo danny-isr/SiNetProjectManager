@@ -400,6 +400,27 @@ namespace SiNetProjectManagerV2
             _floatingInspectionWindow.Show();
         }
 
+        /// <summary>
+        /// Shows (or reuses) the floating inspection window and returns it so a
+        /// caller can drive workflow task-mode opening via
+        /// <see cref="WPFUserControl.FloatingInspectionView.ViewModel"/>. Mirrors
+        /// <see cref="ShowFloatingInspection"/> but exposes the window instance.
+        /// </summary>
+        public WPFUserControl.FloatingInspectionView ShowFloatingInspectionWindow()
+        {
+            if (_floatingInspectionWindow is { IsLoaded: true })
+            {
+                _floatingInspectionWindow.Activate();
+                return _floatingInspectionWindow;
+            }
+
+            _floatingInspectionWindow = new FloatingInspectionView();
+            _floatingInspectionWindow.Owner = this;
+            _floatingInspectionWindow.Closed += (_, _) => _floatingInspectionWindow = null;
+            _floatingInspectionWindow.Show();
+            return _floatingInspectionWindow;
+        }
+
         public void ShowProjectWork()
         {
             NavigateToView(_cachedProjectWorkView ??= new ProjectWorkView());

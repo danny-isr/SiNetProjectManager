@@ -281,6 +281,12 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Tasks.ITaskCompletionCoordinator,
                 SiNetSQL.Services.Tasks.TaskCompletionCoordinator>();
 
+            // Inspection-report task linking: Transient. Idempotently links a review task
+            // (e.g. PerformProfessionalReview) to its concrete InspectionReport via the
+            // existing TaskLink, so the floating inspection window can open the exact report
+            // and complete the task through ITaskCompletionCoordinator. No new link table.
+            services.AddTransient<SiNetSQL.Services.Tasks.InspectionReportTaskLinkService>();
+
             // Task Status Service: Transient. Owns regular (non-completion) status updates from UI.
             // Completing a task must instead go through ITaskCompletionCoordinator.
             services.AddTransient<SiNetSQL.Services.Tasks.TaskStatusService>();

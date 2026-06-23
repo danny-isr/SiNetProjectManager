@@ -194,32 +194,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         {
             case SiNetSQL.Services.Tasks.TaskComponentKeys.InspectionReport:
             case SiNetSQL.Services.Tasks.TaskComponentKeys.ManagerReviewApproval:
-                if (request.ProjectId is int inspectionProjectId)
-                {
-                    _ = System.Threading.Tasks.Task.Run(async () =>
-                    {
-                        try
-                        {
-                            var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
-                            await using var db = await dbFactory.CreateDbContextAsync();
-                            var project = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-                                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Projects), p => p.Id == inspectionProjectId);
-                            if (project != null)
-                            {
-                                SiNetSQL.Services.ActiveProjectContext.Instance.SetActiveProject(project);
-                            }
-                            await Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                mainWindow?.ShowFloatingInspection();
-                                mainWindow?.Activate();
-                            });
-                        }
-                        catch (System.Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[FloatingTasksView] Error loading project for InspectionReport/ManagerReviewApproval: {ex}");
-                        }
-                    });
-                }
+                OpenInspectionReportTask(mainWindow, request);
                 break;
 
             case SiNetSQL.Services.Tasks.TaskComponentKeys.PoliceSubmission:
@@ -616,9 +591,102 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     }
 
     /// <summary>
-    /// Maps a classification task type code to the canonical completion event it
-    /// reports. Returns null when the task type is not a classification task.
+    /// Opens a workflow inspection-report task (e.g. <c>PerformProfessionalReview</c>)
+    /// on the EXACT report resolved by <see cref="SiNetSQL.Services.Tasks.TaskNavigationResolver"/>.
+    /// Reuses the project-centric inspection window but drives it through
+    /// <see cref="SiNetSQL.MVVM.FloatingInspectionViewModel.OpenForTaskAsync"/>; it does
+    /// NOT introduce a parallel navigation router and NEVER auto-picks a report.
     /// </summary>
+    private void OpenInspectionReportTask(
+        MainWindow? mainWindow,
+        SiNetSQL.Services.Tasks.TaskNavigationRequest request)
+    {
+        // Resolver already failed (e.g. missing project / no work target where one
+        // is required). Surface the reason instead of opening a generic window.
+        if (!request.IsSuccess)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[FloatingTasksView] InspectionReport task not resolvable. TaskId={request.TaskId}, " +
+                $"Reason={request.FailureReason}, Message={request.FailureMessage}");
+            MessageBox.Show(
+                string.IsNullOrWhiteSpace(request.FailureMessage)
+                    ? "המשימה לא מקושרת לדוח בדיקה ולכן לא ניתן לפתוח אותה מתוך תהליך העבודה."
+                    : request.FailureMessage,
+                "פתיחת משימת דוח",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (request.ProjectId is not int inspectionProjectId)
+        {
+            MessageBox.Show(
+                "המשימה אינה מקושרת לפרויקט ולכן לא ניתן לפתוח אותה.",
+                "פתיחת משימת דוח",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var reportId = request.PrimaryWorkTargetEntityId is long rid && rid > 0 ? (int?)rid : null;
+
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            // Set the active project so the rest of the app (Work Window, file
+            // providers) stays in sync with the task being opened.
+            try
+            {
+                var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                await using var db = await dbFactory.CreateDbContextAsync();
+                var project = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                    Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Projects),
+                    p => p.Id == inspectionProjectId);
+                if (project != null)
+                {
+                    SiNetSQL.Services.ActiveProjectContext.Instance.SetActiveProject(project);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[FloatingTasksView] Error setting active project for InspectionReport task: {ex}");
+            }
+
+            await Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                var window = mainWindow?.ShowFloatingInspectionWindow();
+                mainWindow?.Activate();
+                if (window == null) return;
+
+                var context = new SiNetSQL.Services.Tasks.InspectionReportTaskContext(
+                    TaskId: request.TaskId,
+                    ComponentKey: request.ComponentKey,
+                    TaskTypeCode: request.TaskTypeCode,
+                    ProjectId: request.ProjectId,
+                    PrimaryReportId: reportId,
+                    WorkflowInstanceId: request.WorkflowInstanceId,
+                    CurrentStageId: request.CurrentStageId,
+                    AllowedTaskResultCodes: request.AllowedTaskResultCodes,
+                    CompletionPolicy: request.CompletionPolicy,
+                    // The task list auto-refreshes via ActiveProjectContext.TaskDataChanged,
+                    // which the VM raises after a successful completion. No extra callback needed.
+                    OnTaskRefreshRequested: null);
+
+                var ok = await window.ViewModel.OpenForTaskAsync(context);
+                if (!ok)
+                {
+                    MessageBox.Show(
+                        string.IsNullOrWhiteSpace(window.ViewModel.StatusMessage)
+                            ? "לא ניתן לפתוח את הדוח עבור המשימה."
+                            : window.ViewModel.StatusMessage,
+                        "פתיחת משימת דוח",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            });
+        });
+    }
+
+
     private static string? ResolveClassificationCompletionEventCode(string taskTypeCode) =>
         taskTypeCode switch
         {

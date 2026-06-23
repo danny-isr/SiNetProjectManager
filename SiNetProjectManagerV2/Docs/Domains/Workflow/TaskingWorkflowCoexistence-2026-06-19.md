@@ -168,6 +168,43 @@ Once all task creation goes through `TaskFactory` and all completion goes throug
 | `TaskManagementSeedService.ResetAllToDefaults()` | Active but destructive — should only be used in dev reset flows |
 | `WorkflowStartTrigger` auto-evaluation | Infrastructure exists; runtime behavior postponed |
 
+## 8a. Task navigation and opening (workflow review tasks → feature windows)
+
+Completing a workflow task is only half of the integration. The other half is **opening** the task on the exact entity it targets. This uses a single, read-only resolution path — never a per-feature router.
+
+### Single resolution path
+
+| Component | Role |
+|---|---|
+| `ReviewTaskInteractionRegistry` | Maps each task type code (e.g. `PerformProfessionalReview`, `FixReportPerManager`) to its `TaskOpenMode`, `TaskComponentKeys.*`, `TaskWorkTargetEntityType`, `TaskCompletionPolicy`, and allowed result codes. Single source of truth for "how does this task open and complete?". |
+| `TaskNavigationResolver` | **Read-only.** Translates a `taskId` into a `TaskNavigationRequest`, deriving `PrimaryWorkTargetEntityId` from the task's work-target `TaskLink`. The UI must not bypass it. |
+| `TaskComponentKeys` | Stable component keys the UI switches on to choose the host window. |
+
+### Inspection-report review tasks
+
+Tasks whose component key is `InspectionReport` / `ManagerReviewApproval` open in the existing **FloatingInspectionView**, not a generic project report list:
+
+1. `FloatingProjectTasksView.OnOpenTaskNavigationRequested(...)` switches on `request.ComponentKey` and delegates to `OpenInspectionReportTask(...)`.
+2. The helper checks `request.IsSuccess`. If the resolver could not resolve a work target (e.g. **no `InspectionReport` `TaskLink`**), it shows a clear Hebrew message and does **not** open a report. There is **no first/last-report fallback**.
+3. It sets the active project, obtains the window via `MainWindow.ShowFloatingInspectionWindow()`, builds an `InspectionReportTaskContext` (report id taken only from `request.PrimaryWorkTargetEntityId`; `null` when no report exists yet), and calls `FloatingInspectionViewModel.OpenForTaskAsync(context)`.
+4. When `PrimaryReportId` is `null`, the VM enters **creation mode**; after the report is created, `InspectionReportTaskLinkService` idempotently creates the `TaskLinkEntityType.InspectionReport` work-target link so the task now points at the concrete report.
+5. On export/send, the VM calls `TaskCompletionCoordinator.CompleteAsync(...)` with the resolved work-target link id. The coordinator marks the link Done, closes the task per policy, and signals workflow auto-advance. The VM never mutates `WorkflowStage` directly.
+
+### Supporting services (task-open path)
+
+| Service | Role |
+|---|---|
+| `InspectionReportTaskContext` | Runtime context passed from the task shell into `FloatingInspectionViewModel.OpenForTaskAsync(...)`. Mirrors `EmailFilingTaskContext`. `PrimaryReportId` is nullable to support creation mode. |
+| `InspectionReportTaskLinkService` | Idempotently creates/repairs the `InspectionReport` work-target `TaskLink` (`Role=Related`, `IsWorkTarget=true`, `WorkStatus=Pending`) and resolves its id for completion. Uses the **existing** `TaskLink` table — no new link table. |
+
+### Constraints (must not regress)
+
+- Do **not** add a parallel navigation router; `TaskNavigationResolver` is the only resolver.
+- Do **not** create a new task↔report link table; reuse `TaskLink` with `TaskLinkEntityType.InspectionReport`.
+- Do **not** auto-pick a report when no `TaskLink` exists; surface the clear "task is not linked to a report" message instead.
+- Do **not** close tasks or advance workflow from the inspection window; go through `TaskCompletionCoordinator`.
+- The normal project-centric way of opening `FloatingInspectionView` (not task-driven) remains unchanged; task-completion services are optional and only used when a task context is supplied.
+
 ## 9. Dropped / cancelled / postponed
 - Deleting `ProjectTypeTaskType` / `ProjectTypeStatus` — **not approved**; still actively used.
 - Treating old tasking model as dead code — **cancelled**; it is still active.
@@ -192,3 +229,8 @@ When validating the tasking/workflow integration, verify:
 - [ ] `TaskFactory.CreateAsync()` produces tasks with correct audit trail.
 - [ ] Workflow auto-advance fires correctly when all required stage tasks are closed.
 - [ ] Sub-workflow completion correctly notifies and advances the parent workflow.
+- [ ] Opening a `PerformProfessionalReview` task whose `InspectionReport` `TaskLink` exists opens `FloatingInspectionView` on the **exact** linked report (series + report selected), not the project's generic report list.
+- [ ] Opening an inspection-report review task with **no** `InspectionReport` `TaskLink` shows the clear "task is not linked to a report" message and does NOT auto-pick a report.
+- [ ] Opening an inspection-report review task before a report exists enters creation mode, and creating the report establishes the `InspectionReport` work-target `TaskLink` via `InspectionReportTaskLinkService`.
+- [ ] Exporting/sending the report from a task-opened inspection window closes the task through `TaskCompletionCoordinator` and advances the workflow.
+- [ ] Opening `FloatingInspectionView` the normal (non-task) project-centric way is unchanged.
