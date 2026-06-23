@@ -179,6 +179,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             SheetRowIndex = rowIndex,
             ProjectNumberFromSheet = link.ProjectRef,
             ProjectNameFromSheet = link.ProjectRef,
+            ReportNumber = link.ReportNumber,
             SheetStatus = link.Status ?? "Unknown",
             ReviewerNameFromSheet = link.Reviewer ?? "Unknown",
             IsDuplicateProjectRow = isDuplicateProjectRow,
@@ -190,6 +191,8 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         var (resolvedId, resolvedNumber, resolvedName) = ResolveProjectReadOnly(allProjects, link.ProjectRef);
         row.ResolvedProjectId = resolvedId;
         row.ResolvedProjectDisplayName = resolvedName;
+        if (!string.IsNullOrWhiteSpace(resolvedNumber))
+            row.ResolvedProjectNumber = resolvedNumber;
         
         if (resolvedId.HasValue)
         {

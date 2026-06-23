@@ -19,6 +19,14 @@ public class GoogleSheetReviewMigrationPreviewRow
     public string? MappedReviewerDisplayName { get; set; }
     public string ReviewerMappingStatus { get; set; } = string.Empty;
     
+    /// <summary>Report number from the index sheet (e.g. "1", "2"). Used with ResolvedProjectNumber
+    /// and VersionIndex to locate the JSON cache via ExtractionCacheService.LoadAsync.</summary>
+    public string ReportNumber { get; set; } = string.Empty;
+
+    /// <summary>The resolved project number (numeric key used as the cache folder name).
+    /// Populated only when the project is resolved. Used for JSON cache lookup.</summary>
+    public string ResolvedProjectNumber { get; set; } = string.Empty;
+
     public string JsonCacheStatus { get; set; } = string.Empty;
     public string JsonPath { get; set; } = string.Empty;
     public string JsonReportSpreadsheetId { get; set; } = string.Empty;

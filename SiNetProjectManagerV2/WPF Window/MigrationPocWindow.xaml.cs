@@ -731,6 +731,10 @@ public partial class MigrationPocWindow : Window
 
     // ════════════════════════════════════════════════════
     //  TAB 3: Deterministic Extraction Preview (read-only, no DB, no AI)
+    //  SUSPENDED — not part of the main migration preview flow.
+    //  Candidate for future cleanup after testing.
+    //  The double-click preview feature uses NewPreviewGrid in the
+    //  "Migration Preview" tab, not DeterministicResultsGrid here.
     // ════════════════════════════════════════════════════
 
     private async void DeterministicExtractButton_Click(object sender, RoutedEventArgs e)
@@ -874,6 +878,78 @@ public partial class MigrationPocWindow : Window
         {
             SaveDeterministicCacheButton.IsEnabled = _lastDeterministicResult != null;
         }
+    }
+
+    private async void DeterministicResultsGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        // The clicked row is only used to identify which report/version to show.
+        // We open the FULL report preview — not just the selected section.
+
+        // ── 1. Try _lastDeterministicResult (in-memory, highest priority) ──
+        if (_lastDeterministicResult != null)
+        {
+            var projectNumber = DetProjectNumberBox.Text.Trim();
+            var reportNumber  = DetReportNumberBox.Text.Trim();
+            var versionText   = DetVersionIndexBox.Text.Trim();
+            int.TryParse(versionText, out var versionIndex);
+
+            var envelope = new ExtractionCacheEnvelope
+            {
+                ProjectNumber        = projectNumber,
+                ReportNumber         = reportNumber,
+                VersionIndex         = versionIndex,
+                TemplateSpreadsheetId = _lastDeterministicResult.TemplateSpreadsheetId,
+                ReportSpreadsheetId  = _lastDeterministicResult.ReportSpreadsheetId,
+                ExtractedAtUtc       = DateTime.UtcNow,
+                SectionCount         = _lastDeterministicResult.Sections.Count,
+                Sections             = _lastDeterministicResult.Sections,
+                GeneralFields        = _lastDeterministicResult.GeneralFields,
+                Warnings             = _lastDeterministicResult.Warnings
+            };
+
+            var win = new Dialogs.FullReportFillPreviewWindow(envelope) { Owner = this };
+            win.Show();
+            return;
+        }
+
+        // ── 2. Try JSON cache if identity fields are filled ──
+        var pn = DetProjectNumberBox.Text.Trim();
+        var rn = DetReportNumberBox.Text.Trim();
+        var vt = DetVersionIndexBox.Text.Trim();
+
+        if (!string.IsNullOrWhiteSpace(pn) && !string.IsNullOrWhiteSpace(rn) && int.TryParse(vt, out var vi) && vi >= 1)
+        {
+            DetStatusLabel.Text = "🔄 טוען מטמון JSON...";
+            try
+            {
+                var cached = await ExtractionCacheService.LoadAsync(pn, vi, rn);
+                if (cached != null)
+                {
+                    DetStatusLabel.Text = $"✅ נטען מ-JSON cache";
+                    var win = new Dialogs.FullReportFillPreviewWindow(cached) { Owner = this };
+                    win.Show();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "[Det-UI] Exception loading JSON cache for full preview");
+            }
+            finally
+            {
+                // Restore status if it wasn't updated by a successful load
+                if (DetStatusLabel.Text == "🔄 טוען מטמון JSON...")
+                    DetStatusLabel.Text = "";
+            }
+        }
+
+        // ── 3. Nothing found — show clear message ──
+        MessageBox.Show(
+            "לא ניתן לאתר את תוצאת החילוץ המלאה עבור הדוח/גרסה הנבחרים.\n\n" +
+            "יש לחלץ תחילה (כפתור 'חלץ דטרמיניסטי') או לוודא שקיים JSON cache\n" +
+            "ושדות מספר פרויקט / מספר דוח / אינדקס גרסה מלאים.",
+            "לא נמצאה תוצאת חילוץ",
+            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // ════════════════════════════════════════════════════
@@ -1657,6 +1733,102 @@ public partial class MigrationPocWindow : Window
         finally
         {
             BuildPreviewButton.IsEnabled = true;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  TAB 3: New Preview Grid — double-click to show filled report data
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Double-click on NewPreviewGrid opens the full report fill preview for the selected
+    /// report/version row.  The clicked row is used only to identify the report identity
+    /// (ResolvedProjectNumber + ReportNumber + VersionIndex).  No extraction is run;
+    /// the window is populated exclusively from the existing JSON cache if available.
+    /// No DB write, no workflow creation, no AI, no automatic extraction.
+    /// </summary>
+    private async void NewPreviewGrid_MouseDoubleClick(
+        object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (NewPreviewGrid.SelectedItem is not
+            SiNetProjectManagerV2.Services.Migration.Models.GoogleSheetReviewMigrationPreviewRow row)
+            return;
+
+        // Determine the project number key used for cache lookup.
+        // Prefer the resolved project number; fall back to the sheet value if not resolved.
+        var projectNumber = !string.IsNullOrWhiteSpace(row.ResolvedProjectNumber)
+            ? row.ResolvedProjectNumber
+            : row.ProjectNumberFromSheet.Trim();
+
+        var reportNumber  = row.ReportNumber;
+        var versionIndex  = row.VersionIndex;
+
+        if (string.IsNullOrWhiteSpace(projectNumber) ||
+            string.IsNullOrWhiteSpace(reportNumber)  ||
+            versionIndex < 1)
+        {
+            MessageBox.Show(
+                "לא ניתן לקבוע את זהות הדוח/גרסה מהשורה הנבחרת.\n"
+                + "אנא בדוק שהפרויקט זוהה במערכת ושקיים JSON cache.",
+                "מידע חסר",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        NewPreviewStatusLabel.Text = "🔄 טוען JSON cache...";
+        try
+        {
+            var envelope = await ExtractionCacheService.LoadAsync(
+                projectNumber, versionIndex, reportNumber);
+
+            if (envelope == null)
+            {
+                NewPreviewStatusLabel.Text = "";
+                MessageBox.Show(
+                    $"לא נמצא JSON cache עבור פרויקט '{projectNumber}' דוח {reportNumber} גרסה {versionIndex}.\n\n"
+                    + "תוכן דוח מלא יוצג רק לאחר שייבוא/חילוץ JSON cache לאותה גרסה.",
+                    "אין נתונים ממולאים",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Filter: show only sections that have actual data
+            var filledSections = envelope.Sections
+                .Where(s => !string.IsNullOrWhiteSpace(s.NoteText)
+                         || !string.IsNullOrWhiteSpace(s.StatusKey)
+                         || !string.IsNullOrWhiteSpace(s.DesignerResponse))
+                .ToList();
+
+            // Build a display envelope containing only filled sections
+            var displayEnvelope = new ExtractionCacheEnvelope
+            {
+                ProjectNumber         = envelope.ProjectNumber,
+                ReportNumber          = envelope.ReportNumber,
+                VersionIndex          = envelope.VersionIndex,
+                TemplateSpreadsheetId = envelope.TemplateSpreadsheetId,
+                ReportSpreadsheetId   = envelope.ReportSpreadsheetId,
+                ExtractedAtUtc        = envelope.ExtractedAtUtc,
+                SectionCount          = filledSections.Count,
+                Sections              = filledSections,
+                GeneralFields         = envelope.GeneralFields,
+                Warnings              = envelope.Warnings,
+            };
+
+            NewPreviewStatusLabel.Text =
+                $"✅ נטען cache: {filledSections.Count} סעיפים עם נתונים";
+
+            var cachePath = ExtractionCacheService.GetProjectCacheFolder(projectNumber);
+            var win = new Dialogs.FullReportFillPreviewWindow(displayEnvelope, cachePath)
+            {
+                Owner = this
+            };
+            win.Show();
+        }
+        catch (Exception ex)
+        {
+            NewPreviewStatusLabel.Text = "";
+            AppendToLog($"[Preview] Error loading JSON cache for preview: {ex.Message}");
+            MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

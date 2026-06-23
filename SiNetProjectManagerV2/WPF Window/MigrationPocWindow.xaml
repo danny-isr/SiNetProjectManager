@@ -380,7 +380,9 @@
                               FlowDirection="RightToLeft"
                               GridLinesVisibility="Horizontal"
                               AlternatingRowBackground="#F5F5F5"
-                              BorderBrush="#D0D0D0" BorderThickness="1">
+                              BorderBrush="#D0D0D0" BorderThickness="1"
+                              MouseDoubleClick="NewPreviewGrid_MouseDoubleClick"
+                              ToolTip="לחץ לחיצה כפולה על שורה לצפייה בתוכן הדוח הממולא (אם קיים JSON Cache)">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="שורה" Binding="{Binding SheetRowIndex}" Width="45"/>
                             <DataGridTextColumn Header="V#" Binding="{Binding VersionIndex}" Width="30"/>
@@ -443,8 +445,12 @@
 
             <!-- ══════════════════════════════════════════════════════════════════
                  TAB 3: Deterministic Extraction Preview
+                 SUSPENDED — not part of the main migration preview flow.
+                 Candidate for future cleanup after testing.
+                 Double-click preview uses NewPreviewGrid in the "Migration Preview" tab.
                  ══════════════════════════════════════════════════════════════════ -->
-            <TabItem Header="🔬 חילוץ דטרמיניסטי (Preview)">
+            <TabItem Header="🔬 חילוץ דטרמיניסטי (Preview)"
+                     IsEnabled="True">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -526,7 +532,7 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Results grid -->
+                    <!-- Results grid — double-click any row to open full report fill preview -->
                     <DataGrid Grid.Row="4" x:Name="DeterministicResultsGrid"
                               AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserSortColumns="True" CanUserResizeColumns="True"
@@ -535,7 +541,9 @@
                               FlowDirection="RightToLeft"
                               GridLinesVisibility="Horizontal"
                               AlternatingRowBackground="#F5F5F5"
-                              BorderBrush="#D0D0D0" BorderThickness="1">
+                              BorderBrush="#D0D0D0" BorderThickness="1"
+                              MouseDoubleClick="DeterministicResultsGrid_MouseDoubleClick"
+                              ToolTip="לחץ לחיצה כפולה על שורה כלשהי לפתיחת תצוגת דוח מלא">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="קוד סעיף"    Binding="{Binding SectionCode}"      Width="65"/>
                             <DataGridTextColumn Header="פרק"          Binding="{Binding ChapterTitle}"     Width="75"/>
