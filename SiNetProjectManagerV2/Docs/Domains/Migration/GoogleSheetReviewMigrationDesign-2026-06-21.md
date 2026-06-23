@@ -396,7 +396,7 @@ The new migration Preview must be **truly read-only**:
 | DataGrid | `NewPreviewGrid` | Read-only preview results grid (17 columns: row index, version, project, status, classification, reviewer, JSON, workflow, report, blocking reason, warnings, proposed actions, etc.) |
 | TextBlock | `NewPreviewLogBox` | Scrollable diagnostic log output |
 
-All controls are read-only in Phase 1. No commit button exists. Double-clicking a preview row opens JSON cache content (if available) for inspection.
+All controls are read-only in Phase 1. There is no enabled Commit action. A disabled Commit placeholder button is shown (`CommitPhase1Button`, `IsEnabled="False"`) to make clear that commit is not implemented in Phase 1. Double-clicking a preview row opens JSON cache content (if available) for inspection.
 
 ---
 

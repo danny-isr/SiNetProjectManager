@@ -82,23 +82,13 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 
         var results = new List<GoogleSheetReviewMigrationPreviewRow>();
 
-        // Find duplicates in advance by ProjectRef
-        var duplicateRefs = links
-            .GroupBy(l => l.ProjectRef)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .ToHashSet();
-
-        int rowIndex = 1;
         foreach (var link in links)
         {
-            var isDuplicateProjectRow = duplicateRefs.Contains(link.ProjectRef);
-
-            // Generate rows per version
+            // Generate rows per version — SheetRowIndex uses the real Sheet row (1-based)
             var versionCount = link.ReportSpreadsheetIds.Count;
             if (versionCount == 0)
             {
-                var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, 1, 1, null, ct);
+                var row = await ProcessSingleRowAsync(db, allProjects, link, reviewerMapping, 1, 1, null, ct);
                 results.Add(row);
             }
             else
@@ -106,9 +96,36 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 for (int i = 0; i < versionCount; i++)
                 {
                     var spreadsheetId = link.ReportSpreadsheetIds[i];
-                    bool isLatest = (i == versionCount - 1);
-                    var row = await ProcessSingleRowAsync(db, allProjects, link, rowIndex++, isDuplicateProjectRow, reviewerMapping, i + 1, versionCount, spreadsheetId, ct);
+                    var row = await ProcessSingleRowAsync(db, allProjects, link, reviewerMapping, i + 1, versionCount, spreadsheetId, ct);
                     results.Add(row);
+                }
+            }
+        }
+
+        // ── Post-process: detect duplicate projects by ResolvedProjectId ──
+        // A project is "duplicate" when more than one distinct source Sheet row
+        // resolves to the same DB project. Multiple version rows from the same
+        // source Sheet row do NOT count as duplicates by themselves.
+        var duplicateProjectIds = results
+            .Where(r => r.ResolvedProjectId.HasValue)
+            .GroupBy(r => r.ResolvedProjectId!.Value)
+            .Where(g => g.Select(r => r.SheetRowIndex).Distinct().Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet();
+
+        foreach (var row in results)
+        {
+            if (row.ResolvedProjectId.HasValue && duplicateProjectIds.Contains(row.ResolvedProjectId.Value))
+            {
+                row.IsDuplicateProjectRow = true;
+
+                // Only override classification if the row is not already in a stronger blocking state
+                if (row.Classification is MigrationPreviewClassification.CommitReady
+                    or MigrationPreviewClassification.CommitReadyWithWarning
+                    or MigrationPreviewClassification.AlreadyDone)
+                {
+                    row.Classification = MigrationPreviewClassification.DuplicateProjectRow;
+                    row.BlockingReason = "Duplicate project row in sheet.";
                 }
             }
         }
@@ -164,8 +181,6 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         SiNetSQLDbContext db,
         IReadOnlyList<Project> allProjects,
         IndexSheetReportLink link,
-        int rowIndex,
-        bool isDuplicateProjectRow,
         IReadOnlyDictionary<string, int> reviewerMapping,
         int versionIndex,
         int totalVersions,
@@ -176,13 +191,12 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 
         var row = new GoogleSheetReviewMigrationPreviewRow
         {
-            SheetRowIndex = rowIndex,
+            SheetRowIndex = link.RowIndex + 1, // 1-based: actual Google Sheet row number
             ProjectNumberFromSheet = link.ProjectRef,
             ProjectNameFromSheet = link.ProjectRef,
             ReportNumber = link.ReportNumber,
             SheetStatus = link.Status ?? "Unknown",
             ReviewerNameFromSheet = link.Reviewer ?? "Unknown",
-            IsDuplicateProjectRow = isDuplicateProjectRow,
             VersionIndex = versionIndex,
             IsLatestVersion = isLatestVersion,
         };
@@ -381,12 +395,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         }
 
         // 7. Final Classification — workflow action and report action composed separately
-        if (row.IsDuplicateProjectRow)
-        {
-            row.Classification = MigrationPreviewClassification.DuplicateProjectRow;
-            row.BlockingReason = "Duplicate project row in sheet.";
-        }
-        else if (isWorkflowAlreadyDone && isReportAlreadyDone)
+        if (isWorkflowAlreadyDone && isReportAlreadyDone)
         {
             row.Classification = MigrationPreviewClassification.AlreadyDone;
             row.ProposedReportAction = "Nothing to do.";
