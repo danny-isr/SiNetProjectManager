@@ -55,4 +55,24 @@ public class GoogleSheetReviewMigrationPreviewRow
     /// <summary>Human-readable combined action shown in the preview grid.</summary>
     public string ProposedAction { get; set; } = string.Empty;
     public bool IsCommitAllowed { get; set; }
+
+    // ── Template Compatibility (populated when target template is provided) ──
+
+    /// <summary>Overall template validation result: NotValidated / FullMatch / PartialMatch / NoMatch / TemplateError.</summary>
+    public string TemplateValidationStatus { get; set; } = "NotValidated";
+
+    /// <summary>Number of JSON notes that matched a target template section (code + title).</summary>
+    public int TemplateMatchedNoteCount { get; set; }
+
+    /// <summary>Number of JSON notes skipped due to template mismatch.</summary>
+    public int TemplateSkippedNoteCount { get; set; }
+
+    /// <summary>Number of section code matches where title/description did not match.</summary>
+    public int TemplateMismatchCount { get; set; }
+
+    /// <summary>Number of JSON sections whose code was not found in the target template.</summary>
+    public int TemplateMissingSectionCount { get; set; }
+
+    /// <summary>Detailed template compatibility warnings (one per mismatched section).</summary>
+    public string TemplateWarnings { get; set; } = string.Empty;
 }

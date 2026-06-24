@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -45,6 +45,15 @@ public partial class MigrationPocWindow : Window
     // ── New Migration Preview State ──
     private List<SystemUserLookupItem> _systemUsers = [];
     private List<ReviewerMappingItem> _reviewerMappings = [];
+
+    /// <summary>
+    /// Template compatibility results from the last preview run.
+    /// Keyed by "ProjectNumber|VersionIndex|ReportNumber" for double-click lookup.
+    /// </summary>
+    private IReadOnlyDictionary<string, TemplateCompatibilityResult>? _lastCompatibilityResults;
+
+    /// <summary>Whether the last preview run had TemplateError (template provided but unreadable).</summary>
+    private bool _lastPreviewHadTemplateError;
 
     // ── Deterministic Extraction Preview state ──
     private ReportExtractionResult? _lastDeterministicResult;
@@ -1704,11 +1713,67 @@ public partial class MigrationPocWindow : Window
 
             BuildPreviewButton.IsEnabled = false;
             NewPreviewStatusLabel.Text = "🔄 מנתח ויוצר Preview קריאה בלבד...";
+            _lastCompatibilityResults = null;
+            _lastPreviewHadTemplateError = false;
 
             var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
             var workflowQueryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
             var authService = CreateGoogleAuthService();
             if (authService == null) return;
+
+            // ── Load target template sections (if provided) ──
+            IReadOnlyList<TemplateSyncRow>? targetTemplateSections = null;
+            var targetTemplateInput = TargetTemplateIdBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(targetTemplateInput))
+            {
+                var templateId = ReportContentExtractor.ExtractSpreadsheetId(targetTemplateInput);
+                if (string.IsNullOrWhiteSpace(templateId))
+                {
+                    MessageBox.Show(
+                        "לא ניתן לזהות Spreadsheet ID מהקלט. הזינו מזהה או קישור תקין.",
+                        "שגיאה", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                try
+                {
+                    NewPreviewStatusLabel.Text = "🔄 טוען תבנית יעד...";
+                    TargetTemplateStatusLabel.Text = "🔄 טוען...";
+                    var templateProvider = new GoogleInspectionTemplateProvider(authService);
+                    var scanResult = await templateProvider.ScanAndParseTemplateAsync(templateId);
+                    targetTemplateSections = scanResult.SyncRows;
+
+                    if (targetTemplateSections.Count == 0)
+                    {
+                        TargetTemplateStatusLabel.Text = "⚠ תבנית ריקה";
+                        TargetTemplateStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
+                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E65100"));
+                        AppendToLog($"[Template] Target template loaded but contains 0 sections: {templateId}");
+                        _lastPreviewHadTemplateError = true;
+                        // Continue preview without template validation — rows will show TemplateError
+                    }
+                    else
+                    {
+                        TargetTemplateStatusLabel.Text = $"✅ {targetTemplateSections.Count} סעיפים";
+                        TargetTemplateStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
+                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2E7D32"));
+                        AppendToLog($"[Template] Target template loaded: {targetTemplateSections.Count} sections from {templateId}");
+                    }
+                }
+                catch (Exception templateEx)
+                {
+                    TargetTemplateStatusLabel.Text = "❌ שגיאה בטעינת תבנית";
+                    TargetTemplateStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#D32F2F"));
+                    AppendToLog($"[Template] Error loading target template: {templateEx.Message}");
+                    _lastPreviewHadTemplateError = true;
+                    // Continue preview without template validation — rows will show TemplateError
+                }
+            }
+            else
+            {
+                TargetTemplateStatusLabel.Text = "";
+            }
 
             var mappingDict = _reviewerMappings
                 .Where(m => m.SelectedUserId.HasValue)
@@ -1716,13 +1781,31 @@ public partial class MigrationPocWindow : Window
 
             var previewService = new GoogleSheetReviewMigrationPreviewService(contextFactory, workflowQueryService, authService);
 
-            var rows = await previewService.BuildPreviewAsync(indexSheetId!, mappingDict, msg => AppendToLog($"[Preview] {msg}"));
+            NewPreviewStatusLabel.Text = "🔄 מנתח ויוצר Preview...";
+            var rows = await previewService.BuildPreviewAsync(
+                indexSheetId!, mappingDict, targetTemplateSections, msg => AppendToLog($"[Preview] {msg}"));
+
+            // If template was provided but loading failed, mark all rows as TemplateError
+            if (_lastPreviewHadTemplateError && !string.IsNullOrWhiteSpace(targetTemplateInput))
+            {
+                foreach (var row in rows)
+                {
+                    row.TemplateValidationStatus = "TemplateError";
+                    row.TemplateWarnings = "Target template could not be loaded — template validation failed.";
+                }
+            }
+
+            // Store compatibility results for double-click access
+            _lastCompatibilityResults = previewService.CompatibilityResults;
 
             NewPreviewGrid.ItemsSource = null;
             NewPreviewGrid.ItemsSource = rows;
 
             var readyCount = rows.Count(r => r.IsCommitAllowed);
-            NewPreviewStatusLabel.Text = $"✅ הניתוח הושלם. {readyCount} שורות מוכנות (אך Commit לא ממומש בשלב 1).";
+            var templateStatus = targetTemplateSections != null
+                ? $" | תבנית: {rows.Count(r => r.TemplateValidationStatus == "FullMatch")} תואמים, {rows.Count(r => r.TemplateValidationStatus == "PartialMatch")} חלקי, {rows.Count(r => r.TemplateValidationStatus == "NoMatch")} לא תואם"
+                : "";
+            NewPreviewStatusLabel.Text = $"✅ הניתוח הושלם. {readyCount} שורות מוכנות (אך Commit לא ממומש בשלב 1).{templateStatus}";
         }
         catch (Exception ex)
         {
@@ -1817,8 +1900,13 @@ public partial class MigrationPocWindow : Window
             NewPreviewStatusLabel.Text =
                 $"✅ נטען cache: {filledSections.Count} סעיפים עם נתונים";
 
+            // Look up template compatibility result for this row
+            TemplateCompatibilityResult? templateCompat = null;
+            var compatKey = $"{projectNumber}|{versionIndex}|{reportNumber}";
+            _lastCompatibilityResults?.TryGetValue(compatKey, out templateCompat);
+
             var cachePath = ExtractionCacheService.GetProjectCacheFolder(projectNumber);
-            var win = new Dialogs.FullReportFillPreviewWindow(displayEnvelope, cachePath)
+            var win = new Dialogs.FullReportFillPreviewWindow(displayEnvelope, cachePath, templateCompat)
             {
                 Owner = this
             };

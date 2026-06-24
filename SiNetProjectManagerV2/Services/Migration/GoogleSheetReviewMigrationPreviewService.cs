@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SiNetProjectManagerV2.Services.Migration.Models;
 using SiNetSQL.Data;
+using SiNetSQL.Services.InspectionSync;
 using SiOffice.GoogleConnector.Reports;
 using SiNetSQL.Services.Workflow;
 using SiNetSQL.Services;
@@ -22,6 +25,16 @@ public sealed class GoogleSheetReviewMigrationPreviewService
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly WorkflowQueryService _workflowQueryService;
     private readonly GoogleAuthService _authService;
+
+    /// <summary>
+    /// Template compatibility results keyed by "ProjectNumber|VersionIndex|ReportNumber".
+    /// Populated during BuildPreviewAsync when targetTemplateSections is provided.
+    /// Used by the UI for double-click detail preview.
+    /// </summary>
+    private readonly Dictionary<string, TemplateCompatibilityResult> _compatibilityResults = new();
+
+    /// <summary>Public accessor for compatibility results (for double-click preview).</summary>
+    public IReadOnlyDictionary<string, TemplateCompatibilityResult> CompatibilityResults => _compatibilityResults;
 
     public GoogleSheetReviewMigrationPreviewService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
@@ -69,6 +82,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
     public async Task<List<GoogleSheetReviewMigrationPreviewRow>> BuildPreviewAsync(
         string indexSheetId,
         IReadOnlyDictionary<string, int> reviewerMapping,
+        IReadOnlyList<TemplateSyncRow>? targetTemplateSections = null,
         Action<string>? log = null,
         CancellationToken ct = default)
     {
@@ -80,6 +94,23 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         // Pre-load all projects once for efficient in-memory matching across all rows
         var allProjects = await db.Projects.AsNoTracking().ToListAsync(ct);
 
+        // Build in-memory target template section map: "X.Y" → TemplateSyncRow
+        Dictionary<string, TemplateSyncRow>? templateMap = null;
+        if (targetTemplateSections?.Count > 0)
+        {
+            templateMap = new Dictionary<string, TemplateSyncRow>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tsr in targetTemplateSections)
+            {
+                if (string.IsNullOrWhiteSpace(tsr.SectionCode) || tsr.ChapterNumber == 0) continue;
+                var parentCode = ExtractParentSectionCode(tsr.SectionCode);
+                if (!string.IsNullOrWhiteSpace(parentCode))
+                    templateMap.TryAdd(parentCode, tsr);
+            }
+            log?.Invoke($"[Template] Target template map built: {templateMap.Count} sections.");
+        }
+
+        _compatibilityResults.Clear();
+
         var results = new List<GoogleSheetReviewMigrationPreviewRow>();
 
         foreach (var link in links)
@@ -88,7 +119,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             var versionCount = link.ReportSpreadsheetIds.Count;
             if (versionCount == 0)
             {
-                var row = await ProcessSingleRowAsync(db, allProjects, link, reviewerMapping, 1, 1, null, ct);
+                var row = await ProcessSingleRowAsync(db, allProjects, link, reviewerMapping, 1, 1, null, templateMap, ct);
                 results.Add(row);
             }
             else
@@ -96,7 +127,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
                 for (int i = 0; i < versionCount; i++)
                 {
                     var spreadsheetId = link.ReportSpreadsheetIds[i];
-                    var row = await ProcessSingleRowAsync(db, allProjects, link, reviewerMapping, i + 1, versionCount, spreadsheetId, ct);
+                    var row = await ProcessSingleRowAsync(db, allProjects, link, reviewerMapping, i + 1, versionCount, spreadsheetId, templateMap, ct);
                     results.Add(row);
                 }
             }
@@ -185,6 +216,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         int versionIndex,
         int totalVersions,
         string? reportSpreadsheetId,
+        Dictionary<string, TemplateSyncRow>? templateMap,
         CancellationToken ct)
     {
         bool isLatestVersion = (versionIndex == totalVersions);
@@ -267,6 +299,41 @@ public sealed class GoogleSheetReviewMigrationPreviewService
         {
             row.JsonCacheStatus = "Missing (No Project Number)";
         }
+
+        // 3.5 Template Compatibility Validation (read-only, no DB writes)
+        if (templateMap != null && jsonCache != null && jsonCache.Sections.Count > 0)
+        {
+            var compatibility = ValidateTemplateCompatibility(jsonCache, templateMap);
+
+            // Store for double-click access
+            var compatKey = $"{row.ResolvedProjectNumber}|{versionIndex}|{row.ReportNumber}";
+            _compatibilityResults[compatKey] = compatibility;
+
+            row.TemplateMatchedNoteCount = compatibility.MatchedCount;
+            row.TemplateMismatchCount = compatibility.MismatchCount;
+            row.TemplateMissingSectionCount = compatibility.MissingCount;
+            row.TemplateSkippedNoteCount = compatibility.MismatchCount + compatibility.MissingCount;
+            row.TemplateWarnings = compatibility.BuildWarningsSummary();
+
+            if (compatibility.MatchedCount > 0 && compatibility.MismatchCount == 0 && compatibility.MissingCount == 0)
+            {
+                row.TemplateValidationStatus = "FullMatch";
+            }
+            else if (compatibility.HasAnyMatch)
+            {
+                row.TemplateValidationStatus = "PartialMatch";
+            }
+            else
+            {
+                row.TemplateValidationStatus = "NoMatch";
+            }
+        }
+        else if (templateMap != null && jsonCache == null)
+        {
+            // Template was provided but no JSON cache — cannot validate
+            row.TemplateValidationStatus = "NotValidated";
+        }
+        // else: templateMap == null → no template provided → stays "NotValidated"
 
         // 4. Resolve Target Stage
         var targetStageCode = DetermineTargetStageCode(link.Status);
@@ -558,4 +625,169 @@ public sealed class GoogleSheetReviewMigrationPreviewService
             _ => null
         };
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Template Compatibility Validation (read-only, in-memory only)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Validates each JSON section against the target template sections (code + title).
+    /// Returns a <see cref="TemplateCompatibilityResult"/> with per-section match entries.
+    /// This is purely in-memory — no DB reads or writes.
+    /// </summary>
+    private static TemplateCompatibilityResult ValidateTemplateCompatibility(
+        ExtractionCacheEnvelope jsonCache,
+        Dictionary<string, TemplateSyncRow> templateMap)
+    {
+        var entries = new List<SectionCompatibilityEntry>();
+
+        // Group JSON sections by parent code (X.Y) to avoid duplicate checks
+        var jsonSectionsByParent = jsonCache.Sections
+            .Where(s => !string.IsNullOrWhiteSpace(s.SectionCode))
+            .GroupBy(s => ExtractParentSectionCode(s.SectionCode))
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .ToList();
+
+        foreach (var group in jsonSectionsByParent)
+        {
+            var parentCode = group.Key!;
+            var firstSection = group.First();
+
+            // Get JSON section title — prefer ChapterTitle + SectionTitle, fall back to SectionTitle alone
+            var jsonTitle = !string.IsNullOrWhiteSpace(firstSection.SectionTitle)
+                ? firstSection.SectionTitle
+                : firstSection.ChapterTitle;
+
+            if (templateMap.TryGetValue(parentCode, out var templateRow))
+            {
+                // Section code found — compare titles
+                var templateTitle = templateRow.SectionTitle ?? templateRow.SectionCode;
+
+                if (AreTitlesCompatible(jsonTitle, templateTitle))
+                {
+                    entries.Add(new SectionCompatibilityEntry
+                    {
+                        SectionCode = parentCode,
+                        JsonSectionTitle = jsonTitle ?? "(empty)",
+                        TemplateSectionTitle = templateTitle,
+                        MatchResult = SectionMatchResult.Matched,
+                        Reason = "Section code and title match."
+                    });
+                }
+                else
+                {
+                    entries.Add(new SectionCompatibilityEntry
+                    {
+                        SectionCode = parentCode,
+                        JsonSectionTitle = jsonTitle ?? "(empty)",
+                        TemplateSectionTitle = templateTitle,
+                        MatchResult = SectionMatchResult.TitleMismatch,
+                        Reason = $"JSON: \"{jsonTitle ?? "(empty)"}\" ≠ Template: \"{templateTitle}\""
+                    });
+                }
+            }
+            else
+            {
+                entries.Add(new SectionCompatibilityEntry
+                {
+                    SectionCode = parentCode,
+                    JsonSectionTitle = jsonTitle ?? "(empty)",
+                    TemplateSectionTitle = null,
+                    MatchResult = SectionMatchResult.MissingInTemplate,
+                    Reason = $"Section {parentCode} not found in target template."
+                });
+            }
+        }
+
+        return new TemplateCompatibilityResult { Entries = entries };
+    }
+
+    /// <summary>
+    /// Extracts the parent section code "X.Y" from a full code like "X.Y.Z" or "X.Y".
+    /// Returns null if the code cannot be parsed.
+    /// </summary>
+    internal static string? ExtractParentSectionCode(string sectionCode)
+    {
+        if (string.IsNullOrWhiteSpace(sectionCode)) return null;
+
+        // Strip bidi marks and <<>> markers
+        var cleaned = sectionCode
+            .Replace("\u200F", "", StringComparison.Ordinal)
+            .Replace("\u200E", "", StringComparison.Ordinal)
+            .Replace("<<", "", StringComparison.Ordinal)
+            .Replace(">>", "", StringComparison.Ordinal)
+            .Trim();
+
+        // Extract leading numeric part with dots
+        var i = 0;
+        while (i < cleaned.Length && (char.IsDigit(cleaned[i]) || cleaned[i] == '.'))
+            i++;
+        var numericPart = cleaned[..i].TrimEnd('.');
+
+        // Split into parts and take the first two (X.Y)
+        var parts = numericPart.Split('.');
+        if (parts.Length >= 2)
+            return $"{parts[0]}.{parts[1]}";
+        if (parts.Length == 1 && parts[0].Length > 0)
+            return parts[0]; // Single number like "3"
+
+        return null;
+    }
+
+    /// <summary>
+    /// Compares two section titles using normalized comparison.
+    /// Normalization: trim, collapse whitespace, remove bidi marks, remove brackets/parentheses,
+    /// case-insensitive (invariant culture).
+    /// If either title is null/empty, considers it a match (no title to compare against).
+    /// </summary>
+    internal static bool AreTitlesCompatible(string? jsonTitle, string? templateTitle)
+    {
+        // If either side has no title, we cannot compare — treat as compatible
+        if (string.IsNullOrWhiteSpace(jsonTitle) || string.IsNullOrWhiteSpace(templateTitle))
+            return true;
+
+        var normalizedJson = NormalizeSectionTitle(jsonTitle);
+        var normalizedTemplate = NormalizeSectionTitle(templateTitle);
+
+        // If normalization produced empty strings, treat as compatible
+        if (string.IsNullOrWhiteSpace(normalizedJson) || string.IsNullOrWhiteSpace(normalizedTemplate))
+            return true;
+
+        // Check containment in both directions — handles cases where one title is a substring of the other
+        // (e.g., "חניה" vs "3.6 חניה [גישה לחניות]")
+        return normalizedJson.Contains(normalizedTemplate, StringComparison.OrdinalIgnoreCase)
+            || normalizedTemplate.Contains(normalizedJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Normalizes a section title for comparison.
+    /// Removes bidi marks, brackets, parentheses, <<>>, collapses whitespace, trims.
+    /// </summary>
+    internal static string NormalizeSectionTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+
+        var result = title;
+
+        // Remove bidi marks
+        result = result.Replace("\u200F", "", StringComparison.Ordinal);
+        result = result.Replace("\u200E", "", StringComparison.Ordinal);
+
+        // Remove << and >> template markers
+        result = result.Replace("<<", "", StringComparison.Ordinal);
+        result = result.Replace(">>", "", StringComparison.Ordinal);
+
+        // Remove content inside brackets [...] and parentheses (...) for comparison
+        // But keep the text inside for containment check
+        result = Regex.Replace(result, @"[\[\]\(\)]", " ");
+
+        // Remove leading numeric code (e.g., "3.6 " prefix)
+        result = Regex.Replace(result, @"^\d+(\.\d+)*\s*", "");
+
+        // Collapse whitespace and trim
+        result = Regex.Replace(result, @"\s+", " ").Trim();
+
+        return result;
+    }
 }
+

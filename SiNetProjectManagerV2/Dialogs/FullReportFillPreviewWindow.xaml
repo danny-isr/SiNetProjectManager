@@ -12,14 +12,15 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- 0: Banner -->
-            <RowDefinition Height="Auto"/>  <!-- 1: Section 1 header -->
-            <RowDefinition Height="Auto"/>  <!-- 2: Section 1 — Identity fields -->
-            <RowDefinition Height="Auto"/>  <!-- 3: Section 2 header -->
-            <RowDefinition Height="160"/>   <!-- 4: Section 2 — Report-fill fields from extraction -->
-            <RowDefinition Height="Auto"/>  <!-- 5: Section 3 header + count -->
-            <RowDefinition Height="*"/>     <!-- 6: Section 3 — All extracted sections -->
-            <RowDefinition Height="Auto"/>  <!-- 7: Technical details (collapsed) -->
-            <RowDefinition Height="Auto"/>  <!-- 8: Close button row -->
+            <RowDefinition Height="Auto"/>  <!-- 1: Template compat banner -->
+            <RowDefinition Height="Auto"/>  <!-- 2: Section 1 header -->
+            <RowDefinition Height="Auto"/>  <!-- 3: Section 1 — Identity fields -->
+            <RowDefinition Height="Auto"/>  <!-- 4: Section 2 header -->
+            <RowDefinition Height="160"/>   <!-- 5: Section 2 — Report-fill fields from extraction -->
+            <RowDefinition Height="Auto"/>  <!-- 6: Section 3 header + count -->
+            <RowDefinition Height="*"/>     <!-- 7: Section 3 — All extracted sections -->
+            <RowDefinition Height="Auto"/>  <!-- 8: Technical details (collapsed) -->
+            <RowDefinition Height="Auto"/>  <!-- 9: Close button row -->
         </Grid.RowDefinitions>
 
         <!-- Row 0: Preview-only banner -->
@@ -35,14 +36,27 @@
             </StackPanel>
         </Border>
 
-        <!-- Row 1: Section 1 header -->
-        <TextBlock Grid.Row="1"
+        <!-- Row 1: Template compatibility banner (hidden when no template validation) -->
+        <Border Grid.Row="1" x:Name="TemplateCompatBanner" Visibility="Collapsed" Margin="0,0,0,8">
+            <Border x:Name="TemplateCompatBannerBorder"
+                    Background="#E8F5E9" BorderBrush="#A5D6A7" BorderThickness="1"
+                    CornerRadius="4" Padding="10,7">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="TemplateCompatBannerText"
+                               FontSize="12" VerticalAlignment="Center"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Row 2: Section 1 header -->
+        <TextBlock Grid.Row="2"
                    Text="שדות זהות (מספר פרויקט / דוח / גרסה)"
                    FontWeight="SemiBold" FontSize="12"
                    Foreground="#1565C0" Margin="0,0,0,4"/>
 
-        <!-- Row 2: Section 1 — Report-fill fields table -->
-        <Border Grid.Row="2"
+        <!-- Row 3: Section 1 — Report-fill fields table -->
+        <Border Grid.Row="3"
                 BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="3"
                 Margin="0,0,0,8">
             <DataGrid x:Name="ReportFieldsGrid"
@@ -81,14 +95,14 @@
             </DataGrid>
         </Border>
 
-        <!-- Row 3: Section 2 header -->
-        <TextBlock Grid.Row="3"
+        <!-- Row 4: Section 2 header -->
+        <TextBlock Grid.Row="4"
                    Text="שדות דוח מתוצאת החילוץ (מה ימולא בייבוא)"
                    FontWeight="SemiBold" FontSize="12"
                    Foreground="#1565C0" Margin="0,0,0,4"/>
 
-        <!-- Row 4: Section 2 — GeneralFields from extraction result -->
-        <Border Grid.Row="4"
+        <!-- Row 5: Section 2 — GeneralFields from extraction result -->
+        <Border Grid.Row="5"
                 BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="3"
                 Margin="0,0,0,8">
             <DataGrid x:Name="GeneralFieldsGrid"
@@ -113,8 +127,8 @@
             </DataGrid>
         </Border>
 
-        <!-- Row 5: Section 3 header + count -->
-        <Grid Grid.Row="5" Margin="0,0,0,4">
+        <!-- Row 6: Section 3 header + count -->
+        <Grid Grid.Row="6" Margin="0,0,0,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -128,8 +142,8 @@
                        VerticalAlignment="Center"/>
         </Grid>
 
-        <!-- Row 6: Section 3 — All extracted sections -->
-        <DataGrid Grid.Row="6"
+        <!-- Row 7: Section 3 — All extracted sections -->
+        <DataGrid Grid.Row="7"
                   x:Name="SectionsGrid"
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserSortColumns="True" CanUserResizeColumns="True"
@@ -176,11 +190,27 @@
                 <DataGridTextColumn Header="מס׳ פיצול"    Binding="{Binding SplitIndex}"        Width="50"/>
                 <DataGridTextColumn Header="אימות כותרת"  Binding="{Binding HeaderValidation}"  Width="88"/>
                 <DataGridTextColumn Header="שיטת זיהוי"   Binding="{Binding DetectionMethod}"   Width="74"/>
+                <DataGridTextColumn Header="התאמת תבנית" Binding="{Binding TemplateMatchStatus}" Width="100">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#555"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="כותרת תבנית"  Binding="{Binding TemplateSectionTitle}" Width="130">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextWrapping" Value="Wrap"/>
+                            <Setter Property="MaxHeight" Value="48"/>
+                            <Setter Property="Foreground" Value="#777"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Row 7: Technical details — collapsed by default -->
-        <Expander Grid.Row="7"
+        <!-- Row 8: Technical details — collapsed by default -->
+        <Expander Grid.Row="8"
                   Header="🔧 פרטים טכניים (Template ID, Report ID, Cache)"
                   Margin="0,8,0,0" IsExpanded="False">
             <Border BorderBrush="#E0E0E0" BorderThickness="1"
@@ -202,8 +232,8 @@
             </Border>
         </Expander>
 
-        <!-- Row 8: Close button -->
-        <StackPanel Grid.Row="8" Orientation="Horizontal"
+        <!-- Row 9: Close button -->
+        <StackPanel Grid.Row="9" Orientation="Horizontal"
                     HorizontalAlignment="Left" Margin="0,10,0,0">
             <Button Content="סגור" Width="90" Height="28"
                     Click="Close_Click"/>

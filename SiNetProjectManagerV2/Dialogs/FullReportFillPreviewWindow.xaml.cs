@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Windows;
 using SiNetProjectManagerV2.Services.Migration;
+using SiNetProjectManagerV2.Services.Migration.Models;
 
 namespace SiNetProjectManagerV2.Dialogs;
 
@@ -17,12 +18,17 @@ public partial class FullReportFillPreviewWindow : Window
     /// </summary>
     /// <param name="envelope">Extraction result (from _lastDeterministicResult or cache).</param>
     /// <param name="cachePath">Optional path of the JSON cache file, shown in technical details if available.</param>
-    public FullReportFillPreviewWindow(ExtractionCacheEnvelope envelope, string? cachePath = null)
+    /// <param name="templateCompatibility">Optional template compatibility result for per-section match display.</param>
+    public FullReportFillPreviewWindow(
+        ExtractionCacheEnvelope envelope, 
+        string? cachePath = null,
+        TemplateCompatibilityResult? templateCompatibility = null)
     {
         InitializeComponent();
         PopulateReportFillFields(envelope);
         PopulateGeneralFields(envelope);
-        PopulateSections(envelope);
+        PopulateSections(envelope, templateCompatibility);
+        PopulateTemplateCompatibilitySummary(templateCompatibility);
         PopulateTechDetails(envelope, cachePath);
         UpdateTitle(envelope);
     }
@@ -69,16 +75,106 @@ public partial class FullReportFillPreviewWindow : Window
     //  Section 3 — Full extracted sections
     // ─────────────────────────────────────────────────────────────────────────
 
-    private void PopulateSections(ExtractionCacheEnvelope envelope)
+    private void PopulateSections(
+        ExtractionCacheEnvelope envelope, 
+        TemplateCompatibilityResult? templateCompatibility)
     {
-        SectionsGrid.ItemsSource = envelope.Sections;
+        if (templateCompatibility != null)
+        {
+            // Build a lookup from section code to compatibility entry
+            var compatLookup = templateCompatibility.Entries
+                .ToDictionary(
+                    e => e.SectionCode, 
+                    e => e, 
+                    StringComparer.OrdinalIgnoreCase);
 
-        var splitCount    = envelope.Sections.Count(s => s.WasSplit);
-        var resolvedCount = envelope.Sections.Count(s => s.IsResolved);
-        var datedCount    = envelope.Sections.Count(s => s.ClosedDate != null);
+            // Wrap each section with its compatibility status
+            var enrichedSections = envelope.Sections.Select(s =>
+            {
+                var parentCode = GoogleSheetReviewMigrationPreviewService.ExtractParentSectionCode(s.SectionCode);
+                SectionCompatibilityEntry? entry = null;
+                if (!string.IsNullOrWhiteSpace(parentCode))
+                    compatLookup.TryGetValue(parentCode, out entry);
 
-        SectionCountLabel.Text =
-            $"סה\"כ: {envelope.Sections.Count} שורות  |  פוצלו: {splitCount}  |  נסגרו: {resolvedCount}  |  עם תאריך: {datedCount}";
+                return new SectionWithCompatibility
+                {
+                    SectionCode = s.SectionCode,
+                    NoteSubIndex = s.NoteSubIndex,
+                    ChapterTitle = s.ChapterTitle,
+                    SectionTitle = s.SectionTitle,
+                    StatusKey = s.StatusKey,
+                    StatusColorHex = s.StatusColorHex,
+                    NoteText = s.NoteText,
+                    DesignerResponse = s.DesignerResponse,
+                    IsResolved = s.IsResolved,
+                    ClosedDate = s.ClosedDate,
+                    ReportRow = s.ReportRow,
+                    OriginalCellRef = s.OriginalCellRef,
+                    WasSplit = s.WasSplit,
+                    SplitIndex = s.SplitIndex,
+                    HeaderValidation = s.HeaderValidation,
+                    DetectionMethod = s.DetectionMethod,
+                    TemplateMatchStatus = entry?.DisplayStatus ?? "—",
+                    TemplateMatchReason = entry?.Reason ?? "",
+                    TemplateSectionTitle = entry?.TemplateSectionTitle ?? ""
+                };
+            }).ToList();
+
+            SectionsGrid.ItemsSource = enrichedSections;
+
+            var splitCount    = enrichedSections.Count(s => s.WasSplit);
+            var resolvedCount = enrichedSections.Count(s => s.IsResolved);
+            var datedCount    = enrichedSections.Count(s => s.ClosedDate != null);
+            var matchedCount  = enrichedSections.Count(s => s.TemplateMatchStatus.Contains("✅"));
+            var mismatchCount = enrichedSections.Count(s => s.TemplateMatchStatus.Contains("⚠") || s.TemplateMatchStatus.Contains("❌"));
+
+            SectionCountLabel.Text =
+                $"סה\"כ: {enrichedSections.Count} שורות  |  פוצלו: {splitCount}  |  נסגרו: {resolvedCount}  |  עם תאריך: {datedCount}  |  תבנית: {matchedCount} ✅ / {mismatchCount} ⚠";
+        }
+        else
+        {
+            SectionsGrid.ItemsSource = envelope.Sections;
+
+            var splitCount    = envelope.Sections.Count(s => s.WasSplit);
+            var resolvedCount = envelope.Sections.Count(s => s.IsResolved);
+            var datedCount    = envelope.Sections.Count(s => s.ClosedDate != null);
+
+            SectionCountLabel.Text =
+                $"סה\"כ: {envelope.Sections.Count} שורות  |  פוצלו: {splitCount}  |  נסגרו: {resolvedCount}  |  עם תאריך: {datedCount}";
+        }
+    }
+
+    private void PopulateTemplateCompatibilitySummary(TemplateCompatibilityResult? templateCompatibility)
+    {
+        if (templateCompatibility == null)
+        {
+            TemplateCompatBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        TemplateCompatBanner.Visibility = Visibility.Visible;
+        var matched = templateCompatibility.MatchedCount;
+        var mismatched = templateCompatibility.MismatchCount;
+        var missing = templateCompatibility.MissingCount;
+        var total = templateCompatibility.Entries.Count;
+
+        if (mismatched == 0 && missing == 0)
+        {
+            TemplateCompatBannerBorder.Background = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E8F5E9"));
+            TemplateCompatBannerBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#A5D6A7"));
+            TemplateCompatBannerText.Text = $"✅ כל {matched} הסעיפים תואמים לתבנית היעד.";
+        }
+        else
+        {
+            TemplateCompatBannerBorder.Background = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFF3E0"));
+            TemplateCompatBannerBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFB74D"));
+            TemplateCompatBannerText.Text = 
+                $"⚠ מתוך {total} סעיפים: {matched} תואמים, {mismatched} אי-התאמת כותרת, {missing} חסרים בתבנית. סעיפים שאינם תואמים לא ייובאו.";
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -152,6 +248,36 @@ public partial class FullReportFillPreviewWindow : Window
 // ─────────────────────────────────────────────────────────────────────────────
 //  DTO for Section 1 — Report-fill field rows
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Extends <see cref="ExtractedSectionData"/> with template compatibility information
+/// for display in the full report preview window.
+/// </summary>
+public sealed class SectionWithCompatibility
+{
+    // ── Original section fields ──
+    public string SectionCode { get; init; } = string.Empty;
+    public string NoteSubIndex { get; init; } = string.Empty;
+    public string ChapterTitle { get; init; } = string.Empty;
+    public string SectionTitle { get; init; } = string.Empty;
+    public string StatusKey { get; init; } = string.Empty;
+    public string StatusColorHex { get; init; } = string.Empty;
+    public string NoteText { get; init; } = string.Empty;
+    public string DesignerResponse { get; init; } = string.Empty;
+    public bool IsResolved { get; init; }
+    public DateTime? ClosedDate { get; init; }
+    public int ReportRow { get; init; }
+    public string OriginalCellRef { get; init; } = string.Empty;
+    public bool WasSplit { get; init; }
+    public int SplitIndex { get; init; }
+    public string HeaderValidation { get; init; } = string.Empty;
+    public string DetectionMethod { get; init; } = string.Empty;
+
+    // ── Template compatibility ──
+    public string TemplateMatchStatus { get; init; } = "—";
+    public string TemplateMatchReason { get; init; } = string.Empty;
+    public string TemplateSectionTitle { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// A single row in the "report-fill fields" section of the preview window.
