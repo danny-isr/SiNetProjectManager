@@ -157,6 +157,9 @@ public partial class MigrationPocWindow : Window
             _availableTemplates = await provider.GetAvailableTemplatesAsync(folderId, CancellationToken.None);
             TemplateComboBox.ItemsSource = _availableTemplates;
 
+            // Also populate the target template dropdown in Tab 3 (same list)
+            TargetTemplateComboBox.ItemsSource = _availableTemplates;
+
             // Auto-select "דוח תנועה תבנית" for testing convenience
             var defaultTemplate = _availableTemplates.FirstOrDefault(t =>
                 t.Name.Contains("תנועה", StringComparison.OrdinalIgnoreCase));
@@ -1721,19 +1724,12 @@ public partial class MigrationPocWindow : Window
             var authService = CreateGoogleAuthService();
             if (authService == null) return;
 
-            // ── Load target template sections (if provided) ──
+            // ── Load target template sections (if selected) ──
             IReadOnlyList<TemplateSyncRow>? targetTemplateSections = null;
-            var targetTemplateInput = TargetTemplateIdBox.Text.Trim();
-            if (!string.IsNullOrWhiteSpace(targetTemplateInput))
+            var selectedTargetTemplate = TargetTemplateComboBox.SelectedItem as InspectionTemplateItem;
+            if (selectedTargetTemplate != null)
             {
-                var templateId = ReportContentExtractor.ExtractSpreadsheetId(targetTemplateInput);
-                if (string.IsNullOrWhiteSpace(templateId))
-                {
-                    MessageBox.Show(
-                        "לא ניתן לזהות Spreadsheet ID מהקלט. הזינו מזהה או קישור תקין.",
-                        "שגיאה", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                var templateId = selectedTargetTemplate.SpreadsheetId;
 
                 try
                 {
@@ -1748,16 +1744,15 @@ public partial class MigrationPocWindow : Window
                         TargetTemplateStatusLabel.Text = "⚠ תבנית ריקה";
                         TargetTemplateStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
                             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E65100"));
-                        AppendToLog($"[Template] Target template loaded but contains 0 sections: {templateId}");
+                        AppendToLog($"[Template] Target template '{selectedTargetTemplate.Name}' loaded but contains 0 sections: {templateId}");
                         _lastPreviewHadTemplateError = true;
-                        // Continue preview without template validation — rows will show TemplateError
                     }
                     else
                     {
                         TargetTemplateStatusLabel.Text = $"✅ {targetTemplateSections.Count} סעיפים";
                         TargetTemplateStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
                             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2E7D32"));
-                        AppendToLog($"[Template] Target template loaded: {targetTemplateSections.Count} sections from {templateId}");
+                        AppendToLog($"[Template] Target template '{selectedTargetTemplate.Name}' loaded: {targetTemplateSections.Count} sections from {templateId}");
                     }
                 }
                 catch (Exception templateEx)
@@ -1765,9 +1760,8 @@ public partial class MigrationPocWindow : Window
                     TargetTemplateStatusLabel.Text = "❌ שגיאה בטעינת תבנית";
                     TargetTemplateStatusLabel.Foreground = new System.Windows.Media.SolidColorBrush(
                         (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#D32F2F"));
-                    AppendToLog($"[Template] Error loading target template: {templateEx.Message}");
+                    AppendToLog($"[Template] Error loading target template '{selectedTargetTemplate.Name}': {templateEx.Message}");
                     _lastPreviewHadTemplateError = true;
-                    // Continue preview without template validation — rows will show TemplateError
                 }
             }
             else
@@ -1786,7 +1780,7 @@ public partial class MigrationPocWindow : Window
                 indexSheetId!, mappingDict, targetTemplateSections, msg => AppendToLog($"[Preview] {msg}"));
 
             // If template was provided but loading failed, mark all rows as TemplateError
-            if (_lastPreviewHadTemplateError && !string.IsNullOrWhiteSpace(targetTemplateInput))
+            if (_lastPreviewHadTemplateError && selectedTargetTemplate != null)
             {
                 foreach (var row in rows)
                 {

@@ -369,10 +369,11 @@
                         <TextBlock Grid.Column="0" 
                                    Text="תבנית יעד לייבוא:" 
                                    VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"
-                                   ToolTip="הזינו מזהה תבנית או קישור מלא ל-Google Sheet. שדה אופציונלי — אם מלא, תתבצע בדיקת התאמה בין הסעיפים בתבנית לסעיפים ב-JSON."/>
-                        <TextBox Grid.Column="1" x:Name="TargetTemplateIdBox"
-                                 FlowDirection="LeftToRight"
-                                 ToolTip="Spreadsheet ID or full URL of the target inspection template"/>
+                                   ToolTip="בחרו תבנית ביקורת מהרשימה. שדה אופציונלי — אם נבחרה תבנית, תתבצע בדיקת התאמה בין הסעיפים בתבנית לסעיפים ב-JSON."/>
+                        <ComboBox Grid.Column="1" x:Name="TargetTemplateComboBox"
+                                  DisplayMemberPath="Name"
+                                  Padding="4,3"
+                                  ToolTip="בחר תבנית ביקורת יעד — אותה רשימה כמו בטאב 1"/>
                         <TextBlock Grid.Column="2" x:Name="TargetTemplateStatusLabel"
                                    VerticalAlignment="Center" Margin="10,0,0,0"
                                    FontSize="11" Foreground="#555"/>
