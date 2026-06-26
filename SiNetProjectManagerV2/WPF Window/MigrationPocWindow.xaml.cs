@@ -55,6 +55,13 @@ public partial class MigrationPocWindow : Window
     /// <summary>Whether the last preview run had TemplateError (template provided but unreadable).</summary>
     private bool _lastPreviewHadTemplateError;
 
+    // ── Phase 2 Import state ──
+    /// <summary>Preview rows from the last BuildPreviewAsync run, stored for Phase 2 import.</summary>
+    private List<GoogleSheetReviewMigrationPreviewRow>? _lastPreviewRows;
+
+    /// <summary>Template sync rows from the last template scan, used by Phase 2 import.</summary>
+    private IReadOnlyList<TemplateSyncRow>? _lastTemplateSyncRows;
+
     // ── Deterministic Extraction Preview state ──
     private ReportExtractionResult? _lastDeterministicResult;
 
@@ -1821,11 +1828,16 @@ public partial class MigrationPocWindow : Window
             NewPreviewGrid.ItemsSource = null;
             NewPreviewGrid.ItemsSource = rows;
 
+            // Store for Phase 2 import.
+            _lastPreviewRows = rows;
+            _lastTemplateSyncRows = targetTemplateSections;
+
             var readyCount = rows.Count(r => r.IsCommitAllowed);
             var templateStatus = targetTemplateSections != null
                 ? $" | תבנית: {rows.Count(r => r.TemplateValidationStatus == "FullMatch")} תואמים, {rows.Count(r => r.TemplateValidationStatus == "PartialMatch")} חלקי, {rows.Count(r => r.TemplateValidationStatus == "NoMatch")} לא תואם"
                 : "";
-            NewPreviewStatusLabel.Text = $"✅ הניתוח הושלם. {readyCount} שורות מוכנות (אך Commit לא ממומש בשלב 1).{templateStatus}";
+            NewPreviewStatusLabel.Text = $"✅ הניתוח הושלם. {readyCount} שורות מוכנות.{templateStatus}";
+            UpdateImportButtonState();
         }
         catch (Exception ex)
         {
@@ -1937,6 +1949,180 @@ public partial class MigrationPocWindow : Window
             NewPreviewStatusLabel.Text = "";
             AppendToLog($"[Preview] Error loading JSON cache for preview: {ex.Message}");
             MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  TAB 3: Phase 2 Import — selected rows only
+    // ═══════════════════════════════════════════════════════════════════
+
+    private void NewPreviewGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        UpdateImportButtonState();
+    }
+
+    /// <summary>
+    /// Enable the import button only when all Phase 2 prerequisites are met.
+    /// </summary>
+    private void UpdateImportButtonState()
+    {
+        if (ImportReportsSelectedButton is null) return;
+
+        // Conditions:
+        // 1. Preview rows loaded
+        // 2. Target template selected
+        // 3. Template compatibility results exist
+        // 4. Template sync rows available
+        // 5. At least one row selected
+        // 6. All selected rows must be import-eligible
+        if (_lastPreviewRows is null || _lastPreviewRows.Count == 0 ||
+            _selectedTemplate is null ||
+            _lastCompatibilityResults is null ||
+            _lastTemplateSyncRows is null || _lastTemplateSyncRows.Count == 0)
+        {
+            ImportReportsSelectedButton.IsEnabled = false;
+            ImportStatusLabel.Text = "";
+            return;
+        }
+
+        var selectedRows = NewPreviewGrid.SelectedItems
+            .OfType<GoogleSheetReviewMigrationPreviewRow>()
+            .ToList();
+
+        if (selectedRows.Count == 0)
+        {
+            ImportReportsSelectedButton.IsEnabled = false;
+            ImportStatusLabel.Text = "בחר שורות לייבוא";
+            return;
+        }
+
+        // Check all selected rows are eligible.
+        var eligible = selectedRows.Where(r =>
+            r.ResolvedProjectId.HasValue &&
+            r.TemplateValidationStatus is "FullMatch" or "PartialMatch" &&
+            r.JsonCacheStatus is "Available" or "✅" or "Found" &&
+            r.Classification is not (
+                MigrationPreviewClassification.AlreadyDone or
+                MigrationPreviewClassification.NoMatch or
+                MigrationPreviewClassification.MissingData or
+                MigrationPreviewClassification.JsonMissing or
+                MigrationPreviewClassification.ExistingReportConflict)
+        ).ToList();
+
+        if (eligible.Count == 0)
+        {
+            ImportReportsSelectedButton.IsEnabled = false;
+            ImportStatusLabel.Text = $"{selectedRows.Count} שורות נבחרו — אף אחת אינה מתאימה לייבוא";
+            return;
+        }
+
+        ImportReportsSelectedButton.IsEnabled = true;
+        ImportStatusLabel.Text = eligible.Count == selectedRows.Count
+            ? $"{eligible.Count} שורות מוכנות לייבוא"
+            : $"{eligible.Count}/{selectedRows.Count} שורות מתאימות לייבוא";
+    }
+
+    private async void ImportReportsSelectedButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastPreviewRows is null || _selectedTemplate is null ||
+            _lastCompatibilityResults is null || _lastTemplateSyncRows is null)
+            return;
+
+        // Get eligible selected rows.
+        var selectedRows = NewPreviewGrid.SelectedItems
+            .OfType<GoogleSheetReviewMigrationPreviewRow>()
+            .Where(r =>
+                r.ResolvedProjectId.HasValue &&
+                r.TemplateValidationStatus is "FullMatch" or "PartialMatch" &&
+                r.JsonCacheStatus is "Available" or "✅" or "Found" &&
+                r.Classification is not (
+                    MigrationPreviewClassification.AlreadyDone or
+                    MigrationPreviewClassification.NoMatch or
+                    MigrationPreviewClassification.MissingData or
+                    MigrationPreviewClassification.JsonMissing or
+                    MigrationPreviewClassification.ExistingReportConflict))
+            .ToList();
+
+        if (selectedRows.Count == 0)
+        {
+            MessageBox.Show("אין שורות מתאימות לייבוא.", "Phase 2", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Confirmation.
+        var confirmMsg = $"האם לייבא {selectedRows.Count} דוח/ות ל-DB?\n\n" +
+                         $"תבנית: {_selectedTemplate.Name}\n" +
+                         $"פעולה זו תיצור InspectionSeries, InspectionReport, ו-InspectionNote ב-DB.\n\n" +
+                         $"Phase 2 — שורות נבחרות בלבד. ללא Workflow, Tasks, או Google Sheets.";
+        var confirm = MessageBox.Show(confirmMsg, "אישור ייבוא Phase 2",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        ImportReportsSelectedButton.IsEnabled = false;
+        ImportStatusLabel.Text = "מייבא...";
+
+        try
+        {
+            // Resolve services (same pattern as preview — no DI constructor injection).
+            var dbFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
+            var reportService = App.ServiceProvider.GetRequiredService<IInspectionReportService>();
+            var templateSyncService = App.ServiceProvider.GetRequiredService<TemplateSyncService>();
+
+            var importService = new ReportImportService(dbFactory, reportService, templateSyncService);
+
+            void LogToUi(string msg)
+            {
+                Dispatcher.Invoke(() => AppendToLog(msg));
+            }
+
+            var result = await Task.Run(async () =>
+                await importService.ImportRowsAsync(
+                    selectedRows,
+                    _lastCompatibilityResults!,
+                    _lastTemplateSyncRows!,
+                    _selectedTemplate!,
+                    LogToUi,
+                    CancellationToken.None));
+
+            ImportStatusLabel.Text = $"✅ ייבוא הושלם: {result.ReportsCreated} נוצרו, " +
+                                    $"{result.ReportsSkippedAlreadyExists} דילוג, " +
+                                    $"{result.NotesImported} הערות, " +
+                                    $"{result.Errors} שגיאות";
+
+            AppendToLog(result.BuildSummary());
+
+            if (result.Errors > 0)
+            {
+                MessageBox.Show(
+                    $"הייבוא הסתיים עם {result.Errors} שגיאות.\n" +
+                    $"נוצרו {result.ReportsCreated} דוחות, {result.NotesImported} הערות.\n\n" +
+                    $"ראה לוג לפרטים.",
+                    "Phase 2 — הסתיים עם שגיאות", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"ייבוא הושלם בהצלחה!\n\n" +
+                    $"דוחות נוצרו: {result.ReportsCreated}\n" +
+                    $"הערות יובאו: {result.NotesImported}\n" +
+                    $"תגובות מתכנן: {result.PlannerResponsesImported}\n" +
+                    $"הערות פערים: {result.GapNotesCreated}\n" +
+                    $"שדות כלליים שדולגו: {result.GeneralFieldsSkipped}\n" +
+                    $"דילוג (קיים כבר): {result.ReportsSkippedAlreadyExists}\n" +
+                    $"דילוג (קונפליקט): {result.ReportsSkippedConflict}",
+                    "Phase 2 — הצלחה", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            ImportStatusLabel.Text = "⚠ שגיאה בייבוא";
+            AppendToLog($"[Phase2] Import error: {ex}");
+            MessageBox.Show($"שגיאה בייבוא:\n{ex.Message}", "Phase 2 Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            UpdateImportButtonState();
         }
     }
 

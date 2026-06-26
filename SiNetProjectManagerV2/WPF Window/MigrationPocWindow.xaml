@@ -404,6 +404,7 @@
                               AlternatingRowBackground="#F5F5F5"
                               BorderBrush="#D0D0D0" BorderThickness="1"
                               MouseDoubleClick="NewPreviewGrid_MouseDoubleClick"
+                              SelectionChanged="NewPreviewGrid_SelectionChanged"
                               ToolTip="לחץ לחיצה כפולה על שורה לצפייה בתוכן הדוח הממולא (אם קיים JSON Cache)">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="שורה" Binding="{Binding SheetRowIndex}" Width="45"/>
@@ -482,10 +483,16 @@
 
                     <!-- Commit Actions -->
                     <StackPanel Grid.Row="7" Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Left">
-                        <Button x:Name="CommitPhase1Button" Content="Commit not implemented in Phase 1" 
-                                Padding="14,6" FontWeight="Bold"
-                                Background="#B0BEC5" Foreground="White" Cursor="No"
-                                BorderThickness="0" IsEnabled="False" ToolTip="Commit מבוטל בשלב 1"/>
+                        <Button x:Name="ImportReportsSelectedButton"
+                                Content="ייבוא דוחות נבחרים (Phase 2)"
+                                Click="ImportReportsSelectedButton_Click"
+                                IsEnabled="False"
+                                Padding="12,6" FontSize="13" FontWeight="Bold"
+                                Background="#1976D2" Foreground="White" Cursor="Hand"
+                                BorderThickness="0"
+                                ToolTip="ייבוא הדוחות הנבחרים ל-DB (Phase 2 — שורות נבחרות בלבד)"/>
+                        <TextBlock x:Name="ImportStatusLabel" VerticalAlignment="Center"
+                                   Margin="12,0,0,0" FontSize="12" Foreground="#666"/>
                     </StackPanel>
                 </Grid>
             </TabItem>

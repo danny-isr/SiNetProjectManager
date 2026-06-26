@@ -2240,6 +2240,43 @@ opening any new gap:
   - `GoogleSheetReviewMigrationDesign §7 Gap 1`
   - `PersonalWorkQueuesByTaskSize §10.5`
 
+### Gap 27 — Phase 2 first slice implemented (selected rows only)
+
+- **Added:** 26.06.2026
+- **Status:** Implemented (first slice) — remaining items documented below
+- **Category:** Migration
+- **Impact:** Phase 2 first slice imports selected preview rows into DB using existing services only.
+
+**What the first slice implements:**
+- `ReportImportService` as thin coordinator (no direct DB logic)
+- `ImportReportsSelectedButton` in Tab 3 of `MigrationPocWindow`
+- EnsureSeries via `TemplateSyncService.EnsureSeriesAsync`
+- Template sync via `TemplateSyncService.SyncAsync` (once per series)
+- Duplicate guard via `(SeriesId, ReportNumber)` EF query
+- Report creation via `InspectionReportService.CreateReportAsync`
+- Note filling via `SaveNotesAsync` / `AddNoteAsync` / `SaveImportedPlannerResponsesAsync`
+- Template-shaped import: only sections passing `IsImportEligible(parentSectionCode)` are imported
+- Status mapping: StatusKey → `InspectionNoteStatus.StatusId` (best-effort, nullable fallback)
+- Gap notes: empty placeholder creation via `AddNoteAsync` if safe
+- Inspector fields: mapped reviewer from preview row (`MappedReviewerUserId`), not current user
+- Confirmation dialog before import
+
+**What remains postponed:**
+- Import all rows (broad import button)
+- GeneralFields / Chapter 0 import (fuzzy matching deferred)
+- `MarkReportAsSentAsync` / historical version locking
+- `ProjectAlternative` creation
+- Workflow reconstruction (Phase 3)
+- Task creation (Phase 3)
+- Google Sheets / Index Sheet writeback
+- Automatic rollback
+
+**Files:**
+- `Services\Migration\ReportImportService.cs` (new)
+- `Services\Migration\Models\ReportImportResult.cs` (new)
+- `WPF Window\MigrationPocWindow.xaml` (modified)
+- `WPF Window\MigrationPocWindow.xaml.cs` (modified)
+
 ## Pointers
 
 - [`Docs\README.md`](../README.md) — documentation index.

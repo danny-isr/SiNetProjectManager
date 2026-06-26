@@ -1,7 +1,7 @@
 # Phase 2 Technical Plan — Report Import from JSON Cache
 
 - **Date:** 22.06.2026
-- **Status:** Plan only — Revised 26.06.2026 to align with user decisions. NOT yet implemented.
+- **Status:** First slice implemented 26.06.2026 (selected rows only). Revised 26.06.2026 for user decisions.
 - **Scope:** Import `InspectionReport` structures from existing JSON cache into the DB.  
   Phase 2 does **not** reconstruct workflows. Phase 3 handles Workflow reconstruction.
 - **Prerequisites:** Phase 1 Preview code is implemented (read-only). Functional testing against real Google Sheet data is pending.  
@@ -294,16 +294,22 @@ It represents the final intended report, **not** the raw JSON cache.
 
 Phase 2 import runs from the **Google Sheet Review Migration Preview tab (Tab 3 / Preview tab)** in `MigrationPocWindow`. It does not run from Tab 1 (Extraction) or Tab 2 (Task Generation).
 
-Suggested button: **"ייבוא דוחות (Phase 2)"** — enabled only when preview rows are loaded.
+**Implemented (26.06.2026 — first slice):**
 
-Expected UI controls:
-- `ImportReportsButton` — runs Phase 2 for all Commit Ready rows with JSON.
-- `ImportReportsSelectedButton` — runs Phase 2 for selected rows only (subset test).
-- Progress bar / log output in the shared `LogBox`.
-- Result summary: rows imported / skipped / conflicted / failed.
+- `ImportReportsSelectedButton` — **"ייבוא דוחות נבחרים (Phase 2)"** — runs Phase 2 for selected rows only.
+- `ImportStatusLabel` — shows import eligibility status and result summary.
+- Log output in the shared `LogBox` via `AppendToLog`.
 
-The button is **disabled** until Phase 1 Preview is built and validated.  
-The button is **read-only disabled** if no `CommitReady` rows with `HasJsonCache = true` exist.
+**Button enable conditions (all must be true):**
+- Preview rows are loaded (`_lastPreviewRows` is populated).
+- A target template is selected (`_selectedTemplate` is set).
+- Template compatibility was performed (`_lastCompatibilityResults` is set).
+- Template sync rows are available (`_lastTemplateSyncRows` is populated).
+- At least one row is selected in the grid.
+- Selected rows must have: `ResolvedProjectId`, `TemplateValidationStatus` ∈ {FullMatch, PartialMatch}, JSON cache available, and no blocking classification.
+
+**Postponed:**
+- `ImportReportsButton` (import all rows) — not yet implemented; first slice is selected-rows-only.
 
 ---
 
