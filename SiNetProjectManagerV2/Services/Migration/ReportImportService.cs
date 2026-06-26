@@ -370,7 +370,13 @@ public sealed class ReportImportService
                 for (int gapIdx = 2; gapIdx < firstJsonSubIndex; gapIdx++)
                 {
                     var gapSubIndex = $"{parentCode}.{gapIdx}";
-                    EnsureNoteExists(report.ReportId, sectionId, gapSubIndex, noteLookup, ref result, log, ct, isGap: true);
+                    var beforeCount = noteLookup.Count;
+                    await EnsureNoteExistsAsync(report.ReportId, sectionId, gapSubIndex, noteLookup, ct);
+                    if (noteLookup.Count > beforeCount)
+                    {
+                        result.GapNotesCreated++;
+                        result.Log($"[Phase2] Gap note created: {gapSubIndex}", log);
+                    }
                 }
             }
 
@@ -385,7 +391,13 @@ public sealed class ReportImportService
                     while (expectedSubIndex < actualSubIndex)
                     {
                         var gapSubIndex = $"{parentCode}.{expectedSubIndex}";
-                        EnsureNoteExists(report.ReportId, sectionId, gapSubIndex, noteLookup, ref result, log, ct, isGap: true);
+                        var beforeCount = noteLookup.Count;
+                        await EnsureNoteExistsAsync(report.ReportId, sectionId, gapSubIndex, noteLookup, ct);
+                        if (noteLookup.Count > beforeCount)
+                        {
+                            result.GapNotesCreated++;
+                            result.Log($"[Phase2] Gap note created: {gapSubIndex}", log);
+                        }
                         expectedSubIndex++;
                     }
                 }
@@ -502,35 +514,6 @@ public sealed class ReportImportService
         var note = await _reportService.AddNoteAsync(reportId, sectionId, subIndex, ct);
         noteLookup[key] = note.NoteId;
         return note.NoteId;
-    }
-
-    /// <summary>
-    /// Fire-and-forget variant for gap notes — creates if missing, logs result.
-    /// Uses ref parameter for result to track gap note count.
-    /// </summary>
-    private void EnsureNoteExists(
-        int reportId, int sectionId, string subIndex,
-        Dictionary<(int SectionId, string SubIndex), long> noteLookup,
-        ref ReportImportResult result,
-        Action<string>? log, CancellationToken ct, bool isGap)
-    {
-        var key = (sectionId, subIndex);
-        if (noteLookup.ContainsKey(key))
-        {
-            // Already exists — no duplicate.
-            return;
-        }
-
-        // Synchronously wait for the async call (we're in a sync context for ref params).
-        var note = _reportService.AddNoteAsync(reportId, sectionId, subIndex, ct)
-            .GetAwaiter().GetResult();
-        noteLookup[key] = note.NoteId;
-
-        if (isGap)
-        {
-            result.GapNotesCreated++;
-            result.Log($"[Phase2] Gap note created: {subIndex}", log);
-        }
     }
 
     // ──────────────────────────────────────────────────────────────────

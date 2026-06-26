@@ -2,7 +2,7 @@
 
 > **Created:** 26.05.2026
 > **Updated:** 26.06.2026
-> **Status:** Active documentation index — documentation alignment round completed (26.06.2026).
+> **Status:** Active documentation index — Phase 2 skipCarryOver / validation defaults documented (26.06.2026).
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---

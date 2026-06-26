@@ -1,7 +1,7 @@
 # Phase 2 Technical Plan — Report Import from JSON Cache
 
 - **Date:** 22.06.2026
-- **Status:** First slice implemented 26.06.2026 (selected rows only). Revised 26.06.2026 for user decisions.
+- **Status:** First slice implemented 26.06.2026. Revised 26.06.2026 for skipCarryOver, duplicate prevention, and validation defaults.
 - **Scope:** Import `InspectionReport` structures from existing JSON cache into the DB.  
   Phase 2 does **not** reconstruct workflows. Phase 3 handles Workflow reconstruction.
 - **Prerequisites:** Phase 1 Preview code is implemented (read-only). Functional testing against real Google Sheet data is pending.  
@@ -47,7 +47,7 @@ The JSON cache is **not** the source of Chapters or Sections. It provides only t
 | `ExtractionCacheService` | `Exists(projNum, versionIdx, reportNum)` | Guard before loading |
 | `TemplateSyncService` | `SyncAsync(rows, seriesId)` | Create/ensure Chapters + Sections from **user-selected target template** (not from JSON) |
 | `GoogleInspectionTemplateProvider` | `ScanAndParseTemplateAsync(spreadsheetId)` | Read target template structure for section creation |
-| `InspectionReportService` | `CreateReportAsync(...)` | Create each report version |
+| `InspectionReportService` | `CreateReportAsync(..., skipCarryOver: true)` | Create each report version — **with skipCarryOver=true** to prevent carry-over from previous report |
 | `InspectionReportService` | `AddNoteAsync(reportId, sectionId, subIndex)` | Add sub-notes beyond the first |
 | `InspectionReportService` | `MarkReportAsSentAsync(reportId, spreadsheetId)` | Lock non-latest versions — **postponed beyond first Phase 2 slice** |
 | `WorkflowQueryService` | `GetByProjectAsync(projectId)` | Read-only: check if series/reports exist (Phase 2 will query only) |
@@ -85,10 +85,10 @@ Phase 1 Preview row (Commit Ready, template validated, report action ≠ Already
 	│  ├── Check if InspectionReport (SeriesId + ReportNumber) already exists (primary guard)
 	│  │      If exists → skip (AlreadyExists). SentSpreadsheetId is secondary check — see §4.5
 	│  │      If not exists →
-	│  │          CreateReportAsync(...)
+	│  │          CreateReportAsync(..., skipCarryOver: true)
 	│  │          Populate notes from JSON — only for sections matched in Template Compatibility Preview (see §4)
 	│  │          Notes for unmatched sections → skip + log warning
-	│  └── If latest version: apply open/closed per §4 status mapping
+	│  └── If latest version: leave validation gaps visible. If historical: apply minimal defaults (see §4.4).
 	│
 	▼
 [E] Log per-row result: versions created / skipped / conflicted / notes skipped due to template mismatch
@@ -108,32 +108,69 @@ JSON `ExtractedSectionData.SectionCode` is in the format `"X.Y.Z"` (e.g., `"1.1.
 - Look up the existing `Section` entity by `(SeriesId, ChapterNumber=X, SubCode=Y)` — the Section must have been created from the **user-selected target template** (Step C), not from JSON.
 - If the Section is not found (JSON references a section code that does not exist in the target template) → **skip that note**, log warning: `[Phase2] Section {code} not found in target template — note skipped`. Do not crash. Do not create a new Section from JSON.
 
-### 4.2 Placeholder note (created by CreateReportAsync)
+### 4.2 Placeholder note and duplicate prevention (revised 26.06.2026)
 
-`CreateReportAsync` creates one placeholder `InspectionNote` per Section with `NoteSubIndex = "X.Y.1"`.
+`CreateReportAsync` (with `skipCarryOver: true`) creates one placeholder `InspectionNote` per Section with `NoteSubIndex = "X.Y.1"`. No notes are carried over from previous reports.
+
+**Duplicate prevention:** Before any note creation, `ReportImportService` builds a lookup of ALL existing notes in the report:
+
+```
+Key: (SectionId, NoteSubIndex) → NoteId
+```
+
+Before each `AddNoteAsync` call:
+- If `(SectionId, NoteSubIndex)` already exists in the lookup → **reuse the existing NoteId** for content update. Do NOT call `AddNoteAsync`.
+- If not found → call `AddNoteAsync`, add to lookup, use the new NoteId.
+
+This prevents the `IX_InspectionNotes_Report_Section_SubIndex` duplicate key error that occurred before this fix.
 
 For the **first sub-note** of a section from JSON (index `.1`):
-- Update the existing placeholder note: set `NoteText`, `NoteStatusId`, `PlannerResponseText`, etc.
-- Do NOT call `AddNoteAsync` for the first sub-note — update in place.
+- Reuse the existing placeholder note (already in lookup).
+- Set `NoteText`, `NoteStatusId`, `PlannerResponseText`, etc.
 
 For **additional sub-notes** (index `.2`, `.3`, …):
-- Call `AddNoteAsync(reportId, sectionId, nextSubIndex)` then set fields.
+- Call `EnsureNoteExistsAsync` (which checks lookup first, then `AddNoteAsync` if needed).
 
-### 4.3 Numbering gaps
+All note creation goes through existing services only. No direct DB inserts.
 
-If JSON has `1.1.1` and `1.1.3` but not `1.1.2`:
-- Create an empty placeholder `InspectionNote` for `1.1.2` with no text.
-- This preserves structural integrity. The note text remains blank/unresolved.
-- Log: `[Phase2] Gap note created: {sectionCode} {subIndex}`.
+### 4.3 Numbering gaps (revised 26.06.2026)
 
-### 4.4 Report open/closed state
+If JSON has `1.1.3` but not `1.1.1` or `1.1.2`:
 
-| Version | Action |
-|---|---|
-| Any non-latest version | `MarkReportAsSentAsync` **postponed** beyond first Phase 2 slice. In the first slice, non-latest versions are created but not locked. |
-| Latest version | Open or closed per §4 of Design doc (status → `REV.*` → open/closed flag from status mapping table) |
-| Latest version, active status (ProfessionalReview / ManagerApproval / etc.) | Keep open (`IsSent = false`) |
-| Latest version, closed status (AwaitingCorrections / Completed) | `MarkReportAsSentAsync` — **postponed** beyond first Phase 2 slice |
+**Critical rule:** Do NOT write content from `X.Y.3` into the placeholder at `X.Y.1`.
+
+- `1.1.1` — the placeholder remains empty (created by `CreateReportAsync`).
+- `1.1.2` — a gap note is created (empty) via `EnsureNoteExistsAsync`.
+- `1.1.3` — created via `EnsureNoteExistsAsync`, then filled with actual JSON content.
+
+Interior gaps (e.g., JSON has `1.1.1` and `1.1.5` but not `1.1.2`–`1.1.4`) are also handled — empty gap notes are created for the missing indexes.
+
+All gap note creation goes through the same duplicate-safe `EnsureNoteExistsAsync` helper.
+Log: `[Phase2] Gap note created: {sectionCode}.{subIndex}`.
+
+### 4.4 Validation defaults (revised 26.06.2026)
+
+The previous rule "every imported report must pass Validation" is **cancelled**.
+
+**New rule — two modes based on `IsLatestVersion`:**
+
+| Report type | `IsLatestVersion` | Both NoteText AND StatusKey empty | NoteText present, StatusKey empty | Action |
+|---|---|---|---|---|
+| Historical (not latest) | `false` | Yes | — | Fill: `NoteText=" "`, `StatusKey="Passed"`, `NoteStatusId` from `GetActiveStatusOptionsAsync()` |
+| Historical (not latest) | `false` | — | Yes | Do NOT assign "Passed". Log: `[Phase2] Missing status for non-empty note: ...` |
+| Latest / active | `true` | Any | Any | **No defaults.** Leave gaps visible for manual review. |
+
+**Why "Passed" for historical defaults (when both empty):**
+- "Passed" (StatusKey="Passed", HebrewLabel="מקובל") means "accepted / no active issue".
+- In historical reports that have been superseded, empty unmarked items are implicitly resolved.
+- "Passed" StatusId is looked up dynamically via `GetActiveStatusOptionsAsync()`, not hardcoded.
+
+**Why NOT "Passed" when text is present but status is empty:**
+- Assigning "Passed" to a note with real text would mark a real finding as "accepted" — misleading.
+- Instead, a warning is logged. If Validation requires a status, the issue is reported as a blocker.
+
+**Sheet status based validation classification is postponed.**
+Currently using `IsLatestVersion` as the sole criterion.
 
 ### 4.5 Duplicate guard (revised 26.06.2026)
 
@@ -353,3 +390,112 @@ Phase 2 import runs from the **Google Sheet Review Migration Preview tab (Tab 3 
 - Any automatic rollback mechanism
 - Silent overwrite of JSON cache files
 - Fallback reviewer assignment
+- Writing "מולא על ידי migration" or "Filled by migration" into note text
+
+---
+
+## 14a. skipCarryOver — Migration Import mode (added 26.06.2026)
+
+Phase 2 Migration Import creates reports with `skipCarryOver: true`.
+
+**When `skipCarryOver == true`, the following are NOT executed:**
+- `CarryOverUnresolvedNotesAsync` — does not copy unresolved notes from the previous report.
+- `CopyGeneralFieldsFromPreviousAsync` — does not copy Chapter 0 / general header fields from the previous report.
+- `CopyReviewedFilesFromPreviousAsync` — does not copy reviewed plan file links from the previous report.
+
+**Reason:** In migration, the sole source of truth is the JSON cache. If regular CarryOver ran, it would create notes that duplicate the JSON-sourced notes, causing the `IX_InspectionNotes_Report_Section_SubIndex` unique constraint violation.
+
+**What still runs (not skipped):**
+- Report creation with auto-numbered `ReportNumber`
+- Placeholder note creation for all active sections (the "snapshot")
+- Transaction commit + diagnostic logging
+
+**Important:**
+- In regular (non-migration) report creation, `skipCarryOver` remains `false` (default).
+- CarryOver is NOT deleted — it is only neutralized in Migration Import mode.
+- Only `ReportImportService` passes `skipCarryOver: true`.
+
+---
+
+## 14b. Auto-fill and Chapter 0 / GeneralFields (added 26.06.2026)
+
+In Migration Import, automatic field population from the current system state is not desired.
+The goal is to preserve what was in the historical report per the JSON cache.
+
+**Auto-fill mechanisms in the system:**
+
+| Mechanism | Location | Neutralized by skipCarryOver? |
+|---|---|---|
+| Carry-over of unresolved notes | `CarryOverUnresolvedNotesAsync` | ✅ Yes |
+| Copy Chapter 0 / general fields from previous | `CopyGeneralFieldsFromPreviousAsync` | ✅ Yes |
+| Copy reviewed file links from previous | `CopyReviewedFilesFromPreviousAsync` | ✅ Yes |
+| `InspectionDate = DateTime.UtcNow` | `CreateReportAsync` line 133 | NOT skipped — import timestamp is acceptable |
+| UI auto-values (ישוב, שם פרויקט, etc.) | `FloatingInspectionVM.BuildInspectionTree` | N/A — UI display-time only, not saved during creation |
+
+**There is no `Place` field on `InspectionReport` model.** Place/location comes from `Project.Place.Title` at UI display time and is shown in Chapter 0 general field labeled "ישוב" / "רשות מקומית". This auto-fill is UI-level only.
+
+**Chapter 0 / GeneralFields import:**
+- NOT implemented in this slice.
+- No fuzzy matching.
+- No new mechanism for general fields.
+- If approved in the future, this will be a separate slice.
+
+---
+
+## 14c. Required tests after implementation (added 26.06.2026)
+
+### V1 import
+- Report created.
+- CarryOver NOT activated (`skipCarryOver=true`).
+- Notes come from JSON only.
+- No duplicate key error.
+
+### V2 import
+- Report #2 created only if V1 exists in the series.
+- No notes carried over from V1.
+- Notes come from JSON only.
+- No duplicate key error.
+
+### Re-run same row
+- Same row identified as `AlreadyExists`.
+- No duplicate report created.
+- No duplicate notes created.
+
+### Gap notes
+- If JSON starts from `X.Y.3`, content does NOT go into `X.Y.1`.
+- Gap notes created only where needed.
+- All gap notes created via `EnsureNoteExistsAsync` (duplicate-safe).
+
+### Validation defaults
+- Historical report: defaults applied only when **both** text AND status are empty.
+- Historical report: note with text but missing status → warning logged, NOT auto-assigned "Passed".
+- Latest/active report: no defaults, Validation gaps remain visible.
+
+### Auto-fill / Chapter 0
+- Chapter 0 / GeneralFields NOT copied from previous report in migration mode.
+- No auto-fill replaces JSON values.
+
+---
+
+## 14d. Dropped / cancelled / postponed (דברים שירדו / בוטלו / הושהו)
+
+| Item | Status |
+|---|---|
+| CarryOver mechanism | NOT deleted — neutralized only in Migration Import via `skipCarryOver: true` |
+| Auto-fill / CopyGeneralFields | NOT deleted — not executed in Migration Import via `skipCarryOver: true` |
+| Writing "מולא על ידי migration" in note text | ❌ Cancelled — text may appear in official reports |
+| Validation defaults for every imported report | ❌ Cancelled — only for historical reports with both text AND status empty |
+| Hiding Validation in latest/active report | ❌ Cancelled — gaps remain visible |
+| Assigning "Passed" when note has text but missing status | ❌ Cancelled — would misleadingly mark findings as accepted |
+| Sheet status based validation classification | ⏳ Postponed — currently using `IsLatestVersion` only |
+| GeneralFields / Chapter 0 import | ⏳ Postponed |
+| Fuzzy matching for general fields | ⏳ Not approved |
+| Import all rows (broad button) | ⏳ Postponed — first slice is selected-rows-only |
+| `MarkReportAsSentAsync` / version locking | ⏳ Postponed |
+| Workflow / Task creation | ⏳ Phase 3 |
+| Google Sheets / Index Sheet writeback | 🔒 Not in scope |
+| Automatic rollback | ⏳ Not approved |
+| Deleting test reports | Requires explicit user decision |
+| New DB status | Not added |
+| DB migration / schema change | Not added |
+| New DB field for migration source marking | Not added |
