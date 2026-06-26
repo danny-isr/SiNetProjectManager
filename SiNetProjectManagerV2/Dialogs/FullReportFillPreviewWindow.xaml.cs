@@ -88,13 +88,20 @@ public partial class FullReportFillPreviewWindow : Window
                     e => e, 
                     StringComparer.OrdinalIgnoreCase);
 
-            // Wrap each section with its compatibility status
+            // Wrap each section with its compatibility status. Eligibility is decided by the
+            // single source of truth on TemplateCompatibilityResult: a section is import-eligible
+            // only when its parent code matched the template by code AND title (SectionMatchResult.Matched).
             var enrichedSections = envelope.Sections.Select(s =>
             {
                 var parentCode = GoogleSheetReviewMigrationPreviewService.ExtractParentSectionCode(s.SectionCode);
                 SectionCompatibilityEntry? entry = null;
                 if (!string.IsNullOrWhiteSpace(parentCode))
                     compatLookup.TryGetValue(parentCode, out entry);
+
+                var isEligible = templateCompatibility.IsImportEligible(parentCode);
+                var skippedReason = isEligible
+                    ? string.Empty
+                    : BuildSkippedReason(parentCode, entry);
 
                 return new SectionWithCompatibility
                 {
@@ -114,26 +121,51 @@ public partial class FullReportFillPreviewWindow : Window
                     SplitIndex = s.SplitIndex,
                     HeaderValidation = s.HeaderValidation,
                     DetectionMethod = s.DetectionMethod,
-                    TemplateMatchStatus = entry?.DisplayStatus ?? "—",
+                    TemplateMatchStatus = entry?.DisplayStatus ?? "❌ לא נמצא בתבנית",
                     TemplateMatchReason = entry?.Reason ?? "",
-                    TemplateSectionTitle = entry?.TemplateSectionTitle ?? ""
+                    TemplateSectionTitle = entry?.TemplateSectionTitle ?? "",
+                    IsImportEligible = isEligible,
+                    SkippedReason = skippedReason
                 };
             }).ToList();
 
-            SectionsGrid.ItemsSource = enrichedSections;
+            // Template-shaped report body: ONLY sections eligible for import into the target template.
+            // Notes whose parent section was not matched are never shown in the report body.
+            var matchedSections = enrichedSections.Where(s => s.IsImportEligible).ToList();
 
-            var splitCount    = enrichedSections.Count(s => s.WasSplit);
-            var resolvedCount = enrichedSections.Count(s => s.IsResolved);
-            var datedCount    = enrichedSections.Count(s => s.ClosedDate != null);
-            var matchedCount  = enrichedSections.Count(s => s.TemplateMatchStatus.Contains("✅"));
-            var mismatchCount = enrichedSections.Count(s => s.TemplateMatchStatus.Contains("⚠") || s.TemplateMatchStatus.Contains("❌"));
+            // Skipped sections are NOT discarded — they are shown separately in the warnings area
+            // so the user can see what will be skipped and why.
+            var skippedSections = enrichedSections.Where(s => !s.IsImportEligible).ToList();
+
+            SectionsGrid.ItemsSource = matchedSections;
+            SkippedSectionsGrid.ItemsSource = skippedSections;
+
+            var splitCount    = matchedSections.Count(s => s.WasSplit);
+            var resolvedCount = matchedSections.Count(s => s.IsResolved);
+            var datedCount    = matchedSections.Count(s => s.ClosedDate != null);
 
             SectionCountLabel.Text =
-                $"סה\"כ: {enrichedSections.Count} שורות  |  פוצלו: {splitCount}  |  נסגרו: {resolvedCount}  |  עם תאריך: {datedCount}  |  תבנית: {matchedCount} ✅ / {mismatchCount} ⚠";
+                $"בדוח (תואם לתבנית): {matchedSections.Count} שורות  |  פוצלו: {splitCount}  |  נסגרו: {resolvedCount}  |  עם תאריך: {datedCount}";
+
+            // Skipped area header/visibility
+            if (skippedSections.Count > 0)
+            {
+                SkippedSectionsExpander.Visibility = Visibility.Visible;
+                SkippedSectionsExpander.Header =
+                    $"⚠ סעיפי JSON שלא ייובאו (לא קיימים/לא תואמים בתבנית): {skippedSections.Count}";
+            }
+            else
+            {
+                SkippedSectionsExpander.Visibility = Visibility.Collapsed;
+            }
         }
         else
         {
+            // No target template selected → cannot template-shape. Show the raw extracted sections
+            // as before, and hide the skipped area entirely.
             SectionsGrid.ItemsSource = envelope.Sections;
+            SkippedSectionsGrid.ItemsSource = null;
+            SkippedSectionsExpander.Visibility = Visibility.Collapsed;
 
             var splitCount    = envelope.Sections.Count(s => s.WasSplit);
             var resolvedCount = envelope.Sections.Count(s => s.IsResolved);
@@ -142,6 +174,26 @@ public partial class FullReportFillPreviewWindow : Window
             SectionCountLabel.Text =
                 $"סה\"כ: {envelope.Sections.Count} שורות  |  פוצלו: {splitCount}  |  נסגרו: {resolvedCount}  |  עם תאריך: {datedCount}";
         }
+    }
+
+    /// <summary>
+    /// Builds a human-readable reason a section was excluded from the template-shaped report body.
+    /// </summary>
+    private static string BuildSkippedReason(string? parentCode, SectionCompatibilityEntry? entry)
+    {
+        if (entry == null)
+        {
+            return string.IsNullOrWhiteSpace(parentCode)
+                ? "לא ניתן לזהות קוד סעיף — לא ניתן להתאים לתבנית."
+                : $"סעיף {parentCode} לא נמצא בבדיקת ההתאמה לתבנית.";
+        }
+
+        return entry.MatchResult switch
+        {
+            SectionMatchResult.MissingInTemplate => $"סעיף {entry.SectionCode} לא קיים בתבנית היעד.",
+            SectionMatchResult.TitleMismatch     => $"אי-התאמת כותרת: {entry.Reason}",
+            _                                    => entry.Reason
+        };
     }
 
     private void PopulateTemplateCompatibilitySummary(TemplateCompatibilityResult? templateCompatibility)
@@ -173,7 +225,7 @@ public partial class FullReportFillPreviewWindow : Window
             TemplateCompatBannerBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFB74D"));
             TemplateCompatBannerText.Text = 
-                $"⚠ מתוך {total} סעיפים: {matched} תואמים, {mismatched} אי-התאמת כותרת, {missing} חסרים בתבנית. סעיפים שאינם תואמים לא ייובאו.";
+                $"⚠ מתוך {total} סעיפים: {matched} תואמים (יוצגו בדוח), {mismatched} אי-התאמת כותרת, {missing} חסרים בתבנית. סעיפים שאינם תואמים לא ייובאו ומוצגים באזור 'סעיפים שלא ייובאו' בלבד.";
         }
     }
 
@@ -277,6 +329,19 @@ public sealed class SectionWithCompatibility
     public string TemplateMatchStatus { get; init; } = "—";
     public string TemplateMatchReason { get; init; } = string.Empty;
     public string TemplateSectionTitle { get; init; } = string.Empty;
+
+    /// <summary>
+    /// True when this section is eligible for import into the selected target template
+    /// (its parent section code matched by code AND title). Only eligible sections appear
+    /// in the template-shaped report body; non-eligible sections appear in the skipped list.
+    /// </summary>
+    public bool IsImportEligible { get; init; }
+
+    /// <summary>
+    /// Human-readable reason a section was skipped (not shown in the report body).
+    /// Empty for eligible sections.
+    /// </summary>
+    public string SkippedReason { get; init; } = string.Empty;
 }
 
 /// <summary>

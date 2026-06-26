@@ -18,9 +18,10 @@
             <RowDefinition Height="Auto"/>  <!-- 4: Section 2 header -->
             <RowDefinition Height="160"/>   <!-- 5: Section 2 — Report-fill fields from extraction -->
             <RowDefinition Height="Auto"/>  <!-- 6: Section 3 header + count -->
-            <RowDefinition Height="*"/>     <!-- 7: Section 3 — All extracted sections -->
-            <RowDefinition Height="Auto"/>  <!-- 8: Technical details (collapsed) -->
-            <RowDefinition Height="Auto"/>  <!-- 9: Close button row -->
+            <RowDefinition Height="*"/>     <!-- 7: Section 3 — Template-shaped report body -->
+            <RowDefinition Height="Auto"/>  <!-- 8: Skipped JSON sections (warnings) -->
+            <RowDefinition Height="Auto"/>  <!-- 9: Technical details (collapsed) -->
+            <RowDefinition Height="Auto"/>  <!-- 10: Close button row -->
         </Grid.RowDefinitions>
 
         <!-- Row 0: Preview-only banner -->
@@ -134,7 +135,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
-                       Text="כל הסעיפים המחולצים (הדוח המלא)"
+                       Text="הסעיפים שייובאו לדוח (תואמים לתבנית היעד)"
                        FontWeight="SemiBold" FontSize="12"
                        Foreground="#1565C0" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" x:Name="SectionCountLabel"
@@ -209,8 +210,65 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Row 8: Technical details — collapsed by default -->
+        <!-- Row 8: Skipped JSON sections — NOT imported into the report body.
+             Shown here as warnings so the user can see what is skipped and why. -->
         <Expander Grid.Row="8"
+                  x:Name="SkippedSectionsExpander"
+                  Visibility="Collapsed"
+                  Margin="0,8,0,0" IsExpanded="True">
+            <Border BorderBrush="#FFB74D" BorderThickness="1"
+                    CornerRadius="3" Background="#FFFDF7" Padding="2" Margin="0,4,0,0">
+                <StackPanel>
+                    <TextBlock Margin="6,4,6,6" FontSize="11" Foreground="#7B6000"
+                               TextWrapping="Wrap"
+                               Text="הסעיפים הבאים קיימים ב-JSON אך אינם תואמים לתבנית היעד (לא נמצאו או כותרת/תיאור אינם תואמים). הם לא ייובאו ולא יופיעו בגוף הדוח — מוצגים כאן לידיעה בלבד."/>
+                    <DataGrid x:Name="SkippedSectionsGrid"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserSortColumns="True" CanUserResizeColumns="True"
+                              HeadersVisibility="Column"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              GridLinesVisibility="Horizontal"
+                              AlternatingRowBackground="#FFF8E1"
+                              BorderThickness="0"
+                              MaxHeight="220">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="קוד סעיף"    Binding="{Binding SectionCode}"          Width="65"/>
+                            <DataGridTextColumn Header="אינדקס"       Binding="{Binding NoteSubIndex}"         Width="52"/>
+                            <DataGridTextColumn Header="שם סעיף"      Binding="{Binding SectionTitle}"         Width="160">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight"    Value="56"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="טקסט הערה"    Binding="{Binding NoteText}"             Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight"    Value="72"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="התאמת תבנית" Binding="{Binding TemplateMatchStatus}"  Width="120"/>
+                            <DataGridTextColumn Header="סיבת דילוג"  Binding="{Binding SkippedReason}"        Width="260">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxHeight"    Value="72"/>
+                                        <Setter Property="Foreground"   Value="#7B6000"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+        </Expander>
+
+        <!-- Row 9: Technical details — collapsed by default -->
+        <Expander Grid.Row="9"
                   Header="🔧 פרטים טכניים (Template ID, Report ID, Cache)"
                   Margin="0,8,0,0" IsExpanded="False">
             <Border BorderBrush="#E0E0E0" BorderThickness="1"
@@ -232,8 +290,8 @@
             </Border>
         </Expander>
 
-        <!-- Row 9: Close button -->
-        <StackPanel Grid.Row="9" Orientation="Horizontal"
+        <!-- Row 10: Close button -->
+        <StackPanel Grid.Row="10" Orientation="Horizontal"
                     HorizontalAlignment="Left" Margin="0,10,0,0">
             <Button Content="סגור" Width="90" Height="28"
                     Click="Close_Click"/>

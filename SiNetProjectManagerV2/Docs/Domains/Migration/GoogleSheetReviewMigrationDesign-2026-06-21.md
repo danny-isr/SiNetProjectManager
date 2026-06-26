@@ -176,6 +176,18 @@ The target template is selected by the user from the existing template dropdown 
 - Mismatched or missing sections are reported as warnings — they do not silently import.
 - Phase 2 may only import notes into sections that passed Template Compatibility Preview.
 
+**Full report preview is template-shaped (decided 27.06.2026):**
+
+The full report preview window (`FullReportFillPreviewWindow`) must show the report **as it will actually appear after import into the selected target template** — not the raw JSON cache.
+
+- The main report body shows **only** sections that exist in the selected target template, i.e. JSON sections whose parent code is import-eligible (`SectionMatchResult.Matched` = code found in template **and** title/description compatible).
+- A JSON note is shown in the report body **only** when its parent section was matched in Template Compatibility Preview. A note is **never** imported or previewed by section number alone.
+- JSON-only sections (parent code not in the template) and code-matched-but-title-mismatched sections are **not** shown inside the report body.
+- Skipped JSON sections are **not** discarded. They remain visible to the user in a **separate warnings / skipped sections area** (a dedicated panel below the report body), each with a human-readable reason (missing in template / title mismatch / unrecognized code).
+- The single source of truth for eligibility is `TemplateCompatibilityResult.IsImportEligible(parentSectionCode)` (backed by `ImportEligibleSectionCodes`). Both the preview body and any future Phase 2 import gate on the same rule, so the preview represents the final intended report.
+- If no target template is selected, the preview cannot be template-shaped; in that case it falls back to listing the raw extracted sections and the skipped area is hidden.
+- The preview remains strictly **read-only**: no DB write, no extraction, no AI, no commit.
+
 **How the normal UI adds sub-sections** (unchanged):
 - `FloatingInspectionViewModel.AddNoteToSection()` counts existing sub-notes for the section and auto-increments: `NoteSubIndex = "{X.Y}.{count+1}"` (e.g., "1.1.3").
 - Calls `InspectionReportService.AddNoteAsync(reportId, sectionId, subIndex)` which creates a plain `InspectionNote` row. No new `Section` entity is ever created by the UI.

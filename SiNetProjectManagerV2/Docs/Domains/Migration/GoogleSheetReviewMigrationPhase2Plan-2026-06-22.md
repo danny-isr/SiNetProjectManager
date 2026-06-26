@@ -242,6 +242,37 @@ The UI for Phase 2 will include a "selected rows only" mode (checkboxes or row f
 
 ---
 
+## 10a. Full report preview rendering rule (template-shaped) — decided 27.06.2026
+
+The full report preview (`FullReportFillPreviewWindow`) is **template-shaped**: it shows only the
+sections/notes that are eligible for import into the **selected target template**. It represents the
+final intended report, **not** the raw JSON cache.
+
+- The report body shows **only** sections that exist in the selected target template — JSON sections
+  whose parent code is import-eligible (`SectionMatchResult.Matched`: code found **and** title/description compatible).
+- A note is shown **only** when its parent section was matched in Template Compatibility Preview.
+  A note is **never** imported or previewed by section number alone.
+- JSON-only sections are **not** shown in the report body. They are shown **only** as skipped / warning items.
+- Code-matched-but-title-mismatched sections are likewise excluded from the body and shown as skipped.
+- Skipped JSON sections are **not deleted** — they stay visible in a separate warnings / skipped panel,
+  each with a reason (missing in template / title mismatch / unrecognized code).
+- Eligibility is single-sourced via `TemplateCompatibilityResult.IsImportEligible(parentSectionCode)`,
+  so the preview body and any future Phase 2 import gate on the exact same rule.
+- The preview stays strictly **read-only**: no DB write, no extraction, no AI, no commit.
+
+### Dropped / cancelled / postponed (preview scope)
+
+| Item | Status |
+|---|---|
+| Showing the raw JSON cache as the "full report" | ❌ Cancelled — body is template-shaped |
+| Showing sections that do not exist in the template inside the report body | ❌ Cancelled — moved to skipped/warnings panel only |
+| Importing/previewing a note by section number alone | ❌ Cancelled — must pass Template Compatibility |
+| Phase 2 import (writing reports/notes to DB) | ⏳ Not started in this change |
+| DB writes from the preview | 🔒 Not approved at this stage |
+| Deleting skipped sections from the data | ❌ Cancelled — kept and shown as warnings only |
+
+---
+
 ## 11. Phase 2 UI location
 
 Phase 2 import runs from the **Google Sheet Review Migration Preview tab (Tab 3 / Preview tab)** in `MigrationPocWindow`. It does not run from Tab 1 (Extraction) or Tab 2 (Task Generation).

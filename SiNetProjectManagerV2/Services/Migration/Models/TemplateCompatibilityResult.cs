@@ -63,6 +63,30 @@ public sealed class TemplateCompatibilityResult
     public int MissingCount => Entries.Count(e => e.MatchResult == SectionMatchResult.MissingInTemplate);
     public bool HasAnyMatch => MatchedCount > 0;
 
+    /// <summary>
+    /// Set of parent section codes (e.g. "3.2") that are eligible for import into the
+    /// selected target template. A code is eligible only when its compatibility entry is
+    /// <see cref="SectionMatchResult.Matched"/> (code found in template AND title compatible).
+    /// This is the single source of truth used by the template-shaped report preview and any
+    /// future import: a section/note is import-eligible only if its parent code is in this set.
+    /// </summary>
+    public IReadOnlySet<string> ImportEligibleSectionCodes => Entries
+        .Where(e => e.MatchResult == SectionMatchResult.Matched)
+        .Select(e => e.SectionCode)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Returns true when the given parent section code is eligible for import into the
+    /// selected target template (matched by code and title). A note must never be imported
+    /// or previewed by section number alone when this returns false.
+    /// </summary>
+    public bool IsImportEligible(string? parentSectionCode) =>
+        !string.IsNullOrWhiteSpace(parentSectionCode) &&
+        ImportEligibleSectionCodes.Contains(parentSectionCode);
+
+    /// <summary>Number of JSON sections that are NOT eligible for import (mismatch + missing).</summary>
+    public int SkippedSectionCount => MismatchCount + MissingCount;
+
     /// <summary>Build a summary string for the TemplateWarnings field.</summary>
     public string BuildWarningsSummary()
     {
