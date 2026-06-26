@@ -12,7 +12,12 @@
 ## 1. Phase 2 Goal
 
 Phase 2 creates `InspectionSeries`, `InspectionReport`, and `InspectionNote` rows  
-from the existing JSON extraction cache — using only existing services, no new service creation.
+using **two sources** and only existing services, no new service creation:
+
+- **Target structure (Chapters, Sections):** User-selected target template (via `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync`).
+- **Historical content (notes, sub-notes):** JSON extraction cache (via `ExtractionCacheService.LoadAsync`).
+
+The JSON cache is **not** the source of Chapters or Sections. It provides only the report-level note content.
 
 **What Phase 2 writes:**
 - `InspectionSeries` (if not already present for the project + template)
@@ -77,9 +82,8 @@ Phase 1 Preview row (Commit Ready, template validated, report action ≠ Already
 	│  Do NOT build TemplateSyncRow from JSON section codes
 	▼
 [D] For each version (ascending: V1, V2 ... Vn):
-	│  ├── Check if InspectionReport (SeriesId + ReportNumber) already exists
-	│  │      If exists + SentSpreadsheetId matches → skip (AlreadyUpToDate)
-	│  │      If exists + mismatch → mark Conflict, skip
+	│  ├── Check if InspectionReport (SeriesId + ReportNumber) already exists (primary guard)
+	│  │      If exists → skip (AlreadyExists). SentSpreadsheetId is secondary check — see §4.5
 	│  │      If not exists →
 	│  │          CreateReportAsync(...)
 	│  │          Populate notes from JSON — only for sections matched in Template Compatibility Preview (see §4)
@@ -131,15 +135,17 @@ If JSON has `1.1.1` and `1.1.3` but not `1.1.2`:
 | Latest version, active status (ProfessionalReview / ManagerApproval / etc.) | Keep open (`IsSent = false`) |
 | Latest version, closed status (AwaitingCorrections / Completed) | `MarkReportAsSentAsync` — **postponed** beyond first Phase 2 slice |
 
-### 4.5 SentSpreadsheetId as duplicate guard
+### 4.5 Duplicate guard (revised 26.06.2026)
 
 Before creating a report version:
-1. Query `InspectionReport` for `(SeriesId, ReportNumber)`.
-2. If found and `SentSpreadsheetId == envelope.ReportSpreadsheetId` → **AlreadyUpToDate**, skip.
-3. If found and `SentSpreadsheetId != envelope.ReportSpreadsheetId` → **Conflict**, skip, log warning.
-4. If not found → create.
+1. Query `InspectionReport` for `(SeriesId, ReportNumber)` — this is the **primary duplicate guard**.
+2. If found → the report already exists. Do **not** create a duplicate.
+   - If `SentSpreadsheetId` is set and matches `envelope.ReportSpreadsheetId` → **AlreadyUpToDate**, skip.
+   - If `SentSpreadsheetId` is set and does not match → **Conflict**, skip, log warning.
+   - If `SentSpreadsheetId` is null (first Phase 2 slice — `MarkReportAsSentAsync` was not yet called) → treat as **AlreadyExists**, skip. Do not overwrite.
+3. If not found → create.
 
-This is the primary duplicate prevention mechanism. Do not invent additional hash/date comparison.
+**First Phase 2 slice note:** Because `MarkReportAsSentAsync` is postponed, `SentSpreadsheetId` may be null on already-imported reports. The primary guard `(SeriesId, ReportNumber)` must be sufficient on its own. `SentSpreadsheetId` comparison is an **additional** check that becomes stronger after `MarkReportAsSentAsync` is approved in a later phase.
 
 ---
 
@@ -191,7 +197,7 @@ Phase 2 never blocks on missing JSON — it just skips and logs.
 | DB write fails mid-row | Log the failure. Mark that row as `Failed`. Continue with next row. |
 | Multiple rows fail | Each row is independent. Failures are isolated. |
 | Manual undo needed | Must be done via direct DB intervention or a future undo script. No automated rollback exists. If a report is created and note population fails, safe compensating cleanup may be attempted only if the created report is still latest and deletion is safe. |
-| Safe to re-run? | **Yes, with the duplicate guard.** Re-running Phase 2 on the same data will skip rows where `SentSpreadsheetId` already matches (AlreadyUpToDate). New or partial rows will be re-attempted. |
+| Safe to re-run? | **Yes, with the duplicate guard.** Re-running Phase 2 on the same data will skip rows where `(SeriesId, ReportNumber)` already exists. `SentSpreadsheetId` comparison is used as an additional check when available. New or partial rows will be re-attempted. |
 
 **Mitigation:** Always run against a small selected subset first (see §9).
 
@@ -238,7 +244,7 @@ The UI for Phase 2 will include a "selected rows only" mode (checkboxes or row f
 
 ## 11. Phase 2 UI location
 
-Phase 2 import runs from the **Preview tab (Tab 2)**, not Tab 1.
+Phase 2 import runs from the **Google Sheet Review Migration Preview tab (Tab 3 / Preview tab)** in `MigrationPocWindow`. It does not run from Tab 1 (Extraction) or Tab 2 (Task Generation).
 
 Suggested button: **"ייבוא דוחות (Phase 2)"** — enabled only when preview rows are loaded.
 

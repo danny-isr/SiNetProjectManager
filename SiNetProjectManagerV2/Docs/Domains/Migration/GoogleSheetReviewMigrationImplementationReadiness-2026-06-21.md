@@ -14,10 +14,12 @@
 
 The core infrastructure for the migration (Inspection Reports, Workflow Engine, UI components) is robust and functional. Following user decisions on the migration blockers, we have a clear path forward. The migration will use a new read-only Preview, a user-approved reviewer mapping step, and strict workflow advancement rules.
 
-**Top remaining blockers / gaps:**
+**Top remaining blockers / gaps:** *(revised 26.06.2026)*
 1. Creating placeholder notes for skipped numbering cleanly.
-2. Determining how to enforce Alternative 1 without duplicating alternatives.
-3. Defining the exact migration outcome log storage mechanism.
+2. Defining the exact migration outcome log storage mechanism.
+3. Report numbering / idempotency validation for first Phase 2 slice (primary guard: `SeriesId + ReportNumber`).
+
+> **Note:** "Determining how to enforce Alternative 1" was previously listed here but is **resolved / postponed** — `ProjectAlternative` is not required for Phase 2 (no FK from `InspectionSeries`/`InspectionReport` to `ProjectAlternative`). See §5 blocker #2.
 
 ---
 

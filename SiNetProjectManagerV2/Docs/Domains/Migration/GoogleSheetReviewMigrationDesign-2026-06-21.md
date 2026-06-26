@@ -490,11 +490,12 @@ Phase 1 Preview includes an optional Template Compatibility validation step.
   - If not exists:
     - Call `InspectionReportService.CreateReportAsync(projectId, seriesId, inspectorName, inspectorId, templateUrl)`.
     - This creates one placeholder note ("X.Y.1") per section.
-    - For each JSON `ExtractedSectionData` entry:
+    - For each JSON `ExtractedSectionData` entry **that was matched in Template Compatibility Preview**:
       - Resolve the parent `Section` from the section code (X.Y level).
       - First sub-note for a section → update the placeholder note's text, status, designer response.
       - Additional sub-notes for the same section → call `AddNoteAsync(reportId, sectionId, nextSubIndex)` and populate.
       - Numbering gaps: if JSON has "1.1.1" and "1.1.3" but not "1.1.2", create an empty placeholder note for "1.1.2" with no text (structural only).
+    - If a JSON section was missing from the target template or had a title mismatch, it is **skipped** and reported as a warning. Phase 2 does not import notes by section number alone — template match is required.
     - For non-latest versions: `MarkReportAsSentAsync()` is **postponed beyond the first Phase 2 slice**. Historical version locking will be addressed after basic report import is validated.
   - For the latest version: apply open/closed state per §4.
 
