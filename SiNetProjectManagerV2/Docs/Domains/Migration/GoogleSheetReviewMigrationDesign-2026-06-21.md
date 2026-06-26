@@ -176,16 +176,30 @@ The target template is selected by the user from the existing template dropdown 
 - Mismatched or missing sections are reported as warnings — they do not silently import.
 - Phase 2 may only import notes into sections that passed Template Compatibility Preview.
 
-**Full report preview is template-shaped (decided 27.06.2026):**
+**Full report preview is template-shaped (decided 27.06.2026; extended to GeneralFields 28.06.2026):**
 
-The full report preview window (`FullReportFillPreviewWindow`) must show the report **as it will actually appear after import into the selected target template** — not the raw JSON cache.
+The full report preview window (`FullReportFillPreviewWindow`) must show the report **as it will actually appear after import into the selected target template** — not the raw JSON cache. This applies to **both report sections and general header fields**.
+
+*Sections / notes:*
 
 - The main report body shows **only** sections that exist in the selected target template, i.e. JSON sections whose parent code is import-eligible (`SectionMatchResult.Matched` = code found in template **and** title/description compatible).
 - A JSON note is shown in the report body **only** when its parent section was matched in Template Compatibility Preview. A note is **never** imported or previewed by section number alone.
 - JSON-only sections (parent code not in the template) and code-matched-but-title-mismatched sections are **not** shown inside the report body.
 - Skipped JSON sections are **not** discarded. They remain visible to the user in a **separate warnings / skipped sections area** (a dedicated panel below the report body), each with a human-readable reason (missing in template / title mismatch / unrecognized code).
-- The single source of truth for eligibility is `TemplateCompatibilityResult.IsImportEligible(parentSectionCode)` (backed by `ImportEligibleSectionCodes`). Both the preview body and any future Phase 2 import gate on the same rule, so the preview represents the final intended report.
-- If no target template is selected, the preview cannot be template-shaped; in that case it falls back to listing the raw extracted sections and the skipped area is hidden.
+- The single source of truth for section eligibility is `TemplateCompatibilityResult.IsImportEligible(parentSectionCode)` (backed by `ImportEligibleSectionCodes`).
+
+*General fields (header fields / `<<tag>>` labels):*
+
+- The general-fields panel (Section 2) shows **only** fields whose key (tag label) exists as an `IsGeneralTag` entry in the selected target template's scan result (`TemplateScanTag.GeneralTagLabel`).
+- JSON general fields that do not exist in the target template are **not** shown in the main report body.
+- Skipped general fields are **not** discarded. They are shown in a **separate skipped general fields diagnostics area** (directly below the general-fields panel), with an explanatory reason.
+- The single source of truth for general-field eligibility is `TemplateCompatibilityResult.IsGeneralFieldEligible(key)` (backed by `ImportEligibleGeneralFieldKeys`).
+- Template general-field labels are captured from `TemplateScanResult.AllTags` (where `IsGeneralTag == true`) right after `ScanAndParseTemplateAsync`, and are injected into `TemplateCompatibilityResult` before it is stored for preview access.
+- If no target template is selected, all JSON general fields are shown (no filtering — `ImportEligibleGeneralFieldKeys` is empty, so `IsGeneralFieldEligible` returns true for all).
+
+*Both rules together:*
+
+- If no target template is selected, neither sections nor general fields are filtered; both areas fall back to showing raw JSON data and the skipped areas are hidden.
 - The preview remains strictly **read-only**: no DB write, no extraction, no AI, no commit.
 
 **How the normal UI adds sub-sections** (unchanged):

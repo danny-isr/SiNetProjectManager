@@ -76,6 +76,27 @@ public sealed class TemplateCompatibilityResult
         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Set of general-field keys (tag labels) that exist in the selected target template
+    /// (i.e. <see cref="TemplateScanTag.IsGeneralTag"/> is true for those tags).
+    /// When non-empty, only general fields whose key is in this set are shown in the
+    /// template-shaped report preview body; all others are moved to the skipped/diagnostics area.
+    /// When empty (no template selected or template has no general tags), all JSON general
+    /// fields are shown as before (no filtering).
+    /// </summary>
+    public IReadOnlySet<string> ImportEligibleGeneralFieldKeys { get; init; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Returns true when the given general-field key is eligible for display in the
+    /// template-shaped report body. When no template-general-field set was provided
+    /// (empty <see cref="ImportEligibleGeneralFieldKeys"/>), all keys are considered eligible
+    /// (no filtering — no template selected).
+    /// </summary>
+    public bool IsGeneralFieldEligible(string? key) =>
+        ImportEligibleGeneralFieldKeys.Count == 0 ||
+        (!string.IsNullOrWhiteSpace(key) && ImportEligibleGeneralFieldKeys.Contains(key));
+
+    /// <summary>
     /// Returns true when the given parent section code is eligible for import into the
     /// selected target template (matched by code and title). A note must never be imported
     /// or previewed by section number alone when this returns false.

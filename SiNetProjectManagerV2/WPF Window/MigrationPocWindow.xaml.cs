@@ -1726,6 +1726,7 @@ public partial class MigrationPocWindow : Window
 
             // ── Load target template sections (if selected) ──
             IReadOnlyList<TemplateSyncRow>? targetTemplateSections = null;
+            IReadOnlySet<string> templateGeneralFieldKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var selectedTargetTemplate = TargetTemplateComboBox.SelectedItem as InspectionTemplateItem;
             if (selectedTargetTemplate != null)
             {
@@ -1738,6 +1739,15 @@ public partial class MigrationPocWindow : Window
                     var templateProvider = new GoogleInspectionTemplateProvider(authService);
                     var scanResult = await templateProvider.ScanAndParseTemplateAsync(templateId);
                     targetTemplateSections = scanResult.SyncRows;
+
+                    // Capture the general-field labels from the template scan so the full
+                    // report preview can filter GeneralFields to only those that exist in
+                    // the selected target template.
+                    templateGeneralFieldKeys = scanResult.AllTags
+                        .Where(t => t.IsGeneralTag && !string.IsNullOrWhiteSpace(t.GeneralTagLabel))
+                        .Select(t => t.GeneralTagLabel!)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    AppendToLog($"[Template] General field keys found in template: {templateGeneralFieldKeys.Count}");
 
                     if (targetTemplateSections.Count == 0)
                     {
@@ -1789,8 +1799,24 @@ public partial class MigrationPocWindow : Window
                 }
             }
 
-            // Store compatibility results for double-click access
-            _lastCompatibilityResults = previewService.CompatibilityResults;
+            // Store compatibility results for double-click access.
+            // Enrich each result with the template general-field keys so the full report
+            // preview can show only GeneralFields that exist in the selected target template.
+            if (templateGeneralFieldKeys.Count > 0)
+            {
+                _lastCompatibilityResults = previewService.CompatibilityResults
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new TemplateCompatibilityResult
+                        {
+                            Entries = kvp.Value.Entries,
+                            ImportEligibleGeneralFieldKeys = templateGeneralFieldKeys
+                        });
+            }
+            else
+            {
+                _lastCompatibilityResults = previewService.CompatibilityResults;
+            }
 
             NewPreviewGrid.ItemsSource = null;
             NewPreviewGrid.ItemsSource = rows;

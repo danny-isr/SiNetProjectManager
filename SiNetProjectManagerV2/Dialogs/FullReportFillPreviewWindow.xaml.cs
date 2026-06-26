@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using SiNetProjectManagerV2.Services.Migration;
 using SiNetProjectManagerV2.Services.Migration.Models;
 
@@ -13,6 +14,15 @@ namespace SiNetProjectManagerV2.Dialogs;
 /// </summary>
 public partial class FullReportFillPreviewWindow : Window
 {
+    // Explicit field declarations for x:Name controls added in the latest XAML edit.
+    // These are normally auto-generated into the .g.cs partial by the BAML compiler;
+    // they are declared here so the compiler resolves them immediately without requiring
+    // a debug-session restart to regenerate the partial. InitializeComponent() wires them
+    // at runtime via the x:Name attributes in the XAML.
+#pragma warning disable CS0649  // field never assigned — assigned by InitializeComponent via XAML x:Name
+    private DataGrid  SkippedGeneralFieldsGrid     = null!;
+    private Expander  SkippedGeneralFieldsExpander = null!;
+#pragma warning restore CS0649
     /// <summary>
     /// Opens the full report fill preview for the given cached envelope.
     /// </summary>
@@ -26,7 +36,7 @@ public partial class FullReportFillPreviewWindow : Window
     {
         InitializeComponent();
         PopulateReportFillFields(envelope);
-        PopulateGeneralFields(envelope);
+        PopulateGeneralFields(envelope, templateCompatibility);
         PopulateSections(envelope, templateCompatibility);
         PopulateTemplateCompatibilitySummary(templateCompatibility);
         PopulateTechDetails(envelope, cachePath);
@@ -52,23 +62,64 @@ public partial class FullReportFillPreviewWindow : Window
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  Section 2 — All GeneralFields from extraction (raw, sorted)
+    //  Section 2 — Template-shaped GeneralFields (filtered to selected template)
     // ─────────────────────────────────────────────────────────────────────────
 
-    private void PopulateGeneralFields(ExtractionCacheEnvelope envelope)
+    private void PopulateGeneralFields(
+        ExtractionCacheEnvelope envelope,
+        TemplateCompatibilityResult? templateCompatibility)
     {
         if (envelope.GeneralFields.Count == 0)
         {
-            GeneralFieldsGrid.ItemsSource = new List<KeyValuePair<string, string>>
+            GeneralFieldsGrid.ItemsSource = new List<GeneralFieldRow>
             {
-                new("—", "לא זוהו שדות כלליים בתוצאת החילוץ הנוכחית.")
+                new GeneralFieldRow("—", "לא זוהו שדות כלליים בתוצאת החילוץ הנוכחית.", true)
             };
+            SkippedGeneralFieldsGrid.ItemsSource = null;
+            SkippedGeneralFieldsExpander.Visibility = Visibility.Collapsed;
             return;
         }
 
-        GeneralFieldsGrid.ItemsSource = envelope.GeneralFields
-            .Select(kv => new KeyValuePair<string, string>(kv.Key, kv.Value))
-            .ToList();
+        // Template-shaped: split GeneralFields into eligible (shown in body) and skipped.
+        // When no template is selected (compatibility is null or has no general field keys),
+        // all fields are eligible — fall back to the original behaviour.
+        var matched = new List<GeneralFieldRow>();
+        var skipped = new List<SkippedGeneralFieldRow>();
+
+        foreach (var kv in envelope.GeneralFields)
+        {
+            if (templateCompatibility != null && !templateCompatibility.IsGeneralFieldEligible(kv.Key))
+            {
+                skipped.Add(new SkippedGeneralFieldRow(
+                    kv.Key,
+                    kv.Value,
+                    "שדה זה קיים ב-JSON אך לא קיים כ-תגית בתבנית היעד הנבחרת. לא ייובא ולא ימולא בדוח הסופי."));
+            }
+            else
+            {
+                matched.Add(new GeneralFieldRow(kv.Key, kv.Value, false));
+            }
+        }
+
+        GeneralFieldsGrid.ItemsSource = matched.Count > 0
+            ? matched
+            : new List<GeneralFieldRow>
+              {
+                  new GeneralFieldRow("—", "כל השדות הכלליים עברו לאזור השדות הדילוג (לא קיימים בתבנית היעד).", true)
+              };
+
+        if (skipped.Count > 0)
+        {
+            SkippedGeneralFieldsGrid.ItemsSource = skipped;
+            SkippedGeneralFieldsExpander.Visibility = Visibility.Visible;
+            SkippedGeneralFieldsExpander.Header =
+                $"⚠ שדות כלליים מ-JSON שלא קיימים בתבנית היעד (לא ייובאו): {skipped.Count}";
+        }
+        else
+        {
+            SkippedGeneralFieldsGrid.ItemsSource = null;
+            SkippedGeneralFieldsExpander.Visibility = Visibility.Collapsed;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -363,6 +414,43 @@ public sealed class ReportFillFieldRow
         IsAvailable = !string.IsNullOrWhiteSpace(value);
         Value       = IsAvailable ? value! : "לא זוהה";
         SourceNote  = sourceNote ?? string.Empty;
+    }
+}
+
+/// <summary>
+/// A single row in the template-shaped GeneralFields display (Section 2).
+/// Only fields that exist in the selected target template appear here.
+/// </summary>
+public sealed class GeneralFieldRow
+{
+    public string FieldKey    { get; }
+    public string Value       { get; }
+    public bool   IsPlaceholder { get; }
+
+    public GeneralFieldRow(string fieldKey, string value, bool isPlaceholder = false)
+    {
+        FieldKey      = fieldKey;
+        Value         = value;
+        IsPlaceholder = isPlaceholder;
+    }
+}
+
+/// <summary>
+/// A single row in the skipped/diagnostics GeneralFields area.
+/// These fields exist in the JSON extraction but not in the selected target template
+/// and will therefore not be imported into the final report.
+/// </summary>
+public sealed class SkippedGeneralFieldRow
+{
+    public string FieldKey     { get; }
+    public string Value        { get; }
+    public string SkippedReason { get; }
+
+    public SkippedGeneralFieldRow(string fieldKey, string value, string skippedReason)
+    {
+        FieldKey      = fieldKey;
+        Value         = value;
+        SkippedReason = skippedReason;
     }
 }
 

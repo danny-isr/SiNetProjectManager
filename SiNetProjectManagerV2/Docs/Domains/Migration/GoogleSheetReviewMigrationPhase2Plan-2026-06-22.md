@@ -242,11 +242,13 @@ The UI for Phase 2 will include a "selected rows only" mode (checkboxes or row f
 
 ---
 
-## 10a. Full report preview rendering rule (template-shaped) — decided 27.06.2026
+## 10a. Full report preview rendering rule (template-shaped) — decided 27.06.2026; extended to GeneralFields 28.06.2026
 
 The full report preview (`FullReportFillPreviewWindow`) is **template-shaped**: it shows only the
-sections/notes that are eligible for import into the **selected target template**. It represents the
-final intended report, **not** the raw JSON cache.
+sections/notes **and general header fields** that are eligible for import into the **selected target template**.
+It represents the final intended report, **not** the raw JSON cache.
+
+*Sections / notes:*
 
 - The report body shows **only** sections that exist in the selected target template — JSON sections
   whose parent code is import-eligible (`SectionMatchResult.Matched`: code found **and** title/description compatible).
@@ -258,6 +260,20 @@ final intended report, **not** the raw JSON cache.
   each with a reason (missing in template / title mismatch / unrecognized code).
 - Eligibility is single-sourced via `TemplateCompatibilityResult.IsImportEligible(parentSectionCode)`,
   so the preview body and any future Phase 2 import gate on the exact same rule.
+
+*General fields (header fields / `<<tag>>` labels):*
+
+- The general-fields panel shows **only** fields whose key (tag label) exists as an `IsGeneralTag`
+  entry in the selected target template (`TemplateScanTag.GeneralTagLabel`).
+- JSON general fields that do not exist in the target template are **not** shown in the report body.
+  They are shown in a **separate skipped general fields diagnostics area** with an explanatory reason.
+- Skipped general fields are **not deleted** — they are retained and shown separately.
+- Eligibility is single-sourced via `TemplateCompatibilityResult.IsGeneralFieldEligible(key)`
+  (backed by `ImportEligibleGeneralFieldKeys`), populated from `TemplateScanResult.AllTags` at scan time.
+- If no target template is selected, all JSON general fields are shown (no filtering).
+
+*Both rules:*
+
 - The preview stays strictly **read-only**: no DB write, no extraction, no AI, no commit.
 
 ### Dropped / cancelled / postponed (preview scope)
@@ -267,9 +283,10 @@ final intended report, **not** the raw JSON cache.
 | Showing the raw JSON cache as the "full report" | ❌ Cancelled — body is template-shaped |
 | Showing sections that do not exist in the template inside the report body | ❌ Cancelled — moved to skipped/warnings panel only |
 | Importing/previewing a note by section number alone | ❌ Cancelled — must pass Template Compatibility |
+| Showing JSON-only GeneralFields as part of the report body | ❌ Cancelled — moved to skipped diagnostics area |
 | Phase 2 import (writing reports/notes to DB) | ⏳ Not started in this change |
 | DB writes from the preview | 🔒 Not approved at this stage |
-| Deleting skipped sections from the data | ❌ Cancelled — kept and shown as warnings only |
+| Deleting skipped sections or skipped general fields from the data | ❌ Cancelled — kept and shown as warnings only |
 
 ---
 
