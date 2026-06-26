@@ -2000,7 +2000,7 @@ public partial class MigrationPocWindow : Window
         var eligible = selectedRows.Where(r =>
             r.ResolvedProjectId.HasValue &&
             r.TemplateValidationStatus is "FullMatch" or "PartialMatch" &&
-            r.JsonCacheStatus is "Available" or "✅" or "Found" &&
+            IsJsonCacheAvailableForImport(r) &&
             r.Classification is not (
                 MigrationPreviewClassification.AlreadyDone or
                 MigrationPreviewClassification.NoMatch or
@@ -2034,7 +2034,7 @@ public partial class MigrationPocWindow : Window
             .Where(r =>
                 r.ResolvedProjectId.HasValue &&
                 r.TemplateValidationStatus is "FullMatch" or "PartialMatch" &&
-                r.JsonCacheStatus is "Available" or "✅" or "Found" &&
+                IsJsonCacheAvailableForImport(r) &&
                 r.Classification is not (
                     MigrationPreviewClassification.AlreadyDone or
                     MigrationPreviewClassification.NoMatch or
@@ -2124,6 +2124,22 @@ public partial class MigrationPocWindow : Window
         {
             UpdateImportButtonState();
         }
+    }
+
+    /// <summary>
+    /// Check whether a preview row has a JSON cache available for Phase 2 import.
+    /// Supports values like "Available", "Found", "Found (V1)", "Found (V2)", "✅".
+    /// Used by both UpdateImportButtonState and ImportReportsSelectedButton_Click
+    /// to ensure identical eligibility logic.
+    /// </summary>
+    private static bool IsJsonCacheAvailableForImport(GoogleSheetReviewMigrationPreviewRow row)
+    {
+        var status = row.JsonCacheStatus;
+        if (string.IsNullOrWhiteSpace(status)) return false;
+
+        return status.Equals("Available", StringComparison.OrdinalIgnoreCase)
+            || status.StartsWith("Found", StringComparison.OrdinalIgnoreCase)
+            || status == "✅";
     }
 
     /// <summary>Minimal config class for GoogleReports section deserialization.</summary>
