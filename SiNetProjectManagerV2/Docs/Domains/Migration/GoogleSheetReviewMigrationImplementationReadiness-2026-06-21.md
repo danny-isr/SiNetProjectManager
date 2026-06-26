@@ -1,7 +1,7 @@
 # Google Sheet Review Migration — Implementation Readiness
 
 - **Date:** 21.06.2026
-- **Status:** Active — implementation readiness gap register
+- **Status:** Active — implementation readiness gap register (revised 26.06.2026 for template alignment)
 - **Scope:** Readiness assessment for the Google Sheet Review Migration design against the current codebase.
 
 ---
@@ -32,17 +32,17 @@ The core infrastructure for the migration (Inspection Reports, Workflow Engine, 
 | Resolve Project | P1 | `MigrationTaskService.ResolveProjectAsync` logic | Needs small extension | Extract read-only resolution logic | `MigrationTaskService.cs` |
 | Detect duplicate project rows | P1 | None (assumes unique per project) | Needs new integration | Add grouping/validation in preview builder | Preview logic |
 | Resolve reviewer / בודק | P1 | `TaskPriorityEngine.BuildUserLookupCachesAsync` | Needs new integration | Build mapping UI for user approval | `TaskPriorityEngine.cs` + new UI |
-| Resolve or create Alternative 1 | P2 | `ProjectAlternativeService` | Needs small extension | Add `EnsureAlternativeAsync` helper | `ProjectAlternativeService.cs` |
+| Resolve or create Alternative 1 | P3+ | `ProjectAlternativeService` | Not required for Phase 2 | No FK from InspectionSeries/InspectionReport to ProjectAlternative. Postponed. | `ProjectAlternativeService.cs` |
 | Read AI JSON cache | P1 | `ExtractionCacheService.LoadAsync()` | Ready as-is | Use existing service | `ExtractionCacheService.cs` |
 | Export/import JSON cache ZIP | P2+ | None | Postponed | Not needed for Phase 1 | `ExtractionCacheService.cs` |
 | Validate JSON envelope | P1 | `ExtractionCacheService` serialization | Ready as-is | Envelope schema is stable | `ExtractionCacheService.cs` |
-| Build main sections from JSON | P2 | `TemplateSyncService.SyncAsync()` | Ready as-is | Map JSON codes to `TemplateSyncRow` | `TemplateSyncService.cs` |
+| Build main sections from user-selected template | P2 | `TemplateSyncService.SyncAsync()` | Ready as-is | Call with full template rows from `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync` — **not** from JSON section codes | `TemplateSyncService.cs`, `GoogleInspectionTemplateProvider.cs` |
 | Create InspectionSeries | P2 | `TemplateSyncService.EnsureSeriesAsync()` / manual creation | Needs small extension | Ensure series creation before reports | `InspectionReportService.cs` |
 | Create InspectionReport versions | P2 | `InspectionReportService.CreateReportAsync()` | Ready as-is | Call per version | `InspectionReportService.cs` |
 | Add detailed sub-notes from JSON | P2 | `InspectionReportService.AddNoteAsync()` | Ready as-is | Call per sub-note | `InspectionReportService.cs` |
 | Create placeholder notes for numbering gaps | P2 | `AddNoteAsync` | Needs design decision | Decide if empty notes are acceptable long-term | `InspectionReportService.cs` |
 | Populate note text/status/planner response | P2 | `InspectionReportService.SaveNotesAsync()` / direct DB | Needs small extension | Map JSON data to note entities | `InspectionReportService.cs` |
-| Lock non-latest reports | P2 | `InspectionReportService.MarkReportAsSentAsync()` | Ready as-is | Call for historical versions | `InspectionReportService.cs` |
+| Lock non-latest reports | P2+ | `InspectionReportService.MarkReportAsSentAsync()` | Ready as-is | **Postponed** beyond first Phase 2 slice | `InspectionReportService.cs` |
 | Decide latest report open/closed state | P1 | Logic based on status | Ready as-is | Implement mapping rules | Migration logic |
 | Compare existing report version with JSON | P1 | `SentSpreadsheetId` | Ready as-is | Compare with JSON `ReportSpreadsheetId` | Migration logic |
 | Detect report version conflict | P1 | DB query | Needs small extension | Surface in preview | Migration logic |
@@ -58,6 +58,9 @@ The core infrastructure for the migration (Inspection Reports, Workflow Engine, 
 | Manager Review rows | P1 | None | Needs new integration | Surface in UI | Preview logic |
 | Log migration outcomes | P4 | `IActionLifecycleReporter` (maybe) | Needs design decision | Decide log storage mechanism | Logging logic |
 | Ensure idempotency / rerun safety | P4 | DB unique constraints | Needs small extension | Wrap in transaction, verify existing | Commit logic |
+| Select target template via dropdown | P1 | `InspectionTemplateItem` dropdown, `GoogleInspectionTemplateProvider` | ✅ Done (26.06.2026) | User selects template from existing dropdown; uses `ScanAndParseTemplateAsync` | `MigrationPocWindow.xaml.cs`, `GoogleInspectionTemplateProvider.cs` |
+| Template Compatibility Preview | P1 | `TemplateCompatibilityResult`, `ValidateTemplateCompatibility()` | ✅ Done (26.06.2026) | Validates JSON sections against selected template; blocks Phase 2 for NoMatch/TemplateError | `GoogleSheetReviewMigrationPreviewService.cs`, `TemplateCompatibilityResult.cs` |
+| Phase 2 blocked for NotValidated/TemplateError/NoMatch | P2 | Template Compatibility Preview | Implemented in Preview | Phase 2 import only allowed for FullMatch/PartialMatch rows | Preview + import logic |
 
 ---
 
@@ -69,7 +72,8 @@ The following existing mechanisms must be reused before writing new code:
 - **Existing project resolution logic inside `MigrationTaskService`**: Reusable for finding projects, provided it is extracted to be read-only.
 - `ExtractionCacheService`: For loading local JSON data.
 - `GeminiExtractionService`: For AI extraction.
-- `TemplateSyncService.SyncAsync`: For creating the main chapter/section structure from JSON.
+- `TemplateSyncService.SyncAsync`: For creating the main chapter/section structure from the **user-selected target template** (not from JSON).
+- `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync`: For reading the target template structure.
 - `InspectionReportService.CreateReportAsync`: To create the report version and initial placeholder notes.
 - `InspectionReportService.AddNoteAsync`: To add detailed sub-notes from the JSON.
 - `InspectionReportService.SaveNotesAsync`: To update note text and status.
@@ -110,8 +114,9 @@ These old mechanisms still exist and **must not be deleted yet**:
 The following issues must be resolved before implementation starts:
 
 1. **Placeholder notes:** Verify the acceptable way to create placeholder notes for skipped numbering (e.g., calling `AddNoteAsync` with empty text).
-2. **Ensure Alternative 1:** Verify if there is an existing mechanism to ensure Alternative "1" without duplicating alternatives.
+2. ~~**Ensure Alternative 1:**~~ **Resolved (26.06.2026):** `ProjectAlternative` is not required for Phase 2. No FK from `InspectionSeries`/`InspectionReport` to `ProjectAlternative`. Postponed.
 3. **Migration outcome logging:** Verify if a mechanism already exists or if a new documentation-approved mechanism is needed.
+4. **Template Compatibility Preview:** ✅ **Resolved (26.06.2026).** Template selection dropdown and compatibility validation are implemented in Phase 1 Preview.
 
 *(Note: Reviewer reassignment, workflow skipping, read-only preview, and report comparison blockers were resolved by User Decisions. See Section 13.)*
 
@@ -151,14 +156,14 @@ These gaps should be documented but do not block the first implementation phase:
 - Classify rows strictly based on new classification definitions.
 - Show warnings/conflicts.
 
-**Phase 2 — Report import only:**
-- Ensure Alternative 1.
-- Ensure InspectionSeries.
-- Create sections from JSON.
+**Phase 2 — Report import only:** *(revised 26.06.2026)*
+- Ensure InspectionSeries (using user-selected target template SpreadsheetId).
+- Sync sections from **user-selected target template** (not from JSON).
 - Create report versions.
-- Add sub-notes.
-- Lock versions as needed.
+- Add sub-notes (only for sections matched in Template Compatibility Preview).
+- Skip notes for unmatched/missing sections with warnings.
 - Idempotency checks.
+- **First slice does NOT call:** `MarkReportAsSentAsync`, `ProjectAlternativeService.CreateAsync`.
 
 **Phase 3 — Workflow reconstruction:**
 - Start Workflow at mapped stage.
@@ -198,6 +203,20 @@ These gaps should be documented but do not block the first implementation phase:
 | Existing Report Conflict | Differing versions (Sheet vs DB) | Yes | "Report version conflict" | No |
 | Duplicate Project Row | Multiple rows for same project | Yes | "Duplicate project row" | No |
 | Backward Movement | Target stage < Current stage | Yes | "Backward movement" | No |
+
+### 8.1 Phase 2 readiness criteria (added 26.06.2026)
+
+Phase 2 import is allowed only when:
+
+| Criterion | Required? | How verified |
+|---|---|---|
+| Target template selected via dropdown | Mandatory | `TargetTemplateComboBox.SelectedItem != null` |
+| Template Compatibility Preview completed | Mandatory | `TemplateValidationStatus ≠ NotValidated` |
+| No `TemplateError` for target row | Mandatory | `TemplateValidationStatus ≠ TemplateError` |
+| At least one matched section/note | Mandatory | `TemplateMatchedNoteCount > 0` |
+| Mismatch/missing sections visible to user | Mandatory | Preview displays `TemplateMismatchCount`, `TemplateMissingSectionCount`, `TemplateWarnings` |
+| Import blocked for `NoMatch` | Mandatory | Rows with `TemplateValidationStatus = NoMatch` are not eligible for Phase 2 |
+| Report numbering does not conflict | Mandatory | Validate against existing reports in target series before import |
 
 ---
 

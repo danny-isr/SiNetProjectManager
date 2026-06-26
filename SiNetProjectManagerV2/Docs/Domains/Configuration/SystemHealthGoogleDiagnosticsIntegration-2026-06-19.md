@@ -1,5 +1,11 @@
 # System Health Google Diagnostics Integration
 
+- **Date:** 19.06.2026
+- **Status:** Active
+- **Scope:** Integration of Google Drive diagnostics into the existing System Health mechanism (`SystemHealthWindow`, `IServiceHealthCheck`). Reuses existing UI and health aggregation patterns.
+
+---
+
 ## 1. Purpose
 This document specifies how to integrate the existing Google Drive diagnostics into the existing System Health mechanism. It explicitly documents that the integration reuses existing UI and health aggregation patterns without introducing new UI frameworks. It does not design a new mechanism.
 

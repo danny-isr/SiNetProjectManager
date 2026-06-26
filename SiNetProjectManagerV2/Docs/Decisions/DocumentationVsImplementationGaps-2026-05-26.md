@@ -2106,6 +2106,140 @@ opening any new gap:
 | AUTH-O6 | Full audit model — no centralized audit log for authorization decisions. | Authorization / Diagnostics |
 | AUTH-O7 | Project-level permissions — deferred per scope constraints. | Authorization / Projects |
 
+---
+
+## Round update — Documentation Alignment Round (2026-06-26)
+
+**Scope:** Documentation-vs-code alignment review. No code changes.
+
+### Gap 21 — Personal Work Queues by Task Size: design documented, not implemented
+
+- **Date identified:** 26.06.2026
+- **Domain:** ProjectWork / Task queue.
+- **Desired principle:**
+  Each employee has three personal work queues — Quick / Medium / Long — with
+  task priority scoped by `AssignedToId + WorkQueueBucket`. See
+  [`Domains\ProjectWork\PersonalWorkQueuesByTaskSize-2026-06-23.md`](../Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md).
+- **Current known state:**
+  The design document is complete and accurate in its description of the
+  existing mechanism (TaskPriorityEngine, WorkPriorityService, TaskService,
+  TaskFactory, UI). However, **zero implementation exists**:
+  - `ProjectAssignment.WorkQueueBucket` — does not exist in the model.
+  - `TaskType.DefaultWorkQueueBucket` — does not exist in the model.
+  - `TaskPriorityEngine` scopes by `AssignedToId` only (no bucket parameter).
+  - `WorkPriorityService` — all methods accept `employeeId` only.
+  - `TaskService.ReorderTask` — scopes per employee, not per bucket.
+  - UI shows a single flat queue per employee (no three-tab layout).
+  - No `BucketChange` event type in `TaskEventTypes`.
+- **Impact / risk:**
+  Low — this is a planned future feature, not a regression. The document
+  explicitly marks itself as "Proposed / Documentation Design" (Status line)
+  and "Documentation-only" (line 7).
+- **Status:** Open — future implementation. Do not implement now.
+
+### Gap 22 — Migration Design document stale after user decisions
+
+- **Date identified:** 26.06.2026
+- **Domain:** Migration.
+- **Desired principle:**
+  The migration design document should reflect the latest approved direction:
+  user-selected target template from dropdown, not JSON-derived sections.
+- **Current known state:**
+  `GoogleSheetReviewMigrationDesign-2026-06-21.md` contained multiple stale
+  claims including: building `TemplateSyncRow` from JSON section codes,
+  calling `TemplateSyncService.SyncAsync` with JSON-derived data,
+  requiring `ProjectAlternative` in Phase 2, calling `MarkReportAsSentAsync`
+  in the first Phase 2 slice, and missing the Template Compatibility Preview
+  section entirely.
+- **Impact / risk:**
+  High — if followed literally, the stale design would produce the wrong
+  implementation (deriving template structure from partial JSON instead of
+  using the user-selected template).
+- **Status:** Fixed — documentation updated 26.06.2026.
+- **Resolution (26.06.2026):**
+  Decision 3 rewritten. §6 mechanisms table updated. §9.1 commit sequence
+  revised. §10.2 section creation revised. §8.5 Template Compatibility
+  Preview section added. §15 technical checks updated. §17 dropped items
+  expanded. All stale JSON-derived section patterns removed.
+
+### Gap 23 — Phase 2 Plan stale after user decisions
+
+- **Date identified:** 26.06.2026
+- **Domain:** Migration.
+- **Desired principle:**
+  The Phase 2 plan should use user-selected target template for section
+  structure, not JSON-derived sections.
+- **Current known state:**
+  `GoogleSheetReviewMigrationPhase2Plan-2026-06-22.md` had its entire
+  data flow (§3 Step C) built around the forbidden JSON-to-sections pattern.
+  §6 had a standalone `ProjectAlternative` fallback. `MarkReportAsSentAsync`
+  was in the first slice.
+- **Impact / risk:**
+  High — same as Gap 22.
+- **Status:** Fixed — documentation updated 26.06.2026.
+- **Resolution (26.06.2026):**
+  Data flow Step C rewritten. Alternative §6 revised. MarkReportAsSentAsync
+  postponed. Template Compatibility prerequisite added. First slice scoping
+  added. Note import rule clarified (only matched sections).
+
+### Gap 24 — Template Compatibility Preview implemented but not documented in migration design
+
+- **Date identified:** 26.06.2026
+- **Domain:** Migration.
+- **Desired principle:**
+  All implemented mechanisms should be documented in the relevant design docs.
+- **Current known state:**
+  Template Compatibility Preview was implemented (ComboBox dropdown,
+  `TemplateCompatibilityResult`, `ValidateTemplateCompatibility()`,
+  per-section compatibility in detail window) but was not mentioned in any
+  of the three migration documents.
+- **Impact / risk:**
+  Medium — undocumented mechanism creates risk of future misalignment.
+- **Status:** Fixed — documentation updated 26.06.2026.
+- **Resolution (26.06.2026):**
+  §8.5 added to Migration Design doc. Phase 2 Plan updated with template
+  prerequisites. Readiness doc updated with template compatibility criteria.
+
+### Gap 25 — SystemHealthGoogleDiagnosticsIntegration missing metadata header
+
+- **Date identified:** 26.06.2026
+- **Domain:** Configuration / Diagnostics.
+- **Desired principle:**
+  Per project rule #4, every document must start with Title, Date, Status,
+  and Scope.
+- **Current known state:**
+  `SystemHealthGoogleDiagnosticsIntegration-2026-06-19.md` starts directly
+  with `## 1. Purpose` — missing the required Date, Status, and Scope
+  metadata header.
+- **Impact / risk:**
+  Low — metadata violation only. Code and content are otherwise aligned.
+- **Status:** Fixed — metadata header added 26.06.2026.
+
+### Gap 26 — TaskService.ReassignTask does not update WorkPriority
+
+- **Date identified:** 26.06.2026 (previously documented in Migration Design
+  §7 Gap 1 and PersonalWorkQueuesByTaskSize §10.5, but not in this register).
+- **Domain:** ProjectWork / Task queue.
+- **Desired principle:**
+  When a task is reassigned to a new employee, `WorkPriority` should be
+  updated: compact the old assignee's queue and insert the task at the end
+  of the new assignee's queue.
+- **Current known state:**
+  `TaskService.ReassignTask()` (in `SiNetSQL\Services\TaskService.cs`)
+  changes only `AssignedToId`, `Modified`, and `EditorId`. It does **not**
+  call `CompactAfterRemoval` for the old assignee or `GetNextPriority` /
+  `InsertInQueue` for the new assignee. The task retains its old
+  `WorkPriority` value after reassignment.
+- **Impact / risk:**
+  Medium — creates queue ordering inconsistency. After reassignment,
+  the new assignee may have duplicate `WorkPriority` values or gaps.
+  This gap widens in scope once Personal Work Queues (Gap 21) are
+  implemented, because compact/insert must then be bucket-scoped.
+- **Status:** Open — postponed / future task. Not part of current round.
+  Referenced in:
+  - `GoogleSheetReviewMigrationDesign §7 Gap 1`
+  - `PersonalWorkQueuesByTaskSize §10.5`
+
 ## Pointers
 
 - [`Docs\README.md`](../README.md) — documentation index.

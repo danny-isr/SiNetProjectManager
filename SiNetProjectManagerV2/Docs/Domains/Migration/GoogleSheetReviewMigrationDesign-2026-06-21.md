@@ -148,22 +148,35 @@ No open tasks are created. Reports are imported and linked to the project contex
 - `TriggerType = System` (enum value 2)
 - `Notes = "Migrated from legacy Index Sheet"` (or similar, with police-path indication for מאושר תנועתית לאחר משטרה)
 
-### Decision 3 — Template establishes main structure; JSON provides detailed historical content
+### Decision 3 — User-selected target template; JSON provides historical content only (revised 26.06.2026)
 
-The Template may be used to establish the main report structure (Chapters and Sections at the X.Y level). The JSON is the source for the detailed historical sub-sections (at the X.Y.Z level) and their content. The migration populates those detailed sub-sections through the same existing mechanism used when a user manually adds them in the normal report UI.
+> **Revision note (26.06.2026):** The original Decision 3 described building `TemplateSyncRow` from JSON section codes and calling `TemplateSyncService.SyncAsync` with JSON-derived data. This direction was superseded by user decisions requiring a **user-selected target template from the existing dropdown**. The original text is replaced below.
 
-**Research findings — Section vs Sub-section architecture:**
+The target template is selected by the user from the existing template dropdown (same mechanism used elsewhere in the application). The selected template is the **authoritative source** for Chapters and Sections (X.Y level). The JSON cache is **only** the source for historical report content/notes (X.Y.Z sub-notes).
 
-The report model has a strict two-tier structure:
+**Template selection and structure:**
+- The user selects a target template from the existing `InspectionTemplateItem` dropdown in the Preview UI (Tab 3).
+- The selected template's `SpreadsheetId` is used to read the template structure via `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync(templateSpreadsheetId)`.
+- The returned `TemplateSyncRow` entries define the Chapters and Sections that will be used for the target `InspectionSeries`.
+- Phase 2 may call `TemplateSyncService.SyncAsync` **only** with the full selected template rows — never with partial JSON-derived rows.
+- The `TemplateSpreadsheetId` found in JSON envelopes is diagnostic/source metadata only — it does **not** determine the target template.
+
+**Report model two-tier architecture** (unchanged):
 
 | Level | Entity | Example | Created by | Scope |
 |---|---|---|---|---|
-| **Main sections** (X.Y) | `Section` (with parent `Chapter`) | "1.1", "3.6" | `TemplateSyncService.SyncAsync()` | Per `InspectionSeries` (template-level, shared across reports) |
+| **Main sections** (X.Y) | `Section` (with parent `Chapter`) | "1.1", "3.6" | `TemplateSyncService.SyncAsync()` with **user-selected template** | Per `InspectionSeries` (template-level, shared across reports) |
 | **Detailed sub-sections** (X.Y.Z) | `InspectionNote` rows with 3-level `NoteSubIndex` | "1.1.1", "1.1.2", "3.6.1" | `AddNoteAsync()` or `CreateReportAsync` snapshot | Per `InspectionReport` (report-level) |
 
-**Key constraint**: `InspectionNote.SectionId` is a non-nullable `int` FK to `Section`. Every note must belong to a valid Section. But Sections are template-level — they are shared across all reports in a series.
+**Key constraint**: `InspectionNote.SectionId` is a non-nullable `int` FK to `Section`. Every note must belong to a valid Section. Sections come from the user-selected template, not from JSON.
 
-**How the normal UI adds sub-sections:**
+**Template Compatibility Preview validates before import:**
+- Phase 1 Preview compares JSON section codes and titles against the selected template.
+- Only JSON notes whose parent section was matched in the target template are eligible for import.
+- Mismatched or missing sections are reported as warnings — they do not silently import.
+- Phase 2 may only import notes into sections that passed Template Compatibility Preview.
+
+**How the normal UI adds sub-sections** (unchanged):
 - `FloatingInspectionViewModel.AddNoteToSection()` counts existing sub-notes for the section and auto-increments: `NoteSubIndex = "{X.Y}.{count+1}"` (e.g., "1.1.3").
 - Calls `InspectionReportService.AddNoteAsync(reportId, sectionId, subIndex)` which creates a plain `InspectionNote` row. No new `Section` entity is ever created by the UI.
 - `CreateReportAsync` creates one initial placeholder note per section with `NoteSubIndex = "X.Y.1"`.
@@ -174,12 +187,15 @@ The report model has a strict two-tier structure:
 **TemplateSyncService scope**: Operates on main sections only (X.Y level). Parses "chapter.sub" format (two levels). Creates/updates `Chapter` and `Section` entities. Does NOT create `InspectionNote` rows. Does NOT handle 3-level sub-sections.
 
 **Correct migration approach:**
-1. Use `TemplateSyncService.SyncAsync()` with `TemplateSyncRow` data to create/ensure main sections (Chapters + Sections at X.Y level) for the InspectionSeries. The rows can be constructed from JSON section codes (extracting the chapter number and section sub-code) or from the Google Sheet template if available.
-2. Call `InspectionReportService.CreateReportAsync()` which creates one placeholder note ("X.Y.1") per section.
-3. For each JSON `ExtractedSectionData` entry, populate the corresponding note or add additional notes via `AddNoteAsync()`:
+1. User selects target template from the dropdown in Preview UI.
+2. Preview validates JSON section compatibility against the selected template.
+3. Phase 2 calls `TemplateSyncService.SyncAsync()` with the **full user-selected template** `TemplateSyncRow` list to create/ensure Chapters + Sections (X.Y level) for the `InspectionSeries`.
+4. Call `InspectionReportService.CreateReportAsync()` which creates one placeholder note ("X.Y.1") per section.
+5. For each JSON `ExtractedSectionData` entry **that was matched** in Template Compatibility Preview:
    - First sub-note for a section → update the placeholder note created by `CreateReportAsync`.
    - Additional sub-notes for the same section → add via `AddNoteAsync(reportId, sectionId, nextSubIndex)`.
    - Set `NoteText`, `NoteStatusId`, `PlannerResponseText`, etc. from JSON data.
+6. Notes whose parent section is missing from the target template are **skipped** and reported as warnings.
 
 ### Decision 4 — Existing Review Workflow handling
 
@@ -289,11 +305,12 @@ If a direct report-to-workflow link is needed in the future, `TaskLink` with `Li
 | Stage task provisioning | `WorkflowStageTaskProvisioningService` | `CreateStageTasksAsync` | Auto-creates stage task with `TaskLink` |
 | Task reassignment | `TaskService` | `ReassignTask(taskId, newAssigneeId, changedByUserId)` | Assign Sheet reviewer to workflow task |
 | User lookup | `TaskPriorityEngine` | `BuildUserLookupCachesAsync` | Resolve Sheet email/name to user ID |
-| Main section creation | `TemplateSyncService` | `SyncAsync(IReadOnlyList<TemplateSyncRow>, seriesId)` | Create Chapters + Sections from JSON section codes |
+| Main section creation | `TemplateSyncService` | `SyncAsync(IReadOnlyList<TemplateSyncRow>, seriesId)` | Create Chapters + Sections from **user-selected target template** (not from JSON) |
 | Report creation | `InspectionReportService` | `CreateReportAsync` | Create report with version number + note snapshot |
 | Sub-note addition | `InspectionReportService` | `AddNoteAsync(reportId, sectionId, subIndex)` | Add detailed sub-notes from JSON |
-| Report lock (sent) | `InspectionReportService` | `MarkReportAsSentAsync` | Lock historical versions as sent/closed |
-| Alternative creation | `ProjectAlternativeService` | `CreateAsync` | Ensure Alternative "1" exists |
+| Report lock (sent) | `InspectionReportService` | `MarkReportAsSentAsync` | Lock historical versions as sent/closed (postponed beyond first Phase 2 slice) |
+| Alternative creation | `ProjectAlternativeService` | `CreateAsync` | Ensure Alternative "1" exists (postponed — not required for Phase 2 report import) |
+| Template reading | `GoogleInspectionTemplateProvider` | `ScanAndParseTemplateAsync(spreadsheetId)` | Read target template structure for compatibility validation |
 | Index Sheet reading | `IndexSheetReader` | `ReadAsync`, `ReadReportHyperlinksAsync` | Read Sheet data and hyperlinks |
 | AI extraction | `GeminiExtractionService` | `ExtractWithAiAsync` | Extract report content |
 | JSON cache | `ExtractionCacheService` | `SaveAsync`, `LoadAsync`, `Exists` | Persist/load extraction results |
@@ -398,25 +415,72 @@ The new migration Preview must be **truly read-only**:
 
 All controls are read-only in Phase 1. There is no enabled Commit action. A disabled Commit placeholder button is shown (`CommitPhase1Button`, `IsEnabled="False"`) to make clear that commit is not implemented in Phase 1. Double-clicking a preview row opens JSON cache content (if available) for inspection.
 
+### 8.5. Template Compatibility Preview (added 26.06.2026)
+
+Phase 1 Preview includes an optional Template Compatibility validation step.
+
+**UI:** The user selects a target template from the existing `InspectionTemplateItem` dropdown (`TargetTemplateComboBox`) in Tab 3. This is the same dropdown mechanism used elsewhere in the application — **not** a free-text Spreadsheet ID input.
+
+**Backend flow:**
+1. User selects a template from the dropdown.
+2. Preview reads the template using `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync(spreadsheetId)`.
+3. Preview does NOT call `TemplateSyncService.SyncAsync`.
+4. Preview does NOT write to DB.
+5. Preview compares each JSON section code + normalized section title/description against the selected template's `TemplateSyncRow` entries.
+6. Results are stored in `TemplateCompatibilityResult` per project/version/report.
+
+**Per-row template validation statuses:**
+
+| Status | Meaning |
+|---|---|
+| `NotValidated` | No target template selected; compatibility check skipped |
+| `FullMatch` | All JSON sections matched template sections |
+| `PartialMatch` | Some JSON sections matched, some did not |
+| `NoMatch` | No JSON sections matched any template section |
+| `TemplateError` | Template could not be loaded or parsed |
+
+**Preview row fields added for template compatibility:**
+- `TemplateValidationStatus` — one of the statuses above
+- `TemplateMatchedNoteCount` — number of matched JSON notes
+- `TemplateSkippedNoteCount` — number of skipped (unmatched) JSON notes
+- `TemplateMismatchCount` — sections with title/description mismatch
+- `TemplateMissingSectionCount` — JSON sections not found in template
+- `TemplateWarnings` — aggregated warning text
+
+**Double-click detail:** Double-clicking a preview row opens the full report content with per-section compatibility columns showing `TemplateMatchStatus`, `TemplateMatchReason`, and `TemplateSectionTitle`.
+
+**Phase 2 readiness rule:** Phase 2 import is blocked for rows with `TemplateValidationStatus` of `NotValidated`, `TemplateError`, or `NoMatch`. Import is allowed for `FullMatch` and `PartialMatch` (importing only matched notes).
+
+**Implementation files:**
+
+| Component | File |
+|---|---|
+| `TemplateCompatibilityResult` | `Services\Migration\Models\TemplateCompatibilityResult.cs` |
+| `SectionCompatibilityEntry` | `Services\Migration\Models\TemplateCompatibilityResult.cs` |
+| `SectionMatchResult` enum | `Services\Migration\Models\TemplateCompatibilityResult.cs` |
+| Preview service validation | `GoogleSheetReviewMigrationPreviewService.ValidateTemplateCompatibility()` |
+| Detail window compatibility | `FullReportFillPreviewWindow.xaml.cs` |
+
 ---
 
 ## 9. Commit design
 
 ### 9.1. Per-row commit sequence
 
-**Step 1 — Ensure Alternative "1":**
-- Query existing alternatives for the project.
-- If no alternative named "1" exists → `ProjectAlternativeService.CreateAsync(projectId, "1", userId)`.
+**Step 1 — Ensure Alternative "1":** *(postponed — not part of Phase 2)*
+
+> **Note (26.06.2026):** `ProjectAlternative` is not required for `InspectionSeries` or `InspectionReport` creation. There is no FK from `InspectionSeries` or `InspectionReport` to `ProjectAlternative`. Alternative creation is postponed to a future phase where reviewed files / per-note file linkage context is needed.
 
 **Step 2 — Ensure InspectionSeries:**
 - Query existing series for the project by template.
-- If not exists → create `InspectionSeries` with `ProjectId`, `SeriesName`, `TemplateSpreadsheetId` from Sheet link.
+- If not exists → create `InspectionSeries` with `ProjectId`, `SeriesName`, `TemplateSpreadsheetId` from the **user-selected target template**.
+- The target template is selected by the user from the existing template dropdown — it is NOT derived from Sheet links or JSON.
 
-**Step 3 — Build main section structure:**
-- Collect all unique main section codes (X.Y level) from JSON across all versions.
-- Build `TemplateSyncRow` list with chapter numbers and section codes.
-- Call `TemplateSyncService.SyncAsync(rows, seriesId)` to create/ensure Chapters + Sections.
-- If no JSON is available, skip this step (workflow-only creation).
+**Step 3 — Sync section structure from user-selected template:** *(revised 26.06.2026)*
+- The section structure comes from the **user-selected target template**, not from JSON.
+- Call `TemplateSyncService.SyncAsync(templateRows, seriesId)` with the full template `TemplateSyncRow` list obtained from `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync`.
+- Do NOT build `TemplateSyncRow` from JSON section codes.
+- Do NOT create Sections that exist only in JSON but not in the target template.
 
 **Step 4 — Import report versions (if JSON available):**
 - For each version (ascending order, 1, 2, 3…):
@@ -431,7 +495,7 @@ All controls are read-only in Phase 1. There is no enabled Commit action. A disa
       - First sub-note for a section → update the placeholder note's text, status, designer response.
       - Additional sub-notes for the same section → call `AddNoteAsync(reportId, sectionId, nextSubIndex)` and populate.
       - Numbering gaps: if JSON has "1.1.1" and "1.1.3" but not "1.1.2", create an empty placeholder note for "1.1.2" with no text (structural only).
-    - For non-latest versions: call `MarkReportAsSentAsync()`. Set `SentSpreadsheetId` from the version's Google Sheet ID.
+    - For non-latest versions: `MarkReportAsSentAsync()` is **postponed beyond the first Phase 2 slice**. Historical version locking will be addressed after basic report import is validated.
   - For the latest version: apply open/closed state per §4.
 
 **Step 5 — Create/reconstruct Review Workflow:**
@@ -479,17 +543,20 @@ InspectionSeries (per project, one for migration)
 
 **Sub-sections** (X.Y.Z) are `InspectionNote` rows scoped to a specific `InspectionReport`. Each is an individual finding/item. Created by `CreateReportAsync` (initial placeholder) or `AddNoteAsync` (manual addition).
 
-### 10.2. Main section creation from JSON
+### 10.2. Main section creation from user-selected template (revised 26.06.2026)
 
-Extract main section codes from JSON:
+> **Revision note:** The original §10.2 described building `TemplateSyncRow` from JSON section codes. This has been superseded. Main sections now come from the user-selected target template.
+
+The section structure is created from the **user-selected target template**, not from JSON:
 ```
-JSON SectionCode "3.6" → ChapterNumber = 3, SectionSubCode = 6
-JSON ChapterTitle "תנועה" → ChapterName
-JSON SectionTitle "חניה [גישה]" → SectionName
-→ TemplateSyncRow { ChapterNumber=3, SectionCode="3.6", SectionTitle="חניה [גישה]" }
-→ TemplateSyncService.SyncAsync(rows, seriesId)
-→ Creates Chapter 3 + Section (Code=6) for the series
+User selects target template from dropdown
+→ GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync(templateSpreadsheetId)
+→ Returns TemplateSyncRow list (full template structure)
+→ TemplateSyncService.SyncAsync(templateRows, seriesId)
+→ Creates Chapters + Sections for the series from the template
 ```
+
+JSON section codes are used only to **map imported notes to existing sections** — they do not create new sections. If a JSON note references a section code that does not exist in the target template, the note is skipped and a warning is reported.
 
 ### 10.3. Sub-note population from JSON
 
@@ -625,11 +692,11 @@ Not reconstructed individually. Single `WorkflowStageTransition` entry: `FromSta
 | 2 | **Same-group constraint** | Are Sheet reviewers members of the `Reviewers` UserGroup? | To verify per environment |
 | 3 | **CompleteAsync after StartAsync** | Call sequence for final stages. Verify Status + timestamps. | Designed; to verify in code |
 | 4 | **Final stage no tasks** | Confirm `StartWorkflowAsync` at `REV.Completed` returns empty task list without throwing. | Designed; to verify |
-| 5 | **TemplateSyncService from JSON** | Construct `TemplateSyncRow` from JSON section codes; call `SyncAsync`. Verify Chapters/Sections. | To verify |
+| 5 | **TemplateSyncService from user-selected template** | Call `SyncAsync` with template rows from `GoogleInspectionTemplateProvider.ScanAndParseTemplateAsync`. Verify Chapters/Sections. | Revised 26.06.2026 — template source changed from JSON to user-selected template |
 | 6 | **CreateReportAsync with synced sections** | After `SyncAsync`, call `CreateReportAsync`. Verify placeholder notes. | To verify |
 | 7 | **AddNoteAsync for sub-notes** | After `CreateReportAsync`, call `AddNoteAsync` for additional sub-notes. Verify in UI. | To verify |
 | 8 | **Placeholder empty notes** | Create empty notes for numbering gaps. Verify `FloatingInspectionView` handles them. | To verify |
-| 9 | **MarkReportAsSentAsync without export** | Call with migration `SentSpreadsheetId`. Verify lock behavior. | To verify |
+| 9 | **MarkReportAsSentAsync without export** | Call with migration `SentSpreadsheetId`. Verify lock behavior. | To verify — **postponed** beyond first Phase 2 slice |
 | 10 | **Existing workflow lookup** | Query + filter by Review definition. Verify accuracy. | To verify |
 | 11 | **Stage SortOrder comparison** | Verify forward/backward detection is consistent with mapping. | To verify |
 | 12 | **בתהליך בדיקה הערות משטרה target** | Confirm `REV.AwaitingPoliceApproval` is closest. | Verified ⚠️ known semantic mismatch |
@@ -646,7 +713,7 @@ Not reconstructed individually. Single `WorkflowStageTransition` entry: `FromSta
 | Duplicate workflows per project | MEDIUM | Logical guard in Preview + Commit |
 | Same-group constraint blocks reassignment | MEDIUM | Preview warning; fallback to group default with visibility |
 | Police-comments semantic mismatch | LOW | Documented; acceptable for now |
-| Section mismatch between JSON versions | MEDIUM | Union all sections across versions; use latest title |
+| Section mismatch between JSON and target template | MEDIUM | Template Compatibility Preview validates before import; mismatched notes are skipped with warnings |
 | Placeholder notes confuse users | LOW | Clearly empty; UI handles gracefully |
 | Missing JSON → incomplete report history | MEDIUM | Preview warning; workflow-only creation allowed |
 | WorkPriority inconsistency after reassignment | LOW | Known gap; fix in future phase |
@@ -675,6 +742,11 @@ Not reconstructed individually. Single `WorkflowStageTransition` entry: `FromSta
 | Queue frequency design (daily/weekly follow-up) | **Postponed** |
 | Adding fallback follow-up tasks | **Not approved** |
 | Adding new workflow stage for police-comments review | **Not approved** — existing stage used with documented mismatch |
+| Building TemplateSyncRow from JSON section codes | **Cancelled (26.06.2026)** — superseded by user-selected target template |
+| ProjectAlternative in Phase 2 | **Postponed (26.06.2026)** — not required for report import; no FK from InspectionSeries/InspectionReport to ProjectAlternative |
+| MarkReportAsSentAsync in first Phase 2 slice | **Postponed (26.06.2026)** — historical version locking deferred until basic report import is validated |
+| Free-text template Spreadsheet ID input | **Cancelled (26.06.2026)** — replaced by existing template dropdown mechanism |
+| Deriving template structure from partial JSON | **Cancelled (26.06.2026)** — template structure comes from user-selected template only |
 
 ---
 
@@ -694,9 +766,10 @@ Not reconstructed individually. Single `WorkflowStageTransition` entry: `FromSta
 - Migrating existing open DB tasks (separate analysis exists as background).
 - Automating Manager Review resolution.
 - Building a migration scheduling/queue system.
-- Phase 2 (Report import) — see separate plan document.
+- Phase 2 (Report import) — see separate plan document. Postponed until documentation alignment and template validation are approved.
 - Phase 3 (Workflow reconstruction) — not yet planned.
 - Group-membership validation code (deferred to Phase 3 per Decision 6).
+- Personal Work Queues implementation (see `PersonalWorkQueuesByTaskSize-2026-06-23.md` — design only, not implemented).
 
 ---
 
