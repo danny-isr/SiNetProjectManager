@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
 using SiNetProjectManagerV2.Services.Migration;
 using SiNetProjectManagerV2.Services.Migration.Models;
 
@@ -14,15 +13,6 @@ namespace SiNetProjectManagerV2.Dialogs;
 /// </summary>
 public partial class FullReportFillPreviewWindow : Window
 {
-    // Explicit field declarations for x:Name controls added in the latest XAML edit.
-    // These are normally auto-generated into the .g.cs partial by the BAML compiler;
-    // they are declared here so the compiler resolves them immediately without requiring
-    // a debug-session restart to regenerate the partial. InitializeComponent() wires them
-    // at runtime via the x:Name attributes in the XAML.
-#pragma warning disable CS0649  // field never assigned — assigned by InitializeComponent via XAML x:Name
-    private DataGrid  SkippedGeneralFieldsGrid     = null!;
-    private Expander  SkippedGeneralFieldsExpander = null!;
-#pragma warning restore CS0649
     /// <summary>
     /// Opens the full report fill preview for the given cached envelope.
     /// </summary>
