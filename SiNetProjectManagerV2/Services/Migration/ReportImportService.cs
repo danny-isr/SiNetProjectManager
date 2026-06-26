@@ -13,7 +13,7 @@ namespace SiNetProjectManagerV2.Services.Migration;
 /// This service contains NO direct DB write logic. All DB mutations go through:
 ///   • <see cref="TemplateSyncService.EnsureSeriesAsync"/> — find/create series
 ///   • <see cref="TemplateSyncService.SyncAsync"/> — sync template structure
-///   • <see cref="IInspectionReportService.CreateReportAsync"/> — create report (auto-numbered)
+///   • <see cref="IInspectionReportService.CreateReportAsync"/> — create report (skipCarryOver=true)
 ///   • <see cref="IInspectionReportService.AddNoteAsync"/> — add sub-notes
 ///   • <see cref="IInspectionReportService.SaveNotesAsync"/> — update note content
 ///   • <see cref="IInspectionReportService.SaveImportedPlannerResponsesAsync"/> — planner responses
@@ -37,9 +37,7 @@ public sealed class ReportImportService
     /// <summary>
     /// Import a batch of selected preview rows into the DB.
     /// Each row is processed independently — individual failures do not block others.
-    /// 
-    /// IMPORTANT: Rows must be sorted by VersionIndex ascending for correct auto-numbering.
-    /// CreateReportAsync auto-generates ReportNumber = MAX+1 per series.
+    /// Rows are sorted by VersionIndex ascending for correct auto-numbering.
     /// </summary>
     public async Task<ReportImportResult> ImportRowsAsync(
         IReadOnlyList<GoogleSheetReviewMigrationPreviewRow> rows,
@@ -54,7 +52,6 @@ public sealed class ReportImportService
         // Pre-load status lookup for StatusKey → NoteStatusId mapping.
         // StatusKey values in the DB are exact, stable strings:
         // "Passed", "Failed", "RecurringFailed", "NotApplicable", "ManagerReview".
-        // JSON StatusKey uses the same exact values. No normalization needed.
         var statusLookup = await BuildStatusLookupAsync(ct);
 
         // Track synced series to avoid redundant SyncAsync calls.
@@ -62,6 +59,9 @@ public sealed class ReportImportService
 
         // Sort rows by VersionIndex ascending — critical for auto-numbering.
         var sortedRows = rows.OrderBy(r => r.VersionIndex).ToList();
+
+        // Sheet status based validation classification is postponed.
+        // Currently using IsLatestVersion as the sole criterion.
 
         foreach (var row in sortedRows)
         {
@@ -161,15 +161,10 @@ public sealed class ReportImportService
         }
 
         // ── E. Duplicate guard ───────────────────────────────────────
-        // CreateReportAsync auto-numbers: MAX(ReportNumber)+1 per series.
-        // VersionIndex is 1-based: V1 should become ReportNumber=1, V2→2, etc.
-        // The expected ReportNumber for this version equals VersionIndex —
-        // but only if versions are imported in ascending order.
         var expectedReportNumber = row.VersionIndex;
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        // Check if a report with this number already exists in the series.
         var existingReport = await db.InspectionReports
             .AsNoTracking()
             .FirstOrDefaultAsync(
@@ -181,9 +176,7 @@ public sealed class ReportImportService
             return;
         }
 
-        // Safety check: verify the next auto-generated number matches expectations.
-        // If previous versions were not imported (e.g., V1 missing, importing V2),
-        // the auto-number would be 1 but we expect 2 — block this.
+        // Safety check: verify auto-numbering alignment.
         var currentMaxReportNumber = await db.InspectionReports
             .Where(r => r.SeriesId == seriesId)
             .MaxAsync(r => (int?)r.ReportNumber, ct) ?? 0;
@@ -199,9 +192,13 @@ public sealed class ReportImportService
             return;
         }
 
-        // ── F. Create report ─────────────────────────────────────────
-        // Use mapped reviewer from preview row; null if not mapped.
-        // Current logged-in user is NOT used as fallback.
+        // ── F. Create report (skipCarryOver=true) ────────────────────
+        // Migration Import: JSON cache is the sole content source.
+        // skipCarryOver=true prevents:
+        //   • CarryOverUnresolvedNotesAsync (unresolved notes from previous report)
+        //   • CopyGeneralFieldsFromPreviousAsync (Chapter 0 fields from previous report)
+        //   • CopyReviewedFilesFromPreviousAsync (reviewed file links from previous report)
+        // Current logged-in user is NOT used as fallback inspector.
         string? inspectorName = row.MappedReviewerDisplayName;
         int? inspectorId = row.MappedReviewerUserId;
 
@@ -211,12 +208,12 @@ public sealed class ReportImportService
             inspectorName,
             ct,
             inspectorId,
-            seriesId);
+            seriesId,
+            skipCarryOver: true);
 
         result.ReportsCreated++;
-        result.Log($"[Phase2] Created report: ReportId={report.ReportId}, SeriesId={seriesId}, ReportNumber={report.ReportNumber} for project {projectNumber} V{row.VersionIndex}", log);
+        result.Log($"[Phase2] Created report: ReportId={report.ReportId}, SeriesId={seriesId}, ReportNumber={report.ReportNumber} for project {projectNumber} V{row.VersionIndex} (skipCarryOver=true)", log);
 
-        // Verify the auto-generated number matches our expectation.
         if (report.ReportNumber != expectedReportNumber)
         {
             result.Log(
@@ -225,7 +222,7 @@ public sealed class ReportImportService
         }
 
         // ── G+H. Fill notes from JSON ────────────────────────────────
-        await FillNotesFromJsonAsync(report, envelope, compat, statusLookup, result, log, ct);
+        await FillNotesFromJsonAsync(report, envelope, compat, statusLookup, row, result, log, ct);
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -261,7 +258,7 @@ public sealed class ReportImportService
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  Note filling
+    //  Note filling with duplicate prevention
     // ──────────────────────────────────────────────────────────────────
 
     private async Task FillNotesFromJsonAsync(
@@ -269,30 +266,36 @@ public sealed class ReportImportService
         ExtractionCacheEnvelope envelope,
         TemplateCompatibilityResult compat,
         IReadOnlyDictionary<string, int> statusLookup,
+        GoogleSheetReviewMigrationPreviewRow row,
         ReportImportResult result,
         Action<string>? log,
         CancellationToken ct)
     {
-        // Get placeholder notes created by CreateReportAsync.
-        var placeholderNotes = await _reportService.GetNotesForReportAsync(report.ReportId, ct);
+        // Get ALL notes already in this report (placeholders from CreateReportAsync).
+        // Since skipCarryOver=true, these are only the empty snapshot placeholders.
+        var existingNotes = await _reportService.GetNotesForReportAsync(report.ReportId, ct);
 
-        // Build lookup: Section.FullCode → (SectionId, placeholder NoteId).
-        // Only numbered chapters (ChapterNumber > 0) — Chapter 0 general fields are skipped.
-        var sectionMap = new Dictionary<string, (int SectionId, long PlaceholderNoteId)>(StringComparer.OrdinalIgnoreCase);
-        foreach (var note in placeholderNotes)
+        // ── Build comprehensive lookup ───────────────────────────────
+        // Key: (SectionId, NoteSubIndex) → NoteId
+        // Used for: (1) placeholder reuse, (2) duplicate prevention.
+        var noteLookup = new Dictionary<(int SectionId, string SubIndex), long>();
+        foreach (var note in existingNotes)
         {
-            if (note.Section?.Chapter is null) continue;
-            if (note.Section.Chapter.ChapterNumber == 0) continue; // Skip Chapter 0
-            var fullCode = note.Section.FullCode;
-            if (!sectionMap.ContainsKey(fullCode))
-            {
-                sectionMap[fullCode] = (note.SectionId, note.NoteId);
-            }
+            var key = (note.SectionId, note.NoteSubIndex ?? "");
+            noteLookup.TryAdd(key, note.NoteId);
         }
 
-        // Extract parent section code for each JSON note using the same logic
-        // as the Full Report Preview (GoogleSheetReviewMigrationPreviewService).
-        // This converts "1.1.3" → "1.1", "3.6" → "3.6", etc.
+        // Build section lookup: FullCode → SectionId (numbered chapters only).
+        var sectionMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var note in existingNotes)
+        {
+            if (note.Section?.Chapter is null) continue;
+            if (note.Section.Chapter.ChapterNumber == 0) continue;
+            var fullCode = note.Section.FullCode;
+            sectionMap.TryAdd(fullCode, note.SectionId);
+        }
+
+        // ── Extract parent codes ─────────────────────────────────────
         var notesWithParent = envelope.Sections
             .Where(s => !string.IsNullOrWhiteSpace(s.SectionCode))
             .Select(s => (
@@ -302,7 +305,6 @@ public sealed class ReportImportService
             .Where(x => x.ParentCode is not null)
             .ToList();
 
-        // Split into eligible and skipped based on template compatibility.
         var eligibleNotes = notesWithParent
             .Where(x => compat.IsImportEligible(x.ParentCode))
             .ToList();
@@ -317,10 +319,22 @@ public sealed class ReportImportService
             result.Log($"[Phase2] Skipped {group.Count()} note(s) for section {group.Key}: not import-eligible in target template", log);
         }
 
-        // Group eligible notes by parent section code.
         var sectionGroups = eligibleNotes
             .GroupBy(x => x.ParentCode!, StringComparer.OrdinalIgnoreCase)
             .OrderBy(g => g.Key);
+
+        // ── Determine validation defaults mode ───────────────────────
+        bool applyHistoricalDefaults = ShouldApplyMigrationValidationDefaults(row);
+        int? passedStatusId = null;
+        if (applyHistoricalDefaults)
+        {
+            statusLookup.TryGetValue("Passed", out var pid);
+            passedStatusId = pid > 0 ? pid : null;
+            if (passedStatusId is null)
+            {
+                result.Log($"[Phase2] WARNING: Cannot find 'Passed' status for historical defaults. Defaults will be partial.", log);
+            }
+        }
 
         // Collect updates for batch save.
         var noteUpdates = new List<(long NoteId, string? Text, string? Status, int? StatusId)>();
@@ -328,11 +342,9 @@ public sealed class ReportImportService
 
         foreach (var sectionGroup in sectionGroups)
         {
-            var parentCode = sectionGroup.Key; // e.g., "1.1"
-            if (!sectionMap.TryGetValue(parentCode, out var sectionInfo))
+            var parentCode = sectionGroup.Key;
+            if (!sectionMap.TryGetValue(parentCode, out var sectionId))
             {
-                // Section is import-eligible but no DB Section entity found.
-                // This shouldn't happen if template compatibility is correct.
                 result.Log($"[Phase2] WARNING: Section {parentCode} is import-eligible but no DB Section entity found. Notes skipped.", log);
                 result.NotesSkippedTemplateMismatch += sectionGroup.Count();
                 continue;
@@ -343,9 +355,6 @@ public sealed class ReportImportService
                 .OrderBy(s => s.NoteSubIndex, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            // Parse sub-indexes to determine positions.
-            // The placeholder from CreateReportAsync has NoteSubIndex = "X.Y.1".
-            // We must NOT write content from a different sub-index into the placeholder.
             var parsedNotes = subNotes
                 .Select(n => (Note: n, SubIdx: ParseSubIndex(n.NoteSubIndex, parentCode)))
                 .OrderBy(x => x.SubIdx)
@@ -355,83 +364,103 @@ public sealed class ReportImportService
 
             int firstJsonSubIndex = parsedNotes[0].SubIdx;
 
-            // If the first JSON note is NOT index 1, we need gap handling.
-            // The placeholder exists at index 1 (created by CreateReportAsync).
-            // We must create gap notes for indexes 2..firstJsonSubIndex-1,
-            // then create the actual content note at firstJsonSubIndex via AddNoteAsync
-            // (do NOT put its content into the placeholder at index 1).
+            // Handle gap before first note.
             if (firstJsonSubIndex > 1)
             {
-                // Create gap notes for indexes 2 through firstJsonSubIndex-1.
-                // The placeholder at index 1 remains empty.
                 for (int gapIdx = 2; gapIdx < firstJsonSubIndex; gapIdx++)
                 {
                     var gapSubIndex = $"{parentCode}.{gapIdx}";
-                    await _reportService.AddNoteAsync(
-                        report.ReportId, sectionInfo.SectionId, gapSubIndex, ct);
-                    result.GapNotesCreated++;
-                    result.Log($"[Phase2] Gap note created: {gapSubIndex}", log);
+                    EnsureNoteExists(report.ReportId, sectionId, gapSubIndex, noteLookup, ref result, log, ct, isGap: true);
                 }
             }
 
             int expectedSubIndex = firstJsonSubIndex > 1 ? firstJsonSubIndex : 2;
-            // Track whether first note at index 1 is being filled from JSON.
             bool isFirstAtPlaceholder = (firstJsonSubIndex == 1);
 
             foreach (var (jsonNote, actualSubIndex) in parsedNotes)
             {
-                // Handle interior gaps (between JSON notes).
+                // Interior gaps.
                 if (!isFirstAtPlaceholder || actualSubIndex > 1)
                 {
                     while (expectedSubIndex < actualSubIndex)
                     {
                         var gapSubIndex = $"{parentCode}.{expectedSubIndex}";
-                        await _reportService.AddNoteAsync(
-                            report.ReportId, sectionInfo.SectionId, gapSubIndex, ct);
-                        result.GapNotesCreated++;
-                        result.Log($"[Phase2] Gap note created: {gapSubIndex}", log);
+                        EnsureNoteExists(report.ReportId, sectionId, gapSubIndex, noteLookup, ref result, log, ct, isGap: true);
                         expectedSubIndex++;
                     }
                 }
 
+                // Resolve or create the target note.
                 long noteId;
+                var targetSubIndex = jsonNote.NoteSubIndex;
+                if (string.IsNullOrWhiteSpace(targetSubIndex))
+                    targetSubIndex = $"{parentCode}.{actualSubIndex}";
+
                 if (isFirstAtPlaceholder && actualSubIndex == 1)
                 {
-                    // First JSON note at index 1 → update the existing placeholder.
-                    noteId = sectionInfo.PlaceholderNoteId;
+                    // Reuse the placeholder at X.Y.1
+                    var placeholderKey = (sectionId, $"{parentCode}.1");
+                    if (noteLookup.TryGetValue(placeholderKey, out var existingId))
+                    {
+                        noteId = existingId;
+                    }
+                    else
+                    {
+                        noteId = await EnsureNoteExistsAsync(report.ReportId, sectionId, $"{parentCode}.1", noteLookup, ct);
+                    }
                     isFirstAtPlaceholder = false;
                     expectedSubIndex = 2;
                 }
                 else
                 {
-                    // Additional sub-notes or first note at index > 1 → AddNoteAsync.
-                    var subIndex = jsonNote.NoteSubIndex;
-                    if (string.IsNullOrWhiteSpace(subIndex))
-                        subIndex = $"{parentCode}.{actualSubIndex}";
-
-                    var addedNote = await _reportService.AddNoteAsync(
-                        report.ReportId, sectionInfo.SectionId, subIndex, ct);
-                    noteId = addedNote.NoteId;
+                    noteId = await EnsureNoteExistsAsync(report.ReportId, sectionId, targetSubIndex, noteLookup, ct);
                     expectedSubIndex = actualSubIndex + 1;
                     if (isFirstAtPlaceholder) isFirstAtPlaceholder = false;
                 }
 
-                // Map status. StatusKey values are exact, stable strings in the DB seed:
-                // "Passed", "Failed", "RecurringFailed", "NotApplicable", "ManagerReview".
-                // No normalization needed — JSON StatusKey uses the same values.
-                int? statusId = null;
+                // ── Determine note content with validation defaults ──
+                string? noteText = jsonNote.NoteText;
                 string? statusStr = jsonNote.StatusKey;
-                if (!string.IsNullOrWhiteSpace(jsonNote.StatusKey) &&
-                    statusLookup.TryGetValue(jsonNote.StatusKey, out var mappedStatusId))
+                int? statusId = null;
+
+                // Map status if present.
+                if (!string.IsNullOrWhiteSpace(statusStr) &&
+                    statusLookup.TryGetValue(statusStr, out var mappedStatusId))
                 {
                     statusId = mappedStatusId;
                 }
 
-                // Collect note content update.
-                noteUpdates.Add((noteId, jsonNote.NoteText, statusStr, statusId));
+                // Validation defaults: only when BOTH text AND status are empty,
+                // AND this is a historical (non-latest) report.
+                bool textEmpty = string.IsNullOrWhiteSpace(noteText);
+                bool statusEmpty = string.IsNullOrWhiteSpace(statusStr);
+
+                if (applyHistoricalDefaults && textEmpty && statusEmpty)
+                {
+                    // Historical report with no content — fill minimal defaults
+                    // so the report passes validation. "Passed" = "מקובל" = no active issue.
+                    noteText = " ";
+                    statusStr = "Passed";
+                    statusId = passedStatusId;
+                }
+                else if (!applyHistoricalDefaults && textEmpty && statusEmpty)
+                {
+                    // Latest/active report — leave gaps visible for manual review.
+                    // Do not auto-fill. Validation will show the gap.
+                }
+                else if (!textEmpty && statusEmpty)
+                {
+                    // Note has text but no status — do NOT assign "Passed" automatically.
+                    // That would mark a real finding as "accepted", which is misleading.
+                    result.Log(
+                        $"[Phase2] Missing status for non-empty note: " +
+                        $"ReportId={report.ReportId}, SectionId={sectionId}, NoteSubIndex={targetSubIndex}", log);
+                }
+
+                noteUpdates.Add((noteId, noteText, statusStr, statusId));
                 result.NotesImported++;
 
-                // Collect planner response if present.
+                // Planner response.
                 if (!string.IsNullOrWhiteSpace(jsonNote.DesignerResponse))
                 {
                     plannerResponses.Add((noteId, jsonNote.DesignerResponse));
@@ -440,7 +469,7 @@ public sealed class ReportImportService
             }
         }
 
-        // ── I. Batch save ────────────────────────────────────────────
+        // ── Batch save ───────────────────────────────────────────────
         if (noteUpdates.Count > 0)
         {
             await _reportService.SaveNotesAsync(noteUpdates, [], ct);
@@ -450,6 +479,79 @@ public sealed class ReportImportService
         {
             await _reportService.SaveImportedPlannerResponsesAsync(plannerResponses, null, ct);
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  Duplicate-safe note creation
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the NoteId for the given (reportId, sectionId, subIndex).
+    /// If a note already exists in the lookup → returns existing NoteId (no AddNoteAsync call).
+    /// If not → calls AddNoteAsync, adds to lookup, returns new NoteId.
+    /// </summary>
+    private async Task<long> EnsureNoteExistsAsync(
+        int reportId, int sectionId, string subIndex,
+        Dictionary<(int SectionId, string SubIndex), long> noteLookup,
+        CancellationToken ct)
+    {
+        var key = (sectionId, subIndex);
+        if (noteLookup.TryGetValue(key, out var existingId))
+            return existingId;
+
+        var note = await _reportService.AddNoteAsync(reportId, sectionId, subIndex, ct);
+        noteLookup[key] = note.NoteId;
+        return note.NoteId;
+    }
+
+    /// <summary>
+    /// Fire-and-forget variant for gap notes — creates if missing, logs result.
+    /// Uses ref parameter for result to track gap note count.
+    /// </summary>
+    private void EnsureNoteExists(
+        int reportId, int sectionId, string subIndex,
+        Dictionary<(int SectionId, string SubIndex), long> noteLookup,
+        ref ReportImportResult result,
+        Action<string>? log, CancellationToken ct, bool isGap)
+    {
+        var key = (sectionId, subIndex);
+        if (noteLookup.ContainsKey(key))
+        {
+            // Already exists — no duplicate.
+            return;
+        }
+
+        // Synchronously wait for the async call (we're in a sync context for ref params).
+        var note = _reportService.AddNoteAsync(reportId, sectionId, subIndex, ct)
+            .GetAwaiter().GetResult();
+        noteLookup[key] = note.NoteId;
+
+        if (isGap)
+        {
+            result.GapNotesCreated++;
+            result.Log($"[Phase2] Gap note created: {subIndex}", log);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  Validation defaults decision
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Determines whether to apply minimal validation defaults for a migrated report.
+    /// Returns true for historical reports (not the latest version) where defaults
+    /// are acceptable to pass validation.
+    /// Returns false for latest/active reports where validation gaps should remain
+    /// visible for manual review.
+    /// 
+    /// Note: Sheet status based validation classification is postponed.
+    /// Currently using IsLatestVersion as the sole criterion.
+    /// </summary>
+    private static bool ShouldApplyMigrationValidationDefaults(GoogleSheetReviewMigrationPreviewRow row)
+    {
+        // Historical report: not the latest version → defaults OK.
+        // Latest/active report: keep gaps visible.
+        return !row.IsLatestVersion;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -483,8 +585,6 @@ public sealed class ReportImportService
         if (string.IsNullOrWhiteSpace(noteSubIndex))
             return 1;
 
-        // Try to extract the trailing number after the parent code prefix.
-        // e.g., "1.1.3" with parent "1.1" → "3" → 3
         if (noteSubIndex.StartsWith(parentCode + ".", StringComparison.OrdinalIgnoreCase))
         {
             var suffix = noteSubIndex[(parentCode.Length + 1)..];
@@ -492,7 +592,6 @@ public sealed class ReportImportService
                 return idx;
         }
 
-        // Fallback: try the last segment after the last dot.
         var lastDot = noteSubIndex.LastIndexOf('.');
         if (lastDot >= 0)
         {

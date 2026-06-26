@@ -2277,6 +2277,32 @@ opening any new gap:
 - `WPF Window\MigrationPocWindow.xaml` (modified)
 - `WPF Window\MigrationPocWindow.xaml.cs` (modified)
 
+### Gap 28 — Phase 2 skipCarryOver, duplicate prevention, validation defaults
+
+- **Added:** 26.06.2026
+- **Status:** Implemented
+- **Category:** Migration
+- **Impact:** Fixes duplicate key crash, prevents carry-over in migration mode, adds conditional validation defaults.
+
+**Changes:**
+- `IInspectionReportService.CreateReportAsync` extended with `bool skipCarryOver = false`
+- `InspectionReportService.CreateReportAsync` wraps carry-over in `if (!skipCarryOver)` guard
+- `ReportImportService` passes `skipCarryOver: true` — skips CarryOver, CopyGeneralFields, CopyReviewedFiles
+- Duplicate prevention via `(SectionId, NoteSubIndex)` lookup before every AddNoteAsync
+- Validation defaults: only when `IsLatestVersion==false` AND both NoteText and StatusKey are empty
+- "Passed" NOT assigned when note has text but missing status — logged as warning instead
+- Latest/active reports keep validation gaps visible
+
+**Postponed:**
+- Sheet status based validation classification
+- GeneralFields / Chapter 0 import
+- MarkReportAsSentAsync
+
+**Files:**
+- `SiNetSQL\Services\InspectionSync\IInspectionReportService.cs` (modified)
+- `SiNetSQL\Services\InspectionSync\InspectionReportService.cs` (modified)
+- `Services\Migration\ReportImportService.cs` (modified)
+
 ## Pointers
 
 - [`Docs\README.md`](../README.md) — documentation index.
