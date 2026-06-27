@@ -137,11 +137,12 @@ public sealed class ReportImportService
             return;
         }
 
-        // Count and skip general fields (not imported in first slice).
-        if (envelope.GeneralFields.Count > 0)
+        // GeneralFields: counted here, imported after report creation
+        // using FillGeneralFieldsFromJsonAsync.
+        var generalFieldCount = envelope.GeneralFields.Count;
+        if (generalFieldCount > 0)
         {
-            result.GeneralFieldsSkipped += envelope.GeneralFields.Count;
-            result.Log($"[Phase2] Skipping {envelope.GeneralFields.Count} general field(s) for row {row.SheetRowIndex} (Chapter 0 import postponed)", log);
+            result.Log($"[Phase2] {generalFieldCount} general field(s) in JSON for row {row.SheetRowIndex}", log);
         }
 
         // ── C. Ensure InspectionSeries ───────────────────────────────
@@ -192,7 +193,25 @@ public sealed class ReportImportService
             return;
         }
 
-        // ── F. Create report (skipCarryOver=true) ────────────────────
+        // ── F. Pre-creation safety: verify active sections exist ──────
+        {
+            await using var checkDb = await _dbFactory.CreateDbContextAsync(ct);
+            var activeSectionCount = await checkDb.Sections
+                .Where(s => s.IsActive && s.Chapter.SeriesId == seriesId)
+                .CountAsync(ct);
+
+            if (activeSectionCount == 0)
+            {
+                result.Errors++;
+                result.Log(
+                    $"[Phase2] BLOCKED: Series has 0 active sections before creating report. " +
+                    $"ProjectId={projectId}, SeriesId={seriesId}, ReportNumber={expectedReportNumber}. " +
+                    $"Template sync may have failed or deactivated all sections.", log);
+                return;
+            }
+        }
+
+        // ── G. Create report (skipCarryOver=true) ─────────────────────
         // Migration Import: JSON cache is the sole content source.
         // skipCarryOver=true prevents:
         //   • CarryOverUnresolvedNotesAsync (unresolved notes from previous report)
@@ -221,8 +240,14 @@ public sealed class ReportImportService
                 $"This may indicate a concurrency issue.", log);
         }
 
-        // ── G+H. Fill notes from JSON ────────────────────────────────
+        // ── H+I. Fill notes from JSON ────────────────────────────────────
         await FillNotesFromJsonAsync(report, envelope, compat, statusLookup, row, result, log, ct);
+
+        // ── J. Import GeneralFields from JSON (conservative) ─────────
+        await FillGeneralFieldsFromJsonAsync(report, envelope, compat, result, log, ct);
+
+        // ── K. Placeholder defaults for empty notes (historical only) ─
+        await ApplyPlaceholderDefaultsAsync(report, statusLookup, row, result, log, ct);
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -491,6 +516,152 @@ public sealed class ReportImportService
         {
             await _reportService.SaveImportedPlannerResponsesAsync(plannerResponses, null, ct);
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  GeneralFields import from JSON (Chapter 0)
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Conservative import of GeneralFields (Project Information / Chapter 0) from JSON.
+    /// Only fields whose key has an exact match in the target template are imported.
+    /// No fuzzy matching. No auto-fill. Does not use CopyGeneralFieldsFromPrevious.
+    /// </summary>
+    private async Task FillGeneralFieldsFromJsonAsync(
+        InspectionReport report,
+        ExtractionCacheEnvelope envelope,
+        TemplateCompatibilityResult compat,
+        ReportImportResult result,
+        Action<string>? log,
+        CancellationToken ct)
+    {
+        if (envelope.GeneralFields.Count == 0) return;
+
+        // Load Chapter 0 notes for this report (created by CreateReportAsync snapshot).
+        var allNotes = await _reportService.GetNotesForReportAsync(report.ReportId, ct);
+        var chapter0Notes = allNotes
+            .Where(n => n.Section?.Chapter?.ChapterNumber == 0 && n.Section?.SectionName != null)
+            .ToList();
+
+        if (chapter0Notes.Count == 0)
+        {
+            result.GeneralFieldsSkipped += envelope.GeneralFields.Count;
+            result.Log(
+                $"[Phase2] No Chapter 0 sections in target template for report {report.ReportId}. " +
+                $"All {envelope.GeneralFields.Count} general field(s) skipped.", log);
+            return;
+        }
+
+        // Build lookup: SectionName text → first note (by SectionId).
+        // Each Chapter 0 section's SectionName is the tag label (e.g., "ProjectName").
+        var noteByLabel = new Dictionary<string, InspectionNote>(StringComparer.OrdinalIgnoreCase);
+        foreach (var note in chapter0Notes)
+        {
+            var label = note.Section!.SectionName!.Name;
+            noteByLabel.TryAdd(label, note);
+        }
+
+        var generalFieldUpdates = new List<(long NoteId, string? Text, string? Status)>();
+
+        foreach (var (key, value) in envelope.GeneralFields)
+        {
+            // Check eligibility in target template.
+            if (!compat.IsGeneralFieldEligible(key))
+            {
+                result.GeneralFieldsSkipped++;
+                result.Log($"[Phase2] GeneralField skipped: key not eligible in target template. Key={key}", log);
+                continue;
+            }
+
+            // Find matching Chapter 0 note by section name.
+            if (!noteByLabel.TryGetValue(key, out var targetNote))
+            {
+                result.GeneralFieldsSkipped++;
+                result.Log($"[Phase2] GeneralField skipped: no matching Chapter 0 section found. Key={key}", log);
+                continue;
+            }
+
+            // Only fill if the target note is empty (do not overwrite existing content).
+            if (!string.IsNullOrWhiteSpace(targetNote.NoteText))
+            {
+                result.Log($"[Phase2] GeneralField skipped: note already has content. Key={key}, NoteId={targetNote.NoteId}", log);
+                continue;
+            }
+
+            generalFieldUpdates.Add((targetNote.NoteId, value, null));
+            result.GeneralFieldsImported++;
+        }
+
+        if (generalFieldUpdates.Count > 0)
+        {
+            // SaveNotesAsync with generalFields parameter → sets NoteStatusId=null automatically.
+            await _reportService.SaveNotesAsync([], generalFieldUpdates, ct);
+            result.Log(
+                $"[Phase2] Imported {generalFieldUpdates.Count} general field(s) into Chapter 0 for report {report.ReportId}", log);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  Placeholder defaults for empty notes (historical reports only)
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// After note filling, apply validation defaults to remaining empty placeholder notes.
+    /// Only for historical (non-latest) reports. Notes where BOTH text AND status are empty
+    /// get NoteText=" ", NoteStatus="Passed", NoteStatusId=passedStatusId.
+    /// Does NOT touch notes that have text but no status.
+    /// Does NOT touch latest/active reports.
+    /// </summary>
+    private async Task ApplyPlaceholderDefaultsAsync(
+        InspectionReport report,
+        IReadOnlyDictionary<string, int> statusLookup,
+        GoogleSheetReviewMigrationPreviewRow row,
+        ReportImportResult result,
+        Action<string>? log,
+        CancellationToken ct)
+    {
+        if (!ShouldApplyMigrationValidationDefaults(row))
+        {
+            // Latest/active report — leave validation gaps visible.
+            return;
+        }
+
+        statusLookup.TryGetValue("Passed", out var passedStatusId);
+        if (passedStatusId == 0)
+        {
+            result.Log("[Phase2] WARNING: Cannot find 'Passed' status for placeholder defaults.", log);
+            return;
+        }
+
+        // Re-load notes to see current state after FillNotesFromJsonAsync.
+        var notes = await _reportService.GetNotesForReportAsync(report.ReportId, ct);
+
+        var emptyPlaceholders = notes
+            .Where(n =>
+                string.IsNullOrWhiteSpace(n.NoteText) &&
+                string.IsNullOrWhiteSpace(n.NoteStatus) &&
+                n.NoteStatusId is null or 0)
+            .ToList();
+
+        if (emptyPlaceholders.Count == 0) return;
+
+        // Separate Chapter 0 (general fields) from numbered sections.
+        var numberedEmpty = emptyPlaceholders
+            .Where(n => n.Section?.Chapter?.ChapterNumber != 0)
+            .ToList();
+
+        if (numberedEmpty.Count == 0) return;
+
+        var defaultUpdates = numberedEmpty
+            .Select(n => (n.NoteId, (string?)" ", (string?)"Passed", (int?)passedStatusId))
+            .ToList();
+
+        await _reportService.SaveNotesAsync(defaultUpdates, [], ct);
+
+        result.PlaceholderDefaultsFilled += numberedEmpty.Count;
+        result.Log(
+            $"[Phase2] Applied validation defaults to {numberedEmpty.Count} empty placeholder note(s) " +
+            $"in historical report {report.ReportId} (ReportNumber={report.ReportNumber})", log);
     }
 
     // ──────────────────────────────────────────────────────────────────

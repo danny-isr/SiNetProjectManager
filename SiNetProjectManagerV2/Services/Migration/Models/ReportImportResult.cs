@@ -17,6 +17,8 @@ public sealed class ReportImportResult
     public int GapNotesCreated { get; set; }
     public int PlannerResponsesImported { get; set; }
     public int GeneralFieldsSkipped { get; set; }
+    public int GeneralFieldsImported { get; set; }
+    public int PlaceholderDefaultsFilled { get; set; }
     public int Errors { get; set; }
 
     /// <summary>
@@ -45,7 +47,9 @@ public sealed class ReportImportResult
             Notes skipped (template): {NotesSkippedTemplateMismatch}
             Gap notes created:        {GapNotesCreated}
             Planner responses:        {PlannerResponsesImported}
+            General fields imported:  {GeneralFieldsImported}
             General fields skipped:   {GeneralFieldsSkipped}
+            Placeholder defaults:     {PlaceholderDefaultsFilled}
             Errors:                   {Errors}
             ═══════════════════════════════
             """;

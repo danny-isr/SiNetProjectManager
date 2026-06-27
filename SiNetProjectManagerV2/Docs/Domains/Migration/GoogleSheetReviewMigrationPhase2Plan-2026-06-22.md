@@ -1,7 +1,7 @@
 # Phase 2 Technical Plan — Report Import from JSON Cache
 
 - **Date:** 22.06.2026
-- **Status:** First slice implemented 26.06.2026. Revised 26.06.2026 for skipCarryOver, duplicate prevention, and validation defaults.
+- **Status:** First slice implemented 26.06.2026. Revised 27.06.2026 for cross-series deactivation fix, active sections guard, GeneralFields import, and placeholder defaults.
 - **Scope:** Import `InspectionReport` structures from existing JSON cache into the DB.  
   Phase 2 does **not** reconstruct workflows. Phase 3 handles Workflow reconstruction.
 - **Prerequisites:** Phase 1 Preview code is implemented (read-only). Functional testing against real Google Sheet data is pending.  
@@ -446,11 +446,15 @@ The goal is to preserve what was in the historical report per the JSON cache.
 
 **There is no `Place` field on `InspectionReport` model.** Place/location comes from `Project.Place.Title` at UI display time and is shown in Chapter 0 general field labeled "ישוב" / "רשות מקומית". This auto-fill is UI-level only.
 
-**Chapter 0 / GeneralFields import:**
-- NOT implemented in this slice.
-- No fuzzy matching.
-- No new mechanism for general fields.
-- If approved in the future, this will be a separate slice.
+**Chapter 0 / GeneralFields import:** *(revised 27.06.2026 — implemented)*
+- Conservative import using `FillGeneralFieldsFromJsonAsync`.
+- Only fields whose key has an **exact match** in the target template Chapter 0 are imported.
+- Eligibility checked via `TemplateCompatibilityResult.IsGeneralFieldEligible(key)`.
+- No fuzzy matching. No new Chapter 0 sections created.
+- If no Chapter 0 sections exist in the target template, all general fields are skipped with a log message.
+- Values written via `SaveNotesAsync` with `generalFields` parameter (NoteStatusId = null).
+- Only empty target notes are filled — never overwrites existing content.
+- Counters: `GeneralFieldsImported` and `GeneralFieldsSkipped` in `ReportImportResult`.
 
 ---
 
@@ -484,8 +488,30 @@ The goal is to preserve what was in the historical report per the JSON cache.
 - Latest/active report: no defaults, Validation gaps remain visible.
 
 ### Auto-fill / Chapter 0
-- Chapter 0 / GeneralFields NOT copied from previous report in migration mode.
+- Chapter 0 / GeneralFields NOT copied from previous report in migration mode (`skipCarryOver=true`).
+- GeneralFields imported conservatively from JSON (exact key match, eligibility-checked).
 - No auto-fill replaces JSON values.
+
+### Placeholder defaults (added 27.06.2026)
+- After note filling and GeneralFields import, `ApplyPlaceholderDefaultsAsync` fills remaining empty placeholder notes.
+- Only for historical (non-latest) reports.
+- Only numbered sections (not Chapter 0).
+- Only when **both** NoteText AND NoteStatus are empty.
+- Sets: NoteText=" ", NoteStatus="Passed", NoteStatusId=passedStatusId.
+- Does NOT touch latest/active reports.
+- Counter: `PlaceholderDefaultsFilled` in `ReportImportResult`.
+
+### TemplateSyncService scoped loading fix (added 27.06.2026)
+- `LoadLookupsAsync` now accepts `int? seriesId` and scopes chapters and sections queries to the series.
+- Prevents `DeactivateAbsentSections` from deactivating sections belonging to other series.
+- Fixes the "Sections: 0" bug where reports 2-4 had no active sections because a previous project's sync deactivated them.
+- ChapterName and SectionName dictionaries remain global (shared across series).
+
+### Active sections safety guard (added 27.06.2026)
+- Before `CreateReportAsync`, `ImportSingleRowAsync` checks `Sections.Count(IsActive && SeriesId)` > 0.
+- If 0 active sections, the row is BLOCKED with error:
+  `[Phase2] BLOCKED: Series has 0 active sections before creating report.`
+- This is a safety net — the scoped loading fix should prevent this from ever triggering.
 
 ---
 
@@ -500,8 +526,8 @@ The goal is to preserve what was in the historical report per the JSON cache.
 | Hiding Validation in latest/active report | ❌ Cancelled — gaps remain visible |
 | Assigning "Passed" when note has text but missing status | ❌ Cancelled — would misleadingly mark findings as accepted |
 | Sheet status based validation classification | ⏳ Postponed — currently using `IsLatestVersion` only |
-| GeneralFields / Chapter 0 import | ⏳ Postponed |
-| Fuzzy matching for general fields | ⏳ Not approved |
+| GeneralFields / Chapter 0 import | ✅ Implemented 27.06.2026 — conservative import with exact key match, eligibility-checked |
+| Fuzzy matching for general fields | ❌ Not approved — exact match only |
 | Import all rows (broad button) | ✅ Implemented 27.06.2026 — approved for DB testing only. Uses same pipeline as Import Selected. |
 | `MarkReportAsSentAsync` / version locking | ⏳ Postponed |
 | Workflow / Task creation | ⏳ Phase 3 |

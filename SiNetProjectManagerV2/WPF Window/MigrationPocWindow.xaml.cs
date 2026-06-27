@@ -2101,7 +2101,9 @@ public partial class MigrationPocWindow : Window
                     $"הערות יובאו: {result.NotesImported}\n" +
                     $"תגובות מתכנן: {result.PlannerResponsesImported}\n" +
                     $"הערות פערים: {result.GapNotesCreated}\n" +
+                    $"שדות כלליים יובאו: {result.GeneralFieldsImported}\n" +
                     $"שדות כלליים שדולגו: {result.GeneralFieldsSkipped}\n" +
+                    $"Placeholder defaults: {result.PlaceholderDefaultsFilled}\n" +
                     $"דילוג (קיים כבר): {result.ReportsSkippedAlreadyExists}\n" +
                     $"דילוג (קונפליקט): {result.ReportsSkippedConflict}",
                     "Phase 2 — הצלחה", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -2218,7 +2220,9 @@ public partial class MigrationPocWindow : Window
                     $"הערות יובאו: {result.NotesImported}\n" +
                     $"תגובות מתכנן: {result.PlannerResponsesImported}\n" +
                     $"הערות פערים: {result.GapNotesCreated}\n" +
+                    $"שדות כלליים יובאו: {result.GeneralFieldsImported}\n" +
                     $"שדות כלליים שדולגו: {result.GeneralFieldsSkipped}\n" +
+                    $"Placeholder defaults: {result.PlaceholderDefaultsFilled}\n" +
                     $"דילוג (קיים כבר): {result.ReportsSkippedAlreadyExists}\n" +
                     $"דילוג (קונפליקט): {result.ReportsSkippedConflict}",
                     "Phase 2 ImportAll — הצלחה", MessageBoxButton.OK, MessageBoxImage.Information);
