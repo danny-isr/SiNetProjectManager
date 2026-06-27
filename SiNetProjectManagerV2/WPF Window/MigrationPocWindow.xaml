@@ -491,6 +491,15 @@
                                 Background="#1976D2" Foreground="White" Cursor="Hand"
                                 BorderThickness="0"
                                 ToolTip="ייבוא הדוחות הנבחרים ל-DB (Phase 2 — שורות נבחרות בלבד)"/>
+                        <Button x:Name="ImportReportsAllButton"
+                                Content="ייבוא כל הדוחות הכשירים (Phase 2)"
+                                Click="ImportReportsAllButton_Click"
+                                IsEnabled="False"
+                                Padding="12,6" FontSize="13" FontWeight="Bold"
+                                Margin="12,0,0,0"
+                                Background="#E65100" Foreground="White" Cursor="Hand"
+                                BorderThickness="0"
+                                ToolTip="ייבוא כל השורות הכשירות ל-DB — לבדיקות DB בלבד"/>
                         <TextBlock x:Name="ImportStatusLabel" VerticalAlignment="Center"
                                    Margin="12,0,0,0" FontSize="12" Foreground="#666"/>
                     </StackPanel>

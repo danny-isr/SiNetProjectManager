@@ -337,16 +337,28 @@ Phase 2 import runs from the **Google Sheet Review Migration Preview tab (Tab 3 
 - `ImportStatusLabel` — shows import eligibility status and result summary.
 - Log output in the shared `LogBox` via `AppendToLog`.
 
-**Button enable conditions (all must be true):**
-- Preview rows are loaded (`_lastPreviewRows` is populated).
-- A target template is selected (`_selectedTemplate` is set).
-- Template compatibility was performed (`_lastCompatibilityResults` is set).
-- Template sync rows are available (`_lastTemplateSyncRows` is populated).
-- At least one row is selected in the grid.
-- Selected rows must have: `ResolvedProjectId`, `TemplateValidationStatus` ∈ {FullMatch, PartialMatch}, JSON cache available, and no blocking classification.
+**Implemented (27.06.2026 — Import All for DB testing):**
 
-**Postponed:**
-- `ImportReportsButton` (import all rows) — not yet implemented; first slice is selected-rows-only.
+- `ImportReportsAllButton` — **"ייבוא כל הדוחות הכשירים (Phase 2)"** — runs Phase 2 for ALL eligible rows.
+- Approved for DB testing only. Shows confirmation dialog with rejection breakdown before executing.
+- Uses the same `ReportImportService.ImportRowsAsync` pipeline as Import Selected.
+
+**Central eligibility helper:** `IsRowEligibleForPhase2Import(row)`
+
+Used by all three callers (`UpdateImportButtonState`, `ImportReportsSelectedButton_Click`, `ImportReportsAllButton_Click`).
+
+A row is eligible when ALL of the following are true:
+- `ResolvedProjectId` is not null.
+- `TemplateValidationStatus` ∈ {`FullMatch`, `PartialMatch`}.
+- `IsJsonCacheAvailableForImport(row)` = true (supports: `Available`, `Found`, `Found (V1)`, `Found (V2)`, `✅`).
+- `Classification` is NOT blocked (`AlreadyDone`, `NoMatch`, `MissingData`, `JsonMissing`, `ExistingReportConflict`).
+
+**Button enable conditions:**
+
+| Button | Base conditions | Additional |
+|---|---|---|
+| Import Selected | Preview rows, template, compatibility, sync rows | At least one eligible row selected |
+| Import All | Preview rows, template, compatibility, sync rows | At least one eligible row exists in the full set |
 
 ---
 
@@ -490,7 +502,7 @@ The goal is to preserve what was in the historical report per the JSON cache.
 | Sheet status based validation classification | ⏳ Postponed — currently using `IsLatestVersion` only |
 | GeneralFields / Chapter 0 import | ⏳ Postponed |
 | Fuzzy matching for general fields | ⏳ Not approved |
-| Import all rows (broad button) | ⏳ Postponed — first slice is selected-rows-only |
+| Import all rows (broad button) | ✅ Implemented 27.06.2026 — approved for DB testing only. Uses same pipeline as Import Selected. |
 | `MarkReportAsSentAsync` / version locking | ⏳ Postponed |
 | Workflow / Task creation | ⏳ Phase 3 |
 | Google Sheets / Index Sheet writeback | 🔒 Not in scope |
