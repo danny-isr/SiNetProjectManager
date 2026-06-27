@@ -1,6 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SiNet.Application.Abstractions.Email;
-using SiNet.LegacyBridge.Email;
 
 namespace SiNet.LegacyBridge;
 
@@ -11,10 +9,17 @@ namespace SiNet.LegacyBridge;
 /// </summary>
 public static class LegacyBridgeServiceCollectionExtensions
 {
+    /// <summary>
+    /// Reserved for bridge-wide registrations. Currently a no-op: there are no active strangler
+    /// adapters in the new stack. The Email/Google slice has been migrated to the native
+    /// <c>GmailEmailGateway</c> in <c>SiNet.Infrastructure.Google</c> (registered by
+    /// <c>AddSiNetGoogle</c>), so the bridge no longer wires <c>IEmailGateway</c>. The remaining
+    /// <c>ILegacyEmailSource</c> seam is bound only by the legacy WPF host
+    /// (<c>SiNetProjectManagerV2</c>) and is intentionally NOT registered here, preserving the
+    /// rule that this assembly never depends on the legacy connector.
+    /// </summary>
     public static IServiceCollection AddSiNetLegacyBridge(this IServiceCollection services)
     {
-        // Example bridge (Foundation Round): new IEmailGateway port -> legacy GoogleService adapter.
-        services.AddSingleton<IEmailGateway, LegacyEmailGatewayAdapter>();
         return services;
     }
 }

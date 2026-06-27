@@ -16,11 +16,20 @@ namespace SiNet.App.Composition;
 public static class SiNetCompositionExtensions
 {
     public static IServiceCollection AddSiNet(this IServiceCollection services)
+        => services.AddSiNet(static _ => { });
+
+    /// <summary>
+    /// Aggregates the modular registrations and lets the host configure the Gmail module
+    /// (client secrets path, token store, application name, interactive sign-in).
+    /// </summary>
+    public static IServiceCollection AddSiNet(
+        this IServiceCollection services,
+        Action<GmailOptions> configureGmail)
     {
         services.AddSiNetLogging();
         services.AddSiNetFileSystem();
         services.AddSiNetSql();
-        services.AddSiNetGoogle();
+        services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();
         services.AddSiNetLegacyBridge();
         return services;

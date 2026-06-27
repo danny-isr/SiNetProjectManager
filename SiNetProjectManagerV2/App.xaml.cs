@@ -247,6 +247,10 @@ namespace SiNetProjectManagerV2
                     $"TokenStorePath='{gs.TokenStorePath}' AppName='{gs.ApplicationName}'");
                 return gs;
             });
+            // Strangler seam: lets the new clean-architecture stack read the mailbox through the
+            // same authenticated GoogleService singleton without depending on the legacy connector.
+            services.AddSingleton<SiNet.LegacyBridge.Email.ILegacyEmailSource,
+                Services.GoogleServiceLegacyEmailSource>();
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)

@@ -91,8 +91,11 @@ Domain  ◄─ Application  ◄─ Infrastructure.* / LegacyBridge  ◄─ App.C
 5. `dotnet build SiNet.sln`; run and extend tests.
 6. Update `MIGRATION_MAP.md`; retire the old path only when its status is **✅ Replaced**.
 
-Migration order: **Email/Google → Workflow → Inspection → ACC/Autodesk → SQL/DbContext →
+Migration order: **Email/Google ✅ (native) → Workflow → Inspection → ACC/Autodesk → SQL/DbContext →
 App startup/DI**.
+
+> Email/Google is the first slice fully migrated to native infrastructure
+> (`SiNet.Infrastructure.Google` → Gmail API, no `LegacyBridge`). See `MIGRATION_MAP.md`.
 
 ---
 

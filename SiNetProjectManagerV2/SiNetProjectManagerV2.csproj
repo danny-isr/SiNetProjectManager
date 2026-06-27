@@ -64,6 +64,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\SiNetSQL\SiNetSQL\SiNetSQL.csproj" />
     <ProjectReference Include="..\..\AutodeskIntegration\SiOffice.GoogleConnector\SiOffice.GoogleConnector.csproj" />
+    <!-- New clean-architecture stack (strangler). The WPF host is the only layer that knows both
+         the legacy GoogleService and the new ports, so it binds the LegacyBridge seam here. -->
+    <ProjectReference Include="..\src\SiNet.Domain\SiNet.Domain.csproj" />
+    <ProjectReference Include="..\src\SiNet.Application\SiNet.Application.csproj" />
+    <ProjectReference Include="..\src\SiNet.LegacyBridge\SiNet.LegacyBridge.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\folder_project.png">
