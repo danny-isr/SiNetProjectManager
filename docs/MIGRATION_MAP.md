@@ -15,7 +15,7 @@ exist/updated, and its row below is marked **✅ Replaced**.
 | Domain | Legacy source (approx. size) | New home | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted; native sign-in + real config done** (no `LegacyBridge`). Read-only; deferred: send/modify only. See sections below. |
-| Workflow | `WorkflowManagementWindow.xaml.cs` (~3,548) | `SiNet.Application` `IWorkflow*` → App.Wpf VM + services | ⬜ | Extract DTOs and business logic out of code-behind. |
+| Workflow | `WorkflowManagementWindow.xaml.cs` (~3,547) | `SiNet.Application` `IWorkflow*` → App.Wpf VM + services | 🟡 | **Read slice extracted.** `WorkflowQueryService` + `ProjectWorkflowPolicyService` moved into `SiNet.Infrastructure.Sql` behind `IWorkflowQueryService` / `IProjectWorkflowPolicyService` ports (namespaces preserved). Writes/engine deferred. See section below. |
 | Inspection | `FloatingInspectionViewModel.cs` (~5,384) | `SiNet.Application` `IInspection*` → services + VM | ⬜ | Split list/report/notes/photos. |
 | ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ `LegacyBridge`) | ⬜ | ACC remains source of truth; DB is cache/helper. |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
@@ -184,6 +184,56 @@ At startup the host attempts `TrySignInSilentlyAsync` (no browser) to restore a 
 > packages. The legacy project (which still has the `IWshRuntimeLibrary` COM reference) must be
 > built with **VS MSBuild** — `dotnet build` cannot resolve COM (`MSB4803`). This is a pre-existing
 > legacy constraint, unaffected by the extraction.
+
+---
+
+## Workflow slice — read services extracted to clean module 🟡
+
+> **Reads-first, writes-deferred.** Only the two **read-only** workflow services were relocated this
+> round. The write/engine layer (orchestrator, executor, transition evaluator, seed, validation,
+> watchdog, etc.) stays in legacy `SiNetSQL.Services.Workflow` and is untouched.
+
+**Why `SiNet.Infrastructure.Sql` (not `SiNet.LegacyBridge` or `SiNet.Application`):**
+
+> The services need `IDbContextFactory<SiNetSQLDbContext>` (EF, now in the clean SQL module).
+> `SiNet.LegacyBridge` (`net10.0`) **cannot** reference legacy `SiNetSQL` (`net10.0-windows` + COM)
+> without contaminating the clean graph. Exposing the EF entities from a port in `SiNet.Application`
+> would force an illegal `Application → Infrastructure` dependency. So the ports are **co-located**
+> in `SiNet.Infrastructure.Sql` for this transitional round (**Option Y**), and the EF entities are
+> **temporarily** allowed in the port signatures (to be DTO-cleaned in a later round).
+
+**Moved into `src/SiNet.Infrastructure.Sql/Services/Workflow` (namespace `SiNetSQL.Services.Workflow` preserved):**
+
+| Artifact | Detail |
+| --- | --- |
+| `WorkflowQueryService.cs` | Read-only queries (definitions, instances, transition history, dashboard snapshots). 9 methods + `ProjectWorkflowSnapshot` / `WorkflowInstanceSnapshot` DTOs. |
+| `ProjectWorkflowPolicyService.cs` | Read-only allowed-workflow resolution by ProjectType (open-policy fallbacks). 3 methods. |
+| `IWorkflowQueryService.cs` *(new)* | Co-located read port for the query service. |
+| `IProjectWorkflowPolicyService.cs` *(new)* | Co-located read port for the policy service. |
+| `WorkflowServiceCollectionExtensions.cs` *(new)* | `AddSiNetWorkflowReads()` registers both services as concrete + port (forwarded). |
+
+**Wiring:**
+
+| Change | Detail |
+| --- | --- |
+| `SiNet.App.Composition` | `AddSiNetWorkflowReads()` aggregated after `AddSiNetSql()`. |
+| Legacy `App.xaml.cs` | Existing concrete `AddTransient` registrations resolve to the moved types automatically (namespace preserved, transitive ref `SiNetSQL → SiNet.Infrastructure.Sql`). Added interface forwarders for both ports. |
+| `WorkflowManagementWindow.xaml.cs` | Dashboard read consumers re-pointed to `IWorkflowQueryService` / `IProjectWorkflowPolicyService`. Write-path `WorkflowTaskOrchestrator` left unchanged. |
+
+**Deferred (not in this round):** all workflow writes/engine, Builder-tab inline `DbContext` reads,
+DTO cleanup (remove EF entities from port signatures), UI/VM migration to `SiNet.App.Wpf`.
+
+| Deliverable | Status |
+| --- | --- |
+| Read services + snapshot DTOs moved (namespaces preserved) | ✅ |
+| `IWorkflowQueryService` / `IProjectWorkflowPolicyService` ports defined (co-located) | ✅ |
+| `AddSiNetWorkflowReads()` DI + composition-root aggregation | ✅ |
+| Legacy host port forwarders + Dashboard read consumers re-pointed | ✅ |
+| Focused tests (9) in `SiNetSQL.Tests/Services/Workflow` | ✅ _9/9_ |
+| Existing workflow regression tests | ✅ _25/25_ |
+| `dotnet build SiNet.sln` green | ✅ _0/0_ |
+| Clean module stays `net10.0`, no Windows/COM/WPF leakage | ✅ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
 
 ---
 

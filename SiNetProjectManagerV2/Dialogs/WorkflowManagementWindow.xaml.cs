@@ -198,9 +198,9 @@ public partial class WorkflowManagementWindow : Window
     // Tab 3: Dashboard state
     // ═══════════════════════════════════════════════════════════════════════
 
-    private WorkflowQueryService? _dashboardQueryService;
+    private IWorkflowQueryService? _dashboardQueryService;
     private WorkflowTaskOrchestrator? _dashboardOrchestrator;
-    private ProjectWorkflowPolicyService? _dashboardPolicyService;
+    private IProjectWorkflowPolicyService? _dashboardPolicyService;
     private List<Project> _dashboardProjects = [];
     private Project? _dashboardSelectedProject;
     private List<WorkflowDefinition> _dashboardDefinitions = [];
@@ -2348,9 +2348,9 @@ public partial class WorkflowManagementWindow : Window
 
         try
         {
-            _dashboardQueryService = App.ServiceProvider?.GetRequiredService<WorkflowQueryService>();
+            _dashboardQueryService = App.ServiceProvider?.GetRequiredService<IWorkflowQueryService>();
             _dashboardOrchestrator = App.ServiceProvider?.GetRequiredService<WorkflowTaskOrchestrator>();
-            _dashboardPolicyService = App.ServiceProvider?.GetRequiredService<ProjectWorkflowPolicyService>();
+            _dashboardPolicyService = App.ServiceProvider?.GetRequiredService<IProjectWorkflowPolicyService>();
 
             var factory = GetFactory();
             if (factory == null) return;
