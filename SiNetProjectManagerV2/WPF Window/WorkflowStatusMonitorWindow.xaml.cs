@@ -18,7 +18,7 @@ public partial class WorkflowStatusMonitorWindow : Window
     {
         InitializeComponent();
 
-        var queryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+        var queryService = App.ServiceProvider.GetRequiredService<IWorkflowQueryService>();
         var vm = new WorkflowStatusViewModel(queryService);
         vm.InstanceRequested = OnInstanceRequested;
         DataContext = vm;

@@ -23,7 +23,7 @@ namespace SiNetProjectManagerV2.Services.Migration;
 public sealed class GoogleSheetReviewMigrationPreviewService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
-    private readonly WorkflowQueryService _workflowQueryService;
+    private readonly IWorkflowQueryService _workflowQueryService;
     private readonly GoogleAuthService _authService;
 
     /// <summary>
@@ -38,7 +38,7 @@ public sealed class GoogleSheetReviewMigrationPreviewService
 
     public GoogleSheetReviewMigrationPreviewService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        WorkflowQueryService workflowQueryService,
+        IWorkflowQueryService workflowQueryService,
         GoogleAuthService authService)
     {
         _dbFactory = dbFactory;

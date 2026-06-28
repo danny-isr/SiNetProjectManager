@@ -319,7 +319,7 @@ public partial class WorkflowCreateProjectWindow : Window
             if (sp == null) return;
 
             var orchestrator = sp.GetService<WorkflowTaskOrchestrator>();
-            var policyService = sp.GetService<ProjectWorkflowPolicyService>();
+            var policyService = sp.GetService<IProjectWorkflowPolicyService>();
             if (orchestrator == null || policyService == null)
             {
                 AppLogger.Warn(

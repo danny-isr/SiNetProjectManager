@@ -18,7 +18,7 @@ public partial class WorkflowInstanceWindow : Window
         InitializeComponent();
         _instanceId = instanceId;
 
-        var queryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+        var queryService = App.ServiceProvider.GetRequiredService<IWorkflowQueryService>();
         var engine = App.ServiceProvider.GetRequiredService<WorkflowEngine>();
         var orchestrator = App.ServiceProvider.GetRequiredService<WorkflowTaskOrchestrator>();
 

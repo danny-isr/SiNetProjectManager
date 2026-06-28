@@ -235,6 +235,75 @@ DTO cleanup (remove EF entities from port signatures), UI/VM migration to `SiNet
 | Clean module stays `net10.0`, no Windows/COM/WPF leakage | ✅ |
 | No schema / migration / `ModelSnapshot` edits | ✅ |
 
+### A1 — port adoption across remaining consumers ✅
+
+> **Ports-only, no DTO swap.** Every remaining concrete `WorkflowQueryService` /
+> `ProjectWorkflowPolicyService` dependency was switched to the co-located ports
+> `IWorkflowQueryService` / `IProjectWorkflowPolicyService`. No DTO redesign, no query-logic
+> change, and the write-path `WorkflowEngine` / `WorkflowTaskOrchestrator` stay concrete.
+> Because the ports share the `SiNetSQL.Services.Workflow` namespace, no `using` changes were
+> needed — each edit is a field/ctor-param type swap (VMs) or `GetRequiredService<Concrete>()`
+> → `GetRequiredService<Interface>()` (hosts).
+
+**Consumers re-pointed to ports:**
+
+| Consumer | Change |
+| --- | --- |
+| `SiNetSQL.MVVM/WorkflowStatusViewModel.cs` | Field + ctor param → `IWorkflowQueryService`. |
+| `SiNetSQL.MVVM/WorkflowInstanceViewModel.cs` | Query field + ctor param → `IWorkflowQueryService` (engine/orchestrator left concrete). |
+| `SiNetSQL.MVVM/WorkflowDashboardViewModel.cs` | Query + policy fields/params → ports (orchestrator left concrete). |
+| `WorkflowStatusMonitorWindow.xaml.cs` | Resolves `IWorkflowQueryService`. |
+| `WorkflowInstanceWindow.xaml.cs` | Resolves `IWorkflowQueryService`. |
+| `WorkflowDashboardView.xaml.cs` | Resolves `IWorkflowQueryService` + `IProjectWorkflowPolicyService`. |
+| `WorkflowCreateProjectWindow.xaml.cs` | Resolves `IProjectWorkflowPolicyService`. |
+| `Services/Migration/GoogleSheetReviewMigrationPreviewService.cs` | Field + ctor param → `IWorkflowQueryService`. |
+| `MigrationPocWindow.xaml.cs` (×2) | Resolves `IWorkflowQueryService` before constructing the preview service. |
+
+**Deferred (still not in this round):** DTO cleanup (remove EF entities from port signatures),
+all workflow writes/engine, Builder-tab inline `DbContext` reads, UI/VM migration to `SiNet.App.Wpf`.
+
+| Deliverable | Status |
+| --- | --- |
+| All concrete read/policy consumers switched to ports (both repos) | ✅ |
+| Only DI forwarders reference the concrete types | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| No DTO / schema / migration / `ModelSnapshot` edits | ✅ |
+
+### C1 — canonical `WorkflowStatus` enum + boundary mapper (additive) ✅
+
+> **Smallest safe slice toward clean contracts ("Option C now → Option A later").**
+> Adds the canonical clean-layer status enum and a boundary mapper **without** touching
+> the ports, VMs, XAML, EF mapping, or the legacy enum's identity. Purely additive —
+> nothing is wired into a port yet, so runtime behavior is unchanged.
+
+**Why the full DTO/port migration ("Option A") is still deferred:** the read-port consumers
+(`WorkflowInstanceViewModel`, `WorkflowDashboardViewModel`) live in the separate `SiNetSQL`
+repo, bind EF entities directly to XAML, and interleave the **write** engine
+(`WorkflowEngine` / `WorkflowTaskOrchestrator`, which still returns entities). Converting only
+the read ports to DTOs would create a mixed entity/DTO graph and break bindings + write calls.
+A faithful migration must move the write engine and rewrite XAML across two repos — out of this
+round's scope.
+
+**Added:**
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Domain/Workflow/WorkflowStatus.cs` *(new)* | Canonical enum (`Draft=0`, `Active=1`, `Paused=2`, `Completed=3`, `Cancelled=4`) — values identical to legacy `SiNetSQL.Models.WorkflowStatus`. |
+| `src/SiNet.Infrastructure.Sql/Services/Workflow/WorkflowStatusMappings.cs` *(new)* | Boundary mapper `ToDomain()` / `ToLegacy()` (incl. nullable overloads) between legacy EF and canonical enums. Single translation point for the future DTO migration. |
+| `SiNetSQL.Tests/Services/Workflow/WorkflowStatusMappingTests.cs` *(new)* | 9 guard tests: name+value lockstep, round-trip both directions, per-member mapping, null handling. |
+
+**Deferred to Option A:** move `IWorkflowQueryService` / `IProjectWorkflowPolicyService` into
+`SiNet.Application`, return clean DTOs (replacing EF entities + snapshots), migrate the write
+engine, and rewrite VMs/XAML accordingly.
+
+| Deliverable | Status |
+| --- | --- |
+| Canonical `WorkflowStatus` in `SiNet.Domain` (values match legacy) | ✅ |
+| Boundary mapper in `SiNet.Infrastructure.Sql` (not wired into any port) | ✅ |
+| Guard tests in `SiNetSQL.Tests/Services/Workflow` | ✅ _9/9_ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| No port / VM / XAML / DTO / schema / migration / `ModelSnapshot` edits | ✅ |
+
 ---
 
 ## Recovery points

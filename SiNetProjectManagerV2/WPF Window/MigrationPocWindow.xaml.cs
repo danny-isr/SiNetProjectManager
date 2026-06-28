@@ -1651,7 +1651,7 @@ public partial class MigrationPocWindow : Window
                 AppendToLog("[Preview] ⚠ אין משתמשי מערכת טעונים — auto-match לא יפעל. נסה לפתוח את החלון מחדש.");
 
             var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-            var workflowQueryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+            var workflowQueryService = App.ServiceProvider.GetRequiredService<IWorkflowQueryService>();
             var authService = CreateGoogleAuthService();
             if (authService == null) return;
 
@@ -1727,7 +1727,7 @@ public partial class MigrationPocWindow : Window
             _lastPreviewHadTemplateError = false;
 
             var contextFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-            var workflowQueryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+            var workflowQueryService = App.ServiceProvider.GetRequiredService<IWorkflowQueryService>();
             var authService = CreateGoogleAuthService();
             if (authService == null) return;
 

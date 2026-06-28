@@ -21,9 +21,9 @@ public partial class WorkflowDashboardView : UserControl
         InitializeComponent();
 
         var dbFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
-        var queryService = App.ServiceProvider.GetRequiredService<WorkflowQueryService>();
+        var queryService = App.ServiceProvider.GetRequiredService<IWorkflowQueryService>();
         var orchestrator = App.ServiceProvider.GetRequiredService<WorkflowTaskOrchestrator>();
-        var policyService = App.ServiceProvider.GetRequiredService<ProjectWorkflowPolicyService>();
+        var policyService = App.ServiceProvider.GetRequiredService<IProjectWorkflowPolicyService>();
 
         var vm = new WorkflowDashboardViewModel(dbFactory, queryService, orchestrator, policyService);
         vm.InstanceStarted = OnInstanceStarted;
