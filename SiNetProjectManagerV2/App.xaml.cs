@@ -270,6 +270,10 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowQueryService>();
             services.AddTransient<SiNet.Application.Workflow.IWorkflowQueryService>(
                 sp => sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowQueryService>());
+            // Write port (assessment phase P2): adapter delegates to WorkflowTaskOrchestrator.
+            services.AddTransient<SiNet.Application.Workflow.IWorkflowCommandService>(
+                sp => new SiNetSQL.Services.Workflow.WorkflowCommandServiceAdapter(
+                    sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>()));
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowSeedService>();
             services.AddTransient<SiNetSQL.Services.Workflow.ProjectWorkflowPolicyService>();

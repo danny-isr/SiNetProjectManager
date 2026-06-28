@@ -347,6 +347,114 @@ to DTO-returning contracts and move read VMs/XAML to `SiNet.App.Wpf`.
 | Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
 | No schema / migration / `ModelSnapshot` edits | ✅ |
 
+### A3 — workflow write-API result boundary returns DTOs (boundary-only) ✅
+
+> Moves the **write** orchestration's *public result records* off EF entities and onto
+> `WorkflowInstanceDto`, closing the last entity leak on the workflow read/write surface.
+> Unlike the original "engine returns DTOs" idea, this is scoped to the **orchestrator
+> boundary only** — the `WorkflowEngine` lifecycle methods and the task-provisioning chain
+> stay entity-based on purpose (see rationale below).
+
+**Why the engine stayed entity-based (deferred, deliberate):**
+
+`WorkflowStageTaskProvisioningService.EnsureInitialStageTasksAsync(WorkflowInstance, …)` is a
+hard entity consumer: it reuses the live `WorkflowInstance`, recursively calls
+`WorkflowEngine.StartAsync(…)` for hosted sub-workflows, and re-feeds that entity result back
+into itself, with `AutoAdvancePastStartNodeAsync` entity-in/entity-out. Changing the engine
+signature to return DTOs would cascade through this recursion and far exceed the intended
+scope. The boundary-only approach keeps the internal chain intact while presenting a clean
+DTO contract to every public caller.
+
+**Boundary contract (DTO at the public surface):**
+
+| Artifact | Detail |
+| --- | --- |
+| `SiNetSQL/Services/Workflow/WorkflowTaskOrchestrator.cs` | `WorkflowStartResult.Instance` and `WorkflowAdvanceResult.Instance` are now `WorkflowInstanceDto`; `StageCompletionResult.AdvancedInstance` is `WorkflowInstanceDto?`. `StartWorkflowAsync` / `AdvanceWithTasksAsync` map at the return via `instance.ToDto()`; the entity is kept locally for status checks, provisioning, and parent-notification before mapping. `ExecuteTransitionAsync` forwards the now-DTO `result.Instance` into `AdvancedInstance` (no extra change). |
+| `src/SiNet.Infrastructure.Sql/Services/Workflow/WorkflowDtoMappings.cs` | Promoted `internal static` → `public static` so the `SiNetSQL` write boundary can project at construction without an extra DB round-trip. |
+| `WorkflowEngine.cs`, `WorkflowStageTaskProvisioningService.cs` | **Unchanged** — remain entity-returning internally by design. |
+
+**Consumers (no code change required — verified DTO-safe scalars):**
+
+| Consumer | Access |
+| --- | --- |
+| `Services/EmailContext/ActionExecutor.cs` | `BuildWorkflowStartResult` reads only `result.Instance.Id` + `result.CreatedTasks.Count`. |
+| `WorkflowManagementWindow.xaml.cs` (dashboard start) | Reads `result.CreatedTasks.Count` + `result.Instance.Id`. |
+| `StalledWorkflowWatchdog.cs`, `WorkflowActionCompletedHandler.cs` | Read only `StageCompletionResult.Action` / `.TargetStageId`; never `AdvancedInstance`. |
+| `CheckAndAutoAdvanceAsync` / `CheckAndAutoAdvanceStalledWorkflowAsync` | Return `ExecuteTransitionAsync` (DTO-backed) or scalar-only results. |
+| `ProposalProjectCreationCompletionAlignmentTests.cs` | Reads `start.Instance.Id` (DTO scalar); `WorkflowInstanceDto` resolves transitively (Tests → `SiNetSQL` → `SiNet.Infrastructure.Sql` → `SiNet.Application`). |
+
+| Deliverable | Status |
+| --- | --- |
+| Public orchestrator result records expose `WorkflowInstanceDto` | ✅ |
+| Engine + provisioning chain intentionally left entity-based | ✅ _deferred, documented_ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| Workflow engine + orchestrator + sub-workflow + E2E tests green | ✅ _21/21_ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+
+**Next-round assessment (document-only):** the deferred "full engine + provisioning conversion"
+has been scoped in [`WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md`](./WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md)
+— write surface, coupling map (engine/provisioning recursion), target `IWorkflowCommandService`
+sketch, and a phased P1–P5 cut plan. No code changed; each phase is its own approval gate.
+
+### A4 — P1: write-result tasks projected to DTO (closes C6) ✅
+
+> First executable phase from the command-service assessment. Removes the **last** EF-entity
+> leak on the workflow write contract: `CreatedTasks` no longer exposes `ProjectAssignment`.
+> Methods stay where they are; engine + provisioning chain untouched.
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Application/Workflow/ProjectAssignmentSummaryDto.cs` *(new)* | Read-only task summary (id, project, title, assignee, status id + legacy status, task-type id, work-priority, due date). |
+| `src/SiNet.Infrastructure.Sql/Services/Workflow/WorkflowDtoMappings.cs` | Added `ProjectAssignment.ToSummaryDto()` + `ToSummaryDtoList()`. |
+| `SiNetSQL/Services/Workflow/WorkflowTaskOrchestrator.cs` | `WorkflowStartResult.CreatedTasks` and `WorkflowAdvanceResult.CreatedTasks` are now `IReadOnlyList<ProjectAssignmentSummaryDto>`; mapped via `tasks.ToSummaryDtoList()` at both return sites. |
+
+**Consumers — no change required:** all 6 production readers use only `.Count`
+(`StartWorkflowProcessActionHandler`, `WorkflowDashboardViewModel`, `WorkflowInstanceViewModel`,
+`ActionExecutor`, `TaskLifecycleService`, `WorkflowManagementWindow`), which is identical on
+`IReadOnlyList<T>`. The unrelated `TaskImportResult.CreatedTasks` was left untouched.
+
+| Deliverable | Status |
+| --- | --- |
+| `CreatedTasks` exposes a DTO, not `ProjectAssignment` | ✅ |
+| Engine + provisioning chain unchanged | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| Workflow tests green | ✅ _21/21_ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+
+---
+
+### A5 — P2: workflow write port (`IWorkflowCommandService`) + adapter + pilot consumer ✅
+
+> Second executable phase from the command-service assessment
+> (`WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md` §6, P2). Introduces an **additive** Application-layer
+> write port and fronts the existing orchestrator with a thin adapter — **no orchestration logic
+> moved**, engine + provisioning chain untouched. One pilot consumer switched off the concrete
+> class.
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Application/Workflow/WorkflowCommands.cs` *(new)* | Command records (`StartWorkflowCommand`, `AdvanceWorkflowCommand`, `TaskClosedCommand`, `StalledWorkflowCommand`) + `WorkflowTriggerTypeDto` (Application mirror of the infra enum, which lives in `SiNetSQL.Models`). |
+| `src/SiNet.Application/Workflow/WorkflowWriteResultDtos.cs` *(new)* | DTO-only results (`WorkflowStartResultDto`, `WorkflowAdvanceResultDto`, `StageCompletionResultDto`, `StageCompletionActionDto`). |
+| `src/SiNet.Application/Workflow/IWorkflowCommandService.cs` *(new)* | Write counterpart to `IWorkflowQueryService`; four `ValueTask` methods, DTOs only across the boundary. |
+| `SiNetSQL/Services/Workflow/WorkflowCommandServiceAdapter.cs` *(new)* | Implements the port by delegating to `WorkflowTaskOrchestrator`; maps `WorkflowTriggerTypeDto` ↔ `WorkflowTriggerType` and `StageCompletionAction` ↔ `StageCompletionActionDto`. |
+| `SiNetProjectManagerV2/App.xaml.cs` | Registered `IWorkflowCommandService` next to the orchestrator + read-port registration. |
+| `SiNetSQL/Services/EmailContext/ActionExecutor.cs` | **Pilot consumer:** now injects `IWorkflowCommandService` instead of `WorkflowTaskOrchestrator`; both start sites use `StartWorkflowCommand`; `BuildWorkflowStartResult` takes `WorkflowStartResultDto`. |
+| 9 test construction sites (8 direct `new ActionExecutor(...)` + 1 `RecordingActionExecutor : ActionExecutor` base call) | Wrap the existing `orchestrator` in `new WorkflowCommandServiceAdapter(orchestrator)` — behavior-preserving (real production adapter). |
+
+| Deliverable | Status |
+| --- | --- |
+| Application-layer write port exists, DTO-only contract | ✅ |
+| Adapter delegates to unchanged orchestrator (no logic moved) | ✅ |
+| Pilot consumer (`ActionExecutor`) off the concrete class | ✅ |
+| Engine + provisioning chain unchanged | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| Workflow tests green | ✅ _60/60_ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+
+**Deferred (future gates):** P3 (modular `AddSiNetWorkflowCommands()` + remove service-locator
+usages), P4 (migrate remaining consumers, mark orchestrator methods `internal`), P5 (optional full
+relocation). See `WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md` §6.
+
 ---
 
 ## Recovery points

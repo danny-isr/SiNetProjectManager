@@ -14,8 +14,13 @@ namespace SiNet.Infrastructure.Sql.Services.Workflow;
 /// control fetch depth via their EF <c>Include</c> chains. Workflow status is translated
 /// through <see cref="WorkflowStatusMappings.ToDomain(WorkflowStatus)"/>.
 /// </para>
+/// <para>
+/// Public so write-side services in the legacy <c>SiNetSQL</c> assembly (e.g.
+/// <c>WorkflowEngine</c>) can project an entity to a DTO at their return boundary
+/// without an extra DB round-trip.
+/// </para>
 /// </summary>
-internal static class WorkflowDtoMappings
+public static class WorkflowDtoMappings
 {
     public static WorkflowUserRefDto ToDto(this Siuser user) =>
         new(user.Id, user.Name);
@@ -75,4 +80,19 @@ internal static class WorkflowDtoMappings
 
     public static List<WorkflowStageDefinitionDto> ToDtoList(this IEnumerable<WorkflowStageDefinition> stages) =>
         stages.Select(s => s.ToDto()).ToList();
+
+    public static ProjectAssignmentSummaryDto ToSummaryDto(this ProjectAssignment task) =>
+        new(
+            task.Id,
+            task.ProjectId,
+            task.Title,
+            task.AssignedToId,
+            task.StatusId,
+            task.Status,
+            task.TaskTypeId,
+            task.WorkPriority,
+            task.DueDate);
+
+    public static List<ProjectAssignmentSummaryDto> ToSummaryDtoList(this IEnumerable<ProjectAssignment> tasks) =>
+        tasks.Select(t => t.ToSummaryDto()).ToList();
 }
