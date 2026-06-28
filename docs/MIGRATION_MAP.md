@@ -457,6 +457,45 @@ relocation). See `WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md` §6.
 
 ---
 
+### A6 — P4: close the last write-path EF-entity leak (watchdog → port, orchestrator narrowed) ✅
+
+> Executes the **P4** deferred item from A5: removes the only remaining consumer that bypassed the
+> write port (`StalledWorkflowWatchdog`) and narrows the orchestration members that still exposed
+> EF entities / an infra result record on a `public` surface. **No engine/provisioning behavior
+> changed** — same provisioning path, same stage; only visibility and the watchdog's dependency
+> changed.
+>
+> **Supersedes the stale "illustrative / not-to-be-built" Option-A note in
+> `WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md`:** the command-port migration (A4→A6) is effectively
+> closed. The orchestrator stays concrete internally, fronted by `IWorkflowCommandService`; the
+> only public boundary is the Application port and its DTOs.
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Application/Workflow/IWorkflowCommandService.cs` | Added `ReprovisionStalledStageTasksAsync(StalledWorkflowCommand, CancellationToken) → ValueTask<int>` — returns only the created-task **count**, so no EF entity crosses the boundary. |
+| `SiNetSQL/Services/Workflow/WorkflowCommandServiceAdapter.cs` | Implements the new method by delegating to the orchestrator's `ReprovisionCurrentStageTasksAsync` and returning the count. |
+| `SiNetSQL/Services/Workflow/WorkflowTaskOrchestrator.cs` | `CreateStageTasksAsync`, `ExecuteTransitionAsync`, `EvaluateManualTransitionsAsync`, and the infra `StageCompletionResult` record narrowed `public → internal`. New `internal ReprovisionCurrentStageTasksAsync` resolves the instance's current stage (DbContext access stays in infra) and delegates to the same `_provisioning.CreateStageTasksAsync` path. |
+| `SiNetSQL/Services/Workflow/StalledWorkflowWatchdog.cs` | Dropped the concrete `WorkflowTaskOrchestrator` ctor dependency; 0-task recovery now calls `IWorkflowCommandService.ReprovisionStalledStageTasksAsync`. XML-doc crefs re-pointed to the port. |
+| `SiNetSQL.Tests/SubWorkflowOrchestrationRuntimeTests.cs` *(new test)* | `ReprovisionStalledStageTasks_Port_ReturnsCount_AndExposesNoEntities` — drives the port path through the real adapter; asserts an `int` count (0 for a SubWorkflow host stage) and no parent task links. |
+
+| Deliverable | Status |
+| --- | --- |
+| Last port-bypass consumer (`StalledWorkflowWatchdog`) off the concrete orchestrator | ✅ |
+| `IWorkflowCommandService` exposes no EF entity / raw `List<>` | ✅ |
+| `CreateStageTasksAsync` / `ExecuteTransitionAsync` / `EvaluateManualTransitionsAsync` / `StageCompletionResult` no longer `public` | ✅ |
+| `CreateStageTasksAsync` test caller still compiles via existing `InternalsVisibleTo("SiNetSQL.Tests")` | ✅ |
+| Engine + provisioning recursion unchanged | ✅ |
+| Full `SiNetProjectManager.sln` build green (VS MSBuild) | ✅ _0 errors_ |
+| Workflow + mapper-guard tests green | ✅ _33/33_ (20 orchestration + 13 mapping/read-port) |
+| No schema / migration / `ModelSnapshot` / EF-mapping edits | ✅ |
+| No UI/XAML changes; no Gmail / ACC / SQL-composition / Inspection changes | ✅ |
+
+**Remaining (optional, deferred):** P3 (modular DI + remove service-locator usages where still
+present), P5 (optional full relocation of the orchestrator). The `StageCompletionAction` enum stays
+`public` (harmless; referenced only by the internal record and the DTO mapper).
+
+---
+
 ### D1 — Legacy host composition adoption, Phase 1: delegate the Workflow read slice ✅
 
 > First executable phase of the **App startup / DI** domain. The legacy host's monolithic
