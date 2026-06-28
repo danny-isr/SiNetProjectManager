@@ -1,12 +1,20 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Workflow;
+using SiNet.Infrastructure.Sql.Services.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
+using DomainWorkflowStatus = SiNet.Domain.Workflow.WorkflowStatus;
 
 namespace SiNetSQL.Services.Workflow;
 
 /// <summary>
 /// Read-only query service for workflow data.
 /// Provides lookups for definitions, active instances, and transition history.
+/// <para>
+/// EF entities are queried internally and mapped to clean
+/// <see cref="SiNet.Application.Workflow"/> DTOs at the boundary via
+/// <see cref="WorkflowDtoMappings"/>; entities never leak past this service.
+/// </para>
 /// </summary>
 public class WorkflowQueryService : IWorkflowQueryService
 {
@@ -20,38 +28,42 @@ public class WorkflowQueryService : IWorkflowQueryService
     /// <summary>
     /// Returns all active workflow definitions.
     /// </summary>
-    public async ValueTask<List<WorkflowDefinition>> GetActiveDefinitionsAsync(CancellationToken ct)
+    public async ValueTask<List<WorkflowDefinitionDto>> GetActiveDefinitionsAsync(CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        return await db.WorkflowDefinitions
+        var definitions = await db.WorkflowDefinitions
             .AsNoTracking()
             .Where(d => d.IsActive)
             .Include(d => d.Stages.OrderBy(s => s.SortOrder))
             .OrderBy(d => d.Code)
             .ToListAsync(ct);
+
+        return definitions.ToDtoList();
     }
 
     /// <summary>
     /// Returns a single definition with its stages and transition rules.
     /// </summary>
-    public async ValueTask<WorkflowDefinition?> GetDefinitionAsync(int definitionId, CancellationToken ct)
+    public async ValueTask<WorkflowDefinitionDto?> GetDefinitionAsync(int definitionId, CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        return await db.WorkflowDefinitions
+        var definition = await db.WorkflowDefinitions
             .AsNoTracking()
             .Include(d => d.Stages.OrderBy(s => s.SortOrder))
             .Include(d => d.TransitionRules)
             .FirstOrDefaultAsync(d => d.Id == definitionId, ct);
+
+        return definition?.ToDto();
     }
 
     /// <summary>
     /// Returns all workflow instances for a project, optionally filtered by status.
     /// </summary>
-    public async ValueTask<List<WorkflowInstance>> GetByProjectAsync(
+    public async ValueTask<List<WorkflowInstanceDto>> GetByProjectAsync(
         int projectId,
-        WorkflowStatus? statusFilter,
+        DomainWorkflowStatus? statusFilter,
         CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -61,23 +73,28 @@ public class WorkflowQueryService : IWorkflowQueryService
             .Where(i => i.ProjectId == projectId);
 
         if (statusFilter.HasValue)
-            query = query.Where(i => i.Status == statusFilter.Value);
+        {
+            var legacyStatus = statusFilter.Value.ToLegacy();
+            query = query.Where(i => i.Status == legacyStatus);
+        }
 
-        return await query
+        var instances = await query
             .Include(i => i.WorkflowDefinition)
             .Include(i => i.CurrentStage)
             .OrderByDescending(i => i.CreatedAtUtc)
             .ToListAsync(ct);
+
+        return instances.ToDtoList();
     }
 
     /// <summary>
     /// Returns active workflows for a project (status = Active or Paused).
     /// </summary>
-    public async ValueTask<List<WorkflowInstance>> GetActiveByProjectAsync(int projectId, CancellationToken ct)
+    public async ValueTask<List<WorkflowInstanceDto>> GetActiveByProjectAsync(int projectId, CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        return await db.WorkflowInstances
+        var instances = await db.WorkflowInstances
             .AsNoTracking()
             .Where(i => i.ProjectId == projectId &&
                         (i.Status == WorkflowStatus.Active || i.Status == WorkflowStatus.Paused))
@@ -85,16 +102,18 @@ public class WorkflowQueryService : IWorkflowQueryService
             .Include(i => i.CurrentStage)
             .OrderByDescending(i => i.CreatedAtUtc)
             .ToListAsync(ct);
+
+        return instances.ToDtoList();
     }
 
     /// <summary>
     /// Returns a single workflow instance with full details (definition, stages, transitions).
     /// </summary>
-    public async ValueTask<WorkflowInstance?> GetInstanceDetailAsync(int instanceId, CancellationToken ct)
+    public async ValueTask<WorkflowInstanceDto?> GetInstanceDetailAsync(int instanceId, CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        return await db.WorkflowInstances
+        var instance = await db.WorkflowInstances
             .AsNoTracking()
             .Include(i => i.WorkflowDefinition)
                 .ThenInclude(d => d.Stages.OrderBy(s => s.SortOrder))
@@ -105,13 +124,15 @@ public class WorkflowQueryService : IWorkflowQueryService
                 .ThenInclude(t => t.TransitionedByUser)
             .Include(i => i.CreatedByUser)
             .FirstOrDefaultAsync(i => i.Id == instanceId, ct);
+
+        return instance?.ToDto();
     }
 
     /// <summary>
     /// Returns the allowed target stages for the current stage of a workflow instance.
     /// Used to present valid transition options in the UI.
     /// </summary>
-    public async ValueTask<List<WorkflowStageDefinition>> GetAllowedNextStagesAsync(
+    public async ValueTask<List<WorkflowStageDefinitionDto>> GetAllowedNextStagesAsync(
         int instanceId,
         CancellationToken ct)
     {
@@ -135,11 +156,13 @@ public class WorkflowQueryService : IWorkflowQueryService
         if (targetStageIds.Count == 0)
             return [];
 
-        return await db.WorkflowStageDefinitions
+        var stages = await db.WorkflowStageDefinitions
             .AsNoTracking()
             .Where(s => targetStageIds.Contains(s.Id))
             .OrderBy(s => s.SortOrder)
             .ToListAsync(ct);
+
+        return stages.ToDtoList();
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -151,7 +174,7 @@ public class WorkflowQueryService : IWorkflowQueryService
     /// Each result contains project info, instance status, current stage, stage list, and
     /// the set of distinct stage IDs already transitioned through (for pipeline display).
     /// </summary>
-    public async ValueTask<List<ProjectWorkflowSnapshot>> GetAllProjectWorkflowSnapshotsAsync(
+    public async ValueTask<List<ProjectWorkflowSnapshotDto>> GetAllProjectWorkflowSnapshotsAsync(
         CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -182,28 +205,30 @@ public class WorkflowQueryService : IWorkflowQueryService
                       .ThenByDescending(i => i.CreatedAtUtc)
                       .First());
 
-        var results = new List<ProjectWorkflowSnapshot>(projects.Count);
+        var results = new List<ProjectWorkflowSnapshotDto>(projects.Count);
 
         foreach (var project in projects)
         {
             if (bestByProject.TryGetValue(project.Id, out var inst))
             {
-                var stages = inst.WorkflowDefinition.Stages.OrderBy(s => s.SortOrder).ToList();
+                var stages = inst.WorkflowDefinition.Stages.OrderBy(s => s.SortOrder).ToDtoList();
                 var visitedStageIds = inst.StageTransitions
                     .Select(t => t.ToStageId)
                     .ToHashSet();
 
-                results.Add(new ProjectWorkflowSnapshot
-                {
-                    Project = project,
-                    Instance = inst,
-                    AllStages = stages,
-                    VisitedStageIds = visitedStageIds
-                });
+                results.Add(new ProjectWorkflowSnapshotDto(
+                    project.ToDto(),
+                    inst.ToDto(),
+                    stages,
+                    visitedStageIds));
             }
             else
             {
-                results.Add(new ProjectWorkflowSnapshot { Project = project });
+                results.Add(new ProjectWorkflowSnapshotDto(
+                    project.ToDto(),
+                    Instance: null,
+                    AllStages: [],
+                    VisitedStageIds: new HashSet<int>()));
             }
         }
 
@@ -214,7 +239,7 @@ public class WorkflowQueryService : IWorkflowQueryService
     /// Returns ALL workflow instances (regardless of project) with full stage info.
     /// Used by the floating Workflow Status Monitor window.
     /// </summary>
-    public async ValueTask<List<WorkflowInstanceSnapshot>> GetAllWorkflowInstanceSnapshotsAsync(
+    public async ValueTask<List<WorkflowInstanceSnapshotDto>> GetAllWorkflowInstanceSnapshotsAsync(
         CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -231,14 +256,9 @@ public class WorkflowQueryService : IWorkflowQueryService
 
         return instances.Select(inst =>
         {
-            var stages = inst.WorkflowDefinition.Stages.OrderBy(s => s.SortOrder).ToList();
+            var stages = inst.WorkflowDefinition.Stages.OrderBy(s => s.SortOrder).ToDtoList();
             var visited = inst.StageTransitions.Select(t => t.ToStageId).ToHashSet();
-            return new WorkflowInstanceSnapshot
-            {
-                Instance = inst,
-                AllStages = stages,
-                VisitedStageIds = visited
-            };
+            return new WorkflowInstanceSnapshotDto(inst.ToDto(), stages, visited);
         }).ToList();
     }
 
@@ -266,25 +286,4 @@ public class WorkflowQueryService : IWorkflowQueryService
         WorkflowStatus.Draft => 2,
         _ => 0
     };
-}
-
-/// <summary>
-/// Lightweight projection for the cross-project workflow dashboard.
-/// </summary>
-public class ProjectWorkflowSnapshot
-{
-    public required Project Project { get; init; }
-    public WorkflowInstance? Instance { get; init; }
-    public List<WorkflowStageDefinition> AllStages { get; init; } = [];
-    public HashSet<int> VisitedStageIds { get; init; } = [];
-}
-
-/// <summary>
-/// Instance-centric snapshot for the floating workflow monitor.
-/// </summary>
-public class WorkflowInstanceSnapshot
-{
-    public required WorkflowInstance Instance { get; init; }
-    public List<WorkflowStageDefinition> AllStages { get; init; } = [];
-    public HashSet<int> VisitedStageIds { get; init; } = [];
 }

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Workflow;
 using SiNetSQL.MVVM;
 using SiNetSQL.Services.Workflow;
 

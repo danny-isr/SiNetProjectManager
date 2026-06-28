@@ -304,6 +304,49 @@ engine, and rewrite VMs/XAML accordingly.
 | Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
 | No port / VM / XAML / DTO / schema / migration / `ModelSnapshot` edits | ✅ |
 
+### A2 — full DTO/port migration of the workflow read slice (Option A) ✅
+
+> **Completes "Option A":** moves the workflow **read** ports into `SiNet.Application.Workflow`,
+> returns clean DTOs (replacing EF entities + in-file snapshots), and propagates the DTO
+> contract through every read consumer across both repos. The **write** engine
+> (`WorkflowEngine` / `WorkflowTaskOrchestrator`) is still invoked by ID and left concrete —
+> read VMs build DTO graphs and call writes by scalar id during the transition.
+
+**Application layer (new DTO contract):**
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Application/Workflow/IWorkflowQueryService.cs`, `IProjectWorkflowPolicyService.cs` *(moved)* | Ports relocated from infrastructure; now return DTOs. `GetByProjectAsync` takes `SiNet.Domain.Workflow.WorkflowStatus?`. |
+| `src/SiNet.Application/Workflow/*Dto.cs` *(new)* | `WorkflowDefinitionDto`, `WorkflowInstanceDto`, `WorkflowStageDefinitionDto`, `WorkflowStageTransitionDto`, `WorkflowUserRefDto`, `WorkflowProjectRefDto`, snapshot DTOs — the full read surface. |
+| `src/SiNet.Infrastructure.Sql/Services/Workflow/WorkflowDtoMappings.cs` *(new)* | Central entity→DTO mapper; uses `WorkflowStatusMappings.ToDomain()` and preserves stage/transition ordering. |
+| `WorkflowQueryService.cs`, `ProjectWorkflowPolicyService.cs` *(rewritten)* | Return DTOs at the boundary; in-file snapshot classes removed. |
+
+**Consumers re-pointed to DTOs (both repos):**
+
+| Consumer | Change |
+| --- | --- |
+| `SiNetSQL.MVVM/WorkflowInstanceViewModel.cs` | Collections/properties → DTOs; writes still by id. |
+| `SiNetSQL.MVVM/WorkflowDashboardViewModel.cs` | `Instances`/`Definitions` → DTOs; projects left entity-based. |
+| `SiNetSQL.MVVM/WorkflowStatusViewModel.cs` + `ProjectWorkflowStatusItem.cs` | Snapshot DTOs + canonical domain `WorkflowStatus`. |
+| `WorkflowManagementWindow.xaml.cs` (dashboard tab) | DTO lists/selection; management tree left entity-based. |
+| `WorkflowCreateProjectWindow.xaml.cs` | Continuation workflow uses DTO allowed-workflow results. |
+| `GoogleSheetReviewMigrationPreviewService.cs` | Consumes DTO active workflows. |
+| `Domain/Actions/Handlers/StartWorkflowProcessActionHandler.cs` | Resolves definition into scalar `definitionId`/`definitionName`; `EnsureNoDuplicateForEmailAsync` takes `string?`. |
+| `Services/EmailContext/ActionExecutor.cs` | `ResolveDefinitionAsync` → `WorkflowDefinitionDto?`. |
+| `Services/EmailContext/EmailContextAnalyzer.cs` + `DTOs/Email/EmailContextResult.cs` | `ActiveWorkflows` → `IReadOnlyList<WorkflowInstanceDto>`; `CalculateConfidence` updated. |
+| `App.xaml.cs` | DI forwarders point at `SiNet.Application.Workflow` ports. |
+| `WorkflowQueryServiceTests.cs`, `ProjectWorkflowPolicyServiceTests.cs` | Use moved ports + domain status filter + DTO assertions. |
+
+**Deferred (next):** migrate the **write** engine (`WorkflowEngine`/`WorkflowTaskOrchestrator`)
+to DTO-returning contracts and move read VMs/XAML to `SiNet.App.Wpf`.
+
+| Deliverable | Status |
+| --- | --- |
+| Read ports moved to `SiNet.Application.Workflow`, returning DTOs | ✅ |
+| All read consumers propagate the DTO contract (both repos) | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+
 ---
 
 ## Recovery points

@@ -7,11 +7,13 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNetSQL.Services;
 using SiNetSQL.Services.Workflow;
 using SiNetSQL.Services.TaskLifecycle;
+using WorkflowStatus = SiNet.Domain.Workflow.WorkflowStatus;
 
 namespace SiNetProjectManagerV2.Dialogs;
 
@@ -203,7 +205,7 @@ public partial class WorkflowManagementWindow : Window
     private IProjectWorkflowPolicyService? _dashboardPolicyService;
     private List<Project> _dashboardProjects = [];
     private Project? _dashboardSelectedProject;
-    private List<WorkflowDefinition> _dashboardDefinitions = [];
+    private List<WorkflowDefinitionDto> _dashboardDefinitions = [];
     private bool _dashboardLoaded;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2427,7 +2429,7 @@ public partial class WorkflowManagementWindow : Window
 
             DashboardDefinitionCombo.ItemsSource = _dashboardDefinitions;
 
-            if (DashboardDefinitionCombo.SelectedItem is WorkflowDefinition wd &&
+            if (DashboardDefinitionCombo.SelectedItem is WorkflowDefinitionDto wd &&
                 !_dashboardDefinitions.Any(d => d.Id == wd.Id))
             {
                 DashboardDefinitionCombo.SelectedItem = null;
@@ -2447,7 +2449,7 @@ public partial class WorkflowManagementWindow : Window
             return;
         }
 
-        if (DashboardDefinitionCombo.SelectedItem is not WorkflowDefinition selectedDef)
+        if (DashboardDefinitionCombo.SelectedItem is not WorkflowDefinitionDto selectedDef)
         {
             StatusText.Text = "נא לבחור תבנית תהליך.";
             return;
@@ -2489,7 +2491,7 @@ public partial class WorkflowManagementWindow : Window
 
     private void DashboardGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (DashboardInstancesGrid.SelectedItem is not WorkflowInstance instance) return;
+        if (DashboardInstancesGrid.SelectedItem is not WorkflowInstanceDto instance) return;
 
         var window = new WPF_Window.WorkflowInstanceWindow(instance.Id)
         {

@@ -1,14 +1,15 @@
-using SiNetSQL.Models;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace SiNetSQL.Services.Workflow;
+namespace SiNet.Application.Workflow;
 
 /// <summary>
-/// Read-only port that resolves which <see cref="WorkflowDefinition"/> are allowed for a
+/// Read-only port that resolves which workflow definitions are allowed for a
 /// project based on the project's ProjectType (JobType) mappings.
 /// <para>
-/// Co-located in <c>SiNet.Infrastructure.Sql</c> for the transitional Workflow read slice.
-/// For this round the port intentionally exposes the EF <see cref="WorkflowDefinition"/>
-/// entity. Entity leakage is a temporary compromise to be removed in a later round.
+/// Lives in the Application layer and exposes clean DTOs only; EF entities never
+/// cross this boundary.
 /// </para>
 /// </summary>
 public interface IProjectWorkflowPolicyService
@@ -16,10 +17,10 @@ public interface IProjectWorkflowPolicyService
     /// <summary>
     /// Returns allowed workflow definitions for a project, resolved via its ProjectTypes.
     /// </summary>
-    ValueTask<List<WorkflowDefinition>> GetAllowedWorkflowsAsync(int projectId, CancellationToken ct);
+    ValueTask<List<WorkflowDefinitionDto>> GetAllowedWorkflowsAsync(int projectId, CancellationToken ct);
 
     /// <summary>Returns allowed workflow definitions for a set of ProjectType IDs.</summary>
-    ValueTask<List<WorkflowDefinition>> GetAllowedWorkflowsForProjectTypesAsync(
+    ValueTask<List<WorkflowDefinitionDto>> GetAllowedWorkflowsForProjectTypesAsync(
         IReadOnlyList<int> projectTypeIds, CancellationToken ct);
 
     /// <summary>Checks whether a specific workflow definition is allowed for a project.</summary>

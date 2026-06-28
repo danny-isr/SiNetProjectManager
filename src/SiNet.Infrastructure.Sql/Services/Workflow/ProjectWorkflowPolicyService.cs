@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Workflow;
+using SiNet.Infrastructure.Sql.Services.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -21,7 +23,7 @@ public class ProjectWorkflowPolicyService(IDbContextFactory<SiNetSQLDbContext> d
     /// Returns allowed workflow definitions for a project, resolved via its ProjectTypes.
     /// Results are ordered by <see cref="ProjectTypeWorkflowDefinition.SortOrder"/> then by name.
     /// </summary>
-    public async ValueTask<List<WorkflowDefinition>> GetAllowedWorkflowsAsync(
+    public async ValueTask<List<WorkflowDefinitionDto>> GetAllowedWorkflowsAsync(
         int projectId, CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -37,20 +39,22 @@ public class ProjectWorkflowPolicyService(IDbContextFactory<SiNetSQLDbContext> d
         if (projectTypeIds.Count == 0)
             return [];
 
-        return await GetAllowedWorkflowsForProjectTypesAsync(db, projectTypeIds, ct);
+        var definitions = await GetAllowedWorkflowsForProjectTypesAsync(db, projectTypeIds, ct);
+        return definitions.ToDtoList();
     }
 
     /// <summary>
     /// Returns allowed workflow definitions for a set of ProjectType IDs.
     /// </summary>
-    public async ValueTask<List<WorkflowDefinition>> GetAllowedWorkflowsForProjectTypesAsync(
+    public async ValueTask<List<WorkflowDefinitionDto>> GetAllowedWorkflowsForProjectTypesAsync(
         IReadOnlyList<int> projectTypeIds, CancellationToken ct)
     {
         if (projectTypeIds.Count == 0)
             return [];
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return await GetAllowedWorkflowsForProjectTypesAsync(db, projectTypeIds, ct);
+        var definitions = await GetAllowedWorkflowsForProjectTypesAsync(db, projectTypeIds, ct);
+        return definitions.ToDtoList();
     }
 
     /// <summary>

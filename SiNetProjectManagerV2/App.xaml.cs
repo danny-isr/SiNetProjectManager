@@ -268,12 +268,12 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowQueryService>();
-            services.AddTransient<SiNetSQL.Services.Workflow.IWorkflowQueryService>(
+            services.AddTransient<SiNet.Application.Workflow.IWorkflowQueryService>(
                 sp => sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowQueryService>());
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowSeedService>();
             services.AddTransient<SiNetSQL.Services.Workflow.ProjectWorkflowPolicyService>();
-            services.AddTransient<SiNetSQL.Services.Workflow.IProjectWorkflowPolicyService>(
+            services.AddTransient<SiNet.Application.Workflow.IProjectWorkflowPolicyService>(
                 sp => sp.GetRequiredService<SiNetSQL.Services.Workflow.ProjectWorkflowPolicyService>());
 
             // Task Lifecycle Services: Transient (auto-create/auto-close tasks based on behavior definitions)
