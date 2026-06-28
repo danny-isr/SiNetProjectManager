@@ -827,6 +827,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<TaskPanelViewModel>();
             services.AddTransient<FloatingProjectTasksViewModel>();
             services.AddTransient<SiNetSQL.Services.InspectionSync.IInspectionReportService, SiNetSQL.Services.InspectionSync.InspectionReportService>();
+            services.AddTransient<SiNetSQL.Services.InspectionSync.IInspectionDrawingManagementService, SiNetSQL.Services.InspectionSync.InspectionDrawingManagementService>();
             services.AddTransient<FloatingInspectionViewModel>();
             services.AddTransient<ProjectTypeRulesViewModel>();
             services.AddTransient<SiNetSQL.Services.ProjectTypes.IProjectTypeService, SiNetSQL.Services.ProjectTypes.ProjectTypeService>();
