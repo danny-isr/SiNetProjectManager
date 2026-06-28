@@ -14,9 +14,9 @@ exist/updated, and its row below is marked **✅ Replaced**.
 
 | Domain | Legacy source (approx. size) | New home | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted; native sign-in + real config done** (no `LegacyBridge`). Read-only; deferred: send/modify only. See sections below. |
+| Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted; native sign-in + real config done** (no `LegacyBridge`). Read-only; deferred: send/modify only. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below. |
 | Workflow | `WorkflowManagementWindow.xaml.cs` (~3,547) | `SiNet.Application` `IWorkflow*` → App.Wpf VM + services | 🟡 | **Read slice extracted.** `WorkflowQueryService` + `ProjectWorkflowPolicyService` moved into `SiNet.Infrastructure.Sql` behind `IWorkflowQueryService` / `IProjectWorkflowPolicyService` ports (namespaces preserved). Writes/engine deferred. See section below. |
-| Inspection | `FloatingInspectionViewModel.cs` (~5,384) | `SiNet.Application` `IInspection*` → services + VM | ⬜ | Split list/report/notes/photos. |
+| Inspection | `FloatingInspectionViewModel.cs` (~5,270) | `SiNet.Application` `IInspection*` → services + VM | 🟡 | **In progress (in-place decomposition).** Phase 1: extracted `InspectionChangeDetector`. Phase 2: extracted `InspectionNoteHelpers`, `InspectionNoteOrdering`, `InspectionAvailabilityDiagnostics` (pure note utilities, sub-note reindex computation, active-file diagnostics) — VM delegates via thin wrappers, no behavior change. Phase 3: extracted `InspectionReviewedPlanBuilder` + `InspectionDrawingStampBuilder` (pure reviewed-plan candidate/row transforms + drawing-stamp entity transform) from the `Reviewed Plan` / `Drawing Management` regions — VM call sites delegate, no behavior change. Still TODO: lift `Drawing Management` behind a service (Phase 4); relocate report generation + sent/locked actions. See sections below. |
 | ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ `LegacyBridge`) | ⬜ | ACC remains source of truth; DB is cache/helper. |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
@@ -784,6 +784,142 @@ deferred item.
 | No live Gmail / OAuth / network / real send | \u2705 |
 | No Drive / host-switch / ACC / Workflow / SQL / schema changes | \u2705 |
 | Remaining native send risks documented | \u2705 |
+
+---
+
+## Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed
+
+**Decision:** Do **not** consolidate the legacy `GoogleService` registration into the native
+`SiNet.Infrastructure.Google` path inside `SiNetProjectManagerV2`. The legacy and native Google
+paths are **not behavior-equivalent**.
+
+**Findings (accepted):**
+
+| Aspect | Legacy `GoogleService` (`SiOffice.GoogleConnector`, active in `SiNetProjectManagerV2`) | Native `GmailClientProvider` (`SiNet.Infrastructure.Google`, active in `SiNet.App.Wpf`) |
+| --- | --- | --- |
+| OAuth scopes | `GmailModify` **+ Sheets.Spreadsheets + Drive.DriveReadonly** | `GmailReadonly` + `GmailSend` (Gmail only) |
+| Token store | `%APPDATA%\SiNet\GoogleTokens` (shared) | **Independent** token store (separate from legacy) |
+| Capabilities | Gmail + **Sheets** + **Drive** | Gmail read/send only |
+| Sign-in | `LoginAsync` / `TryRestoreSessionAsync` (broad consent) | silent restore; interactive only if `AllowInteractiveSignIn`; **send needs re-consent** |
+
+- `SiNetProjectManagerV2` (legacy host) does **not** call `AddSiNet`/`AddSiNetGoogle`; the native
+  Gmail stack is not registered there.
+- `SiNet.App.Wpf` (modular host) calls `services.AddSiNet(ConfigureGmail)` → `AddSiNetGoogle`; no
+  legacy `GoogleService`.
+- Switching the legacy host onto the native registration would change runtime sign-in behavior,
+  force re-authentication (different token store), break Drive/Sheets consumers (no scopes), and
+  trigger a send re-consent prompt.
+
+**Constraints while blocked:** no code change for consolidation; do not change token stores, OAuth
+scopes, or sign-in behavior; do not retire legacy `GoogleService`; do not merge the two paths inside
+the legacy host.
+
+**Unblock requires (separate, explicitly approved design):** capability parity (Sheets + Drive on the
+native path or a dedicated native Drive provider), a token-store strategy (reuse the existing store
+vs. an accepted one-time re-consent), and porting the legacy consumers into `SiNet.App.Wpf` rather
+than swapping registrations inside `SiNetProjectManagerV2`.
+
+---
+
+## Inspection decomposition — Phase 2 (in-place helper extraction)
+
+**Goal:** Reduce `FloatingInspectionViewModel` by extracting several low-risk responsibilities
+in one block while preserving behavior. No XAML changes; no schema/migration/ModelSnapshot;
+no Google/Gmail, ACC/token, or Workflow changes; report generation and sent/locked report
+actions intentionally untouched.
+
+**What was extracted (new internal helpers in `SiNetSQL.MVVM`):**
+
+| New file | Responsibility moved out of the VM |
+| --- | --- |
+| `InspectionNoteHelpers.cs` | Pure note utilities: `IsSubNote`, `CanAddNoteToSection`, `SubscribeNoteForCommandRefresh`, `ResolveNoteStatusId(note, statusKeyToId)`, `CanMoveNote(note, direction)`. |
+| `InspectionNoteOrdering.cs` | `ComputeReindex(section)` — the pure sub-note re-indexing computation (mutates `NoteSubIndex`, returns the changed `(NoteId, SubIndex)` renumberings). |
+| `InspectionAvailabilityDiagnostics.cs` | `LogActiveFileAvailability(...)` — the self-contained active-file availability diagnostics log (log-only). |
+
+**How behavior is preserved:** the VM keeps the same private members (`ResolveNoteStatusId`,
+`SubscribeNoteForCommandRefresh`, `IsSubNote`, `CanAddNoteToSection`, `CanMoveNote`,
+`LogActiveFileAvailability`) as thin wrappers that delegate to the helpers, so every existing call
+site and command binding is unchanged. `ReindexSectionNotesAsync` now calls
+`InspectionNoteOrdering.ComputeReindex` and still persists via `_reportService.RenumberNotesAsync`;
+`DeleteEmptyNote` / `MoveNoteUp` / `MoveNoteDown` keep their persistence + `StatusMessage` handling
+in the VM. The diagnostics log line is emitted verbatim.
+
+**Tests:** added `InspectionNoteHelpersTests.cs` (19 tests covering `IsSubNote`,
+`CanAddNoteToSection`, `CanMoveNote`, `ResolveNoteStatusId`, and `ComputeReindex`), exercising the
+extracted pure logic via the existing `InternalsVisibleTo("SiNetSQL.Tests")`.
+
+| Deliverable | Status |
+| --- | --- |
+| `InspectionNoteHelpers` / `InspectionNoteOrdering` / `InspectionAvailabilityDiagnostics` extracted | ✅ |
+| VM delegates via thin wrappers; call sites + XAML unchanged | ✅ |
+| Focused unit tests added (19) | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| Inspection tests green (73 passed, 2 pre-existing skips) | ✅ |
+| No schema / migration / ModelSnapshot / Google / ACC / Workflow changes | ✅ |
+| Report generation + sent/locked actions untouched | ✅ |
+
+**Remaining Inspection debt:** `FloatingInspectionViewModel` is still large (~5,330 lines). Next
+candidates (later phases): `Template Sync On Load`, `Drawing Management`, `Reviewed Plan (Phase A/B)`,
+and ultimately the largest region `Sent / Locked report actions` + report generation (explicitly out
+of scope for this phase). The original goal "split list/report/notes/photos" into
+`SiNet.Application` `IInspection*` ports remains a larger, separately-scoped effort.
+
+---
+
+## Inspection decomposition — Phase 3 (pure transform builders)
+
+**Goal:** Extract a larger, behavior-preserving block than the Phase 2 micro-helpers by pulling the
+deterministic, dependency-free transforms out of the `Drawing Management` and
+`Reviewed Plan (Phase A/B)` regions. No XAML changes; no schema/migration/ModelSnapshot;
+no Google/Gmail, ACC/token, SQL-composition, or Workflow changes; report generation and
+sent/locked report actions intentionally untouched.
+
+**Dependency scan outcome:** the `Drawing Management` and `Reviewed Plan` command handlers are
+`async void` and tightly coupled to VM state (`StatusMessage`, `MessageBox`, `_reportService`,
+`ActiveFileQueryRegistry` / `FileOpenServiceRegistry`, `ReportDrawings`, `OnPropertyChanged`),
+so they stay in the VM. Only the **pure transforms** embedded inside them are cohesive and
+side-effect-free, so those were extracted.
+
+**What was extracted (new internal helpers in `SiNetSQL.MVVM`):**
+
+| New file | Responsibility moved out of the VM |
+| --- | --- |
+| `InspectionReviewedPlanBuilder.cs` | `BuildCandidates(activeFiles)` — projects the live `ActiveFileInfo` snapshot into `ReviewedPlanCandidate` rows (empty-alternatives fallback + `AlternativeName ?? string.Empty`); `BuildReviewedFileRows(reportId, chosen)` — shapes chosen candidates into `InspectionReportReviewedFile` rows (drop-blank → trim → `Distinct()` → sequential `SortOrder`). |
+| `InspectionDrawingStampBuilder.cs` | `BuildStampEntities(reportId, items)` — maps `DrawingDisplayItem`s to `InspectionReportDrawing` entities plus the parallel `(int Id, int[] LayoutIndices)` persistence payload (skip null id; selected-layout filtering; empty selection serializes to `"[]"`). |
+
+**How behavior is preserved:** `SelectReviewedPlan` now calls
+`InspectionReviewedPlanBuilder.BuildCandidates` (dialog/registry orchestration unchanged);
+`PersistReviewedFilesAsync` calls `BuildReviewedFileRows` and still persists via
+`_reportService.PersistReviewedFilesAsync` with the same try/catch + `StatusMessage`;
+`StampDrawings` calls `BuildStampEntities` and keeps `SaveDrawingLayoutsAndStatusAsync`, the
+stamping service call, status messages, and UI updates in the VM. Each extracted block is a verbatim
+move of the original transform.
+
+**Tests:** added `InspectionReviewedPlanBuilderTests.cs` (9 tests) and
+`InspectionDrawingStampBuilderTests.cs` (6 tests) covering candidate projection, reviewed-row
+shaping (trim / blank-drop / dedupe-after-trim / SortOrder), and stamp-entity mapping
+(id-skip / selected-only / `"[]"` serialization / stamp-data order), via the existing
+`InternalsVisibleTo("SiNetSQL.Tests")`.
+
+| Deliverable | Status |
+| --- | --- |
+| `InspectionReviewedPlanBuilder` / `InspectionDrawingStampBuilder` extracted | ✅ |
+| VM call sites delegate to builders; bindings + XAML unchanged | ✅ |
+| Focused unit tests added (15) | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| Inspection builder/helper tests green (34 passed, 0 failed) | ✅ |
+| No schema / migration / ModelSnapshot / Google / ACC / SQL / Workflow changes | ✅ |
+| Report generation + sent/locked actions untouched | ✅ |
+
+**Remaining Inspection debt:** `FloatingInspectionViewModel` is still large (~5,270 lines). The
+remaining command handlers in `Drawing Management` (`LoadAvailableDrawingFiles`,
+`LoadReportDrawings`, `AddDrawingToReport`, `RemoveDrawingFromReport`, `StampDrawings`,
+`ResolveDwfTemplatePath`, `ResolveApprovedPlanDirectory`) and `Reviewed Plan` (`SelectReviewedPlan`,
+`OpenNoteLinkedFile`, persistence wrappers) stay coupled to services/dialogs/registries.
+**Recommended Phase 4:** lift `Drawing Management` (and the reviewed-plan/open-file orchestration)
+behind a dedicated injectable service so the VM holds only thin command bodies — a bigger,
+DI-touching step that should be approved on its own; the largest region
+`Sent / Locked report actions` + report generation remains explicitly deferred.
 
 ---
 
