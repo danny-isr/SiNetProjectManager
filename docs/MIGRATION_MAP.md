@@ -19,7 +19,7 @@ exist/updated, and its row below is marked **✅ Replaced**.
 | Inspection | `FloatingInspectionViewModel.cs` (~5,384) | `SiNet.Application` `IInspection*` → services + VM | ⬜ | Split list/report/notes/photos. |
 | ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ `LegacyBridge`) | ⬜ | ACC remains source of truth; DB is cache/helper. |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
-| App startup / DI | `App.xaml.cs` (~1,806), `ConfigureServices()` (~690) | `SiNet.App.Composition` + `SiNet.App.Wpf` | ⬜ | Modular `AddSiNet*` extensions. |
+| App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
 | Logging | scattered Serilog usage | `SiNet.Application` `IAppLogger` → `SiNet.Infrastructure.Logging` | ⬜ | |
 
@@ -454,6 +454,201 @@ sketch, and a phased P1–P5 cut plan. No code changed; each phase is its own ap
 **Deferred (future gates):** P3 (modular `AddSiNetWorkflowCommands()` + remove service-locator
 usages), P4 (migrate remaining consumers, mark orchestrator methods `internal`), P5 (optional full
 relocation). See `WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md` §6.
+
+---
+
+### D1 — Legacy host composition adoption, Phase 1: delegate the Workflow read slice ✅
+
+> First executable phase of the **App startup / DI** domain. The legacy host's monolithic
+> `ConfigureServices()` (~700 lines) is incrementally pointed at the existing modular composition
+> root instead of hand-wiring every registration inline. Phase 1 delegates exactly **one**
+> behavior-identical group — the Workflow **read slice** — and removes the corresponding inline
+> duplicates. No runtime behavior changes; startup orchestration, logging bootstrap, font resolver,
+> mutex, and global handlers are untouched.
+
+**Why not adopt the whole `SiNet.App.Composition.AddSiNet()` aggregate yet:** it also calls
+`AddSiNetLogging()` (registers `ConsoleAppLogger`, which would collide with the host's Serilog
+wiring) and `AddSiNetGoogle()` (the native Gmail `IEmailGateway`, explicitly out of scope this
+round). Phase 1 therefore delegates a single narrowly-scoped covered group via the module's own
+extension rather than the aggregate.
+
+**`ConfigureServices()` bucket map (audit of lines 152–854):**
+
+| Bucket | Contents |
+| --- | --- |
+| **(1) Covered by a module — delegated now** | Workflow read slice: `WorkflowQueryService` + `IWorkflowQueryService`, `ProjectWorkflowPolicyService` + `IProjectWorkflowPolicyService` → `AddSiNetWorkflowReads()`. |
+| **(1b) Covered but intentionally kept this round** | Logging (`AddLogging`+Serilog vs module `ConsoleAppLogger`); SQL `DbContextFactory` (host sources the connection string from its secret vault); Google stack (native Gmail out of scope); Workflow **write** port (already modular via `AddSiNetWorkflowCommands()`). |
+| **(2) Host-specific — preserved** | Workflow write/engine services, task-lifecycle/coordinator/status, all `IProcessActionHandler` registrations, files/ACC filing stack + `ITokenProvider` factory, MoveToProject + typed-continuation application services, WPF continuation UI host, ACC metadata/health/file-index/Drive/Ollama/AI, the **ACC remote-vs-local provisioning block** (runtime-sensitive factory + self-signed-cert handling), and all WPF ViewModels + their backing services. |
+| **(3) Orphaned / duplicate** | None, other than the read slice delegated in bucket (1). |
+
+**Change:**
+
+| Artifact | Detail |
+| --- | --- |
+| `SiNetProjectManagerV2/SiNetProjectManagerV2.csproj` | Added a direct `ProjectReference` to `src/SiNet.Infrastructure.Sql`. Already reached transitively via `SiNetSQL → SiNet.Infrastructure.Sql`; making it explicit introduces **no new cycle** (host → Infrastructure.Sql → Application/Domain). |
+| `SiNetProjectManagerV2/App.xaml.cs` | Replaced the four inline read-slice `AddTransient` registrations with a single `SiNet.Infrastructure.Sql.WorkflowServiceCollectionExtensions.AddSiNetWorkflowReads(services)` call (fully-qualified — no `using` change). Registration shape is byte-for-byte equivalent: concrete type `Transient` + port forwarded via `sp.GetRequiredService<Concrete>()`. The interleaved write/engine registrations and the `AddSiNetWorkflowCommands()` call are unchanged. (Supersedes the A1 "added interface forwarders for both ports" note for the legacy host.) |
+
+**Deferred (next phases):** delegate the SQL `DbContextFactory` (via `AddSiNetSql(connectionString)`)
+once the host's vault-sourced connection string is threaded through; reconcile logging; everything
+else stays host-wired until its owning module exists. The full aggregate `AddSiNet()` is **not**
+adopted until logging + Google reconciliation is approved.
+
+| Deliverable | Status |
+| --- | --- |
+| Workflow read slice delegated to `AddSiNetWorkflowReads()`; inline duplicates removed | ✅ |
+| `ConfigureServices()` registration bucket map produced | ✅ |
+| Host-specific / out-of-scope registrations preserved (logging, Google, SQL factory, write/engine, ACC, VMs) | ✅ |
+| No new project-reference cycle (explicit ref over existing transitive path) | ✅ |
+| Full `SiNetProjectManager.sln` build green (VS MSBuild) | ✅ _exit 0_ |
+| Clean module chain `dotnet build` green (`SiNet.Infrastructure.Sql` → Application → Domain) | ✅ _exit 0_ |
+| Workflow read/path regression tests green | ✅ _9/9_ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+| No Workflow engine/provisioning, ACC/token, or Gmail behavior changes | ✅ |
+
+---
+
+### D2 — Legacy host composition adoption, Phase 2: bucket re-check (no safe group remained) ✅ _assessment_
+
+> Phase 2 re-audited the four approved candidate groups for delegation at a faster pace, intending
+> to delegate **all** clearly-covered, behavior-identical groups in one block. The verdict: **every
+> remaining candidate hits a real, enumerated blocker**, so no code was changed this phase. Per the
+> pace rule ("do not stop after one tiny group *unless there is a real blocker*"), each stop below is
+> a genuine behavior/lifetime/auth blocker, documented for the next gate. The host's
+> `ConfigureServices()` is unchanged from the D1 state.
+
+**Candidate verdicts (priority order):**
+
+| # | Candidate group | Module extension | Verdict | Blocker / reason |
+| --- | --- | --- | --- | --- |
+| 1 | SQL `DbContextFactory` | `AddSiNetSql(connectionString)` | ⛔ **Behavior mismatch — kept in host** *(→ resolved in D3)* | Vault sourcing *itself* is fine (host would pass the Credential-Manager string), **but** the host registration adds a `#if DEBUG` block — `EnableSensitiveDataLogging()` + `EnableDetailedErrors()` — that the clean `net10.0` module's fixed options lambda does **not** emit. Delegating would silently drop DEBUG diagnostics. Preserving it would require changing the shared module's signature (≈ "invent/alter a module"), which was out of Phase 2 scope. **Unblocked and delegated in D3** via the `SiNetSqlOptions.EnableEfDebugDiagnostics` opt-in. |
+| 2 | Workflow command port | `AddSiNetWorkflowCommands()` | ✅ **Already modular (no-op)** | Delegated since A5/P2; the host already calls `WorkflowCommandsServiceCollectionExtensions.AddSiNetWorkflowCommands(services)` at `App.xaml.cs` line 274. Nothing left to move. |
+| 3 | FileSystem / Logging | `AddSiNetFileSystem()` / `AddSiNetLogging()` | ⛔ **Dead/behavior-changing — kept in host** | The modules register clean ports `IFileStorage→LocalFileStorage` and `IAppLogger→ConsoleAppLogger`. A workspace scan shows the host **neither registers nor consumes** `IFileStorage`/`IAppLogger` anywhere; the host logs through `AddLogging`+Serilog and `AppLogger`. Calling these would add unused registrations and introduce a second logger abstraction — a behavior change with no consumer, not a like-for-like swap. |
+| 4 | Google / Gmail | `AddSiNetGoogle(configure)` | ⛔ **Auth/runtime change — kept in host** *(→ confirmed in D4)* | The module wires the **native** `IEmailGateway→GmailEmailGateway` (direct Gmail API via `GmailClientProvider`). The host runs the legacy `GoogleAuthService` + `GoogleService` + `GmailOutboundMailService` sign-in/throttle path (bridged via `ILegacyEmailSource`). Adopting the module would change Gmail sign-in/runtime behavior — explicitly forbidden this phase. **D4 confirmed not behavior-equivalent** (read-only scope, separate OAuth client + token store, 5 legacy consumers, 0 native consumers) — no consolidation executed. |
+
+**Net result:** group #2 was already modular; groups #1, #3, #4 remain host-specific for the
+documented blockers. The `ConfigureServices()` bucket map from D1 stands unchanged; bucket **(1b)
+"covered but intentionally kept"** is the authoritative list for #1/#3/#4, now with explicit
+blocker reasons above.
+
+**Unblock conditions (future gates, each its own approval):**
+
+- **SQL #1:** ~~add a debug-diagnostics opt-in to `AddSiNetSql`~~ **Done in D3** — `SiNetSqlOptions.EnableEfDebugDiagnostics`
+  opt-in added and the host SQL factory delegated with proven-identical behavior.
+- **FileSystem/Logging #3:** only meaningful once host consumers are migrated to `IFileStorage` /
+  `IAppLogger`; until then the modules have no consumer in this host.
+- **Google #4:** ~~part of the separately-gated Gmail consolidation~~ **Investigated in D4** — paths
+  are **not** behavior-equivalent (read-only native scope, separate OAuth client/token store, no
+  native consumers); legacy `GoogleService` retained. No further composition gate planned for Gmail.
+
+| Deliverable | Status |
+| --- | --- |
+| All four candidate groups re-audited against their module extensions | ✅ |
+| Each non-delegated group has a real, documented blocker | ✅ |
+| No code changed (no safe group remained) | ✅ |
+| `ConfigureServices()` bucket map confirmed current (D1 (1b) authoritative) | ✅ |
+| Builds untouched and still green from D1 (no regression introduced) | ✅ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+| No Gmail sign-in, ACC/token, Workflow engine, or SQL config behavior changed | ✅ |
+
+---
+
+### D3 — SQL `AddSiNetSql` diagnostics option + host SQL-factory delegation ✅
+
+> Closes the D2 #1 blocker. Adds a small, explicit **EF diagnostics opt-in** to the clean SQL
+> registration so the legacy host can delegate its `DbContextFactory` wiring **without losing the
+> existing DEBUG diagnostics**. Because the host's only divergence from the module was the
+> `#if DEBUG` `EnableSensitiveDataLogging()` + `EnableDetailedErrors()` pair, the new opt-in makes
+> the registrations **provably identical**, so the host factory was delegated in this same gate.
+
+**Why delegation is behavior-identical (proof):**
+
+| Aspect | Host (before) | Module `AddSiNetSql(conn, opt)` (now) | Same? |
+| --- | --- | --- | --- |
+| Context type | `SiNetSQL.Data.SiNetSQLDbContext` | `SiNetSQL.Data.SiNetSQLDbContext` (single shared type — EF layer lives in `SiNet.Infrastructure.Sql`) | ✅ |
+| Registration | `AddDbContextFactory<…>` | `AddDbContextFactory<…>` | ✅ |
+| Provider + compat | `UseSqlServer(conn, sql => sql.UseCompatibilityLevel(120))` | identical | ✅ |
+| Connection string source | host vault (Windows Credential Manager), passed in | **unchanged** — host still resolves it and passes the string | ✅ |
+| DEBUG diagnostics | `#if DEBUG` → `EnableSensitiveDataLogging()` + `EnableDetailedErrors()` | host sets `EnableEfDebugDiagnostics = true` only under `#if DEBUG`; module emits the same two calls | ✅ |
+| Release diagnostics | none (`#if DEBUG` compiled out) | flag stays `false` → calls never made | ✅ |
+
+**Added / changed:**
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Infrastructure.Sql/SiNetSqlOptions.cs` *(new)* | Options object with a single `bool EnableEfDebugDiagnostics` (default `false`). Documented as a DEBUG-only opt-in; must stay off in Release. |
+| `src/SiNet.Infrastructure.Sql/SqlServiceCollectionExtensions.cs` | New overload `AddSiNetSql(this IServiceCollection, string connectionString, Action<SiNetSqlOptions> configure)`. The existing `AddSiNetSql(services, connectionString)` now forwards to it with a no-op configure (default = diagnostics off — **byte-for-byte prior behavior**). When `EnableEfDebugDiagnostics` is set, the factory adds `EnableSensitiveDataLogging()` + `EnableDetailedErrors()`. The no-connection-string `AddSiNetSql(services)` no-op overload is unchanged. |
+| `SiNetProjectManagerV2/App.xaml.cs` | The inline `AddDbContextFactory<SiNetSQLDbContext>(…)` block was replaced with `SiNet.Infrastructure.Sql.SqlServiceCollectionExtensions.AddSiNetSql(services, connectionString, options => { #if DEBUG options.EnableEfDebugDiagnostics = true; #endif })`. The vault lookup (`AppConfiguration.GetConnectionString("SiNetDatabase")`) and its throw-guard are unchanged; the project already references `SiNet.Infrastructure.Sql` (D1). |
+
+**SQL factory delegation status:** ✅ **unblocked and delegated.** The D1 bucket-map entry for SQL
+moves from **(1b) "covered but intentionally kept"** to **(1) delegated**.
+
+**Not changed:** connection string source, EF mappings/configurations, migrations, `ModelSnapshot`,
+Release SQL/runtime behavior, and every other registration group (workflow, logging, Google, ACC,
+task/VM services).
+
+| Deliverable | Status |
+| --- | --- |
+| `SiNetSqlOptions` diagnostics opt-in added; default disabled | ✅ |
+| `AddSiNetSql(conn, configure)` overload; existing overload forwards unchanged | ✅ |
+| Host SQL factory delegated with proven-identical behavior (incl. `#if DEBUG`) | ✅ |
+| Connection string source unchanged (host vault) | ✅ |
+| Clean module `dotnet build` green (Release) | ✅ _exit 0_ |
+| Full `SiNetProjectManager.sln` via VS MSBuild green (Debug **and** Release) | ✅ _exit 0_ |
+| Release behavior unchanged (`#if DEBUG` compiled out; flag stays `false`) | ✅ |
+| Workflow/DI regression tests green | ✅ _22/22_ |
+| No schema / migration / `ModelSnapshot` / EF-mapping edits | ✅ |
+| No unrelated registration groups touched | ✅ |
+
+---
+
+| No Gmail sign-in / ACC-token / Workflow / SQL / schema changes | \u2705 |
+
+---
+
+### D5 \u2014 Native Google capabilities: auth-state / health bridge \u2705
+
+> First **execution** step of the post-D4 *Native Google capabilities* track. Ports the smallest
+> dependency-surface capability that legacy `GoogleService` still uniquely covers \u2014 the
+> **auth-state / health bridge** (`GoogleService.AuthStateChanged`) \u2014 into the clean stack, **without**
+> touching the legacy production host. No new OAuth scopes, no new NuGet, no Gmail/Drive API calls.
+
+**What was added (clean module only \u2014 `SiNet.Infrastructure.Google`):**
+
+| Artifact | Detail |
+| --- | --- |
+| `GmailClientProvider.cs` | New `event Action<bool>? AuthStateChanged` + private `RaiseIfAuthStateChanged(wasSignedIn)`. Raised (outside `_gate`) on a real transition from `TryGetServiceAsync`, `TrySignInSilentlyAsync`, `SignInInteractiveAsync` (false\u2192true) and on `Logout` / `DisposeAsync` (true\u2192false). New `Logout()` drops the cached session **without** deleting the persisted refresh token (silent restore can re-establish it). |
+| `GmailConnectorAuthService.cs` *(new)* | `IConnectorAuthService` adapter over the provider: `IsAuthenticated`\u21d2`IsSignedIn`, `LoginAsync`\u21d2`SignInInteractiveAsync` (true on `Success`), `TryRestoreSessionAsync`\u21d2`TrySignInSilentlyAsync`, `Logout`\u21d2`Logout`, and `AuthStateChanged` forwarded via add/remove accessors. |
+| `GoogleServiceCollectionExtensions.cs` | `AddSiNetGoogle` now registers `IConnectorAuthService \u2192 GmailConnectorAuthService` as a singleton **over the same `GmailClientProvider` singleton** that backs `IEmailGateway` \u2014 one shared source of truth for signed-in state + events. |
+
+**Why this is the right first capability:** `IConnectorAuthService` (the connector-agnostic auth/health
+port, already in `SiNet.Application.Common`) is the native equivalent of the legacy health bridge. The
+native provider already tracked `IsSignedIn` but raised no event, so health/status consumers in the new
+stack had nothing to subscribe to. This closes that gap with **zero** scope/NuGet/API surface and keeps
+the module free of WPF/legacy dependencies.
+
+**Legacy host:** untouched. `SiNetProjectManagerV2` still owns `GoogleAuthService`/`GoogleService` and
+its `AuthStateChanged` health wiring exactly as before; the native bridge lives only in the clean stack.
+
+**Remaining `GoogleService` replacement gaps (for future, separately-approved capability steps):**
+
+| Capability | Native status | Gap to close before host switch |
+| --- | --- | --- |
+| Gmail **read** | \u2705 `IEmailGateway \u2192 GmailEmailGateway` (`GmailReadonly`) | none |
+| Auth-state / **health** | \u2705 **D5** `IConnectorAuthService \u2192 GmailConnectorAuthService` | none |
+| Gmail **send** | \u26d4 not ported | needs `GmailSend` scope + a send port (e.g. `IOutboundMailService` equivalent) + impl; scope change \u21d2 fresh consent, so must be its own gate |
+| Google **Drive** read/write | \u26d4 not ported | needs `Google.Apis.Drive.v3` + Drive scopes + Drive port(s) + impl |
+| Native **sign-in/config** flow | \u26a0 partial | interactive sign-in exists; production-grade config/secrets wiring for the host switch still TBD |
+
+| Deliverable | Status |
+| --- | --- |
+| Native auth-state event added to `GmailClientProvider` | \u2705 |
+| `IConnectorAuthService` native adapter implemented + registered | \u2705 |
+| Clean module free of WPF / legacy / `SiNetProjectManagerV2` deps | \u2705 |
+| Clean module `dotnet build` (Debug) green | \u2705 |
+| Full `SiNetProjectManager.sln` build green | \u2705 |
+| Legacy Google path unchanged and still builds | \u2705 |
+| No OAuth scope / NuGet / ACC-token / Workflow / SQL / schema changes | \u2705 |
+| Remaining `GoogleService` gaps documented (send, Drive, config) | \u2705 |
 
 ---
 

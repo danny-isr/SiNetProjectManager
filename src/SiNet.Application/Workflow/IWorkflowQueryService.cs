@@ -47,4 +47,10 @@ public interface IWorkflowQueryService
 
     /// <summary>Returns the distinct workflow definition names that have at least one instance.</summary>
     ValueTask<List<string>> GetDistinctWorkflowNamesAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Returns the task-completion progress for a workflow instance's current stage
+    /// (required/optional/created/closed counts). Read-only; returns a value DTO.
+    /// </summary>
+    ValueTask<StageTaskProgressDto> GetStageTaskProgressAsync(int instanceId, CancellationToken ct);
 }

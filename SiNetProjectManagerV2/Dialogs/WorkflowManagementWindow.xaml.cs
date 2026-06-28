@@ -201,7 +201,7 @@ public partial class WorkflowManagementWindow : Window
     // ═══════════════════════════════════════════════════════════════════════
 
     private IWorkflowQueryService? _dashboardQueryService;
-    private WorkflowTaskOrchestrator? _dashboardOrchestrator;
+    private IWorkflowCommandService? _dashboardWorkflowCommands;
     private IProjectWorkflowPolicyService? _dashboardPolicyService;
     private List<Project> _dashboardProjects = [];
     private Project? _dashboardSelectedProject;
@@ -2351,7 +2351,7 @@ public partial class WorkflowManagementWindow : Window
         try
         {
             _dashboardQueryService = App.ServiceProvider?.GetRequiredService<IWorkflowQueryService>();
-            _dashboardOrchestrator = App.ServiceProvider?.GetRequiredService<WorkflowTaskOrchestrator>();
+            _dashboardWorkflowCommands = App.ServiceProvider?.GetRequiredService<IWorkflowCommandService>();
             _dashboardPolicyService = App.ServiceProvider?.GetRequiredService<IProjectWorkflowPolicyService>();
 
             var factory = GetFactory();
@@ -2455,20 +2455,21 @@ public partial class WorkflowManagementWindow : Window
             return;
         }
 
-        if (_dashboardOrchestrator == null) return;
+        if (_dashboardWorkflowCommands == null) return;
 
         try
         {
             StatusText.Text = "מפעיל תהליך...";
 
             var userId = CurrentUserContext.Instance.CurrentUserId ?? 0;
-            var result = await _dashboardOrchestrator.StartWorkflowAsync(
-                selectedDef.Id,
-                _dashboardSelectedProject.Id,
-                WorkflowTriggerType.Manual,
-                triggerEntityId: null,
-                userId,
-                notes: null,
+            var result = await _dashboardWorkflowCommands.StartAsync(
+                new StartWorkflowCommand(
+                    selectedDef.Id,
+                    _dashboardSelectedProject.Id,
+                    WorkflowTriggerTypeDto.Manual,
+                    TriggerEntityId: null,
+                    userId,
+                    Notes: null),
                 CancellationToken.None);
 
             var taskCount = result.CreatedTasks.Count;

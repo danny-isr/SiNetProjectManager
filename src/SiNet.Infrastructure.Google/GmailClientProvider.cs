@@ -47,6 +47,28 @@ public sealed class GmailClientProvider : IAsyncDisposable
     public bool IsSignedIn => _gmailService != null;
 
     /// <summary>
+    /// Raised whenever the signed-in state transitions (false→true on a successful silent restore
+    /// or interactive sign-in; true→false on <see cref="Logout"/> or disposal). The payload is the
+    /// new <see cref="IsSignedIn"/> value. This is the native equivalent of the legacy
+    /// <c>GoogleService.AuthStateChanged</c> health/auth bridge. Handlers must not throw.
+    /// </summary>
+    public event Action<bool>? AuthStateChanged;
+
+    /// <summary>
+    /// Compares the cached-session state captured before a mutation (<paramref name="wasSignedIn"/>)
+    /// with the current state and raises <see cref="AuthStateChanged"/> only on a real transition.
+    /// Always call this outside the <c>_gate</c> so handlers cannot deadlock the provider.
+    /// </summary>
+    private void RaiseIfAuthStateChanged(bool wasSignedIn)
+    {
+        var isSignedIn = _gmailService != null;
+        if (isSignedIn != wasSignedIn)
+        {
+            AuthStateChanged?.Invoke(isSignedIn);
+        }
+    }
+
+    /// <summary>
     /// Returns a ready <see cref="GmailService"/>, or <c>null</c> when the mailbox is not
     /// available (no client secrets configured, or no token and interactive sign-in disabled).
     /// Never throws for the "not signed in" case.
@@ -58,6 +80,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
             return _gmailService;
         }
 
+        var wasSignedIn = _gmailService != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -66,6 +89,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
         finally
         {
             _gate.Release();
+            RaiseIfAuthStateChanged(wasSignedIn);
         }
     }
 
@@ -81,6 +105,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
             return true;
         }
 
+        var wasSignedIn = _gmailService != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -90,6 +115,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
         finally
         {
             _gate.Release();
+            RaiseIfAuthStateChanged(wasSignedIn);
         }
     }
 
@@ -102,6 +128,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// </summary>
     public async Task<GmailSignInResult> SignInInteractiveAsync(CancellationToken cancellationToken = default)
     {
+        var wasSignedIn = _gmailService != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -138,6 +165,29 @@ public sealed class GmailClientProvider : IAsyncDisposable
         finally
         {
             _gate.Release();
+            RaiseIfAuthStateChanged(wasSignedIn);
+        }
+    }
+
+    /// <summary>
+    /// Drops the cached Gmail session so the provider reports as signed-out. Does not revoke or
+    /// delete the persisted refresh token, so a subsequent <see cref="TrySignInSilentlyAsync"/>
+    /// can restore the session without a browser. Raises <see cref="AuthStateChanged"/> when the
+    /// state actually transitions from signed-in to signed-out.
+    /// </summary>
+    public void Logout()
+    {
+        var wasSignedIn = _gmailService != null;
+        _gate.Wait();
+        try
+        {
+            _gmailService?.Dispose();
+            _gmailService = null;
+        }
+        finally
+        {
+            _gate.Release();
+            RaiseIfAuthStateChanged(wasSignedIn);
         }
     }
 
@@ -296,9 +346,11 @@ public sealed class GmailClientProvider : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
+        var wasSignedIn = _gmailService != null;
         _gmailService?.Dispose();
         _gmailService = null;
         _gate.Dispose();
+        RaiseIfAuthStateChanged(wasSignedIn);
         return ValueTask.CompletedTask;
     }
 }

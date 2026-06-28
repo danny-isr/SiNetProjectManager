@@ -278,6 +278,67 @@ public class WorkflowQueryService : IWorkflowQueryService
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Returns the task-completion progress for a workflow instance's current stage
+    /// (required/optional/created/closed counts). Read-only projection; mirrors the
+    /// orchestrator's stage-progress query but returns a clean value DTO.
+    /// </summary>
+    public async ValueTask<StageTaskProgressDto> GetStageTaskProgressAsync(int instanceId, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var instance = await db.WorkflowInstances
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == instanceId, ct)
+            ?? throw new InvalidOperationException($"Workflow instance {instanceId} not found.");
+
+        if (instance.CurrentStageId is null)
+            return StageTaskProgressDto.Empty;
+
+        var currentStageId = instance.CurrentStageId.Value;
+        // Canonical stage tag stored in TaskLink.Description (mirrors WorkflowConstants.BuildStageTag,
+        // which lives in the SiNetSQL assembly that this infrastructure module does not reference).
+        var stageTag = $"Stage:{currentStageId}";
+
+        var templates = await db.WorkflowStageTasks
+            .AsNoTracking()
+            .Where(st => st.StageDefinitionId == currentStageId && st.IsActive)
+            .Select(st => new { st.TaskTypeId, st.IsRequired })
+            .ToListAsync(ct);
+
+        var totalRequired = templates.Count(t => t.IsRequired);
+        var totalOptional = templates.Count(t => !t.IsRequired);
+
+        var linkedTaskStatuses = await (
+            from link in db.TaskLinks.AsNoTracking()
+            join task in db.ProjectAssignments.AsNoTracking()
+                on link.TaskId equals task.Id
+            join status in db.ProjectAssignmentStatuses.AsNoTracking()
+                on task.StatusId equals status.Id
+            where link.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
+               && link.LinkedEntityId == instanceId
+               && link.Role == TaskLinkRole.Trigger
+               && link.Description == stageTag
+            select new { task.TaskTypeId, status.IsOpen }
+        ).ToListAsync(ct);
+
+        var requiredTaskTypeIds = templates
+            .Where(t => t.IsRequired)
+            .Select(t => t.TaskTypeId)
+            .ToHashSet();
+
+        var completedRequired = linkedTaskStatuses
+            .Where(t => t.TaskTypeId.HasValue && requiredTaskTypeIds.Contains(t.TaskTypeId.Value) && !t.IsOpen)
+            .Select(t => t.TaskTypeId!.Value)
+            .Distinct()
+            .Count();
+
+        var totalCreated = linkedTaskStatuses.Count;
+        var totalClosed = linkedTaskStatuses.Count(t => !t.IsOpen);
+
+        return new StageTaskProgressDto(totalRequired, completedRequired, totalOptional, totalCreated, totalClosed);
+    }
+
     /// <summary>Priority for picking the "best" instance: Active first, then Paused, etc.</summary>
     private static int StatusPriority(WorkflowStatus s) => s switch
     {

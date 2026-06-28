@@ -173,15 +173,18 @@ namespace SiNetProjectManagerV2
                 ?? throw new InvalidOperationException(
                     "חסר connection string ל-SiNetDatabase. הגדר ב-Credential Manager דרך חלון הגדרת סודות (SiNet/ConnectionStrings/SiNetDatabase).");
 
-            services.AddDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>(options =>
+            // Composition adoption (Phase 2 / SQL diagnostics gate): the DbContextFactory registration
+            // is delegated to the modular SiNet.Infrastructure.Sql module. The connection string is
+            // still sourced from the host's vault (Windows Credential Manager) and passed in — the
+            // source is unchanged. AddSiNetSql applies the same UseSqlServer + UseCompatibilityLevel(120)
+            // as before; the #if DEBUG opt-in below reproduces the previous inline EnableSensitiveDataLogging()
+            // + EnableDetailedErrors() exactly. In Release the flag stays false, so SQL/runtime behavior
+            // is identical. SiNetSQL.Data.SiNetSQLDbContext is the single shared context type, so consumers
+            // resolve the same IDbContextFactory<SiNetSQLDbContext>.
+            SiNet.Infrastructure.Sql.SqlServiceCollectionExtensions.AddSiNetSql(services, connectionString, options =>
             {
-                // UseCompatibilityLevel(120) prevents EF Core 8 from generating OPENJSON($)
-                // for collection.Contains() queries — requires SQL Server 2016+ (compat 130).
-                // Our DB has a lower compat level, causing "Incorrect syntax near '$'".
-                options.UseSqlServer(connectionString, sql => sql.UseCompatibilityLevel(120));
 #if DEBUG
-                options.EnableSensitiveDataLogging();
-                options.EnableDetailedErrors();
+                options.EnableEfDebugDiagnostics = true;
 #endif
             });
 
@@ -267,18 +270,19 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowStageTaskProvisioningService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowQueryService>();
-            services.AddTransient<SiNet.Application.Workflow.IWorkflowQueryService>(
-                sp => sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowQueryService>());
-            // Write port (assessment phase P2): adapter delegates to WorkflowTaskOrchestrator.
-            services.AddTransient<SiNet.Application.Workflow.IWorkflowCommandService>(
-                sp => new SiNetSQL.Services.Workflow.WorkflowCommandServiceAdapter(
-                    sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>()));
+            // Workflow write port (assessment phase P3b): registered via the modular
+            // AddSiNetWorkflowCommands() extension hosted in the SiNetSQL assembly (where the
+            // adapter + orchestrator live). The adapter delegates to the WorkflowTaskOrchestrator
+            // registered above; the engine/provisioning chain is unchanged.
+            SiNetSQL.Services.Workflow.WorkflowCommandsServiceCollectionExtensions.AddSiNetWorkflowCommands(services);
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowSeedService>();
-            services.AddTransient<SiNetSQL.Services.Workflow.ProjectWorkflowPolicyService>();
-            services.AddTransient<SiNet.Application.Workflow.IProjectWorkflowPolicyService>(
-                sp => sp.GetRequiredService<SiNetSQL.Services.Workflow.ProjectWorkflowPolicyService>());
+            // Composition adoption (Phase 1): the Workflow READ slice is delegated to the modular
+            // SiNet.Infrastructure.Sql module. This registers WorkflowQueryService / IWorkflowQueryService
+            // and ProjectWorkflowPolicyService / IProjectWorkflowPolicyService with identical Transient
+            // lifetimes and port-forwarding, replacing the previous inline duplicates here. The
+            // write/engine services above intentionally stay in the host (no port equivalent).
+            SiNet.Infrastructure.Sql.WorkflowServiceCollectionExtensions.AddSiNetWorkflowReads(services);
 
             // Task Lifecycle Services: Transient (auto-create/auto-close tasks based on behavior definitions)
             services.AddTransient<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService>();

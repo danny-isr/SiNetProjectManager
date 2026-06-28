@@ -319,9 +319,9 @@ public partial class WorkflowCreateProjectWindow : Window
             var sp = App.ServiceProvider;
             if (sp == null) return;
 
-            var orchestrator = sp.GetService<WorkflowTaskOrchestrator>();
+            var workflowCommands = sp.GetService<IWorkflowCommandService>();
             var policyService = sp.GetService<IProjectWorkflowPolicyService>();
-            if (orchestrator == null || policyService == null)
+            if (workflowCommands == null || policyService == null)
             {
                 AppLogger.Warn(
                     "[WorkflowCreateProject] Workflow services unavailable — skipping auto-start");
@@ -350,15 +350,17 @@ public partial class WorkflowCreateProjectWindow : Window
                 initialStageCode = "REV.MaterialIntake";
             }
 
-            await orchestrator.StartWorkflowAsync(
-                definition.Id,
-                args.ProjectId,
-                WorkflowTriggerType.Email,
-                triggerEntityId: emailMessageId == 0 ? null : emailMessageId,
-                userId: userId,
-                notes: $"Auto-started on project creation from email (continuation: {definition.Code})",
-                ct: CancellationToken.None,
-                initialStageCode: initialStageCode);
+            await workflowCommands.StartAsync(
+                new StartWorkflowCommand(
+                    definition.Id,
+                    args.ProjectId,
+                    WorkflowTriggerTypeDto.Email,
+                    TriggerEntityId: emailMessageId == 0 ? null : emailMessageId,
+                    UserId: userId,
+                    Notes: $"Auto-started on project creation from email (continuation: {definition.Code})",
+                    IsProjectBound: true,
+                    InitialStageCode: initialStageCode),
+                CancellationToken.None);
 
             AppLogger.Info(
                 $"[WorkflowCreateProject] ✅ Continuation workflow '{definition.Code}' started for project {args.ProjectId}");

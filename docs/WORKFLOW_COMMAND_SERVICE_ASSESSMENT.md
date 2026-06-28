@@ -1,7 +1,11 @@
 # Workflow Command / Application-Service Assessment (Option 1)
 
-> **Status:** Assessment complete (P0) — **P1 and P2 executed** (port introduced behind an
-> adapter; one pilot consumer switched). P3–P5 remain future approval gates.
+> **Status:** Assessment complete (P0) — **P1, P2, P3b, P4, and P6 executed** (port introduced behind an
+> adapter; pilot consumer switched in P2; all WPF service-locator orchestrator usages removed and
+> the command registration modularized in P3b; same-assembly write-path callers migrated in P4;
+> result-record boundary consolidated and the last write-path orchestrator dependency
+> (`TaskCompletionCoordinator`) moved onto the command port in **P6**). The optional full-relocation
+> **P5** remains a future approval gate.
 > **Scope guard:** This document is the agreed deliverable for the "Option 1" next round.
 > Each remaining phase below is its own future approval gate.
 > **Builds on:** the accepted `Workflow write API DTO boundary: accepted transitional state`
@@ -167,17 +171,31 @@ sequencing dependency.)*
 | Consumer | Methods used | Notes |
 | --- | --- | --- |
 | `SiNetSQL/Services/EmailContext/ActionExecutor.cs` | `IWorkflowCommandService.StartAsync` | ✅ **Migrated (P2)** — now depends on the Application port; reads `.Instance.Id`, `.CreatedTasks.Count` from `WorkflowStartResultDto`. |
-| `SiNetProjectManagerV2/Dialogs/WorkflowManagementWindow.xaml.cs` | `StartWorkflowAsync` (dashboard) | DTO-safe scalars. |
-| `SiNetSQL/Services/Workflow/StalledWorkflowWatchdog.cs` | `CheckAndAutoAdvanceStalledWorkflowAsync` | Reads `.Action`/`.TargetStageId` only. |
-| `SiNetSQL/Services/Workflow/WorkflowActionCompletedHandler.cs` | `ExecuteTransitionAsync` | Reads `.Action` only. |
+| `SiNetProjectManagerV2/Dialogs/WorkflowManagementWindow.xaml.cs` | `StartWorkflowAsync` (dashboard tab) | ✅ **Migrated (P3b)** — `_dashboardOrchestrator` replaced with `IWorkflowCommandService`; starts via `StartWorkflowCommand` + `WorkflowTriggerTypeDto.Manual`. |
+| `SiNetProjectManagerV2/Dialogs/WorkflowCreateProjectWindow.xaml.cs` | `StartWorkflowAsync` (continuation auto-start) | ✅ **Migrated (P3b)** — local orchestrator resolve replaced with `IWorkflowCommandService`; passes `InitialStageCode` via `StartWorkflowCommand`. |
+| `SiNetProjectManagerV2/WPFUserControl/WorkflowDashboardView.xaml.cs` → `WorkflowDashboardViewModel` | `StartWorkflowAsync` | ✅ **Migrated (P3b)** — view-model now injects `IWorkflowCommandService`; code-behind resolves the port instead of the orchestrator. |
+| `SiNetProjectManagerV2/WPF Window/WorkflowInstanceWindow.xaml.cs` → `WorkflowInstanceViewModel` | `AdvanceWithTasksAsync` + stage progress | ✅ **Migrated (P3b)** — VM now injects `IWorkflowCommandService` (advance) **and** `IWorkflowQueryService` (`GetStageTaskProgressAsync`); `StageProgress` retyped to `StageTaskProgressDto`. `WorkflowEngine` retained for pause/resume (out of scope). |
+| `SiNetSQL/Domain/Actions/Handlers/StartWorkflowProcessActionHandler.cs` | `StartWorkflowAsync` | ✅ **Migrated (P4)** — injects `IWorkflowCommandService`; starts via `StartWorkflowCommand` + `WorkflowTriggerTypeDto.Email`; result retyped to `WorkflowStartResultDto`. |
+| `SiNetSQL/Services/TaskLifecycle/TaskLifecycleService.cs` | `StartWorkflowAsync`, `CheckAndAutoAdvanceAsync` | ✅ **Migrated (P4)** — primary-ctor now injects `IWorkflowCommandService`; auto-start via `StartWorkflowCommand`, task-closed via `TaskClosedCommand`. |
+| `SiNetSQL/Services/Workflow/StalledWorkflowWatchdog.cs` | `CheckAndAutoAdvanceStalledWorkflowAsync`, `CheckAndAutoAdvanceAsync`, `CreateStageTasksAsync` | ✅ **Migrated (P4, partial)** — both auto-advance calls now go through `IWorkflowCommandService` (`StalledWorkflowCommand` / `TaskClosedCommand`). **Orchestrator dependency retained** for `CreateStageTasksAsync` (no port equivalent). |
+| `SiNetSQL/Services/Tasks/TaskCompletionCoordinator.cs` | `CheckAndAutoAdvanceAsync` | ✅ **Migrated (P6)** — now injects `IWorkflowCommandService?` and routes auto-advance via `TaskClosedCommand`. The carrier `TaskCompletionResult.StageAdvanceResult` was retyped to `StageCompletionResultDto?` (verified write-only: zero member-access reads across both repos), so the public contract is now DTO-clean. This removes the **last** production write-path dependency on the concrete orchestrator. |
+| `SiNetSQL/Services/Workflow/WorkflowActionCompletedHandler.cs` | `ExecuteTransitionAsync` | ⚪ **Retained on orchestrator (P4)** — `ExecuteTransitionAsync` has **no** Application write-port equivalent; stays public. |
+| `SiNetSQL/Services/ReviewWorkflowInitiationService.cs` | `StartWorkflowAsync` | ⚪ **Not migrated (P4)** — entire file is dead code (`#if false`, zero callers, not in DI); left untouched per safety rules. |
 | `Domain/Actions/Handlers/StartSubWorkflowProcessActionHandler.cs` | `EnsureInitialStageTasksAsync` (via provisioning, not orchestrator) | The DI-cycle-avoidance path (C5). |
-| `…/ViewModels/FloatingProjectTasksViewModel.cs`, `TaskOperationHelper.cs` | orchestrator via `ServiceLocator`/optional ctor | **Service-locator usage** — would need explicit DI when porting. |
-| Tests: `WorkflowTaskOrchestratorTests`, `SubWorkflowOrchestrationRuntimeTests`, `Proposal*`/`ApproveOrClose*` E2E | start/advance/auto-advance | Read DTO scalars; would retarget to the port. |
+| Tests: `WorkflowTaskOrchestratorTests`, `SubWorkflowOrchestrationRuntimeTests`, `Proposal*`/`ApproveOrClose*`/`AllActiveWorkflowsExecution` E2E | start/advance/auto-advance | ⚪ **Updated for DTO results (P6)** — still call the orchestrator directly via existing `InternalsVisibleTo("SiNetSQL.Tests"/"SiNetSQL.E2ETests")`; assertions retyped to `WorkflowStartResultDto` and `StageCompletionActionDto.AutoAdvanced` to match the new DTO-returning signatures. No behavior change. |
 
-**Sizing:** a *full* execution touches the engine wrapper, provisioning entry, ~7 production
-call sites (incl. 2 service-locator usages to clean up), the DI composition (legacy → modular),
-1 new result DTO + mapper, and the workflow test suite. This is **High blast radius** — exactly
-why the staged plan below front-loads the cheapest, reversible increments.
+**Sizing correction (discovered during P3b):** the original inventory mis-identified the
+service-locator targets as `TaskOperationHelper` / `FloatingProjectTasksViewModel`; neither
+references `WorkflowTaskOrchestrator`. The real concrete-orchestrator consumers are the four WPF
+sites above (two windows + one user-control view-model + one instance view-model). All four were
+migrated in P3b. **P4 (done)** then migrated the same-assembly production write-path callers that
+have a port equivalent (`StartWorkflowProcessActionHandler`, `TaskLifecycleService`, and the two
+auto-advance calls in `StalledWorkflowWatchdog`) and marked the four port-covered orchestrator
+write methods `internal`. **P6 (done)** consolidated the result-record boundary and migrated
+`TaskCompletionCoordinator` onto the command port, so the only same-assembly callers still bound to
+the concrete orchestrator are `StalledWorkflowWatchdog.CreateStageTasksAsync` and
+`WorkflowActionCompletedHandler.ExecuteTransitionAsync` — both methods that have **no** port
+equivalent and remain public by design.
 
 ---
 
@@ -190,9 +208,10 @@ why the staged plan below front-loads the cheapest, reversible increments.
 | **P0** *(this doc)* | Assessment: surface, coupling map, target sketch, plan. | None | Total | ✅ Done — this file. |
 | **P1** | Add `ProjectAssignmentSummaryDto` + mapper (close C6). Keep methods where they are; just change result records' `List<ProjectAssignment>` → `IReadOnlyList<ProjectAssignmentSummaryDto>` at the orchestrator boundary (same pattern as A3). | Low | High | ✅ **Done** — build green + 21/21 workflow tests green; no engine/provisioning edits. |
 | **P2** | Introduce `IWorkflowCommandService` (Option A) in `SiNet.Application.Workflow` and **adapter-implement** it by delegating to the existing `WorkflowTaskOrchestrator` (no logic moved yet). | Low–Med | High | ✅ **Done** — port + command/result DTOs added; `WorkflowCommandServiceAdapter` delegates to the orchestrator; `ActionExecutor` switched as the pilot consumer (now depends on the port, not the concrete orchestrator); full solution build green + 60/60 workflow tests green. |
-| **P3** | Add `AddSiNetWorkflowCommands()` module; move registration out of legacy `App.xaml.cs:268` into the modular composition; remove service-locator usages (`TaskOperationHelper`, `FloatingProjectTasksViewModel`) in favor of injected port. | Medium *(runtime DI)* | Medium | App starts; smoke-test start/advance; tests green. |
-| **P4** | Migrate remaining consumers + tests to the port; mark the concrete orchestrator methods `internal`. | Medium | Medium | All callers on the port; `WorkflowTaskOrchestrator` no longer publicly referenced outside infra. |
+| **P3b** | Add a modular `AddSiNetWorkflowCommands()` registration; move the write-port registration out of the inline `App.xaml.cs` block; remove **all** WPF service-locator orchestrator usages (4 sites) in favor of the injected `IWorkflowCommandService`; expand the read port with `GetStageTaskProgressAsync` → `StageTaskProgressDto` so `WorkflowInstanceViewModel` can leave the concrete orchestrator. | Medium *(runtime DI)* | Medium | ✅ **Done** — solution build green; 41 workflow tests green (engine, execution, health, continuation, policy read-port, approve/close E2E). **Placement note:** `AddSiNetWorkflowCommands()` had to live in the **SiNetSQL** assembly (`Services/Workflow/WorkflowCommandsServiceCollectionExtensions.cs`), not `SiNet.Infrastructure.Sql`, because the infra project references only `SiNet.Application` + `SiNet.Domain` and cannot see `WorkflowTaskOrchestrator`/`WorkflowCommandServiceAdapter`. The infra read-port impl mirrors the stage tag inline (`$"Stage:{id}"`) for the same reason (`WorkflowConstants` lives in SiNetSQL). |
+| **P4** | Migrate the same-assembly production write-path callers that have a port equivalent (`StartWorkflowProcessActionHandler`, `TaskLifecycleService`, the two auto-advance calls in `StalledWorkflowWatchdog`) to `IWorkflowCommandService`; mark the four port-covered orchestrator write methods `internal`. | Medium | Medium | ✅ **Done** — solution build green; 29/29 workflow E2E tests green. The four write methods (`StartWorkflowAsync`, `AdvanceWithTasksAsync`, `CheckAndAutoAdvanceAsync`, `CheckAndAutoAdvanceStalledWorkflowAsync`) are now `internal`; `IWorkflowCommandService`/`WorkflowCommandServiceAdapter` is the public seam. **Retained on the orchestrator (same-assembly access):** `StalledWorkflowWatchdog.CreateStageTasksAsync` and `WorkflowActionCompletedHandler.ExecuteTransitionAsync` (no port equivalent), and `TaskCompletionCoordinator.CheckAndAutoAdvanceAsync` (its result feeds the public `TaskCompletionResult.StageAdvanceResult`). Tests left as-is — covered by existing `InternalsVisibleTo`. `ExecuteTransitionAsync` + provisioning/query helpers stay public. |
 | **P5** *(optional/deferred)* | Only if desired: relocate orchestration logic fully into the Application/Infrastructure split. Engine + provisioning recursion stays entity-based regardless (C1–C5). | High | Low | Separate proposal; not in scope of the command-port effort. |
+| **P6** *(Workflow Consolidation Block)* | Consolidate the write result-record boundary and reduce the remaining concrete-orchestrator footprint inside the Workflow boundary: retarget the four `internal` write methods to return Application DTOs directly (`WorkflowStartResultDto` / `WorkflowAdvanceResultDto` / `StageCompletionResultDto?`); delete the orphaned infra `WorkflowStartResult` / `WorkflowAdvanceResult` records; collapse the adapter to thin pass-throughs; migrate `TaskCompletionCoordinator` to `IWorkflowCommandService` and retype `TaskCompletionResult.StageAdvanceResult` to the DTO. | Medium | Medium | ✅ **Done** — full `SiNetProjectManager.sln` build green (VS MSBuild, exit 0); **64/64** workflow tests green across two runs. Infra→DTO mapping now lives once in the orchestrator (`MapToDto`); the adapter only maps the inbound `WorkflowTriggerTypeDto`. `ExecuteTransitionAsync` / `EvaluateManualTransitionsAsync` deliberately stay infra-typed (`StageCompletionResult`) because `WorkflowActionCompletedHandler` consumes that contract — porting it needs the deferred P5 redesign. No schema / migration / `ModelSnapshot` changes. |
 
 **Hard invariants for every phase (carried from repo rules + A3):**
 
@@ -207,21 +226,43 @@ why the staged plan below front-loads the cheapest, reversible increments.
 
 - **The A3 boundary is the correct seam.** The coupling map confirms writes must be wrapped at
   the orchestrator level, not pushed into the engine.
-- **P1 and P2 are done.** The `ProjectAssignment` → DTO gap is closed and a DTO-only
-  `IWorkflowCommandService` now fronts the orchestrator via a thin adapter, with `ActionExecutor`
-  as the proven pilot consumer.
-- **Next recommended gate is P3** (composition cleanup): move the registration out of the legacy
-  `App.xaml.cs` block into a modular `AddSiNetWorkflowCommands()` and remove the two
-  service-locator usages. P4 (migrate remaining consumers + mark orchestrator methods `internal`)
-  follows once all callers are on the port.
+- **P1, P2, P3b, P4, and P6 are done.** The `ProjectAssignment` → DTO gap is closed, a DTO-only
+  `IWorkflowCommandService` now fronts the orchestrator via a thin adapter, **all WPF consumers
+  that previously reached the concrete orchestrator through the service locator now depend on the
+  Application ports** (`IWorkflowCommandService` for writes, `IWorkflowQueryService` for the new
+  stage-progress read), the same-assembly production write-path callers with a port equivalent
+  were migrated in P4, and **P6** consolidated the result-record boundary while moving the last
+  write-path caller (`TaskCompletionCoordinator`) onto the command port.
+- **P4 tightened visibility and P6 consolidated the result boundary:** the four port-covered
+  orchestrator write methods are `internal` **and now return Application DTOs directly**, so
+  `IWorkflowCommandService`/`WorkflowCommandServiceAdapter` is the only public write seam and the
+  adapter carries no result mapping. The orphaned infra result records (`WorkflowStartResult`,
+  `WorkflowAdvanceResult`) were deleted; infra→DTO mapping is centralized in the orchestrator.
+- **Remaining Workflow debt (intentional):** `WorkflowActionCompletedHandler.ExecuteTransitionAsync`
+  and `StalledWorkflowWatchdog.CreateStageTasksAsync` stay on the concrete orchestrator because they
+  have no port equivalent and are entity-coupled (`WorkflowStageTransition`, `ProjectAssignment`).
+  `ExecuteTransitionAsync` / `EvaluateManualTransitionsAsync` therefore keep the infra
+  `StageCompletionResult` contract. Closing these requires the deferred **P5** redesign.
+- **Only P5 remains** (optional/deferred): relocating orchestration logic fully into the
+  Application/Infrastructure split. It is a separate proposal, not part of the command-port effort.
 
 ---
 
 ## 8. Execution status
 
-P0 (assessment) is the original deliverable. **P1 and P2 have since been executed** under explicit
-approval: the write contract is fully DTO, `IWorkflowCommandService` exists in the Application
-layer, `WorkflowCommandServiceAdapter` implements it over the unchanged orchestrator, and
-`ActionExecutor` is the pilot consumer. Build and the workflow test suite are green.
-**P3–P5 remain unauthorized** — await explicit approval of the next specific phase before any
-further code change.
+P0 (assessment) is the original deliverable. **P1, P2, P3b, P4, and P6 have since been executed** under
+explicit approval: the write contract is fully DTO, `IWorkflowCommandService` exists in the
+Application layer, `WorkflowCommandServiceAdapter` implements it over the unchanged orchestrator,
+and every WPF service-locator orchestrator usage now resolves the Application ports instead. The
+read port gained `GetStageTaskProgressAsync` (returning `StageTaskProgressDto`) so the instance
+view-model no longer touches the concrete orchestrator. The command registration is modularized in
+the SiNetSQL assembly (placement forced by the infra project's reference graph — see the P3b row).
+**P4** migrated the same-assembly production write-path callers with a port equivalent and marked
+the four port-covered orchestrator write methods `internal`. **P6 (Workflow Consolidation Block)**
+then retargeted those four `internal` methods to return Application DTOs directly, deleted the
+orphaned infra `WorkflowStartResult` / `WorkflowAdvanceResult` records, reduced the adapter to thin
+pass-throughs, and migrated `TaskCompletionCoordinator` onto `IWorkflowCommandService` (retyping
+`TaskCompletionResult.StageAdvanceResult` to `StageCompletionResultDto?`). Full-solution build is
+green (VS MSBuild, exit 0) and the workflow test suite is green (**64/64** across two runs). No
+schema / migration / `ModelSnapshot` changes were made.
+**Only P5 remains** (optional/deferred) — await explicit approval before any further code change.
