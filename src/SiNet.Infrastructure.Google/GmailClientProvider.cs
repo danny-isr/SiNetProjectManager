@@ -20,7 +20,15 @@ namespace SiNet.Infrastructure.Google;
 /// </summary>
 public sealed class GmailClientProvider : IAsyncDisposable
 {
-    private static readonly string[] Scopes = { GmailService.Scope.GmailReadonly };
+    // Read + send. GmailSend is the narrowest scope that allows sending (not full MailGoogleCom).
+    // NOTE: expanding scopes invalidates the *send* authorization of any token persisted before
+    // this change. Silent restore still works for reads; sending will surface as "requires consent"
+    // until the user performs a deliberate interactive sign-in that re-grants read + send.
+    private static readonly string[] Scopes =
+    {
+        GmailService.Scope.GmailReadonly,
+        GmailService.Scope.GmailSend,
+    };
     private const string TokenUser = "user";
 
     private readonly GmailOptions _options;

@@ -635,7 +635,7 @@ its `AuthStateChanged` health wiring exactly as before; the native bridge lives 
 | --- | --- | --- |
 | Gmail **read** | \u2705 `IEmailGateway \u2192 GmailEmailGateway` (`GmailReadonly`) | none |
 | Auth-state / **health** | \u2705 **D5** `IConnectorAuthService \u2192 GmailConnectorAuthService` | none |
-| Gmail **send** | \u26d4 not ported | needs `GmailSend` scope + a send port (e.g. `IOutboundMailService` equivalent) + impl; scope change \u21d2 fresh consent, so must be its own gate |
+| Gmail **send** | \u2705 **D6** `IEmailSender \u2192 GmailEmailSender` (`GmailSend` scope) | re-consent on first native send (token scope upgrade) |
 | Google **Drive** read/write | \u26d4 not ported | needs `Google.Apis.Drive.v3` + Drive scopes + Drive port(s) + impl |
 | Native **sign-in/config** flow | \u26a0 partial | interactive sign-in exists; production-grade config/secrets wiring for the host switch still TBD |
 
@@ -649,6 +649,102 @@ its `AuthStateChanged` health wiring exactly as before; the native bridge lives 
 | Legacy Google path unchanged and still builds | \u2705 |
 | No OAuth scope / NuGet / ACC-token / Workflow / SQL / schema changes | \u2705 |
 | Remaining `GoogleService` gaps documented (send, Drive, config) | \u2705 |
+
+---
+
+### D6 \u2014 Native Gmail send capability \u2705
+
+> Second **execution** step of the *Native Google capabilities* track, run as its own explicit gate
+> because it requires the **`GmailSend` OAuth scope** and therefore a one-time **re-consent**. Adds
+> native send behind a new clean Application port. The legacy production host is **not** switched and
+> **not** modified.
+
+**Plan deliverable (the 7 required topics):**
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 1 | Application send port | `IEmailSender.SendAsync(EmailSendRequest, CancellationToken) \u2192 EmailSendResult`. UI-agnostic DTOs: `EmailSendRequest` (To/Cc/Bcc, Subject, Body, `IsHtml`, optional `From`, `ThreadId`, `InReplyToMessageId`, `Attachments`), `EmailAttachment` (name + content-type + `ReadOnlyMemory<byte>`), `EmailSendResult` (Success / MessageId / Error / **`RequiresConsent`** / ShouldRetry). |
+| 2 | Required scopes | Added the **narrowest** send scope `GmailService.Scope.GmailSend` alongside `GmailReadonly` (not full `MailGoogleCom`). |
+| 3 | Token / consent impact | The persisted token grants read-only; expanding scopes means the first native **send** fails with an insufficient-permission error until a deliberate interactive sign-in re-grants read + send. **Reads keep working** on the old token; **startup stays silent** (no surprise consent). The sender surfaces this as `EmailSendResult.RequiresConsent`. |
+| 4 | Where send lives | `GmailEmailSender` in `SiNet.Infrastructure.Google`, over the shared `GmailClientProvider` singleton; registered by `AddSiNetGoogle`. No new project. |
+| 5 | No legacy coupling | No reference to legacy `IOutboundMailService` / `GmailOutboundMailService` / `SiNetProjectManagerV2`. Module references only `SiNet.Application` + Google libs. |
+| 6 | Tests / smoke | Clean-module build + full-solution build + compile-level verification of the MIME/base64url builder and non-throwing failure paths. No live-network send (would require real consent). |
+| 7 | Stop condition | Port + DTOs defined, impl + registration done, scope added with documented consent handling, builds green, legacy unchanged, remaining gaps documented. |
+
+**What was added:**
+
+| Artifact | Detail |
+| --- | --- |
+| `SiNet.Application/Abstractions/Email/IEmailSender.cs` *(new)* | Send port; non-throwing for expected failures. |
+| `SiNet.Application/Abstractions/Email/EmailSendRequest.cs` + `EmailSendResult.cs` + `EmailAttachment.cs` *(new)* | UI-agnostic send DTOs (no WPF types). |
+| `SiNet.Infrastructure.Google/GmailEmailSender.cs` *(new)* | Builds RFC 5322 MIME by hand (no new NuGet): single text part or `multipart/mixed` with attachments, RFC 2047 encoded-word headers for non-ASCII, base64 bodies/attachments chunked at 76 cols, then base64url; sends via `users.messages.send` (`"me"`); threads via `ThreadId` + `In-Reply-To`/`References`. Maps 403 insufficient-permission \u2192 `RequiresConsent`, 429/5xx \u2192 retryable, not-signed-in \u2192 `Fail`. |
+| `SiNet.Infrastructure.Google/GmailClientProvider.cs` | `Scopes` now `{ GmailReadonly, GmailSend }`, with an inline note on the consent impact. |
+| `SiNet.Infrastructure.Google/GoogleServiceCollectionExtensions.cs` | `AddSiNetGoogle` registers `IEmailSender \u2192 GmailEmailSender` over the same provider singleton that backs read + auth-state. |
+
+**Legacy host:** untouched. `SiNetProjectManagerV2` still sends via legacy `GmailOutboundMailService`/`GoogleService`; the native sender is available in the clean stack only and is inert for the host.
+
+**Remaining gaps (still deferred to their own gates):** Google **Drive** read/write; native **sign-in/config** adoption by a real host; the eventual **production-host switch** off legacy `GoogleService`.
+
+| Deliverable | Status |
+| --- | --- |
+| `IEmailSender` port + UI-agnostic DTOs added | \u2705 |
+| `GmailEmailSender` implemented (MIME + base64url, non-throwing) | \u2705 |
+| `GmailSend` scope added (narrowest) with consent handling | \u2705 |
+| `IEmailSender \u2192 GmailEmailSender` registered over shared provider | \u2705 |
+| Clean module free of WPF / legacy / `SiNetProjectManagerV2` deps | \u2705 |
+| Clean module `dotnet build` (Debug) green | \u2705 |
+| Full `SiNetProjectManager.sln` build green | \u2705 |
+| Legacy Google send/Drive/sign-in path unchanged and still builds | \u2705 |
+| No new NuGet / Drive scope / ACC-token / Workflow / SQL / schema changes | \u2705 |
+| Drive + host-switch gaps remain documented | \u2705 |
+
+---
+
+### D7 \u2014 Native Gmail send/MIME tests (\u0060SiNet.Infrastructure.Google.Tests\u0060) \u2705
+
+> Verification gate for D6. Adds a small, **deterministic, offline** test project for the native
+> send path: it locks the hand-built RFC 5322 / base64url MIME output and the send error
+> classification, with **no** live Gmail API, OAuth, network, or real send. The legacy host and the
+> production send path are **not** touched.
+
+**Testability seams (behavior-preserving):**
+
+| Change | Detail |
+| --- | --- |
+| \u0060GmailEmailSender\u0060 helpers \u0060private static\u0060 \u2192 \u0060internal static\u0060 | \u0060BuildRawMessage\u0060, \u0060EncodeAddressList\u0060, \u0060EncodeHeader\u0060, \u0060IsAscii\u0060, \u0060EnsureAngleBrackets\u0060, \u0060ChunkBase64\u0060, \u0060Base64UrlEncode\u0060, \u0060IsInsufficientScope\u0060, \u0060IsTransient\u0060. **Accessibility only** \u2014 no logic change. |
+| \u0060BuildRawMessage(request, string? boundary = null)\u0060 | Optional fixed-boundary seam for deterministic \u0060multipart/mixed\u0060 assertions. Production still passes \u0060null\u0060 \u2192 a fresh random \u0060Guid\u0060 boundary. |
+| \u0060<InternalsVisibleTo Include="SiNet.Infrastructure.Google.Tests" />\u0060 | Exposes the internal seams to the test assembly only. |
+
+**What was added:**
+
+| Artifact | Detail |
+| --- | --- |
+| \u0060src/SiNet.Infrastructure.Google.Tests/SiNet.Infrastructure.Google.Tests.csproj\u0060 *(new)* | \u0060net10.0\u0060 xUnit 2.9.3 project (matches repo test conventions); references the Google module only. Added to \u0060SiNetProjectManager.sln\u0060. |
+| \u0060GmailMimeBuilderTests.cs\u0060 *(new)* | Decodes the base64url output back to MIME and asserts: RFC 5322 header order/presence (From/To/Cc/Bcc/Subject/MIME-Version), \u0060text/plain\u0060 vs \u0060text/html\u0060, non-ASCII subject/body/filename (RFC 2047 \u002B base64), threading (\u0060In-Reply-To\u0060/\u0060References\u0060 \u002B angle-bracket normalization), \u0060multipart/mixed\u0060 with fixed boundary, \u0060application/octet-stream\u0060 fallback, multiple attachments, random-boundary-per-call, base64url validity round-trip, and the encoding helpers (\u0060IsAscii\u0060, \u0060EncodeHeader\u0060, \u0060EncodeAddressList\u0060, \u0060EnsureAngleBrackets\u0060, \u0060ChunkBase64\u0060 76-col wrap, \u0060Base64UrlEncode\u0060). |
+| \u0060GmailSendErrorMappingTests.cs\u0060 *(new)* | Synthetic \u0060GoogleApiException\u0060 (status \u002B \u0060RequestError\u0060/\u0060SingleError.Reason\u0060) drives \u0060IsInsufficientScope\u0060 (403 \u002B \u0060insufficientPermissions\u0060/\u0060ACCESS_TOKEN_SCOPE_INSUFFICIENT\u0060, case-insensitive \u2192 consent; 403 unrelated/no-detail \u2192 false; 401 \u002B insufficient message \u2192 consent; non-403 \u2192 false) and \u0060IsTransient\u0060 (429/5xx \u2192 retryable; 4xx \u2192 not). |
+
+**Result:** **51 tests, 51 passed, 0 failed** (offline). No production behavior change beyond the
+accessibility widening and the optional boundary parameter.
+
+**Remaining native send risks (documented, not addressed here):** no end-to-end test against the live
+\u0060users.messages.send\u0060 API (would require real consent/network); MIME is hand-rolled (no \u0060MimeKit\u0060), so
+exotic cases \u2014 header folding for very long encoded-words, inline/\u0060Content-ID\u0060 images, explicit
+\u0060multipart/alternative\u0060 (text+HTML) bodies, and non-UTF-8 charsets \u2014 are out of scope; \u0060RequiresConsent\u0060
+is asserted at the classifier level (\u0060IsInsufficientScope\u0060) rather than through a live 403; the actual
+interactive **re-consent** flow for the expanded \u0060GmailReadonly\u0060 \u002B \u0060GmailSend\u0060 scopes remains a separate
+deferred item.
+
+| Deliverable | Status |
+| --- | --- |
+| \u0060SiNet.Infrastructure.Google.Tests\u0060 project created \u002B added to solution | \u2705 |
+| Deterministic MIME/encoding/threading tests | \u2705 |
+| Send error-mapping tests (\u0060RequiresConsent\u0060 / retryable / fail) | \u2705 |
+| Seam extraction is accessibility-only \u002B optional boundary (no behavior change) | \u2705 |
+| All Google module tests pass | \u2705 _51/51_ |
+| Full \u0060SiNetProjectManager.sln\u0060 build green | \u2705 |
+| No live Gmail / OAuth / network / real send | \u2705 |
+| No Drive / host-switch / ACC / Workflow / SQL / schema changes | \u2705 |
+| Remaining native send risks documented | \u2705 |
 
 ---
 

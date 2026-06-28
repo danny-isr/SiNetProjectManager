@@ -21,4 +21,9 @@
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+	<!-- Expose internal MIME/error-mapping seams to the deterministic test project only. -->
+	<InternalsVisibleTo Include="SiNet.Infrastructure.Google.Tests" />
+  </ItemGroup>
+
 </Project>
