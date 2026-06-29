@@ -1,13 +1,54 @@
+using System.Collections.ObjectModel;
+using SiNet.Application.Abstractions.Inspection;
+
 namespace SiNet.App.Wpf.Inspection;
 
 /// <summary>
-/// Placeholder view model for the Inspection notes area. Note editing, ordering, and status flow
-/// (reusing the extracted <c>InspectionNoteHelpers</c> / <c>InspectionNoteOrdering</c>) will be
-/// added when this area is migrated; the foundation only provides a header + placeholder.
+/// View model for the Inspection notes area. Read-only: shows the notes under the report selected in
+/// the tree, loaded through the clean <see cref="IInspectionWorkspace"/> port. Note editing, ordering,
+/// status flow and creation stay in the legacy window. Empty when no report is selected.
 /// </summary>
 public sealed class InspectionNotesViewModel : ObservableObject
 {
+    private readonly IInspectionWorkspace _workspace;
+    private bool _isLoading;
+
+    public InspectionNotesViewModel(IInspectionWorkspace workspace)
+    {
+        _workspace = workspace;
+    }
+
     public string Title => "Notes";
 
-    public string Placeholder { get; } = "Inspection notes — to be migrated.";
+    public ObservableCollection<InspectionNoteRow> Notes { get; } = [];
+
+    public bool IsLoading
+    {
+        get => _isLoading;
+        private set => SetField(ref _isLoading, value);
+    }
+
+    /// <summary>Loads read-only notes for a report. Clears the list when <paramref name="reportId"/> is null.</summary>
+    public async Task LoadNotesAsync(int? reportId, CancellationToken cancellationToken = default)
+    {
+        Notes.Clear();
+        if (reportId is not int id || id <= 0)
+        {
+            return;
+        }
+
+        IsLoading = true;
+        try
+        {
+            var notes = await _workspace.GetNotesAsync(id, cancellationToken).ConfigureAwait(true);
+            foreach (var note in notes)
+            {
+                Notes.Add(note);
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
 }

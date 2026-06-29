@@ -1106,6 +1106,40 @@ generation and sent/locked.
 
 ---
 
+## Inspection New WPF Screen — Phase 4 (read-only notes for selected report)
+
+Selecting a report row in the Tree area now drives a read-only notes list in the Notes tab. All note
+editing/creation/deletion/reordering and status writes stay in the legacy window; this phase is
+strictly read-only.
+
+**Selected report:** `InspectionTreeViewModel.SelectedReport` (auto-selects the first row after a
+series loads, cleared on reload). `InspectionShellViewModel` observes `SelectedReport` and calls
+`InspectionNotesViewModel.LoadNotesAsync(reportId)`; null/0 ⇒ empty list (no report selected).
+
+**Port/DTO:** `IInspectionWorkspace.GetNotesAsync(reportId)` + `InspectionNoteRow`
+(`NoteId`, `Number`, `Text`, `Status`) added.
+
+**Bridge/seam:** `LegacyInspectionNoteDto` + `ILegacyInspectionSource.GetNotesForReportAsync` added;
+`LegacyInspectionWorkspace` maps them (empty when seam unbound); legacy-host
+`ReportServiceLegacyInspectionSource` adapts `IInspectionReportService.GetNotesForReportAsync(reportId)`
+(`NoteSubIndex` → Number, `NoteText` → Text, `NoteStatus` → Status).
+
+**Read-only data visible:** notes for the selected report shown as a read-only DataGrid (number /
+text / status). New app shows empty (no seam bound); legacy host shows live notes.
+
+| Verification | Status |
+| --- | --- |
+| Notes follow report selection; empty when none selected; Inbox still works | ✅ |
+| `dotnet build SiNet.sln` green | ✅ _0 errors_ |
+| Full `SiNetProjectManager.sln` (VS MSBuild) green | ✅ _0 errors_ |
+| Legacy Inspection window untouched; no SiNetSQL ref from App/Bridge | ✅ |
+
+**Remaining placeholder-only:** Drawings, ReviewedPlan, Report generation. **Recommended Phase 5:**
+read-only Drawings/ReviewedPlan listing for the selected report (extend port/seam), still no writes;
+defer report generation and sent/locked.
+
+---
+
 ## Recovery points
 
 - **Frozen reference:** `Before_refactoring` 🔒 — never modify; restore any old file from here.

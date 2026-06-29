@@ -30,4 +30,12 @@ public interface ILegacyInspectionSource
         int projectId,
         int seriesId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the note rows under <paramref name="reportId"/>. Read-only; implementations should
+    /// return an empty list (not throw) when data is unavailable.
+    /// </summary>
+    Task<IReadOnlyList<LegacyInspectionNoteDto>> GetNotesForReportAsync(
+        int reportId,
+        CancellationToken cancellationToken = default);
 }

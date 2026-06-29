@@ -23,6 +23,13 @@ public interface IInspectionWorkspace
     /// </summary>
     Task<IReadOnlyList<InspectionReportRow>> GetReportsAsync(
         int projectId, int seriesId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads the notes under a report. Read-only projection for the new screen's notes area; no
+    /// editing/creation/deletion/reordering or status writes are exposed here.
+    /// </summary>
+    Task<IReadOnlyList<InspectionNoteRow>> GetNotesAsync(
+        int reportId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -41,3 +48,13 @@ public readonly record struct InspectionSeriesSummary(int SeriesId, string Name)
 /// <param name="InspectorName">The inspector display name, if any.</param>
 public readonly record struct InspectionReportRow(
     int ReportId, int ReportNumber, DateTime InspectionDate, string? InspectorName);
+
+/// <summary>
+/// Read-only projection of an inspection note row under a report for the new screen's notes list.
+/// </summary>
+/// <param name="NoteId">The note identifier.</param>
+/// <param name="Number">The note sub-index/number (e.g. 1.1.1), if any.</param>
+/// <param name="Text">The note text, if any.</param>
+/// <param name="Status">The note status, if any.</param>
+public readonly record struct InspectionNoteRow(
+    long NoteId, string? Number, string? Text, string? Status);

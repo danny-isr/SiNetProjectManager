@@ -26,6 +26,7 @@
                              DisplayMemberPath="Name" Margin="0,0,8,0" />
                     <DataGrid Grid.Column="1" ItemsSource="{Binding Tree.Reports}" AutoGenerateColumns="False"
                               IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False"
+                              SelectedItem="{Binding Tree.SelectedReport, Mode=TwoWay}"
                               GridLinesVisibility="Horizontal">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Round" Binding="{Binding ReportNumber}" Width="Auto" />
@@ -36,7 +37,15 @@
                 </Grid>
             </TabItem>
             <TabItem Header="{Binding Notes.Title}">
-                <TextBlock Text="{Binding Notes.Placeholder}" Margin="12" Opacity="0.8" />
+                <DataGrid Margin="12" ItemsSource="{Binding Notes.Notes}" AutoGenerateColumns="False"
+                          IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="#" Binding="{Binding Number}" Width="Auto" />
+                        <DataGridTextColumn Header="Note" Binding="{Binding Text}" Width="*" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="Auto" />
+                    </DataGrid.Columns>
+                </DataGrid>
             </TabItem>
             <TabItem Header="{Binding Drawings.Title}">
                 <TextBlock Text="{Binding Drawings.Placeholder}" Margin="12" Opacity="0.8" />

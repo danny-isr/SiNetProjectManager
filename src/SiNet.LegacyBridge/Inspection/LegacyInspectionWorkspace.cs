@@ -64,4 +64,25 @@ internal sealed class LegacyInspectionWorkspace : IInspectionWorkspace
 
         return result;
     }
+
+    public async Task<IReadOnlyList<InspectionNoteRow>> GetNotesAsync(
+        int reportId, CancellationToken cancellationToken = default)
+    {
+        if (_source is null)
+        {
+            return [];
+        }
+
+        var notes = await _source
+            .GetNotesForReportAsync(reportId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var result = new List<InspectionNoteRow>(notes.Count);
+        foreach (var n in notes)
+        {
+            result.Add(new InspectionNoteRow(n.NoteId, n.Number, n.Text, n.Status));
+        }
+
+        return result;
+    }
 }

@@ -76,4 +76,29 @@ internal sealed class ReportServiceLegacyInspectionSource : ILegacyInspectionSou
             return [];
         }
     }
+
+    public async Task<IReadOnlyList<LegacyInspectionNoteDto>> GetNotesForReportAsync(
+        int reportId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var dbNotes = await _reportService
+                .GetNotesForReportAsync(reportId, cancellationToken)
+                .ConfigureAwait(false);
+
+            var result = new List<LegacyInspectionNoteDto>(dbNotes.Count);
+            foreach (var n in dbNotes)
+            {
+                result.Add(new LegacyInspectionNoteDto(
+                    n.NoteId, n.NoteSubIndex, n.NoteText, n.NoteStatus));
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
 }

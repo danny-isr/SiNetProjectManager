@@ -15,6 +15,7 @@ public sealed class InspectionTreeViewModel : ObservableObject
     private bool _isLoading;
     private int _projectId;
     private InspectionSeriesSummary? _selectedSeries;
+    private InspectionReportRow? _selectedReport;
 
     public InspectionTreeViewModel(IInspectionWorkspace workspace)
     {
@@ -38,6 +39,12 @@ public sealed class InspectionTreeViewModel : ObservableObject
                 _ = LoadReportsAsync(CancellationToken.None);
             }
         }
+    }
+
+    public InspectionReportRow? SelectedReport
+    {
+        get => _selectedReport;
+        set => SetField(ref _selectedReport, value);
     }
 
     public bool IsLoading
@@ -73,6 +80,7 @@ public sealed class InspectionTreeViewModel : ObservableObject
     public async Task LoadReportsAsync(CancellationToken cancellationToken = default)
     {
         Reports.Clear();
+        SelectedReport = null;
         if (_selectedSeries is not { } series || _projectId <= 0)
         {
             return;
@@ -85,5 +93,7 @@ public sealed class InspectionTreeViewModel : ObservableObject
         {
             Reports.Add(row);
         }
+
+        SelectedReport = Reports.Count > 0 ? Reports[0] : null;
     }
 }
