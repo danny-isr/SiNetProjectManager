@@ -1,0 +1,43 @@
+<UserControl x:Class="SiNet.App.Wpf.Inspection.InspectionShellView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             d:DesignHeight="600" d:DesignWidth="900"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+                   Margin="0,0,0,8" />
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="{Binding Tree.Title}">
+                <Grid Margin="12">
+                    <ItemsControl ItemsSource="{Binding Tree.Series}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </TabItem>
+            <TabItem Header="{Binding Notes.Title}">
+                <TextBlock Text="{Binding Notes.Placeholder}" Margin="12" Opacity="0.8" />
+            </TabItem>
+            <TabItem Header="{Binding Drawings.Title}">
+                <TextBlock Text="{Binding Drawings.Placeholder}" Margin="12" Opacity="0.8" />
+            </TabItem>
+            <TabItem Header="{Binding ReviewedPlan.Title}">
+                <TextBlock Text="{Binding ReviewedPlan.Placeholder}" Margin="12" Opacity="0.8" />
+            </TabItem>
+            <TabItem Header="{Binding Report.Title}">
+                <TextBlock Text="{Binding Report.Placeholder}" Margin="12" Opacity="0.8" />
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

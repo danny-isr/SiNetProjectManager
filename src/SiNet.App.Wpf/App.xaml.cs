@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Composition;
 using SiNet.App.Wpf.Inbox;
+using SiNet.App.Wpf.Inspection;
 using SiNet.Infrastructure.Google;
 
 namespace SiNet.App.Wpf;
@@ -31,6 +32,15 @@ public partial class App : System.Windows.Application
         services.AddSiNet(ConfigureGmail);
         services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainWindow>();
+
+        // New Inspection screen foundation (not yet shown; legacy window stays active).
+        services.AddSingleton<InspectionTreeViewModel>();
+        services.AddSingleton<InspectionNotesViewModel>();
+        services.AddSingleton<InspectionDrawingsViewModel>();
+        services.AddSingleton<InspectionReviewedPlanViewModel>();
+        services.AddSingleton<InspectionReportViewModel>();
+        services.AddSingleton<InspectionShellViewModel>();
+        services.AddSingleton<InspectionShellView>();
 
         _services = services.BuildServiceProvider();
 

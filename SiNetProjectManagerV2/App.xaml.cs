@@ -254,6 +254,12 @@ namespace SiNetProjectManagerV2
             // same authenticated GoogleService singleton without depending on the legacy connector.
             services.AddSingleton<SiNet.LegacyBridge.Email.ILegacyEmailSource,
                 Services.GoogleServiceLegacyEmailSource>();
+
+            // Strangler seam: lets the new Inspection screen read inspection series through the
+            // legacy IInspectionReportService. Transient to match the report service lifetime; the
+            // LegacyBridge adapter degrades to an empty list when this seam is absent (new app host).
+            services.AddTransient<SiNet.LegacyBridge.Inspection.ILegacyInspectionSource,
+                Services.ReportServiceLegacyInspectionSource>();
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)

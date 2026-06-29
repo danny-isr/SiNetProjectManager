@@ -994,6 +994,87 @@ generation region remains explicitly deferred.
 
 ---
 
+## Inspection New WPF Screen Foundation — Phase 1
+
+**Strategic shift:** the legacy `FloatingInspectionViewModel` window is now a **functional
+reference / behavior source / temporary host** — not the long-term UI. The new target is rebuilt
+in `SiNet.App.Wpf` in small areas, reusing the extracted services/builders. The old VM and old
+XAML are **not** copied wholesale.
+
+**Phase 1 = minimal self-contained foundation (no real reuse yet).** `SiNet.App.Wpf` references
+only `SiNet.App.Composition` / `SiNet.Application` / `SiNet.Domain` (not legacy `SiNetSQL`), so the
+shell is self-contained; real reuse of the extracted logic is deferred to a bridge phase via a
+defined port. Host navigation is unchanged (`MainWindow` stays on Inbox; shell is DI-resolvable but
+not shown).
+
+| New file | Role |
+| --- | --- |
+| `SiNet.Application/Abstractions/Inspection/IInspectionWorkspace.cs` | UI-agnostic port (future LegacyBridge seam). `GetSeriesAsync` + `InspectionSeriesSummary` only. |
+| `SiNet.App.Wpf/Inspection/ObservableObject.cs` | Lightweight `INotifyPropertyChanged` base (mirrors Inbox slice; no MVVM toolkit). |
+| `SiNet.App.Wpf/Inspection/InspectionTreeViewModel.cs` … `InspectionReportViewModel.cs` | Five sub-area placeholder VMs: Tree, Notes, Drawings, ReviewedPlan, Report. |
+| `SiNet.App.Wpf/Inspection/InspectionShellViewModel.cs` | Root VM composing the five injected sub-areas. |
+| `SiNet.App.Wpf/Inspection/InspectionShellView.xaml(.cs)` | Tabbed placeholder UserControl bound to the shell VM. |
+| `SiNet.App.Wpf/App.xaml.cs` | DI: 5 child VMs + shell VM + view registered (`AddSingleton`), not shown. |
+
+**Feature-migration plan (legacy region → new sub-area → extracted reuse):**
+
+| New sub-area | Legacy source | Extracted pieces to reuse (via `IInspectionWorkspace` / future bridge) |
+| --- | --- | --- |
+| `InspectionTree` | series/report tree + selection | `InspectionAvailabilityDiagnostics` (read-only) |
+| `InspectionNotes` | notes grid + reorder/status | `InspectionNoteHelpers`, `InspectionNoteOrdering`, `InspectionChangeDetector` |
+| `InspectionDrawings` | `Drawing Management` | `IInspectionDrawingManagementService`, `InspectionDrawingStampBuilder` |
+| `InspectionReviewedPlan` | `Reviewed Plan` A/B | `InspectionReviewedPlanBuilder` |
+| `InspectionReport` | report gen + sent/locked | **deferred** — stays in legacy window |
+
+| Deliverable | Status |
+| --- | --- |
+| `IInspectionWorkspace` port added to `SiNet.Application` | ✅ |
+| Shell + 5 sub-area VMs + tabbed view created in `SiNet.App.Wpf` | ✅ |
+| DI registration added (shell not shown; legacy untouched) | ✅ |
+| `dotnet build SiNet.sln` green | ✅ _0 errors_ |
+| Full `SiNetProjectManager.sln` (VS MSBuild) green | ✅ _0 errors_ |
+| Legacy Inspection window + XAML unchanged; old VM not copied | ✅ |
+| No schema / migration / ModelSnapshot / Google / ACC / SQL / Workflow changes | ✅ |
+
+**Recommended Phase 2:** add a `SiNet.LegacyBridge` adapter implementing `IInspectionWorkspace`
+over the extracted `SiNetSQL` services, then migrate the first real area (`InspectionTree` series
+list) end-to-end; add host navigation between Inbox and the Inspection shell only once a safe
+pattern exists. `Sent / Locked` + report generation remain explicitly deferred.
+
+## Inspection New WPF Screen — Phase 2 (LegacyBridge Tree/series adapter)
+
+The clean `IInspectionWorkspace` port is now backed by a controlled LegacyBridge adapter, mirroring
+the established `ILegacyEmailSource` strangler seam. The new app stays free of `SiNetSQL`; only the
+legacy WPF host (which already references both worlds) binds the seam to live data.
+
+**Bridge files added (`SiNet.LegacyBridge`):**
+- `Inspection/LegacyInspectionSeriesDto.cs` — bridge-local series projection (`SeriesId`, `DisplayName`).
+- `Inspection/ILegacyInspectionSource.cs` — host-bound seam, no `SiNetSQL` dependency.
+- `Inspection/LegacyInspectionWorkspace.cs` — `IInspectionWorkspace` adapter; empty list when seam unbound.
+
+**Application:** `IInspectionWorkspace` / `InspectionSeriesSummary` reused as-is (no port changes).
+
+**App.Wpf:** `InspectionTreeViewModel` consumes `IInspectionWorkspace` (`LoadSeriesAsync`, `Series`,
+`IsLoading`); shell Tree tab lists series. **No `SiNet.App.Wpf -> SiNetSQL` reference.**
+
+**Legacy host:** `ReportServiceLegacyInspectionSource` adapts `IInspectionReportService.GetSeriesForProjectAsync`
+(reusing the `סדרה #id (dd/MM/yyyy)` fallback name); registered transient next to the email seam.
+
+| Verification | Status |
+| --- | --- |
+| `IInspectionWorkspace` adapter resolves through DI (`AddSiNetLegacyBridge`) | ✅ |
+| Real series visible in new shell when run from legacy host; empty fallback in new app | ✅ |
+| `dotnet build SiNet.sln` green | ✅ _0 errors_ |
+| Full `SiNetProjectManager.sln` (VS MSBuild) green | ✅ _0 errors_ |
+| Legacy Inspection window untouched; navigation still deferred | ✅ |
+| No SiNetSQL ref from App/Bridge; no schema/migration/ACC/Google/SQL/Workflow changes | ✅ |
+
+**Remaining:** Notes, Drawings, ReviewedPlan, Report still placeholders. **Recommended Phase 3:**
+migrate report rows under the selected series (read-only) + add safe shell navigation; keep report
+generation and sent/locked actions in the legacy host.
+
+---
+
 ## Recovery points
 
 - **Frozen reference:** `Before_refactoring` 🔒 — never modify; restore any old file from here.
