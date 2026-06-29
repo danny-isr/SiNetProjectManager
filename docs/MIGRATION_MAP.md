@@ -16,7 +16,7 @@ exist/updated, and its row below is marked **✅ Replaced**.
 | --- | --- | --- | --- | --- |
 | Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted; native sign-in + real config done** (no `LegacyBridge`). Read-only; deferred: send/modify only. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below. |
 | Workflow | `WorkflowManagementWindow.xaml.cs` (~3,547) | `SiNet.Application` `IWorkflow*` → App.Wpf VM + services | 🟡 | **Read slice extracted.** `WorkflowQueryService` + `ProjectWorkflowPolicyService` moved into `SiNet.Infrastructure.Sql` behind `IWorkflowQueryService` / `IProjectWorkflowPolicyService` ports (namespaces preserved). Writes/engine deferred. See section below. |
-| Inspection | `FloatingInspectionViewModel.cs` (~5,270) | `SiNet.Application` `IInspection*` → services + VM | 🟡 | **In progress (in-place decomposition).** Phase 1: extracted `InspectionChangeDetector`. Phase 2: extracted `InspectionNoteHelpers`, `InspectionNoteOrdering`, `InspectionAvailabilityDiagnostics` (pure note utilities, sub-note reindex computation, active-file diagnostics) — VM delegates via thin wrappers, no behavior change. Phase 3: extracted `InspectionReviewedPlanBuilder` + `InspectionDrawingStampBuilder` (pure reviewed-plan candidate/row transforms + drawing-stamp entity transform) from the `Reviewed Plan` / `Drawing Management` regions — VM call sites delegate, no behavior change. Still TODO: lift `Drawing Management` behind a service (Phase 4); relocate report generation + sent/locked actions. See sections below. |
+Phase 3: extracted `InspectionReviewedPlanBuilder` + `InspectionDrawingStampBuilder` (pure reviewed-plan candidate/row transforms + drawing-stamp entity transform) from the `Reviewed Plan` / `Drawing Management` regions — VM call sites delegate, no behavior change. Phase 4: extracted `IInspectionDrawingManagementService` (available-drawing candidate discovery + DWF/approved-plan path resolution) — VM no longer uses `ServiceLocator` for `FileIndexService`; thin command handlers map a status discriminator to the same messages. Still TODO: relocate report generation + sent/locked actions. See sections below. |
 | ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ `LegacyBridge`) | ⬜ | ACC remains source of truth; DB is cache/helper. |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
@@ -920,6 +920,77 @@ remaining command handlers in `Drawing Management` (`LoadAvailableDrawingFiles`,
 behind a dedicated injectable service so the VM holds only thin command bodies — a bigger,
 DI-touching step that should be approved on its own; the largest region
 `Sent / Locked report actions` + report generation remains explicitly deferred.
+
+---
+
+## Inspection decomposition — Phase 4 (injectable Drawing-Management service)
+
+**Goal:** Move from pure helper extraction to a real injectable-service extraction for the
+`Drawing Management` orchestration, while preserving current UI behavior. The VM stays the
+command/UI-state owner; the deterministic coordination (active-file/candidate discovery and
+path resolution) moves behind a constructor-injected service.
+
+**Dependency scan (pre-extraction):** `ResolveApprovedPlanDirectory` and `ResolveDwfTemplatePath`
+were each only called from `StampDrawings` inside the VM; `LoadAvailableDrawingFiles` is called
+once internally. There is **no** `new FloatingInspectionViewModel(...)` anywhere — the VM is pure
+DI (`AddTransient`), so adding a constructor parameter is safe. `FileIndexService` was already
+registered as `AddSingleton`, so the VM's `ServiceLocator.GetService<FileIndexService>()` could be
+replaced with proper injection through the new service.
+
+**What was extracted (new service in `SiNetSQL.Services.InspectionSync`):**
+
+| New file | Responsibility moved out of the VM |
+| --- | --- |
+| `IInspectionDrawingManagementService.cs` | Contract + UI-agnostic result/request types: `LoadAvailableDrawingCandidatesAsync` (returns `AvailableDrawingDiscoveryResult` with an `AvailableDrawingDiscoveryStatus` discriminator + `AvailableDrawingCandidate` list), `ResolveDwfTemplatePathAsync`, `ResolveApprovedPlanDirectoryAsync`. Request structs `AvailableDrawingRequest` / `ApprovedPlanDirectoryRequest` carry the project/series context so the service stays free of `ActiveProjectContext`/WPF state. |
+| `InspectionDrawingManagementService.cs` | The deterministic orchestration: slot lookup (`GetAvailableDrawingSlotsAsync`) → file-index scan (`FileIndexService.ScanFolderAsync`) → `.pdf`/`.dwf` filter → parsed-number slot matching → cross-store dedup; plus DWF stamp-template resolution (settings + `File.Exists`) and approved-plan output-directory resolution (config lookup + `Directory.CreateDirectory`). Verbatim moves of the original VM logic. |
+
+**How behavior is preserved:** `LoadAvailableDrawingFiles` stays an `async void` command handler:
+it still owns `AvailableDrawingFiles.Clear()`, the null-project early return, the `catch`, the
+`finally` `OnPropertyChanged`, and the **exact** Hebrew `StatusMessage` strings — now driven by the
+returned `AvailableDrawingDiscoveryStatus` (`NoSlotsForSeries` / `NoSlotsForProject` /
+`IndexUnavailable` / `Success`). The VM's `ServiceLocator` usage is gone (0 remaining references).
+`ResolveDwfTemplatePath` is now a passthrough; `ResolveApprovedPlanDirectory` keeps its
+`_activeProject`/`_selectedSeries` VM-state guard and delegates the rest. `StampDrawings` is
+unchanged apart from those two resolver calls now hitting the service.
+
+**DI:** `services.AddTransient<IInspectionDrawingManagementService, InspectionDrawingManagementService>()`
+registered in `App.xaml.cs`, immediately before the `FloatingInspectionViewModel` registration
+(transient, matching its `IInspectionReportService` dependency).
+
+**Tests:** added `InspectionDrawingManagementServiceTests.cs` (6 tests) covering the status mapping
+(`NoSlotsForSeries`, `NoSlotsForProject`, series-id-0 treated as no-series, `Success` with empty
+candidates against a real `FileIndexService` built with no stores) and the resolvers
+(`ResolveDwfTemplatePath` → null when unset, `ResolveApprovedPlanDirectory` → null when no config).
+Uses a hand-written `FakeReportService` (the test project references no mocking library) and the
+existing `TestDbContextFactory` for a real `SystemSettingsService`.
+
+| Deliverable | Status |
+| --- | --- |
+| `IInspectionDrawingManagementService` + `InspectionDrawingManagementService` extracted | ✅ |
+| VM `LoadAvailableDrawingFiles` + resolvers delegate; `ServiceLocator` removed from VM | ✅ |
+| Service registered in `App.xaml.cs` DI | ✅ |
+| Focused unit tests added (6) | ✅ |
+| Full `SiNetProjectManager.sln` build green | ✅ _0 errors_ |
+| Inspection service/builder/detector tests green (21 passed, 0 failed) | ✅ |
+| No schema / migration / ModelSnapshot / Google / ACC / SQL / Workflow changes | ✅ |
+| Report generation + sent/locked actions untouched; XAML unchanged | ✅ |
+
+**Dependencies moved out of `FloatingInspectionViewModel`:** the `FileIndexService` service-locator
+lookup, the slot-grouping/scan/dedup discovery loop, the DWF-template settings resolution, and the
+approved-plan config/path-building logic.
+
+**What remains VM-owned (by design):** commands, `SelectedSeries`/selected items, `MessageBox`/dialog
+decisions, `StatusMessage`, observable collections (`AvailableDrawingFiles`, `ReportDrawings`) and
+their mutation, `OnPropertyChanged`/UI refresh, the `async void` command bodies, and the
+registry-driven open/active-file orchestration (`ActiveFileQueryRegistry` / `FileOpenServiceRegistry`).
+
+**Remaining Inspection debt:** `FloatingInspectionViewModel` is still large. `LoadReportDrawings`,
+`AddDrawingToReport`, `RemoveDrawingFromReport`, and the `Reviewed Plan` command handlers
+(`SelectReviewedPlan`, `OpenNoteLinkedFile`, persistence wrappers) remain coupled to
+services/dialogs/registries. **Recommended Phase 5:** extract a reviewed-plan/open-file orchestration
+service (mirroring this phase) to absorb `SelectReviewedPlan` candidate sourcing + `OpenNoteLinkedFile`
+resolution, leaving the VM with thin command bodies; the `Sent / Locked report actions` + report
+generation region remains explicitly deferred.
 
 ---
 
