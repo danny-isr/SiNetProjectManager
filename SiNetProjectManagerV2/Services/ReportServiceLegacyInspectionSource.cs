@@ -50,4 +50,30 @@ internal sealed class ReportServiceLegacyInspectionSource : ILegacyInspectionSou
             return [];
         }
     }
+
+    public async Task<IReadOnlyList<LegacyInspectionReportDto>> GetReportsForSeriesAsync(
+        int projectId,
+        int seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var dbReports = await _reportService
+                .GetReportsForProjectAsync(projectId, seriesId, null, cancellationToken)
+                .ConfigureAwait(false);
+
+            var result = new List<LegacyInspectionReportDto>(dbReports.Count);
+            foreach (var r in dbReports)
+            {
+                result.Add(new LegacyInspectionReportDto(
+                    r.ReportId, r.ReportNumber, r.InspectionDate, r.InspectorName));
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
 }

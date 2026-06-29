@@ -1073,6 +1073,37 @@ legacy WPF host (which already references both worlds) binds the seam to live da
 migrate report rows under the selected series (read-only) + add safe shell navigation; keep report
 generation and sent/locked actions in the legacy host.
 
+## Inspection New WPF Screen — Phase 3 (safe navigation + read-only series detail)
+
+The new shell is now reachable in `SiNet.App.Wpf` via a simple Inbox/Inspection tab switch, and the
+Tree area shows read-only report rows under the selected series. All write/generate/sent-locked
+behaviour stays in the legacy window; this phase is strictly read-only.
+
+**Navigation:** `MainWindow` Inbox content was wrapped in a 2-tab `TabControl` (Inbox default +
+Inspection). `MainViewModel` exposes `Inbox` + `Inspection`; the Inspection tab hosts the
+DI-resolved `InspectionShellView` via a `ContentControl`. No MainWindow rewrite, no ServiceLocator.
+
+**Port/DTO:** `IInspectionWorkspace.GetReportsAsync(projectId, seriesId)` + `InspectionReportRow`
+(`ReportId`, `ReportNumber`, `InspectionDate`, `InspectorName`) added.
+
+**Bridge/seam:** `LegacyInspectionReportDto` + `ILegacyInspectionSource.GetReportsForSeriesAsync`
+added; `LegacyInspectionWorkspace` maps them; legacy-host `ReportServiceLegacyInspectionSource`
+adapts `IInspectionReportService.GetReportsForProjectAsync(projectId, seriesId, null)`.
+
+**Read-only data visible:** selectable series list + per-series report rows (round / date /
+inspector). New app shows empty (no seam bound); legacy host shows live rows.
+
+| Verification | Status |
+| --- | --- |
+| Inbox/Inspection tab switch; Inbox default; Inbox still works | ✅ |
+| `dotnet build SiNet.sln` green | ✅ _0 errors_ |
+| Full `SiNetProjectManager.sln` (VS MSBuild) green | ✅ _0 errors_ |
+| Legacy Inspection window untouched; no SiNetSQL ref from App/Bridge | ✅ |
+
+**Remaining placeholder-only:** Notes, Drawings, ReviewedPlan, Report generation. **Recommended
+Phase 4:** read-only notes under a selected report (extend port/seam), still no writes; defer report
+generation and sent/locked.
+
 ---
 
 ## Recovery points

@@ -21,4 +21,13 @@ public interface ILegacyInspectionSource
     Task<IReadOnlyList<LegacyInspectionSeriesDto>> GetSeriesForProjectAsync(
         int projectId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the inspection report rows under <paramref name="seriesId"/>, newest first.
+    /// Read-only; implementations should return an empty list (not throw) when data is unavailable.
+    /// </summary>
+    Task<IReadOnlyList<LegacyInspectionReportDto>> GetReportsForSeriesAsync(
+        int projectId,
+        int seriesId,
+        CancellationToken cancellationToken = default);
 }

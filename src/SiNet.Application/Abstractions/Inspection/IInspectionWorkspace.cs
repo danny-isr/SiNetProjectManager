@@ -16,6 +16,13 @@ public interface IInspectionWorkspace
     /// </summary>
     Task<IReadOnlyList<InspectionSeriesSummary>> GetSeriesAsync(
         int projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads the inspection reports under a series, newest first. Read-only projection for the new
+    /// screen's series detail; no editing/generation/sent-locked behaviour is exposed here.
+    /// </summary>
+    Task<IReadOnlyList<InspectionReportRow>> GetReportsAsync(
+        int projectId, int seriesId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -24,3 +31,13 @@ public interface IInspectionWorkspace
 /// <param name="SeriesId">The series identifier.</param>
 /// <param name="Name">Display name of the series.</param>
 public readonly record struct InspectionSeriesSummary(int SeriesId, string Name);
+
+/// <summary>
+/// Read-only projection of an inspection report row under a series for the new screen's detail list.
+/// </summary>
+/// <param name="ReportId">The report identifier.</param>
+/// <param name="ReportNumber">The sequential report (round) number.</param>
+/// <param name="InspectionDate">The inspection date.</param>
+/// <param name="InspectorName">The inspector display name, if any.</param>
+public readonly record struct InspectionReportRow(
+    int ReportId, int ReportNumber, DateTime InspectionDate, string? InspectorName);

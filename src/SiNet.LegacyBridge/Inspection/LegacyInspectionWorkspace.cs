@@ -43,4 +43,25 @@ internal sealed class LegacyInspectionWorkspace : IInspectionWorkspace
 
         return result;
     }
+
+    public async Task<IReadOnlyList<InspectionReportRow>> GetReportsAsync(
+        int projectId, int seriesId, CancellationToken cancellationToken = default)
+    {
+        if (_source is null)
+        {
+            return [];
+        }
+
+        var reports = await _source
+            .GetReportsForSeriesAsync(projectId, seriesId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var result = new List<InspectionReportRow>(reports.Count);
+        foreach (var r in reports)
+        {
+            result.Add(new InspectionReportRow(r.ReportId, r.ReportNumber, r.InspectionDate, r.InspectorName));
+        }
+
+        return result;
+    }
 }

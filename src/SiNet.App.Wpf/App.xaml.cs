@@ -33,7 +33,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainWindow>();
 
-        // New Inspection screen foundation (not yet shown; legacy window stays active).
+        // New Inspection screen foundation (now surfaced as a safe Inbox/Inspection tab switch).
         services.AddSingleton<InspectionTreeViewModel>();
         services.AddSingleton<InspectionNotesViewModel>();
         services.AddSingleton<InspectionDrawingsViewModel>();
@@ -41,6 +41,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<InspectionReportViewModel>();
         services.AddSingleton<InspectionShellViewModel>();
         services.AddSingleton<InspectionShellView>();
+        services.AddSingleton<MainViewModel>();
 
         _services = services.BuildServiceProvider();
 

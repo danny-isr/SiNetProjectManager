@@ -17,13 +17,22 @@
         <TabControl Grid.Row="1">
             <TabItem Header="{Binding Tree.Title}">
                 <Grid Margin="12">
-                    <ItemsControl ItemsSource="{Binding Tree.Series}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Name}" Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ListBox Grid.Column="0" ItemsSource="{Binding Tree.Series}"
+                             SelectedItem="{Binding Tree.SelectedSeries, Mode=TwoWay}"
+                             DisplayMemberPath="Name" Margin="0,0,8,0" />
+                    <DataGrid Grid.Column="1" ItemsSource="{Binding Tree.Reports}" AutoGenerateColumns="False"
+                              IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Round" Binding="{Binding ReportNumber}" Width="Auto" />
+                            <DataGridTextColumn Header="Date" Binding="{Binding InspectionDate, StringFormat=dd/MM/yyyy}" Width="Auto" />
+                            <DataGridTextColumn Header="Inspector" Binding="{Binding InspectorName}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
             </TabItem>
             <TabItem Header="{Binding Notes.Title}">
