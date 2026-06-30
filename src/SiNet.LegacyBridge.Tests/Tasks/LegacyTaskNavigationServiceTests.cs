@@ -81,6 +81,60 @@ public sealed class LegacyTaskNavigationServiceTests
         Assert.Equal("Inspection", context.ComponentKey);
         Assert.Equal(3030, context.PrimaryWorkTargetEntityId);
         Assert.Equal(new[] { "Approved", "Rejected" }, context.AllowedResultCodes);
+        // New runtime-only fields default to null when the source does not project them.
+        Assert.Null(context.CompletionEventCode);
+        Assert.Null(context.ActingUserId);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_maps_resolved_completion_event_code_and_acting_user_id()
+    {
+        // Runtime-only enrichment: when the host source projects an unambiguous completion-event code
+        // and an authenticated acting user id, they must flow through to the WorkSurfaceContext so the
+        // shell can auto-fill (and hide) those inputs.
+        var source = new FakeSource(new LegacyTaskNavigationRequestDto(
+            TaskId: 21,
+            ProjectId: 250,
+            WorkflowInstanceId: 9,
+            ComponentKey: "Inspection",
+            PrimaryWorkTargetEntityId: 3030,
+            AllowedTaskResultCodes: new[] { "Approved" },
+            IsSuccess: true,
+            FailureMessage: null,
+            CompletionEventCode: "ReviewProfessionalReviewCompleted",
+            ActingUserId: 77));
+        var sut = new LegacyTaskNavigationService(source);
+
+        var context = await sut.ResolveAsync(taskId: 21, ct: CancellationToken.None);
+
+        Assert.NotNull(context);
+        Assert.Equal("ReviewProfessionalReviewCompleted", context!.CompletionEventCode);
+        Assert.Equal(77, context.ActingUserId);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_leaves_completion_event_code_and_acting_user_id_null_when_unresolved()
+    {
+        // When the host cannot resolve them safely (ambiguous task type / no authenticated user),
+        // they remain null so the shell keeps the explicit dev inputs rather than guessing.
+        var source = new FakeSource(new LegacyTaskNavigationRequestDto(
+            TaskId: 22,
+            ProjectId: 250,
+            WorkflowInstanceId: 9,
+            ComponentKey: "Inspection",
+            PrimaryWorkTargetEntityId: 3030,
+            AllowedTaskResultCodes: new[] { "Approved", "Rejected" },
+            IsSuccess: true,
+            FailureMessage: null,
+            CompletionEventCode: null,
+            ActingUserId: null));
+        var sut = new LegacyTaskNavigationService(source);
+
+        var context = await sut.ResolveAsync(taskId: 22, ct: CancellationToken.None);
+
+        Assert.NotNull(context);
+        Assert.Null(context!.CompletionEventCode);
+        Assert.Null(context.ActingUserId);
     }
 
     [Fact]

@@ -12,6 +12,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -27,7 +28,46 @@
             </StackPanel>
         </Border>
 
-        <TabControl Grid.Row="2">
+        <!--
+            Minimal completion trigger. Shown only when completion is meaningful (task mode + a real
+            task context). Event code and acting user id are auto-filled from the resolved task/host
+            context when available; each falls back to an explicit dev input only when it could not be
+            resolved safely (NeedsManualCompletionEventCode / NeedsManualActingUserId). The result-code
+            picker only appears when the task allows more than one. All validation stays in the view
+            model's CompleteFromTaskAsync.
+        -->
+        <Border Grid.Row="2" Margin="0,0,0,8" Padding="8,6" CornerRadius="3"
+                Background="#E8F5E9" BorderBrush="#43A047" BorderThickness="1"
+                Visibility="{Binding CanCompleteInTaskMode, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Complete task" FontWeight="SemiBold" VerticalAlignment="Center"
+                           Margin="0,0,12,0" />
+
+                <TextBlock Text="Event code (dev):" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85"
+                           Visibility="{Binding NeedsManualCompletionEventCode, Converter={StaticResource BoolToVisibility}}" />
+                <TextBox Width="160" VerticalAlignment="Center" Margin="0,0,12,0"
+                         Visibility="{Binding NeedsManualCompletionEventCode, Converter={StaticResource BoolToVisibility}}"
+                         Text="{Binding CompletionEventCode, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Text="User id (dev):" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85"
+                           Visibility="{Binding NeedsManualActingUserId, Converter={StaticResource BoolToVisibility}}" />
+                <TextBox Width="60" VerticalAlignment="Center" Margin="0,0,12,0"
+                         Visibility="{Binding NeedsManualActingUserId, Converter={StaticResource BoolToVisibility}}"
+                         Text="{Binding ActingUserId, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Text="Result:" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85"
+                           Visibility="{Binding HasMultipleAllowedResultCodes, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox Width="140" VerticalAlignment="Center" Margin="0,0,12,0"
+                          ItemsSource="{Binding AllowedResultCodes}"
+                          SelectedItem="{Binding SelectedResultCode, Mode=TwoWay}"
+                          Visibility="{Binding HasMultipleAllowedResultCodes, Converter={StaticResource BoolToVisibility}}" />
+
+                <Button Content="Complete Task" Padding="10,3" VerticalAlignment="Center"
+                        Command="{Binding CompleteTaskCommand}" />
+            </StackPanel>
+        </Border>
+
+        <TabControl Grid.Row="3">
             <TabItem Header="{Binding Tree.Title}">
                 <Grid Margin="12">
                     <Grid.ColumnDefinitions>

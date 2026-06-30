@@ -15,6 +15,15 @@ namespace SiNet.LegacyBridge.Tasks;
 /// <param name="AllowedTaskResultCodes">The task-result codes the surface may record on completion.</param>
 /// <param name="IsSuccess">Whether the legacy resolver could open the task. When false, the adapter returns a <see langword="null"/> context.</param>
 /// <param name="FailureMessage">Resolver failure detail when <paramref name="IsSuccess"/> is false.</param>
+/// <param name="CompletionEventCode">
+/// The stable completion-event code resolved from the task type, when it is <b>unambiguous</b>;
+/// <see langword="null"/> when it cannot be safely derived. Projected by the host from the legacy
+/// completion-behavior table; <b>runtime-only</b> (never persisted).
+/// </param>
+/// <param name="ActingUserId">
+/// The authenticated host user id, when the host can supply one; <see langword="null"/> otherwise.
+/// <b>Runtime-only</b> (never persisted).
+/// </param>
 public sealed record LegacyTaskNavigationRequestDto(
     int TaskId,
     int? ProjectId,
@@ -23,4 +32,6 @@ public sealed record LegacyTaskNavigationRequestDto(
     long? PrimaryWorkTargetEntityId,
     IReadOnlyList<string> AllowedTaskResultCodes,
     bool IsSuccess,
-    string? FailureMessage);
+    string? FailureMessage,
+    string? CompletionEventCode = null,
+    int? ActingUserId = null);

@@ -53,6 +53,17 @@ internal sealed class TaskNavigationLegacySource : ILegacyTaskNavigationSource
             return null;
         }
 
+        // Runtime-only enrichment (no DB, no persistence): resolve the stable completion-event code
+        // from the task type, but ONLY when it is unambiguous (exactly one ReviewCompletionBehavior
+        // applies). Task types whose result selects between several events (e.g. RecheckPlan) resolve
+        // to null here so the surface keeps requiring an explicit event instead of guessing.
+        var completionEventCode =
+            ReviewCompletionEventBehavior.TryResolveUniqueEventCodeForTaskType(request.TaskTypeCode);
+
+        // Runtime-only: the authenticated host user, when available. Null leaves the surface to fall
+        // back to an explicit input rather than invent a user id.
+        var actingUserId = SiNetSQL.Services.CurrentUserContext.Instance.CurrentUserId;
+
         return new LegacyTaskNavigationRequestDto(
             TaskId: request.TaskId,
             ProjectId: request.ProjectId,
@@ -61,6 +72,8 @@ internal sealed class TaskNavigationLegacySource : ILegacyTaskNavigationSource
             PrimaryWorkTargetEntityId: request.PrimaryWorkTargetEntityId,
             AllowedTaskResultCodes: request.AllowedTaskResultCodes,
             IsSuccess: request.IsSuccess,
-            FailureMessage: request.FailureMessage);
+            FailureMessage: request.FailureMessage,
+            CompletionEventCode: completionEventCode,
+            ActingUserId: actingUserId);
     }
 }

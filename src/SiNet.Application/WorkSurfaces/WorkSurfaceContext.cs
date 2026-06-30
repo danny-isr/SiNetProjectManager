@@ -20,10 +20,22 @@ namespace SiNet.Application.WorkSurfaces;
 /// <param name="ComponentKey">Stable key identifying which screen/component should host the work (resolved by task navigation).</param>
 /// <param name="PrimaryWorkTargetEntityId">The exact work-target entity to open (e.g. inspection report id); <see langword="null"/> when the task has no concrete target.</param>
 /// <param name="AllowedResultCodes">The task-result codes the surface may record on completion (drives the available completion actions).</param>
+/// <param name="CompletionEventCode">
+/// The stable completion-event code the coordinator should receive for this task, when it can be
+/// resolved <b>unambiguously</b> from the task type; <see langword="null"/> when it cannot be safely
+/// derived (e.g. a task type whose result is chosen at completion time), in which case the surface
+/// must obtain it some other way rather than guess. <b>Runtime-only</b> — never persisted.
+/// </param>
+/// <param name="ActingUserId">
+/// The authenticated host user id to record on completion, when the host can provide one;
+/// <see langword="null"/> when no authenticated user is available. <b>Runtime-only</b> — never persisted.
+/// </param>
 public sealed record WorkSurfaceContext(
     int? TaskId,
     int ProjectId,
     int? WorkflowInstanceId,
     string ComponentKey,
     int? PrimaryWorkTargetEntityId,
-    IReadOnlyList<string> AllowedResultCodes);
+    IReadOnlyList<string> AllowedResultCodes,
+    string? CompletionEventCode = null,
+    int? ActingUserId = null);

@@ -282,6 +282,15 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNet.LegacyBridge.Tasks.ILegacyTaskCompletionSource,
                 Services.TaskCompletionLegacySource>();
 
+            // Current-user port: binds the new clean ICurrentUserContext to the legacy authenticated
+            // CurrentUserContext singleton so feature screens (e.g. the Inspection Work Surface) can
+            // record the acting user without inventing an id. Singleton to match the underlying
+            // CurrentUserContext.Instance lifetime; the new SiNet.App.Wpf preview harness leaves this
+            // unbound, in which case the shell falls back to an explicit dev input. Read-only adapter:
+            // it exposes only the user id and makes no authorization decisions.
+            services.AddSingleton<SiNet.Application.Identity.ICurrentUserContext,
+                Services.CurrentUserContextAdapter>();
+
             // Inspection migration (Phase 5): register the clean Application port adapter and the new
             // Inspection shell graph so the additive "Inspection (Preview)" developer entry point can
             // resolve InspectionShellView from this host's DI. Because ILegacyInspectionSource is bound

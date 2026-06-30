@@ -1,3 +1,6 @@
+using System.Windows.Input;
+using SiNet.App.Wpf.Inbox;
+using SiNet.Application.Identity;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -26,10 +29,25 @@ public sealed class InspectionShellViewModel : ObservableObject
 
     private readonly ITaskNavigationService _taskNavigation;
     private readonly ITaskCompletionService _taskCompletion;
+    private readonly ICurrentUserContext? _currentUser;
     private bool _isTaskMode;
     private bool _isBusy;
     private string? _taskStatusMessage;
     private WorkSurfaceContext? _context;
+
+    // Admin/dev completion inputs. These remain ONLY as a fallback: when the work context (or host
+    // user context) can supply a value safely, it is auto-filled and the corresponding input is
+    // hidden (see NeedsManualCompletionEventCode / NeedsManualActingUserId). They are never guessed:
+    //   - CompletionEventCode is auto-filled from WorkSurfaceContext.CompletionEventCode, which the
+    //     host resolves only when the task type maps to exactly one completion event.
+    //   - ActingUserId is auto-filled from the authenticated host user (WorkSurfaceContext.ActingUserId
+    //     or ICurrentUserContext.UserId).
+    // If neither source yields a value, the dev input stays visible so the user can supply it.
+    private string? _completionEventCode;
+    private int _actingUserId;
+    private string? _selectedResultCode;
+    private bool _hasResolvedCompletionEventCode;
+    private bool _hasResolvedActingUserId;
 
     public InspectionShellViewModel(
         InspectionTreeViewModel tree,
@@ -38,7 +56,8 @@ public sealed class InspectionShellViewModel : ObservableObject
         InspectionReviewedPlanViewModel reviewedPlan,
         InspectionReportViewModel report,
         ITaskNavigationService taskNavigation,
-        ITaskCompletionService taskCompletion)
+        ITaskCompletionService taskCompletion,
+        ICurrentUserContext? currentUser = null)
     {
         Tree = tree;
         Notes = notes;
@@ -47,6 +66,7 @@ public sealed class InspectionShellViewModel : ObservableObject
         Report = report;
         _taskNavigation = taskNavigation;
         _taskCompletion = taskCompletion;
+        _currentUser = currentUser;
 
         Tree.PropertyChanged += async (_, e) =>
         {
@@ -55,6 +75,10 @@ public sealed class InspectionShellViewModel : ObservableObject
                 await Notes.LoadNotesAsync(Tree.SelectedReport?.ReportId).ConfigureAwait(true);
             }
         };
+
+        CompleteTaskCommand = new AsyncRelayCommand(
+            CompleteFromCommandAsync,
+            () => CanCompleteInTaskMode);
     }
 
     public string Title => "Inspection (new screen foundation)";
@@ -73,21 +97,45 @@ public sealed class InspectionShellViewModel : ObservableObject
     public WorkSurfaceContext? Context
     {
         get => _context;
-        private set => SetField(ref _context, value);
+        private set
+        {
+            if (SetField(ref _context, value))
+            {
+                ResolveCompletionInputsFromContext(value);
+                OnPropertyChanged(nameof(AllowedResultCodes));
+                OnPropertyChanged(nameof(HasMultipleAllowedResultCodes));
+                OnPropertyChanged(nameof(CanCompleteInTaskMode));
+                CompleteTaskCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     /// <summary><see langword="true"/> when the shell was opened from a task (vs. free browsing).</summary>
     public bool IsTaskMode
     {
         get => _isTaskMode;
-        private set => SetField(ref _isTaskMode, value);
+        private set
+        {
+            if (SetField(ref _isTaskMode, value))
+            {
+                OnPropertyChanged(nameof(CanCompleteInTaskMode));
+                CompleteTaskCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     /// <summary><see langword="true"/> while resolving/loading a task target.</summary>
     public bool IsBusy
     {
         get => _isBusy;
-        private set => SetField(ref _isBusy, value);
+        private set
+        {
+            if (SetField(ref _isBusy, value))
+            {
+                OnPropertyChanged(nameof(CanCompleteInTaskMode));
+                CompleteTaskCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -98,6 +146,135 @@ public sealed class InspectionShellViewModel : ObservableObject
     {
         get => _taskStatusMessage;
         private set => SetField(ref _taskStatusMessage, value);
+    }
+
+    /// <summary>
+    /// The stable completion-event code understood by the legacy coordinator. Auto-filled from
+    /// <see cref="WorkSurfaceContext.CompletionEventCode"/> when the host could resolve it
+    /// unambiguously (see <see cref="NeedsManualCompletionEventCode"/>); otherwise it remains an
+    /// explicit admin/dev input because this slice must not guess one.
+    /// </summary>
+    public string? CompletionEventCode
+    {
+        get => _completionEventCode;
+        set
+        {
+            if (SetField(ref _completionEventCode, value))
+            {
+                OnPropertyChanged(nameof(CanCompleteInTaskMode));
+                CompleteTaskCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The acting user id recorded on completion. Auto-filled from the authenticated host user
+    /// (<see cref="WorkSurfaceContext.ActingUserId"/> or <see cref="ICurrentUserContext.UserId"/>)
+    /// when available (see <see cref="NeedsManualActingUserId"/>); otherwise it remains an explicit
+    /// admin/dev input because this slice must not invent a user id.
+    /// </summary>
+    public int ActingUserId
+    {
+        get => _actingUserId;
+        set => SetField(ref _actingUserId, value);
+    }
+
+    /// <summary>
+    /// <see langword="true"/> when the completion-event code could <b>not</b> be resolved safely from
+    /// the task context, so the view must keep the explicit event-code input. <see langword="false"/>
+    /// once it has been auto-filled from <see cref="WorkSurfaceContext.CompletionEventCode"/>.
+    /// </summary>
+    public bool NeedsManualCompletionEventCode => !_hasResolvedCompletionEventCode;
+
+    /// <summary>
+    /// <see langword="true"/> when the acting user id could <b>not</b> be resolved from the host user
+    /// context, so the view must keep the explicit user-id input. <see langword="false"/> once it has
+    /// been auto-filled from the authenticated host user.
+    /// </summary>
+    public bool NeedsManualActingUserId => !_hasResolvedActingUserId;
+
+    /// <summary>
+    /// The user-chosen task-result code (used only when the context allows more than one). Left
+    /// <see langword="null"/> otherwise; the resolution/validation stays in
+    /// <see cref="CompleteFromTaskAsync"/> so the command never bypasses the guardrails.
+    /// </summary>
+    public string? SelectedResultCode
+    {
+        get => _selectedResultCode;
+        set => SetField(ref _selectedResultCode, value);
+    }
+
+    /// <summary>
+    /// The result codes the current context permits, surfaced for an optional picker. Empty when
+    /// there is no task context.
+    /// </summary>
+    public IReadOnlyList<string> AllowedResultCodes
+        => Context?.AllowedResultCodes ?? Array.Empty<string>();
+
+    /// <summary>
+    /// <see langword="true"/> when the context allows more than one result code, so the view shows
+    /// a picker. With zero or one allowed code the picker is hidden (the single/none case is
+    /// resolved automatically and never guessed).
+    /// </summary>
+    public bool HasMultipleAllowedResultCodes => AllowedResultCodes.Count > 1;
+
+    /// <summary>
+    /// <see langword="true"/> only when completion is meaningful: the shell is in task mode, was
+    /// opened from a real task (context with a <see cref="WorkSurfaceContext.TaskId"/>), and is not
+    /// busy. The view binds this to show/enable the minimal completion trigger. All deeper
+    /// validation (result-code resolution, event code) remains in <see cref="CompleteFromTaskAsync"/>.
+    /// </summary>
+    public bool CanCompleteInTaskMode
+        => IsTaskMode && !IsBusy && Context is { TaskId: not null };
+
+    /// <summary>
+    /// The single minimal UI trigger for this slice. Bound to one "Complete Task" button; it reads
+    /// the admin/dev inputs and delegates to <see cref="CompleteFromTaskAsync"/>, which is the only
+    /// completion boundary. The command never touches workflow directly.
+    /// </summary>
+    public AsyncRelayCommand CompleteTaskCommand { get; }
+
+    private Task CompleteFromCommandAsync()
+        => CompleteFromTaskAsync(
+            CompletionEventCode ?? string.Empty,
+            ActingUserId,
+            string.IsNullOrWhiteSpace(SelectedResultCode) ? null : SelectedResultCode);
+
+    /// <summary>
+    /// Auto-fills the completion inputs from the resolved <paramref name="context"/> (and the host
+    /// user context) so the view can hide whichever value was obtained safely. Nothing here is
+    /// guessed: an input is only marked resolved when a concrete value was supplied, and a blank/zero
+    /// value leaves the explicit admin/dev input in place.
+    /// </summary>
+    private void ResolveCompletionInputsFromContext(WorkSurfaceContext? context)
+    {
+        // Completion event code: trust only an unambiguous code projected by the host. Anything else
+        // keeps the manual input.
+        if (!string.IsNullOrWhiteSpace(context?.CompletionEventCode))
+        {
+            CompletionEventCode = context.CompletionEventCode;
+            _hasResolvedCompletionEventCode = true;
+        }
+        else
+        {
+            _hasResolvedCompletionEventCode = false;
+        }
+
+        // Acting user id: prefer the value the host put on the context; otherwise ask the injected
+        // host user context. A positive id is required — null/zero is treated as "unknown".
+        var resolvedUserId = context?.ActingUserId ?? _currentUser?.UserId;
+        if (resolvedUserId is > 0)
+        {
+            ActingUserId = resolvedUserId.Value;
+            _hasResolvedActingUserId = true;
+        }
+        else
+        {
+            _hasResolvedActingUserId = false;
+        }
+
+        OnPropertyChanged(nameof(NeedsManualCompletionEventCode));
+        OnPropertyChanged(nameof(NeedsManualActingUserId));
     }
 
     /// <summary>
@@ -117,6 +294,7 @@ public sealed class InspectionShellViewModel : ObservableObject
         IsBusy = true;
         TaskStatusMessage = null;
         Context = null;
+        SelectedResultCode = null;
         try
         {
             var context = await _taskNavigation.ResolveAsync(taskId, cancellationToken).ConfigureAwait(true);
