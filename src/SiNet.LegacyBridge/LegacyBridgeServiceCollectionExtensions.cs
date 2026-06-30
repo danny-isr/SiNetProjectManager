@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Tasks;
 using SiNet.LegacyBridge.Inspection;
+using SiNet.LegacyBridge.Tasks;
 
 namespace SiNet.LegacyBridge;
 
@@ -23,6 +25,14 @@ public static class LegacyBridgeServiceCollectionExtensions
     public static IServiceCollection AddSiNetLegacyBridge(this IServiceCollection services)
     {
         services.AddTransient<IInspectionWorkspace, LegacyInspectionWorkspace>();
+
+        // Workflow-first task ports. Both adapters degrade gracefully when their optional legacy
+        // seam (ILegacyTaskNavigationSource / ILegacyTaskCompletionSource) is unbound: navigation
+        // returns null (no guessed target) and completion reports Unavailable. The legacy WPF host
+        // binds the seams to TaskNavigationResolver / TaskCompletionCoordinator; the new app stays
+        // free of any SiNetSQL dependency.
+        services.AddTransient<ITaskNavigationService, LegacyTaskNavigationService>();
+        services.AddTransient<ITaskCompletionService, LegacyTaskCompletionService>();
         return services;
     }
 }

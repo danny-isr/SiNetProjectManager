@@ -24,6 +24,10 @@ small files, clear layers, explicit interfaces, and modular wiring.
 | DI registration for a module | that module's `AddSiNet*` extension |
 | The aggregate DI wiring | `SiNet.App.Composition` |
 | A view, view-model, converter, or window | `SiNet.App.Wpf` (UI only) |
+| A UI screen that performs work (Email, Inspection, ProjectWork, Task Panel…) | `SiNet.App.Wpf` — treat it as a **Work Surface** that receives a `WorkSurfaceContext` |
+| Workflow start/advance/auto-advance/recovery | behind `IWorkflowCommandService` (Application); implementation internal to `SiNet.Infrastructure.Sql` |
+| Workflow reads (instances, dashboards, history) | behind `IWorkflowQueryService` (Application) |
+| Task query/command/navigation/completion | behind the Task ports (`ITaskQueryService`, `ITaskCommandService`, `ITaskNavigationService`, `ITaskCompletionService`) |
 
 ---
 
@@ -46,10 +50,48 @@ small files, clear layers, explicit interfaces, and modular wiring.
 9. **No MediatR, no full Repository pattern** unless explicitly requested.
 10. **Never hand-edit EF migrations, `*.Designer.cs`, or `ModelSnapshot`.** Change
 	model/configuration only and report when `Add-Migration`/`Remove-Migration` is needed.
+11. **No direct workflow mutation from UI.** Only `IWorkflowCommandService` may start/advance/
+	auto-advance/recover workflow instances. Screens and feature ViewModels must not change workflow
+	state; route work completion through a task completion service that may call
+	`IWorkflowCommandService.CheckAndAutoAdvanceAsync`.
+12. **Work Surfaces do not guess context.** A screen opened from a task receives an explicit
+	`WorkSurfaceContext` (project/task/workflow/work target); open the **exact** target, with no
+	first/last fallback.
 
 ---
 
-## 3. Strangler workflow (per domain)
+## 3. Process Control & Work Surfaces (Workflow-first)
+
+The runtime is organized around **process control** (see `ARCHITECTURE_TARGET.md` §4). When adding
+or migrating a feature screen, follow these rules:
+
+```plaintext
+Workflow first. Tasks second. Screens as Work Surfaces. Domain services behind screens.
+Infrastructure at the bottom. Fast vertical slices. No direct workflow mutation from UI.
+```
+
+- **Workflow is the backbone.** `IWorkflowQueryService` (reads) and `IWorkflowCommandService`
+  (start/advance/auto-advance/recovery) are the **only** official boundaries. The internal
+  `WorkflowEngine`/provisioning stay entity-based inside `SiNet.Infrastructure.Sql`.
+- **Tasks connect workflow stages to work targets.** Resolve a `taskId` into a navigation target
+  via `ITaskNavigationService`; the UI must not hand-build the target. Complete work via
+  `ITaskCompletionService`, which records the result and calls
+  `IWorkflowCommandService.CheckAndAutoAdvanceAsync` when appropriate.
+- **A screen is a Work Surface.** It opens, receives a `WorkSurfaceContext`, loads the target data,
+  and **requests** actions — it does not perform workflow/ACC/filing work inline.
+- **Feature ViewModels must not own cross-cutting logic.** The Email ViewModel must not own Gmail,
+  ACC, Workflow, Task and project-filing logic directly; route each to its owning service. ProjectWork
+  is not responsible for workflow logic — `MoveToProject` belongs in `ProjectFileFilingService` or
+  equivalent, not the screen.
+
+**A vertical slice is “useful” when:** the screen opens, receives context, loads target data, performs
+one real action, completes the task or advances workflow **through the official services**, and the
+app still builds. Prefer these slices over long read-only-only scaffolding, and do not keep two active
+implementations indefinitely or copy legacy ViewModels wholesale.
+
+---
+
+## 4. Refactor workflow (per slice)
 
 1. Define or confirm the ports in `SiNet.Application`.
 2. Implement the port in the right `Infrastructure.*` project, **or** add a
@@ -61,7 +103,7 @@ small files, clear layers, explicit interfaces, and modular wiring.
 
 ---
 
-## 4. Build & verify
+## 5. Build & verify
 
 - Build the new solution: `dotnet build SiNet.sln`. Keep it green before finishing a task.
 - The legacy solution `SiNetProjectManager.sln` stays buildable and is the **functional
@@ -69,7 +111,7 @@ small files, clear layers, explicit interfaces, and modular wiring.
 
 ---
 
-## 5. Reference & recovery
+## 6. Reference & recovery
 
 - **Functional reference:** `SiNetProjectManager.sln`.
 - **Old code recovery:** the frozen branch `Before_refactoring` (never modify it).

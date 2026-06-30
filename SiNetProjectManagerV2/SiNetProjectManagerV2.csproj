@@ -73,6 +73,13 @@
          read slice to the modular AddSiNetWorkflowReads(). Already reached transitively via
          SiNetSQL -> SiNet.Infrastructure.Sql; this makes the dependency explicit (no new cycle). -->
     <ProjectReference Include="..\src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
+    <!-- Inspection migration (Phase 5): the new Inspection shell view + view-models live in the
+         SiNet.App.Wpf preview harness. The main host references it ONLY to surface the new screen
+         as an additive "Inspection (Preview)" developer entry point with live data through the
+         already-bound ILegacyInspectionSource seam. SiNet.App.Wpf has no SiNetSQL reference, so this
+         does not create a SiNet.App.Wpf -> SiNetSQL dependency. The host never instantiates the
+         preview app's System.Windows.Application; it only resolves InspectionShellView from DI. -->
+    <ProjectReference Include="..\src\SiNet.App.Wpf\SiNet.App.Wpf.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\folder_project.png">

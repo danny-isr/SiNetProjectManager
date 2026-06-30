@@ -58,6 +58,8 @@
                 <Separator Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🔬 בדיקת חילוץ דוח (Migration PoC)" Click="OpenMigrationPoc_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
+                <MenuItem Header="🧪 Inspection (Preview - מסך חדש)" Click="OpenNewInspectionPreview_Click"
+                    Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🔗 מיפוי MasterPlan ↔ SiNet" Click="OpenMasterPlanMapping_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <Separator Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>

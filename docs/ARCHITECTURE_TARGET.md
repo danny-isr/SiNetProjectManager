@@ -13,15 +13,25 @@ when code and this document disagree, fix the document first, then the code.
 
 ## 1. Purpose
 
-The SiNet app is **pre-production**: no live users, no backward-compatibility constraint.
-We are restructuring aggressively using a **parallel / strangler** approach:
+The SiNet app is **pre-production**: no live users, no backward-compatibility constraint, and it is
+**not** the active production path during this refactor. We therefore optimize for a **fast, clean
+rebuild** (a *Workflow-first fast track*) rather than a long dual-maintenance strangler:
 
-- The existing solution (`SiNetProjectManager.sln`) stays **working and untouched** as the
-  functional reference.
+- The existing solution (`SiNetProjectManager.sln`) is a **frozen reference** and behavior source —
+  kept for recovery, **not** a second active system to maintain indefinitely.
 - New, clean code lives in `SiNet.sln` and grows **beside** the old code.
-- Functionality is moved **one domain at a time** behind interfaces.
-- Old code is deleted **only after** the new path compiles, the UI flow works, tests exist,
-  and `MIGRATION_MAP.md` marks the old path as replaced.
+- Functionality is moved behind ports, but in **fast vertical slices**: a screen opens, receives
+  context, loads target data, performs one real action, completes a task or advances workflow
+  through the official services, and the app still builds.
+- Old code is removed once the new path compiles, the UI flow works, tests exist, and
+  `MIGRATION_MAP.md` marks the old path as replaced.
+
+> One-line direction:
+> **Workflow first. Tasks second. Screens as Work Surfaces. Domain services behind screens.
+> Infrastructure at the bottom. Fast vertical slices. No direct workflow mutation from UI.**
+
+See the [`MIGRATION_MAP.md`](MIGRATION_MAP.md) _Refactor Strategy — Workflow-first Fast Track_
+section for the per-domain ledger and the _Next implementation order_.
 
 ---
 
@@ -59,9 +69,124 @@ Domain  ◄─ Application  ◄─ Infrastructure.* / LegacyBridge  ◄─ App.C
 - `Infrastructure.*` projects must **not** reference each other.
 - Nothing may reference `App.Wpf`.
 
+> **Composition TODOs:**
+> ```plaintext
+> Consider separating AddSiNetClean() from AddSiNetWithLegacyBridge() so the clean app can eventually run without always registering LegacyBridge.
+> ```
+> ```plaintext
+> Avoid App.Wpf depending directly on infrastructure option types where practical.
+> If GmailOptions must be configured by the host temporarily, make the dependency explicit or wrap it in composition-level options.
+> ```
+
 ---
 
-## 4. Hard conventions
+## 4. Process Control model (Workflow-first)
+
+The runtime is organized around **process control**, not around isolated screens. Layers:
+
+```plaintext
+Workflow
+  = owns process state, start, advance, auto-advance, stalled recovery, sub-workflows.
+
+Tasks
+  = executable work items created by workflow or manually.
+  = connect workflow stages to actual work targets.
+
+Work Surfaces
+  = UI screens/windows that let the user perform work.
+  = examples: Email, Inspection, ProjectWork, Task Panel, Workflow Instance.
+
+Domain Services
+  = perform actual business work.
+  = examples: EmailContext, InspectionReport, ProjectFileFiling, FileIndex, ACC.
+
+Infrastructure
+  = external IO only.
+  = examples: Gmail API, Google Drive, ACC, SQL, FileSystem, Logging.
+```
+
+### Process-control rule (authoritative)
+
+```plaintext
+Only IWorkflowCommandService may start, advance, auto-advance or recover workflow instances.
+UI screens and feature ViewModels must not mutate workflow state directly.
+Task completion must go through a task completion/coordinator service, which may call IWorkflowCommandService.
+```
+
+### Bridge rule
+
+```plaintext
+Task completion is the bridge back into workflow.
+Feature screens complete work; they do not advance workflow directly.
+```
+
+### Workflow boundaries (these already exist)
+
+Workflow is the **process backbone**. Both official boundaries live in `SiNet.Application.Workflow`
+and are DTO-clean:
+
+* `IWorkflowQueryService` — reads (definitions, instances, transition history, dashboard snapshots).
+* `IWorkflowCommandService` — start / advance / auto-advance / stalled recovery
+  (e.g. `CheckAndAutoAdvanceAsync`).
+
+The internal `WorkflowEngine` and task provisioning **may remain entity-based** inside
+`SiNet.Infrastructure.Sql`. The boundary returns DTOs; the engine stays an implementation detail.
+The next step is **not** merely "extract workflow reads/writes" — it is to make Workflow the central
+process backbone used by the new UI shell.
+
+### WorkSurfaceContext (planned, application-level)
+
+```csharp
+public sealed record WorkSurfaceContext(
+    int? TaskId,
+    int ProjectId,
+    int? WorkflowInstanceId,
+    string ComponentKey,
+    int? PrimaryWorkTargetEntityId,
+    IReadOnlyList<string> AllowedResultCodes);
+```
+
+* A Work Surface should **not guess** how it was opened.
+* A screen opened from a task gets an **explicit context**.
+* The context tells the screen what **project / task / workflow / work target** it operates on.
+* **Inspection** should receive report target context.
+* **Email** should receive email/task/project context.
+* **ProjectWork** should receive project/file context.
+* The context is **runtime-only** unless a real persistence requirement appears later.
+
+### Task ports (planned, Application-level)
+
+```csharp
+ITaskQueryService
+ITaskCommandService
+ITaskNavigationService
+ITaskCompletionService
+```
+
+```plaintext
+ITaskQueryService
+- Load task queues.
+- Load project tasks.
+- Load task detail.
+
+ITaskCommandService
+- Create/update/close tasks when not directly part of completion workflow.
+
+ITaskNavigationService
+- Convert taskId into WorkSurfaceContext / navigation target.
+- Decide which screen/component should open.
+- UI must not bypass this resolver.
+
+ITaskCompletionService
+- Complete task work targets.
+- Record task result.
+- Close task according to policy.
+- Call IWorkflowCommandService.CheckAndAutoAdvanceAsync when appropriate.
+```
+
+---
+
+## 5. Hard conventions
 
 1. **File size:** no new file above **~600 lines**. If it grows, split by responsibility.
 2. **No WPF outside `App.Wpf`:** connectors/infrastructure return primitives (e.g. a hex
@@ -81,25 +206,42 @@ Domain  ◄─ Application  ◄─ Infrastructure.* / LegacyBridge  ◄─ App.C
 
 ---
 
-## 5. Strangler workflow (per domain)
+## 6. Refactor workflow (per slice)
 
 1. Define/confirm the ports in `SiNet.Application`.
 2. Implement them in the right `Infrastructure.*` **or** add a `SiNet.LegacyBridge` adapter that
    delegates to the existing service.
 3. Register via the module's `AddSiNet*` extension.
-4. Point new consumers at the port.
+4. Point new consumers at the port; make the slice **vertical** (screen opens → receives
+   `WorkSurfaceContext` → loads target data → performs one real action → completes task / advances
+   workflow through the official services).
 5. `dotnet build SiNet.sln`; run and extend tests.
 6. Update `MIGRATION_MAP.md`; retire the old path only when its status is **✅ Replaced**.
 
-Migration order: **Email/Google ✅ (native) → Workflow → Inspection → ACC/Autodesk → SQL/DbContext →
-App startup/DI**.
+**Next implementation order (Workflow-first):**
 
-> Email/Google is the first slice fully migrated to native infrastructure
-> (`SiNet.Infrastructure.Google` → Gmail API, no `LegacyBridge`). See `MIGRATION_MAP.md`.
+```plaintext
+1. Update migration/architecture docs with Workflow-first model.
+2. Make sure IWorkflowQueryService and IWorkflowCommandService are the official workflow boundaries.
+3. Define WorkSurfaceContext.
+4. Define task navigation/completion ports.
+5. Build/adjust shell navigation so screens are work surfaces.
+6. Connect Workflow screens first (dashboard, instance detail, task-created flows, advance/pause/resume/complete/cancel).
+7. Connect Task navigation (task opens correct work surface; work surface receives context).
+8. Connect Inspection task mode.
+9. Connect Email action execution to Workflow/Task services.
+10. Connect ProjectWork/File filing to task/workflow completion where relevant.
+11. Only after the backbone works, continue filling screen-specific features.
+```
+
+> Email/Google is already migrated to native infrastructure
+> (`SiNet.Infrastructure.Google` → Gmail API, no `LegacyBridge`). Note that native Gmail **read**
+> plumbing is **not** the same as the full Email Management Work Surface — see the
+> _Email Management — Workflow/Task Integration Plan_ in `MIGRATION_MAP.md`.
 
 ---
 
-## 6. Build & guardrails
+## 7. Build & guardrails
 
 - Verify the new solution with `dotnet build SiNet.sln`.
 - During the Foundation Round do **not** modify: `SiNetProjectManager.sln`, legacy projects,

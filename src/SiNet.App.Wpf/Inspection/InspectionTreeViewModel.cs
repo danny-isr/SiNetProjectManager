@@ -96,4 +96,52 @@ public sealed class InspectionTreeViewModel : ObservableObject
 
         SelectedReport = Reports.Count > 0 ? Reports[0] : null;
     }
+
+    /// <summary>
+    /// Task-mode selection: opens the <em>exact</em> report identified by
+    /// <paramref name="reportId"/> for <paramref name="projectId"/>, with NO fallback to the first
+    /// report. Scans the project's series for the one that contains the target report, selects that
+    /// series, loads its rows, then selects the matching row. Returns <see langword="true"/> only
+    /// when the exact target was found and selected; otherwise leaves no report selected and returns
+    /// <see langword="false"/> so the caller can show a clear "target missing" error.
+    /// </summary>
+    public async Task<bool> SelectReportByIdAsync(
+        int projectId, int reportId, CancellationToken cancellationToken = default)
+    {
+        await LoadSeriesAsync(projectId, cancellationToken).ConfigureAwait(true);
+
+        foreach (var series in Series)
+        {
+            var rows = await _workspace
+                .GetReportsAsync(projectId, series.SeriesId, cancellationToken)
+                .ConfigureAwait(true);
+
+            if (!rows.Any(r => r.ReportId == reportId))
+            {
+                continue;
+            }
+
+            // Found the owning series. Select it (loads its rows via the setter) then pick the
+            // exact report. Set the field directly here so we don't re-trigger an extra reload race.
+            _selectedSeries = series;
+            OnPropertyChanged(nameof(SelectedSeries));
+
+            Reports.Clear();
+            foreach (var row in rows)
+            {
+                Reports.Add(row);
+            }
+
+            var target = Reports.FirstOrDefault(r => r.ReportId == reportId);
+            if (target.ReportId == reportId)
+            {
+                SelectedReport = target;
+                return true;
+            }
+        }
+
+        // Exact target not found anywhere in the project. Do not guess.
+        SelectedReport = null;
+        return false;
+    }
 }

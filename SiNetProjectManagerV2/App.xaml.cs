@@ -260,6 +260,25 @@ namespace SiNetProjectManagerV2
             // LegacyBridge adapter degrades to an empty list when this seam is absent (new app host).
             services.AddTransient<SiNet.LegacyBridge.Inspection.ILegacyInspectionSource,
                 Services.ReportServiceLegacyInspectionSource>();
+
+            // Inspection migration (Phase 5): register the clean Application port adapter and the new
+            // Inspection shell graph so the additive "Inspection (Preview)" developer entry point can
+            // resolve InspectionShellView from this host's DI. Because ILegacyInspectionSource is bound
+            // above, the LegacyInspectionWorkspace gets the live legacy seam injected here (unlike the
+            // SiNet.App.Wpf preview harness, which leaves it unbound and shows empty data). Transient so
+            // each preview-window open gets a fresh, independent shell graph. This is preview-only and
+            // does not replace or alter the legacy floating Inspection window.
+            // IInspectionWorkspace -> LegacyInspectionWorkspace is registered via the bridge's own
+            // public extension because LegacyInspectionWorkspace is internal to SiNet.LegacyBridge.
+            SiNet.LegacyBridge.LegacyBridgeServiceCollectionExtensions.AddSiNetLegacyBridge(services);
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionTreeViewModel>();
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionNotesViewModel>();
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionDrawingsViewModel>();
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionReviewedPlanViewModel>();
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionReportViewModel>();
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionShellViewModel>();
+            services.AddTransient<SiNet.App.Wpf.Inspection.InspectionShellView>();
+
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)

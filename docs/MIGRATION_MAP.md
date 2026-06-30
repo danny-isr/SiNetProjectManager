@@ -8,6 +8,170 @@
 A legacy path may be retired **only** when: the new path compiles, the UI flow works, tests
 exist/updated, and its row below is marked **✅ Replaced**.
 
+> **Companion architecture docs:**
+> [`ARCHITECTURE_TARGET.md`](ARCHITECTURE_TARGET.md) (process-control model, ports, dependency rules) ·
+> [`AI_DEVELOPMENT_GUIDE.md`](AI_DEVELOPMENT_GUIDE.md) (coding rules for the refactor).
+
+---
+
+## Refactor Strategy — Workflow-first Fast Track
+
+This refactor is **not** a long-lived strangler with two actively maintained systems. The legacy
+app is **not** the active production path during the refactor, so we optimize for a **fast, clean**
+rebuild and keep the old code as a **frozen reference**, not a second system to maintain
+indefinitely.
+
+**Order of attack:**
+
+* Do **not** start by fully rebuilding each screen independently.
+* First architectural priority: make **Workflow** and **Task** the **backbone** of the application.
+* Move/create the UI shell and screens as **Work Surfaces**.
+* After the shell/screens exist, **migrate the Workflow flow first**.
+* Then connect **Email**, **Inspection**, **ProjectWork**, **Files** and **ACC** onto the
+  Workflow/Task backbone.
+* The old legacy code stays a **frozen reference** and source of behavior, **not** a second active
+  system to maintain indefinitely.
+* Prefer **fast vertical slices** over slow read-only-only migration when the behavior is needed for
+  the process.
+
+> One-line direction:
+> **Workflow first. Tasks second. Screens as Work Surfaces. Domain services behind screens.
+> Infrastructure at the bottom. Fast vertical slices. No direct workflow mutation from UI.**
+
+### Process Control model
+
+```plaintext
+Workflow
+  = owns process state, start, advance, auto-advance, stalled recovery, sub-workflows.
+
+Tasks
+  = executable work items created by workflow or manually.
+  = connect workflow stages to actual work targets.
+
+Work Surfaces
+  = UI screens/windows that let the user perform work.
+  = examples: Email, Inspection, ProjectWork, Task Panel, Workflow Instance.
+
+Domain Services
+  = perform actual business work.
+  = examples: EmailContext, InspectionReport, ProjectFileFiling, FileIndex, ACC.
+
+Infrastructure
+  = external IO only.
+  = examples: Gmail API, Google Drive, ACC, SQL, FileSystem, Logging.
+```
+
+**Process-control rule (authoritative):**
+
+```plaintext
+Only IWorkflowCommandService may start, advance, auto-advance or recover workflow instances.
+UI screens and feature ViewModels must not mutate workflow state directly.
+Task completion must go through a task completion/coordinator service, which may call IWorkflowCommandService.
+```
+
+### WorkSurfaceContext (planned, application-level)
+
+```csharp
+public sealed record WorkSurfaceContext(
+    int? TaskId,
+    int ProjectId,
+    int? WorkflowInstanceId,
+    string ComponentKey,
+    int? PrimaryWorkTargetEntityId,
+    IReadOnlyList<string> AllowedResultCodes);
+```
+
+* A Work Surface should **not guess** how it was opened.
+* A screen opened from a task gets an **explicit context**.
+* The context tells the screen what **project / task / workflow / work target** it operates on.
+* **Inspection** should receive report target context.
+* **Email** should receive email/task/project context.
+* **ProjectWork** should receive project/file context.
+* The context is **runtime-only** unless a real persistence requirement appears later.
+
+### Task ports (planned, Application-level)
+
+```csharp
+ITaskQueryService
+ITaskCommandService
+ITaskNavigationService
+ITaskCompletionService
+```
+
+```plaintext
+ITaskQueryService
+- Load task queues.
+- Load project tasks.
+- Load task detail.
+
+ITaskCommandService
+- Create/update/close tasks when not directly part of completion workflow.
+
+ITaskNavigationService
+- Convert taskId into WorkSurfaceContext / navigation target.
+- Decide which screen/component should open.
+- UI must not bypass this resolver.
+
+ITaskCompletionService
+- Complete task work targets.
+- Record task result.
+- Close task according to policy.
+- Call IWorkflowCommandService.CheckAndAutoAdvanceAsync when appropriate.
+```
+
+**Bridge rule:**
+
+```plaintext
+Task completion is the bridge back into workflow.
+Feature screens complete work; they do not advance workflow directly.
+```
+
+### Next implementation order
+
+```plaintext
+1. Update migration/architecture docs with Workflow-first model.
+2. Make sure IWorkflowQueryService and IWorkflowCommandService are the official workflow boundaries.
+3. Define WorkSurfaceContext.
+4. Define task navigation/completion ports.
+5. Build/adjust shell navigation so screens are work surfaces.
+6. Connect Workflow screens first:
+   - dashboard
+   - instance detail
+   - task-created workflow flows
+   - advance / pause / resume / complete / cancel
+7. Connect Task navigation:
+   - task opens correct work surface.
+   - work surface receives context.
+8. Connect Inspection task mode.
+9. Connect Email action execution to Workflow/Task services.
+10. Connect ProjectWork/File filing to task/workflow completion where relevant.
+11. Only after the backbone works, continue filling screen-specific features.
+```
+
+### Speed requirement
+
+```plaintext
+Because this refactor is intended to finish quickly, prefer vertical slices over long parallel read-only scaffolding.
+
+A vertical slice is considered useful when:
+- screen opens,
+- receives context,
+- loads target data,
+- performs one real action,
+- completes task or updates workflow through the official services,
+- app still builds.
+```
+
+Avoid:
+
+```plaintext
+- rebuilding every screen fully before connecting workflow,
+- keeping two active implementations indefinitely,
+- copying legacy ViewModels wholesale,
+- moving code without establishing boundaries,
+- allowing screens to directly control workflow state.
+```
+
 ---
 
 ## Domains
@@ -15,8 +179,7 @@ exist/updated, and its row below is marked **✅ Replaced**.
 | Domain | Legacy source (approx. size) | New home | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted; native sign-in + real config done** (no `LegacyBridge`). Read-only; deferred: send/modify only. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below. |
-| Workflow | `WorkflowManagementWindow.xaml.cs` (~3,547) | `SiNet.Application` `IWorkflow*` → App.Wpf VM + services | 🟡 | **Read slice extracted.** `WorkflowQueryService` + `ProjectWorkflowPolicyService` moved into `SiNet.Infrastructure.Sql` behind `IWorkflowQueryService` / `IProjectWorkflowPolicyService` ports (namespaces preserved). Writes/engine deferred. See section below. |
-Phase 3: extracted `InspectionReviewedPlanBuilder` + `InspectionDrawingStampBuilder` (pure reviewed-plan candidate/row transforms + drawing-stamp entity transform) from the `Reviewed Plan` / `Drawing Management` regions — VM call sites delegate, no behavior change. Phase 4: extracted `IInspectionDrawingManagementService` (available-drawing candidate discovery + DWF/approved-plan path resolution) — VM no longer uses `ServiceLocator` for `FileIndexService`; thin command handlers map a status discriminator to the same messages. Still TODO: relocate report generation + sent/locked actions. See sections below. |
+| Workflow | Legacy Workflow windows, `WorkflowTaskOrchestrator`, `WorkflowEngine`, task provisioning | `SiNet.Application.Workflow` `IWorkflowQueryService` + `IWorkflowCommandService`; SQL implementation keeps engine/provisioning internal | 🟡 | **Workflow is the process backbone.** Both boundaries exist and are DTO-clean: `IWorkflowQueryService` (reads) and `IWorkflowCommandService` (start / advance / auto-advance / stalled recovery). Internal `WorkflowEngine` + provisioning stay entity-based inside SQL/infrastructure. Next work should **connect new screens to workflow/task control** rather than rebuilding screens as isolated modules. See _Refactor Strategy_ + the Workflow sections below. |
 | ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ `LegacyBridge`) | ⬜ | ACC remains source of truth; DB is cache/helper. |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
@@ -994,6 +1157,69 @@ generation region remains explicitly deferred.
 
 ---
 
+## Inspection decomposition — Phase 5 (Template-Sync pure transforms)
+
+> **UX guardrail:** executed under the approved `same UX, cleaner internals` principle. Production UI
+> stays `FloatingInspectionView` (unchanged); the tabbed `InspectionShellView` was **not** expanded.
+> (The "reviewed-plan/open-file service" idea noted at the end of Phase 4 remains a *separate* future
+> candidate; this Phase 5 instead targets the self-contained Template-Sync math, the safest next block.)
+
+**Goal:** Extract the pure, side-effect-free Template-Sync logic from `FloatingInspectionViewModel`
+into a unit-testable helper, with **no** UI/XAML/behavior change. No schema/migration/ModelSnapshot;
+no Google/Gmail, ACC/token, SQL-composition, or Workflow changes; report generation and sent/locked
+report actions intentionally untouched.
+
+**What was extracted (new helper in `SiNetSQL.MVVM`):**
+
+| New file | Responsibility moved out of the VM |
+| --- | --- |
+| `InspectionTemplateSyncMath.cs` | `Compare(tags, sections)` — the pure core of the former `CompareTemplateWithTree`: builds the template code/title lookups (status-tag `DefaultText` is authoritative, legacy note-tag `Title` is the fallback), decides each section's target `SectionSyncState` (missing / title-mismatch via trim + case-insensitive compare / normal), collects title-mismatches, counts missing/new codes, and composes the Hebrew summary string — returned as a `TemplateSyncComparison` result. `ComputeHash(tags)` — the former `ComputeTemplateHash` structural fingerprint (code/row/col, order-independent), moved verbatim. Inputs use a UI-free `SectionDescriptor(NumericCode, DisplayTitle)` so the helper stays free of WPF/observable types. |
+
+**How behavior is preserved:** `CompareTemplateWithTree` now maps the live tree sections to
+`SectionDescriptor`s, calls `InspectionTemplateSyncMath.Compare`, then **applies** the returned
+`SyncStates` onto the matching `SectionTreeItem`s, sets `StatusMessage` from `SummaryText`, and maps
+the `TitleMismatch` records back to the existing `(Code, OldTitle, NewTitle)` tuple so the unchanged
+`PromptTitleMismatchApprovalAsync` dialog is called exactly as before. Both hash call sites
+(`ScanTemplateForSyncAsync`, `ValidateTemplateIntegrityAsync`) now call `ComputeHash`; the private
+`ComputeTemplateHash` method was removed. The Hebrew wording
+(`"סנכרון תבנית: …"`, `"… חסרים מהתבנית"`, `"… שינויי כותרת"`, `"… סעיפים חדשים בתבנית"`) is byte-for-byte unchanged.
+The VM keeps all I/O (`ScanTemplateAsync`), `MessageBox` prompts, persistence (`SyncSectionNamesAsync`),
+and `ValidateTemplateIntegrityAsync` orchestration.
+
+**Tests:** added `InspectionTemplateSyncMathTests.cs` (17 tests) covering hash
+(empty / order-independence / move-sensitivity / title-and-bracket-text ignored), compare
+(missing-from-template, title-mismatch collection, normalized match via case + trim, status-tag
+precedence over note-tag, note-tag title fallback, new-codes counting, blank-section-code ignored,
+null-safety), and the Hebrew summary composition (null when no change, all-three-categories ordering,
+missing-only), via the existing `InternalsVisibleTo("SiNetSQL.Tests")`.
+
+| Deliverable | Status |
+| --- | --- |
+| `InspectionTemplateSyncMath` extracted (`Compare` + `ComputeHash`) | ✅ |
+| VM delegates; `SyncState`/`StatusMessage`/dialog applied in VM; bindings + XAML unchanged | ✅ |
+| Private `ComputeTemplateHash` removed; both call sites repointed | ✅ |
+| Focused unit tests added (17) | ✅ |
+| `dotnet build SiNet.sln` green | ✅ _0 errors_ |
+| Full `SiNetProjectManager.sln` (VS MSBuild) green | ✅ _0 errors_ |
+| Inspection tests green (112 passed, 0 failed, 2 pre-existing skips) | ✅ |
+| No schema / migration / ModelSnapshot / Google / ACC / SQL / Workflow changes | ✅ |
+| Report generation + sent/locked actions untouched; legacy window untouched | ✅ |
+
+**Note (build tooling):** `SiNetSQL` uses COM references, so test build/run for this repo must use
+**VS MSBuild** + `vstest.console` (`dotnet test` fails with `MSB4803`). `SiNet.sln` (clean stack) still
+builds with `dotnet build`.
+
+**Spec check:** no mismatch found. The behavior matches
+`Docs/Domains/PlanReview/InspectionReportUiAndLifecycle-2026-06-21.md` (Template Sync On Load / section
+sync states); only the internal location of the pure logic changed.
+
+**Remaining Inspection debt:** `FloatingInspectionViewModel` is still large (~5,070 lines). The largest
+deferred region is `Sent / Locked report actions` + report generation (explicitly out of scope).
+**Recommended next UX-preserving block:** finish the small `Note Helpers` region, or extract the
+reviewed-plan/open-file orchestration service noted in Phase 4 — both behind the existing UI.
+
+---
+
 ## Inspection New WPF Screen Foundation — Phase 1
 
 **Strategic shift:** the legacy `FloatingInspectionViewModel` window is now a **functional
@@ -1137,6 +1363,233 @@ text / status). New app shows empty (no seam bound); legacy host shows live note
 **Remaining placeholder-only:** Drawings, ReviewedPlan, Report generation. **Recommended Phase 5:**
 read-only Drawings/ReviewedPlan listing for the selected report (extend port/seam), still no writes;
 defer report generation and sent/locked.
+
+> **Superseded by the alignment correction below.** The "read-only Drawings/ReviewedPlan"
+> recommendation is **paused**. Before adding more tabs/features, the migration must first prove
+> UX parity with the legacy `FloatingInspectionView`. See _Inspection Refactoring Alignment_.
+
+---
+
+## Inspection Refactoring Alignment — principle + corrected plan (documentation-only)
+
+**Principle (authoritative):** `Same UX, cleaner internals.` The goal of the Inspection migration is
+**not** to redesign the screen. The existing `FloatingInspectionView` UI layout, workflow, terminology,
+and visible behavior are the **reference**. Internals (ViewModel size/responsibility split, services,
+ports/interfaces, DTOs, LegacyBridge adapters, testable builders, DI) may change; user-facing behavior
+**must not** change unless explicitly approved. Any implementation/spec mismatch is **reported**, not
+silently redesigned.
+
+**Source-of-truth spec:** `SiNetProjectManagerV2/Docs/Domains/PlanReview/InspectionReportUiAndLifecycle-2026-06-21.md`
+(scope: `FloatingInspectionView`, lifecycle, sections/notes, sent/locked) is the documented UX baseline.
+Supporting: `PlanReview/PlanReviewPrinciples-*`, `UI/UiPrinciples-*`, `Inspection-Template-Guide.md`,
+and the `Migration/GoogleSheetReview*` designs. **Spec gap:** none of these define the new tabbed
+`InspectionShellView` as the target UX — so the tabbed shell is **not** spec-backed and stays a harness.
+
+**Status of `src/SiNet.App.Wpf/Inspection/InspectionShellView.xaml`:** **technical prototype / wiring
+harness only.** It is LTR, ~900×600, tab-based (Tree/Notes/Drawings/ReviewedPlan/Report), read-only
+DataGrids. The legacy window is RTL, frameless floating (`WindowStyle=None`, `AllowsTransparency`,
+topmost toggle, ~420×850), single-pane **card** flow with create-bar + action-bar (templates, series,
+inspector, Create Report, Mark-Response-Received, Re-pull, Open-source, Unlock, Share-with-link,
+reviewed-version). **These differ in layout, orientation, structure, and density — the tabbed shell is
+NOT the target UI and must not be promoted to one without explicit approval.**
+
+**Corrected migration plan (replaces "read-only Drawings/ReviewedPlan next"):**
+
+1. Keep the legacy `FloatingInspectionView` as the visual/behavior reference; do not delete/replace it.
+2. Continue the *internals-only* track already in flight (Inspection decomposition Phases 2–4: pure
+   helpers/builders + injectable services behind the existing VM), keeping XAML/bindings unchanged.
+3. Treat the new shell strictly as an additive, admin-gated **preview harness** for validating clean
+   ports (`IInspectionWorkspace`) against live data — not as the future screen.
+4. Defer any new shell tabs/features (Drawings/ReviewedPlan/Report) until a UX-parity rebuild of the
+   legacy layout is explicitly approved; when approved, rebuild the **same** RTL card layout on top of
+   the clean ports, not the tabbed prototype.
+5. Do not change report generation or sent/locked actions; keep both `SiNet.sln` and
+   `SiNetProjectManager.sln` green.
+
+> **Updated by _Refactor Strategy — Workflow-first Fast Track_ (top of file).** The
+> `same UX, cleaner internals` principle and the existing read-only phases above remain **valid**.
+> What changes is the *priority*: the next near-term Inspection work is the **task-mode / workflow
+> integration** vertical slice below — not more read-only tabs. The tabbed `InspectionShellView`
+> stays a harness; any production UX rebuild still needs explicit approval.
+
+---
+
+## Inspection New WPF Screen — Task Mode / Workflow Integration (planned)
+
+**Why now:** under the Workflow-first fast track, Inspection's value to the *process* is that a
+workflow task can open the **exact** report it targets, the user completes the review, and that
+completion flows back into workflow auto-advance. This is a **vertical slice**, not another
+read-only tab. The existing read-only phases (1–4) stay valid as behavior scaffolding.
+
+**Scope of this phase:**
+
+* New Inspection shell can **open from a task**.
+* Opening is resolved through `ITaskNavigationService` (UI must not hand-build the target).
+* The shell receives an explicit `WorkSurfaceContext` (project / task / workflow / report target).
+* It opens the **exact report from the task target** (`PrimaryWorkTargetEntityId`).
+  **No fallback** to first/last report.
+* Report work completion goes through `ITaskCompletionService` (record result + close per policy).
+* Workflow auto-advance goes through `IWorkflowCommandService.CheckAndAutoAdvanceAsync` — never
+  mutated from the Inspection ViewModel.
+* Legacy `FloatingInspectionViewModel` remains the **behavior reference**, not the long-term
+  implementation.
+
+```plaintext
+Task → ITaskNavigationService → WorkSurfaceContext(ComponentKey = "Inspection", PrimaryWorkTargetEntityId = reportId)
+     → Inspection shell opens that exact report
+     → user completes review
+     → ITaskCompletionService (record result, close task)
+     → IWorkflowCommandService.CheckAndAutoAdvanceAsync
+```
+
+**Vertical-slice done criteria:** shell opens from a task, receives context, loads the target
+report, performs one real completion action, completes the task and triggers workflow auto-advance
+through the official services, and both solutions still build.
+
+---
+
+## Workflow-first backbone — Slice 1: ports + LegacyBridge seams + Inspection task navigation 🟡
+
+> First executable step of the Workflow-first fast track. Establishes the **process backbone
+> primitives** (`WorkSurfaceContext` + task ports) and the first navigation half of the Inspection
+> task-mode vertical slice. Read access stays through `IWorkflowQueryService`; workflow mutation
+> stays exclusively behind `IWorkflowCommandService`. Task completion is bridged but its concrete
+> legacy backing is left to the legacy host (the new app degrades gracefully). No schema/migration/
+> `ModelSnapshot` edits; no Gmail/ACC/SQL-composition/Workflow-engine changes; the legacy
+> `FloatingInspectionViewModel` is untouched.
+
+**Application layer (new ports + runtime context):**
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.Application/WorkSurfaces/WorkSurfaceContext.cs` *(new)* | Runtime-only record `(int? TaskId, int ProjectId, int? WorkflowInstanceId, string ComponentKey, int? PrimaryWorkTargetEntityId, IReadOnlyList<string> AllowedResultCodes)`. No DB table. Screens consume it instead of guessing how they were opened. |
+| `src/SiNet.Application/Tasks/ITaskQueryService.cs`, `ITaskCommandService.cs` *(new)* | Placeholder read/write task ports (members deferred) so the boundary exists for the next slices. |
+| `src/SiNet.Application/Tasks/ITaskNavigationService.cs` *(new)* | `ResolveAsync(int taskId, CancellationToken) → WorkSurfaceContext?`. The only sanctioned way to turn a task id into a navigation target; UI must not hand-build context. |
+| `src/SiNet.Application/Tasks/ITaskCompletionService.cs` *(new)* | `CompleteAsync(CompleteTaskCommand, CancellationToken) → TaskCompletionResultDto`. The bridge back into workflow; records completion and routes auto-advance through `IWorkflowCommandService`. |
+| `src/SiNet.Application/Tasks/CompleteTaskCommand.cs` *(new)* | UI-agnostic completion command (`TaskId`, `CompletionEventCode`, `TaskResultCode?`, `CompletedTaskLinkIds?`, `UserId`). |
+| `src/SiNet.Application/Tasks/TaskCompletionResultDto.cs` *(new)* | Completion result; carries the workflow auto-advance outcome via the existing `StageCompletionResultDto`. `Failure(...)` (business) vs `Unavailable(...)` (no backend bound). |
+
+**LegacyBridge seams + strangler adapters (`SiNet.LegacyBridge`, Application+Domain only — no `SiNetSQL`):**
+
+| Artifact | Detail |
+| --- | --- |
+| `Tasks/LegacyTaskNavigationRequestDto.cs` *(new)* | Bridge-local projection of the legacy `TaskNavigationRequest` (`long? PrimaryWorkTargetEntityId`, `IsSuccess`, …) — no `SiNetSQL` types. |
+| `Tasks/ILegacyTaskNavigationSource.cs` *(new)* | Host-bound seam over `TaskNavigationResolver`; unbound in the new app. |
+| `Tasks/LegacyTaskNavigationService.cs` *(new)* | Implements `ITaskNavigationService`; maps the seam DTO → `WorkSurfaceContext` (clamps `long`→`int?`, never truncating into a different valid id). Returns `null` when the seam is unbound **or** the resolver failed — caller shows a clear error, never guesses a target. |
+| `Tasks/LegacyTaskCompletionResultDto.cs`, `LegacyCompleteTaskCommandDto.cs`, `ILegacyTaskCompletionSource.cs` *(new)* | Bridge-local completion seam mirroring `TaskCompletionCoordinator.CompleteAsync`; the legacy coordinator already routes auto-advance through `IWorkflowCommandService.CheckAndAutoAdvanceAsync`. |
+| `Tasks/LegacyTaskCompletionService.cs` *(new)* | Implements `ITaskCompletionService`; returns `Unavailable` when the seam is unbound, else projects the legacy result (incl. `StageAdvanceResult`). |
+| `LegacyBridgeServiceCollectionExtensions.cs` | `AddSiNetLegacyBridge()` now also registers `ITaskNavigationService → LegacyTaskNavigationService` and `ITaskCompletionService → LegacyTaskCompletionService` (both seams optional → graceful degradation). |
+
+**Inspection task-mode (navigation half wired; completion pending a bound seam):**
+
+| Artifact | Detail |
+| --- | --- |
+| `src/SiNet.App.Wpf/Inspection/InspectionTreeViewModel.cs` | New `SelectReportByIdAsync(projectId, reportId)`: scans the project's series for the **exact** report and selects it; **no first/last fallback** — returns `false` and selects nothing when the target is absent. The existing read-only first-item default path (`LoadReportsAsync`) is unchanged. |
+| `src/SiNet.App.Wpf/Inspection/InspectionShellViewModel.cs` | Injects `ITaskNavigationService`. New `OpenFromTaskAsync(int taskId)` resolves `WorkSurfaceContext`, validates `ComponentKey == "Inspection"`, requires a concrete `PrimaryWorkTargetEntityId`, and opens that exact report. Exposes `IsTaskMode` / `IsBusy` / `TaskStatusMessage` / `Context`. The shell never mutates workflow. |
+| `src/SiNet.App.Wpf/Inspection/InspectionShellView.xaml` | Added a task-mode status banner (visible only in task mode) showing `TaskStatusMessage`; the read-only tabs are otherwise unchanged. |
+
+**Deferred (next slices, by design):**
+
+* Actual task **completion** from the new shell — needs a real `ILegacyTaskCompletionSource` bound
+  by the legacy host (or a native infrastructure completion service); until then completion reports
+  `Unavailable`.
+* A host entry point that calls `OpenFromTaskAsync` from a real workflow-created task (task-queue UI
+  → Inspection surface).
+* `ITaskQueryService` / `ITaskCommandService` member definitions and implementations.
+* Legacy-host binding of `ILegacyTaskNavigationSource` to `TaskNavigationResolver`.
+
+| Deliverable | Status |
+| --- | --- |
+| `WorkSurfaceContext` added (runtime-only, exact doc shape) | ✅ |
+| Task navigation/completion ports + command/result DTOs added | ✅ |
+| LegacyBridge task seams + strangler adapters added (no `SiNetSQL` dependency) | ✅ |
+| Adapters degrade gracefully when seam unbound (null nav / `Unavailable` completion) | ✅ |
+| Task adapters registered in `AddSiNetLegacyBridge()` | ✅ |
+| Inspection shell opens an **exact** report from `WorkSurfaceContext`; no first/last fallback | ✅ |
+| Inspection task-mode status surfaced in the shell view | ✅ |
+| `dotnet build SiNet.sln` green | ✅ _0 errors_ |
+| No schema / migration / `ModelSnapshot` edits | ✅ |
+| No Gmail / ACC / SQL-composition / Workflow-engine changes; legacy Inspection window untouched | ✅ |
+| Task completion from the new shell (needs bound legacy seam) | 🟡 Deferred |
+| Host entry point opening Inspection from a real task | 🟡 Deferred |
+
+---
+
+## Email Management — Workflow/Task Integration Plan (planned)
+
+**Clarification:** the **native Gmail read infrastructure** (`SiNet.Infrastructure.Google`,
+`GmailClientProvider`) is **not** the same thing as the full **Email Management screen**. Read
+infrastructure is plumbing; the Email Management screen is a **Work Surface** that turns email
+context into workflow/task/file actions.
+
+**Target model:**
+
+```plaintext
+Email screen
+- displays inbox/list/viewer/search/filter state.
+
+EmailContextService
+- analyzes email/project/attachments/workflow family.
+
+SuggestedActionsService
+- builds available actions from context.
+
+ActionExecutionService
+- executes selected action.
+
+Workflow actions
+- must call IWorkflowCommandService.
+
+Task actions
+- must call task services.
+
+File/project actions
+- must call ProjectFileFilingService / ProjectWork services.
+
+The Email ViewModel must not own Gmail, ACC, Workflow, Task and Project filing logic directly.
+```
+
+**Boundary rule:** the Email screen *requests* actions; it does not *perform* workflow, task, ACC,
+or filing work inline. Each action category routes to its owning service (Workflow →
+`IWorkflowCommandService`; Task → task services; File/project → `ProjectFileFilingService` /
+ProjectWork services).
+
+---
+
+## ProjectWork / Files (formal domain)
+
+ProjectWork is promoted to a formal domain: a **Work Surface** over the project file/folder model,
+with all filing/placement logic behind domain services, and **no** direct workflow control.
+
+| Domain | Legacy source | New home | Status | Notes |
+| --- | --- | --- | --- | --- |
+| ProjectWork / Files | Legacy ProjectWork window(s) + scattered file/filing logic | ProjectWork **Work Surface** + `ProjectFileFilingService` / `FileIndex` domain services; `SiNet.Infrastructure.*` for IO (ACC, Drive, FileSystem) | ⬜ | Screen is a work surface only; filing/placement/versioning/naming live in services; ProjectWork **must not** advance workflow directly. See target below. |
+
+**Target responsibilities:**
+
+```plaintext
+ProjectWork screen
+- display project file/folder tree.
+- show versions/alternatives.
+- open files.
+- show ACC viewer.
+- support drag/drop as a work surface.
+
+ProjectFile services
+- perform filing, placement, versioning, naming, storage-destination logic.
+
+Workflow
+- receives task completion / process events.
+- ProjectWork must not advance workflow directly.
+```
+
+**Existing principle (carried over from the active ProjectWork docs —
+`SiNetProjectManagerV2/Docs/Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md`):**
+
+```plaintext
+ProjectWork is not responsible for Workflow management logic.
+MoveToProject belongs outside the screen, in ProjectFileFilingService or equivalent.
+```
 
 ---
 

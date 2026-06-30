@@ -470,6 +470,54 @@ namespace SiNetProjectManagerV2
             dialog.ShowDialog();
         }
 
+        /// <summary>
+        /// Developer/preview entry point (Phase 5 of the Inspection migration). Hosts the new
+        /// <see cref="SiNet.App.Wpf.Inspection.InspectionShellView"/> (built in the SiNet.App.Wpf
+        /// preview harness) inside this production host so it can be exercised with LIVE legacy data
+        /// through the already-bound <c>ILegacyInspectionSource</c> seam. This is additive and does
+        /// NOT replace or alter the legacy floating Inspection window
+        /// (<see cref="OpenFloatingInspection_Click"/>). Read-only: the new shell currently shows
+        /// series, reports, and notes only — no editing/generation/sent-locked actions.
+        /// </summary>
+        private void OpenNewInspectionPreview_Click(object sender, RoutedEventArgs e)
+        {
+            if (!RequireAdminAccess("אין לך הרשאה לתצוגה מקדימה."))
+                return;
+
+            // Resolve the new shell view from DI so its full view-model graph (and the live
+            // IInspectionWorkspace bound in this host) is constructed for us.
+            var shellView = App.ServiceProvider.GetRequiredService<SiNet.App.Wpf.Inspection.InspectionShellView>();
+
+            // Ask which project's inspection series to load so the preview shows live data. The new
+            // tree only loads when LoadSeriesAsync is called; if no/invalid id is given we still open
+            // the shell (empty tree) so the new screen structure is visible.
+            var prompt = new Dialogs.TextInputDialog(
+                "Inspection (Preview)",
+                "מספר פרויקט להצגת סדרות בדיקה (השאר ריק לפתיחת המסך החדש ללא נתונים):")
+            {
+                Owner = this
+            };
+
+            if (prompt.ShowDialog() == true
+                && int.TryParse(prompt.ResponseText?.Trim(), out var projectId)
+                && projectId > 0
+                && shellView.DataContext is SiNet.App.Wpf.Inspection.InspectionShellViewModel shellVm)
+            {
+                _ = shellVm.Tree.LoadSeriesAsync(projectId);
+            }
+
+            var previewWindow = new Window
+            {
+                Title = "Inspection (Preview) — מסך חדש (קריאה בלבד)",
+                Content = shellView,
+                Owner = this,
+                Width = 1000,
+                Height = 700,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            previewWindow.Show();
+        }
+
         private void OpenProjectDecisions_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ProjectDecisionsWindow();
