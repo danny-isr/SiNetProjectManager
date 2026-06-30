@@ -1,0 +1,589 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Inspection.InspectionWindowView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Inspection"
+        mc:Ignorable="d"
+        Title="{Binding Title}"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False"
+        Width="420" Height="850"
+        MinWidth="360" MinHeight="380"
+        FlowDirection="RightToLeft"
+        d:DataContext="{d:DesignInstance Type=local:InspectionWindowViewModel, IsDesignTimeCreatable=True}">
+
+    <!--
+        VISUAL CLONE of the legacy SiNetProjectManagerV2/WPFUserControl/FloatingInspectionView.xaml.
+        Structure (header chrome, create-report strip, locked-report action row, metadata row,
+        notes list, report cards, status bar) is reproduced for visual parity. Commands are stubbed
+        in InspectionWindowViewModel ("not wired yet"); data is fake/design-time only. No DB / report
+        generation / Gmail / planner / ACC / file-system / workflow logic lives behind this window.
+        InspectionShellView remains a developer harness only; this is the visual-clone target.
+    -->
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- Small action button (mirrors the legacy CardActionButton chrome). -->
+        <Style TargetType="Button" x:Key="CardActionButton">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#CCC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#90CAF9" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#BBDEFB" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="ContentBorder" Background="#F5F5F5" CornerRadius="8" Margin="8" ClipToBounds="True">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ═══════ Header: Project Name + Pin + Dock + Refresh + Collapse + Close ═══════ -->
+            <Border Grid.Row="0" Background="#2E7D32" Padding="10,8"
+                    CornerRadius="8,8,0,0"
+                    MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding ActiveProjectDisplay}"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+
+                    <!-- Pin (stay on top) -->
+                    <ToggleButton Grid.Column="1"
+                                  IsChecked="{Binding IsPinned, Mode=TwoWay}"
+                                  Width="28" Height="28"
+                                  Margin="6,0,0,0"
+                                  Cursor="Hand"
+                                  ToolTip="הצמד למעלה">
+                        <ToggleButton.Template>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Border x:Name="PinBorder" Background="Transparent" CornerRadius="4" Padding="4">
+                                    <TextBlock x:Name="PinIcon" Text="📌" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" Opacity="0.5" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsChecked" Value="True">
+                                        <Setter TargetName="PinIcon" Property="Opacity" Value="1.0" />
+                                        <Setter TargetName="PinBorder" Property="Background" Value="#388E3C" />
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="PinBorder" Property="Background" Value="#388E3C" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </ToggleButton.Template>
+                    </ToggleButton>
+
+                    <!-- Dock / Undock -->
+                    <ToggleButton Grid.Column="2"
+                                  IsChecked="{Binding IsDocked, Mode=TwoWay}"
+                                  Width="28" Height="28"
+                                  Margin="4,0,0,0"
+                                  Cursor="Hand"
+                                  ToolTip="עגן לאפליקציה">
+                        <ToggleButton.Template>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Border x:Name="DockBorder" Background="Transparent" CornerRadius="4" Padding="4">
+                                    <TextBlock x:Name="DockIcon" Text="🏠" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" Opacity="0.5" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsChecked" Value="True">
+                                        <Setter TargetName="DockIcon" Property="Opacity" Value="1.0" />
+                                        <Setter TargetName="DockBorder" Property="Background" Value="#388E3C" />
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="DockBorder" Property="Background" Value="#388E3C" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </ToggleButton.Template>
+                    </ToggleButton>
+
+                    <!-- Refresh -->
+                    <Button Grid.Column="3"
+                            Content="🔄"
+                            Command="{Binding RefreshCommand}"
+                            ToolTip="רענן"
+                            Width="28" Height="28"
+                            Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White" />
+
+                    <!-- Collapse / Expand -->
+                    <Button Grid.Column="4"
+                            Command="{Binding ToggleCollapseCommand}"
+                            Width="28" Height="28"
+                            Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Content" Value="🔽" />
+                                <Setter Property="ToolTip" Value="כווץ" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
+                                        <Setter Property="Content" Value="🔼" />
+                                        <Setter Property="ToolTip" Value="הרחב" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <!-- Close -->
+                    <Button Grid.Column="5"
+                            Content="✕"
+                            Click="CloseButton_Click"
+                            ToolTip="סגור"
+                            Width="28" Height="28"
+                            Margin="4,0,0,0"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White"
+                            FontWeight="Bold" />
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Create New Report Strip ═══════ -->
+            <Border x:Name="CreateBar" Grid.Row="1" Background="#F5F5F5" Padding="8,6"
+                    BorderBrush="#C0C0C0" BorderThickness="0,0,0,1"
+                    Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Template picker -->
+                    <ComboBox Grid.Row="0" Grid.Column="0"
+                              ItemsSource="{Binding AvailableTemplates}"
+                              SelectedItem="{Binding SelectedTemplate}"
+                              DisplayMemberPath="Name"
+                              Padding="4,3"
+                              Margin="0,0,4,4"
+                              ToolTip="בחר תבנית ביקורת" />
+
+                    <!-- Create report -->
+                    <Button Grid.Row="1" Grid.Column="0"
+                            Content="+ דוח חדש"
+                            Command="{Binding CreateReportCommand}"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource CardActionButton}"
+                            FontWeight="SemiBold"
+                            Padding="10,3"
+                            ToolTip="צור דוח ביקורת חדש מהתבנית הנבחרת" />
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Selected report body (notes area) ═══════ -->
+            <Border Grid.Row="2"
+                    Background="#F5F5F5"
+                    Padding="6"
+                    Visibility="{Binding HasSelectedReport, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Title -->
+                    <TextBlock Grid.Row="0" FontWeight="SemiBold" Foreground="#2E7D32" Margin="4,0,0,4">
+                        <Run Text="📋 שאלון ביקורת — דוח #" />
+                        <Run Text="{Binding SelectedReport.ReportNumber, Mode=OneWay}" />
+                    </TextBlock>
+
+                    <!-- Report action row + metadata -->
+                    <Border Grid.Row="1" Background="White" CornerRadius="4"
+                            BorderBrush="#D0D0D0" BorderThickness="1"
+                            Padding="6,4" Margin="2,0,2,4">
+                        <StackPanel Orientation="Vertical">
+
+                            <!-- Action row: mark received / re-pull / open source / unlock / share -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <Button Content="✅"
+                                        Command="{Binding MarkResponseReceivedCommand}"
+                                        Width="28" Height="24" Padding="0" FontSize="14"
+                                        Background="#43A047" Foreground="White"
+                                        BorderBrush="#2E7D32" BorderThickness="1"
+                                        Cursor="Hand" Margin="0,0,4,0"
+                                        ToolTip="התקבלה תגובה מהמתכנן" />
+                                <Button Content="🔄"
+                                        Command="{Binding RepullPlannerResponsesCommand}"
+                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Background="Transparent" Foreground="#2E7D32"
+                                        BorderBrush="#2E7D32" BorderThickness="1"
+                                        Cursor="Hand" Margin="0,0,4,0"
+                                        ToolTip="משיכת תגובות המתכנן מחדש" />
+                                <Button Content="🔗"
+                                        Command="{Binding OpenSourceReportCommand}"
+                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Background="Transparent" Foreground="#1565C0"
+                                        BorderBrush="#1565C0" BorderThickness="1"
+                                        Cursor="Hand" Margin="0,0,4,0"
+                                        ToolTip="פתח את דוח המקור" />
+                                <Button Content="🔓"
+                                        Command="{Binding UnlockReportCommand}"
+                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Background="Transparent" Foreground="#6D4C00"
+                                        BorderBrush="#FFB300" BorderThickness="1"
+                                        Cursor="Hand" Margin="0,0,4,0"
+                                        ToolTip="שחרר נעילה" />
+                                <Button Content="🌐"
+                                        Command="{Binding ShareReportCommand}"
+                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Background="Transparent" Foreground="#6D4C00"
+                                        BorderBrush="#FFB300" BorderThickness="1"
+                                        Cursor="Hand"
+                                        ToolTip="שתף קישור לכל מי שיש לו הקישור" />
+                            </StackPanel>
+
+                            <!-- Metadata + reviewed-plan selection -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" MinWidth="80" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="בודק:" Foreground="#555"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelectedReport.InspectorName, Mode=OneWay}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" Text="תאריך:" Foreground="#555"
+                                           VerticalAlignment="Center" Margin="12,0,6,0" />
+                                <TextBlock Grid.Column="3"
+                                           Text="{Binding SelectedReport.InspectionDate, StringFormat=dd/MM/yyyy, Mode=OneWay}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Button Grid.Column="5"
+                                        Content="בחר תוכנית..."
+                                        Command="{Binding SelectReviewedPlanCommand}"
+                                        Margin="6,0,0,0" Padding="8,1"
+                                        VerticalAlignment="Center"
+                                        ToolTip="בחר את התוכנית שנבדקה" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Notes / cards list -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="2,0,2,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="📋 שאלון ביקורת" FontWeight="SemiBold"
+                                       Foreground="#555" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="+ הערה"
+                                    Command="{Binding AddNoteCommand}"
+                                    Style="{StaticResource CardActionButton}"
+                                    Padding="8,1" ToolTip="הוסף הערה חדשה" />
+                        </Grid>
+
+                        <!-- Hierarchical questionnaire tree: Chapter → Section → Note (visual clone) -->
+                        <TreeView Grid.Row="1"
+                                  ItemsSource="{Binding InspectionTree}"
+                                  BorderThickness="0"
+                                  Background="Transparent"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem">
+                                    <Setter Property="IsExpanded" Value="True" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                            <TreeView.Resources>
+                                <!-- Level 1: Chapter — number + title -->
+                                <HierarchicalDataTemplate DataType="{x:Type local:InspectionChapterItem}"
+                                                          ItemsSource="{Binding Sections}">
+                                    <TextBlock Text="{Binding DisplayTitle}"
+                                               FontWeight="Bold"
+                                               Foreground="#2E7D32"
+                                               Margin="0,2"
+                                               ToolTip="{Binding DisplayTitle}" />
+                                </HierarchicalDataTemplate>
+
+                                <!-- Level 2: Section — header + "+" add-note button -->
+                                <HierarchicalDataTemplate DataType="{x:Type local:InspectionSectionItem}"
+                                                          ItemsSource="{Binding Notes}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding SectionHeaderText}"
+                                                   Foreground="#333"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   ToolTip="{Binding SectionHeaderText}" />
+                                        <Button Grid.Column="1" Content="+"
+                                                Command="{Binding DataContext.AddNoteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource CardActionButton}"
+                                                Padding="2,0" FontWeight="Bold"
+                                                Width="18" Height="18"
+                                                ToolTip="הוסף הערה חדשה" />
+                                    </Grid>
+                                </HierarchicalDataTemplate>
+
+                                <!-- Level 3: Note row — [▲▼] [📂📷] [Index] [💬] [Status] [Text] -->
+                                <DataTemplate DataType="{x:Type local:InspectionNoteItem}">
+                                    <Border Padding="2,3" Margin="0,0,0,2"
+                                            CornerRadius="2" BorderThickness="0,0,0,1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="White" />
+                                                <Setter Property="BorderBrush" Value="#D0D0D0" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasPlannerResponse}" Value="True">
+                                                        <Setter Property="Background" Value="#E8F5E9" />
+                                                        <Setter Property="BorderBrush" Value="#2E7D32" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" MinWidth="36" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" MinWidth="78" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Reorder buttons -->
+                                            <StackPanel Grid.Column="0" Orientation="Vertical"
+                                                        VerticalAlignment="Center" Margin="0,0,2,0">
+                                                <Button Content="▲" FontSize="9"
+                                                        Width="14" Height="11" Padding="0"
+                                                        Command="{Binding DataContext.MoveNoteUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource CardActionButton}"
+                                                        ToolTip="הזז למעלה" />
+                                                <Button Content="▼" FontSize="9"
+                                                        Width="14" Height="11" Padding="0"
+                                                        Command="{Binding DataContext.MoveNoteDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource CardActionButton}"
+                                                        ToolTip="הזז למטה" />
+                                            </StackPanel>
+
+                                            <!-- Linked file + screenshot buttons -->
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                        VerticalAlignment="Center" Margin="2,0,4,0">
+                                                <Button Content="📂" FontSize="11"
+                                                        Width="18" Height="18" Padding="0" Margin="0,0,3,0"
+                                                        Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="פתח קובץ מקושר">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource CardActionButton}">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasLinkedFile}" Value="True">
+                                                                    <Setter Property="Background" Value="#E8F5E9" />
+                                                                    <Setter Property="BorderBrush" Value="#2E7D32" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                <Button Content="📷" FontSize="11"
+                                                        Width="18" Height="18" Padding="0"
+                                                        Command="{Binding DataContext.ScreenshotPrimaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource CardActionButton}"
+                                                        ToolTip="צרף תמונה חדשה מהלוח" />
+                                            </StackPanel>
+
+                                            <!-- Index label -->
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding DisplayLabel}"
+                                                       Foreground="#333" FontWeight="Bold"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right"
+                                                       Margin="0,0,4,0" />
+
+                                            <!-- Planner-response indicator -->
+                                            <TextBlock Grid.Column="3" Text="💬"
+                                                       FontSize="11" VerticalAlignment="Center"
+                                                       Margin="0,0,4,0"
+                                                       ToolTip="התקבלה תגובת מתכנן">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasPlannerResponse}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <!-- Status combo (stubbed selection) -->
+                                            <ComboBox Grid.Column="4"
+                                                      ItemsSource="{Binding DataContext.StatusOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedItem="{Binding StatusText, Mode=OneWay}"
+                                                      FontSize="11" Padding="1,0" Margin="0,0,4,0"
+                                                      Height="20" VerticalAlignment="Center"
+                                                      ToolTip="סטטוס ההערה" />
+
+                                            <!-- Note text -->
+                                            <TextBlock Grid.Column="5"
+                                                       Text="{Binding NoteText}"
+                                                       TextWrapping="Wrap"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </TreeView.Resources>
+                        </TreeView>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Report Cards List (bottom) ═══════ -->
+            <Border Grid.Row="3"
+                    Background="#F5F5F5"
+                    BorderBrush="#C0C0C0"
+                    BorderThickness="0,1,0,0"
+                    Padding="6,4"
+                    MaxHeight="160"
+                    Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="📋 דוחות ביקורת" FontWeight="SemiBold"
+                               Foreground="#555" Margin="0,0,0,2" />
+
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding Reports}"
+                             SelectedItem="{Binding SelectedReport}"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="2,0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="4,3" Margin="0,0,0,2"
+                                        CornerRadius="4" BorderThickness="1"
+                                        BorderBrush="#D0D0D0" Background="White">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Background="#E8F5E9" CornerRadius="2"
+                                                Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center">
+                                            <TextBlock FontWeight="SemiBold" Foreground="#2E7D32">
+                                                <Run Text="#" /><Run Text="{Binding ReportNumber, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </Border>
+                                        <TextBlock Grid.Column="1" Text="{Binding InspectorName}"
+                                                   Opacity="0.7" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding InspectionDate, StringFormat=dd/MM}"
+                                                   Foreground="#888" VerticalAlignment="Center" Margin="4,0" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Status Bar ═══════ -->
+            <Border Grid.Row="4" Background="#F5F5F5" Padding="8,4" CornerRadius="0,0,8,8">
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="#555"
+                           TextTrimming="CharacterEllipsis" />
+            </Border>
+        </Grid>
+    </Border>
+</Window>

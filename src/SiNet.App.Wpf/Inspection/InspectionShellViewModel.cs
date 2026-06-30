@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.Application.Identity;
@@ -7,12 +8,17 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNet.App.Wpf.Inspection;
 
 /// <summary>
-/// Root view model for the rebuilt Inspection screen. It composes the five sub-area view models
-/// (tree, notes, drawings, reviewed plan, report) so the screen can be developed and migrated one
-/// area at a time. This is the new target UI foundation — it does NOT replace the legacy
-/// <c>FloatingInspectionViewModel</c> window yet. It coordinates the read-only flow: when the tree's
-/// selected report changes, the notes area reloads. Sub-areas are injected so each can evolve
-/// independently and be unit-tested in isolation.
+/// <b>DEVELOPER HARNESS ONLY — NOT the target Inspection UX.</b> This view model exists solely to
+/// exercise the workflow task-completion seam during development. It must <b>not</b> be expanded into
+/// the product screen and must <b>not</b> replace the legacy <c>FloatingInspectionView</c>. The
+/// visual-clone target for Inspection is
+/// <see cref="SiNet.App.Wpf.Surfaces.Inspection.InspectionWindowViewModel"/>
+/// (clone of <c>FloatingInspectionView</c>). See <c>docs/UI_WINDOW_MIGRATION_MAP.md</c>.
+/// <para>
+/// It composes the five sub-area view models (tree, notes, drawings, reviewed plan, report) and
+/// coordinates the read-only flow: when the tree's selected report changes, the notes area reloads.
+/// Sub-areas are injected so each can be unit-tested in isolation.
+/// </para>
 /// <para>
 /// Task mode (workflow-first): <see cref="OpenFromTaskAsync"/> resolves a
 /// <see cref="WorkSurfaceContext"/> through <see cref="ITaskNavigationService"/> and opens the
@@ -387,8 +393,8 @@ public sealed class InspectionShellViewModel : ObservableObject
     /// <para>
     /// This is the single, minimal completion path for the Inspection slice. It refuses to act
     /// (and shows a clear message) when there is no <see cref="Context"/>, no
-    /// <see cref="WorkSurfaceContext.TaskId"/>, or when a task-result code is required but cannot be
-    /// determined without guessing:
+    /// <see cref="WorkSurfaceContext.TaskId"/>, when a task-result code is required but cannot be
+    /// determined without guessing, or when no single completion event can be resolved:
     /// </para>
     /// <list type="bullet">
     ///   <item>If the context exposes exactly one allowed result code, that code is used.</item>
@@ -396,8 +402,19 @@ public sealed class InspectionShellViewModel : ObservableObject
     ///   and must be one of <see cref="WorkSurfaceContext.AllowedResultCodes"/> — never invented.</item>
     ///   <item>If it exposes none, completion proceeds with no result code (the event may not need one).</item>
     /// </list>
+    /// <para>
+    /// The effective completion event is resolved <b>after</b> the result code, via
+    /// <see cref="TryResolveEffectiveCompletionEventCode"/>: an explicit/unique code wins, otherwise the
+    /// <c>(task type, resolved result)</c> pair is mapped through
+    /// <see cref="ITaskCompletionMetadataResolver"/>. If neither yields a single event, completion is
+    /// blocked and <see cref="ITaskCompletionService"/> is never called.
+    /// </para>
     /// </summary>
-    /// <param name="completionEventCode">Stable completion-event code understood by the coordinator (required).</param>
+    /// <param name="completionEventCode">
+    /// Stable completion-event code understood by the coordinator. Optional when it can be resolved from
+    /// the <c>(task type, result)</c> pair (the branching case); when supplied explicitly it takes
+    /// precedence over resolution.
+    /// </param>
     /// <param name="actingUserId">The acting user id recorded on the completion.</param>
     /// <param name="taskResultCode">
     /// The task-result code to record. Required only when the context allows more than one; otherwise
@@ -411,12 +428,6 @@ public sealed class InspectionShellViewModel : ObservableObject
         string? taskResultCode = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(completionEventCode))
-        {
-            TaskStatusMessage = "Cannot complete: no completion event was specified.";
-            return false;
-        }
-
         if (Context is not { } context)
         {
             TaskStatusMessage = "Cannot complete: this surface was not opened from a task.";
@@ -429,9 +440,24 @@ public sealed class InspectionShellViewModel : ObservableObject
             return false;
         }
 
+        // Result code FIRST: a branching task's completion event is selected by the result, so the
+        // event code cannot be resolved before the result is known/validated.
         if (!TryResolveResultCode(context, taskResultCode, out var resolvedResultCode, out var resultMessage))
         {
             TaskStatusMessage = resultMessage;
+            return false;
+        }
+
+        // Completion event code SECOND: prefer the explicit/unique code, otherwise resolve it from the
+        // (task type, resolved result) pair via the metadata port. Never guessed.
+        if (!TryResolveEffectiveCompletionEventCode(
+                context,
+                completionEventCode,
+                resolvedResultCode,
+                out var effectiveEventCode,
+                out var eventMessage))
+        {
+            TaskStatusMessage = eventMessage;
             return false;
         }
 
@@ -442,7 +468,7 @@ public sealed class InspectionShellViewModel : ObservableObject
                 .CompleteAsync(
                     new CompleteTaskCommand(
                         TaskId: taskId,
-                        CompletionEventCode: completionEventCode,
+                        CompletionEventCode: effectiveEventCode,
                         TaskResultCode: resolvedResultCode,
                         CompletedTaskLinkIds: null,
                         UserId: actingUserId),
@@ -465,6 +491,58 @@ public sealed class InspectionShellViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Resolves the completion-event code to send to the coordinator without ever inventing one,
+    /// honouring the required precedence:
+    /// <list type="number">
+    ///   <item>An explicit <paramref name="explicitCompletionEventCode"/> (the unambiguous-by-task-type
+    ///   value the host projected, or the admin/dev fallback input) always wins.</item>
+    ///   <item>Otherwise it asks the <see cref="ITaskCompletionMetadataResolver"/> port to resolve the
+    ///   event from the <c>(task type, resolved result)</c> pair, reusing the host's declarative mapping.
+    ///   For a branching task this is the only safe path and requires the result code to already be
+    ///   resolved.</item>
+    ///   <item>If neither yields a single event it returns <see langword="false"/> with a clear message
+    ///   so the caller blocks completion and never calls <see cref="ITaskCompletionService"/>.</item>
+    /// </list>
+    /// </summary>
+    private bool TryResolveEffectiveCompletionEventCode(
+        WorkSurfaceContext context,
+        string? explicitCompletionEventCode,
+        string? resolvedResultCode,
+        [NotNullWhen(true)] out string? completionEventCode,
+        out string? message)
+    {
+        message = null;
+
+        // (a) Explicit/unique event code wins (dev fallback or host-projected unambiguous value).
+        if (!string.IsNullOrWhiteSpace(explicitCompletionEventCode))
+        {
+            completionEventCode = explicitCompletionEventCode.Trim();
+            return true;
+        }
+
+        // (b) Resolve from (task type, resolved result) via the metadata port. The ViewModel owns no
+        // mapping table — it only consumes the resolver's answer.
+        if (_completionMetadata is not null
+            && context.TaskTypeCode is { } taskTypeCode
+            && !string.IsNullOrWhiteSpace(taskTypeCode))
+        {
+            var resolved = _completionMetadata.ResolveCompletionEventCode(taskTypeCode, resolvedResultCode);
+            if (!string.IsNullOrWhiteSpace(resolved))
+            {
+                completionEventCode = resolved;
+                return true;
+            }
+        }
+
+        // (c) Could not resolve a single event safely — block rather than guess.
+        completionEventCode = null;
+        message = string.IsNullOrWhiteSpace(resolvedResultCode)
+            ? "Cannot complete: no completion event could be resolved for this task. Select a result first."
+            : $"Cannot complete: no single completion event maps to result '{resolvedResultCode}' for this task.";
+        return false;
     }
 
     /// <summary>

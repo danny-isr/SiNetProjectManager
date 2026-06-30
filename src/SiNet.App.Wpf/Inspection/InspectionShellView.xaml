@@ -5,6 +5,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
+    <!--
+        DEVELOPER HARNESS ONLY - NOT the target Inspection UX.
+        This view exists to exercise the workflow task-completion seam during development. It must NOT
+        be expanded into the product screen and must NOT replace the legacy FloatingInspectionView.
+        The visual-clone target is SiNet.App.Wpf.Surfaces.Inspection.InspectionWindowView.
+        See docs/UI_WINDOW_MIGRATION_MAP.md.
+    -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </UserControl.Resources>
@@ -32,9 +39,11 @@
             Minimal completion trigger. Shown only when completion is meaningful (task mode + a real
             task context). Event code and acting user id are auto-filled from the resolved task/host
             context when available; each falls back to an explicit dev input only when it could not be
-            resolved safely (NeedsManualCompletionEventCode / NeedsManualActingUserId). The result-code
-            picker only appears when the task allows more than one. All validation stays in the view
-            model's CompleteFromTaskAsync.
+            resolved safely (NeedsManualCompletionEventCode / NeedsManualActingUserId). For a branching
+            task (its result selects the completion event, e.g. RecheckPlan) the dev event-code input
+            stays hidden because the event is resolved from the chosen result via the metadata port; the
+            result-code picker appears whenever the task allows more than one. All validation/resolution
+            stays in the view model's CompleteFromTaskAsync (result code first, event code second).
         -->
         <Border Grid.Row="2" Margin="0,0,0,8" Padding="8,6" CornerRadius="3"
                 Background="#E8F5E9" BorderBrush="#43A047" BorderThickness="1"

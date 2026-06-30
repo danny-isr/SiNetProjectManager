@@ -84,6 +84,7 @@ public sealed class LegacyTaskNavigationServiceTests
         // New runtime-only fields default to null when the source does not project them.
         Assert.Null(context.CompletionEventCode);
         Assert.Null(context.ActingUserId);
+        Assert.Null(context.TaskTypeCode);
     }
 
     [Fact]
@@ -102,7 +103,8 @@ public sealed class LegacyTaskNavigationServiceTests
             IsSuccess: true,
             FailureMessage: null,
             CompletionEventCode: "ReviewProfessionalReviewCompleted",
-            ActingUserId: 77));
+            ActingUserId: 77,
+            TaskTypeCode: "PerformProfessionalReview"));
         var sut = new LegacyTaskNavigationService(source);
 
         var context = await sut.ResolveAsync(taskId: 21, ct: CancellationToken.None);
@@ -110,6 +112,7 @@ public sealed class LegacyTaskNavigationServiceTests
         Assert.NotNull(context);
         Assert.Equal("ReviewProfessionalReviewCompleted", context!.CompletionEventCode);
         Assert.Equal(77, context.ActingUserId);
+        Assert.Equal("PerformProfessionalReview", context.TaskTypeCode);
     }
 
     [Fact]

@@ -445,10 +445,200 @@ public sealed class InspectionShellViewModelCompletionTests
         Assert.Equal(88, completion.LastCommand.UserId);
     }
 
+    // ----- Branching CompletionEventCode resolution from the selected result code -----
+    // For task types whose result selects between several events (e.g. RecheckPlan), the event code is
+    // resolved from (TaskTypeCode, resolved result) via the metadata port AFTER the result is known.
+    // The ViewModel owns no mapping table; it consumes the resolver's answer and blocks (no service
+    // call) whenever the pair is missing/invalid/ambiguous.
+
+    private const string RecheckPlan = "RecheckPlan";
+    private const string RecheckPassed = "RecheckPassed";
+    private const string RecheckNeedsMore = "RecheckRequiresMoreCorrections";
+    private const string EventPassed = "ReviewRecheckPassed";
+    private const string EventNeedsMore = "ReviewRecheckRequiresMoreCorrections";
+
+    private static FakeCompletionMetadataResolver RecheckResolver() =>
+        new(new Dictionary<(string, string), string>
+        {
+            [(RecheckPlan, RecheckPassed)] = EventPassed,
+            [(RecheckPlan, RecheckNeedsMore)] = EventNeedsMore,
+        });
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_explicit_event_code_wins_over_resolution()
+    {
+        // An explicit event code always takes precedence; the resolver is not consulted.
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var resolver = RecheckResolver();
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: resolver);
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        var ok = await sut.CompleteFromTaskAsync("ExplicitEvent", actingUserId: 9, taskResultCode: RecheckPassed);
+
+        Assert.True(ok);
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal("ExplicitEvent", completion.LastCommand!.CompletionEventCode);
+        Assert.Equal(RecheckPassed, completion.LastCommand.TaskResultCode);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_unique_context_event_code_still_works()
+    {
+        // The unambiguous-by-task-type path (event projected on the context) is unchanged.
+        var context = Context(taskId: 42, allowed: new[] { "Approved" }, completionEventCode: EventCode);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        Assert.False(sut.NeedsManualCompletionEventCode);
+
+        sut.CompleteTaskCommand.Execute(null);
+
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal(EventCode, completion.LastCommand!.CompletionEventCode);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_branching_result_A_resolves_event_A()
+    {
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        // No explicit event code: it must be resolved from (RecheckPlan, RecheckPassed).
+        var ok = await sut.CompleteFromTaskAsync(string.Empty, actingUserId: 9, taskResultCode: RecheckPassed);
+
+        Assert.True(ok);
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal(EventPassed, completion.LastCommand!.CompletionEventCode);
+        Assert.Equal(RecheckPassed, completion.LastCommand.TaskResultCode);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_branching_result_B_resolves_event_B()
+    {
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        var ok = await sut.CompleteFromTaskAsync(string.Empty, actingUserId: 9, taskResultCode: RecheckNeedsMore);
+
+        Assert.True(ok);
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal(EventNeedsMore, completion.LastCommand!.CompletionEventCode);
+        Assert.Equal(RecheckNeedsMore, completion.LastCommand.TaskResultCode);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_branching_without_result_blocks_completion()
+    {
+        // Multiple allowed results and no pick: TryResolveResultCode blocks before event resolution, so
+        // the service is never called.
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        var ok = await sut.CompleteFromTaskAsync(string.Empty, actingUserId: 9);
+
+        Assert.False(ok);
+        Assert.Equal(0, completion.CallCount);
+        Assert.NotNull(sut.TaskStatusMessage);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_branching_with_invalid_result_blocks_completion()
+    {
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        var ok = await sut.CompleteFromTaskAsync(string.Empty, actingUserId: 9, taskResultCode: "NotAllowed");
+
+        Assert.False(ok);
+        Assert.Equal(0, completion.CallCount);
+        Assert.NotNull(sut.TaskStatusMessage);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_unmapped_pair_blocks_before_service_call()
+    {
+        // The pair is allowed by the context but the resolver has no event for it: block, no call.
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        // Resolver knows only result A -> event A; result B is unmapped (ambiguous/unsupported).
+        var resolver = new FakeCompletionMetadataResolver(new Dictionary<(string, string), string>
+        {
+            [(RecheckPlan, RecheckPassed)] = EventPassed,
+        });
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: resolver);
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        var ok = await sut.CompleteFromTaskAsync(string.Empty, actingUserId: 9, taskResultCode: RecheckNeedsMore);
+
+        Assert.False(ok);
+        Assert.Equal(0, completion.CallCount);
+        Assert.NotNull(sut.TaskStatusMessage);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_valid_resolved_pair_calls_service_once()
+    {
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        var ok = await sut.CompleteFromTaskAsync(string.Empty, actingUserId: 9, taskResultCode: RecheckPassed);
+
+        Assert.True(ok);
+        Assert.Equal(1, completion.CallCount);
+    }
+
+    [Fact]
+    public async Task CompleteTaskCommand_branching_resolves_event_and_hides_dev_input_after_pick()
+    {
+        // End-to-end through the command: a branching task hides the dev event input once a valid result
+        // is selected (because the event can then be resolved), and forwards the resolved event once.
+        var context = Context(
+            taskId: 42, allowed: new[] { RecheckPassed, RecheckNeedsMore }, taskTypeCode: RecheckPlan);
+        var completion = new FakeCompletionService(SuccessResult());
+        var sut = BuildShell(new FakeNavigationService(context), completion, completionMetadata: RecheckResolver());
+        await sut.OpenFromTaskAsync(taskId: 42);
+
+        // Before picking a result the dev input is still needed (the event is not yet resolvable).
+        Assert.True(sut.NeedsManualCompletionEventCode);
+
+        sut.ActingUserId = 7;
+        sut.SelectedResultCode = RecheckPassed;
+
+        // After a valid pick the event resolves, so the dev input is no longer needed.
+        Assert.False(sut.NeedsManualCompletionEventCode);
+
+        sut.CompleteTaskCommand.Execute(null);
+
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal(EventPassed, completion.LastCommand!.CompletionEventCode);
+        Assert.Equal(RecheckPassed, completion.LastCommand.TaskResultCode);
+        Assert.Equal(7, completion.LastCommand.UserId);
+    }
+
     private static InspectionShellViewModel BuildShell(
         ITaskNavigationService navigation,
         ITaskCompletionService completion,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        ITaskCompletionMetadataResolver? completionMetadata = null)
     {
         var workspace = new EmptyWorkspace();
         return new InspectionShellViewModel(
@@ -459,14 +649,16 @@ public sealed class InspectionShellViewModelCompletionTests
             new InspectionReportViewModel(),
             navigation,
             completion,
-            currentUser);
+            currentUser,
+            completionMetadata);
     }
 
     private static WorkSurfaceContext Context(
         int? taskId,
         IReadOnlyList<string> allowed,
         string? completionEventCode = null,
-        int? actingUserId = null) =>
+        int? actingUserId = null,
+        string? taskTypeCode = null) =>
         new(
             TaskId: taskId,
             ProjectId: 10,
@@ -475,7 +667,8 @@ public sealed class InspectionShellViewModelCompletionTests
             PrimaryWorkTargetEntityId: null,
             AllowedResultCodes: allowed,
             CompletionEventCode: completionEventCode,
-            ActingUserId: actingUserId);
+            ActingUserId: actingUserId,
+            TaskTypeCode: taskTypeCode);
 
     private static TaskCompletionResultDto SuccessResult() =>
         new(Success: true, TaskClosed: true, WorkflowAdvanced: false);
@@ -513,6 +706,45 @@ public sealed class InspectionShellViewModelCompletionTests
         public FakeCurrentUserContext(int? userId) => UserId = userId;
 
         public int? UserId { get; }
+    }
+
+    /// <summary>
+    /// Deterministic stand-in for the host completion-metadata port. It mirrors the legacy
+    /// declarative mapping for the branching case under test (<c>RecheckPlan</c>) without depending on
+    /// SiNetSQL: it resolves the event only for an exact, supported <c>(task type, result)</c> pair and
+    /// returns <see langword="null"/> (block) for everything else, including the no-result and ambiguous
+    /// cases. The constructor takes the rows so each test states exactly which pairs are supported.
+    /// </summary>
+    private sealed class FakeCompletionMetadataResolver : ITaskCompletionMetadataResolver
+    {
+        private readonly IReadOnlyDictionary<(string TaskType, string Result), string> _byPair;
+        private readonly IReadOnlyDictionary<string, string>? _uniqueByTaskType;
+
+        public FakeCompletionMetadataResolver(
+            IReadOnlyDictionary<(string, string), string> byPair,
+            IReadOnlyDictionary<string, string>? uniqueByTaskType = null)
+        {
+            _byPair = byPair;
+            _uniqueByTaskType = uniqueByTaskType;
+        }
+
+        public int CallCount { get; private set; }
+
+        public string? ResolveCompletionEventCode(string taskTypeCode, string? taskResultCode)
+        {
+            CallCount++;
+
+            if (string.IsNullOrWhiteSpace(taskTypeCode))
+                return null;
+
+            if (string.IsNullOrWhiteSpace(taskResultCode))
+                return _uniqueByTaskType is not null
+                    && _uniqueByTaskType.TryGetValue(taskTypeCode, out var unique)
+                    ? unique
+                    : null;
+
+            return _byPair.TryGetValue((taskTypeCode, taskResultCode!), out var ev) ? ev : null;
+        }
     }
 
     private sealed class EmptyWorkspace : IInspectionWorkspace
