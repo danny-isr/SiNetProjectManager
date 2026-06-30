@@ -271,6 +271,17 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNet.LegacyBridge.Tasks.ILegacyTaskNavigationSource,
                 Services.TaskNavigationLegacySource>();
 
+            // Strangler seam: lets the new Work Surface COMPLETE a task through the official path
+            // (ITaskCompletionService -> ILegacyTaskCompletionSource -> TaskCompletionCoordinator).
+            // The coordinator (registered below) is the single decision point that records the
+            // result, closes the task per policy, and routes workflow auto-advance through
+            // IWorkflowCommandService.CheckAndAutoAdvanceAsync. The UI/ViewModel never touch
+            // WorkflowEngine/WorkflowTaskOrchestrator directly. Transient to match the coordinator
+            // lifetime; the LegacyBridge LegacyTaskCompletionService degrades to an Unavailable
+            // result when this seam is absent (new app host).
+            services.AddTransient<SiNet.LegacyBridge.Tasks.ILegacyTaskCompletionSource,
+                Services.TaskCompletionLegacySource>();
+
             // Inspection migration (Phase 5): register the clean Application port adapter and the new
             // Inspection shell graph so the additive "Inspection (Preview)" developer entry point can
             // resolve InspectionShellView from this host's DI. Because ILegacyInspectionSource is bound

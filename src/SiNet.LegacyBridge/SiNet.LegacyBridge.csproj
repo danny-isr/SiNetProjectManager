@@ -18,4 +18,10 @@
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
   </ItemGroup>
 
+  <!-- Test-only visibility: lets the unit test project exercise the internal strangler adapters
+	   (e.g. LegacyTaskNavigationService) directly. Build-config only; no DB/schema impact. -->
+  <ItemGroup>
+	<InternalsVisibleTo Include="SiNet.LegacyBridge.Tests" />
+  </ItemGroup>
+
 </Project>
