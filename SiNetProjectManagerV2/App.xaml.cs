@@ -291,6 +291,17 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNet.Application.Identity.ICurrentUserContext,
                 Services.CurrentUserContextAdapter>();
 
+            // Completion-metadata port: binds the new clean ITaskCompletionMetadataResolver to the
+            // legacy declarative ReviewCompletionEventBehavior mapping so feature screens can resolve
+            // the completion event code for a BRANCHING task (where the chosen result selects between
+            // several events, e.g. RecheckPlan) without owning a mapping table and without guessing.
+            // Singleton because the mapping is static/stateless. Read-only: it only translates the
+            // (task type, result) pair into the event code the TaskCompletionCoordinator validates;
+            // it never advances workflow. The SiNet.App.Wpf preview harness leaves this unbound, in
+            // which case the shell falls back to an explicit dev input.
+            services.AddSingleton<SiNet.Application.Tasks.ITaskCompletionMetadataResolver,
+                Services.TaskCompletionMetadataResolver>();
+
             // Inspection migration (Phase 5): register the clean Application port adapter and the new
             // Inspection shell graph so the additive "Inspection (Preview)" developer entry point can
             // resolve InspectionShellView from this host's DI. Because ILegacyInspectionSource is bound

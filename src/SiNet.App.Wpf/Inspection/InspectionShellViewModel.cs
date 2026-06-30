@@ -30,6 +30,7 @@ public sealed class InspectionShellViewModel : ObservableObject
     private readonly ITaskNavigationService _taskNavigation;
     private readonly ITaskCompletionService _taskCompletion;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly ITaskCompletionMetadataResolver? _completionMetadata;
     private bool _isTaskMode;
     private bool _isBusy;
     private string? _taskStatusMessage;
@@ -57,7 +58,8 @@ public sealed class InspectionShellViewModel : ObservableObject
         InspectionReportViewModel report,
         ITaskNavigationService taskNavigation,
         ITaskCompletionService taskCompletion,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        ITaskCompletionMetadataResolver? completionMetadata = null)
     {
         Tree = tree;
         Notes = notes;
@@ -67,6 +69,7 @@ public sealed class InspectionShellViewModel : ObservableObject
         _taskNavigation = taskNavigation;
         _taskCompletion = taskCompletion;
         _currentUser = currentUser;
+        _completionMetadata = completionMetadata;
 
         Tree.PropertyChanged += async (_, e) =>
         {
@@ -182,9 +185,13 @@ public sealed class InspectionShellViewModel : ObservableObject
     /// <summary>
     /// <see langword="true"/> when the completion-event code could <b>not</b> be resolved safely from
     /// the task context, so the view must keep the explicit event-code input. <see langword="false"/>
-    /// once it has been auto-filled from <see cref="WorkSurfaceContext.CompletionEventCode"/>.
+    /// once it has been auto-filled from <see cref="WorkSurfaceContext.CompletionEventCode"/> (the
+    /// unambiguous-by-task-type case) <b>or</b> can be resolved from the currently selected result via
+    /// the completion-metadata port (the branching case, e.g. <c>RecheckPlan</c>). Never guesses: if no
+    /// source can supply an event code, the manual input stays.
     /// </summary>
-    public bool NeedsManualCompletionEventCode => !_hasResolvedCompletionEventCode;
+    public bool NeedsManualCompletionEventCode
+        => !_hasResolvedCompletionEventCode && TryResolveEventFromSelectedResult() is null;
 
     /// <summary>
     /// <see langword="true"/> when the acting user id could <b>not</b> be resolved from the host user
@@ -201,7 +208,15 @@ public sealed class InspectionShellViewModel : ObservableObject
     public string? SelectedResultCode
     {
         get => _selectedResultCode;
-        set => SetField(ref _selectedResultCode, value);
+        set
+        {
+            if (SetField(ref _selectedResultCode, value))
+            {
+                // For a branching task the chosen result is what selects the completion event, so the
+                // "needs a manual event code" state can change as soon as the selection changes.
+                OnPropertyChanged(nameof(NeedsManualCompletionEventCode));
+            }
+        }
     }
 
     /// <summary>
@@ -275,6 +290,31 @@ public sealed class InspectionShellViewModel : ObservableObject
 
         OnPropertyChanged(nameof(NeedsManualCompletionEventCode));
         OnPropertyChanged(nameof(NeedsManualActingUserId));
+    }
+
+    /// <summary>
+    /// Resolves the completion-event code from the currently selected result via the
+    /// <see cref="ITaskCompletionMetadataResolver"/> port, reusing the host's existing declarative
+    /// mapping. Returns <see langword="null"/> when no resolver/context is available, the task type is
+    /// unknown, or the <c>(task type, result)</c> pair is unsupported/ambiguous — never an invented
+    /// code. Pure: it only reads current state.
+    /// </summary>
+    private string? TryResolveEventFromSelectedResult()
+    {
+        if (_completionMetadata is null)
+            return null;
+
+        if (Context is not { TaskTypeCode: { } taskTypeCode } || string.IsNullOrWhiteSpace(taskTypeCode))
+            return null;
+
+        var resultCode = string.IsNullOrWhiteSpace(SelectedResultCode) ? null : SelectedResultCode;
+
+        // For a branching task the result is what selects the event; without a selection the resolver
+        // can only answer for the unambiguous-by-task-type case, which the context already projected.
+        if (resultCode is null && HasMultipleAllowedResultCodes)
+            return null;
+
+        return _completionMetadata.ResolveCompletionEventCode(taskTypeCode, resultCode);
     }
 
     /// <summary>

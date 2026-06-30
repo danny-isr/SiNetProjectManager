@@ -74,6 +74,7 @@ internal sealed class TaskNavigationLegacySource : ILegacyTaskNavigationSource
             IsSuccess: request.IsSuccess,
             FailureMessage: request.FailureMessage,
             CompletionEventCode: completionEventCode,
-            ActingUserId: actingUserId);
+            ActingUserId: actingUserId,
+            TaskTypeCode: request.TaskTypeCode);
     }
 }

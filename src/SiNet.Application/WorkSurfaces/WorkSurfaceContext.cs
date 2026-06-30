@@ -30,6 +30,12 @@ namespace SiNet.Application.WorkSurfaces;
 /// The authenticated host user id to record on completion, when the host can provide one;
 /// <see langword="null"/> when no authenticated user is available. <b>Runtime-only</b> — never persisted.
 /// </param>
+/// <param name="TaskTypeCode">
+/// The task type code that opened the surface, when known. It lets the surface resolve the completion
+/// event for a <b>branching</b> task (whose chosen result selects between several events) via the
+/// completion-metadata port at completion time, without owning a mapping table or guessing;
+/// <see langword="null"/> when the host did not supply it. <b>Runtime-only</b> — never persisted.
+/// </param>
 public sealed record WorkSurfaceContext(
     int? TaskId,
     int ProjectId,
@@ -38,4 +44,5 @@ public sealed record WorkSurfaceContext(
     int? PrimaryWorkTargetEntityId,
     IReadOnlyList<string> AllowedResultCodes,
     string? CompletionEventCode = null,
-    int? ActingUserId = null);
+    int? ActingUserId = null,
+    string? TaskTypeCode = null);

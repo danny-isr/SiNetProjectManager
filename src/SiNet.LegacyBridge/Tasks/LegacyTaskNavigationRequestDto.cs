@@ -24,6 +24,11 @@ namespace SiNet.LegacyBridge.Tasks;
 /// The authenticated host user id, when the host can supply one; <see langword="null"/> otherwise.
 /// <b>Runtime-only</b> (never persisted).
 /// </param>
+/// <param name="TaskTypeCode">
+/// The task type code, when the host can supply one; <see langword="null"/> otherwise. Lets the
+/// surface resolve a branching task's completion event from the selected result via the
+/// completion-metadata port. <b>Runtime-only</b> (never persisted).
+/// </param>
 public sealed record LegacyTaskNavigationRequestDto(
     int TaskId,
     int? ProjectId,
@@ -34,4 +39,5 @@ public sealed record LegacyTaskNavigationRequestDto(
     bool IsSuccess,
     string? FailureMessage,
     string? CompletionEventCode = null,
-    int? ActingUserId = null);
+    int? ActingUserId = null,
+    string? TaskTypeCode = null);

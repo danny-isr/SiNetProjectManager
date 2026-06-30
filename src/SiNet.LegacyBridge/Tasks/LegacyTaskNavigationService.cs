@@ -50,7 +50,8 @@ internal sealed class LegacyTaskNavigationService : ITaskNavigationService
             PrimaryWorkTargetEntityId: ToInt32(request.PrimaryWorkTargetEntityId),
             AllowedResultCodes: request.AllowedTaskResultCodes,
             CompletionEventCode: request.CompletionEventCode,
-            ActingUserId: request.ActingUserId);
+            ActingUserId: request.ActingUserId,
+            TaskTypeCode: request.TaskTypeCode);
     }
 
     // Legacy work-target ids are long; the new context exposes int? to match the EF entity keys the
