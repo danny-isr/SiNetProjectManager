@@ -60,6 +60,8 @@
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🧪 Inspection (Preview - מסך חדש)" Click="OpenNewInspectionPreview_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
+                <MenuItem Header="🧪 Inspection (Task - פתיחה ממשימה)" Click="OpenInspectionFromTask_Click"
+                    Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="🔗 מיפוי MasterPlan ↔ SiNet" Click="OpenMasterPlanMapping_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <Separator Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>

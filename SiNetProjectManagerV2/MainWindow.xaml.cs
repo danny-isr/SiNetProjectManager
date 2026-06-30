@@ -518,6 +518,60 @@ namespace SiNetProjectManagerV2
             previewWindow.Show();
         }
 
+        /// <summary>
+        /// Developer/preview entry point that proves the Workflow-first task-navigation vertical
+        /// slice: it opens the new <see cref="SiNet.App.Wpf.Inspection.InspectionShellView"/> for a
+        /// real <c>taskId</c> through the OFFICIAL path
+        /// (<c>ITaskNavigationService</c> → <c>ILegacyTaskNavigationSource</c> →
+        /// <c>TaskNavigationResolver</c> → <c>WorkSurfaceContext</c> →
+        /// <c>InspectionShellViewModel.OpenFromTaskAsync</c> → exact report selected). The shell binds
+        /// the live <see cref="SiNet.LegacyBridge.Tasks.ILegacyTaskNavigationSource"/> seam through
+        /// this host's DI, so a workflow-created Inspection task opens its EXACT report — never a
+        /// first/last fallback. If the resolver fails or the task has no concrete report target, the
+        /// shell's task-mode banner shows a clear error and selects nothing. This is additive and does
+        /// NOT replace the legacy floating Inspection window or become the primary production
+        /// task-open flow. The shell never mutates workflow here (navigation only — no completion yet).
+        /// </summary>
+        private void OpenInspectionFromTask_Click(object sender, RoutedEventArgs e)
+        {
+            if (!RequireAdminAccess("אין לך הרשאה לתצוגה מקדימה."))
+                return;
+
+            // Resolve the new shell view from DI so its full view-model graph (and the live
+            // ITaskNavigationService backed by the bound legacy seam) is constructed for us.
+            var shellView = App.ServiceProvider.GetRequiredService<SiNet.App.Wpf.Inspection.InspectionShellView>();
+
+            var prompt = new Dialogs.TextInputDialog(
+                "Inspection (Task)",
+                "מספר משימה (taskId) לפתיחת הדוח המדויק דרך תזרים משימות:")
+            {
+                Owner = this
+            };
+
+            if (prompt.ShowDialog() != true
+                || !int.TryParse(prompt.ResponseText?.Trim(), out var taskId)
+                || taskId <= 0
+                || shellView.DataContext is not SiNet.App.Wpf.Inspection.InspectionShellViewModel shellVm)
+            {
+                return;
+            }
+
+            // Official task-open path. The shell sets its own task-mode status/error banner from the
+            // result, so we do not interpret success/failure here (and never fall back to a guess).
+            _ = shellVm.OpenFromTaskAsync(taskId);
+
+            var taskWindow = new Window
+            {
+                Title = "Inspection (Task) — פתיחה ממשימה (קריאה בלבד)",
+                Content = shellView,
+                Owner = this,
+                Width = 1000,
+                Height = 700,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            taskWindow.Show();
+        }
+
         private void OpenProjectDecisions_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ProjectDecisionsWindow();

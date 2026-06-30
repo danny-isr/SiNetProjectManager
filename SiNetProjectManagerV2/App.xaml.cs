@@ -261,6 +261,16 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNet.LegacyBridge.Inspection.ILegacyInspectionSource,
                 Services.ReportServiceLegacyInspectionSource>();
 
+            // Strangler seam: lets the new Work Surface navigation resolve a real workflow-created
+            // task into a WorkSurfaceContext through the legacy read-only TaskNavigationResolver
+            // (registered below). Transient to match the resolver lifetime; the LegacyBridge
+            // LegacyTaskNavigationService degrades to a null context when this seam is absent (new
+            // app host), so the surface shows a clear "cannot open from task yet" message instead of
+            // guessing a target. This is the host-side fulfilment for
+            // ITaskNavigationService -> ILegacyTaskNavigationSource -> TaskNavigationResolver.
+            services.AddTransient<SiNet.LegacyBridge.Tasks.ILegacyTaskNavigationSource,
+                Services.TaskNavigationLegacySource>();
+
             // Inspection migration (Phase 5): register the clean Application port adapter and the new
             // Inspection shell graph so the additive "Inspection (Preview)" developer entry point can
             // resolve InspectionShellView from this host's DI. Because ILegacyInspectionSource is bound
