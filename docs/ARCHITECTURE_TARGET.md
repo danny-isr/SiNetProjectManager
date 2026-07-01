@@ -9,6 +9,10 @@ This document describes the **target** clean architecture for the SiNet ecosyste
 rules every new project/file must follow. It is the source of truth for the refactoring;
 when code and this document disagree, fix the document first, then the code.
 
+> **Domain target docs:** per-domain target-state documents refine this architecture for a specific
+> area. Project domain / Project Context: [`PROJECTS.md`](PROJECTS.md) (implemented by
+> [`PROJECT_CONTEXT_MIGRATION.md`](PROJECT_CONTEXT_MIGRATION.md)).
+
 ---
 
 ## 1. Purpose

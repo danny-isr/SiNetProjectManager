@@ -9,7 +9,8 @@
 > behind them. We do **not** redesign the UX and we do **not** change DB / schema / migrations /
 > `ModelSnapshot` / EF mappings as part of this work.
 >
-> Related: `docs/MIGRATION_MAP.md` (workflow-first process model), `docs/ARCHITECTURE_TARGET.md`.
+> Related: `docs/MIGRATION_MAP.md` (workflow-first process model), `docs/ARCHITECTURE_TARGET.md`,
+> [`docs/PROJECTS.md`](./PROJECTS.md) (Project domain / Project Context target state).
 
 ## Status legend
 

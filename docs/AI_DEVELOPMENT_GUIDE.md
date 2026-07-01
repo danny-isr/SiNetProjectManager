@@ -3,6 +3,9 @@
 > Audience: AI assistants and developers working inside `SiNet.sln`.
 > Read together with [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md) and
 > [`MIGRATION_MAP.md`](./MIGRATION_MAP.md).
+>
+> Domain target docs (active source of truth): [`PROJECTS.md`](./PROJECTS.md) — the Project domain /
+> Project Context target state (implemented by [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md)).
 
 The goal of the new structure is to make the codebase **predictable for AI-assisted work**:
 small files, clear layers, explicit interfaces, and modular wiring.

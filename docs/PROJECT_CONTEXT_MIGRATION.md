@@ -1,17 +1,27 @@
 # Project Context Migration — Cross-Application Project Selector & Current Project
 
-> **Status:** Design (planning slice) — 2026-06-27
+> **Status:** Migration plan (planning slice) — 2026-06-27
 > **Working branch:** `SiWorkNet10`
-> **Read together with:** [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md),
+> **Target document (source of truth):** [`PROJECTS.md`](./PROJECTS.md)
+> **Read together with:** [`PROJECTS.md`](./PROJECTS.md),
+> [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md),
 > [`MIGRATION_MAP.md`](./MIGRATION_MAP.md), [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md),
 > [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md).
 >
-> **Scope of this document:** design only. No implementation is performed by this slice. No DB /
-> schema / migration / `ModelSnapshot` / `DbContext` / `DbSet` changes are proposed or made.
+> **This migration plan implements the target defined in [`PROJECTS.md`](./PROJECTS.md).**
+> **If this migration plan conflicts with `PROJECTS.md`, `PROJECTS.md` wins and this migration plan
+> must be updated.**
+>
+> **Scope of this document:** migration/sequencing only. The *target state* of the Project domain is
+> defined in [`PROJECTS.md`](./PROJECTS.md); this document describes **how** to get there (order,
+> slices, legacy mapping). No implementation is performed by this slice. No DB / schema / migration /
+> `ModelSnapshot` / `DbContext` / `DbSet` changes are proposed or made.
 
-This document defines the **target** architecture for the app-wide **Project Context / Project
-Selector** mechanism: how a project is searched, selected, remembered as "current", and observed by
-every Work Surface (Email, Inspection, ProjectWork, Tasks, Workflow) and the MainWindow title/header.
+This document is the **migration plan** for the app-wide **Project Context / Project Selector**
+mechanism: how the target described in [`PROJECTS.md`](./PROJECTS.md) is reached — how a project is
+searched, selected, remembered as "current", and observed by every Work Surface (Email, Inspection,
+ProjectWork, Tasks, Workflow) and the MainWindow title/header. **`PROJECTS.md` is the authoritative
+target-state description; this document sequences the work to implement it.**
 
 It treats project selection as **cross-application infrastructure**, not an Email-only control.
 
@@ -19,7 +29,9 @@ It treats project selection as **cross-application infrastructure**, not an Emai
 
 ## 1. Active documentation alignment
 
-This design is bound by the four active docs at repo-root `docs/`. Verified during this slice:
+The authoritative target for this migration is [`PROJECTS.md`](./PROJECTS.md) (the active target-state
+Project domain document). This plan is additionally bound by the active architecture docs at repo-root
+`docs/`. Verified during this slice:
 
 | Rule (source) | This design complies by… |
 | --- | --- |

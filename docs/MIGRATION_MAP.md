@@ -11,6 +11,9 @@ exist/updated, and its row below is marked **✅ Replaced**.
 > **Companion architecture docs:**
 > [`ARCHITECTURE_TARGET.md`](ARCHITECTURE_TARGET.md) (process-control model, ports, dependency rules) ·
 > [`AI_DEVELOPMENT_GUIDE.md`](AI_DEVELOPMENT_GUIDE.md) (coding rules for the refactor).
+>
+> **Domain target docs:** [`PROJECTS.md`](PROJECTS.md) (Project domain / Project Context target state,
+> implemented by [`PROJECT_CONTEXT_MIGRATION.md`](PROJECT_CONTEXT_MIGRATION.md)).
 
 ---
 
