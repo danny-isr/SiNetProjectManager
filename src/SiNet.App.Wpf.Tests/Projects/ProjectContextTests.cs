@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.Application.Projects;
@@ -116,5 +117,103 @@ public sealed class ProjectContextTests
 
         Assert.Contains("1042", sut.ActiveProjectDisplay);
         Assert.Contains("North Towers", sut.ActiveProjectDisplay);
+    }
+
+    [Fact]
+    public async Task Two_selectors_sharing_one_context_observe_the_same_selection()
+    {
+        // The core of the DI-sharing slice: when two selectors share ONE ICurrentProjectContext,
+        // selecting a project in one is observed by the other (this is what DI singleton guarantees).
+        var projects = new[] { Project(3, "1003", "Delta"), Project(4, "1004", "Echo") };
+        var sharedContext = new InMemoryCurrentProjectContext();
+
+        var selectorA = new ProjectSelectorViewModel(new StubProjectQueryService(projects), sharedContext);
+        var selectorB = new ProjectSelectorViewModel(new StubProjectQueryService(projects), sharedContext);
+        await selectorA.LoadAsync();
+        await selectorB.LoadAsync();
+
+        selectorA.SelectedProject = selectorA.Projects.First(p => p.ProjectId == 4);
+
+        Assert.NotNull(selectorB.SelectedProject);
+        Assert.Equal(4, selectorB.SelectedProject!.ProjectId);
+        Assert.Equal(4, sharedContext.CurrentProject!.ProjectId);
+    }
+
+    [Fact]
+    public async Task EmailWindowViewModel_observes_external_context_change()
+    {
+        // The Email VM must react to a change made DIRECTLY on the shared context by some other
+        // surface (not through its own selector) — proving it is an observer, not the owner.
+        var projects = new[] { Project(5, "1005", "Foxtrot") };
+        var sharedContext = new InMemoryCurrentProjectContext();
+        var sut = new EmailWindowViewModel(new StubProjectQueryService(projects), sharedContext);
+        await sut.ProjectSelector.LoadAsync();
+
+        await sharedContext.SetCurrentProjectAsync(Project(5, "1005", "Foxtrot"));
+
+        Assert.Contains("1005", sut.ActiveProjectDisplay);
+        Assert.Contains("Foxtrot", sut.ActiveProjectDisplay);
+    }
+
+    [Fact]
+    public async Task Selecting_the_same_project_twice_does_not_fire_duplicate_events()
+    {
+        // Re-selecting the same project (via the selector path) must not re-publish: the context
+        // de-dupes by ProjectId, so subscribers are not notified a second time.
+        var projects = new[] { Project(6, "1006", "Golf") };
+        var sharedContext = new InMemoryCurrentProjectContext();
+        var raised = 0;
+        sharedContext.CurrentProjectChanged += (_, _) => raised++;
+
+        var sut = new ProjectSelectorViewModel(new StubProjectQueryService(projects), sharedContext);
+        await sut.LoadAsync();
+
+        sut.SelectedProject = sut.Projects.Single(); // first select -> raises once
+        sut.SelectedProject = sut.Projects.Single(); // same project -> no new event
+
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public void Di_registration_shares_one_current_project_context_singleton()
+    {
+        // End-to-end DI check: AddSiNetProjectContextFake registers ICurrentProjectContext as a
+        // singleton, so every resolution (and every EmailWindowViewModel) shares the same instance.
+        using var provider = new ServiceCollection()
+            .AddSiNetProjectContextFake()
+            .BuildServiceProvider();
+
+        var context1 = provider.GetRequiredService<ICurrentProjectContext>();
+        var context2 = provider.GetRequiredService<ICurrentProjectContext>();
+        Assert.Same(context1, context2);
+
+        // Transient view models each resolve, but both observe the SAME singleton context.
+        using var vmA = provider.GetRequiredService<EmailWindowViewModel>();
+        using var vmB = provider.GetRequiredService<EmailWindowViewModel>();
+        Assert.NotSame(vmA, vmB);
+
+        // The factory is available and resolves the shared services.
+        Assert.NotNull(provider.GetRequiredService<IEmailWindowFactory>());
+    }
+
+    [Fact]
+    public async Task Singleton_is_scoped_per_di_container_not_across_containers()
+    {
+        // Documents the scope contract (see docs/PROJECTS.md §4 "Scope"): the singleton lifetime is
+        // per DI container/process, NOT global. Two separate containers stand in for two separate
+        // running app instances — they get independent contexts, and a selection in one must not
+        // leak into the other. No cross-process persistence exists.
+        using var appInstanceA = new ServiceCollection().AddSiNetProjectContextFake().BuildServiceProvider();
+        using var appInstanceB = new ServiceCollection().AddSiNetProjectContextFake().BuildServiceProvider();
+
+        var contextA = appInstanceA.GetRequiredService<ICurrentProjectContext>();
+        var contextB = appInstanceB.GetRequiredService<ICurrentProjectContext>();
+        Assert.NotSame(contextA, contextB);
+
+        await contextA.SetCurrentProjectAsync(Project(7, "1007", "Hotel"));
+
+        // Instance A has its own Current Project; instance B is unaffected (independent by design).
+        Assert.Equal(7, contextA.CurrentProject!.ProjectId);
+        Assert.Null(contextB.CurrentProject);
     }
 }

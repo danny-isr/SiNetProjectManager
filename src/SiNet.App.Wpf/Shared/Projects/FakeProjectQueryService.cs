@@ -3,27 +3,20 @@ using SiNet.Application.Projects;
 namespace SiNet.App.Wpf.Shared.Projects;
 
 /// <summary>
-/// Fake/in-memory <see cref="IProjectQueryService"/> for the first Project Context slice
+/// Fake/in-memory <see cref="IProjectQueryService"/> retained for design-time and tests
 /// (see <c>docs/PROJECT_CONTEXT_MIGRATION.md</c>).
 /// <para>
 /// <b>Fake data only.</b> It serves a small hard-coded list of <see cref="ProjectSummaryDto"/> and does
-/// NOT touch the database, EF, or any external system. It reproduces the shared selector's parity
-/// behavior so the UI feels real: results are sorted by project number descending, dummy project
-/// numbers are excluded, and the free-text / job-type / status / user / include-closed filters are
-/// applied. A real <c>SiNet.Infrastructure.Sql</c> (or <c>SiNet.LegacyBridge</c>) implementation
-/// replaces this later behind the same interface.
+/// NOT touch the database, EF, or any external system. Filtering/sorting is delegated to the shared
+/// <see cref="ProjectSummaryQuery"/> helper, so it reproduces the exact selector parity behavior used by
+/// the real <c>SiNet.Infrastructure.Sql</c> source: results are sorted by project number descending,
+/// dummy project numbers are excluded, and the free-text / job-type / status / include-closed filters are
+/// applied. At runtime the real <c>SiNet.Infrastructure.Sql</c> implementation is registered instead of
+/// this fake (behind the same interface); this type remains only for design-time/no-database hosts.
 /// </para>
 /// </summary>
 public sealed class FakeProjectQueryService : IProjectQueryService
 {
-    // Dummy/reserved project numbers that must never appear in the selector (parity with legacy
-    // ExcludedNumbers behavior). Kept as strings because the DTO number is a display string.
-    private static readonly HashSet<string> ExcludedNumbers = new(StringComparer.Ordinal)
-    {
-        "0",
-        "9999",
-    };
-
     private static readonly IReadOnlyList<ProjectSummaryDto> Projects =
     [
         new(1042, "1042", "\u05DE\u05D2\u05D3\u05DC\u05D9 \u05D4\u05E6\u05E4\u05D5\u05DF", "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1", "\u05D0\u05D1\u05E0\u05D9 \u05D1\u05E0\u05D9\u05D9\u05DF \u05D1\u05E2\u0022\u05DE", "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", "\u05E4\u05E2\u05D9\u05DC", "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", true),
@@ -43,38 +36,12 @@ public sealed class FakeProjectQueryService : IProjectQueryService
 
         ArgumentNullException.ThrowIfNull(query);
 
-        IEnumerable<ProjectSummaryDto> results = Projects
-            .Where(p => !ExcludedNumbers.Contains(p.ProjectNumber));
+        // Delegate to the shared parity filter/sort so the fake behaves exactly like the real
+        // SiNet.Infrastructure.Sql source (dummy-number exclusion, active/include-closed,
+        // job-type/status/free-text filters, number-descending ordering).
+        var ordered = ProjectSummaryQuery.Apply(Projects, query);
 
-        if (!query.IncludeClosed)
-        {
-            results = results.Where(p => p.IsActive);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.JobType))
-        {
-            results = results.Where(p => string.Equals(p.JobType, query.JobType, StringComparison.Ordinal));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Status))
-        {
-            results = results.Where(p => string.Equals(p.Status, query.Status, StringComparison.Ordinal));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.SearchText))
-        {
-            var text = query.SearchText.Trim();
-            results = results.Where(p => MatchesText(p, text));
-        }
-
-        // Parity ordering: project number descending (newest first). Numbers are display strings, so
-        // parse for a stable numeric sort and fall back to ordinal for anything non-numeric.
-        var ordered = results
-            .OrderByDescending(p => long.TryParse(p.ProjectNumber, out var n) ? n : long.MinValue)
-            .ThenByDescending(p => p.ProjectNumber, StringComparer.Ordinal)
-            .ToList();
-
-        return Task.FromResult<IReadOnlyList<ProjectSummaryDto>>(ordered);
+        return Task.FromResult(ordered);
     }
 
     /// <inheritdoc />
@@ -87,10 +54,4 @@ public sealed class FakeProjectQueryService : IProjectQueryService
         var match = Projects.FirstOrDefault(p => p.ProjectId == projectId);
         return Task.FromResult(match);
     }
-
-    private static bool MatchesText(ProjectSummaryDto p, string text) =>
-        p.ProjectNumber.Contains(text, StringComparison.OrdinalIgnoreCase)
-        || p.ProjectName.Contains(text, StringComparison.OrdinalIgnoreCase)
-        || (p.PlaceName?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (p.CompanyName?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false);
 }

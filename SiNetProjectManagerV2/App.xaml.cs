@@ -921,6 +921,15 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.IProjectDecisionService, SiNetSQL.Services.ProjectDecisionService>();
             services.AddTransient<ProjectDecisionsViewModel>();
 
+            // Shared, application-wide Project Context for the new WPF surfaces.
+            // First register the REAL read-only IProjectQueryService (SQL-backed, DTO-only) — it reuses
+            // the IDbContextFactory<SiNetSQLDbContext> registered by AddSiNetSql above. Then register the
+            // shell pieces (a single ICurrentProjectContext + Email window factory) via the runtime path,
+            // so the Email selector loads real projects while every surface observes the SAME Current
+            // Project. Read-only: no DB writes, no EF entities in WPF, no email filtering, no workflow mutation.
+            SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
+            SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
+
             return services.BuildServiceProvider();
         }
 

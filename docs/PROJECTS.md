@@ -87,6 +87,37 @@ Rules (target):
 - It **de-duplicates changes by `ProjectId`** — setting the same project id again does not re-raise the
   event.
 
+**Scope (target):**
+
+Current Project is **application-instance scoped**.
+It is shared across windows in the same running app instance.
+It is not shared across separate app instances.
+Opening the application twice allows each instance to work on a different Current Project.
+
+`ICurrentProjectContext` is a singleton **within one running application process**, not a machine-wide
+or user-wide singleton:
+
+```plaintext
+One running app instance
+→ one DI ServiceProvider
+→ one singleton ICurrentProjectContext
+→ all windows/surfaces in that app instance share the same Current Project
+
+Two separate running app instances
+→ two separate processes
+→ two separate DI ServiceProviders
+→ two separate singleton ICurrentProjectContext instances
+→ each app instance may have a different Current Project
+```
+
+Rules:
+
+- **Do not** persist, broadcast, or synchronize Current Project across separate application instances.
+- **Do not** store Current Project in DB, settings, registry, file, named pipe, shared memory, or any
+  other cross-process mechanism unless a future requirement explicitly says so (see §15).
+- The "singleton" lifetime is **per DI container/process**, not global across processes. Two processes
+  are two independent Current Projects by design.
+
 Threading/consumption (target):
 
 - The change event may be raised off the UI thread; **WPF subscribers marshal to the Dispatcher**.
@@ -142,9 +173,9 @@ Email/ProjectWork filter strip):
 
 | Filter | Meaning | Maps to |
 | --- | --- | --- |
-| **Job Type** | Restrict to a project type / discipline (legacy `JobType` / ProjectType). | `ProjectSearchQuery.JobType`, `ProjectSummaryDto.JobType` |
+| **Job Type** | Restrict to a project type / discipline (legacy `JobType` / ProjectType). | `ProjectSearchQuery.JobType`, `ProjectSummaryDto.JobType` — *partial*: matches the first surfaced type title (see migration §8a). |
 | **Status** | Restrict by project status/state. | `ProjectSearchQuery.Status`, `ProjectSummaryDto.Status` |
-| **User** | Restrict by assigned/responsible user. | `ProjectSearchQuery.AssignedUserId`, `ProjectSummaryDto.AssignedUserName` |
+| **User** | Restrict by assigned/responsible user. | `ProjectSearchQuery.AssignedUserId`, `ProjectSummaryDto.AssignedUserName` — *deferred* in the real source: the DTO carries a user *name*, not an id, so `AssignedUserId` is not applied yet (see migration §8a). |
 | **Include closed / active** | Include or hide closed projects. | `ProjectSearchQuery.IncludeClosed`, `ProjectSummaryDto.IsActive` |
 | **Free-text search** | number / title / city / client. | `ProjectSearchQuery.SearchText` |
 
@@ -246,6 +277,24 @@ CurrentProjectChanged
 > `ActiveProjectContext.ActiveProjectChanged` and updates its `Title` accordingly. The target keeps
 > this exact direction over `ICurrentProjectContext.CurrentProjectChanged`.
 
+> **Implementation status (as of the shell-title slice):** `ICurrentProjectContext` is registered as a
+> **singleton per running app instance** (one DI `ServiceProvider` per process — see §4 *Scope* and §12)
+> shared by all surfaces in that instance. The **live shell** `SiNetProjectManagerV2/MainWindow` is now
+> the single subscriber that renders the Current Project into the window `Title`: it resolves
+> `ICurrentProjectContext` from `App.ServiceProvider`, subscribes to `CurrentProjectChanged`, seeds the
+> title from any already-selected project, marshals updates to the WPF `Dispatcher`, and unsubscribes on
+> close. Title text is produced by the pure `SiNet.App.Wpf/Shared/Projects/ProjectTitleFormatter`
+> (`"{default} - {ProjectName}"`, or the default when the project/name is `null`), which is unit-tested.
+> Feature windows (`EmailWindowViewModel`, `ProjectSelectorViewModel`, `EmailWindowView`) do **not** set
+> the global title — they change the Current Project and the shell reacts.
+>
+> **Temporary coexistence (explicit):** the legacy `ActiveProjectContext.ActiveProjectChanged` handler is
+> **intentionally kept** and is not removed in this slice. Both the legacy and the new handler route
+> through the **same** `ProjectTitleFormatter` and the same `_defaultTitle`, so there is one title format
+> and no conflicting/duplicate rendering. `ActiveProjectContext` remains the legacy source; a later slice
+> may unify the two once the new context drives real project data. The clean-host
+> `src/SiNet.App.Wpf/MainWindow` remains a scaffold (its title is static) and is not the live shell.
+
 ---
 
 ## 12. Layering and ports
@@ -280,14 +329,17 @@ Intended shapes (defined in detail in the migration plan; summarized here as the
 SiNet.App.Wpf/Shared/Projects/
 ```
 
-**Real DB source** is added later behind:
+**Real DB source** (implemented, read-only) lives behind:
 
 ```
 SiNet.Infrastructure.Sql   (via IDbContextFactory<>)
 ```
 
-or a **`SiNet.LegacyBridge`** adapter if it is faster to delegate to existing legacy project loading
-during migration.
+`SiNetSQL.Services.Projects.ProjectQueryService` is the real read-only `IProjectQueryService`; it maps
+the `Project` EF entity to `ProjectSummaryDto` and applies the shared `ProjectSummaryQuery` parity
+filters/order. See migration plan **§8a** for the field mapping and the supported-vs-deferred filters.
+(The `SiNet.LegacyBridge` adapter path was considered but not used — `Infrastructure.Sql` already owns
+the EF model and factory.)
 
 Hard layering rules (from `ARCHITECTURE_TARGET.md` §3 / `AI_DEVELOPMENT_GUIDE.md` §2):
 
@@ -336,7 +388,9 @@ These require a decision/approval before or during implementation:
 
 1. **Persistence of Current Project.** Should the last selected project be remembered across app
    restarts? Target default: **runtime-only, not persisted** (§4). Persisting would be a new
-   requirement and, if it needs storage, a separate schema/migration decision.
+   requirement and, if it needs storage, a separate schema/migration decision. Note this is **distinct
+   from cross-instance sharing**, which is explicitly out of scope per §4 *Scope*: Current Project is
+   per running app instance and is never synchronized across processes.
 2. **Selector data source for early slices.** Start with a **fake/in-memory** `IProjectQueryService`
    (recommended for the first vertical slice), then a real `Infrastructure.Sql` implementation vs. a
    `LegacyBridge` adapter delegating to existing legacy project loading — which first?

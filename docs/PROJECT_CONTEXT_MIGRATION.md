@@ -363,7 +363,73 @@ only if legacy host files are touched); confirm no DB/migration/schema changes.
 
 ---
 
-## 9. Guardrails
+## 8a. Real read-only source slice (implemented)
+
+> **Status:** Implemented — replaces the fake list with a real, **read-only** `IProjectQueryService`
+> behind the existing port. Read-only only: no writes, no schema, no migrations, no email filtering,
+> no workflow mutation.
+
+### Chosen path: `SiNet.Infrastructure.Sql` (Option A)
+
+The real implementation is `SiNetSQL.Services.Projects.ProjectQueryService`
+(`src/SiNet.Infrastructure.Sql/Services/Projects/ProjectQueryService.cs`), reading via
+`IDbContextFactory<SiNetSQLDbContext>` with `AsNoTracking()`.
+
+Chosen over the `LegacyBridge` adapter (Option B) because `Infrastructure.Sql` **already** owns the EF
+model, the `IDbContextFactory<SiNetSQLDbContext>` registration, and an existing read-only service
+precedent (`WorkflowQueryService`). It is the smallest, safest change that keeps the read side inside the
+persistence module and matches `ARCHITECTURE_TARGET.md` / `AI_DEVELOPMENT_GUIDE.md`. The legacy authority
+mirrored is `SiNetProjectManagerV2/Dialogs/ProjectSelectorDialog.LoadProjects` (load `Where(NameAndNumber != null)`,
+include Place/Company, `OrderByDescending(Number)`, `AsNoTracking()`).
+
+### Field mapping (`Project` entity → `ProjectSummaryDto`)
+
+| DTO field | Source | Notes |
+| --- | --- | --- |
+| `ProjectId` | `Project.Id` | |
+| `ProjectNumber` | `Project.Number` (`float?`) | Formatted to an integer string when there is no fractional part (e.g. `1042`), else invariant round-trip; empty when null. |
+| `ProjectName` | `Project.Title` | `null` → empty string. |
+| `PlaceName` | `Project.Place?.Title` | Blank → `null`. |
+| `CompanyName` | `Project.Company?.Title` | Blank → `null`. |
+| `Status` | `Project.ProjectStatus?.Title` | Blank → `null`. |
+| `JobType` | first `Project.TypeOfProjectInProjects[].ProjectType.Title` | Display-only; see deferred note below. |
+| `AssignedUserName` | `Project.Worker` | Display-only string. |
+| `IsActive` | `Project.EndOfProject != true` | Used by the active / IncludeClosed filter. |
+
+Parity filtering/ordering is applied **after** projection by the shared, DB-free
+`SiNet.Application.Projects.ProjectSummaryQuery`, so the fake and real sources behave identically.
+
+### Filters supported now
+
+- Free-text search across number / name / place / company (case-insensitive, trimmed).
+- `Status` filter (exact match on the surfaced status title).
+- `JobType` filter (exact match on the surfaced job-type title — display value; see deferred note).
+- `IncludeClosed` / active filter (`IsActive` from `EndOfProject`).
+- Default sort by project number descending (numeric).
+- Dummy/reserved project-number exclusion (`0`, `9999`) — parity with legacy `ExcludedNumbers`.
+
+### Filters deferred / partial (documented, not guessed)
+
+- **`AssignedUserId` (user filter):** **not applied.** The display DTO carries a user *name*
+  (`Project.Worker`), not a stable user id, so filtering by `AssignedUserId` is intentionally ignored
+  (rows are retained, never silently dropped). A real user-id filter needs an id on the DTO/query
+  projection and is a later slice.
+- **`JobType` filter:** **partial.** A project can have several types (`TypeOfProjectInProject`); the DTO
+  surfaces only the *first* type's title, and the scalar `JobType` filter matches that display value.
+  Multi-type-aware filtering is deferred.
+
+### DI / runtime registration
+
+- `AddSiNetProjectQuerySql()` (`src/SiNet.Infrastructure.Sql/ProjectQueryServiceCollectionExtensions.cs`)
+  registers the real `IProjectQueryService`. It is called by the composition root
+  (`SiNetCompositionExtensions.AddSiNet`) and directly by the legacy host.
+- The shell pieces (singleton `ICurrentProjectContext`, `EmailWindowViewModel`, `IEmailWindowFactory`)
+  moved to a real `AddSiNetProjectContext()`; `AddSiNetProjectContextFake()` remains for
+  design-time/tests (it additionally registers `FakeProjectQueryService`).
+- `ICurrentProjectContext` remains a **singleton per running app instance**.
+
+---
+
 
 **Do NOT:**
 

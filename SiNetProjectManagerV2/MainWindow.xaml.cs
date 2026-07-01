@@ -14,6 +14,8 @@ using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiNetSQL.Data;
 using SiOffice.GoogleConnector;
+using SiNet.App.Wpf.Shared.Projects;
+using SiNet.Application.Projects;
 namespace SiNetProjectManagerV2
 {
     public partial class MainWindow : BaseWindow
@@ -29,6 +31,14 @@ namespace SiNetProjectManagerV2
         // and any embedded WebView2 instances keep their state across navigation.
         private ProjectWorkView? _cachedProjectWorkView;
         private EmailManagementView? _cachedEmailManagementView;
+
+        // New clean-architecture Current Project context (fake/in-memory this slice).
+        // The shell is the single subscriber that renders the Current Project into the window
+        // Title (docs/PROJECTS.md §11). Resolved from DI when available; null-safe if unregistered.
+        // This COEXISTS with the legacy ActiveProjectContext for now — both feed the same title via
+        // ProjectTitleFormatter so there is no conflicting/duplicate title format. ActiveProjectContext
+        // is intentionally NOT removed in this slice.
+        private readonly ICurrentProjectContext? _currentProjectContext;
 
         /// <summary>
         /// Returns the cached <see cref="EmailManagementViewModel"/> if it has
@@ -48,8 +58,24 @@ namespace SiNetProjectManagerV2
             InitializeComponent(); // חובה כדי לטעון את ה־XAML
             Title = _defaultTitle;
 
-            // Dynamic title: reflect the currently active project
+            // Dynamic title: reflect the currently active project (legacy source).
             ActiveProjectContext.Instance.ActiveProjectChanged += OnActiveProjectChanged;
+
+            // New clean-architecture source: the shared singleton Current Project context.
+            // The shell is the single place that renders the Current Project into the title
+            // (docs/PROJECTS.md §11). Resolve defensively — if the fake module is not registered
+            // (or the provider is not ready), the window still works and keeps the default title.
+            _currentProjectContext = App.ServiceProvider?.GetService<ICurrentProjectContext>();
+            if (_currentProjectContext is not null)
+            {
+                _currentProjectContext.CurrentProjectChanged += OnCurrentProjectChanged;
+
+                // Seed the title from any project already selected before this window opened.
+                if (_currentProjectContext.CurrentProject is not null)
+                {
+                    Title = ProjectTitleFormatter.Format(_defaultTitle, _currentProjectContext.CurrentProject);
+                }
+            }
 
 #if DEBUG
             // DEBUG-only dev data reset: visible only to allowed Windows users.
@@ -79,9 +105,27 @@ namespace SiNetProjectManagerV2
         {
             Dispatcher.Invoke(() =>
             {
-                Title = project != null
-                    ? $"{_defaultTitle} - {project.Title}"
-                    : _defaultTitle;
+                // Route through the shared formatter so legacy and new sources produce an identical title.
+                Title = ProjectTitleFormatter.Format(_defaultTitle, project?.Title);
+            });
+        }
+
+        /// <summary>
+        /// Renders the new clean-architecture Current Project (<see cref="ICurrentProjectContext"/>) into
+        /// the window <see cref="Window.Title"/>. The shell is the single subscriber that owns the title
+        /// (docs/PROJECTS.md §11): feature windows only change the Current Project; this reacts.
+        /// <para>
+        /// <see cref="ICurrentProjectContext.CurrentProjectChanged"/> may fire off the UI thread, so the
+        /// update is marshaled to the WPF <see cref="Dispatcher"/>. The context already de-duplicates by
+        /// <c>ProjectId</c>, so re-selecting the same project does not re-raise the event and cannot cause
+        /// a duplicate title update.
+        /// </para>
+        /// </summary>
+        private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                Title = ProjectTitleFormatter.Format(_defaultTitle, e.Project);
             });
         }
 
@@ -107,6 +151,13 @@ namespace SiNetProjectManagerV2
                     e.Cancel = true;
                     return;
                 }
+            }
+
+            // Detach the shell title subscriber. The Current Project context is an app-instance singleton
+            // that outlives this window, so leaving the handler attached would keep MainWindow alive.
+            if (_currentProjectContext is not null)
+            {
+                _currentProjectContext.CurrentProjectChanged -= OnCurrentProjectChanged;
             }
 
             base.OnClosing(e);
@@ -560,13 +611,15 @@ namespace SiNetProjectManagerV2
             if (!RequireAdminAccess("אין לך הרשאה לתצוגה מקדימה."))
                 return;
 
-            // The visual clone is a self-contained Window with a parameterless constructor that loads
-            // its own fake/design-time data. No DI, no DataContext wiring, no live services.
-            var cloneWindow = new SiNet.App.Wpf.Surfaces.Email.EmailWindowView
-            {
-                Owner = this,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
-            };
+            // Resolve the window through the shared IEmailWindowFactory so every Email window binds to the
+            // SAME application-wide ICurrentProjectContext (singleton). Selecting a project in one window is
+            // therefore observed by the others. Still fake-data only: no DB, no Gmail, no workflow, no email
+            // filtering — the selector uses the fake IProjectQueryService. This does NOT replace the legacy
+            // EmailManagementView and is not promoted to production UX.
+            var factory = App.ServiceProvider.GetRequiredService<SiNet.App.Wpf.Shared.Projects.IEmailWindowFactory>();
+            var cloneWindow = factory.Create();
+            cloneWindow.Owner = this;
+            cloneWindow.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             cloneWindow.Show();
         }
 
