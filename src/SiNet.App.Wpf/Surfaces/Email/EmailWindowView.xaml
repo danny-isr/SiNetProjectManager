@@ -1,0 +1,503 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Email.EmailWindowView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
+        mc:Ignorable="d"
+        Title="{Binding Title}"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        Width="1200" Height="720"
+        MinWidth="820" MinHeight="480"
+        FlowDirection="RightToLeft"
+        d:DataContext="{d:DesignInstance Type=local:EmailWindowViewModel, IsDesignTimeCreatable=True}">
+
+    <!--
+        VISUAL CLONE of the legacy SiNetProjectManagerV2/WPFUserControl/EmailManagementView.xaml.
+        Structure (top status + project/Gmail filters strip, selected-project info strip, and the 3-pane
+        content area: email list on the right, email viewer in the center, context/calendar placeholder
+        on the left) is reproduced for visual parity. Commands are stubbed in EmailWindowViewModel
+        ("not wired yet"); data is fake/design-time only (EmailWindowDesignData). No DB / Gmail / Outlook
+        / file-system / project-linking / task-creation / workflow logic lives behind this window.
+        The old EmailManagementView remains the visual reference / legacy source; this is the clone target.
+    -->
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Small toolbar/action button chrome (mirrors the legacy filter/action buttons). -->
+        <Style TargetType="Button" x:Key="ActionButton">
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#CCC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#90CAF9" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="ContentBorder" Background="#F5F5F5" CornerRadius="8" Margin="8" ClipToBounds="True">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black" />
+        </Border.Effect>
+
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- HEADER CHROME (borderless-window drag strip + close), mirrors the floating clone pattern. -->
+            <Grid Grid.Row="0"
+                  x:Name="HeaderBar"
+                  Background="#1976D2"
+                  MouseLeftButtonDown="Header_MouseLeftButtonDown"
+                  Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="10,6">
+                    <TextBlock Text="&#x2709;" FontSize="16" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="&#x2715;"
+                        Foreground="White"
+                        FontSize="14"
+                        Width="34"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        Cursor="Hand"
+                        Click="CloseButton_Click"
+                        ToolTip="&#x05E1;&#x05D2;&#x05D5;&#x05E8;" />
+            </Grid>
+
+            <!-- ROW 0 (of source): Status bar + project/Gmail filters (combined). -->
+            <Border Grid.Row="1"
+                    Background="#F5F5F5"
+                    Padding="10,5"
+                    Margin="0,0,0,8"
+                    BorderBrush="#E0E0E0"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Status text + error/message area. -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#x2139;" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#1976D2" />
+                            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Foreground="#555" />
+                        </StackPanel>
+
+                        <!-- Pagination placeholder (visual only). -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,20,0" VerticalAlignment="Center">
+                            <Button Content="&#x25B6;" Style="{StaticResource ActionButton}" ToolTip="\u05D4\u05E7\u05D5\u05D3\u05DD" />
+                            <TextBlock Text="1 / 3" VerticalAlignment="Center" Margin="4,0" Foreground="#666" />
+                            <Button Content="&#x25C0;" Style="{StaticResource ActionButton}" ToolTip="\u05D4\u05D1\u05D0" />
+                        </StackPanel>
+
+                        <!-- Refresh + calendar toggle + help. -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="&#x1F504;"
+                                    Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    ToolTip="\u05E8\u05E2\u05E0\u05DF" />
+                            <Button Content="&#x1F4C5;" Style="{StaticResource ActionButton}" ToolTip="\u05D9\u05D5\u05DE\u05DF" />
+                            <Button Content="?" Style="{StaticResource ActionButton}" ToolTip="\u05E2\u05D6\u05E8\u05D4" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Project selector + Job Type / Status / User filters + Gmail search + dates. -->
+                    <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <ComboBox Width="350"
+                                  Margin="0,0,10,0"
+                                  ItemsSource="{Binding Folders}"
+                                  SelectedItem="{Binding SelectedFolder}"
+                                  DisplayMemberPath="Name"
+                                  ToolTip="\u05D1\u05D7\u05E8 \u05EA\u05D9\u05E7\u05D9\u05D9\u05D4 / \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" />
+
+                        <Button Content="&#x1F504;"
+                                Command="{Binding RefreshCommand}"
+                                Style="{StaticResource ActionButton}"
+                                Width="28"
+                                ToolTip="\u05E8\u05E2\u05E0\u05DF \u05E8\u05E9\u05D9\u05DE\u05D4" />
+
+                        <ComboBox Width="140"
+                                  Margin="0,0,10,0"
+                                  ItemsSource="{Binding StatusOptions}"
+                                  SelectedItem="{Binding SelectedStatus}"
+                                  ToolTip="\u05E1\u05D8\u05D8\u05D5\u05E1" />
+
+                        <TextBlock Text="&#x1F50E; Gmail"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0,6,0"
+                                   FontWeight="SemiBold" />
+
+                        <TextBox Width="200"
+                                 Height="24"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,6,0"
+                                 ToolTip="\u05D7\u05D9\u05E4\u05D5\u05E9 \u05D7\u05D5\u05E4\u05E9\u05D9" />
+
+                        <DatePicker Width="110" Height="24" Margin="0,0,6,0" ToolTip="\u05DE\u05EA\u05D0\u05E8\u05D9\u05DA" />
+                        <DatePicker Width="110" Height="24" Margin="0,0,6,0" ToolTip="\u05E2\u05D3 \u05EA\u05D0\u05E8\u05D9\u05DA" />
+
+                        <Button Content="\u05D7\u05E4\u05E9"
+                                Command="{Binding SearchCommand}"
+                                Style="{StaticResource ActionButton}"
+                                MinWidth="46"
+                                ToolTip="\u05D8\u05E2\u05DF \u05DE\u05D9\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05D4\u05D7\u05D9\u05E4\u05D5\u05E9" />
+
+                        <Button Content="\u05E0\u05E7\u05D4"
+                                Style="{StaticResource ActionButton}"
+                                MinWidth="46"
+                                ToolTip="\u05E0\u05E7\u05D4 \u05D7\u05D9\u05E4\u05D5\u05E9" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ROW 1 (of source): Selected project info strip. -->
+            <Border Grid.Row="2"
+                    Background="#E3F2FD"
+                    BorderBrush="#90CAF9"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,6"
+                    Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#x1F4C1;" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBlock Text="\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 \u05E0\u05D1\u05D7\u05E8: " FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ActiveProjectDisplay}"
+                               Foreground="#1565C0"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- ROW 2 (of source): Main content area (RTL: Column 0 = visual Right). -->
+            <Grid Grid.Row="3" FlowDirection="RightToLeft">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="420" MinWidth="250" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="380" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="260" MinWidth="180" />
+                </Grid.ColumnDefinitions>
+
+                <!-- EMAIL LIST (visually Right in RTL — first column). -->
+                <Border Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- List header: title + All/Unread toggle + unread count. -->
+                        <Border Grid.Row="0" Background="#F5F5F5" Padding="10">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="\u05DE\u05D9\u05D9\u05DC\u05D9\u05DD \u05DC\u05EA\u05D9\u05D5\u05E7"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center" />
+                                <Border Background="#E3F2FD"
+                                        BorderBrush="#64B5F6"
+                                        BorderThickness="1"
+                                        CornerRadius="3"
+                                        Padding="8,2"
+                                        Margin="10,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#x1F4E9; \u05DC\u05D0 \u05E0\u05E7\u05E8\u05D0\u05D5 " Foreground="#1565C0" FontSize="11" />
+                                        <TextBlock Text="2" Foreground="#1565C0" FontWeight="Bold" FontSize="11" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- List body: emails grouped by project bucket. -->
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding Emails}"
+                                 SelectedItem="{Binding SelectedEmail}"
+                                 HorizontalContentAlignment="Stretch"
+                                 BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="4,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <!-- Unread dot. -->
+                                                    <Ellipse Width="8" Height="8"
+                                                             Fill="#2196F3"
+                                                             Margin="0,0,6,0"
+                                                             VerticalAlignment="Center"
+                                                             Visibility="{Binding IsUnread, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="{Binding Sender}"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Subject}"
+                                                           Margin="14,2,0,0"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Preview}"
+                                                           Margin="14,2,0,0"
+                                                           Foreground="#888"
+                                                           FontSize="11"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding ReceivedDisplay}"
+                                                           Foreground="#999"
+                                                           FontSize="10"
+                                                           HorizontalAlignment="Left" />
+                                                <TextBlock Text="{Binding AttachmentBadge}"
+                                                           Foreground="#666"
+                                                           FontSize="11"
+                                                           HorizontalAlignment="Left"
+                                                           Margin="0,2,0,0"
+                                                           Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+                                                <!-- Assigned marker. -->
+                                                <TextBlock Text="&#x2713; \u05DE\u05E9\u05D5\u05D9\u05DA"
+                                                           Foreground="#2E7D32"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           HorizontalAlignment="Left"
+                                                           Margin="0,2,0,0"
+                                                           Visibility="{Binding IsAssigned, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+
+                <!-- SPLITTER: Email list | viewer. -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              Background="Transparent"
+                              Cursor="SizeWE" />
+
+                <!-- CENTER: Email viewer (header + attachments + body + action bar). -->
+                <Border Grid.Column="2"
+                        FlowDirection="LeftToRight"
+                        BorderBrush="#E0E0E0"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                    <Grid>
+                        <!-- Empty state (no email selected). -->
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                            <TextBlock Text="&#x2709;" FontSize="64" HorizontalAlignment="Center" Foreground="#CCC" />
+                            <TextBlock Text="Select an email from the list"
+                                       Opacity="0.7"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,10,0,0" />
+                        </StackPanel>
+
+                        <!-- Selected email content. -->
+                        <Grid Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Row 0: Header (subject + sender + date). -->
+                            <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="12,8">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding SelectedEmail.Subject}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <TextBlock Text="{Binding SelectedEmail.Sender}" Foreground="#555" />
+                                        <TextBlock Text="  •  " Foreground="#AAA" />
+                                        <TextBlock Text="{Binding SelectedEmail.ReceivedDisplay}" Foreground="#888" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Row 1: Attachments chips. -->
+                            <Border Grid.Row="1" Padding="12,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
+                                <StackPanel>
+                                    <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="11" Foreground="#666" />
+                                    <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Command="{Binding DataContext.OpenAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="{Binding DisplayLabel}"
+                                                        Padding="8,3"
+                                                        Margin="0,0,6,6"
+                                                        Cursor="Hand"
+                                                        Background="#EEF2FF"
+                                                        BorderBrush="#C5CAE9"
+                                                        ToolTip="\u05E4\u05EA\u05D7 \u05E7\u05D5\u05D1\u05E5 \u05DE\u05E6\u05D5\u05E8\u05E3" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Row 2: Body preview. -->
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="12,8">
+                                <TextBlock Text="{Binding SelectedEmailBody}" TextWrapping="Wrap" Foreground="#333" />
+                            </ScrollViewer>
+
+                            <!-- Row 3: Action bar (File / Move to Project etc.). -->
+                            <Border Grid.Row="3" Background="#E8F5E9" Padding="8,6" BorderBrush="#EEE" BorderThickness="0,1,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="\u05E9\u05D9\u05D5\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8: " FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding ActiveProjectDisplay}"
+                                                   Foreground="#2E7D32"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Content="\u05E9\u05D9\u05D9\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8"
+                                                Command="{Binding LinkToProjectCommand}"
+                                                Style="{StaticResource ActionButton}"
+                                                ToolTip="\u05E9\u05D9\u05D9\u05DA \u05DE\u05D9\u05D9\u05DC \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" />
+                                        <Button Content="&#x1F4C2; \u05D4\u05E2\u05D1\u05E8 \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8"
+                                                Command="{Binding MarkHandledCommand}"
+                                                Style="{StaticResource ActionButton}"
+                                                Background="#C8E6C9"
+                                                BorderBrush="#66BB6A"
+                                                ToolTip="\u05D4\u05E2\u05D1\u05E8 \u05DE\u05D9\u05D9\u05DC \u05DC\u05EA\u05D9\u05E7\u05D9\u05D9\u05EA \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" />
+                                        <Button Content="\u05D4\u05E9\u05D1"
+                                                Command="{Binding ReplyCommand}"
+                                                Style="{StaticResource ActionButton}"
+                                                ToolTip="\u05D4\u05E9\u05D1 \u05DC\u05E9\u05D5\u05DC\u05D7" />
+                                        <Button Content="\u05D4\u05E2\u05D1\u05E8"
+                                                Command="{Binding ForwardCommand}"
+                                                Style="{StaticResource ActionButton}"
+                                                ToolTip="\u05D4\u05E2\u05D1\u05E8 \u05D0\u05EA \u05D4\u05DE\u05D9\u05D9\u05DC" />
+                                        <Button Content="\u05E6\u05D5\u05E8 \u05DE\u05E9\u05D9\u05DE\u05D4"
+                                                Command="{Binding CreateTaskFromEmailCommand}"
+                                                Style="{StaticResource ActionButton}"
+                                                ToolTip="\u05E6\u05D5\u05E8 \u05DE\u05E9\u05D9\u05DE\u05D4 \u05DE\u05D4\u05DE\u05D9\u05D9\u05DC" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- SPLITTER: viewer | context/calendar. -->
+                <GridSplitter Grid.Column="3"
+                              Width="5"
+                              HorizontalAlignment="Center"
+                              Background="Transparent"
+                              Cursor="SizeWE" />
+
+                <!-- LEFT (in RTL): Context / calendar placeholder (workflow + suggested actions). -->
+                <Border Grid.Column="4" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="White">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="\u05D4\u05E7\u05E9\u05E8 / \u05EA\u05D6\u05DE\u05D5\u05DF" FontWeight="Bold" Margin="0,0,0,8" />
+                        <TextBlock Text="\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DE\u05D5\u05E6\u05E2\u05D5\u05EA"
+                                   FontWeight="SemiBold"
+                                   Foreground="#666"
+                                   Margin="0,0,0,6" />
+                        <Button Content="&#x2713; \u05E1\u05DE\u05DF \u05DB\u05D8\u05D5\u05E4\u05DC"
+                                Command="{Binding MarkHandledCommand}"
+                                Style="{StaticResource ActionButton}"
+                                Margin="0,0,0,6"
+                                HorizontalAlignment="Right" />
+                        <Button Content="\u05D0\u05E8\u05DB\u05D9\u05D5\u05DF"
+                                Command="{Binding ArchiveCommand}"
+                                Style="{StaticResource ActionButton}"
+                                Margin="0,0,0,6"
+                                HorizontalAlignment="Right" />
+                        <Button Content="\u05E1\u05D9\u05D9\u05DD \u05DE\u05E9\u05D9\u05DE\u05D4"
+                                Command="{Binding CompleteTaskCommand}"
+                                Style="{StaticResource ActionButton}"
+                                HorizontalAlignment="Right" />
+                        <Border Background="#FFF8E1"
+                                BorderBrush="#FFE082"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="8"
+                                Margin="0,12,0,0">
+                            <TextBlock Text="\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05EA\u05D4\u05DC\u05D9\u05DB\u05D9\u05DD"
+                                       TextWrapping="Wrap"
+                                       Foreground="#8D6E63"
+                                       FontSize="11" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- STATUS BAR (bottom). -->
+            <Border Grid.Row="4"
+                    Background="#ECEFF1"
+                    BorderBrush="#E0E0E0"
+                    BorderThickness="0,1,0,0"
+                    Padding="10,5"
+                    Margin="0,8,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Foreground="#555" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D3\u05D5\u05D2\u05DE\u05D4 \u05D1\u05DC\u05D1\u05D3"
+                               Foreground="#999"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -519,6 +519,58 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
+        /// Developer/preview entry point for the new Inspection VISUAL CLONE
+        /// (<see cref="SiNet.App.Wpf.Surfaces.Inspection.InspectionWindowView"/>) — the visual clone of
+        /// the legacy floating Inspection window. This opens the window with its built-in
+        /// fake/design-time data ONLY so the visual structure (header chrome, create-report strip,
+        /// report action row, metadata row, questionnaire tree, report cards, status bar) can be
+        /// reviewed. It is intentionally NOT wired to any data or behavior: no DB, no
+        /// <c>IInspectionReportService</c>, no <c>IInspectionWorkspace</c>, no workflow/task completion,
+        /// no Gmail, no ACC. All buttons are stubbed. This does NOT replace the legacy floating
+        /// Inspection window and is not promoted to production UX.
+        /// </summary>
+        private void OpenInspectionVisualClone_Click(object sender, RoutedEventArgs e)
+        {
+            if (!RequireAdminAccess("אין לך הרשאה לתצוגה מקדימה."))
+                return;
+
+            // The visual clone is a self-contained Window with a parameterless constructor that loads
+            // its own fake/design-time data. No DI, no DataContext wiring, no live services.
+            var cloneWindow = new SiNet.App.Wpf.Surfaces.Inspection.InspectionWindowView
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            cloneWindow.Show();
+        }
+
+        /// <summary>
+        /// Developer/preview entry point for the new Email VISUAL CLONE
+        /// (<see cref="SiNet.App.Wpf.Surfaces.Email.EmailWindowView"/>) — the visual clone of the legacy
+        /// <c>EmailManagementView</c>. This opens the window with its built-in fake/design-time data ONLY
+        /// so the visual structure (status + filters strip, selected-project info strip, email list,
+        /// email viewer with attachments + body + action bar, context/calendar placeholder, status bar)
+        /// can be reviewed. It is intentionally NOT wired to any data or behavior: no DB, no Gmail/Outlook,
+        /// no email services, no ACC, no project linking, no task creation, no workflow. All buttons are
+        /// stubbed. This does NOT replace the legacy <c>EmailManagementView</c> and is not promoted to
+        /// production UX.
+        /// </summary>
+        private void OpenEmailVisualClone_Click(object sender, RoutedEventArgs e)
+        {
+            if (!RequireAdminAccess("אין לך הרשאה לתצוגה מקדימה."))
+                return;
+
+            // The visual clone is a self-contained Window with a parameterless constructor that loads
+            // its own fake/design-time data. No DI, no DataContext wiring, no live services.
+            var cloneWindow = new SiNet.App.Wpf.Surfaces.Email.EmailWindowView
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            cloneWindow.Show();
+        }
+
+        /// <summary>
         /// Developer/preview entry point that proves the Workflow-first task-navigation vertical
         /// slice: it opens the new <see cref="SiNet.App.Wpf.Inspection.InspectionShellView"/> for a
         /// real <c>taskId</c> through the OFFICIAL path

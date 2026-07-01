@@ -29,6 +29,9 @@
 - **`src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView` - the visual-clone target.**
   This is the clean visual clone of the legacy `FloatingInspectionView` and is where Inspection UI
   work continues.
+- **`src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView` - the Email visual-clone target.**
+  This is the clean visual clone of the legacy `EmailManagementView`. The old `EmailManagementView`
+  remains the **visual reference / legacy source** and must **not** be modified as part of clone work.
 
 ## Inventory of major legacy windows
 
@@ -46,7 +49,7 @@
 | Legacy window | Target surface (new) | Status |
 | --- | --- | --- |
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
-| EmailManagementView | src/SiNet.App.Wpf/Surfaces/Inbox/... (TBD) | Not started |
+| EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (visual shell, fake data) |
 | ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/... (TBD) | Not started |
 | TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
@@ -90,6 +93,41 @@ seam is already proven by prior slices. The visual clone lives at
   warning banners.
 - Inspector/admin pickers, series picker, manual template URL, reviewed-version textbox, and the
   shared application font-size dynamic resources.
+
+## Email window - EmailManagementView
+
+Second target chosen after Inspection. The visual clone lives at `src/SiNet.App.Wpf/Surfaces/Email/`.
+The old `EmailManagementView` is the **visual reference / legacy source** only; it is not modified.
+
+### Slice 1 - initial visual clone (current)
+
+| Aspect | Status | Notes |
+| --- | --- | --- |
+| EmailManagementView visual clone | Started / partial | EmailWindowView(.xaml/.cs) + EmailWindowViewModel + EmailWindowDesignData created. Borderless RTL window mirroring the 3-row source: top status + project/Gmail filters strip (folder selector, status filter, Gmail search, date pickers, chapaz/naka buttons, refresh/calendar/help, pagination placeholder), selected-project info strip, and the 3-pane content area (email list on the right with "Emails to File" header + unread badge + grouped rows showing sender/subject/preview/date/attachment/assigned markers; email viewer in the center with header + attachment chips + body + action bar (share/move-to-project/reply/forward/create-task); context/calendar placeholder on the left with stubbed actions and a visual-shell notice), plus a bottom status bar. |
+| Real email data | Not connected | Fake/design-time data only (EmailWindowDesignData): sample folders/statuses, four sample emails, attachments, and a fake body. No DB, no Gmail/Outlook, no ACC inbox, no file system. |
+| Actions | Stubbed only | Refresh, Search, OpenEmail, LinkToProject, CreateTaskFromEmail, MarkHandled, Archive, Reply, Forward, OpenAttachment, CompleteTask -> all stubbed (set StatusMessage to "peula zo terem chubra (sheled vizuali bilvad)"). No email send/forward/reply, no project linking, no task creation, no workflow side effects. |
+| Workflow / Task integration | Pending | EmailWindowView.ApplyContext(WorkSurfaceContext?) placeholder exists so the window can later be opened from a task; no task opening, no task completion, and no workflow mutation implemented. |
+
+### Email visual gaps deferred for later slices
+
+- The legacy screen is highly decomposed into custom controls (EmailListControl, EmailViewerControl,
+  EmailActionBarControl, EmailTopStatusBarControl, EmailPaginationControl, SearchableProjectSelector,
+  EmailContextPanel). The clone reproduces the visual *shape* and terminology inline, not those exact
+  controls.
+- WebView2 calendar sidebar (real embedded calendar) - shown as a static context/calendar placeholder.
+- EmailContextPanel workflow visuals (HasContext / ProjectDisplay / SuggestedActions / ExecuteAction) -
+  shown as stubbed suggested-action buttons only.
+- Grouped-by-project expanders with assigned/unassigned header coloring and the per-row context menu
+  (file / unfile / mark pending / mark personal / mark irrelevant).
+- Real pagination, unread counts, Job Type / Status / User project filters bound to live data.
+- Move-to-project block-reason warnings and "all attachments placed" state.
+
+> **Cross-application note:** the project selector + Job Type / Status / User filters and the
+> "selected project" concept are **not** Email-only. They are shared across Email, ProjectWork,
+> Tasks, Workflow and the MainWindow title. Their target design (shared `ProjectSelectorView`,
+> `IProjectQueryService`, `ICurrentProjectContext`) is tracked separately in
+> [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md). The Email clone should consume
+> that shared mechanism rather than growing its own local project-selection state.
 
 ## DB / schema confirmation
 
