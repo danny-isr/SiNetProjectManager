@@ -1,0 +1,52 @@
+<Window x:Class="SiNet.App.Wpf.Shell.StartupModeSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-namespace:SiNet.App.Wpf.Shell"
+        mc:Ignorable="d"
+        FlowDirection="RightToLeft"
+        Title="בחירת מצב הפעלה"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        Topmost="True"
+        d:DataContext="{d:DesignInstance Type=local:StartupModeSelectionViewModel, IsDesignTimeCreatable=True}">
+
+    <!--
+        First-visible startup mode chooser (docs/APP_SHELL.md §2/§3). This is NOT a splash: it has no
+        timeout and no auto-close. It waits for the user to pick a mode and press "המשך". Closing with X
+        is treated as cancel/exit by the code-behind (never a silent Legacy default). Default selection
+        is New System (StartupModeSelectionViewModel.DefaultMode).
+    -->
+    <Border Padding="24" MinWidth="380" Background="White">
+        <StackPanel>
+            <TextBlock Text="{Binding Prompt}"
+                       FontSize="18" FontWeight="SemiBold" Foreground="#1F3A5F"
+                       Margin="0,0,0,16" />
+
+            <RadioButton GroupName="StartupMode"
+                         IsChecked="{Binding IsNewSystemSelected, Mode=TwoWay}"
+                         Margin="4,6" FontSize="15">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding NewSystemLabel}" FontWeight="SemiBold" />
+                    <TextBlock Text="(מומלץ)" Foreground="#4A6D93" Margin="8,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </RadioButton>
+
+            <RadioButton GroupName="StartupMode"
+                         IsChecked="{Binding IsLegacySelected, Mode=TwoWay}"
+                         Content="{Binding LegacyLabel}"
+                         Margin="4,6" FontSize="15" />
+
+            <Button Content="{Binding ContinueLabel}"
+                    Command="{Binding ContinueCommand}"
+                    IsDefault="True"
+                    HorizontalAlignment="Left"
+                    MinWidth="120" Height="34" Margin="0,20,0,0"
+                    Background="#1F3A5F" Foreground="White" FontSize="14" FontWeight="SemiBold"
+                    BorderThickness="0" Cursor="Hand" />
+        </StackPanel>
+    </Border>
+</Window>

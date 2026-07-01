@@ -930,6 +930,12 @@ namespace SiNetProjectManagerV2
             SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
             SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
 
+            // Clean New System shell factory (docs/APP_SHELL.md). Registered after the surfaces it opens
+            // (Project Context above + the Inspection shell view registered earlier) so its migrated-only
+            // menu can resolve them. Additive: this only enables the optional New system startup mode and
+            // does NOT change the legacy MainWindow startup path.
+            SiNet.App.Wpf.Shell.ShellServiceCollectionExtensions.AddSiNetShell(services);
+
             return services.BuildServiceProvider();
         }
 
@@ -977,11 +983,38 @@ namespace SiNetProjectManagerV2
                 AppSettings = SettingsManager.LoadSettings();
                 ApplySettings();
 
-                // ── Step 1: Credential Vault ──────────────────────────────
+                // Startup Mode Selection (FIRST visible UI).
+                // The startup mode is a USER DECISION, not a splash/timeout. This modal chooser is the
+                // first window the user sees, defaults to New System, and waits indefinitely for an
+                // explicit choice (see docs/APP_SHELL.md §2/§3). It MUST run before any legacy gate
+                // (credential vault, DB connection, schema validation, role selector, splash, MainWindow).
+                Log.Information("[STARTUP] Step 0b: Prompting for startup mode...");
+                if (!SiNet.App.Wpf.Shell.StartupModeSelectionWindow.TryPromptForMode(null, out var startupMode))
+                {
+                    // User closed the chooser with X / cancel — treat as exit. Never silently pick Legacy.
+                    Log.Information("[STARTUP] Startup mode selection cancelled by user. Shutting down.");
+                    Shutdown();
+                    return;
+                }
+
+                if (SiNet.App.Wpf.Shell.StartupModeRouter.OpensNewShell(startupMode))
+                {
+                    // New System: skip the legacy credential/DB/schema/role-selector gates entirely and
+                    // open the clean shell. The legacy MainWindow is never constructed on this path.
+                    Log.Information("[STARTUP] Startup mode: New System — skipping legacy gates and launching the shell.");
+                    base.OnStartup(e);
+                    LaunchNewSystemShell();
+                    Log.Information("[STARTUP] New System startup completed successfully.");
+                    return;
+                }
+
+                Log.Information("[STARTUP] Startup mode: Legacy — running the existing startup flow.");
+
+                // ── Step 1: Credential Vault ──
                 Log.Information("[STARTUP] Step 1: Setting up credential vault...");
                 SetupCredentialVault();
 
-                // ── Step 2: Database Connection Gate ──────────────────────
+                // ── Step 2: Database Connection Gate ──
                 Log.Information("[STARTUP] Step 2: Ensuring database connection...");
                 if (!EnsureDatabaseConnection())
                 {
@@ -1578,31 +1611,113 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// Shows the splash screen then transitions to the main window after a brief delay.
-        /// Once MainWindow is established, switches ShutdownMode to OnMainWindowClose.
+        /// Legacy launch surface. The startup mode was already chosen up front by the modal
+        /// <c>StartupModeSelectionWindow</c> (see <c>docs/APP_SHELL.md</c> §3), so this method only runs
+        /// on the Legacy path and simply opens the legacy <see cref="MainWindow"/>. A short splash may be
+        /// shown here, but it does NOT control any decision and there is NO timeout/auto-continuation.
+        /// Once the main window exists, switches ShutdownMode back to OnMainWindowClose.
         /// </summary>
         private void ShowSplashThenMainWindow()
         {
             var splash = new SplashWindow();
             splash.Show();
 
-            Task.Delay(2000).ContinueWith(_ =>
+            try
             {
-                splash.Dispatcher.Invoke(() =>
+                Log.Information("[STARTUP] Startup mode: Legacy — opening MainWindow.");
+                var main = new MainWindow();
+
+                Current.MainWindow = main;
+
+                // CRITICAL: Switch shutdown mode to normal behavior now that MainWindow exists.
+                // This allows the app to close properly when MainWindow is closed. Prior to this point,
+                // ShutdownMode was OnExplicitShutdown to prevent premature shutdown during setup dialogs.
+                Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+                main.Show();
+            }
+            catch (Exception ex)
+            {
+                // Last-resort guard: something failed building/showing the legacy window. Never leave the
+                // app running invisibly — log, tell the user, then shut down cleanly.
+                Log.Fatal(ex, "[STARTUP] Fatal error while opening the legacy MainWindow. Shutting down.");
+                try
                 {
-                    var main = new MainWindow();
-                    Current.MainWindow = main;
+                    MessageBox.Show(
+                        $"אירעה שגיאה קריטית בפתיחת חלון האפליקציה והמערכת תיסגר.\n\n{ex.Message}",
+                        "שגיאת הפעלה",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+                catch (Exception messageEx)
+                {
+                    Log.Error(messageEx, "[STARTUP] Failed to display the fatal startup error dialog.");
+                }
 
-                    // CRITICAL: Switch shutdown mode to normal behavior now that MainWindow exists.
-                    // This allows the app to close properly when MainWindow is closed.
-                    // Prior to this point, ShutdownMode was OnExplicitShutdown to prevent
-                    // premature shutdown during setup dialogs (credential vault, database connection).
-                    Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                Shutdown();
+            }
+            finally
+            {
+                splash.Close();
+            }
+        }
 
-                    main.Show();
-                    splash.Close();
-                });
-            });
+        /// <summary>
+        /// Launches the clean New System shell (see <c>docs/APP_SHELL.md</c> §3). This path deliberately
+        /// SKIPS the legacy interactive gates (credential-vault setup, DB connection retry, schema
+        /// validation, DEBUG role selector). It still composes the service graph — the shell resolves its
+        /// dependencies from DI — by wiring the credential provider (a non-interactive delegate) and
+        /// calling <see cref="ConfigureServices"/>/<see cref="WireLegacyLocators"/>. The legacy
+        /// <see cref="MainWindow"/> is NEVER constructed on this path. Because the user explicitly chose
+        /// New System, we do NOT silently fall back to Legacy; instead a failure shows a clear message and
+        /// shuts down cleanly.
+        /// </summary>
+        private void LaunchNewSystemShell()
+        {
+            try
+            {
+                // Non-interactive credential wiring only: the secret store is read lazily by
+                // ConfigureServices() (connection string) — no vault-setup or provisioning dialogs run.
+                CredentialProvider.GetSecret = CredentialVaultService.GetSecret;
+
+                // Compose the service graph so the shell can resolve IProjectQueryService, current
+                // user/project contexts, and window factories from DI.
+                ServiceProvider = ConfigureServices();
+                WireLegacyLocators();
+                SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+
+                var factory = ServiceProvider.GetService<SiNet.App.Wpf.Shell.INewShellFactory>()
+                    ?? throw new InvalidOperationException(
+                        "INewShellFactory is not registered; New system mode is unavailable.");
+
+                var shell = factory.CreateShell();
+                Log.Information("[STARTUP] New system shell opened (legacy MainWindow and legacy gates not loaded).");
+
+                Current.MainWindow = shell;
+                Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                shell.Show();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "[STARTUP] Failed to launch the New System shell. Shutting down.");
+                try
+                {
+                    MessageBox.Show(
+                        "פתיחת המערכת החדשה נכשלה.\n\n" +
+                        $"פרטי השגיאה:\n{ex.Message}",
+                        "שגיאה בפתיחת המערכת החדשה",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+                catch (Exception messageEx)
+                {
+                    Log.Error(messageEx, "[STARTUP] Failed to display the New System startup error dialog.");
+                }
+
+                Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                Shutdown();
+            }
         }
 
         #endregion

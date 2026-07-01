@@ -5,6 +5,7 @@ using SiNet.App.Composition;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Shell;
 using SiNet.Infrastructure.Google;
 
 namespace SiNet.App.Wpf;
@@ -48,6 +49,11 @@ public partial class App : System.Windows.Application
         services.AddSingleton<InspectionShellViewModel>();
         services.AddSingleton<InspectionShellView>();
         services.AddSingleton<MainViewModel>();
+
+        // Clean New System shell factory (docs/APP_SHELL.md). Registered after the surfaces it opens
+        // (Project Context + Inspection shell) so its migrated-only menu can resolve them. Additive:
+        // it does not change this harness's default MainWindow startup.
+        services.AddSiNetShell();
 
         _services = services.BuildServiceProvider();
 

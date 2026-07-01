@@ -1,0 +1,110 @@
+<Window x:Class="SiNet.App.Wpf.Shell.NewShellWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-namespace:SiNet.App.Wpf.Shell"
+        mc:Ignorable="d"
+        FlowDirection="RightToLeft"
+        Title="{Binding Title}"
+        Height="600" Width="960"
+        WindowStartupLocation="CenterScreen"
+        d:DataContext="{d:DesignInstance Type=local:NewShellDesignData, IsDesignTimeCreatable=True}">
+
+    <!--
+        Clean New System shell (docs/APP_SHELL.md). This is NOT the legacy MainWindow: it opens only
+        migrated/refactored surfaces via DI/factories and shows a migrated-only menu. No legacy menu is
+        loaded or copied here.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: title/subtitle (right in RTL) + current user (left) -->
+        <Border Grid.Row="0" Background="#1F3A5F" Padding="16,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding HeaderSubtitle}" Foreground="#BBD4F0" FontSize="12" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                    <TextBlock Text="משתמש נוכחי" Foreground="#BBD4F0" FontSize="11" HorizontalAlignment="Left" />
+                    <TextBlock Text="{Binding CurrentUserDisplay}" Foreground="White" FontSize="13"
+                               FontWeight="SemiBold" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Current Project bar: hosts the shared ProjectSelectorView + current project display -->
+        <Border Grid.Row="1" Background="#EEF3F9" Padding="16,8" BorderBrush="#D5DEE9" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="פרויקט נוכחי:" VerticalAlignment="Center"
+                           FontWeight="SemiBold" Margin="0,0,10,0" />
+
+                <!-- The shared, reusable Project Selector is dropped in here by the code-behind. -->
+                <ContentControl Grid.Column="1" x:Name="ProjectSelectorHost" VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="2" Text="{Binding CurrentProjectDisplay}" VerticalAlignment="Center"
+                           Margin="10,0,0,0" Opacity="0.85" />
+            </Grid>
+        </Border>
+
+        <!-- Body: migrated-only menu (right) + content/open-window area (left) -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Menu area: data-driven, migrated-only. Each button opens a surface via its command. -->
+            <Border Grid.Column="0" Background="#F7F9FC" BorderBrush="#D5DEE9" BorderThickness="1,0,0,0">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Top" Text="תפריט מערכת חדשה" FontWeight="SemiBold"
+                               Margin="12,12,12,6" Foreground="#33475B" />
+                    <ItemsControl ItemsSource="{Binding MenuItems}" Margin="8,0,8,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding OpenCommand}"
+                                        ToolTip="{Binding Description}"
+                                        IsEnabled="{Binding IsAvailable}"
+                                        HorizontalContentAlignment="Right"
+                                        Padding="12,8" Margin="0,4"
+                                        Content="{Binding Title}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </Border>
+
+            <!-- Content/open-window area: hosts an in-shell surface when one is set. Migrated surfaces
+                 currently open as their own windows (Email/Inspection), so this stays a hint for now. -->
+            <Grid Grid.Column="1" Margin="16">
+                <TextBlock Text="בחר פריט מהתפריט כדי לפתוח מסך חדש."
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="#7A8CA0" FontSize="14" />
+                <ContentControl x:Name="ContentHost" />
+            </Grid>
+        </Grid>
+
+        <!-- Status bar -->
+        <Border Grid.Row="3" Background="#1F3A5F" Padding="12,4">
+            <TextBlock Text="{Binding StatusText}" Foreground="#D6E4F5" FontSize="11" />
+        </Border>
+    </Grid>
+</Window>
