@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shared.Projects;
+using SiNet.Application.Projects;
 using SiNet.Application.WorkSurfaces;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
@@ -25,25 +27,48 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// does not implement task opening or task completion behavior.
 /// </para>
 /// <para>
+/// Project selection is <b>not owned here</b>: the window hosts the shared
+/// <see cref="ProjectSelectorViewModel"/> (bound in XAML via <see cref="ProjectSelector"/>) and only
+/// <i>observes</i> the shared <see cref="ICurrentProjectContext"/> so <see cref="ActiveProjectDisplay"/>
+/// reflects the Current Project (see <c>docs/PROJECTS.md</c> §5/§9). Both the selector and this view
+/// model share one in-memory context in this slice; no real project source or email filtering is wired.
+/// </para>
+/// <para>
 /// This is the visual-clone target. The old <c>EmailManagementView</c> remains the visual reference /
 /// legacy source and is not modified.
 /// </para>
 /// </summary>
-public sealed class EmailWindowViewModel : ObservableObject
+public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 {
     private const string NotWiredYet =
         "\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05D8\u05E8\u05DD \u05D7\u05D5\u05D1\u05E8\u05D4 (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u05D1\u05DC\u05D1\u05D3)"; // "This action is not wired yet (visual shell only)"
+
+    private readonly ICurrentProjectContext _currentProject;
 
     private string _searchText = string.Empty;
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
     private EmailListRow? _selectedEmail;
     private bool _isBusy;
+    private string _activeProjectDisplay =
+        "\u05DC\u05D0 \u05E0\u05D1\u05D7\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8"; // "No project selected"
     private string _statusMessage =
         "\u05DE\u05D5\u05DB\u05DF (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05DC\u05DC\u05D0 \u05D7\u05D9\u05D1\u05D5\u05E8 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD)"; // "Ready (visual shell — no data connected)"
 
     public EmailWindowViewModel()
+        : this(new FakeProjectQueryService(), new InMemoryCurrentProjectContext())
     {
+    }
+
+    /// <summary>
+    /// Primary constructor: hosts the shared <see cref="ProjectSelectorViewModel"/> over the supplied
+    /// read port and shared current-project context, and observes that context for display updates.
+    /// </summary>
+    public EmailWindowViewModel(IProjectQueryService projectQuery, ICurrentProjectContext currentProject)
+    {
+        ArgumentNullException.ThrowIfNull(projectQuery);
+        _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
+
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
         Emails = new ObservableCollection<EmailListRow>(EmailWindowDesignData.SampleEmails);
@@ -52,6 +77,11 @@ public sealed class EmailWindowViewModel : ObservableObject
         _selectedFolder = Folders.FirstOrDefault();
         _selectedStatus = StatusOptions.FirstOrDefault();
         _selectedEmail = Emails.FirstOrDefault();
+
+        ProjectSelector = new ProjectSelectorViewModel(projectQuery, _currentProject);
+        _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
+        UpdateActiveProjectDisplay(_currentProject.CurrentProject);
+        _ = ProjectSelector.LoadAsync();
 
         RefreshCommand = Stub();
         SearchCommand = Stub();
@@ -69,9 +99,18 @@ public sealed class EmailWindowViewModel : ObservableObject
     /// <summary>Window title, mirrors the legacy email management window.</summary>
     public string Title => "\u05E0\u05D9\u05D4\u05D5\u05DC \u05D3\u05D5\u05D0\u05E8 \u2014 \u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9"; // "Email management — visual shell"
 
-    /// <summary>Project/context label shown in the selected-project info strip.</summary>
-    public string ActiveProjectDisplay =>
-        "1042 \u2014 \u05DE\u05D2\u05D3\u05DC\u05D9 \u05D4\u05E6\u05E4\u05D5\u05DF"; // "1042 — North Towers"
+    /// <summary>
+    /// Shared, reusable Project Selector hosted by this window. Email does not own project selection;
+    /// selecting a project here publishes it to the shared <see cref="ICurrentProjectContext"/>.
+    /// </summary>
+    public ProjectSelectorViewModel ProjectSelector { get; }
+
+    /// <summary>Project/context label shown in the selected-project info strip; follows the Current Project.</summary>
+    public string ActiveProjectDisplay
+    {
+        get => _activeProjectDisplay;
+        private set => SetField(ref _activeProjectDisplay, value);
+    }
 
     public ObservableCollection<EmailFolderRow> Folders { get; }
 
@@ -165,4 +204,21 @@ public sealed class EmailWindowViewModel : ObservableObject
         StatusMessage = NotWiredYet;
         return Task.CompletedTask;
     });
+
+    private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
+        => UpdateActiveProjectDisplay(e.Project);
+
+    private void UpdateActiveProjectDisplay(ProjectSummaryDto? project)
+    {
+        ActiveProjectDisplay = project is null
+            ? "\u05DC\u05D0 \u05E0\u05D1\u05D7\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" // "No project selected"
+            : $"{project.ProjectNumber} \u2014 {project.ProjectName}";
+    }
+
+    /// <summary>Unsubscribes from the shared context and disposes the hosted selector to avoid leaks.</summary>
+    public void Dispose()
+    {
+        _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
+        ProjectSelector.Dispose();
+    }
 }

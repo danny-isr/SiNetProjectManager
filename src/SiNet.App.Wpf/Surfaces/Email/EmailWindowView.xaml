@@ -1,9 +1,10 @@
-<Window x:Class="SiNet.App.Wpf.Surfaces.Email.EmailWindowView"
+﻿<Window x:Class="SiNet.App.Wpf.Surfaces.Email.EmailWindowView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
+        xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         mc:Ignorable="d"
         Title="{Binding Title}"
         WindowStyle="None"
@@ -144,24 +145,14 @@
 
                     <!-- Project selector + Job Type / Status / User filters + Gmail search + dates. -->
                     <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <ComboBox Width="350"
-                                  Margin="0,0,10,0"
-                                  ItemsSource="{Binding Folders}"
-                                  SelectedItem="{Binding SelectedFolder}"
-                                  DisplayMemberPath="Name"
-                                  ToolTip="\u05D1\u05D7\u05E8 \u05EA\u05D9\u05E7\u05D9\u05D9\u05D4 / \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" />
-
-                        <Button Content="&#x1F504;"
-                                Command="{Binding RefreshCommand}"
-                                Style="{StaticResource ActionButton}"
-                                Width="28"
-                                ToolTip="\u05E8\u05E2\u05E0\u05DF \u05E8\u05E9\u05D9\u05DE\u05D4" />
-
-                        <ComboBox Width="140"
-                                  Margin="0,0,10,0"
-                                  ItemsSource="{Binding StatusOptions}"
-                                  SelectedItem="{Binding SelectedStatus}"
-                                  ToolTip="\u05E1\u05D8\u05D8\u05D5\u05E1" />
+                        <!--
+                            Shared, cross-application Project Selector (docs/PROJECTS.md §5/§9).
+                            Email HOSTS it rather than owning project selection; selecting a project
+                            publishes it to the shared ICurrentProjectContext, which the Email view
+                            model observes. Gmail search / dates / pagination below stay Email-specific.
+                        -->
+                        <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                                                      VerticalAlignment="Center" />
 
                         <TextBlock Text="&#x1F50E; Gmail"
                                    VerticalAlignment="Center"

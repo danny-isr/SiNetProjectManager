@@ -1,0 +1,98 @@
+<UserControl x:Class="SiNet.App.Wpf.Shared.Projects.ProjectSelectorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:SiNet.App.Wpf.Shared.Projects"
+             mc:Ignorable="d"
+             FlowDirection="RightToLeft"
+             d:DesignWidth="720"
+             d:DataContext="{d:DesignInstance Type=local:ProjectSelectorViewModel, IsDesignTimeCreatable=True}">
+
+    <UserControl.Resources>
+        <local:InverseBooleanConverter x:Key="InverseBool" />
+    </UserControl.Resources>
+
+    <!--
+        Shared Project Selector (docs/PROJECTS.md §5). Reusable across windows; binds only to
+        ProjectSummaryDto. Selecting a project publishes it to ICurrentProjectContext via the view model.
+        This slice uses fake/in-memory data behind IProjectQueryService — no DB, no EF entities.
+    -->
+    <WrapPanel Orientation="Horizontal">
+        <!-- Searchable project selection: number / name / place / company. -->
+        <ComboBox Width="360"
+                  Margin="0,0,10,4"
+                  IsEditable="True"
+                  IsTextSearchEnabled="True"
+                  StaysOpenOnEdit="True"
+                  TextSearch.TextPath="ProjectName"
+                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                  ItemsSource="{Binding Projects}"
+                  SelectedItem="{Binding SelectedProject}"
+                  IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                  ToolTip="&#x05D1;&#x05D7;&#x05E8; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7;)">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding ProjectNumber}" FontWeight="Bold" Foreground="#1565C0" />
+                        <TextBlock Text=" &#x2014; " Foreground="#999" />
+                        <TextBlock Text="{Binding ProjectName}" />
+                        <TextBlock Text="  ·  " Foreground="#CCC" />
+                        <TextBlock Text="{Binding PlaceName}" Foreground="#777" />
+                        <TextBlock Text="  ·  " Foreground="#CCC" />
+                        <TextBlock Text="{Binding CompanyName}" Foreground="#777" />
+                    </StackPanel>
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <!-- Refresh (reload the project list through IProjectQueryService). -->
+        <Button Content="&#x1F504;"
+                Command="{Binding RefreshCommand}"
+                Margin="0,0,10,4"
+                Padding="8,3"
+                MinWidth="30"
+                Cursor="Hand"
+                ToolTip="&#x05E8;&#x05E2;&#x05E0;&#x05DF; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05EA; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD;" />
+
+        <!-- Job Type filter. -->
+        <ComboBox Width="140"
+                  Margin="0,0,8,4"
+                  ItemsSource="{Binding JobTypeOptions}"
+                  SelectedItem="{Binding SelectedJobType}"
+                  ToolTip="&#x05E1;&#x05D5;&#x05D2; &#x05E2;&#x05D1;&#x05D5;&#x05D3;&#x05D4;">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <!-- Status filter. -->
+        <ComboBox Width="140"
+                  Margin="0,0,8,4"
+                  ItemsSource="{Binding StatusOptions}"
+                  SelectedItem="{Binding SelectedStatus}"
+                  ToolTip="&#x05E1;&#x05D8;&#x05D8;&#x05D5;&#x05E1;">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <!-- Include closed projects. -->
+        <CheckBox Content="&#x05DB;&#x05D5;&#x05DC;&#x05DC; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;"
+                  IsChecked="{Binding IncludeClosed}"
+                  VerticalAlignment="Center"
+                  Margin="0,0,10,4"
+                  ToolTip="&#x05D4;&#x05E6;&#x05D2; &#x05D2;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;" />
+
+        <!-- Loading / status message. -->
+        <TextBlock Text="{Binding StatusMessage}"
+                   VerticalAlignment="Center"
+                   Margin="4,0,0,4"
+                   Foreground="#777"
+                   FontSize="11" />
+    </WrapPanel>
+</UserControl>
