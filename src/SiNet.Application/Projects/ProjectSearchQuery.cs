@@ -14,9 +14,16 @@ namespace SiNet.Application.Projects;
 /// <param name="Status">Restrict to a single project status; <see langword="null"/> means all.</param>
 /// <param name="AssignedUserId">Restrict to projects assigned to this user id; <see langword="null"/> means all users.</param>
 /// <param name="IncludeClosed"><see langword="true"/> to include closed/inactive projects; defaults to <see langword="false"/> (active only).</param>
+/// <param name="MaxResults">
+/// Optional cap on the number of returned rows (applied after parity ordering, so the highest project
+/// numbers win). <see langword="null"/> or a non-positive value means "no cap". This is a
+/// <b>responsiveness</b> guard for the shared selector so a very large project table never floods a
+/// non-virtualized ComboBox; it is a runtime query concern only and does not describe/touch schema.
+/// </param>
 public sealed record ProjectSearchQuery(
     string? SearchText = null,
     string? JobType = null,
     string? Status = null,
     int? AssignedUserId = null,
-    bool IncludeClosed = false);
+    bool IncludeClosed = false,
+    int? MaxResults = null);

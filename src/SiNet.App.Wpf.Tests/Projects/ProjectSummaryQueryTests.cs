@@ -223,4 +223,31 @@ public sealed class ProjectSummaryQueryTests
 
         Assert.Empty(result);
     }
+
+    [Fact]
+    public void MaxResults_caps_the_ordered_result_after_sorting()
+    {
+        // The cap must apply AFTER number-descending ordering, so the highest (newest) numbers win.
+        var source = new[]
+        {
+            Project(1, "1001"),
+            Project(2, "1005"),
+            Project(3, "1003"),
+            Project(4, "1004"),
+        };
+
+        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: 2));
+
+        Assert.Equal(new[] { 2, 4 }, result.Select(p => p.ProjectId));
+    }
+
+    [Fact]
+    public void MaxResults_null_or_non_positive_means_no_cap()
+    {
+        var source = new[] { Project(1, "1001"), Project(2, "1002"), Project(3, "1003") };
+
+        Assert.Equal(3, ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: null)).Count);
+        Assert.Equal(3, ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: 0)).Count);
+        Assert.Equal(3, ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: -5)).Count);
+    }
 }

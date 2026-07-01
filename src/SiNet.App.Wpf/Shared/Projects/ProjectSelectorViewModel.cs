@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
@@ -23,8 +24,31 @@ namespace SiNet.App.Wpf.Shared.Projects;
 /// </summary>
 public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 {
+    /// <summary>
+    /// Default cap on rows returned to the selector. Keeps a very large project table from flooding the
+    /// (non-virtualized-dropdown) ComboBox and keeps typing responsive. The newest projects (highest
+    /// numbers) are kept because results are ordered number-descending before the cap is applied.
+    /// </summary>
+    public const int DefaultMaxResults = 200;
+
+    /// <summary>
+    /// Debounce window applied to filter/search text changes. Typing coalesces into a single query after
+    /// this idle period instead of querying on every keystroke, which is what kept the UI thread busy.
+    /// </summary>
+    public static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
+
+    // "Loading projects..." — shown immediately on a filter change so the user sees progress while the
+    // (still-enabled) search box remains fully responsive.
+    private const string LoadingText = "\u05D8\u05D5\u05E2\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD...";
+
     private readonly IProjectQueryService _projectQuery;
     private readonly ICurrentProjectContext _currentProject;
+    private readonly TimeSpan _debounce;
+
+    // Debounce + last-write-wins state: each queued reload cancels the previous pending one, and each
+    // in-flight query has a monotonically increasing id so a slow/stale result never overwrites a newer.
+    private CancellationTokenSource? _pendingReloadCts;
+    private long _reloadRequestId;
 
     private string _searchText = string.Empty;
     private string? _selectedJobType;
@@ -43,9 +67,22 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
     /// <summary>Primary constructor: binds to the supplied read port and shared current-project context.</summary>
     public ProjectSelectorViewModel(IProjectQueryService projectQuery, ICurrentProjectContext currentProject)
+        : this(projectQuery, currentProject, SearchDebounce)
+    {
+    }
+
+    /// <summary>
+    /// Constructor with an explicit debounce window. Tests pass <see cref="TimeSpan.Zero"/> to make the
+    /// coalescing/last-write-wins behavior deterministic without waiting on wall-clock time.
+    /// </summary>
+    public ProjectSelectorViewModel(
+        IProjectQueryService projectQuery,
+        ICurrentProjectContext currentProject,
+        TimeSpan debounce)
     {
         _projectQuery = projectQuery ?? throw new ArgumentNullException(nameof(projectQuery));
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
+        _debounce = debounce < TimeSpan.Zero ? TimeSpan.Zero : debounce;
 
         Projects = new ObservableCollection<ProjectSummaryDto>();
         JobTypeOptions = new ObservableCollection<string?> { null };
@@ -66,7 +103,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     /// <summary>Distinct Status filter values (first entry <see langword="null"/> = "all").</summary>
     public ObservableCollection<string?> StatusOptions { get; }
 
-    /// <summary>Free-text search across number / name / place / company. Re-queries on change.</summary>
+    /// <summary>Free-text search across number / name / place / company. Debounced re-query on change.</summary>
     public string SearchText
     {
         get => _searchText;
@@ -74,12 +111,12 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _searchText, value))
             {
-                _ = LoadAsync();
+                QueueReload();
             }
         }
     }
 
-    /// <summary>The selected Job Type filter, or <see langword="null"/> for all. Re-queries on change.</summary>
+    /// <summary>The selected Job Type filter, or <see langword="null"/> for all. Debounced re-query on change.</summary>
     public string? SelectedJobType
     {
         get => _selectedJobType;
@@ -87,12 +124,12 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _selectedJobType, value))
             {
-                _ = LoadAsync();
+                QueueReload();
             }
         }
     }
 
-    /// <summary>The selected Status filter, or <see langword="null"/> for all. Re-queries on change.</summary>
+    /// <summary>The selected Status filter, or <see langword="null"/> for all. Debounced re-query on change.</summary>
     public string? SelectedStatus
     {
         get => _selectedStatus;
@@ -100,12 +137,12 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _selectedStatus, value))
             {
-                _ = LoadAsync();
+                QueueReload();
             }
         }
     }
 
-    /// <summary>When <see langword="true"/>, closed/inactive projects are included. Re-queries on change.</summary>
+    /// <summary>When <see langword="true"/>, closed/inactive projects are included. Debounced re-query on change.</summary>
     public bool IncludeClosed
     {
         get => _includeClosed;
@@ -113,7 +150,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _includeClosed, value))
             {
-                _ = LoadAsync();
+                QueueReload();
             }
         }
     }
@@ -135,7 +172,11 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>True while a load is in progress (drives a busy indicator / disables inputs).</summary>
+    /// <summary>
+    /// True while a load is in progress. Drives a busy indicator only — it must NOT disable the search
+    /// box, because typing has to stay responsive while projects load (the view shows a "loading" message
+    /// instead). Only the Refresh command's own re-entrancy guard depends on load state.
+    /// </summary>
     public bool IsBusy
     {
         get => _isBusy;
@@ -153,11 +194,64 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     public ICommand RefreshCommand { get; }
 
     /// <summary>
-    /// Loads (or reloads) the project list applying the current filters. Safe to call repeatedly; the
-    /// last call wins for the displayed collection.
+    /// Schedules a debounced reload. Called by the filter/search setters on every change: it cancels any
+    /// pending (not-yet-started) reload, waits the debounce window, and only then runs the query. Rapid
+    /// typing therefore coalesces into a single query instead of one query per keystroke, and a query
+    /// already cancelled by a newer keystroke never touches the UI. Fire-and-forget by design; failures
+    /// other than cancellation surface through <see cref="StatusMessage"/>.
+    /// </summary>
+    private void QueueReload()
+    {
+        Debug.WriteLine(
+            $"[PERF] ProjectSelector filter changed (search='{_searchText}', jobType='{_selectedJobType}', status='{_selectedStatus}', includeClosed={_includeClosed}) — scheduling debounced reload in {_debounce.TotalMilliseconds:F0} ms.");
+
+        // Cancel the previous pending/in-flight reload so only the latest keystroke wins.
+        var cts = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _pendingReloadCts, cts);
+        previous?.Cancel();
+        previous?.Dispose();
+
+        // Show immediate feedback WITHOUT blocking input (the search box stays enabled).
+        StatusMessage = LoadingText;
+
+        _ = DebouncedReloadAsync(cts);
+    }
+
+    private async Task DebouncedReloadAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            if (_debounce > TimeSpan.Zero)
+            {
+                await Task.Delay(_debounce, cts.Token).ConfigureAwait(true);
+            }
+
+            await LoadAsync(cts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer keystroke — expected; do nothing.
+        }
+        finally
+        {
+            // Clear our slot if we are still the current request.
+            if (Interlocked.CompareExchange(ref _pendingReloadCts, null, cts) == cts)
+            {
+                cts.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Loads (or reloads) the project list applying the current filters and the <see cref="DefaultMaxResults"/>
+    /// cap. Safe to call repeatedly; a monotonic request id enforces <b>last-write-wins</b> so a slow/stale
+    /// result never overwrites a newer one, and the query is fully awaited (no UI-thread blocking).
     /// </summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        var requestId = Interlocked.Increment(ref _reloadRequestId);
+        var sw = Stopwatch.StartNew();
+
         IsBusy = true;
         try
         {
@@ -166,9 +260,21 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
                 JobType: _selectedJobType,
                 Status: _selectedStatus,
                 AssignedUserId: null,
-                IncludeClosed: _includeClosed);
+                IncludeClosed: _includeClosed,
+                MaxResults: DefaultMaxResults);
 
             var results = await _projectQuery.SearchProjectsAsync(query, cancellationToken).ConfigureAwait(true);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Last-write-wins: if a newer request started while we were awaiting, drop these results so
+            // they never overwrite the newer ones on the UI.
+            if (Interlocked.Read(ref _reloadRequestId) != requestId)
+            {
+                Debug.WriteLine(
+                    $"[PERF] ProjectSelector LoadAsync #{requestId} superseded after {sw.ElapsedMilliseconds} ms (dropped).");
+                return;
+            }
 
             Projects.Clear();
             foreach (var project in results)
@@ -184,10 +290,23 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             StatusMessage = results.Count == 0
                 ? "\u05D0\u05D9\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD \u05EA\u05D5\u05D0\u05DE\u05D9\u05DD" // "No matching projects"
                 : $"{results.Count} \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD"; // "{n} projects"
+
+            Debug.WriteLine(
+                $"[PERF] ProjectSelector LoadAsync #{requestId} loaded {results.Count} project(s) in {sw.ElapsedMilliseconds} ms.");
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.WriteLine(
+                $"[PERF] ProjectSelector LoadAsync #{requestId} cancelled after {sw.ElapsedMilliseconds} ms.");
+            throw;
         }
         finally
         {
-            IsBusy = false;
+            // Only the latest request owns the busy flag, so an old cancelled load can't clear it early.
+            if (Interlocked.Read(ref _reloadRequestId) == requestId)
+            {
+                IsBusy = false;
+            }
         }
     }
 
@@ -264,6 +383,13 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         return a.ProjectId == b.ProjectId;
     }
 
-    /// <summary>Unsubscribes from the shared context to avoid leaks when the host view is closed.</summary>
-    public void Dispose() => _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
+    /// <summary>Unsubscribes from the shared context and cancels any pending reload to avoid leaks when the host view is closed.</summary>
+    public void Dispose()
+    {
+        _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
+
+        var pending = Interlocked.Exchange(ref _pendingReloadCts, null);
+        pending?.Cancel();
+        pending?.Dispose();
+    }
 }

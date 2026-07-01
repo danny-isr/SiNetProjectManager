@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Inspection;
@@ -33,6 +34,8 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// <inheritdoc />
     public Window CreateShell()
     {
+        var sw = Stopwatch.StartNew();
+
         var currentUser = _services.GetService<ICurrentUserContext>();
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
@@ -40,8 +43,15 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         var viewModel = new NewShellViewModel(menu, DescribeUser(currentUser));
 
         var selectorView = TryCreateProjectSelector();
+        var selectorReadyMs = sw.ElapsedMilliseconds;
 
-        return new NewShellWindow(viewModel, selectorView, currentProject);
+        var window = new NewShellWindow(viewModel, selectorView, currentProject);
+
+        Debug.WriteLine(
+            $"[PERF] NewShellFactory.CreateShell: selector built at {selectorReadyMs} ms, window constructed at " +
+            $"{sw.ElapsedMilliseconds} ms (projects load lazily after the window is shown).");
+
+        return window;
     }
 
     /// <summary>

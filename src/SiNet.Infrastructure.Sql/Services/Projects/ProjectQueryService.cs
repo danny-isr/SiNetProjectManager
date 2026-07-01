@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Projects;
@@ -44,6 +45,8 @@ public sealed class ProjectQueryService : IProjectQueryService
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        var sw = Stopwatch.StartNew();
+
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
         // Server-side: mirror the legacy load (NameAndNumber present) and project only the columns the
@@ -74,11 +77,20 @@ public sealed class ProjectQueryService : IProjectQueryService
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var loadedMs = sw.ElapsedMilliseconds;
+
         var projects = rows.Select(ToDto);
 
         // Apply the shared selector parity filters/order (dummy-number exclusion, active/include-closed,
-        // job-type/status/free-text, number-descending). AssignedUserId is intentionally not applied here.
-        return ProjectSummaryQuery.Apply(projects, query);
+        // job-type/status/free-text, number-descending) plus the optional MaxResults cap. AssignedUserId
+        // is intentionally not applied here.
+        var results = ProjectSummaryQuery.Apply(projects, query);
+
+        Debug.WriteLine(
+            $"[PERF] ProjectQueryService.SearchProjectsAsync: loaded {rows.Count} row(s) from DB in {loadedMs} ms, " +
+            $"filtered to {results.Count} in {sw.ElapsedMilliseconds - loadedMs} ms (total {sw.ElapsedMilliseconds} ms).");
+
+        return results;
     }
 
     /// <inheritdoc />

@@ -9,17 +9,16 @@
              d:DesignWidth="720"
              d:DataContext="{d:DesignInstance Type=local:ProjectSelectorViewModel, IsDesignTimeCreatable=True}">
 
-    <UserControl.Resources>
-        <local:InverseBooleanConverter x:Key="InverseBool" />
-    </UserControl.Resources>
-
     <!--
         Shared Project Selector (docs/PROJECTS.md §5). Reusable across windows; binds only to
         ProjectSummaryDto. Selecting a project publishes it to ICurrentProjectContext via the view model.
         This slice uses fake/in-memory data behind IProjectQueryService — no DB, no EF entities.
     -->
     <WrapPanel Orientation="Horizontal">
-        <!-- Searchable project selection: number / name / place / company. -->
+        <!-- Searchable project selection: number / name / place / company.
+             The input is intentionally NOT disabled while loading (no IsBusy binding) so typing stays
+             responsive; the StatusMessage shows "loading" instead. Item virtualization + recycling keep
+             the dropdown fast even with a capped-but-large result set. -->
         <ComboBox Width="360"
                   Margin="0,0,10,4"
                   IsEditable="True"
@@ -29,7 +28,9 @@
                   Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                   ItemsSource="{Binding Projects}"
                   SelectedItem="{Binding SelectedProject}"
-                  IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                  ScrollViewer.CanContentScroll="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
                   ToolTip="&#x05D1;&#x05D7;&#x05E8; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7;)">
             <ComboBox.ItemTemplate>
                 <DataTemplate>

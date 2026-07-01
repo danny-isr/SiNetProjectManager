@@ -89,10 +89,19 @@ public static class ProjectSummaryQuery
 
         // Parity ordering: project number descending (newest first). Numbers are display strings, so
         // parse for a stable numeric sort and fall back to ordinal for anything non-numeric.
-        return results
+        var ordered = results
             .OrderByDescending(p => long.TryParse(p.ProjectNumber, out var n) ? n : long.MinValue)
-            .ThenByDescending(p => p.ProjectNumber, StringComparer.Ordinal)
-            .ToList();
+            .ThenByDescending(p => p.ProjectNumber, StringComparer.Ordinal);
+
+        // Optional responsiveness cap: after ordering, keep only the first N (highest numbers). A
+        // null/non-positive MaxResults means "no cap". This prevents flooding a non-virtualized selector
+        // with a very large project table; it changes no data, only how many display rows are returned.
+        if (query.MaxResults is int max && max > 0)
+        {
+            return ordered.Take(max).ToList();
+        }
+
+        return ordered.ToList();
     }
 
     /// <summary>
