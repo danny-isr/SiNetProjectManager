@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Identity;
-using SiNetSQL.Services.Users;
 
 namespace SiNetProjectManagerV2.Services.Composition;
 
@@ -12,6 +11,7 @@ public static class IdentityServiceCollectionExtensions
 {
     /// <summary>
     /// Registers identity read/query ports backed by the legacy authenticated user context and services.
+    /// User-management writes are not registered here — rebuild in Infrastructure.Sql for New System.
     /// </summary>
     public static IServiceCollection AddSiNetIdentityLegacyAdapters(this IServiceCollection services)
     {
@@ -21,8 +21,6 @@ public static class IdentityServiceCollectionExtensions
         services.AddSingleton<ICurrentUserProfileService, LegacyCurrentUserProfileService>();
         services.AddSingleton<IAuthorizationQueryService, LegacyAuthorizationQueryService>();
         services.AddSingleton<IActionPermissionQueryService, LegacyActionPermissionQueryService>();
-        // Transient to align with IUserService; host must register IUserService before resolving this port.
-        services.AddTransient<IUserManagementService, UserManagementPortAdapter>();
 
         return services;
     }

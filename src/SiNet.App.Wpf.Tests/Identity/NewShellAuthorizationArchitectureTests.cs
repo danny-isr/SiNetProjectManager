@@ -5,7 +5,7 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Identity;
 
 /// <summary>
-/// Ensures New System shell code uses Application authorization ports, not legacy singletons.
+/// Ensures New System shell code uses Application authorization ports, not legacy singletons or legacy windows.
 /// </summary>
 public sealed class NewShellAuthorizationArchitectureTests
 {
@@ -16,6 +16,15 @@ public sealed class NewShellAuthorizationArchitectureTests
         Assert.DoesNotContain(
             wpfAssembly.GetReferencedAssemblies(),
             a => a.Name == "SiNetSQL");
+    }
+
+    [Fact]
+    public void NewShell_types_do_not_reference_SiNetProjectManagerV2_assembly()
+    {
+        var wpfAssembly = typeof(NewShellFactory).Assembly;
+        Assert.DoesNotContain(
+            wpfAssembly.GetReferencedAssemblies(),
+            a => a.Name == "SiNetProjectManagerV2");
     }
 
     [Fact]
@@ -37,31 +46,20 @@ public sealed class NewShellAuthorizationArchitectureTests
     }
 
     [Fact]
-    public void NewShellFactory_wires_action_permission_admin_via_factory_and_feature_code()
+    public void NewShellFactory_does_not_open_legacy_admin_windows()
     {
         var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
-        Assert.Contains("IActionPermissionAdminWindowFactory", source, StringComparison.Ordinal);
-        Assert.Contains("AppFeatureCodes.ActionPermissionsManage", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IActionPermissionAdminWindowFactory", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IUserManagementWindowFactory", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IAddUserWindowFactory", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ActionPermissionWindow", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NewShellFactory_wires_user_management_via_factory_and_feature_code()
-    {
-        var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
-        Assert.Contains("IUserManagementWindowFactory", source, StringComparison.Ordinal);
-        Assert.Contains("AppFeatureCodes.UsersManage", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("UserManagementWindow()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UserManagementWindow", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddUserWindow", source, StringComparison.Ordinal);
     }
 
     [Fact]
     public void NewShell_types_do_not_reference_action_permission_legacy_service()
     {
-        var wpfAssembly = typeof(NewShellFactory).Assembly;
-        Assert.DoesNotContain(
-            wpfAssembly.GetReferencedAssemblies(),
-            a => a.Name == "SiNetSQL");
-
         var factorySource = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
         Assert.DoesNotContain("IActionPermissionService", factorySource, StringComparison.Ordinal);
         Assert.DoesNotContain("ActionPermissionService", factorySource, StringComparison.Ordinal);
@@ -78,11 +76,6 @@ public sealed class NewShellAuthorizationArchitectureTests
     [Fact]
     public void NewShell_types_do_not_reference_user_management_legacy_service()
     {
-        var wpfAssembly = typeof(NewShellFactory).Assembly;
-        Assert.DoesNotContain(
-            wpfAssembly.GetReferencedAssemblies(),
-            a => a.Name == "SiNetSQL");
-
         var factorySource = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
         Assert.DoesNotContain("IUserService", factorySource, StringComparison.Ordinal);
         Assert.DoesNotContain("UserService", factorySource, StringComparison.Ordinal);
@@ -90,35 +83,6 @@ public sealed class NewShellAuthorizationArchitectureTests
         var vmSource = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellViewModel.cs");
         Assert.DoesNotContain("IUserService", vmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("UserService", vmSource, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NewShellFactory_wires_add_user_via_factory_and_feature_code()
-    {
-        var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
-        Assert.Contains("IAddUserWindowFactory", source, StringComparison.Ordinal);
-        Assert.Contains("AppFeatureCodes.UsersManage", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("AddUserWindow()", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void UserManagementViewModel_uses_user_management_port_internally()
-    {
-        var source = ReadSourceRelativeToRepo("../SiNetSQL/SiNetSQL/MVVM/UserManagementViewModel.cs");
-        Assert.Contains("IUserManagementService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("new UserManagementPortAdapter", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("_userService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("UserUpdateDto", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AddUserViewModel_uses_user_management_port_internally()
-    {
-        var source = ReadSourceRelativeToRepo("../SiNetSQL/SiNetSQL/MVVM/AddUserViewModel.cs");
-        Assert.Contains("IUserManagementService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("new UserManagementPortAdapter", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("_userService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("new Siuser", source, StringComparison.Ordinal);
     }
 
     private static string ReadSourceRelativeToRepo(string relativePath)

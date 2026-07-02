@@ -1,7 +1,8 @@
 # Identity and Permissions Target
 
 > **Status:** Active target specification (documentation slice — 2026-07-02)  
-> **Audit reconciliation:** [`users_system_audit_reconciliation_2026-07-02.md`](./users_system_audit_reconciliation_2026-07-02.md) — corrects 2026-07-02 review gaps (Identity tests, Q10, self-protection docs, DI path).  
+> **Audit reconciliation:** [`users_system_audit_reconciliation_2026-07-02.md`](./users_system_audit_reconciliation_2026-07-02.md)  
+> **New System boundary:** [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) — New System must not open legacy windows or reference SiNetSQL.  
 > **Scope:** Application identity, roles, action permissions, user management, and shell/menu availability for the **New System** refactor.  
 > **Read together with:** [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md), [`APP_SHELL.md`](./APP_SHELL.md), [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md), [`MIGRATION_MAP.md`](./MIGRATION_MAP.md), [`PROJECTS.md`](./PROJECTS.md).
 
@@ -290,8 +291,8 @@ Opened surface / Application service re-checks before mutating state
 | `UserService`, `ActionPermissionService`, `SystemSettingsService` | Application-layer ports + Sql implementations |
 | `MainWindow` menu gates | `IAuthorizationQueryService` consumed by New Shell |
 | Admin/management windows (`AddUserWindow`, …) | Migrated WPF surfaces (future slices) |
-| `UserManagementWindow` | New System menu via `IUserManagementWindowFactory` (with P6 admin menu slice) |
-| `ActionPermissionWindow` | New System menu via `IActionPermissionAdminWindowFactory` (P6); visual clone deferred |
+| `UserManagementWindow` | Legacy host menu only — **not** New System |
+| `ActionPermissionWindow` | Legacy host menu only — **not** New System |
 
 ### 6.2 What New System must not do yet
 
@@ -396,7 +397,7 @@ public interface IActionPermissionQueryService
 
 **Current user:** `CanCurrentUserExecuteActionAsync` uses `ICurrentUserContext.UserId`; returns `false` when `UserId` is `null` — never invents an id.
 
-**UI:** Action permission **management** window remains the legacy `ActionPermissionWindow` implementation; the New System shell opens it via `IActionPermissionAdminWindowFactory` (P6) when `ActionPermissions.Manage` is authorized.
+**UI:** Legacy admin windows stay on the Legacy startup path. New System will get native `SiNet.App.Wpf` surfaces when rebuilt (see [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md)).
 
 ### 7.5 Implemented — user management (P5)
 
@@ -411,17 +412,17 @@ public interface IUserManagementService
 
 **DTOs:** `UserSummaryDto`, `CreateUserCommand`, `UpdateUserCommand`, `AppAccUserType` (mirrors legacy `AccUserType`).
 
-**Host adapter (shared):** `SiNetSQL/Services/Users/UserManagementPortAdapter.cs` → legacy `UserService`.
+**Host adapter (target):** `SiNet.Infrastructure.Sql` — not `SiNetSQL` adapter for New System.
 
-**UI:** `UserManagementViewModel` and `AddUserViewModel` receive `IUserManagementService` from DI (host registers `UserManagementPortAdapter` → legacy `UserService`). New System shell opens admin windows via host factories when authorized.
+**UI (legacy only):** `UserManagementViewModel` / `AddUserViewModel` in `SiNetSQL.MVVM` remain for Legacy path; do not wire to New System menu.
 
 ### 7.6 DI registration direction
 
 Modular host extensions (P7):
 
 ```text
-AddSiNetIdentityLegacyAdapters()   → ICurrentUserContext, profile, authorization, action permission, user management ports
-AddSiNetNewSystemGraph()           → project context + shell + admin window factories
+AddSiNetIdentityLegacyAdapters()   → read/query identity ports only (no user-management writes for New System)
+AddSiNetNewSystemGraph()           → project context + shell (no legacy window factories)
 ```
 
 Full container split (`AddSiNetClean` vs `AddSiNetWithLegacyBridge`) remains deferred per `ARCHITECTURE_TARGET.md`.
@@ -451,10 +452,9 @@ Phased, documentation-driven slices:
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
-| **P5 — user management port** | `IUserManagementService`; migrate User Management UI | ✅ Implemented (port + adapter; VMs DI-injected; admin menus wired) |
-| **P6 — action permission admin UI** | `ActionPermissionWindow` in New System menu via factory | ✅ Implemented (legacy window; host factory) |
-| **P6b — add user menu** | `AddUserWindow` in New System menu via `IAddUserWindowFactory` | ✅ Implemented (legacy window; host factory) |
-| **P7 — composition split** | Modular DI: `AddSiNetIdentityLegacyAdapters`, `AddSiNetNewSystemGraph` | ✅ Partial (host extensions; full clean/legacy container split deferred) |
+| **P5 — user management port** | `IUserManagementService` + native New System UI | 🟡 Port defined; **Infrastructure.Sql** impl + App.Wpf surface pending |
+| **P6 — action permission admin UI** | Native App.Wpf admin surface | 🟡 Revoked legacy-window approach; rebuild pending |
+| **P7 — composition split** | Modular DI without legacy UI wiring | ⏸ Paused until boundary clean (see `NEW_SYSTEM_BOUNDARY.md`) |
 
 Each phase ends with: tests on service behavior, doc/code alignment check, explicit note in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md).
 

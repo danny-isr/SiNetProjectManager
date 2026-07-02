@@ -160,23 +160,13 @@ Initial menu (P3 + P6):
 | --- | --- | --- | --- |
 | Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
-| Action permissions | `ActionPermissions.Manage` | Administrator | `IActionPermissionAdminWindowFactory.Create()` → legacy `ActionPermissionWindow` |
-| User management | `Users.Manage` | Administrator | `IUserManagementWindowFactory.Create()` → legacy `UserManagementWindow` |
-| Add user | `Users.Manage` | Administrator | `IAddUserWindowFactory.Create()` → legacy `AddUserWindow` |
+| Action permissions | `ActionPermissions.Manage` | Administrator | *native New System surface — not yet implemented* |
+| User management | `Users.Manage` | Administrator | *native New System surface — not yet implemented* |
 | Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
 
-**Action permissions (P4):** read-only checks for email/workflow follow-up actions use
-`IActionPermissionQueryService` (`CanUserExecuteActionAsync`, `GetAuthorizedUsersForActionAsync`) when
-migrated surfaces need them. Deny-by-default + Administrator bypass match legacy `ActionPermissionService`.
-Action permission **admin UI** (P6): Administrators see **הרשאות פעולה** in the New System menu when
-`ActionPermissions.Manage` is authorized. The shell opens the existing legacy `ActionPermissionWindow`
-via `IActionPermissionAdminWindowFactory` — no visual clone yet; save still uses `ActionPermissionService`.
-
-**User management (P5 + menu):** Administrators see **ניהול משתמשים** and **הוספת משתמש** in the New System menu when
-`Users.Manage` is authorized. The shell opens legacy `UserManagementWindow` / `AddUserWindow` via
-`IUserManagementWindowFactory` / `IAddUserWindowFactory`. CRUD flows through `IUserManagementService` (DI-injected into view models; host registers `UserManagementPortAdapter` → legacy `UserService`).
+**Action permissions / user management:** **Not** in the New System menu. Legacy admin windows remain on the Legacy startup path only (`MainWindow` menu). Rebuild as native `SiNet.App.Wpf` surfaces + `Infrastructure.Sql` — see [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md).
 
 ---
 

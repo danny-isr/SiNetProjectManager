@@ -74,35 +74,9 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "פתיחת מעטפת הביקורת החדשה"));
         }
 
-        // Action permission admin — legacy window opened via host factory; menu gated by feature code.
-        if (_services.GetService<IActionPermissionAdminWindowFactory>() is { } actionPermissionFactory
-            && CanAccessFeature(AppFeatureCodes.ActionPermissionsManage))
-        {
-            items.Add(new NewShellMenuItem(
-                "הרשאות פעולה",
-                () => ShowDialog(actionPermissionFactory.Create()),
-                "ניהול הרשאות פעולה לפי סוג פעולה"));
-        }
-
-        // User management — legacy dashboard opened via host factory; menu gated by feature code.
-        if (_services.GetService<IUserManagementWindowFactory>() is { } userManagementFactory
-            && CanAccessFeature(AppFeatureCodes.UsersManage))
-        {
-            items.Add(new NewShellMenuItem(
-                "ניהול משתמשים",
-                () => ShowWindow(userManagementFactory.Create()),
-                "ניהול משתמשים, תפקידים וסטטוס פעיל"));
-        }
-
-        // Add user — legacy dialog opened via host factory; same Administrator feature gate.
-        if (_services.GetService<IAddUserWindowFactory>() is { } addUserFactory
-            && CanAccessFeature(AppFeatureCodes.UsersManage))
-        {
-            items.Add(new NewShellMenuItem(
-                "הוספת משתמש",
-                () => ShowDialog(addUserFactory.Create()),
-                "הוספת משתמש חדש למערכת"));
-        }
+        // Action permissions / user management — NOT wired here. Legacy admin windows belong only on the
+        // Legacy startup path. New System will get native App.Wpf surfaces + Infrastructure.Sql (see
+        // docs/NEW_SYSTEM_BOUNDARY.md).
 
         // Settings — surface not implemented yet; show disabled. When implemented, gate with
         // AppFeatureCodes.SystemSettingsWrite (Administrator).
@@ -184,16 +158,6 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         window.Show();
-    }
-
-    private static void ShowDialog(Window window)
-    {
-        if (System.Windows.Application.Current?.MainWindow is { } owner && !ReferenceEquals(owner, window))
-        {
-            window.Owner = owner;
-        }
-
-        window.ShowDialog();
     }
 
     private string? ResolveCurrentUserDisplay()

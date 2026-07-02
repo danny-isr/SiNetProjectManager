@@ -11,7 +11,7 @@ namespace SiNetProjectManagerV2.Services.Composition;
 public static class NewSystemServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers Project Context, the clean shell factory, and host-owned admin window factories.
+    /// Registers Project Context and the clean shell factory. Does not register legacy window factories.
     /// Call after SQL project reads and Inspection shell views are registered.
     /// </summary>
     public static IServiceCollection AddSiNetNewSystemGraph(this IServiceCollection services)
@@ -21,10 +21,6 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         ShellServiceCollectionExtensions.AddSiNetShell(services);
-
-        services.AddSingleton<IActionPermissionAdminWindowFactory, ActionPermissionAdminWindowFactory>();
-        services.AddSingleton<IUserManagementWindowFactory, UserManagementWindowFactory>();
-        services.AddSingleton<IAddUserWindowFactory, AddUserWindowFactory>();
 
         return services;
     }
