@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Admin.Permissions;
+using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -98,8 +99,15 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "ניהול הרשאות פעולה (מערכת חדשה)"));
         }
 
-        // Settings — surface not implemented yet; show disabled. When implemented, gate with
-        // AppFeatureCodes.SystemSettingsWrite (Administrator).
+        if (CanAccessFeature(AppFeatureCodes.SystemSettingsWrite))
+        {
+            items.Add(new NewShellMenuItem(
+                "מפתחות וסודות",
+                OpenNativeSecretSetup,
+                "הגדרת מפתחות וסודות (Credential Vault)"));
+        }
+
+        // Legacy settings placeholder — native secrets moved to dedicated menu item above.
         const bool settingsSurfaceImplemented = false;
         var settingsAuthorized = CanAccessFeature(AppFeatureCodes.SystemSettingsWrite);
         items.Add(new NewShellMenuItem(
@@ -179,6 +187,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     {
         var window = _services.GetRequiredService<ActionPermissionsWindow>();
         ShowWindow(window);
+    }
+
+    private void OpenNativeSecretSetup()
+    {
+        try
+        {
+            var window = _services.GetRequiredService<SecretSetupWindow>();
+            ShowDialog(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת מפתחות וסודות: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
     }
 
     private void OpenInspectionShell()

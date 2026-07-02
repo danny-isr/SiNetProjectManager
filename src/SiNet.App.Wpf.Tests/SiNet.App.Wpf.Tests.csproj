@@ -26,6 +26,7 @@
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
 	<ProjectReference Include="..\SiNet.App.Wpf\SiNet.App.Wpf.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
+	<ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
   </ItemGroup>
 
 </Project>
