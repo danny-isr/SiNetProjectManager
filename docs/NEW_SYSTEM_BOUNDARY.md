@@ -1,14 +1,27 @@
 # New System boundary (2026-07-02)
 
-> **Decision:** New System is **not** a legacy host. Migration means re-implementing capabilities in the new architecture — not wrapping old windows.
+> **Decision:** New System is **not** a legacy host.
+
+## Core statements
+
+```text
+New System is not a legacy host.
+No legacy windows in NewShell.
+No legacy ViewModels in App.Wpf.
+No SiNetSQL.MVVM.
+No V2 Dialogs.
+Migration means rebuild into new architecture, not wrapping old windows.
+```
+
+New System admin capabilities (Action Permissions, User Management, Add User) will be built **only** as native `SiNet.App.Wpf` surfaces backed by `SiNet.Application` ports and `SiNet.Infrastructure.Sql` — never by opening legacy windows from the New System menu.
 
 ## Rule
 
 `SiNet.App.Wpf` must **not**:
 
-- Reference `SiNetSQL`, `SiNetProjectManagerV2`, or `SiNetSQL.MVVM`
+- Reference `SiNetSQL`, `SiNetProjectManagerV2`, or `SiNetSQL.MVVM` (project or assembly)
 - Open legacy windows (`ActionPermissionWindow`, `UserManagementWindow`, `AddUserWindow`, …)
-- Depend on legacy ViewModels or host window factories
+- Depend on legacy ViewModels, `SiNetProjectManagerV2.Dialogs`, or host window factories for admin UI
 
 Legacy startup (`StartupMode.Legacy` → `SiNetProjectManagerV2.MainWindow`) may continue to use legacy UI unchanged.
 
@@ -29,6 +42,20 @@ SiNet.App.Wpf              → views, viewmodels, shell, navigation
 | `IAddUserWindowFactory` → legacy `AddUserWindow` | **Removed** |
 | `UserManagementPortAdapter` in V2 DI for New System | **Removed** from `AddSiNetIdentityLegacyAdapters` |
 | Changes to `SiNetSQL.MVVM` for New System consumption | **Stopped** |
+
+## Architecture tests (boundary hardening)
+
+Enforced by `src/SiNet.App.Wpf.Tests/Boundary/NewSystemBoundaryTests.cs`:
+
+| Guard | What it checks |
+| --- | --- |
+| csproj references | `SiNet.App.Wpf.csproj` has no `SiNetSQL` / `SiNetProjectManagerV2` project refs |
+| assembly references | Loaded `SiNet.App.Wpf` assembly does not reference legacy assemblies |
+| source scan | All `.cs` / `.xaml` under `src/SiNet.App.Wpf` exclude forbidden legacy identifiers |
+| NewShellFactory | No legacy admin factories, feature gates, Hebrew admin menu labels, or legacy window types |
+| factory policy | Only `IEmailWindowFactory` may exist as a window factory in App.Wpf (native surfaces) |
+
+See also `Identity/NewShellAuthorizationArchitectureTests.cs` for authorization-port usage in the shell.
 
 ## Rebuild path (next slices)
 
