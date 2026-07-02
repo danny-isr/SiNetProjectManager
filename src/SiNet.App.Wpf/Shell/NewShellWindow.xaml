@@ -45,8 +45,8 @@
             </Grid>
         </Border>
 
-        <!-- Current Project bar: hosts the shared ProjectSelectorView + current project display -->
-        <Border Grid.Row="1" Background="#EEF3F9" Padding="16,8" BorderBrush="#D5DEE9" BorderThickness="0,0,0,1">
+        <!-- Current Project bar: hosts the shared ProjectSelectorView (compact, reusable — docs/PROJECTS.md §5) -->
+        <Border Grid.Row="1" Background="#EEF3F9" Padding="12,5" BorderBrush="#D5DEE9" BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

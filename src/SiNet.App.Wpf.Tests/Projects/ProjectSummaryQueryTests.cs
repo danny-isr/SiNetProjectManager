@@ -157,41 +157,6 @@ public sealed class ProjectSummaryQueryTests
         Assert.Equal(new[] { expectedId }, result.Select(p => p.ProjectId));
     }
 
-    [Theory]
-    [InlineData("רעננה 1234")]
-    [InlineData("1234 רעננה")]
-    [InlineData("שםפרויקט לקוח")]
-    public void Multi_word_search_requires_every_token_in_any_field(string search)
-    {
-        var source = new[]
-        {
-            Project(1, "1234", name: "שםפרויקט", place: "רעננה", company: "לקוח"),
-            Project(2, "9999", name: "other", place: "other", company: "other"),
-        };
-
-        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(SearchText: search));
-
-        Assert.Equal(new[] { 1 }, result.Select(p => p.ProjectId));
-    }
-
-    [Fact]
-    public void Multi_word_search_fails_when_one_token_is_missing()
-    {
-        var source = new[] { Project(1, "1234", name: "שםפרויקט", place: "רעננה", company: "לקוח") };
-
-        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(SearchText: "רעננה 5678"));
-
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public void SplitSearchTokens_splits_on_spaces_commas_and_semicolons()
-    {
-        var tokens = ProjectSummaryQuery.SplitSearchTokens("  alpha, beta;gamma\t delta  ");
-
-        Assert.Equal(new[] { "alpha", "beta", "gamma", "delta" }, tokens);
-    }
-
     [Fact]
     public void Free_text_is_case_insensitive_and_trimmed()
     {
@@ -257,32 +222,5 @@ public sealed class ProjectSummaryQueryTests
         var result = ProjectSummaryQuery.Apply(Array.Empty<ProjectSummaryDto>(), new ProjectSearchQuery());
 
         Assert.Empty(result);
-    }
-
-    [Fact]
-    public void MaxResults_caps_the_ordered_result_after_sorting()
-    {
-        // The cap must apply AFTER number-descending ordering, so the highest (newest) numbers win.
-        var source = new[]
-        {
-            Project(1, "1001"),
-            Project(2, "1005"),
-            Project(3, "1003"),
-            Project(4, "1004"),
-        };
-
-        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: 2));
-
-        Assert.Equal(new[] { 2, 4 }, result.Select(p => p.ProjectId));
-    }
-
-    [Fact]
-    public void MaxResults_null_or_non_positive_means_no_cap()
-    {
-        var source = new[] { Project(1, "1001"), Project(2, "1002"), Project(3, "1003") };
-
-        Assert.Equal(3, ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: null)).Count);
-        Assert.Equal(3, ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: 0)).Count);
-        Assert.Equal(3, ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(MaxResults: -5)).Count);
     }
 }

@@ -1,25 +1,36 @@
-using System.Diagnostics;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Projects;
 using SiNetSQL.Data;
-using SiNetSQL.Models;
 
 namespace SiNetSQL.Services.Projects;
 
 /// <summary>
 /// Real, <b>read-only</b> <see cref="IProjectQueryService"/> backed by the existing SiNetSQL EF model
-/// (see <c>docs/PROJECTS.md</c> §5/§6 and <c>docs/PROJECT_CONTEXT_MIGRATION.md</c> §8a).
+/// (see <c>docs/PROJECTS.md</c> §5/§6 and <c>docs/PROJECT_CONTEXT_MIGRATION.md</c>).
 /// <para>
-/// Browse mode (no search text) filters and caps in SQL so the full catalog is not materialized.
-/// Search mode filters in SQL against the full source, then applies shared relevance ranking and
-/// <c>MaxResults</c> in memory via <see cref="ProjectSummaryQuery"/>.
+/// It mirrors the legacy project-loading authority
+/// (<c>SiNetProjectManagerV2/Dialogs/ProjectSelectorDialog.LoadProjects</c>): projects are read through
+/// <see cref="IDbContextFactory{TContext}"/> with <c>AsNoTracking()</c>, filtered server-side to rows
+/// that have a <c>NameAndNumber</c>, projected to clean <see cref="ProjectSummaryDto"/> rows at the
+/// boundary (EF entities never leak into WPF), then narrowed/ordered by the shared
+/// <see cref="ProjectSummaryQuery"/> helper so the selector's parity behavior (dummy-number exclusion,
+/// active/include-closed, job-type/status/free-text filters, number-descending order) matches the fake
+/// source exactly.
+/// </para>
+/// <para>
+/// This service performs <b>no writes</b> and touches <b>no schema</b>. It only issues read queries; it
+/// never adds, updates, or deletes entities and never mutates workflow, tasks, or files.
 /// </para>
 /// </summary>
 public sealed class ProjectQueryService : IProjectQueryService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
 
+    /// <summary>
+    /// Creates the service over the shared <see cref="SiNetSQLDbContext"/> factory. The factory (and its
+    /// connection string) is supplied by the host composition root; this service performs no lookup.
+    /// </summary>
     public ProjectQueryService(IDbContextFactory<SiNetSQLDbContext> dbFactory)
     {
         ArgumentNullException.ThrowIfNull(dbFactory);
@@ -33,53 +44,41 @@ public sealed class ProjectQueryService : IProjectQueryService
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var sw = Stopwatch.StartNew();
-        var hasSearch = !string.IsNullOrWhiteSpace(query.SearchText);
-        var maxResults = query.MaxResults is int cap && cap > 0 ? cap : (int?)null;
-
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var filtered = ApplyBaseFilters(db.Projects.AsNoTracking(), query);
-
-        if (!hasSearch && maxResults.HasValue)
-        {
-            var rows = await filtered
-                .OrderByDescending(p => p.Number ?? float.MinValue)
-                .ThenByDescending(p => p.Id)
-                .Take(maxResults.Value)
-                .Select(ProjectRowProjection)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            var browseMs = sw.ElapsedMilliseconds;
-            var browseResults = ProjectSummaryQuery.Apply(rows.Select(ToDto), query with { MaxResults = null });
-
-            Debug.WriteLine(
-                $"[PERF] ProjectQueryService.SearchProjectsAsync (browse): SQL capped at {maxResults.Value}, " +
-                $"returned {browseResults.Count} row(s) in {browseMs} ms.");
-
-            return browseResults;
-        }
-
-        if (hasSearch)
-        {
-            filtered = ApplySearchTokens(filtered, query.SearchText!.Trim());
-        }
-
-        var matchingRows = await filtered
-            .Select(ProjectRowProjection)
+        // Server-side: mirror the legacy load (NameAndNumber present) and project only the columns the
+        // selector needs. Navigation titles (Place/Company/Status) and the first project type are read
+        // via correlated sub-selects so EF entities never materialize past this boundary.
+        var rows = await db.Projects
+            .AsNoTracking()
+            .Where(p => p.NameAndNumber != null)
+            .Select(p => new ProjectRow
+            {
+                Id = p.Id,
+                Number = p.Number,
+                Title = p.Title,
+                PlaceName = p.Place != null ? p.Place.Title : null,
+                CompanyName = p.Company != null ? p.Company.Title : null,
+                StatusName = p.ProjectStatus != null ? p.ProjectStatus.Title : null,
+                // Display-only: a project can have several types (TypeOfProjectInProject); the selector's
+                // Job Type filter over a single scalar is deferred, so we surface the first type's title.
+                JobType = p.TypeOfProjectInProjects
+                    .Where(t => t.ProjectType != null && t.ProjectType.Title != null)
+                    .Select(t => t.ProjectType!.Title)
+                    .FirstOrDefault(),
+                // Display-only assigned/responsible worker; the user-id filter is deferred (the DTO carries
+                // a name, not an id).
+                AssignedUserName = p.Worker,
+                IsActive = p.EndOfProject != true,
+            })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var loadedMs = sw.ElapsedMilliseconds;
-        var results = ProjectSummaryQuery.Apply(matchingRows.Select(ToDto), query);
+        var projects = rows.Select(ToDto);
 
-        Debug.WriteLine(
-            $"[PERF] ProjectQueryService.SearchProjectsAsync ({(hasSearch ? "search" : "browse-uncapped")}): " +
-            $"matched {matchingRows.Count} row(s) from DB in {loadedMs} ms, " +
-            $"returned {results.Count} after rank/cap in {sw.ElapsedMilliseconds} ms.");
-
-        return results;
+        // Apply the shared selector parity filters/order (dummy-number exclusion, active/include-closed,
+        // job-type/status/free-text, number-descending). AssignedUserId is intentionally not applied here.
+        return ProjectSummaryQuery.Apply(projects, query);
     }
 
     /// <inheritdoc />
@@ -92,73 +91,26 @@ public sealed class ProjectQueryService : IProjectQueryService
         var row = await db.Projects
             .AsNoTracking()
             .Where(p => p.Id == projectId)
-            .Select(ProjectRowProjection)
+            .Select(p => new ProjectRow
+            {
+                Id = p.Id,
+                Number = p.Number,
+                Title = p.Title,
+                PlaceName = p.Place != null ? p.Place.Title : null,
+                CompanyName = p.Company != null ? p.Company.Title : null,
+                StatusName = p.ProjectStatus != null ? p.ProjectStatus.Title : null,
+                JobType = p.TypeOfProjectInProjects
+                    .Where(t => t.ProjectType != null && t.ProjectType.Title != null)
+                    .Select(t => t.ProjectType!.Title)
+                    .FirstOrDefault(),
+                AssignedUserName = p.Worker,
+                IsActive = p.EndOfProject != true,
+            })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         return row is null ? null : ToDto(row);
     }
-
-    private static IQueryable<Project> ApplyBaseFilters(IQueryable<Project> source, ProjectSearchQuery query)
-    {
-        var results = source.Where(p => p.NameAndNumber != null);
-
-        // Dummy/reserved numbers — parity with ProjectSummaryQuery.DefaultExcludedNumbers.
-        results = results.Where(p => p.Number == null || (p.Number != 0 && p.Number != 9999));
-
-        if (!query.IncludeClosed)
-        {
-            results = results.Where(p => p.EndOfProject != true);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.JobType))
-        {
-            var jobType = query.JobType;
-            results = results.Where(p => p.TypeOfProjectInProjects.Any(t =>
-                t.ProjectType != null && t.ProjectType.Title == jobType));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Status))
-        {
-            var status = query.Status;
-            results = results.Where(p => p.ProjectStatus != null && p.ProjectStatus.Title == status);
-        }
-
-        return results;
-    }
-
-    private static IQueryable<Project> ApplySearchTokens(IQueryable<Project> source, string searchText)
-    {
-        var tokens = ProjectSummaryQuery.SplitSearchTokens(searchText);
-        foreach (var token in tokens)
-        {
-            var t = token;
-            source = source.Where(p =>
-                (p.NameAndNumber != null && p.NameAndNumber.Contains(t))
-                || (p.Title != null && p.Title.Contains(t))
-                || (p.Place != null && p.Place.Title != null && p.Place.Title.Contains(t))
-                || (p.Company != null && p.Company.Title != null && p.Company.Title.Contains(t)));
-        }
-
-        return source;
-    }
-
-    private static readonly System.Linq.Expressions.Expression<Func<Project, ProjectRow>> ProjectRowProjection =
-        p => new ProjectRow
-        {
-            Id = p.Id,
-            Number = p.Number,
-            Title = p.Title,
-            PlaceName = p.Place != null ? p.Place.Title : null,
-            CompanyName = p.Company != null ? p.Company.Title : null,
-            StatusName = p.ProjectStatus != null ? p.ProjectStatus.Title : null,
-            JobType = p.TypeOfProjectInProjects
-                .Where(t => t.ProjectType != null && t.ProjectType.Title != null)
-                .Select(t => t.ProjectType!.Title)
-                .FirstOrDefault(),
-            AssignedUserName = p.Worker,
-            IsActive = p.EndOfProject != true,
-        };
 
     private static ProjectSummaryDto ToDto(ProjectRow row) => new(
         ProjectId: row.Id,
@@ -171,6 +123,11 @@ public sealed class ProjectQueryService : IProjectQueryService
         AssignedUserName: NullIfBlank(row.AssignedUserName),
         IsActive: row.IsActive);
 
+    /// <summary>
+    /// Formats the legacy <c>float?</c> project number as the selector's display string: an integer when
+    /// there is no fractional part (e.g. <c>1042</c>), otherwise an invariant round-trip value. Empty when
+    /// the number is missing.
+    /// </summary>
     private static string FormatNumber(float? number)
     {
         if (number is not float value)
@@ -187,6 +144,10 @@ public sealed class ProjectQueryService : IProjectQueryService
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value;
 
+    /// <summary>
+    /// Flat projection of the columns the selector needs. Kept private so EF entities never escape this
+    /// service and the DTO mapping (including number formatting) stays in memory.
+    /// </summary>
     private sealed class ProjectRow
     {
         public int Id { get; init; }

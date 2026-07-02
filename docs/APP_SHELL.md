@@ -45,10 +45,12 @@ New system mode  → opens the new clean shell (NewShellWindow, SiNet.App.Wpf)
 				 → loads only new/refactored surfaces on demand
 ```
 
-The mode is chosen at startup in a **dedicated modal chooser** (`StartupModeSelectionWindow`) that is
-the **first visible UI** — before credential vault, DB connection, schema validation, role selector,
-splash, or either main window. The default selection is **New system mode**; the user can explicitly
-switch to Legacy mode.
+The mode is chosen at startup in a **Yes/No prompt** after the splash screen (see `App.xaml.cs`
+`PromptStartupMode`). Default is **Legacy** ("לא").
+
+> **Current status:** New system startup is **disabled** via
+> `StartupModeRouter.EnableNewSystemStartup = false`. The app always opens the legacy `MainWindow`
+> and never shows the new-system prompt. Set the flag to `true` to re-enable opt-in New system mode.
 
 > **Non-goal / anti-pattern (explicit):** New system mode must **not** be implemented by opening the
 > legacy `MainWindow` and hiding menu items. That would still load the legacy system and defeat the
@@ -86,8 +88,9 @@ helper (`StartupModeRouter`) so the decision can be tested without WPF.
 ## 4. What is allowed to load in New system mode
 
 - The **new shell** (`NewShellWindow` + `NewShellViewModel`) from `SiNet.App.Wpf`.
-- The shared **Project Context** slice: `ICurrentProjectContext` (singleton), `ProjectSelectorView` +
-  `ProjectSelectorViewModel`, real read-only `IProjectQueryService` (see `PROJECTS.md`).
+- The shared **Project Context** slice: `ICurrentProjectContext` (singleton), compact embeddable
+  `ProjectSelectorView` + `ProjectSelectorViewModel` (host-configurable DPs — see `PROJECTS.md` §5),
+  real read-only `IProjectQueryService`.
 - The **current user** display via `ICurrentUserContext` (host adapter already registered).
 - Migrated Work Surfaces opened **on demand** from the shell menu:
   - **Email visual clone** via `IEmailWindowFactory.Create()`.

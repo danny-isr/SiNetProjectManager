@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Inspection;
@@ -34,8 +33,6 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// <inheritdoc />
     public Window CreateShell()
     {
-        var sw = Stopwatch.StartNew();
-
         var currentUser = _services.GetService<ICurrentUserContext>();
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
@@ -43,15 +40,8 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         var viewModel = new NewShellViewModel(menu, DescribeUser(currentUser));
 
         var selectorView = TryCreateProjectSelector();
-        var selectorReadyMs = sw.ElapsedMilliseconds;
 
-        var window = new NewShellWindow(viewModel, selectorView, currentProject);
-
-        Debug.WriteLine(
-            $"[PERF] NewShellFactory.CreateShell: selector built at {selectorReadyMs} ms, window constructed at " +
-            $"{sw.ElapsedMilliseconds} ms (projects load lazily after the window is shown).");
-
-        return window;
+        return new NewShellWindow(viewModel, selectorView, currentProject);
     }
 
     /// <summary>
@@ -110,14 +100,13 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         // The selector VM is constructed the same way the Email surface does it (it is not a DI type):
         // resolve the read side + shared context and bind a fresh view model to the reusable control.
         var projectQuery = _services.GetService<IProjectQueryService>();
-        var filterOptions = _services.GetService<IProjectFilterOptionsService>();
         var currentProject = _services.GetService<ICurrentProjectContext>();
-        if (projectQuery is null || filterOptions is null || currentProject is null)
+        if (projectQuery is null || currentProject is null)
         {
             return null;
         }
 
-        var selectorViewModel = new ProjectSelectorViewModel(projectQuery, filterOptions, currentProject);
+        var selectorViewModel = new ProjectSelectorViewModel(projectQuery, currentProject);
         return new ProjectSelectorView { DataContext = selectorViewModel };
     }
 

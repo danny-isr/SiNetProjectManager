@@ -152,6 +152,8 @@
                             model observes. Gmail search / dates / pagination below stay Email-specific.
                         -->
                         <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                                                      CompactMode="True"
+                                                      SearchBoxWidth="220"
                                                       VerticalAlignment="Center" />
 
                         <TextBlock Text="&#x1F50E; Gmail"

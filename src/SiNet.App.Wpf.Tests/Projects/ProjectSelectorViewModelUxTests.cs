@@ -180,7 +180,22 @@ public sealed class ProjectSelectorViewModelUxTests
     }
 
     [Fact]
-    public async Task Expanded_results_increase_display_cap_to_1000()
+    public async Task Selecting_project_stays_closed_when_search_box_regains_focus()
+    {
+        var project = Project(1, "1001", "Alpha");
+        var queryService = new StubProjectQueryService(_ => Task.FromResult<IReadOnlyList<ProjectSummaryDto>>(new[] { project }));
+        var sut = CreateSut(queryService);
+        await sut.LoadAsync();
+
+        sut.IsResultsOpen = true;
+        sut.SelectProjectCommand.Execute(project);
+        sut.HandleSearchBoxGotFocus();
+
+        Assert.False(sut.IsResultsOpen);
+    }
+
+    [Fact]
+    public async Task Expanded_results_show_all_projects_without_cap()
     {
         var many = Enumerable.Range(1, 1200)
             .Select(i => Project(i, i.ToString()))
@@ -195,9 +210,9 @@ public sealed class ProjectSelectorViewModelUxTests
         sut.ShowExpandedResults = true;
         await Task.Delay(50);
 
-        Assert.Equal(ProjectSelectorViewModel.ExpandedMaxResults, sut.EffectiveMaxResults);
-        Assert.Equal(ProjectSelectorViewModel.ExpandedMaxResults, sut.Projects.Count);
-        Assert.Contains("\u05DE\u05D5\u05E8\u05D7\u05D1", sut.StatusMessage);
+        Assert.Null(sut.EffectiveMaxResults);
+        Assert.Equal(1200, sut.Projects.Count);
+        Assert.Contains("\u05DE\u05DC\u05D0\u05D4", sut.StatusMessage);
     }
 
     [Fact]

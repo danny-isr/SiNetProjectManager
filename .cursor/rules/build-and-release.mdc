@@ -1,0 +1,18 @@
+---
+description: Require green build and tests before finishing a code slice
+alwaysApply: true
+---
+
+# Build and release gate
+
+Before marking any **code** task complete:
+
+1. Run:
+   - `dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj`
+   - `dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj`
+2. Fix all compile errors — do not leave the repo in a broken build state.
+3. In the final report, state: build pass/fail, test pass/fail, DB/schema changes (must be none unless explicitly requested).
+
+If `dotnet build` fails on file locks, retry once; if COM/MSBuild environment issues appear, document the exact error.
+
+Do not disable New System startup or other product behavior unless the user explicitly asks.

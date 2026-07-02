@@ -7,15 +7,129 @@ using SiNet.Application.Projects;
 namespace SiNet.App.Wpf.Shared.Projects;
 
 /// <summary>
-/// Shared Project Selector control. Code-behind handles popup open/close and list selection only.
+/// Shared, embeddable Project Selector (see <c>docs/PROJECTS.md</c> §5). Host windows configure layout
+/// via dependency properties; selection publishes through <see cref="ProjectSelectorViewModel"/> →
+/// <see cref="ICurrentProjectContext"/>. No Email/Shell/Task/Workflow logic lives here.
 /// </summary>
 public partial class ProjectSelectorView : UserControl
 {
+    public static readonly DependencyProperty SearchBoxWidthProperty =
+        DependencyProperty.Register(
+            nameof(SearchBoxWidth),
+            typeof(double),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(220d));
+
+    public static readonly DependencyProperty CompactModeProperty =
+        DependencyProperty.Register(
+            nameof(CompactMode),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(true));
+
+    public static readonly DependencyProperty ShowFiltersProperty =
+        DependencyProperty.Register(
+            nameof(ShowFilters),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(true));
+
+    public static readonly DependencyProperty ShowUserFilterProperty =
+        DependencyProperty.Register(
+            nameof(ShowUserFilter),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(false));
+
+    public static readonly DependencyProperty ShowIncludeClosedProperty =
+        DependencyProperty.Register(
+            nameof(ShowIncludeClosed),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(true));
+
+    public static readonly DependencyProperty ShowExpandedResultsToggleProperty =
+        DependencyProperty.Register(
+            nameof(ShowExpandedResultsToggle),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(true));
+
+    public static readonly DependencyProperty ShowRefreshButtonProperty =
+        DependencyProperty.Register(
+            nameof(ShowRefreshButton),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(true));
+
+    public static readonly DependencyProperty ShowStatusMessageProperty =
+        DependencyProperty.Register(
+            nameof(ShowStatusMessage),
+            typeof(bool),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(true));
+
     public ProjectSelectorView()
     {
         InitializeComponent();
         Loaded += OnLoaded;
         LostKeyboardFocus += OnLostKeyboardFocus;
+    }
+
+    /// <summary>Width of the search TextBox + ▼ toggle group.</summary>
+    public double SearchBoxWidth
+    {
+        get => (double)GetValue(SearchBoxWidthProperty);
+        set => SetValue(SearchBoxWidthProperty, value);
+    }
+
+    /// <summary>When <see langword="true"/>, uses smaller controls and margins for toolbar embedding.</summary>
+    public bool CompactMode
+    {
+        get => (bool)GetValue(CompactModeProperty);
+        set => SetValue(CompactModeProperty, value);
+    }
+
+    /// <summary>Show Job Type and Status filter combos.</summary>
+    public bool ShowFilters
+    {
+        get => (bool)GetValue(ShowFiltersProperty);
+        set => SetValue(ShowFiltersProperty, value);
+    }
+
+    /// <summary>Show user filter (deferred — default hidden).</summary>
+    public bool ShowUserFilter
+    {
+        get => (bool)GetValue(ShowUserFilterProperty);
+        set => SetValue(ShowUserFilterProperty, value);
+    }
+
+    /// <summary>Show the include-closed-projects checkbox.</summary>
+    public bool ShowIncludeClosed
+    {
+        get => (bool)GetValue(ShowIncludeClosedProperty);
+        set => SetValue(ShowIncludeClosedProperty, value);
+    }
+
+    /// <summary>Show the show-full-list checkbox.</summary>
+    public bool ShowExpandedResultsToggle
+    {
+        get => (bool)GetValue(ShowExpandedResultsToggleProperty);
+        set => SetValue(ShowExpandedResultsToggleProperty, value);
+    }
+
+    /// <summary>Show the reload button.</summary>
+    public bool ShowRefreshButton
+    {
+        get => (bool)GetValue(ShowRefreshButtonProperty);
+        set => SetValue(ShowRefreshButtonProperty, value);
+    }
+
+    /// <summary>Show the inline status hint.</summary>
+    public bool ShowStatusMessage
+    {
+        get => (bool)GetValue(ShowStatusMessageProperty);
+        set => SetValue(ShowStatusMessageProperty, value);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -30,7 +144,7 @@ public partial class ProjectSelectorView : UserControl
     {
         if (DataContext is ProjectSelectorViewModel viewModel)
         {
-            viewModel.OpenResults();
+            viewModel.HandleSearchBoxGotFocus();
         }
     }
 

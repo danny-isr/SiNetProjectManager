@@ -4,118 +4,210 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:SiNet.App.Wpf.Shared.Projects"
+             x:Name="Root"
              mc:Ignorable="d"
              FlowDirection="RightToLeft"
              d:DesignWidth="720"
+             d:DesignHeight="32"
              d:DataContext="{d:DesignInstance Type=local:ProjectSelectorViewModel, IsDesignTimeCreatable=True}"
              PreviewMouseDown="Selector_OnPreviewMouseDown">
 
-    <!-- Shared Project Selector (docs/PROJECTS.md §5): TextBox + Popup/ListBox. -->
-    <WrapPanel Orientation="Horizontal">
-        <StackPanel Width="360" Margin="0,0,10,4">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+    <!-- Shared Project Selector — compact, embeddable toolbar (docs/PROJECTS.md §5). -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-                <TextBox x:Name="SearchBox"
-                         Grid.Column="0"
-                         Text="{Binding EditorText, UpdateSourceTrigger=PropertyChanged}"
-                         GotFocus="SearchBox_OnGotFocus"
-                         PreviewKeyDown="SearchBox_OnPreviewKeyDown"
-                         ToolTip="&#x05D7;&#x05E4;&#x05E9; &#x05DC;&#x05E4;&#x05D9; &#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; &#x05DE;&#x05D9;&#x05DC;&#x05D9;&#x05DD; &#x05DE;&#x05D5;&#x05E4;&#x05E8;&#x05D3;&#x05D5;&#x05EA;)" />
+        <Style x:Key="CompactTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="4,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                    <Setter Property="Height" Value="24" />
+                    <Setter Property="FontSize" Value="12" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 
-                <Button Grid.Column="1"
-                        Content="&#x25BC;"
-                        Width="28"
-                        Margin="4,0,0,0"
-                        Padding="0"
-                        Command="{Binding ToggleResultsCommand}"
-                        ToolTip="&#x05E4;&#x05EA;&#x05D7; / &#x05E1;&#x05D2;&#x05D5;&#x05E8; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05EA; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD;" />
-            </Grid>
+        <Style x:Key="FilterComboStyle" TargetType="ComboBox">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Width" Value="115" />
+            <Setter Property="Height" Value="26" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                    <Setter Property="Width" Value="88" />
+                    <Setter Property="Height" Value="24" />
+                    <Setter Property="FontSize" Value="11" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 
-            <Popup x:Name="ResultsPopup"
-                   PlacementTarget="{Binding ElementName=SearchBox}"
-                   Placement="Bottom"
-                   StaysOpen="False"
-                   AllowsTransparency="True"
-                   IsOpen="{Binding IsResultsOpen, Mode=TwoWay}">
-                <Border BorderBrush="#CCC"
-                        BorderThickness="1"
-                        Background="White"
-                        MaxHeight="280"
-                        Width="{Binding ActualWidth, ElementName=SearchBox}">
-                    <ListBox x:Name="ResultsList"
-                             ItemsSource="{Binding Projects}"
-                             PreviewMouseLeftButtonDown="ResultsList_OnPreviewMouseLeftButtonDown"
-                             ScrollViewer.CanContentScroll="True"
-                             VirtualizingPanel.IsVirtualizing="True"
-                             VirtualizingPanel.VirtualizationMode="Recycling">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding ProjectNumber}" FontWeight="Bold" Foreground="#1565C0" />
-                                    <TextBlock Text=" &#x2014; " Foreground="#999" />
-                                    <TextBlock Text="{Binding ProjectName}" />
-                                    <TextBlock Text="  ·  " Foreground="#CCC" />
-                                    <TextBlock Text="{Binding PlaceName}" Foreground="#777" />
-                                    <TextBlock Text="  ·  " Foreground="#CCC" />
-                                    <TextBlock Text="{Binding CompanyName}" Foreground="#777" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Border>
-            </Popup>
-        </StackPanel>
+        <Style x:Key="FilterLabelStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Margin" Value="0,0,3,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CompactCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Margin" Value="0,0,6,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ToggleButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="3,0,0,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                    <Setter Property="Width" Value="24" />
+                    <Setter Property="Height" Value="24" />
+                    <Setter Property="FontSize" Value="10" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RefreshButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="MinWidth" Value="26" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                    <Setter Property="Padding" Value="4,1" />
+                    <Setter Property="MinWidth" Value="24" />
+                    <Setter Property="Height" Value="24" />
+                    <Setter Property="Margin" Value="0,0,4,0" />
+                    <Setter Property="FontSize" Value="11" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <!-- Search editor + floating results popup -->
+        <Grid Width="{Binding SearchBoxWidth, ElementName=Root}" Margin="0,0,2,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="SearchBox"
+                     Grid.Column="0"
+                     Style="{StaticResource CompactTextBoxStyle}"
+                     Text="{Binding EditorText, UpdateSourceTrigger=PropertyChanged}"
+                     GotFocus="SearchBox_OnGotFocus"
+                     PreviewKeyDown="SearchBox_OnPreviewKeyDown"
+                     ToolTip="&#x05D7;&#x05E4;&#x05E9; &#x05DC;&#x05E4;&#x05D9; &#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7;" />
+
+            <Button Grid.Column="1"
+                    Content="&#x25BC;"
+                    Style="{StaticResource ToggleButtonStyle}"
+                    Command="{Binding ToggleResultsCommand}"
+                    ToolTip="&#x05E4;&#x05EA;&#x05D7; / &#x05E1;&#x05D2;&#x05D5;&#x05E8; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05D4;" />
+        </Grid>
+
+        <Popup x:Name="ResultsPopup"
+               PlacementTarget="{Binding ElementName=SearchBox}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               IsOpen="{Binding IsResultsOpen, Mode=TwoWay}">
+            <Border BorderBrush="#CCC"
+                    BorderThickness="1"
+                    Background="White"
+                    MaxHeight="280"
+                    Width="{Binding ActualWidth, ElementName=SearchBox}">
+                <ListBox x:Name="ResultsList"
+                         ItemsSource="{Binding Projects}"
+                         PreviewMouseLeftButtonDown="ResultsList_OnPreviewMouseLeftButtonDown"
+                         ScrollViewer.CanContentScroll="True"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding ProjectNumber}" FontWeight="Bold" Foreground="#1565C0" />
+                                <TextBlock Text=" &#x2014; " Foreground="#999" />
+                                <TextBlock Text="{Binding ProjectName}" />
+                                <TextBlock Text="  ·  " Foreground="#CCC" />
+                                <TextBlock Text="{Binding PlaceName}" Foreground="#777" />
+                                <TextBlock Text="  ·  " Foreground="#CCC" />
+                                <TextBlock Text="{Binding CompanyName}" Foreground="#777" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </Popup>
 
         <Button Content="&#x1F504;"
+                Style="{StaticResource RefreshButtonStyle}"
                 Command="{Binding RefreshCommand}"
-                Margin="0,0,10,4"
-                Padding="8,3"
-                MinWidth="30"
-                Cursor="Hand"
-                ToolTip="&#x05E8;&#x05E2;&#x05E0;&#x05DF; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05EA; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD;" />
+                ToolTip="&#x05E8;&#x05E2;&#x05E0;&#x05DF;"
+                Visibility="{Binding ShowRefreshButton, ElementName=Root, Converter={StaticResource BoolToVis}}" />
 
-        <StackPanel Orientation="Horizontal" Margin="0,0,8,4">
-            <TextBlock Text="&#x05E1;&#x05D5;&#x05D2; &#x05E2;&#x05D1;&#x05D5;&#x05D3;&#x05D4;:"
-                       VerticalAlignment="Center"
-                       Margin="0,0,6,0" />
-            <ComboBox Width="140"
+        <StackPanel Orientation="Horizontal"
+                    Visibility="{Binding ShowFilters, ElementName=Root, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="&#x05E1;&#x05D5;&#x05D2;:"
+                       Style="{StaticResource FilterLabelStyle}" />
+            <ComboBox Style="{StaticResource FilterComboStyle}"
                       ItemsSource="{Binding JobTypeOptions}"
                       SelectedValue="{Binding SelectedJobTypeId}"
                       SelectedValuePath="Id"
-                      DisplayMemberPath="DisplayName" />
-        </StackPanel>
+                      DisplayMemberPath="DisplayName"
+                      Margin="0,0,6,0" />
 
-        <StackPanel Orientation="Horizontal" Margin="0,0,8,4">
             <TextBlock Text="&#x05E1;&#x05D8;&#x05D8;&#x05D5;&#x05E1;:"
-                       VerticalAlignment="Center"
-                       Margin="0,0,6,0" />
-            <ComboBox Width="140"
+                       Style="{StaticResource FilterLabelStyle}" />
+            <ComboBox Style="{StaticResource FilterComboStyle}"
                       ItemsSource="{Binding StatusOptions}"
                       SelectedValue="{Binding SelectedStatusId}"
                       SelectedValuePath="Id"
-                      DisplayMemberPath="DisplayName" />
+                      DisplayMemberPath="DisplayName"
+                      Margin="0,0,6,0" />
         </StackPanel>
 
-        <CheckBox Content="&#x05DB;&#x05D5;&#x05DC;&#x05DC; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;"
+        <CheckBox Content="&#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;"
+                  Style="{StaticResource CompactCheckBoxStyle}"
                   IsChecked="{Binding IncludeClosed}"
-                  VerticalAlignment="Center"
-                  Margin="0,0,10,4"
-                  ToolTip="&#x05D4;&#x05E6;&#x05D2; &#x05D2;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;" />
+                  ToolTip="&#x05DB;&#x05D5;&#x05DC;&#x05DC; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;"
+                  Visibility="{Binding ShowIncludeClosed, ElementName=Root, Converter={StaticResource BoolToVis}}" />
 
-        <CheckBox Content="&#x05D4;&#x05E6;&#x05D2; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05D4; &#x05DE;&#x05D5;&#x05E8;&#x05D7;&#x05D1;&#x05EA;"
+        <CheckBox Content="&#x05D4;&#x05E6;&#x05D2; &#x05D4;&#x05DB;&#x05DC;"
+                  Style="{StaticResource CompactCheckBoxStyle}"
                   IsChecked="{Binding ShowExpandedResults}"
-                  VerticalAlignment="Center"
-                  Margin="0,0,10,4"
-                  ToolTip="&#x05DE;&#x05E2;&#x05DC;&#x05D4; &#x05E2;&#x05D3; 1000 &#x05EA;&#x05D5;&#x05E6;&#x05D0;&#x05D5;&#x05EA; (&#x05D1;&#x05DE;&#x05E7;&#x05D5;&#x05DD; 200)" />
+                  ToolTip="&#x05DE;&#x05E6;&#x05D9;&#x05D2; &#x05D0;&#x05EA; &#x05DB;&#x05DC; &#x05D4;&#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD; &#x05D4;&#x05EA;&#x05D5;&#x05D0;&#x05DE;&#x05D9;&#x05DD;"
+                  Visibility="{Binding ShowExpandedResultsToggle, ElementName=Root, Converter={StaticResource BoolToVis}}" />
 
         <TextBlock Text="{Binding StatusMessage}"
                    VerticalAlignment="Center"
-                   Margin="4,0,0,4"
                    Foreground="#777"
-                   FontSize="11" />
-    </WrapPanel>
+                   TextTrimming="CharacterEllipsis"
+                   MaxWidth="200"
+                   Visibility="{Binding ShowStatusMessage, ElementName=Root, Converter={StaticResource BoolToVis}}">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Margin" Value="2,0,0,0" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
+                            <Setter Property="FontSize" Value="10" />
+                            <Setter Property="MaxWidth" Value="160" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+    </StackPanel>
 </UserControl>

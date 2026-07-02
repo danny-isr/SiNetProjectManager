@@ -12,6 +12,12 @@ namespace SiNet.App.Wpf.Shell;
 public static class StartupModeRouter
 {
     /// <summary>
+    /// Master switch for New system startup. When <see langword="false"/>, the host always opens the
+    /// legacy main window and never prompts for / opens <see cref="NewShellWindow"/>.
+    /// </summary>
+    public static readonly bool EnableNewSystemStartup = false;
+
+    /// <summary>
     /// Maps a boolean startup choice to <see cref="StartupMode"/>. Used by hosts that still expose a
     /// checkbox; the modal chooser binds directly to <see cref="StartupMode"/> instead.
     /// </summary>
@@ -20,21 +26,23 @@ public static class StartupModeRouter
     /// <see langword="false"/>.
     /// </param>
     /// <returns>
-    /// <see cref="StartupMode.NewSystem"/> when <paramref name="runNewSystem"/> is
+    /// <see cref="StartupMode.NewSystem"/> when enabled and <paramref name="runNewSystem"/> is
     /// <see langword="true"/>; otherwise <see cref="StartupMode.Legacy"/>.
     /// </returns>
     public static StartupMode Resolve(bool runNewSystem) =>
-        runNewSystem ? StartupMode.NewSystem : StartupMode.Legacy;
+        EnableNewSystemStartup && runNewSystem ? StartupMode.NewSystem : StartupMode.Legacy;
 
     /// <summary>
     /// Convenience predicate: <see langword="true"/> when the chosen mode must open the clean shell
     /// instead of the legacy main window.
     /// </summary>
-    public static bool OpensNewShell(StartupMode mode) => mode == StartupMode.NewSystem;
+    public static bool OpensNewShell(StartupMode mode) =>
+        EnableNewSystemStartup && mode == StartupMode.NewSystem;
 
     /// <summary>
     /// Convenience predicate: <see langword="true"/> when the chosen mode must keep the legacy
     /// startup path (open the legacy main window) unchanged.
     /// </summary>
-    public static bool OpensLegacyMainWindow(StartupMode mode) => mode == StartupMode.Legacy;
+    public static bool OpensLegacyMainWindow(StartupMode mode) =>
+        !EnableNewSystemStartup || mode == StartupMode.Legacy;
 }

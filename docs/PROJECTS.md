@@ -143,9 +143,67 @@ SiNet.App.Wpf/Shared/Projects/ProjectSelectorViewModel.cs
 SiNet.App.Wpf/Shared/Projects/ProjectSelectorDesignData.cs
 ```
 
-- It is **reusable across windows** (Email, ProjectWork, Tasks, Workflow, dialogs).
-- It is **not Email-specific**.
+- It is **reusable across windows** (Email, ProjectWork, Tasks, Workflow, dialogs, Inspection).
+- It is **not Shell-specific**, **not Email-specific**, and contains **no feature-window business logic**
+  (no Gmail, tasks, workflow, file actions, or surface-specific filtering).
 - It binds to a **project DTO** (`ProjectSummaryDto`), never to an EF entity.
+- Host windows **embed** `ProjectSelectorView` and observe `ICurrentProjectContext` for reactions;
+  they do not push Email/Task/Workflow logic into the selector.
+
+### Shared / modular contract
+
+| Responsibility | Owner |
+| --- | --- |
+| Search, filters, results popup, explicit project pick | `ProjectSelectorView` + `ProjectSelectorViewModel` |
+| Publish selected project app-wide | `ICurrentProjectContext.SetCurrentProjectAsync` (on explicit pick) |
+| React to project changes (Email list scope, title, etc.) | Each host window / its ViewModel — via `ICurrentProjectContext` events |
+| Gmail search, task completion, workflow mutation | **Outside** the selector |
+
+**Ports only** (no `DbContext`, no EF entities, no Shell/Email ViewModels):
+
+- `IProjectQueryService`
+- `IProjectFilterOptionsService`
+- `ICurrentProjectContext`
+
+**Default layout:** compact single-row toolbar (`CompactMode="True"`). Results use a **Popup** so they
+never reserve vertical space in the host window.
+
+### Host configuration (`ProjectSelectorView` dependency properties)
+
+Hosts tune the control without forking XAML:
+
+| Property | Default | Purpose |
+| --- | --- | --- |
+| `SearchBoxWidth` | `220` | Width of the search editor + ▼ toggle |
+| `CompactMode` | `True` | Smaller height, margins, labels, and combo widths |
+| `ShowFilters` | `True` | Job Type + Status filter strip |
+| `ShowUserFilter` | `False` | User filter (deferred; hidden until semantics exist) |
+| `ShowIncludeClosed` | `True` | “Include closed projects” checkbox |
+| `ShowExpandedResultsToggle` | `True` | “Show full list” checkbox |
+| `ShowRefreshButton` | `True` | Reload filter options + project list |
+| `ShowStatusMessage` | `True` | Inline status hint (compact font when `CompactMode`) |
+
+Example (Email header strip):
+
+```xml
+<projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                              CompactMode="True"
+                              SearchBoxWidth="220" />
+```
+
+Example (minimal dialog — search only):
+
+```xml
+<projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                              ShowFilters="False"
+                              ShowIncludeClosed="False"
+                              ShowExpandedResultsToggle="False"
+                              ShowStatusMessage="False"
+                              SearchBoxWidth="280" />
+```
+
+See also `docs/APP_SHELL.md` (NewShell hosts the same control) and
+`docs/PROJECT_CONTEXT_MIGRATION.md` § shared selector boundaries.
 
 It must support the existing legacy project-selection behavior (parity target, do not redesign the UX):
 
@@ -165,8 +223,8 @@ It must support the existing legacy project-selection behavior (parity target, d
   `SelectedProject` until the user picks a row.
 - **Dropdown toggle** (▼) opens/closes the results popup; opening with no search text shows the
   default browse list.
-- **Expanded list** checkbox (`ShowExpandedResults`): default cap **200** rows; expanded cap **1000**
-  rows (display only — search still runs against the full source).
+- **Expanded list** checkbox (`ShowExpandedResults`): default cap **200** rows; when checked, **no display cap**
+  (all matching projects). ListBox virtualization keeps scrolling responsive.
 - Popup **closes** after project selection, focus leaving the control, click outside, or Escape.
 
 ### TextBox modes: UserTyping vs SelectedProjectDisplay
@@ -245,7 +303,7 @@ Email/ProjectWork filter strip):
 | **User** | Restrict by assigned/responsible user. | `ProjectSearchQuery.AssignedUserId`, `ProjectSummaryDto.AssignedUserName` — *deferred* in the real source: the DTO carries a user *name*, not an id, so `AssignedUserId` is not applied yet (see migration §8a). |
 | **Include closed / active** | Include or hide closed projects. | `ProjectSearchQuery.IncludeClosed`, `ProjectSummaryDto.IsActive` |
 | **Free-text search** | number / title / city / client (multi-token AND). | `ProjectSearchQuery.SearchText`, `ProjectSummaryQuery.MatchesText` |
-| **MaxResults** | Cap **displayed** project rows for responsiveness. | Default **200** (`DefaultMaxResults`); expanded **1000** (`ExpandedMaxResults`) when `ShowExpandedResults` is checked. Applied **after** filtering on the **full search source** — never before text filters, and never on filter-option lists. |
+| **MaxResults** | Cap **displayed** project rows for responsiveness. | Default **200** (`DefaultMaxResults`); **no cap** (`null`) when `ShowExpandedResults` is checked. Applied **after** filtering on the **full search source** — never before text filters, and never on filter-option lists. |
 
 Filter option lists (`Status`, `Job Type`) are loaded through **`IProjectFilterOptionsService`**
 (read-only, full lists from reference tables). Selection is stored by stable id

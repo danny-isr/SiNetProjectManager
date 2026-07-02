@@ -1,0 +1,14 @@
+---
+description: Guardrails for WPF migration / ProjectSelector / shared components
+globs: src/SiNet.App.Wpf/**/*.cs,src/SiNet.App.Wpf/**/*.xaml,src/SiNet.Application/**/*.cs,docs/PROJECTS.md,docs/PROJECT_CONTEXT_MIGRATION.md
+alwaysApply: false
+---
+
+# Migration slice guardrails
+
+- Documentation-first for meaningful behavior changes (`docs/PROJECTS.md`, migration docs).
+- No DB writes, schema changes, migrations, or ModelSnapshot edits unless explicitly requested.
+- WPF must not reference EF entities; use Application DTOs and ports.
+- `ProjectSelectorView` is shared — no Email/Task/Workflow logic inside it.
+- Preserve debounce, cancellation, and last-write-wins on project search reloads.
+- `MaxResults` is display-only; search runs against the full project source.

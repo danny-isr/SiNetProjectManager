@@ -10,12 +10,12 @@ namespace SiNet.App.Wpf.Shared.Projects;
 
 /// <summary>
 /// Reusable view model for the shared <c>ProjectSelectorView</c> (see <c>docs/PROJECTS.md</c> §5).
-/// Supports UserTyping vs SelectedProjectDisplay editor modes; search source is always the full catalog.
+/// Embeddable in any host window; depends only on project query/filter ports and
+/// <see cref="ICurrentProjectContext"/>. Contains no Email/Shell/Task/Workflow business logic.
 /// </summary>
 public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 {
     public const int DefaultMaxResults = 200;
-    public const int ExpandedMaxResults = 1000;
     public static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
 
     private const string LoadingText = "\u05D8\u05D5\u05E2\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD...";
@@ -43,6 +43,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     private bool _isBusy;
     private bool _isSyncingFromContext;
     private bool _isResultsOpen;
+    private bool _suppressOpenResultsOnNextFocus;
     private string _statusMessage = string.Empty;
 
     public ProjectSelectorViewModel()
@@ -108,7 +109,6 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
     public bool IsUserFilterAvailable => false;
 
-    /// <summary>TextBox content — user typing or selected-project display (see docs/PROJECTS.md §5).</summary>
     public string EditorText
     {
         get => _editorText;
@@ -128,7 +128,6 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Backward-compatible alias used by tests; maps to editor typing mode.</summary>
     public string SearchText
     {
         get => IsUserTyping ? _searchQueryText : EditorText;
@@ -141,7 +140,8 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         private set => SetField(ref _isUserTyping, value);
     }
 
-    public int EffectiveMaxResults => ShowExpandedResults ? ExpandedMaxResults : DefaultMaxResults;
+    /// <summary>Display cap: 200 by default; null (no cap) when <see cref="ShowExpandedResults"/> is checked.</summary>
+    public int? EffectiveMaxResults => ShowExpandedResults ? null : DefaultMaxResults;
 
     public bool ShowExpandedResults
     {
@@ -262,11 +262,23 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
     public void OpenResults()
     {
+        _suppressOpenResultsOnNextFocus = false;
         IsResultsOpen = true;
         if (!IsUserTyping)
         {
             QueueReload();
         }
+    }
+
+    public void HandleSearchBoxGotFocus()
+    {
+        if (_suppressOpenResultsOnNextFocus)
+        {
+            _suppressOpenResultsOnNextFocus = false;
+            return;
+        }
+
+        OpenResults();
     }
 
     public void CloseResults() => IsResultsOpen = false;
@@ -397,6 +409,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
         ApplySelectedProjectDisplay(project);
         IsResultsOpen = false;
+        _suppressOpenResultsOnNextFocus = true;
     }
 
     private void ApplySelectedProjectDisplay(ProjectSummaryDto? project)
@@ -499,14 +512,19 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             return "\u05D0\u05D9\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD \u05EA\u05D5\u05D0\u05DE\u05D9\u05DD";
         }
 
-        var cap = query.MaxResults ?? DefaultMaxResults;
+        var cap = query.MaxResults;
         var hasSearch = !string.IsNullOrWhiteSpace(query.SearchText);
-        var atCap = query.MaxResults is int max && max > 0 && results.Count >= max;
-        var isExpanded = cap > DefaultMaxResults;
+        var atCap = cap is int max && max > 0 && results.Count >= max;
+        var isUncapped = cap is null or <= 0;
 
-        if (isExpanded && !hasSearch)
+        if (isUncapped && !hasSearch)
         {
-            return "\u05DE\u05D5\u05E6\u05D2\u05D5\u05EA \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05DE\u05D5\u05E8\u05D7\u05D1\u05D5\u05EA.";
+            return $"\u05DE\u05D5\u05E6\u05D2\u05EA \u05E8\u05E9\u05D9\u05DE\u05D4 \u05DE\u05DC\u05D0\u05D4 ({results.Count} \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD).";
+        }
+
+        if (isUncapped && hasSearch)
+        {
+            return $"{results.Count} \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD \u05EA\u05D5\u05D0\u05DE\u05D9\u05DD";
         }
 
         if (!hasSearch)

@@ -414,14 +414,23 @@ Loading the entire catalog into WPF is forbidden.
 
 ### ProjectSelector UX (TextBox + Popup)
 
+**Shared reusable control** — `ProjectSelectorView` is embeddable in NewShell, Email, ProjectWork,
+Tasks, Workflow, dialogs, and future surfaces. It is **not** owned by any one host. Feature-specific
+behavior stays in host ViewModels that **observe** `ICurrentProjectContext`; the selector does not
+call Email/Gmail/Task/Workflow APIs.
+
+**Compact by default** — single horizontal toolbar row; results in a floating Popup (no fixed panel
+height in the host). Hosts configure visibility/width via dependency properties (see `docs/PROJECTS.md`
+§5 “Host configuration”).
+
 Implemented in `ProjectSelectorView` / `ProjectSelectorViewModel`:
 
 - **TextBox + Popup/ListBox** — not ComboBox.
 - **UserTyping** vs **SelectedProjectDisplay** editor modes (see `docs/PROJECTS.md` §5).
 - **Toggle button** (▼) opens/closes results; empty search shows browse list.
 - Popup closes on: selection, focus leave, click outside, Escape.
-- **`ShowExpandedResults`**: raises display cap from 200 to 1000 (`ExpandedMaxResults`); search source
-  unchanged.
+- **`ShowExpandedResults`**: removes the display cap (`MaxResults = null`) so all matching projects are shown;
+  search source remains the full catalog. List virtualization keeps the UI scrollable.
 - **`EffectiveMaxResults`** drives `ProjectSearchQuery.MaxResults` only — never limits SQL search scope.
 
 ### Filters supported now
