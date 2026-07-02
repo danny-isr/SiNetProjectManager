@@ -288,7 +288,8 @@ Opened surface / Application service re-checks before mutating state
 | `CurrentUserContextAdapter` | Native Infrastructure identity adapter |
 | `UserService`, `ActionPermissionService`, `SystemSettingsService` | Application-layer ports + Sql implementations |
 | `MainWindow` menu gates | `IAuthorizationQueryService` consumed by New Shell |
-| Admin/management windows (`ActionPermissionWindow`, User Management, …) | Migrated WPF surfaces (future slices) |
+| Admin/management windows (`UserManagementWindow`, …) | Migrated WPF surfaces (future slices) |
+| `ActionPermissionWindow` | New System menu via `IActionPermissionAdminWindowFactory` (P6); visual clone deferred |
 
 ### 6.2 What New System must not do yet
 
@@ -393,7 +394,7 @@ public interface IActionPermissionQueryService
 
 **Current user:** `CanCurrentUserExecuteActionAsync` uses `ICurrentUserContext.UserId`; returns `false` when `UserId` is `null` — never invents an id.
 
-**UI:** Action permission **management** remains legacy (`ActionPermissionWindow`). Migrated surfaces that need action checks should consume `IActionPermissionQueryService` — not registered in NewShell menu in P4.
+**UI:** Action permission **management** window remains the legacy `ActionPermissionWindow` implementation; the New System shell opens it via `IActionPermissionAdminWindowFactory` (P6) when `ActionPermissions.Manage` is authorized.
 
 ### 7.5 Implemented — user management (P5)
 
@@ -440,7 +441,7 @@ Phased, documentation-driven slices:
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
 | **P5 — user management port** | `IUserManagementService`; migrate User Management UI | ✅ Implemented (port + adapter; admin UI still legacy) |
-| **P6 — action permission admin UI** | Migrate `ActionPermissionWindow` to New System menu | Uses existing save service |
+| **P6 — action permission admin UI** | `ActionPermissionWindow` in New System menu via factory | ✅ Implemented (legacy window; host factory) |
 | **P7 — composition split** | Optional separate DI graphs (`AddSiNetClean` vs legacy bridge) per `ARCHITECTURE_TARGET.md` | None |
 
 Each phase ends with: tests on service behavior, doc/code alignment check, explicit note in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md).

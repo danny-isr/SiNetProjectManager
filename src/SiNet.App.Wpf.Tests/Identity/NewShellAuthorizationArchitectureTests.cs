@@ -37,6 +37,15 @@ public sealed class NewShellAuthorizationArchitectureTests
     }
 
     [Fact]
+    public void NewShellFactory_wires_action_permission_admin_via_factory_and_feature_code()
+    {
+        var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
+        Assert.Contains("IActionPermissionAdminWindowFactory", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.ActionPermissionsManage", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActionPermissionWindow", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NewShell_types_do_not_reference_action_permission_legacy_service()
     {
         var wpfAssembly = typeof(NewShellFactory).Assembly;

@@ -188,7 +188,7 @@ Avoid:
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
 | Logging | scattered Serilog usage | `SiNet.Application` `IAppLogger` → `SiNet.Infrastructure.Logging` | ⬜ | |
-| Identity / Permissions | `CurrentUserContext`, `UserService`, `ActionPermissionService`, `MainWindow` menu gates | `SiNet.Application.Identity` ports → host adapters | 🟡 | **Target spec:** [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md). P1–P5 **implemented** (current user, profile, role/feature auth, action permissions, user management port). Admin UIs (`UserManagementWindow`, `ActionPermissionWindow`) still legacy. |
+| Identity / Permissions | `CurrentUserContext`, `UserService`, `ActionPermissionService`, `MainWindow` menu gates | `SiNet.Application.Identity` ports → host adapters | 🟡 | **Target spec:** [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md). P1–P6 **implemented**. `ActionPermissionWindow` reachable from New System menu (P6); `UserManagementWindow` still legacy-only. |
 
 ---
 

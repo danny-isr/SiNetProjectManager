@@ -948,6 +948,10 @@ namespace SiNetProjectManagerV2
             // does NOT change the legacy MainWindow startup path.
             SiNet.App.Wpf.Shell.ShellServiceCollectionExtensions.AddSiNetShell(services);
 
+            // Host-owned admin surfaces opened from the New System shell menu (P6).
+            services.AddSingleton<SiNet.App.Wpf.Shell.IActionPermissionAdminWindowFactory,
+                Services.ActionPermissionAdminWindowFactory>();
+
             return services.BuildServiceProvider();
         }
 

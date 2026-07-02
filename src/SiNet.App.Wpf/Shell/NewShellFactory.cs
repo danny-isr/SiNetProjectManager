@@ -74,6 +74,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "פתיחת מעטפת הביקורת החדשה"));
         }
 
+        // Action permission admin — legacy window opened via host factory; menu gated by feature code.
+        if (_services.GetService<IActionPermissionAdminWindowFactory>() is { } actionPermissionFactory
+            && CanAccessFeature(AppFeatureCodes.ActionPermissionsManage))
+        {
+            items.Add(new NewShellMenuItem(
+                "הרשאות פעולה",
+                () => ShowDialog(actionPermissionFactory.Create()),
+                "ניהול הרשאות פעולה לפי סוג פעולה"));
+        }
+
         // Settings — surface not implemented yet; show disabled. When implemented, gate with
         // AppFeatureCodes.SystemSettingsWrite (Administrator).
         const bool settingsSurfaceImplemented = false;
@@ -154,6 +164,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         window.Show();
+    }
+
+    private static void ShowDialog(Window window)
+    {
+        if (System.Windows.Application.Current?.MainWindow is { } owner && !ReferenceEquals(owner, window))
+        {
+            window.Owner = owner;
+        }
+
+        window.ShowDialog();
     }
 
     private string? ResolveCurrentUserDisplay()

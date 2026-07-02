@@ -154,12 +154,13 @@ Rules:
 - The menu carries **no business logic** and never mutates workflow (see §10 and
   `AI_DEVELOPMENT_GUIDE.md` rule 11).
 
-Initial menu (P3):
+Initial menu (P3 + P6):
 
 | Item | Feature code | Min role | Opens |
 | --- | --- | --- | --- |
 | Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
+| Action permissions | `ActionPermissions.Manage` | Administrator | `IActionPermissionAdminWindowFactory.Create()` → legacy `ActionPermissionWindow` |
 | Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
@@ -167,7 +168,9 @@ Project Context (`ProjectSelectorView`) is embedded in the shell header — not 
 **Action permissions (P4):** read-only checks for email/workflow follow-up actions use
 `IActionPermissionQueryService` (`CanUserExecuteActionAsync`, `GetAuthorizedUsersForActionAsync`) when
 migrated surfaces need them. Deny-by-default + Administrator bypass match legacy `ActionPermissionService`.
-Action permission **admin UI** (`ActionPermissionWindow`) is unchanged and still legacy-only.
+Action permission **admin UI** (P6): Administrators see **הרשאות פעולה** in the New System menu when
+`ActionPermissions.Manage` is authorized. The shell opens the existing legacy `ActionPermissionWindow`
+via `IActionPermissionAdminWindowFactory` — no visual clone yet; save still uses `ActionPermissionService`.
 
 **User management (P5):** read/write user operations use `IUserManagementService` when migrated
 surfaces need them (`GetUsersAsync`, `AddUserAsync`, `UpdateUsersAsync`). Administrator-only writes
