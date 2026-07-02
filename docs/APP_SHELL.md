@@ -154,22 +154,33 @@ Rules:
 - The menu carries **no business logic** and never mutates workflow (see §10 and
   `AI_DEVELOPMENT_GUIDE.md` rule 11).
 
-Initial menu (P3 + P6):
+Initial menu (P3 + P6 + native admin):
 
 | Item | Feature code | Min role | Opens |
 | --- | --- | --- | --- |
 | Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
-| Action permissions | `ActionPermissions.Manage` | Administrator | *native surface — not yet implemented* |
 | User management | `Users.Manage` | Administrator | `UserListWindow` → native `UserManagementView` |
 | Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |
-| Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
+| Action permissions | `ActionPermissions.Manage` | Administrator | `ActionPermissionsWindow` → native `ActionPermissionsView` |
+| Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
+| Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until general settings surface exists* |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
 
 **User management / add user (native):** Administrators see **ניהול משתמשים** and **הוספת משתמש** when
 `Users.Manage` is authorized. Opens native `UserListWindow` / `AddUserDialogWindow` in `SiNet.App.Wpf.Admin.Users`
 backed by `SqlUserManagementService` in Infrastructure.Sql — not legacy windows or SiNetSQL.MVVM.
+
+**Action permissions (native):** Administrators see **הרשאות פעולה** when `ActionPermissions.Manage` is
+authorized. Opens native `ActionPermissionsWindow` in `SiNet.App.Wpf.Admin.Permissions` backed by
+`SqlActionPermissionAdminService` → `IActionPermissionAdminService` in Infrastructure.Sql.
+
+**Keys and secrets (native):** Administrators see **מפתחות וסודות** when `System.Settings.Write` is
+authorized. Opens native `SecretSetupWindow` in `SiNet.App.Wpf.Admin.Security` backed by
+`CredentialVaultSecretSetupService` in Infrastructure.Secrets (Credential Vault). General system settings
+(`ManagementSettingsWindow` parity) remain a separate future surface — the **הגדרות** menu item stays
+disabled until that surface exists.
 
 ---
 

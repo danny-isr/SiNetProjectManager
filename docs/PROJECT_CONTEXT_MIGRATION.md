@@ -1,6 +1,6 @@
 # Project Context Migration — Cross-Application Project Selector & Current Project
 
-> **Status:** Migration plan (planning slice) — 2026-06-27
+> **Status:** Partially implemented — 2026-07-03 (shared selector + real read-only query; migration sequencing doc)
 > **Working branch:** `SiWorkNet10`
 > **Target document (source of truth):** [`PROJECTS.md`](./PROJECTS.md)
 > **Read together with:** [`PROJECTS.md`](./PROJECTS.md),
@@ -12,10 +12,11 @@
 > **If this migration plan conflicts with `PROJECTS.md`, `PROJECTS.md` wins and this migration plan
 > must be updated.**
 >
-> **Scope of this document:** migration/sequencing only. The *target state* of the Project domain is
-> defined in [`PROJECTS.md`](./PROJECTS.md); this document describes **how** to get there (order,
-> slices, legacy mapping). No implementation is performed by this slice. No DB / schema / migration /
-> `ModelSnapshot` / `DbContext` / `DbSet` changes are proposed or made.
+> **Scope of this document:** migration/sequencing for the Project Context / Project Selector. The *target
+> state* is defined in [`PROJECTS.md`](./PROJECTS.md); this document describes **how** to get there (order,
+> slices, legacy mapping). **Slices 1 and 8a are implemented** (Application ports/DTOs, shared
+> `ProjectSelectorView`, real read-only `ProjectQueryService`). No DB / schema / migration /
+> `ModelSnapshot` / `DbContext` / `DbSet` **writes** are part of this work.
 
 This document is the **migration plan** for the app-wide **Project Context / Project Selector**
 mechanism: how the target described in [`PROJECTS.md`](./PROJECTS.md) is reached — how a project is
@@ -193,7 +194,7 @@ Confirmed consumers of project selection / current project (legacy):
 | **WorkflowDashboardView** / `WorkflowManagementWindow` | Project combo (`SelectedProject` / `_dashboardSelectedProject`) scopes dashboard/policy queries. |
 | **MainWindow (title/header)** | Subscribes to `ActiveProjectContext.ActiveProjectChanged` (see §5). |
 | **Move-to-project / continuation flows** | `ProjectSelectorDialog` → `SelectedProject` (e.g. `WpfActionContinuationUiHost`, `EmailManagementView` file dialog). |
-| **New Email visual clone** (`Surfaces/Email/EmailWindowView`) | Currently has **local-only** fake project display state; target is to consume the shared selector + context. |
+| **New Email visual clone** (`Surfaces/Email/EmailWindowView`) | Embeds shared `ProjectSelectorView`; `EmailWindowViewModel` observes `ICurrentProjectContext` (implemented). Gmail/triage remains visual-clone scope. |
 
 ---
 
@@ -208,9 +209,9 @@ Confirmed consumers of project selection / current project (legacy):
 [ SiNet.Application ]  IProjectQueryService (search/get)   ICurrentProjectContext (current + event)
 		│  (ports only, runtime DTOs)
 		▼
-[ SiNet.Infrastructure.Sql  OR  SiNet.LegacyBridge ]  real implementations
-		- IProjectQueryService  -> EF via IDbContextFactory<>  (or delegate to legacy list load)
-		- ICurrentProjectContext -> may wrap legacy ActiveProjectContext during migration
+[ SiNet.Infrastructure.Sql ]  real read-only implementation (implemented)
+		- IProjectQueryService  -> ProjectQueryService via IDbContextFactory<SiNetDbContext>
+		- ICurrentProjectContext -> in-memory singleton per app instance (legacy ActiveProjectContext may still drive legacy MainWindow title)
 ```
 
 - Manual selection: `ProjectSelectorView` → user picks a `ProjectSummaryDto` →
@@ -231,20 +232,27 @@ public sealed record ProjectSummaryDto(
 	int ProjectId,
 	string ProjectNumber,
 	string ProjectName,
+	string? PlaceName,
+	string? CompanyName,
 	string? JobType,
 	string? Status,
 	string? AssignedUserName,
-	bool IsActive);
+	bool IsActive,
+	int? StatusId = null,
+	IReadOnlyList<int>? JobTypeIds = null);
 ```
 
 ```csharp
 // ProjectSearchQuery.cs
 public sealed record ProjectSearchQuery(
-	string? SearchText,
-	string? JobType,
-	string? Status,
-	int? AssignedUserId,
-	bool IncludeClosed);
+	string? SearchText = null,
+	string? JobType = null,
+	string? Status = null,
+	int? JobTypeId = null,
+	int? StatusId = null,
+	int? AssignedUserId = null,
+	bool IncludeClosed = false,
+	int? MaxResults = null);
 ```
 
 ```csharp
@@ -318,10 +326,10 @@ Behavior parity to preserve from `SearchableProjectSelector`: default sort by nu
 search across number/title/city/client, exclusion of dummy project numbers, and the
 "[Number] Title | Company" compact display. Virtualization/highlighting are visual concerns of the view.
 
-> For the first slices this VM can be fed by a **fake in-memory** `IProjectQueryService` and a
-> **fake `ICurrentProjectContext`** so the shared control renders and behaves without any DB.
+> For design-time and tests, `FakeProjectQueryService` and `AddSiNetProjectContextFake()` remain available;
+> production hosts register the real `ProjectQueryService` via `AddSiNetProjectQuerySql()`.
 
-### 7.4 Email integration (target)
+### 7.4 Email integration (implemented)
 
 ```
 EmailWindowView
@@ -330,17 +338,16 @@ EmailWindowView
   → EmailWindowViewModel OBSERVES ICurrentProjectContext.CurrentProject / CurrentProjectChanged
 ```
 
-- The Email clone must **not** implement project selection as local-only state in
-  `EmailWindowViewModel`. Its current fake `ActiveProjectDisplay` is a placeholder to be replaced by an
-  observation of `ICurrentProjectContext`.
+- Project selection is **not** local-only state in `EmailWindowViewModel` — it observes `ICurrentProjectContext`.
 - The Gmail search + email triage controls remain in Email (they are not project selection).
-- May remain fake/in-memory for now (no Gmail, no DB), consistent with the visual-clone slices.
+- Email content/Gmail integration may remain visual-clone scope (no real Gmail in New System yet).
 
-### 7.5 MainWindow title / header (target)
+### 7.5 MainWindow title / header (partial)
 
 ```
 ICurrentProjectContext.CurrentProjectChanged
-  → MainWindow / MainShell listens (single subscriber)
+  → NewShellWindow listens (implemented)
+  → legacy MainWindow still uses ActiveProjectContext (separate until unified)
   → app title/header updates: "{default} - {CurrentProject.ProjectName}"  (or default when null)
 ```
 
@@ -351,27 +358,20 @@ ICurrentProjectContext.CurrentProjectChanged
 
 ---
 
-## 8. First implementation slice
+## 8. First implementation slice (implemented)
 
-Do **not** implement in this planning slice. After this design is accepted, the recommended first
-implementation slice (fake-data-first, per `AI_DEVELOPMENT_GUIDE.md` vertical-slice rule) is:
+The first vertical slice below is **implemented** in the repo. Later slices (user filter semantics,
+full legacy title unification, additional host embeds) remain tracked in §8a and `PROJECTS.md`.
 
-1. Add Application DTOs/ports in `src/SiNet.Application/Projects/`:
+1. Application DTOs/ports in `src/SiNet.Application/Projects/`:
    `ProjectSummaryDto`, `ProjectSearchQuery`, `IProjectQueryService`, `ICurrentProjectContext`
    (+ `ProjectChangedEventArgs`). Runtime-only; no EF.
-2. Add a **fake/in-memory** `IProjectQueryService` (sample projects) — for now this may live as a WPF
-   design-time/fake source or a small `SiNet.Application`-level fake used by the host, with the real
-   `Infrastructure.Sql` / `LegacyBridge` implementation deferred.
-3. Add an **in-memory** `ICurrentProjectContext` (de-dupe by id; raise `CurrentProjectChanged`).
-4. Add the shared `ProjectSelectorView` + `ProjectSelectorViewModel` (+ design data) under
-   `src/SiNet.App.Wpf/Shared/Projects/`, wired to the fake query service.
-5. Embed `ProjectSelectorView` into `EmailWindowView` (replacing the local fake project display).
-6. Make `EmailWindowViewModel` **observe** `ICurrentProjectContext` (no local-only selection state).
-7. **No real DB source yet.**
-8. **No real email filtering yet.**
-
-Verification for that future slice: `dotnet build SiNet.sln` (and `MSBuild SiNetProjectManager.sln`
-only if legacy host files are touched); confirm no DB/migration/schema changes.
+2. Shared `ProjectSelectorView` + `ProjectSelectorViewModel` (+ design data) under
+   `src/SiNet.App.Wpf/Shared/Projects/`.
+3. Real read-only `IProjectQueryService` via `ProjectQueryService` in `SiNet.Infrastructure.Sql`
+   (see §8a).
+4. `EmailWindowView` embeds `ProjectSelectorView`; `EmailWindowViewModel` observes `ICurrentProjectContext`.
+5. NewShell embeds the same shared selector in its header.
 
 ---
 
@@ -507,6 +507,6 @@ Implemented in `ProjectSelectorView` / `ProjectSelectorViewModel`:
 
 ## DB / schema confirmation
 
-This is a **documentation / planning** slice. It introduces **no** code, **no** migrations, **no**
-`ModelSnapshot`, **no** `*.Designer.cs`, **no** `DbContext` / `DbSet` changes, and **no** schema
-changes. The only file changes are Markdown docs under `docs/`.
+This migration introduces **no** schema changes, **no** migrations, **no** `ModelSnapshot` edits, and
+**no** `DbContext` / `DbSet` mapping changes. The implemented read path uses existing tables via
+`ProjectQueryService` (`AsNoTracking()` only).

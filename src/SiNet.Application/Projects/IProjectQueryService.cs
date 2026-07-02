@@ -5,9 +5,10 @@ namespace SiNet.Application.Projects;
 /// Project Selector and other project-scoped screens (see <c>docs/PROJECTS.md</c> §5/§12).
 /// <para>
 /// It returns UI display DTOs only — never EF entities — so the WPF layer stays free of
-/// <c>DbContext</c>. The concrete implementation is a fake/in-memory source in this slice; a real
-/// <c>SiNet.Infrastructure.Sql</c> (or <c>SiNet.LegacyBridge</c>) implementation is added in a later
-/// slice behind this same interface.
+/// <c>DbContext</c>. The production implementation is <c>ProjectQueryService</c> in
+/// <c>SiNet.Infrastructure.Sql</c> (read-only, <c>AsNoTracking()</c> via
+/// <c>IDbContextFactory&lt;SiNetDbContext&gt;</c>). Design-time and tests may use
+/// <c>FakeProjectQueryService</c> behind this same interface.
 /// </para>
 /// </summary>
 public interface IProjectQueryService

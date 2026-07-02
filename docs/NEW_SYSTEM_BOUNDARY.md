@@ -45,6 +45,26 @@ Native user SQL must **not** use `SiNetSQL.Data`, `SiNetSQL.Models`, or `SiNetSQ
 
 Menu items **ניהול משתמשים** / **הוספת משתמש** in `NewShellFactory` are gated by `AppFeatureCodes.UsersManage`.
 
+## Native action permissions admin (2026-07-03)
+
+| Surface | Location |
+| --- | --- |
+| Action permissions | `ActionPermissionsWindow` + `ActionPermissionsView` + `ActionPermissionsViewModel` |
+| Service | `SqlActionPermissionAdminService` → `IActionPermissionAdminService` via **`SiNetDbContext`** + `SiNet.Infrastructure.Sql.Entities` |
+
+Menu item **הרשאות פעולה** in `NewShellFactory` is gated by `AppFeatureCodes.ActionPermissionsManage`.
+Native permissions SQL must **not** use `SiNetSQL.Data`, `SiNetSQL.Models`, or `SiNetSQLDbContext`.
+
+## Native secret setup (2026-07-03)
+
+| Surface | Location |
+| --- | --- |
+| Keys and secrets | `SecretSetupWindow` + `SecretSetupView` + `SecretSetupViewModel` |
+| Service | `CredentialVaultSecretSetupService` → `ISecretSetupService` in `SiNet.Infrastructure.Secrets` |
+
+Menu item **מפתחות וסודות** in `NewShellFactory` is gated by `AppFeatureCodes.SystemSettingsWrite`.
+The general **הגדרות** menu item remains a disabled placeholder until a native system-settings surface exists.
+
 ## Revoked pattern (do not extend)
 
 | Pattern | Status |
@@ -67,7 +87,7 @@ Enforced by `NewSystemBoundaryTests.cs` and `Admin/NewShellNativeUserAdminMenuTe
 
 | Capability | Target |
 | --- | --- |
-| Action Permissions Admin | New view + VM in `SiNet.App.Wpf`; SQL in `Infrastructure.Sql` |
 | User inline edit / `UpdateUsersAsync` | Extend native user admin + `SqlUserManagementService` |
+| General system settings surface | Native settings UI (replaces disabled **הגדרות** placeholder in `NewShellFactory`) |
 
 See also: [`APP_SHELL.md`](./APP_SHELL.md), [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md).

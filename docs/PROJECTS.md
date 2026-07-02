@@ -174,7 +174,7 @@ Hosts tune the control without forking XAML:
 
 | Property | Default | Purpose |
 | --- | --- | --- |
-| `SearchBoxWidth` | `220` | Width of the search editor + ▼ toggle |
+| `SearchBoxWidth` | `340` | Width of the search editor + ▼ toggle |
 | `CompactMode` | `True` | Smaller height, margins, labels, and combo widths |
 | `ShowFilters` | `True` | Job Type + Status filter strip |
 | `ShowUserFilter` | `False` | User filter (deferred; hidden until semantics exist) |
@@ -188,7 +188,7 @@ Example (Email header strip):
 ```xml
 <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
                               CompactMode="True"
-                              SearchBoxWidth="220" />
+                              SearchBoxWidth="340" />
 ```
 
 Example (minimal dialog — search only):
@@ -459,10 +459,11 @@ ProjectChangedEventArgs
 
 Intended shapes (defined in detail in the migration plan; summarized here as the target contract):
 
-- **`ProjectSummaryDto`** — `(int ProjectId, string ProjectNumber, string ProjectName, string? JobType,
-  string? Status, string? AssignedUserName, bool IsActive)`. The only project shape the UI binds to.
-- **`ProjectSearchQuery`** — `(string? SearchText, string? JobType, string? Status, int? AssignedUserId,
-  bool IncludeClosed)`.
+- **`ProjectSummaryDto`** — `(int ProjectId, string ProjectNumber, string ProjectName, string? PlaceName,
+  string? CompanyName, string? JobType, string? Status, string? AssignedUserName, bool IsActive,
+  int? StatusId, IReadOnlyList<int>? JobTypeIds)`. The only project shape the UI binds to.
+- **`ProjectSearchQuery`** — `(string? SearchText, string? JobType, string? Status, int? JobTypeId,
+  int? StatusId, int? AssignedUserId, bool IncludeClosed, int? MaxResults)`.
 - **`IProjectQueryService`** — `SearchProjectsAsync(ProjectSearchQuery, CancellationToken)` and
   `GetProjectAsync(int projectId, CancellationToken)`; returns DTOs.
 - **`ICurrentProjectContext`** — `CurrentProject` (`ProjectSummaryDto?`), `CurrentProjectChanged`
