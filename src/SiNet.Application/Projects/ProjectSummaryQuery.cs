@@ -34,14 +34,22 @@ public static class ProjectSummaryQuery
             results = results.Where(p => p.IsActive);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.JobType))
+        if (query.StatusId is int statusId)
         {
-            results = results.Where(p => string.Equals(p.JobType, query.JobType, StringComparison.Ordinal));
+            results = results.Where(p => p.StatusId == statusId);
         }
-
-        if (!string.IsNullOrWhiteSpace(query.Status))
+        else if (!string.IsNullOrWhiteSpace(query.Status))
         {
             results = results.Where(p => string.Equals(p.Status, query.Status, StringComparison.Ordinal));
+        }
+
+        if (query.JobTypeId is int jobTypeId)
+        {
+            results = results.Where(p => p.JobTypeIds?.Contains(jobTypeId) == true);
+        }
+        else if (!string.IsNullOrWhiteSpace(query.JobType))
+        {
+            results = results.Where(p => string.Equals(p.JobType, query.JobType, StringComparison.Ordinal));
         }
 
         if (!string.IsNullOrWhiteSpace(query.SearchText))

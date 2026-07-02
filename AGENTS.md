@@ -29,7 +29,7 @@ Report in the final message: build result, test result, and whether DB/schema ch
 
 ## Key docs
 
-- `docs/APP_SHELL.md` — Legacy vs New system shell (New system startup currently **disabled**)
+- `docs/APP_SHELL.md` — Legacy vs New system shell; `StartupModeSelectionWindow` is first UI
 - `docs/PROJECTS.md` — Shared ProjectSelector, project context
 - `docs/PROJECT_CONTEXT_MIGRATION.md` — Migration slice notes
 - `docs/ARCHITECTURE_TARGET.md` — Target architecture

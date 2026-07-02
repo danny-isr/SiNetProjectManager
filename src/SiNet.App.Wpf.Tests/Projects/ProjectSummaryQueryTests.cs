@@ -22,7 +22,9 @@ public sealed class ProjectSummaryQueryTests
         string? jobType = null,
         string? status = null,
         string? assignedUserName = null,
-        bool isActive = true)
+        bool isActive = true,
+        int? statusId = null,
+        IReadOnlyList<int>? jobTypeIds = null)
         => new(
             ProjectId: id,
             ProjectNumber: number,
@@ -32,7 +34,9 @@ public sealed class ProjectSummaryQueryTests
             JobType: jobType,
             Status: status,
             AssignedUserName: assignedUserName,
-            IsActive: isActive);
+            IsActive: isActive,
+            StatusId: statusId,
+            JobTypeIds: jobTypeIds);
 
     [Fact]
     public void Excludes_default_dummy_project_numbers()
@@ -107,6 +111,53 @@ public sealed class ProjectSummaryQueryTests
         var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery());
 
         Assert.Equal(new[] { 2, 3, 1 }, result.Select(p => p.ProjectId));
+    }
+
+    [Fact]
+    public void Filters_by_status_id()
+    {
+        var source = new[]
+        {
+            Project(1, "1042", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1),
+            Project(2, "1041", status: "\u05E1\u05D2\u05D5\u05E8", statusId: 2, isActive: false),
+        };
+
+        var result = ProjectSummaryQuery.Apply(
+            source,
+            new ProjectSearchQuery(StatusId: 1, IncludeClosed: true));
+
+        Assert.Equal(new[] { 1 }, result.Select(p => p.ProjectId));
+    }
+
+    [Fact]
+    public void Filters_by_job_type_id_using_all_linked_types()
+    {
+        var source = new[]
+        {
+            Project(1, "1042", jobType: "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", jobTypeIds: [1, 2]),
+            Project(2, "1041", jobType: "\u05DE\u05E1\u05D7\u05E8", jobTypeIds: [2]),
+        };
+
+        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(JobTypeId: 1));
+
+        Assert.Equal(new[] { 1 }, result.Select(p => p.ProjectId));
+    }
+
+    [Fact]
+    public void Filters_by_combined_status_and_job_type_ids()
+    {
+        var source = new[]
+        {
+            Project(1, "1042", jobType: "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [1]),
+            Project(2, "1041", jobType: "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", status: "\u05E1\u05D2\u05D5\u05E8", statusId: 2, jobTypeIds: [1], isActive: false),
+            Project(3, "1040", jobType: "\u05DE\u05E1\u05D7\u05E8", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [2]),
+        };
+
+        var result = ProjectSummaryQuery.Apply(
+            source,
+            new ProjectSearchQuery(StatusId: 1, JobTypeId: 1, IncludeClosed: true));
+
+        Assert.Equal(new[] { 1 }, result.Select(p => p.ProjectId));
     }
 
     [Fact]

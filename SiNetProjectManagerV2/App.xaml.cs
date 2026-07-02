@@ -983,115 +983,23 @@ namespace SiNetProjectManagerV2
                 AppSettings = SettingsManager.LoadSettings();
                 ApplySettings();
 
-                // ── Step 1: Credential Vault ──────────────────────────────
-                Log.Information("[STARTUP] Step 1: Setting up credential vault...");
-                SetupCredentialVault();
-
-                // ── Step 2: Database Connection Gate ──────────────────────
-                Log.Information("[STARTUP] Step 2: Ensuring database connection...");
-                if (!EnsureDatabaseConnection())
+                Log.Information("[STARTUP] Step 1: Startup mode selection (first visible UI)...");
+                var selectedMode = SiNet.App.Wpf.Shell.StartupModeSelectionWindow.TryPromptForMode();
+                if (selectedMode is null)
                 {
-                    Log.Warning("[STARTUP] Database connection failed. Shutting down.");
+                    Log.Information("[STARTUP] Startup mode selection cancelled. Shutting down.");
                     Shutdown();
                     return;
                 }
 
-                // ── Step 3: Logging ──────────────────────────────────────
-                Log.Information("[STARTUP] Step 3: Configuring logging...");
-                ConfigureLoggingAndSettings();
-
-                // ── Step 4: Dependency Injection ──────────────────────────
-                Log.Information("[STARTUP] Step 4: Configuring DI services...");
-                ServiceProvider = ConfigureServices();
-                WireLegacyLocators();
-
-                // Initialize ServiceLocator for SiNetSQL library access
-                SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
-
-                // Bridge: when the shared GoogleService toggles auth state (login/logout),
-                // ask the health service to re-check the "google" row immediately so the
-                // System Health indicator turns green without requiring "בדוק עכשיו".
-                try
+                if (SiNet.App.Wpf.Shell.StartupModeRouter.OpensNewShell(selectedMode.Value))
                 {
-                    var googleSvc = ServiceProvider.GetRequiredService<GoogleService>();
-                    var healthSvc = ServiceProvider.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
-                    googleSvc.AuthStateChanged += (_, _) =>
-                    {
-                        AppLogger.Info("[Health][google] AuthStateChanged -> refreshing all Google rows");
-                        _ = healthSvc.RefreshAsync("google", System.Threading.CancellationToken.None);
-                        _ = healthSvc.RefreshAsync("google_account", System.Threading.CancellationToken.None);
-                        _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionTemplatesFolderId, System.Threading.CancellationToken.None);
-                        _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionReportsFolderId, System.Threading.CancellationToken.None);
-                    };
-                }
-                catch (Exception ex)
-                {
-                    AppLogger.Info($"[Health][google] failed to wire AuthStateChanged refresh: {ex.Message}");
-                }
-
-                // ── Step 4b: Load Management Settings from DB ────────────
-                Log.Information("[STARTUP] Step 4b: Loading management settings from DB...");
-                LoadManagementSettingsFromDb();
-
-                // ── Step 5: Background Services (non-blocking) ───────────
-                Log.Information("[STARTUP] Step 5: Scheduling background services...");
-                SchedulePdfRendererInit();
-                StartAccUserBootstrap();
-
-                // ── Step 6: Database Validation & Seeding ─────────────────
-                Log.Information("[STARTUP] Step 6: Validating database schema...");
-                if (!ValidateDatabaseSchema(out var defaultProjectError))
-                {
-                    Log.Warning("[STARTUP] Database schema validation failed. Shutting down.");
-                    Shutdown();
+                    RunNewSystemStartup(e);
+                    Log.Information("[STARTUP] ═══ Application startup completed (New System) ═══");
                     return;
                 }
 
-#if DEBUG
-                // ── Step 6b: Debug Role Selector ──────────────────────────
-                Log.Information("[STARTUP] Step 6b: Checking Debug Authorization Role Selector...");
-                RunDebugAuthorizationRoleSelector();
-#endif
-
-                // ── Step 7: User Authorization ────────────────────────────
-                Log.Information("[STARTUP] Step 7: Authorizing current user...");
-                if (!AuthorizeCurrentUser())
-                {
-                    Log.Warning("[STARTUP] User authorization failed. Shutting down.");
-                    Shutdown();
-                    return;
-                }
-
-                // ── Step 8: Post-Auth Initialization ──────────────────────
-                Log.Information("[STARTUP] Step 8: Post-auth initialization...");
-                if (defaultProjectError is not null && !HandleDefaultProjectFailure())
-                {
-                    Log.Warning("[STARTUP] Default project handling failed. Shutting down.");
-                    Shutdown();
-                    return;
-                }
-
-                Log.Information("[STARTUP] Step 8: Initializing status colors...");
-                InitializeStatusColors();
-
-                // ── Step 9: Launch ────────────────────────────────────────
-                Log.Information("[STARTUP] Step 9: Enforcing single instance...");
-                if (!EnforceSingleInstance())
-                {
-                    Log.Information("[STARTUP] Another instance is already running. Shutting down.");
-                    Shutdown();
-                    return;
-                }
-
-                Log.Information("[STARTUP] Step 10: Launching main window...");
-                base.OnStartup(e);
-                ShowSplashThenMainWindow();
-
-                // ── Step 10: Post-Launch Admin Alerts ─────────────────────
-                // Show sync failures AFTER MainWindow is established
-                // This ensures the alert is a non-blocking floating notification
-                Dispatcher.BeginInvoke(ShowSyncFailureAlertIfAdmin, DispatcherPriority.Background);
-
+                RunLegacyStartup(e);
                 Log.Information("[STARTUP] ═══ Application startup completed successfully ═══");
             }
             catch (Exception ex)
@@ -1124,6 +1032,152 @@ namespace SiNetProjectManagerV2
         }
 
         #region Startup Pipeline Steps
+
+        /// <summary>
+        /// New System startup (see <c>docs/APP_SHELL.md</c> §3): builds DI then opens
+        /// <see cref="SiNet.App.Wpf.Shell.NewShellWindow"/> without legacy schema/auth gates or
+        /// <see cref="MainWindow"/>. No silent fallback to Legacy on failure.
+        /// </summary>
+        private void RunNewSystemStartup(StartupEventArgs e)
+        {
+            Log.Information("[STARTUP][NewSystem] Setting up credential vault (connection string)...");
+            SetupCredentialVault();
+
+            Log.Information("[STARTUP][NewSystem] Configuring logging...");
+            ConfigureLoggingAndSettings();
+
+            Log.Information("[STARTUP][NewSystem] Configuring DI services...");
+            ServiceProvider = ConfigureServices();
+            WireLegacyLocators();
+            SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+
+            base.OnStartup(e);
+            LaunchNewSystemShell();
+        }
+
+        /// <summary>
+        /// Opens the clean New System shell. On failure shows an error and shuts down — no Legacy fallback.
+        /// </summary>
+        private static void LaunchNewSystemShell()
+        {
+            try
+            {
+                var factory = ServiceProvider.GetRequiredService<SiNet.App.Wpf.Shell.INewShellFactory>();
+                var shell = factory.CreateShell();
+
+                Current.MainWindow = shell;
+                Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                shell.Show();
+
+                Log.Information("[STARTUP][NewSystem] NewShell opened (legacy MainWindow not loaded).");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[STARTUP][NewSystem] Failed to launch New System shell.");
+                MessageBox.Show(
+                    $"לא ניתן לפתוח את המערכת החדשה:\n\n{ex.Message}",
+                    "שגיאת הפעלה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Current.Shutdown();
+            }
+        }
+
+        /// <summary>
+        /// Legacy production startup path — unchanged gates ending in splash + <see cref="MainWindow"/>.
+        /// </summary>
+        private void RunLegacyStartup(StartupEventArgs e)
+        {
+            Log.Information("[STARTUP][Legacy] Step 1: Setting up credential vault...");
+            SetupCredentialVault();
+
+            Log.Information("[STARTUP][Legacy] Step 2: Ensuring database connection...");
+            if (!EnsureDatabaseConnection())
+            {
+                Log.Warning("[STARTUP][Legacy] Database connection failed. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            Log.Information("[STARTUP][Legacy] Step 3: Configuring logging...");
+            ConfigureLoggingAndSettings();
+
+            Log.Information("[STARTUP][Legacy] Step 4: Configuring DI services...");
+            ServiceProvider = ConfigureServices();
+            WireLegacyLocators();
+            SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+
+            try
+            {
+                var googleSvc = ServiceProvider.GetRequiredService<GoogleService>();
+                var healthSvc = ServiceProvider.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
+                googleSvc.AuthStateChanged += (_, _) =>
+                {
+                    AppLogger.Info("[Health][google] AuthStateChanged -> refreshing all Google rows");
+                    _ = healthSvc.RefreshAsync("google", System.Threading.CancellationToken.None);
+                    _ = healthSvc.RefreshAsync("google_account", System.Threading.CancellationToken.None);
+                    _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionTemplatesFolderId, System.Threading.CancellationToken.None);
+                    _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionReportsFolderId, System.Threading.CancellationToken.None);
+                };
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Info($"[Health][google] failed to wire AuthStateChanged refresh: {ex.Message}");
+            }
+
+            Log.Information("[STARTUP][Legacy] Step 4b: Loading management settings from DB...");
+            LoadManagementSettingsFromDb();
+
+            Log.Information("[STARTUP][Legacy] Step 5: Scheduling background services...");
+            SchedulePdfRendererInit();
+            StartAccUserBootstrap();
+
+            Log.Information("[STARTUP][Legacy] Step 6: Validating database schema...");
+            if (!ValidateDatabaseSchema(out var defaultProjectError))
+            {
+                Log.Warning("[STARTUP][Legacy] Database schema validation failed. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+#if DEBUG
+            Log.Information("[STARTUP][Legacy] Step 6b: Debug Authorization Role Selector...");
+            RunDebugAuthorizationRoleSelector();
+#endif
+
+            Log.Information("[STARTUP][Legacy] Step 7: Authorizing current user...");
+            if (!AuthorizeCurrentUser())
+            {
+                Log.Warning("[STARTUP][Legacy] User authorization failed. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            Log.Information("[STARTUP][Legacy] Step 8: Post-auth initialization...");
+            if (defaultProjectError is not null && !HandleDefaultProjectFailure())
+            {
+                Log.Warning("[STARTUP][Legacy] Default project handling failed. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            Log.Information("[STARTUP][Legacy] Step 8: Initializing status colors...");
+            InitializeStatusColors();
+
+            Log.Information("[STARTUP][Legacy] Step 9: Enforcing single instance...");
+            if (!EnforceSingleInstance())
+            {
+                Log.Information("[STARTUP][Legacy] Another instance is already running. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            Log.Information("[STARTUP][Legacy] Step 10: Launching legacy main window...");
+            base.OnStartup(e);
+            ShowSplashThenMainWindow();
+
+            Dispatcher.BeginInvoke(ShowSyncFailureAlertIfAdmin, DispatcherPriority.Background);
+        }
 
         /// <summary>
         /// Wires the credential bridge and auto-imports provisioning file if available.
@@ -1584,15 +1638,8 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// Shows the splash screen then transitions to the chosen startup surface after a brief delay.
-        /// <para>
-        /// At this first startup moment the user chooses the startup mode (see
-        /// <c>docs/APP_SHELL.md</c>): <b>Legacy mode</b> keeps today's behavior and opens the legacy
-        /// <see cref="MainWindow"/>; <b>New system mode</b> (הפעל מערכת חדשה) opens the clean
-        /// <c>NewShellWindow</c> from the new stack and does NOT open the legacy main window. If the new
-        /// shell cannot be created, we log and fall back to the legacy window so startup never dead-ends.
-        /// Once a main window is established, switches ShutdownMode to OnMainWindowClose.
-        /// </para>
+        /// Legacy launch only: splash then <see cref="MainWindow"/>. Mode selection happens earlier in
+        /// <see cref="SiNet.App.Wpf.Shell.StartupModeSelectionWindow"/> (see <c>docs/APP_SHELL.md</c> §3).
         /// </summary>
         private void ShowSplashThenMainWindow()
         {
@@ -1603,88 +1650,13 @@ namespace SiNetProjectManagerV2
             {
                 splash.Dispatcher.Invoke(() =>
                 {
-                    var mode = PromptStartupMode();
-
-                    Window main;
-                    if (SiNet.App.Wpf.Shell.StartupModeRouter.OpensNewShell(mode)
-                        && TryCreateNewSystemShell(out var shell))
-                    {
-                        // New system mode: open the clean shell only. The legacy MainWindow is never
-                        // constructed here, which is what makes this path useful for performance isolation.
-                        main = shell!;
-                    }
-                    else
-                    {
-                        // Legacy mode (or new-shell creation failed) — unchanged behavior.
-                        main = new MainWindow();
-                    }
-
+                    var main = new MainWindow();
                     Current.MainWindow = main;
-
-                    // CRITICAL: Switch shutdown mode to normal behavior now that MainWindow exists.
-                    // This allows the app to close properly when MainWindow is closed.
-                    // Prior to this point, ShutdownMode was OnExplicitShutdown to prevent
-                    // premature shutdown during setup dialogs (credential vault, database connection).
                     Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
-
                     main.Show();
                     splash.Close();
                 });
             });
-        }
-
-        /// <summary>
-        /// Prompts the user, at the first startup moment, to choose the startup mode
-        /// (see <c>docs/APP_SHELL.md</c> §2/§3). Default is <see cref="SiNet.App.Wpf.Shell.StartupMode.Legacy"/>;
-        /// New system mode is strictly opt-in ("הפעל מערכת חדשה"). Presented as a simple Yes/No prompt so
-        /// it works in every build configuration (there is no interactive user-picker in Release).
-        /// </summary>
-        private static SiNet.App.Wpf.Shell.StartupMode PromptStartupMode()
-        {
-            if (!SiNet.App.Wpf.Shell.StartupModeRouter.EnableNewSystemStartup)
-            {
-                return SiNet.App.Wpf.Shell.StartupMode.Legacy;
-            }
-
-            var choice = MessageBox.Show(
-                "האם להפעיל את המערכת החדשה (מעטפת נקייה, ללא המערכת הישנה)?\n\n" +
-                "בחירה ב-\"לא\" תפעיל את המערכת הרגילה (Legacy) ללא שינוי.",
-                "בחירת מצב הפעלה",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question,
-                MessageBoxResult.No);
-
-            return SiNet.App.Wpf.Shell.StartupModeRouter.Resolve(choice == MessageBoxResult.Yes);
-        }
-
-        /// <summary>
-        /// Attempts to build the clean New System shell window from DI (see <c>docs/APP_SHELL.md</c>).
-        /// Returns <see langword="false"/> (and logs) if the shell factory is unavailable or throws, so
-        /// the caller can fall back to the legacy window and startup never dead-ends. This path does NOT
-        /// construct the legacy <see cref="MainWindow"/>.
-        /// </summary>
-        private static bool TryCreateNewSystemShell(out Window? shell)
-        {
-            shell = null;
-            try
-            {
-                var factory = ServiceProvider?.GetService<SiNet.App.Wpf.Shell.INewShellFactory>();
-                if (factory is null)
-                {
-                    Log.Warning("New system mode requested but INewShellFactory is not registered. Falling back to legacy MainWindow.");
-                    return false;
-                }
-
-                shell = factory.CreateShell();
-                Log.Information("Startup mode: New system shell opened (legacy MainWindow not loaded).");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to create the New System shell. Falling back to legacy MainWindow.");
-                shell = null;
-                return false;
-            }
         }
 
         #endregion

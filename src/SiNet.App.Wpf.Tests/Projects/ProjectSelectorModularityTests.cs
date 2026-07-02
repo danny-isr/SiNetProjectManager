@@ -48,7 +48,7 @@ public sealed class ProjectSelectorModularityTests
     [Fact]
     public void View_layout_dependency_properties_have_compact_embed_defaults()
     {
-        Assert.Equal(220d, ProjectSelectorView.SearchBoxWidthProperty.DefaultMetadata.DefaultValue);
+        Assert.Equal(340d, ProjectSelectorView.SearchBoxWidthProperty.DefaultMetadata.DefaultValue);
         Assert.Equal(true, ProjectSelectorView.CompactModeProperty.DefaultMetadata.DefaultValue);
         Assert.Equal(true, ProjectSelectorView.ShowFiltersProperty.DefaultMetadata.DefaultValue);
         Assert.Equal(false, ProjectSelectorView.ShowUserFilterProperty.DefaultMetadata.DefaultValue);

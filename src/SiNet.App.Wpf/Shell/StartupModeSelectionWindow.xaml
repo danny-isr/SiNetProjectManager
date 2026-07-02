@@ -1,0 +1,50 @@
+<Window x:Class="SiNet.App.Wpf.Shell.StartupModeSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:SiNet.App.Wpf.Shell"
+        Title="בחירת מצב הפעלה"
+        Height="320"
+        Width="480"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        FlowDirection="RightToLeft"
+        ShowInTaskbar="True">
+
+    <Border Background="#F7F9FC" Padding="24">
+        <StackPanel>
+            <TextBlock Text="SiNet — בחר מצב הפעלה"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,8" />
+
+            <TextBlock Text="בחר האם להפעיל את המערכת החדשה (מעטפת נקייה) או את המערכת הרגילה (Legacy)."
+                       TextWrapping="Wrap"
+                       Foreground="#555"
+                       Margin="0,0,0,16" />
+
+            <RadioButton Content="מערכת חדשה (New System) — מעטפת נקייה, ללא MainWindow ישן"
+                         IsChecked="{Binding IsNewSystemSelected}"
+                         Margin="0,0,0,8"
+                         GroupName="StartupMode" />
+
+            <RadioButton Content="מערכת רגילה (Legacy) — התנהגות ייצור נוכחית"
+                         IsChecked="{Binding IsLegacySelected}"
+                         Margin="0,0,0,20"
+                         GroupName="StartupMode" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="המשך"
+                        Width="100"
+                        IsDefault="True"
+                        Click="Continue_OnClick"
+                        Margin="0,0,8,0"
+                        Padding="12,6" />
+                <Button Content="ביטול"
+                        Width="100"
+                        IsCancel="True"
+                        Click="Cancel_OnClick"
+                        Padding="12,6" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

@@ -18,7 +18,9 @@ public sealed class ProjectSelectorViewModelBehaviorTests
         string? company = null,
         string? jobType = null,
         string? status = null,
-        bool isActive = true)
+        bool isActive = true,
+        int? statusId = null,
+        IReadOnlyList<int>? jobTypeIds = null)
         => new(
             ProjectId: id,
             ProjectNumber: number,
@@ -28,7 +30,9 @@ public sealed class ProjectSelectorViewModelBehaviorTests
             JobType: jobType,
             Status: status,
             AssignedUserName: null,
-            IsActive: isActive);
+            IsActive: isActive,
+            StatusId: statusId,
+            JobTypeIds: jobTypeIds);
 
     private sealed class StubProjectQueryService(
         Func<ProjectSearchQuery, Task<IReadOnlyList<ProjectSummaryDto>>> search) : IProjectQueryService
@@ -296,5 +300,110 @@ public sealed class ProjectSelectorViewModelBehaviorTests
         Assert.Single(sut.Projects);
         Assert.Equal("New", sut.Projects[0].ProjectName);
         Assert.Equal("new", sut.SearchText);
+    }
+
+    [Fact]
+    public async Task Status_filter_returns_only_matching_projects()
+    {
+        var projects = new[]
+        {
+            Project(1, "1042", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1),
+            Project(2, "1041", status: "\u05E1\u05D2\u05D5\u05E8", statusId: 2, isActive: false),
+        };
+
+        var queryService = new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(projects, q)));
+        var sut = new ProjectSelectorViewModel(
+            queryService,
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+        sut.SelectedStatusId = 1;
+        sut.IncludeClosed = true;
+        await sut.LoadAsync();
+
+        Assert.Single(sut.Projects);
+        Assert.Equal(1, sut.Projects[0].ProjectId);
+        Assert.Equal(1, queryService.ReceivedQueries[^1].StatusId);
+    }
+
+    [Fact]
+    public async Task JobType_filter_returns_only_matching_projects()
+    {
+        var projects = new[]
+        {
+            Project(1, "1042", jobType: "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", jobTypeIds: [10]),
+            Project(2, "1041", jobType: "\u05DE\u05E1\u05D7\u05E8", jobTypeIds: [20]),
+        };
+
+        var queryService = new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(projects, q)));
+        var sut = new ProjectSelectorViewModel(
+            queryService,
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+        sut.SelectedJobTypeId = 20;
+        await sut.LoadAsync();
+
+        Assert.Single(sut.Projects);
+        Assert.Equal(2, sut.Projects[0].ProjectId);
+        Assert.Equal(20, queryService.ReceivedQueries[^1].JobTypeId);
+    }
+
+    [Fact]
+    public async Task Combined_status_and_job_type_filters_narrow_results()
+    {
+        var projects = new[]
+        {
+            Project(1, "1042", jobType: "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [10]),
+            Project(2, "1041", jobType: "\u05DE\u05D2\u05D5\u05E8\u05D9\u05DD", status: "\u05E1\u05D2\u05D5\u05E8", statusId: 2, jobTypeIds: [10], isActive: false),
+            Project(3, "1040", jobType: "\u05DE\u05E1\u05D7\u05E8", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [20]),
+        };
+
+        var queryService = new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(projects, q)));
+        var sut = new ProjectSelectorViewModel(
+            queryService,
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+        sut.SelectedStatusId = 1;
+        sut.SelectedJobTypeId = 10;
+        sut.IncludeClosed = true;
+        await sut.LoadAsync();
+
+        Assert.Single(sut.Projects);
+        Assert.Equal(1, sut.Projects[0].ProjectId);
+    }
+
+    [Fact]
+    public async Task All_filter_selection_does_not_apply_field_filter()
+    {
+        var projects = new[]
+        {
+            Project(1, "1042", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [10]),
+            Project(2, "1041", status: "\u05E1\u05D2\u05D5\u05E8", statusId: 2, jobTypeIds: [20], isActive: false),
+        };
+
+        var queryService = new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(projects, q)));
+        var sut = new ProjectSelectorViewModel(
+            queryService,
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+        sut.SelectedStatusId = null;
+        sut.SelectedJobTypeId = null;
+        sut.IncludeClosed = true;
+        await sut.LoadAsync();
+
+        Assert.Equal(2, sut.Projects.Count);
+        Assert.Null(queryService.ReceivedQueries[^1].StatusId);
+        Assert.Null(queryService.ReceivedQueries[^1].JobTypeId);
     }
 }

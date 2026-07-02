@@ -386,8 +386,8 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
         return new ProjectSearchQuery(
             SearchText: searchText,
-            JobType: ResolveJobTypeDisplayName(),
-            Status: ResolveStatusDisplayName(),
+            JobTypeId: SelectedJobTypeId,
+            StatusId: SelectedStatusId,
             AssignedUserId: null,
             IncludeClosed: _includeClosed,
             MaxResults: EffectiveMaxResults);
@@ -456,26 +456,6 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         SelectedJobTypeId = previousJobTypeId is int jobTypeId && JobTypeOptions.Any(o => o.Id == jobTypeId)
             ? jobTypeId
             : null;
-    }
-
-    private string? ResolveStatusDisplayName()
-    {
-        if (SelectedStatusId is not int statusId)
-        {
-            return null;
-        }
-
-        return StatusOptions.FirstOrDefault(o => o.Id == statusId)?.DisplayName;
-    }
-
-    private string? ResolveJobTypeDisplayName()
-    {
-        if (SelectedJobTypeId is not int jobTypeId)
-        {
-            return null;
-        }
-
-        return JobTypeOptions.FirstOrDefault(o => o.Id == jobTypeId)?.DisplayName;
     }
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)

@@ -18,7 +18,7 @@ public partial class ProjectSelectorView : UserControl
             nameof(SearchBoxWidth),
             typeof(double),
             typeof(ProjectSelectorView),
-            new PropertyMetadata(220d));
+            new PropertyMetadata(340d));
 
     public static readonly DependencyProperty CompactModeProperty =
         DependencyProperty.Register(

@@ -46,12 +46,30 @@ public sealed class ProjectQueryService : IProjectQueryService
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        // Server-side: mirror the legacy load (NameAndNumber present) and project only the columns the
-        // selector needs. Navigation titles (Place/Company/Status) and the first project type are read
-        // via correlated sub-selects so EF entities never materialize past this boundary.
-        var rows = await db.Projects
+        var queryable = db.Projects
             .AsNoTracking()
-            .Where(p => p.NameAndNumber != null)
+            .Where(p => p.NameAndNumber != null);
+
+        if (query.StatusId is int statusId)
+        {
+            queryable = queryable.Where(p => p.ProjectStatusId == statusId);
+        }
+
+        if (query.JobTypeId is int jobTypeId)
+        {
+            queryable = queryable.Where(p =>
+                p.TypeOfProjectInProjects.Any(t => t.ProjectTypeId == jobTypeId));
+        }
+
+        if (!query.IncludeClosed)
+        {
+            queryable = queryable.Where(p => p.EndOfProject != true);
+        }
+
+        // Server-side: mirror the legacy load (NameAndNumber present) and project only the columns the
+        // selector needs. Navigation titles (Place/Company/Status) and linked project types are read
+        // via correlated sub-selects so EF entities never materialize past this boundary.
+        var rows = await queryable
             .Select(p => new ProjectRow
             {
                 Id = p.Id,
@@ -59,13 +77,17 @@ public sealed class ProjectQueryService : IProjectQueryService
                 Title = p.Title,
                 PlaceName = p.Place != null ? p.Place.Title : null,
                 CompanyName = p.Company != null ? p.Company.Title : null,
+                StatusId = p.ProjectStatusId,
                 StatusName = p.ProjectStatus != null ? p.ProjectStatus.Title : null,
-                // Display-only: a project can have several types (TypeOfProjectInProject); the selector's
-                // Job Type filter over a single scalar is deferred, so we surface the first type's title.
+                // Display-only: surface the first type title; filtering uses all linked type ids.
                 JobType = p.TypeOfProjectInProjects
                     .Where(t => t.ProjectType != null && t.ProjectType.Title != null)
                     .Select(t => t.ProjectType!.Title)
                     .FirstOrDefault(),
+                JobTypeIds = p.TypeOfProjectInProjects
+                    .Where(t => t.ProjectTypeId != null)
+                    .Select(t => t.ProjectTypeId!.Value)
+                    .ToList(),
                 // Display-only assigned/responsible worker; the user-id filter is deferred (the DTO carries
                 // a name, not an id).
                 AssignedUserName = p.Worker,
@@ -98,11 +120,16 @@ public sealed class ProjectQueryService : IProjectQueryService
                 Title = p.Title,
                 PlaceName = p.Place != null ? p.Place.Title : null,
                 CompanyName = p.Company != null ? p.Company.Title : null,
+                StatusId = p.ProjectStatusId,
                 StatusName = p.ProjectStatus != null ? p.ProjectStatus.Title : null,
                 JobType = p.TypeOfProjectInProjects
                     .Where(t => t.ProjectType != null && t.ProjectType.Title != null)
                     .Select(t => t.ProjectType!.Title)
                     .FirstOrDefault(),
+                JobTypeIds = p.TypeOfProjectInProjects
+                    .Where(t => t.ProjectTypeId != null)
+                    .Select(t => t.ProjectTypeId!.Value)
+                    .ToList(),
                 AssignedUserName = p.Worker,
                 IsActive = p.EndOfProject != true,
             })
@@ -121,7 +148,9 @@ public sealed class ProjectQueryService : IProjectQueryService
         JobType: NullIfBlank(row.JobType),
         Status: NullIfBlank(row.StatusName),
         AssignedUserName: NullIfBlank(row.AssignedUserName),
-        IsActive: row.IsActive);
+        IsActive: row.IsActive,
+        StatusId: row.StatusId,
+        JobTypeIds: row.JobTypeIds);
 
     /// <summary>
     /// Formats the legacy <c>float?</c> project number as the selector's display string: an integer when
@@ -155,8 +184,10 @@ public sealed class ProjectQueryService : IProjectQueryService
         public string? Title { get; init; }
         public string? PlaceName { get; init; }
         public string? CompanyName { get; init; }
+        public int? StatusId { get; init; }
         public string? StatusName { get; init; }
         public string? JobType { get; init; }
+        public List<int> JobTypeIds { get; init; } = [];
         public string? AssignedUserName { get; init; }
         public bool IsActive { get; init; }
     }

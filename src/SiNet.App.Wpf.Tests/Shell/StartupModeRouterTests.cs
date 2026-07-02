@@ -4,49 +4,56 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Shell;
 
 /// <summary>
-/// Unit tests for <see cref="StartupModeRouter"/>, the pure decision helper behind the first-startup
-/// mode choice (see <c>docs/APP_SHELL.md</c> §2/§3).
+/// Unit tests for startup mode selection and routing (see <c>docs/APP_SHELL.md</c> §3).
 /// </summary>
 public sealed class StartupModeRouterTests
 {
     [Fact]
-    public void New_system_startup_is_disabled_by_default()
+    public void StartupModeSelectionViewModel_defaults_to_New_System()
     {
-        Assert.False(StartupModeRouter.EnableNewSystemStartup);
+        var vm = new StartupModeSelectionViewModel();
+
+        Assert.Equal(StartupMode.NewSystem, vm.SelectedMode);
+        Assert.True(vm.IsNewSystemSelected);
+        Assert.False(vm.IsLegacySelected);
     }
 
     [Fact]
-    public void Resolve_always_returns_legacy_while_new_system_startup_disabled()
+    public void Resolve_maps_boolean_to_startup_mode()
     {
-        Assert.Equal(StartupMode.Legacy, StartupModeRouter.Resolve(runNewSystem: true));
+        Assert.Equal(StartupMode.NewSystem, StartupModeRouter.Resolve(runNewSystem: true));
         Assert.Equal(StartupMode.Legacy, StartupModeRouter.Resolve(runNewSystem: false));
     }
 
-    [Fact]
-    public void OpensNewShell_is_false_while_new_system_startup_disabled()
+    [Theory]
+    [InlineData(StartupMode.NewSystem, true)]
+    [InlineData(StartupMode.Legacy, false)]
+    public void OpensNewShell_only_for_new_system_mode(StartupMode mode, bool expected)
     {
-        Assert.False(StartupModeRouter.OpensNewShell(StartupMode.NewSystem));
-        Assert.False(StartupModeRouter.OpensNewShell(StartupMode.Legacy));
+        Assert.Equal(expected, StartupModeRouter.OpensNewShell(mode));
     }
 
     [Theory]
     [InlineData(StartupMode.Legacy, true)]
-    [InlineData(StartupMode.NewSystem, true)]
-    public void OpensLegacyMainWindow_while_new_system_startup_disabled(StartupMode mode, bool expected)
+    [InlineData(StartupMode.NewSystem, false)]
+    public void OpensLegacyMainWindow_only_for_legacy_mode(StartupMode mode, bool expected)
     {
         Assert.Equal(expected, StartupModeRouter.OpensLegacyMainWindow(mode));
     }
 
     [Fact]
-    public void Exactly_one_surface_opens_while_new_system_startup_disabled()
+    public void Exactly_one_surface_opens_for_every_choice()
     {
-        foreach (var runNewSystem in new[] { true, false })
+        foreach (var mode in new[] { StartupMode.NewSystem, StartupMode.Legacy })
         {
-            var mode = StartupModeRouter.Resolve(runNewSystem);
-
-            Assert.Equal(StartupMode.Legacy, mode);
-            Assert.False(StartupModeRouter.OpensNewShell(mode));
-            Assert.True(StartupModeRouter.OpensLegacyMainWindow(mode));
+            Assert.NotEqual(StartupModeRouter.OpensNewShell(mode), StartupModeRouter.OpensLegacyMainWindow(mode));
         }
+    }
+
+    [Fact]
+    public void Router_has_no_EnableNewSystemStartup_master_switch()
+    {
+        Assert.Null(typeof(StartupModeRouter).GetProperty("EnableNewSystemStartup"));
+        Assert.Null(typeof(StartupModeRouter).GetField("EnableNewSystemStartup"));
     }
 }

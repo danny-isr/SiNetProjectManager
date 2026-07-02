@@ -45,12 +45,18 @@ New system mode  → opens the new clean shell (NewShellWindow, SiNet.App.Wpf)
 				 → loads only new/refactored surfaces on demand
 ```
 
-The mode is chosen at startup in a **Yes/No prompt** after the splash screen (see `App.xaml.cs`
-`PromptStartupMode`). Default is **Legacy** ("לא").
+The mode is chosen at startup in **`StartupModeSelectionWindow`** — the **first visible UI**, before
+credential vault, database gate, schema validation, or splash. Default selection is **New System**.
 
-> **Current status:** New system startup is **disabled** via
-> `StartupModeRouter.EnableNewSystemStartup = false`. The app always opens the legacy `MainWindow`
-> and never shows the new-system prompt. Set the flag to `true` to re-enable opt-in New system mode.
+Rules:
+
+- **One prompt only** — `ShowSplashThenMainWindow()` does **not** ask for mode again (Legacy: splash →
+  `MainWindow` only).
+- **New System** builds `ServiceProvider` via `ConfigureServices()` **before** opening `NewShellWindow`
+  (DI required for `INewShellFactory`, Project Context, Email/Inspection factories). It **skips**
+  legacy DB retry loop, schema validation, debug role selector, and user authorization gates.
+- **No silent Legacy fallback** — if New System shell creation fails, show an error and **shutdown**;
+  do not open `MainWindow` in the background.
 
 > **Non-goal / anti-pattern (explicit):** New system mode must **not** be implemented by opening the
 > legacy `MainWindow` and hiding menu items. That would still load the legacy system and defeat the
@@ -65,13 +71,18 @@ for now. Startup is **code-driven** (no XAML `StartupUri`) in `App.xaml.cs`.
 
 ```plaintext
 App.OnStartup
-  → load app settings (non-interactive)
-  → StartupModeSelectionWindow (FIRST visible UI; default = New system)
-        ├─ user cancels / closes → shutdown (no silent Legacy default)
-        ├─ New system   → LaunchNewSystemShell()
-        │                   → ConfigureServices (DI only; no legacy MainWindow)
-        │                   → NewShellWindow (INewShellFactory)
-        └─ Legacy         → credential vault → DB gate → schema → auth → splash → MainWindow
+  → ShutdownMode = OnExplicitShutdown
+  → ConfigureGlobalHandlers
+  → Load AppSettings + ApplySettings
+  → StartupModeSelectionWindow (FIRST visible UI; default = New System)
+        ├─ cancel / close → Shutdown
+        ├─ New System   → SetupCredentialVault (if needed for conn string)
+        │                 → ConfigureLoggingAndSettings
+        │                 → ConfigureServices + WireLegacyLocators
+        │                 → LaunchNewSystemShell() → NewShellWindow
+        │                 (no schema/auth gates; no MainWindow; no second prompt)
+        └─ Legacy       → credential vault → DB gate → schema → auth → splash → MainWindow
+                          (ShowSplashThenMainWindow: splash only, no mode prompt)
 ```
 
 The mode prompt is shown **before any legacy gate** so New system mode can skip credential/DB/schema

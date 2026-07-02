@@ -56,17 +56,21 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         "\u05DE\u05D5\u05DB\u05DF (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05DC\u05DC\u05D0 \u05D7\u05D9\u05D1\u05D5\u05E8 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD)"; // "Ready (visual shell — no data connected)"
 
     public EmailWindowViewModel()
-        : this(new FakeProjectQueryService(), new InMemoryCurrentProjectContext())
+        : this(new FakeProjectQueryService(), new FakeProjectFilterOptionsService(), new InMemoryCurrentProjectContext())
     {
     }
 
     /// <summary>
     /// Primary constructor: hosts the shared <see cref="ProjectSelectorViewModel"/> over the supplied
-    /// read port and shared current-project context, and observes that context for display updates.
+    /// read ports and shared current-project context, and observes that context for display updates.
     /// </summary>
-    public EmailWindowViewModel(IProjectQueryService projectQuery, ICurrentProjectContext currentProject)
+    public EmailWindowViewModel(
+        IProjectQueryService projectQuery,
+        IProjectFilterOptionsService filterOptions,
+        ICurrentProjectContext currentProject)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
+        ArgumentNullException.ThrowIfNull(filterOptions);
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
@@ -78,7 +82,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         _selectedStatus = StatusOptions.FirstOrDefault();
         _selectedEmail = Emails.FirstOrDefault();
 
-        ProjectSelector = new ProjectSelectorViewModel(projectQuery, _currentProject);
+        ProjectSelector = new ProjectSelectorViewModel(projectQuery, filterOptions, _currentProject);
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
         _ = ProjectSelector.InitializeAsync();

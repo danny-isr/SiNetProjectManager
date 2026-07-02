@@ -19,6 +19,8 @@ namespace SiNet.Application.Projects;
 /// <param name="Status">Project status used by the Status filter; <see langword="null"/> when unset.</param>
 /// <param name="AssignedUserName">Assigned/responsible user display name used by the User filter; <see langword="null"/> when unassigned.</param>
 /// <param name="IsActive"><see langword="true"/> for active projects; <see langword="false"/> for closed ones (drives include-closed filtering).</param>
+/// <param name="StatusId">Project status id for id-based filtering; <see langword="null"/> when unknown.</param>
+/// <param name="JobTypeIds">Linked job / project type ids for id-based filtering; empty when none.</param>
 public sealed record ProjectSummaryDto(
     int ProjectId,
     string ProjectNumber,
@@ -28,4 +30,6 @@ public sealed record ProjectSummaryDto(
     string? JobType,
     string? Status,
     string? AssignedUserName,
-    bool IsActive);
+    bool IsActive,
+    int? StatusId = null,
+    IReadOnlyList<int>? JobTypeIds = null);

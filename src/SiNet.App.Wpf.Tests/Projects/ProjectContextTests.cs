@@ -110,7 +110,10 @@ public sealed class ProjectContextTests
         // updates its display strip. Publishing through the selector (as the UI would) must be reflected.
         var projects = new[] { Project(1042, "1042", "North Towers") };
         var context = new InMemoryCurrentProjectContext();
-        var sut = new EmailWindowViewModel(new StubProjectQueryService(projects), context);
+        var sut = new EmailWindowViewModel(
+            new StubProjectQueryService(projects),
+            new FakeProjectFilterOptionsService(),
+            context);
         await sut.ProjectSelector.LoadAsync();
 
         sut.ProjectSelector.SelectProjectCommand.Execute(sut.ProjectSelector.Projects.Single());
@@ -146,7 +149,10 @@ public sealed class ProjectContextTests
         // surface (not through its own selector) — proving it is an observer, not the owner.
         var projects = new[] { Project(5, "1005", "Foxtrot") };
         var sharedContext = new InMemoryCurrentProjectContext();
-        var sut = new EmailWindowViewModel(new StubProjectQueryService(projects), sharedContext);
+        var sut = new EmailWindowViewModel(
+            new StubProjectQueryService(projects),
+            new FakeProjectFilterOptionsService(),
+            sharedContext);
         await sut.ProjectSelector.LoadAsync();
 
         await sharedContext.SetCurrentProjectAsync(Project(5, "1005", "Foxtrot"));

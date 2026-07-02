@@ -15,4 +15,4 @@ Before marking any **code** task complete:
 
 If `dotnet build` fails on file locks, retry once; if COM/MSBuild environment issues appear, document the exact error.
 
-Do not disable New System startup or other product behavior unless the user explicitly asks.
+Do not disable New System startup unless the user explicitly asks.

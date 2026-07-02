@@ -214,7 +214,7 @@ It must support the existing legacy project-selection behavior (parity target, d
   `SearchableProjectSelector`).
 - Default **sort by project number, descending** (newest first).
 - **Exclusion of dummy project numbers** (e.g. 0 / 9999).
-- **Job Type** / **Status** filters with visible labels (see §6). Filter dropdown options load from
+- **Job Type** / **Status** filter combo boxes (see §6). Options load from
   `IProjectFilterOptionsService` — **not** from the capped project result list (`MaxResults`).
 - **User** filter — *deferred* (hidden in UI until semantics are defined).
 - **Refresh** (reload filter options + project list through Application ports).
@@ -298,17 +298,17 @@ Email/ProjectWork filter strip):
 
 | Filter | Meaning | Maps to |
 | --- | --- | --- |
-| **Job Type** | Restrict to a project type / discipline (legacy `JobType` / ProjectType). | `ProjectSearchQuery.JobType`, `ProjectSummaryDto.JobType` — *partial*: matches the first surfaced type title (see migration §8a). |
-| **Status** | Restrict by project status/state. | `ProjectSearchQuery.Status`, `ProjectSummaryDto.Status` |
+| **Job Type** | Restrict to a project type / discipline (legacy `JobType` / ProjectType). | `ProjectSearchQuery.JobTypeId` — matches any linked `TypeOfProjectInProject.ProjectTypeId` (legacy parity). |
+| **Status** | Restrict by project status/state. | `ProjectSearchQuery.StatusId` — matches `Project.ProjectStatusId`. |
 | **User** | Restrict by assigned/responsible user. | `ProjectSearchQuery.AssignedUserId`, `ProjectSummaryDto.AssignedUserName` — *deferred* in the real source: the DTO carries a user *name*, not an id, so `AssignedUserId` is not applied yet (see migration §8a). |
 | **Include closed / active** | Include or hide closed projects. | `ProjectSearchQuery.IncludeClosed`, `ProjectSummaryDto.IsActive` |
 | **Free-text search** | number / title / city / client (multi-token AND). | `ProjectSearchQuery.SearchText`, `ProjectSummaryQuery.MatchesText` |
 | **MaxResults** | Cap **displayed** project rows for responsiveness. | Default **200** (`DefaultMaxResults`); **no cap** (`null`) when `ShowExpandedResults` is checked. Applied **after** filtering on the **full search source** — never before text filters, and never on filter-option lists. |
 
 Filter option lists (`Status`, `Job Type`) are loaded through **`IProjectFilterOptionsService`**
-(read-only, full lists from reference tables). Selection is stored by stable id
-(`SelectedStatusId`, `SelectedJobTypeId`) and resolved to display names when building
-`ProjectSearchQuery`.
+(read-only, **distinct values present on selectable projects**). Selection is stored by stable id
+(`SelectedStatusId`, `SelectedJobTypeId`); `null` means **הכל** (no filter). Combo boxes show
+**הכל** or the selected value — no separate field labels.
 
 ### SQL vs in-memory filtering (implementation)
 
