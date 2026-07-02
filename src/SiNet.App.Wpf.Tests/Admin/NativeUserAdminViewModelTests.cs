@@ -23,7 +23,7 @@ public sealed class NativeUserAdminViewModelTests
         var service = new Mock<IUserManagementService>();
         service.Setup(s => s.GetUsersAsync(It.IsAny<CancellationToken>())).ReturnsAsync(users);
 
-        var vm = new UserManagementViewModel(service.Object);
+        var vm = new UserManagementViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup());
         await vm.LoadUsersAsync();
 
         Assert.Single(vm.Users);
@@ -43,7 +43,7 @@ public sealed class NativeUserAdminViewModelTests
             .Callback<IReadOnlyList<UpdateUserCommand>, CancellationToken>((updates, _) => captured = updates)
             .Returns(Task.CompletedTask);
 
-        var vm = new UserManagementViewModel(service.Object);
+        var vm = new UserManagementViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup());
         await vm.LoadUsersAsync();
         vm.Users[0].DisplayName = "Alice Updated";
         vm.NotifyRowChanged();
@@ -62,7 +62,7 @@ public sealed class NativeUserAdminViewModelTests
         service.Setup(s => s.GetUsersAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([new UserSummaryDto(1, "Alice", "a@x.com", "alice", false, true, AppAccUserType.NoAccUser, AppRole.Administrator, 0)]);
 
-        var vm = new UserManagementViewModel(service.Object);
+        var vm = new UserManagementViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup());
         await vm.LoadUsersAsync();
         vm.Users[0].DisplayName = "Changed";
         vm.NotifyRowChanged();
@@ -79,7 +79,7 @@ public sealed class NativeUserAdminViewModelTests
         service.Setup(s => s.CheckDuplicateLoginNameAsync("dup", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var vm = new AddUserViewModel(service.Object)
+        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup())
         {
             LoginName = "dup",
             DisplayName = "Dup User",
@@ -102,7 +102,7 @@ public sealed class NativeUserAdminViewModelTests
             .Callback<CreateUserCommand, CancellationToken>((cmd, _) => captured = cmd)
             .Returns(Task.CompletedTask);
 
-        var vm = new AddUserViewModel(service.Object)
+        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup())
         {
             LoginName = "new1",
             DisplayName = "New User",
@@ -129,7 +129,7 @@ public sealed class NativeUserAdminViewModelTests
         service.Setup(s => s.AddUserAsync(It.IsAny<CreateUserCommand>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var vm = new AddUserViewModel(service.Object, notifier)
+        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), notifier)
         {
             LoginName = "new1",
             DisplayName = "New User",
@@ -195,6 +195,23 @@ public sealed class SqlUserManagementServiceAuthorizationTests
             sut.UpdateUsersAsync(
                 [new UpdateUserCommand(2, "Bob", null, "admin", AppAccUserType.NoAccUser, AppRole.Employee, true)],
                 CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UpdateUsersAsync_persists_MasterPlanEmployeeId_and_AccUserType()
+    {
+        var db = CreateInMemoryDb();
+        var auth = AuthorizeUsersManage();
+        var sut = new SqlUserManagementService(db, auth.Object, NullCurrentUserContext.Instance);
+
+        await sut.UpdateUsersAsync(
+            [new UpdateUserCommand(2, "Bob", "b@x.com", "bob", AppAccUserType.Engineer, AppRole.Employee, true, MasterPlanEmployeeId: 42)],
+            CancellationToken.None);
+
+        await using var verify = db.CreateDbContext();
+        var entity = await verify.Users.SingleAsync(u => u.Id == 2);
+        Assert.Equal(42, entity.MasterPlanEmployeeId);
+        Assert.Equal((int)AppAccUserType.Engineer, entity.AccUserType);
     }
 
     private static Mock<IAuthorizationQueryService> AuthorizeUsersManage()

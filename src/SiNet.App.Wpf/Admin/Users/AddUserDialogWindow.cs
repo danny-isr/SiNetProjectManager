@@ -12,13 +12,14 @@ public sealed class AddUserDialogWindow : Window
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         Title = "הוספת משתמש — מערכת חדשה";
         Width = 480;
-        Height = 420;
+        Height = 520;
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         Content = new AddUserView { DataContext = _viewModel };
         _viewModel.RequestClose += OnRequestClose;
         Closed += (_, _) => _viewModel.RequestClose -= OnRequestClose;
+        Loaded += async (_, _) => await _viewModel.InitializeAsync().ConfigureAwait(true);
     }
 
     private void OnRequestClose(bool dialogResult)

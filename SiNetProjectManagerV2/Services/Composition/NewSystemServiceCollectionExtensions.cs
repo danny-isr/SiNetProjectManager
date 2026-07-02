@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Identity;
 
 namespace SiNetProjectManagerV2.Services.Composition;
 
@@ -23,6 +24,7 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);
         SiNet.App.Wpf.Admin.Permissions.PermissionAdminServiceCollectionExtensions.AddSiNetPermissionAdminWpf(services);
+        services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         ShellServiceCollectionExtensions.AddSiNetShell(services);
 
         return services;

@@ -43,6 +43,8 @@ public sealed class InfrastructureSqlBoundaryTests
         // Native user-admin code must use SiNetDbContext + SiNet.Infrastructure.Sql.Entities only.
         if (!relativePath.StartsWith("Services\\Identity", StringComparison.OrdinalIgnoreCase)
             && !relativePath.StartsWith("Services/Identity", StringComparison.OrdinalIgnoreCase)
+            && !relativePath.StartsWith("Services\\MasterPlan", StringComparison.OrdinalIgnoreCase)
+            && !relativePath.StartsWith("Services/MasterPlan", StringComparison.OrdinalIgnoreCase)
             && !relativePath.StartsWith("Entities", StringComparison.OrdinalIgnoreCase)
             && !relativePath.StartsWith("Data\\SiNetDbContext", StringComparison.OrdinalIgnoreCase)
             && !relativePath.StartsWith("Data/SiNetDbContext", StringComparison.OrdinalIgnoreCase)
@@ -86,6 +88,17 @@ public sealed class InfrastructureSqlBoundaryTests
         Assert.DoesNotContain("SiNetSQL.Models", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SiNetSQLDbContext", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ActionPermissionService", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SqlMasterPlanEmployeeLookupService_uses_native_sql_only()
+    {
+        var path = Path.Combine(InfrastructureSqlRoot, "Services", "MasterPlan", "SqlMasterPlanEmployeeLookupService.cs");
+        var source = File.ReadAllText(path);
+        Assert.Contains("Microsoft.Data.SqlClient", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQL.Data", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQL.Models", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQL.MVVM", source, StringComparison.Ordinal);
     }
 
     private static string RepoRoot => RepoPaths.RepoRoot;

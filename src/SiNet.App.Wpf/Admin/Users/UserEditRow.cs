@@ -8,13 +8,14 @@ namespace SiNet.App.Wpf.Admin.Users;
 /// </summary>
 public sealed class UserEditRow : ObservableObject
 {
-    private readonly AppAccUserType _originalAccUserType;
     private string _displayName;
     private string _email;
     private string _loginName;
+    private AppAccUserType _accUserType;
     private AppRole _role;
     private bool _isActive;
     private int? _masterPlanEmployeeId;
+    private string? _masterPlanEmployeeName;
     private string _notes;
 
     public UserEditRow(UserSummaryDto source)
@@ -22,11 +23,11 @@ public sealed class UserEditRow : ObservableObject
         UserId = source.UserId;
         OpenTaskCount = source.OpenTaskCount;
         IsDomainGroup = source.IsDomainGroup;
-        _originalAccUserType = source.AccUserType;
 
         _displayName = source.DisplayName;
         _email = source.Email;
         _loginName = source.LoginName;
+        _accUserType = source.AccUserType;
         _role = source.Role;
         _isActive = source.IsActive;
         _masterPlanEmployeeId = source.MasterPlanEmployeeId;
@@ -40,8 +41,6 @@ public sealed class UserEditRow : ObservableObject
     public int OpenTaskCount { get; }
 
     public bool? IsDomainGroup { get; }
-
-    public AppAccUserType AccUserType => _originalAccUserType;
 
     public string DisplayName
     {
@@ -79,6 +78,21 @@ public sealed class UserEditRow : ObservableObject
         }
     }
 
+    public AppAccUserType AccUserType
+    {
+        get => _accUserType;
+        set
+        {
+            if (SetField(ref _accUserType, value))
+            {
+                OnPropertyChanged(nameof(AccUserTypeDisplay));
+                NotifyDirtyChanged();
+            }
+        }
+    }
+
+    public string AccUserTypeDisplay => AppAccUserTypeDisplay.GetDisplayName(AccUserType);
+
     public AppRole Role
     {
         get => _role;
@@ -86,10 +100,13 @@ public sealed class UserEditRow : ObservableObject
         {
             if (SetField(ref _role, value))
             {
+                OnPropertyChanged(nameof(RoleDisplay));
                 NotifyDirtyChanged();
             }
         }
     }
+
+    public string RoleDisplay => AppRoleDisplay.GetDisplayName(Role);
 
     public bool IsActive
     {
@@ -115,6 +132,12 @@ public sealed class UserEditRow : ObservableObject
         }
     }
 
+    public string? MasterPlanEmployeeName
+    {
+        get => _masterPlanEmployeeName;
+        set => SetField(ref _masterPlanEmployeeName, value);
+    }
+
     public string Notes
     {
         get => _notes;
@@ -132,6 +155,7 @@ public sealed class UserEditRow : ObservableObject
     private string _originalDisplayName = string.Empty;
     private string _originalEmail = string.Empty;
     private string _originalLoginName = string.Empty;
+    private AppAccUserType _originalAccUserType;
     private AppRole _originalRole;
     private bool _originalIsActive;
     private int? _originalMasterPlanEmployeeId;
@@ -142,6 +166,7 @@ public sealed class UserEditRow : ObservableObject
         DisplayName = _originalDisplayName;
         Email = _originalEmail;
         LoginName = _originalLoginName;
+        AccUserType = _originalAccUserType;
         Role = _originalRole;
         IsActive = _originalIsActive;
         MasterPlanEmployeeId = _originalMasterPlanEmployeeId;
@@ -166,6 +191,7 @@ public sealed class UserEditRow : ObservableObject
         _originalDisplayName = _displayName;
         _originalEmail = _email;
         _originalLoginName = _loginName;
+        _originalAccUserType = _accUserType;
         _originalRole = _role;
         _originalIsActive = _isActive;
         _originalMasterPlanEmployeeId = _masterPlanEmployeeId;
@@ -179,6 +205,7 @@ public sealed class UserEditRow : ObservableObject
         var dirty = _displayName != _originalDisplayName
                     || _email != _originalEmail
                     || _loginName != _originalLoginName
+                    || _accUserType != _originalAccUserType
                     || _role != _originalRole
                     || _isActive != _originalIsActive
                     || _masterPlanEmployeeId != _originalMasterPlanEmployeeId

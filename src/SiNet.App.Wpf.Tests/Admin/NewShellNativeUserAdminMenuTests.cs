@@ -54,8 +54,8 @@ public sealed class NewShellNativeUserAdminMenuTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IAuthorizationQueryService>(new StubAuthorization(usersManage, actionPermissionsManage));
-        services.AddTransient<UserListWindow>(_ => new UserListWindow(new UserManagementViewModel(new NoOpUserManagementService())));
-        services.AddTransient<AddUserDialogWindow>(_ => new AddUserDialogWindow(new AddUserViewModel(new NoOpUserManagementService())));
+        services.AddTransient<UserListWindow>(_ => new UserListWindow(new UserManagementViewModel(new NoOpUserManagementService(), UserAdminTestDoubles.EmptyMasterPlanLookup())));
+        services.AddTransient<AddUserDialogWindow>(_ => new AddUserDialogWindow(new AddUserViewModel(new NoOpUserManagementService(), UserAdminTestDoubles.EmptyMasterPlanLookup())));
         services.AddTransient<ActionPermissionsWindow>(_ => new ActionPermissionsWindow(new ActionPermissionsViewModel(new NoOpActionPermissionAdminService())));
         var sp = services.BuildServiceProvider();
         var factory = new NewShellFactory(sp);

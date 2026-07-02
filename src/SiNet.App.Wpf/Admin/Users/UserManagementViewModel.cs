@@ -13,25 +13,32 @@ namespace SiNet.App.Wpf.Admin.Users;
 public sealed class UserManagementViewModel : ObservableObject
 {
     private readonly IUserManagementService _userManagementService;
+    private readonly IMasterPlanEmployeeLookupService _masterPlanEmployeeLookup;
     private readonly IUserAdminChangesNotifier? _changesNotifier;
     private bool _isLoading;
     private bool _isSaving;
     private string _statusMessage = string.Empty;
+    private string _searchText = string.Empty;
     private UserEditRow? _selectedUser;
 
     public UserManagementViewModel(
         IUserManagementService userManagementService,
+        IMasterPlanEmployeeLookupService masterPlanEmployeeLookup,
         IUserAdminChangesNotifier? changesNotifier = null)
     {
         _userManagementService = userManagementService ?? throw new ArgumentNullException(nameof(userManagementService));
+        _masterPlanEmployeeLookup = masterPlanEmployeeLookup ?? throw new ArgumentNullException(nameof(masterPlanEmployeeLookup));
         _changesNotifier = changesNotifier;
         Users = [];
+        FilteredUsers = [];
+        MasterPlanEmployees = [];
         AvailableRoles =
         [
             AppRole.Employee,
             AppRole.Management,
             AppRole.Administrator,
         ];
+        AvailableAccUserTypes = new ObservableCollection<AppAccUserType>(AppAccUserTypeDisplay.AllValues);
 
         RefreshCommand = new AsyncRelayCommand(LoadUsersAsync, () => !IsLoading && !IsSaving);
         SaveCommand = new AsyncRelayCommand(SaveChangesAsync, CanSave);
@@ -45,12 +52,30 @@ public sealed class UserManagementViewModel : ObservableObject
 
     public ObservableCollection<UserEditRow> Users { get; }
 
+    public ObservableCollection<UserEditRow> FilteredUsers { get; }
+
+    public ObservableCollection<MasterPlanEmployeeDto> MasterPlanEmployees { get; }
+
     public ObservableCollection<AppRole> AvailableRoles { get; }
+
+    public ObservableCollection<AppAccUserType> AvailableAccUserTypes { get; }
 
     public UserEditRow? SelectedUser
     {
         get => _selectedUser;
         set => SetField(ref _selectedUser, value);
+    }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetField(ref _searchText, value))
+            {
+                ApplySearchFilter();
+            }
+        }
     }
 
     public bool IsLoading
@@ -107,17 +132,39 @@ public sealed class UserManagementViewModel : ObservableObject
 
         try
         {
-            var users = await _userManagementService.GetUsersAsync().ConfigureAwait(true);
+            var usersTask = _userManagementService.GetUsersAsync();
+            var employeesTask = _masterPlanEmployeeLookup.GetEmployeesAsync();
+            await Task.WhenAll(usersTask, employeesTask).ConfigureAwait(true);
+
+            var users = await usersTask.ConfigureAwait(true);
+            var employees = await employeesTask.ConfigureAwait(true);
+
+            MasterPlanEmployees.Clear();
+            foreach (var employee in employees)
+            {
+                MasterPlanEmployees.Add(employee);
+            }
+
             Users.Clear();
             foreach (var user in users)
             {
                 var row = new UserEditRow(user);
-                row.PropertyChanged += (_, _) => NotifyRowChanged();
+                row.PropertyChanged += OnUserRowPropertyChanged;
                 Users.Add(row);
             }
 
-            SelectedUser = Users.FirstOrDefault();
-            StatusMessage = $"נטענו {Users.Count} משתמשים.";
+            UpdateMasterPlanEmployeeNames();
+            ApplySearchFilter();
+            SelectedUser = FilteredUsers.FirstOrDefault() ?? Users.FirstOrDefault();
+
+            if (MasterPlanEmployees.Count <= 1)
+            {
+                StatusMessage = $"נטענו {Users.Count} משתמשים. MasterPlan: אין חיבור DB מוגדר (ReplicaDatabase / MasterPlanDatabase).";
+            }
+            else
+            {
+                StatusMessage = $"נטענו {Users.Count} משתמשים, {MasterPlanEmployees.Count - 1} עובדי MasterPlan.";
+            }
         }
         catch (Exception ex)
         {
@@ -126,6 +173,54 @@ public sealed class UserManagementViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    public void UpdateMasterPlanEmployeeNames()
+    {
+        var nameById = MasterPlanEmployees
+            .Where(e => e.Id.HasValue)
+            .ToDictionary(e => e.Id!.Value, e => e.Name);
+
+        foreach (var row in Users)
+        {
+            if (row.MasterPlanEmployeeId is int id && nameById.TryGetValue(id, out var name))
+            {
+                row.MasterPlanEmployeeName = name;
+            }
+            else
+            {
+                row.MasterPlanEmployeeName = null;
+            }
+        }
+    }
+
+    private void OnUserRowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is UserEditRow row && e.PropertyName == nameof(UserEditRow.MasterPlanEmployeeId))
+        {
+            var match = MasterPlanEmployees.FirstOrDefault(m => m.Id == row.MasterPlanEmployeeId);
+            row.MasterPlanEmployeeName = match?.Name;
+        }
+
+        NotifyRowChanged();
+    }
+
+    private void ApplySearchFilter()
+    {
+        FilteredUsers.Clear();
+        var search = SearchText.Trim();
+
+        foreach (var user in Users)
+        {
+            if (string.IsNullOrEmpty(search)
+                || user.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || user.Email.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || user.LoginName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || (user.MasterPlanEmployeeName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            {
+                FilteredUsers.Add(user);
+            }
         }
     }
 
@@ -173,6 +268,7 @@ public sealed class UserManagementViewModel : ObservableObject
             row.RevertChanges();
         }
 
+        UpdateMasterPlanEmployeeNames();
         OnPropertyChanged(nameof(HasUnsavedChanges));
         SaveCommand.RaiseCanExecuteChanged();
         CancelCommand.RaiseCanExecuteChanged();

@@ -14,29 +14,40 @@ namespace SiNet.App.Wpf.Admin.Users;
 public sealed class AddUserViewModel : ObservableObject
 {
     private readonly IUserManagementService _userManagementService;
+    private readonly IMasterPlanEmployeeLookupService _masterPlanEmployeeLookup;
     private readonly IUserAdminChangesNotifier? _changesNotifier;
     private string _loginName = string.Empty;
     private string _displayName = string.Empty;
     private string _email = string.Empty;
     private string _notes = string.Empty;
     private AppRole _selectedRole = AppRole.Employee;
+    private AppAccUserType _selectedAccUserType = AppAccUserType.NoAccUser;
+    private int? _masterPlanEmployeeId;
     private bool _isActive = true;
     private bool _isSaving;
     private string _validationMessage = string.Empty;
 
     public AddUserViewModel(
         IUserManagementService userManagementService,
+        IMasterPlanEmployeeLookupService masterPlanEmployeeLookup,
         IUserAdminChangesNotifier? changesNotifier = null)
     {
         _userManagementService = userManagementService ?? throw new ArgumentNullException(nameof(userManagementService));
+        _masterPlanEmployeeLookup = masterPlanEmployeeLookup ?? throw new ArgumentNullException(nameof(masterPlanEmployeeLookup));
         _changesNotifier = changesNotifier;
         AvailableRoles = new ObservableCollection<AppRole>(
             [AppRole.Employee, AppRole.Management, AppRole.Administrator]);
+        AvailableAccUserTypes = new ObservableCollection<AppAccUserType>(AppAccUserTypeDisplay.AllValues);
+        MasterPlanEmployees = [];
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanSave);
         CancelCommand = new RelayCommand(_ => RequestClose?.Invoke(false));
     }
 
     public ObservableCollection<AppRole> AvailableRoles { get; }
+
+    public ObservableCollection<AppAccUserType> AvailableAccUserTypes { get; }
+
+    public ObservableCollection<MasterPlanEmployeeDto> MasterPlanEmployees { get; }
 
     public string LoginName
     {
@@ -80,6 +91,18 @@ public sealed class AddUserViewModel : ObservableObject
         set => SetField(ref _selectedRole, value);
     }
 
+    public AppAccUserType SelectedAccUserType
+    {
+        get => _selectedAccUserType;
+        set => SetField(ref _selectedAccUserType, value);
+    }
+
+    public int? MasterPlanEmployeeId
+    {
+        get => _masterPlanEmployeeId;
+        set => SetField(ref _masterPlanEmployeeId, value);
+    }
+
     public bool IsActive
     {
         get => _isActive;
@@ -109,6 +132,16 @@ public sealed class AddUserViewModel : ObservableObject
     public ICommand CancelCommand { get; }
 
     public event Action<bool>? RequestClose;
+
+    public async Task InitializeAsync()
+    {
+        MasterPlanEmployees.Clear();
+        var employees = await _masterPlanEmployeeLookup.GetEmployeesAsync().ConfigureAwait(true);
+        foreach (var employee in employees)
+        {
+            MasterPlanEmployees.Add(employee);
+        }
+    }
 
     private void ValidateInput()
     {
@@ -149,7 +182,9 @@ public sealed class AddUserViewModel : ObservableObject
                 DisplayName: DisplayName.Trim(),
                 Email: string.IsNullOrWhiteSpace(Email) ? null : Email.Trim(),
                 Role: SelectedRole,
+                AccUserType: SelectedAccUserType,
                 IsActive: IsActive,
+                MasterPlanEmployeeId: MasterPlanEmployeeId,
                 Notes: string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim());
 
             await _userManagementService.AddUserAsync(command).ConfigureAwait(true);
