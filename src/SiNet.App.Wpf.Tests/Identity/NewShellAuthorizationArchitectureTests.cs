@@ -93,11 +93,20 @@ public sealed class NewShellAuthorizationArchitectureTests
     }
 
     [Fact]
+    public void NewShellFactory_wires_add_user_via_factory_and_feature_code()
+    {
+        var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
+        Assert.Contains("IAddUserWindowFactory", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.UsersManage", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddUserWindow()", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void UserManagementViewModel_uses_user_management_port_internally()
     {
         var source = ReadSourceRelativeToRepo("../SiNetSQL/SiNetSQL/MVVM/UserManagementViewModel.cs");
-        Assert.Contains("UserManagementPortAdapter", source, StringComparison.Ordinal);
         Assert.Contains("IUserManagementService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new UserManagementPortAdapter", source, StringComparison.Ordinal);
         Assert.DoesNotContain("_userService", source, StringComparison.Ordinal);
         Assert.DoesNotContain("UserUpdateDto", source, StringComparison.Ordinal);
     }
@@ -106,8 +115,8 @@ public sealed class NewShellAuthorizationArchitectureTests
     public void AddUserViewModel_uses_user_management_port_internally()
     {
         var source = ReadSourceRelativeToRepo("../SiNetSQL/SiNetSQL/MVVM/AddUserViewModel.cs");
-        Assert.Contains("UserManagementPortAdapter", source, StringComparison.Ordinal);
         Assert.Contains("IUserManagementService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new UserManagementPortAdapter", source, StringComparison.Ordinal);
         Assert.DoesNotContain("_userService", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new Siuser", source, StringComparison.Ordinal);
     }

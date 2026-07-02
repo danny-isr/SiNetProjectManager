@@ -162,6 +162,7 @@ Initial menu (P3 + P6):
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
 | Action permissions | `ActionPermissions.Manage` | Administrator | `IActionPermissionAdminWindowFactory.Create()` → legacy `ActionPermissionWindow` |
 | User management | `Users.Manage` | Administrator | `IUserManagementWindowFactory.Create()` → legacy `UserManagementWindow` |
+| Add user | `Users.Manage` | Administrator | `IAddUserWindowFactory.Create()` → legacy `AddUserWindow` |
 | Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
@@ -173,10 +174,9 @@ Action permission **admin UI** (P6): Administrators see **הרשאות פעול�
 `ActionPermissions.Manage` is authorized. The shell opens the existing legacy `ActionPermissionWindow`
 via `IActionPermissionAdminWindowFactory` — no visual clone yet; save still uses `ActionPermissionService`.
 
-**User management (P5 + menu):** Administrators see **ניהול משתמשים** in the New System menu when
-`Users.Manage` is authorized. The shell opens the existing legacy `UserManagementWindow` via
-`IUserManagementWindowFactory`. CRUD still flows through `IUserManagementService` / legacy `UserService`
-when migrated; both view models now consume the port via `UserManagementPortAdapter`. `AddUserWindow` entry remains legacy host menu only.
+**User management (P5 + menu):** Administrators see **ניהול משתמשים** and **הוספת משתמש** in the New System menu when
+`Users.Manage` is authorized. The shell opens legacy `UserManagementWindow` / `AddUserWindow` via
+`IUserManagementWindowFactory` / `IAddUserWindowFactory`. CRUD flows through `IUserManagementService` (DI-injected into view models; host registers `UserManagementPortAdapter` → legacy `UserService`).
 
 ---
 

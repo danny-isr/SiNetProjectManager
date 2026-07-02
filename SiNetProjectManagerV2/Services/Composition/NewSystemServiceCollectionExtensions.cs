@@ -24,6 +24,7 @@ public static class NewSystemServiceCollectionExtensions
 
         services.AddSingleton<IActionPermissionAdminWindowFactory, ActionPermissionAdminWindowFactory>();
         services.AddSingleton<IUserManagementWindowFactory, UserManagementWindowFactory>();
+        services.AddSingleton<IAddUserWindowFactory, AddUserWindowFactory>();
 
         return services;
     }

@@ -94,6 +94,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "ניהול משתמשים, תפקידים וסטטוס פעיל"));
         }
 
+        // Add user — legacy dialog opened via host factory; same Administrator feature gate.
+        if (_services.GetService<IAddUserWindowFactory>() is { } addUserFactory
+            && CanAccessFeature(AppFeatureCodes.UsersManage))
+        {
+            items.Add(new NewShellMenuItem(
+                "הוספת משתמש",
+                () => ShowDialog(addUserFactory.Create()),
+                "הוספת משתמש חדש למערכת"));
+        }
+
         // Settings — surface not implemented yet; show disabled. When implemented, gate with
         // AppFeatureCodes.SystemSettingsWrite (Administrator).
         const bool settingsSurfaceImplemented = false;

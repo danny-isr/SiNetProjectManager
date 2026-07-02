@@ -21,7 +21,8 @@ public static class IdentityServiceCollectionExtensions
         services.AddSingleton<ICurrentUserProfileService, LegacyCurrentUserProfileService>();
         services.AddSingleton<IAuthorizationQueryService, LegacyAuthorizationQueryService>();
         services.AddSingleton<IActionPermissionQueryService, LegacyActionPermissionQueryService>();
-        services.AddSingleton<IUserManagementService, UserManagementPortAdapter>();
+        // Transient to align with IUserService; host must register IUserService before resolving this port.
+        services.AddTransient<IUserManagementService, UserManagementPortAdapter>();
 
         return services;
     }

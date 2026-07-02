@@ -1,6 +1,7 @@
 # Identity and Permissions Target
 
 > **Status:** Active target specification (documentation slice — 2026-07-02)  
+> **Audit reconciliation:** [`users_system_audit_reconciliation_2026-07-02.md`](./users_system_audit_reconciliation_2026-07-02.md) — corrects 2026-07-02 review gaps (Identity tests, Q10, self-protection docs, DI path).  
 > **Scope:** Application identity, roles, action permissions, user management, and shell/menu availability for the **New System** refactor.  
 > **Read together with:** [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md), [`APP_SHELL.md`](./APP_SHELL.md), [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md), [`MIGRATION_MAP.md`](./MIGRATION_MAP.md), [`PROJECTS.md`](./PROJECTS.md).
 
@@ -412,7 +413,7 @@ public interface IUserManagementService
 
 **Host adapter (shared):** `SiNetSQL/Services/Users/UserManagementPortAdapter.cs` → legacy `UserService`.
 
-**UI:** `UserManagementViewModel` and `AddUserViewModel` route user operations through `IUserManagementService` via `UserManagementPortAdapter` (constructors still accept `IUserService` for legacy DI). New System shell opens admin windows via host factories when authorized.
+**UI:** `UserManagementViewModel` and `AddUserViewModel` receive `IUserManagementService` from DI (host registers `UserManagementPortAdapter` → legacy `UserService`). New System shell opens admin windows via host factories when authorized.
 
 ### 7.6 DI registration direction
 
@@ -450,8 +451,9 @@ Phased, documentation-driven slices:
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
-| **P5 — user management port** | `IUserManagementService`; migrate User Management UI | ✅ Implemented (port + adapter; admin UI still legacy) |
+| **P5 — user management port** | `IUserManagementService`; migrate User Management UI | ✅ Implemented (port + adapter; VMs DI-injected; admin menus wired) |
 | **P6 — action permission admin UI** | `ActionPermissionWindow` in New System menu via factory | ✅ Implemented (legacy window; host factory) |
+| **P6b — add user menu** | `AddUserWindow` in New System menu via `IAddUserWindowFactory` | ✅ Implemented (legacy window; host factory) |
 | **P7 — composition split** | Modular DI: `AddSiNetIdentityLegacyAdapters`, `AddSiNetNewSystemGraph` | ✅ Partial (host extensions; full clean/legacy container split deferred) |
 
 Each phase ends with: tests on service behavior, doc/code alignment check, explicit note in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md).
@@ -501,7 +503,7 @@ Do **not** guess — resolve with Product / legacy owner before implementation.
 | **Q7** | **Project-level permissions** — exist or future? | Legacy AuthorizationVerification doc: **postponed**. No app-wide project ACL in scanned code. **Future only.** |
 | **Q8** | Are **ACC permissions** separate from Application permissions? | **Yes.** `AccUserType` + ACC bootstrap/reconciler are a parallel concern to `AppUserRole` / Action Permissions. |
 | **Q9** | Should Management ever manage users (per 2026-06-17 doc)? | Code enforces **Admin-only** user CRUD. Confirm whether doc or code should change. |
-| **Q10** | When New System runs without auth, may migrated surfaces perform **writes**? | **Fail-closed:** query ports return `false`/empty when unauthenticated (`ICurrentUserContext.UserId == null`). Legacy write services (`UserService`, `ActionPermissionService.Save…`) call `CurrentUserContext.RequireAdmin()` / `RequireAdmin()` and throw `UnauthorizedAccessException` when there is no authenticated admin — never anonymous writes. |
+| **Q10** | When New System runs without auth, may migrated surfaces perform **writes**? | **Closed (2026-07-02):** Fail-closed — query ports return `false`/empty when `ICurrentUserContext.UserId == null`. Legacy write services (`UserService`, `ActionPermissionService.Save…`) call `RequireAdmin()` and throw `UnauthorizedAccessException` when there is no authenticated admin — never anonymous writes. See [audit reconciliation](./users_system_audit_reconciliation_2026-07-02.md). |
 
 ---
 
@@ -534,7 +536,9 @@ Do **not** guess — resolve with Product / legacy owner before implementation.
 
 ## Appendix C — Identity test inventory
 
-**GitHub repo (`SiNetProjectManager_GitHub`) — `src/SiNet.App.Wpf.Tests/Identity/`**
+> Full audit reconciliation (2026-07-02): [`users_system_audit_reconciliation_2026-07-02.md`](./users_system_audit_reconciliation_2026-07-02.md)
+
+**GitHub repo (`SiNetProjectManager_GitHub`) — `src/SiNet.App.Wpf.Tests/Identity/`** (~32 test methods)
 
 | File | Covers |
 | --- | --- |
@@ -554,6 +558,14 @@ Do **not** guess — resolve with Product / legacy owner before implementation.
 | `SiNetSQL.Tests/Services/Authorization/LegacyActionPermissionQueryServiceTests.cs` | P4 adapter parity |
 | `SiNetSQL.Tests/Services/Users/UserServiceTests.cs` | Admin-only writes, self-protection |
 | `SiNetSQL.Tests/Services/Users/UserManagementPortAdapterTests.cs` | P5 port adapter + lookup methods |
+
+**SiNetSQL implementation (sibling repo — not in GitHub tree):**
+
+| Path | Role |
+| --- | --- |
+| `SiNetSQL/Services/Users/UserManagementPortAdapter.cs` | P5 shared adapter |
+| `SiNetSQL/MVVM/UserManagementViewModel.cs` | Load/save via port |
+| `SiNetSQL/MVVM/AddUserViewModel.cs` | Add + duplicate check via port |
 
 ---
 
