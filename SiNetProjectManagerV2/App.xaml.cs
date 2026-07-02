@@ -952,6 +952,9 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNet.App.Wpf.Shell.IActionPermissionAdminWindowFactory,
                 Services.ActionPermissionAdminWindowFactory>();
 
+            services.AddSingleton<SiNet.App.Wpf.Shell.IUserManagementWindowFactory,
+                Services.UserManagementWindowFactory>();
+
             return services.BuildServiceProvider();
         }
 

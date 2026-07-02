@@ -84,6 +84,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "ניהול הרשאות פעולה לפי סוג פעולה"));
         }
 
+        // User management — legacy dashboard opened via host factory; menu gated by feature code.
+        if (_services.GetService<IUserManagementWindowFactory>() is { } userManagementFactory
+            && CanAccessFeature(AppFeatureCodes.UsersManage))
+        {
+            items.Add(new NewShellMenuItem(
+                "ניהול משתמשים",
+                () => ShowWindow(userManagementFactory.Create()),
+                "ניהול משתמשים, תפקידים וסטטוס פעיל"));
+        }
+
         // Settings — surface not implemented yet; show disabled. When implemented, gate with
         // AppFeatureCodes.SystemSettingsWrite (Administrator).
         const bool settingsSurfaceImplemented = false;

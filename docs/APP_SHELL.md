@@ -161,6 +161,7 @@ Initial menu (P3 + P6):
 | Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
 | Action permissions | `ActionPermissions.Manage` | Administrator | `IActionPermissionAdminWindowFactory.Create()` → legacy `ActionPermissionWindow` |
+| User management | `Users.Manage` | Administrator | `IUserManagementWindowFactory.Create()` → legacy `UserManagementWindow` |
 | Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
@@ -172,9 +173,10 @@ Action permission **admin UI** (P6): Administrators see **הרשאות פעול�
 `ActionPermissions.Manage` is authorized. The shell opens the existing legacy `ActionPermissionWindow`
 via `IActionPermissionAdminWindowFactory` — no visual clone yet; save still uses `ActionPermissionService`.
 
-**User management (P5):** read/write user operations use `IUserManagementService` when migrated
-surfaces need them (`GetUsersAsync`, `AddUserAsync`, `UpdateUsersAsync`). Administrator-only writes
-and self-protection rules match legacy `UserService`. User Management / Add User windows remain legacy.
+**User management (P5 + menu):** Administrators see **ניהול משתמשים** in the New System menu when
+`Users.Manage` is authorized. The shell opens the existing legacy `UserManagementWindow` via
+`IUserManagementWindowFactory`. CRUD still flows through `IUserManagementService` / legacy `UserService`
+when migrated; the window itself still uses `UserManagementViewModel` today.
 
 ---
 

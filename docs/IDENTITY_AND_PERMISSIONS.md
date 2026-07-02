@@ -288,7 +288,8 @@ Opened surface / Application service re-checks before mutating state
 | `CurrentUserContextAdapter` | Native Infrastructure identity adapter |
 | `UserService`, `ActionPermissionService`, `SystemSettingsService` | Application-layer ports + Sql implementations |
 | `MainWindow` menu gates | `IAuthorizationQueryService` consumed by New Shell |
-| Admin/management windows (`UserManagementWindow`, …) | Migrated WPF surfaces (future slices) |
+| Admin/management windows (`AddUserWindow`, …) | Migrated WPF surfaces (future slices) |
+| `UserManagementWindow` | New System menu via `IUserManagementWindowFactory` (with P6 admin menu slice) |
 | `ActionPermissionWindow` | New System menu via `IActionPermissionAdminWindowFactory` (P6); visual clone deferred |
 
 ### 6.2 What New System must not do yet
@@ -411,7 +412,9 @@ public interface IUserManagementService
 
 **Host adapter:** `SiNetProjectManagerV2/Services/LegacyUserManagementService.cs` → legacy `UserService` (Administrator-only writes, self-protection, ACC reconciliation).
 
-**UI:** User Management / Add User windows remain legacy (`UserManagementViewModel`, `AddUserViewModel`). Migrated surfaces should consume `IUserManagementService` — not wired to NewShell menu in P5.
+**UI:** User Management / Add User windows remain legacy implementations; the New System shell opens
+`UserManagementWindow` via `IUserManagementWindowFactory` when `Users.Manage` is authorized (menu wiring
+with P6 admin surfaces).
 
 ### 7.6 DI registration direction
 
