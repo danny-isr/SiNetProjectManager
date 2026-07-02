@@ -84,18 +84,14 @@ public partial class App : System.Windows.Application
     /// override the file so existing developer setups keep working. When no client secrets are
     /// configured, <see cref="GmailOptions.ClientSecretsPath"/> stays empty and the gateway
     /// degrades gracefully (no sign-in, empty inbox) instead of throwing.
+    /// When <see cref="IGoogleClientSecretsPathProvider"/> is registered (AddSiNetSecrets), the
+    /// vault is the source of truth; config/env paths are fallback only.
     /// </summary>
     private void ConfigureGmail(GmailOptions options)
     {
         _configuration?.GetSection("Gmail").Bind(options);
 
-        // Back-compat overrides: explicit env vars win over the config file.
-        var secretsPath = Environment.GetEnvironmentVariable("SINET_GOOGLE_CLIENT_SECRETS");
-        if (!string.IsNullOrWhiteSpace(secretsPath))
-        {
-            options.ClientSecretsPath = secretsPath;
-        }
-
+        // Token store env override only — client secrets come from Vault via IGoogleClientSecretsPathProvider.
         var tokenStore = Environment.GetEnvironmentVariable("SINET_GOOGLE_TOKEN_STORE");
         if (!string.IsNullOrWhiteSpace(tokenStore))
         {

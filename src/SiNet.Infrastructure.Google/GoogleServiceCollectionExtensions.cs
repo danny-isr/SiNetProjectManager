@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
+using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Google;
 
@@ -38,7 +40,10 @@ public static class GoogleServiceCollectionExtensions
             return options;
         });
 
-        services.AddSingleton<GmailClientProvider>();
+        services.AddSingleton<GmailClientProvider>(sp => new GmailClientProvider(
+            sp.GetRequiredService<GmailOptions>(),
+            sp.GetRequiredService<IAppLogger>(),
+            sp.GetService<IGoogleClientSecretsPathProvider>()));
         services.AddSingleton<IEmailGateway, GmailEmailGateway>();
 
         // Native auth/health bridge over the same provider singleton, so signed-in state and

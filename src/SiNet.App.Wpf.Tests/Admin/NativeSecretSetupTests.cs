@@ -198,5 +198,7 @@ public sealed class NativeSecretSetupCatalogTests
         public static NullSecretSetupHostConfiguration Instance { get; } = new();
 
         public string? ActiveDirectoryDomainName => null;
+
+        public string? AccServiceBaseUrl => null;
     }
 }

@@ -4,6 +4,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Google;
 
@@ -33,14 +34,19 @@ public sealed class GmailClientProvider : IAsyncDisposable
 
     private readonly GmailOptions _options;
     private readonly IAppLogger _logger;
+    private readonly IGoogleClientSecretsPathProvider? _pathProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private GmailService? _gmailService;
 
-    public GmailClientProvider(GmailOptions options, IAppLogger logger)
+    public GmailClientProvider(
+        GmailOptions options,
+        IAppLogger logger,
+        IGoogleClientSecretsPathProvider? pathProvider = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _pathProvider = pathProvider;
     }
 
     /// <summary>The root Gmail label under which projects are filed.</summary>
@@ -261,10 +267,10 @@ public sealed class GmailClientProvider : IAsyncDisposable
     private async Task<(ClientSecrets Secrets, FileDataStore DataStore)?> TryPrepareAuthAsync(
         CancellationToken cancellationToken)
     {
-        var secretsPath = _options.ClientSecretsPath;
+        var secretsPath = await ResolveSecretsPathAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(secretsPath) || !File.Exists(secretsPath))
         {
-            _logger.Warn($"[Gmail] client secrets not found at '{secretsPath}'. Mailbox unavailable.");
+            _logger.Warn($"[Gmail] client secrets not found at '{secretsPath ?? "(null)"}'. Mailbox unavailable.");
             return null;
         }
 
@@ -284,6 +290,34 @@ public sealed class GmailClientProvider : IAsyncDisposable
         }
 
         return (secrets, new FileDataStore(tokenPath, fullPath: true));
+    }
+
+    private async Task<string?> ResolveSecretsPathAsync(CancellationToken cancellationToken)
+    {
+        if (_pathProvider is not null)
+        {
+            var vaultPath = await _pathProvider.ResolveClientSecretsPathAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(vaultPath) && File.Exists(vaultPath))
+            {
+                return vaultPath;
+            }
+
+            _logger.Warn("[Gmail] Vault Google client secrets unavailable; config fallback is deprecated — use Secret Setup.");
+        }
+
+        var configuredPath = _options.ClientSecretsPath;
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return null;
+        }
+
+        if (File.Exists(configuredPath))
+        {
+            return configuredPath;
+        }
+
+        return null;
     }
 
     private async Task<UserCredential?> AuthorizeInteractiveAsync(

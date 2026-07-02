@@ -133,7 +133,8 @@ public sealed class CredentialVaultSecretSetupService(
         var ad = await Task.Run(
             () => SecretSetupValidators.TestAdFromVault(_vault, _hostConfiguration),
             cancellationToken).ConfigureAwait(false);
-        var accService = SecretSetupValidators.TestPresenceOnly(_vault, SecretCatalog.AccServiceApiKey);
+        var accServiceDiag = await AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken)
+            .ConfigureAwait(false);
         var masterPlanApi = SecretSetupValidators.TestPresenceOnly(_vault, SecretCatalog.MasterPlanApiKey);
 
         return
@@ -147,9 +148,124 @@ public sealed class CredentialVaultSecretSetupService(
                 SecretCatalog.AutodeskClientId, SecretCatalog.AutodeskClientSecret),
             ToPairResult("Active Directory", ad.BothExist, ad.Success, ad.Detail,
                 SecretCatalog.AdUsername, SecretCatalog.AdPassword),
-            ToResult(SecretCatalog.AccServiceApiKey, "AccService API Key", accService.Exists, accService.Success, accService.Detail),
+            ToResult(
+                SecretCatalog.AccServiceApiKey,
+                "AccService API Key",
+                _vault.HasSecret(SecretCatalog.AccServiceApiKey),
+                accServiceDiag.Success,
+                accServiceDiag.Detail),
             ToResult(SecretCatalog.MasterPlanApiKey, "MasterPlan API Key", masterPlanApi.Exists, masterPlanApi.Success, masterPlanApi.Detail),
         ];
+    }
+
+    public Task<SecretExportResultDto> ExportAsync(
+        string filePath,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var count = SecretProvisioningFileService.ExportToFile(_vault, filePath, password);
+        return Task.FromResult(new SecretExportResultDto(
+            count,
+            $"יוצאו {count} מפתחות לקובץ מוצפן (.secrets)."));
+    }
+
+    public Task<SecretImportPreviewDto> PreviewImportAsync(
+        string filePath,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var decrypted = SecretProvisioningFileService.DecryptSecrets(filePath, password);
+        return Task.FromResult(BuildImportPreview(decrypted));
+    }
+
+    public Task<SecretImportResultDto> ImportAsync(
+        string filePath,
+        string password,
+        bool overwrite,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var decrypted = SecretProvisioningFileService.DecryptSecrets(filePath, password);
+        var catalogKeys = SecretCatalog.AllKeys.ToHashSet(StringComparer.Ordinal);
+        var imported = 0;
+        var skipped = 0;
+        var skippedSummaries = new List<string>();
+
+        foreach (var (key, value) in decrypted)
+        {
+            if (!catalogKeys.Contains(key))
+            {
+                skipped++;
+                skippedSummaries.Add($"דולג key לא מוכר: {key}");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                skipped++;
+                skippedSummaries.Add($"דולג {key}: ערך ריק");
+                continue;
+            }
+
+            if (_vault.HasSecret(key) && !overwrite)
+            {
+                skipped++;
+                skippedSummaries.Add($"דולג {key}: כבר קיים ב-Vault (overwrite=false)");
+                continue;
+            }
+
+            var entry = SecretCatalog.All.First(e => e.Key == key);
+            var normalized = entry.Kind == SecretKind.ConnectionString
+                ? ConnectionStringNormalizer.Normalize(value)
+                : value.Trim();
+
+            _vault.SetSecret(key, normalized);
+            imported++;
+        }
+
+        return Task.FromResult(new SecretImportResultDto(
+            imported,
+            skipped,
+            skippedSummaries,
+            $"יובאו {imported} מפתחות, דולגו {skipped}."));
+    }
+
+    public Task<string> GenerateAccServiceApiKeyAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = AccServiceSecretDiagnostics.GenerateApiKey();
+        _vault.SetSecret(SecretCatalog.AccServiceApiKey, key);
+        return Task.FromResult(key);
+    }
+
+    public Task<AccServiceDiagnosticResultDto> TestAccServiceAsync(CancellationToken cancellationToken = default)
+        => AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken);
+
+    private SecretImportPreviewDto BuildImportPreview(IReadOnlyDictionary<string, string> decrypted)
+    {
+        var catalogKeys = SecretCatalog.AllKeys.ToHashSet(StringComparer.Ordinal);
+        var items = new List<SecretImportPreviewItemDto>();
+        var unknown = new List<string>();
+
+        foreach (var key in decrypted.Keys)
+        {
+            if (!catalogKeys.Contains(key))
+            {
+                unknown.Add(key);
+                continue;
+            }
+
+            var entry = SecretCatalog.All.First(e => e.Key == key);
+            items.Add(new SecretImportPreviewItemDto(
+                key,
+                entry.DisplayName,
+                _vault.HasSecret(key),
+                IsKnown: true));
+        }
+
+        return new SecretImportPreviewDto(items, unknown.Count, unknown, items.Count);
     }
 
     private static SecretValidationResultDto ToResult(

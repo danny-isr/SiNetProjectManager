@@ -28,3 +28,30 @@ public sealed record SecretSaveResultDto(
     bool AllPassed,
     IReadOnlyList<string> PassedSummaries,
     IReadOnlyList<string> FailedSummaries);
+
+public sealed record SecretExportResultDto(int ExportedCount, string Message);
+
+public sealed record SecretImportPreviewItemDto(
+    string Key,
+    string DisplayName,
+    bool ExistsInVault,
+    bool IsKnown);
+
+public sealed record SecretImportPreviewDto(
+    IReadOnlyList<SecretImportPreviewItemDto> Items,
+    int UnknownKeyCount,
+    IReadOnlyList<string> UnknownKeys,
+    int KeysToImportCount);
+
+public sealed record SecretImportResultDto(
+    int ImportedCount,
+    int SkippedCount,
+    IReadOnlyList<string> SkippedSummaries,
+    string Message);
+
+public sealed record AccServiceDiagnosticResultDto(
+    bool Success,
+    SecretStatusLevel StatusLevel,
+    string Summary,
+    bool IsNetworkTest,
+    string? Detail);

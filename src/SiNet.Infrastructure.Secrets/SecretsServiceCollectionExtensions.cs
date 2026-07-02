@@ -14,7 +14,14 @@ public static class SecretsServiceCollectionExtensions
             services.AddSingleton<ISecretSetupHostConfiguration>(NullSecretSetupHostConfiguration.Instance);
         }
 
+        if (!services.Any(d => d.ServiceType == typeof(GoogleClientSecretsFallbackOptions)))
+        {
+            services.AddSingleton(new GoogleClientSecretsFallbackOptions());
+        }
+
         services.AddSingleton<ISecretVaultStore, WindowsCredentialVaultStore>();
+        services.AddSingleton<IGoogleClientSecretsMaterializer, GoogleClientSecretsMaterializer>();
+        services.AddSingleton<IGoogleClientSecretsPathProvider, VaultGoogleClientSecretsPathProvider>();
         services.AddSingleton<ISecretSetupService, CredentialVaultSecretSetupService>();
 
         return services;
@@ -26,4 +33,6 @@ internal sealed class NullSecretSetupHostConfiguration : ISecretSetupHostConfigu
     public static NullSecretSetupHostConfiguration Instance { get; } = new();
 
     public string? ActiveDirectoryDomainName => null;
+
+    public string? AccServiceBaseUrl => null;
 }

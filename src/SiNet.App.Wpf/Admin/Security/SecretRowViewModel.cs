@@ -30,6 +30,8 @@ public sealed class SecretRowViewModel : ObservableObject
 
     public bool IsMultiline => Kind is SecretKind.ConnectionString;
 
+    public bool IsAccServiceApiKey => Key == SecretCatalog.AccServiceApiKey;
+
     public string TextValue
     {
         get => _textValue;

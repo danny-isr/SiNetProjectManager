@@ -4,4 +4,6 @@ namespace SiNet.Application.Configuration;
 public interface ISecretSetupHostConfiguration
 {
     string? ActiveDirectoryDomainName { get; }
+
+    string? AccServiceBaseUrl { get; }
 }
