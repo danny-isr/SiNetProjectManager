@@ -501,7 +501,7 @@ Do **not** guess — resolve with Product / legacy owner before implementation.
 | **Q7** | **Project-level permissions** — exist or future? | Legacy AuthorizationVerification doc: **postponed**. No app-wide project ACL in scanned code. **Future only.** |
 | **Q8** | Are **ACC permissions** separate from Application permissions? | **Yes.** `AccUserType` + ACC bootstrap/reconciler are a parallel concern to `AppUserRole` / Action Permissions. |
 | **Q9** | Should Management ever manage users (per 2026-06-17 doc)? | Code enforces **Admin-only** user CRUD. Confirm whether doc or code should change. |
-| **Q10** | When New System runs without auth, may migrated surfaces perform **writes**? | Today: risky — `UserId` null, but legacy services may still be callable from DI. Slice should define fail-closed rules per surface. |
+| **Q10** | When New System runs without auth, may migrated surfaces perform **writes**? | **Fail-closed:** query ports return `false`/empty when unauthenticated (`ICurrentUserContext.UserId == null`). Legacy write services (`UserService`, `ActionPermissionService.Save…`) call `CurrentUserContext.RequireAdmin()` / `RequireAdmin()` and throw `UnauthorizedAccessException` when there is no authenticated admin — never anonymous writes. |
 
 ---
 
@@ -528,7 +528,32 @@ Do **not** guess — resolve with Product / legacy owner before implementation.
 - `SiNetProjectManagerV2/Docs/Domains/Security/UserRolesAndPermissions-2026-06-17.md`
 - `SiNetProjectManagerV2/Docs/Domains/Authorization/AuthorizationVerification-2026-06-19.md`
 - `src/SiNet.Infrastructure.Sql/Models/AppUserRole.cs`, `AccUserType.cs`, `ActionPermission.cs`
-- Tests: `SiNetSQL.Tests/Services/Authorization/ActionPermissionServiceTests.cs`, `UserServiceTests.cs`, `CurrentUserContextTests.cs`
+- Tests: see **Appendix C — Identity test inventory**
+
+---
+
+## Appendix C — Identity test inventory
+
+**GitHub repo (`SiNetProjectManager_GitHub`) — `src/SiNet.App.Wpf.Tests/Identity/`**
+
+| File | Covers |
+| --- | --- |
+| `AppFeatureAuthorizationTests.cs` | Role hierarchy, feature access by role, unknown feature throws |
+| `AppFeatureCodesCoverageTests.cs` | Feature × role matrix; all codes registered |
+| `AppRoleEnumParityTests.cs` | `AppRole` ↔ `AppUserRole`, `AppAccUserType` ↔ `AccUserType` |
+| `AuthorizationQueryServiceStubTests.cs` | Unauthenticated deny; unknown feature |
+| `ActionPermissionQueryServiceStubTests.cs` | Null current user; `ActionPermissionCodes` |
+| `NewShellAuthorizationArchitectureTests.cs` | No SiNetSQL in Wpf; factory/feature wiring |
+| `CurrentUserProfileDisplayTests.cs` | Profile display formatting |
+
+**SiNetSQL repo (sibling) — integration tests**
+
+| File | Covers |
+| --- | --- |
+| `SiNetSQL.Tests/Services/Authorization/ActionPermissionServiceTests.cs` | Deny-by-default, admin bypass |
+| `SiNetSQL.Tests/Services/Authorization/LegacyActionPermissionQueryServiceTests.cs` | P4 adapter parity |
+| `SiNetSQL.Tests/Services/Users/UserServiceTests.cs` | Admin-only writes, self-protection |
+| `SiNetSQL.Tests/Services/Users/UserManagementPortAdapterTests.cs` | P5 port adapter + lookup methods |
 
 ---
 
