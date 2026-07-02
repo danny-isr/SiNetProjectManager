@@ -45,8 +45,10 @@ New system mode  → opens the new clean shell (NewShellWindow, SiNet.App.Wpf)
 				 → loads only new/refactored surfaces on demand
 ```
 
-The mode is chosen at startup, at the first login/user-selection point (see §3). The default is
-**Legacy mode**; New system mode is opt-in via a checkbox (`הפעל מערכת חדשה`).
+The mode is chosen at startup in a **dedicated modal chooser** (`StartupModeSelectionWindow`) that is
+the **first visible UI** — before credential vault, DB connection, schema validation, role selector,
+splash, or either main window. The default selection is **New system mode**; the user can explicitly
+switch to Legacy mode.
 
 > **Non-goal / anti-pattern (explicit):** New system mode must **not** be implemented by opening the
 > legacy `MainWindow` and hiding menu items. That would still load the legacy system and defeat the
@@ -61,24 +63,23 @@ for now. Startup is **code-driven** (no XAML `StartupUri`) in `App.xaml.cs`.
 
 ```plaintext
 App.OnStartup
-  → build configuration + DI (ConfigureServices)         [shared by both modes]
-  → validate DB schema / seed
-  → authorize current Windows user (AuthorizeCurrentUser) [SIUser lookup]
-  → (DEBUG) optional role/user selector
-  → single-instance enforcement
-  → ShowSplashThenMainWindow()      ← MODE FORK LIVES HERE
-		├─ prompt: Legacy mode | New system mode (הפעל מערכת חדשה)
-		├─ Legacy       → new MainWindow()      (unchanged)
-		└─ New system   → NewShellWindow (resolved from App.ServiceProvider)
+  → load app settings (non-interactive)
+  → StartupModeSelectionWindow (FIRST visible UI; default = New system)
+        ├─ user cancels / closes → shutdown (no silent Legacy default)
+        ├─ New system   → LaunchNewSystemShell()
+        │                   → ConfigureServices (DI only; no legacy MainWindow)
+        │                   → NewShellWindow (INewShellFactory)
+        └─ Legacy         → credential vault → DB gate → schema → auth → splash → MainWindow
 ```
 
-The mode prompt is shown right before the fork so it works in **all build configurations**. The
-choice is captured as a `StartupMode` value and routed by a small, unit-testable helper
-(`StartupModeRouter`) so the decision can be tested without WPF.
+The mode prompt is shown **before any legacy gate** so New system mode can skip credential/DB/schema
+dialogs entirely. The choice is captured as a `StartupMode` value and routed by a small, unit-testable
+helper (`StartupModeRouter`) so the decision can be tested without WPF.
 
-> Current-user selection: normal mode authorizes the current **Windows identity** (there is no
-> interactive user-picker in Release; the DEBUG `DebugAuthorizationRoleSelectorWindow` is the
-> developer picker). The mode checkbox is presented at this same first-window moment.
+> Current-user selection: in **Legacy mode**, normal startup authorizes the current **Windows identity**
+> (there is no interactive user-picker in Release; the DEBUG `DebugAuthorizationRoleSelectorWindow` is
+> the developer picker). **New system mode** skips those legacy gates in this slice; the shell shows
+> whatever `ICurrentUserContext` the host registers when DI is composed.
 
 ---
 

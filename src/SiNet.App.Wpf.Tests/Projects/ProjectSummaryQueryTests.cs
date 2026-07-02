@@ -157,6 +157,41 @@ public sealed class ProjectSummaryQueryTests
         Assert.Equal(new[] { expectedId }, result.Select(p => p.ProjectId));
     }
 
+    [Theory]
+    [InlineData("רעננה 1234")]
+    [InlineData("1234 רעננה")]
+    [InlineData("שםפרויקט לקוח")]
+    public void Multi_word_search_requires_every_token_in_any_field(string search)
+    {
+        var source = new[]
+        {
+            Project(1, "1234", name: "שםפרויקט", place: "רעננה", company: "לקוח"),
+            Project(2, "9999", name: "other", place: "other", company: "other"),
+        };
+
+        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(SearchText: search));
+
+        Assert.Equal(new[] { 1 }, result.Select(p => p.ProjectId));
+    }
+
+    [Fact]
+    public void Multi_word_search_fails_when_one_token_is_missing()
+    {
+        var source = new[] { Project(1, "1234", name: "שםפרויקט", place: "רעננה", company: "לקוח") };
+
+        var result = ProjectSummaryQuery.Apply(source, new ProjectSearchQuery(SearchText: "רעננה 5678"));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void SplitSearchTokens_splits_on_spaces_commas_and_semicolons()
+    {
+        var tokens = ProjectSummaryQuery.SplitSearchTokens("  alpha, beta;gamma\t delta  ");
+
+        Assert.Equal(new[] { "alpha", "beta", "gamma", "delta" }, tokens);
+    }
+
     [Fact]
     public void Free_text_is_case_insensitive_and_trimmed()
     {

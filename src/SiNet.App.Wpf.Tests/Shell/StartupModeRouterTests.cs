@@ -6,8 +6,8 @@ namespace SiNet.App.Wpf.Tests.Shell;
 /// <summary>
 /// Unit tests for <see cref="StartupModeRouter"/>, the pure decision helper behind the first-startup
 /// mode choice (see <c>docs/APP_SHELL.md</c> §2/§3). These are WPF-free tests that lock in the routing
-/// contract: the checkbox maps to a <see cref="StartupMode"/>, Legacy is the safe default, only New
-/// system mode opens the clean shell, and only Legacy mode opens the legacy main window.
+/// contract: the modal chooser defaults to New system mode; only New system mode opens the clean shell,
+/// and only Legacy mode opens the legacy main window.
 /// </summary>
 public sealed class StartupModeRouterTests
 {

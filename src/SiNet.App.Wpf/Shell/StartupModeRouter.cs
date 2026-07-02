@@ -12,8 +12,8 @@ namespace SiNet.App.Wpf.Shell;
 public static class StartupModeRouter
 {
     /// <summary>
-    /// Maps the user's choice to a <see cref="StartupMode"/>. Default is
-    /// <see cref="StartupMode.Legacy"/>; New system mode is strictly opt-in.
+    /// Maps a boolean startup choice to <see cref="StartupMode"/>. Used by hosts that still expose a
+    /// checkbox; the modal chooser binds directly to <see cref="StartupMode"/> instead.
     /// </summary>
     /// <param name="runNewSystem">
     /// <see langword="true"/> when the user checked "הפעל מערכת חדשה"; otherwise

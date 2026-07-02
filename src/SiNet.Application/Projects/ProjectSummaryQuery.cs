@@ -105,18 +105,53 @@ public static class ProjectSummaryQuery
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> when <paramref name="text"/> matches the project's number, name,
-    /// place, or company (case-insensitive substring), mirroring the legacy selector's
-    /// <c>FilterProperties = NameAndNumber,Title,Place.Title,Company.Title</c>.
+    /// Token separators for free-text search (parity with legacy
+    /// <c>SearchableProjectSelector</c>: space, tab, newline, comma, semicolon).
+    /// </summary>
+    public static readonly char[] SearchTokenSeparators = [' ', '\t', '\r', '\n', ',', ';'];
+
+    /// <summary>
+    /// Splits <paramref name="text"/> into non-empty search tokens.
+    /// </summary>
+    public static string[] SplitSearchTokens(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return text.Split(
+            SearchTokenSeparators,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when every token in <paramref name="text"/> appears in at least
+    /// one of the project's number, name, place, or company fields (case-insensitive substring). Token
+    /// order does not matter. Mirrors legacy <c>FilterProperties = NameAndNumber,Title,Place.Title,Company.Title</c>.
     /// </summary>
     public static bool MatchesText(ProjectSummaryDto project, string text)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(text);
 
-        return project.ProjectNumber.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || project.ProjectName.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || (project.PlaceName?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (project.CompanyName?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false);
+        var tokens = SplitSearchTokens(text.Trim());
+        if (tokens.Length == 0)
+        {
+            return true;
+        }
+
+        foreach (var token in tokens)
+        {
+            if (!TokenMatchesAnyField(project, token))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
+
+    private static bool TokenMatchesAnyField(ProjectSummaryDto project, string token)
+        => project.ProjectNumber.Contains(token, StringComparison.OrdinalIgnoreCase)
+            || project.ProjectName.Contains(token, StringComparison.OrdinalIgnoreCase)
+            || (project.PlaceName?.Contains(token, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (project.CompanyName?.Contains(token, StringComparison.OrdinalIgnoreCase) ?? false);
 }

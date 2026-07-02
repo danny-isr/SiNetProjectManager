@@ -33,6 +33,9 @@ public static class ProjectQueryServiceCollectionExtensions
         services.AddTransient<ProjectQueryService>();
         services.AddTransient<IProjectQueryService>(sp => sp.GetRequiredService<ProjectQueryService>());
 
+        services.AddTransient<ProjectFilterOptionsService>();
+        services.AddTransient<IProjectFilterOptionsService>(sp => sp.GetRequiredService<ProjectFilterOptionsService>());
+
         return services;
     }
 }

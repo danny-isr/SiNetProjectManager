@@ -110,13 +110,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         // The selector VM is constructed the same way the Email surface does it (it is not a DI type):
         // resolve the read side + shared context and bind a fresh view model to the reusable control.
         var projectQuery = _services.GetService<IProjectQueryService>();
+        var filterOptions = _services.GetService<IProjectFilterOptionsService>();
         var currentProject = _services.GetService<ICurrentProjectContext>();
-        if (projectQuery is null || currentProject is null)
+        if (projectQuery is null || filterOptions is null || currentProject is null)
         {
             return null;
         }
 
-        var selectorViewModel = new ProjectSelectorViewModel(projectQuery, currentProject);
+        var selectorViewModel = new ProjectSelectorViewModel(projectQuery, filterOptions, currentProject);
         return new ProjectSelectorView { DataContext = selectorViewModel };
     }
 

@@ -10,44 +10,62 @@
              d:DataContext="{d:DesignInstance Type=local:ProjectSelectorViewModel, IsDesignTimeCreatable=True}">
 
     <!--
-        Shared Project Selector (docs/PROJECTS.md §5). Reusable across windows; binds only to
-        ProjectSummaryDto. Selecting a project publishes it to ICurrentProjectContext via the view model.
-        This slice uses fake/in-memory data behind IProjectQueryService — no DB, no EF entities.
+        Shared Project Selector (docs/PROJECTS.md §5). Search text, results list, and selected project
+        are separate controls so async reloads never overwrite user typing.
     -->
     <WrapPanel Orientation="Horizontal">
-        <!-- Searchable project selection: number / name / place / company.
-             The input is intentionally NOT disabled while loading (no IsBusy binding) so typing stays
-             responsive; the StatusMessage shows "loading" instead. Item virtualization + recycling keep
-             the dropdown fast even with a capped-but-large result set. -->
-        <ComboBox Width="360"
-                  Margin="0,0,10,4"
-                  IsEditable="True"
-                  IsTextSearchEnabled="True"
-                  StaysOpenOnEdit="True"
-                  TextSearch.TextPath="ProjectName"
-                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                  ItemsSource="{Binding Projects}"
-                  SelectedItem="{Binding SelectedProject}"
-                  ScrollViewer.CanContentScroll="True"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling"
-                  ToolTip="&#x05D1;&#x05D7;&#x05E8; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7;)">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding ProjectNumber}" FontWeight="Bold" Foreground="#1565C0" />
-                        <TextBlock Text=" &#x2014; " Foreground="#999" />
-                        <TextBlock Text="{Binding ProjectName}" />
-                        <TextBlock Text="  ·  " Foreground="#CCC" />
-                        <TextBlock Text="{Binding PlaceName}" Foreground="#777" />
-                        <TextBlock Text="  ·  " Foreground="#CCC" />
-                        <TextBlock Text="{Binding CompanyName}" Foreground="#777" />
-                    </StackPanel>
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+        <!-- Search box + popup results (not an editable ComboBox). -->
+        <StackPanel Width="360" Margin="0,0,10,4">
+            <TextBox x:Name="SearchBox"
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     GotFocus="SearchBox_OnGotFocus"
+                     PreviewLostKeyboardFocus="SearchBox_OnPreviewLostKeyboardFocus"
+                     PreviewKeyDown="SearchBox_OnPreviewKeyDown"
+                     ToolTip="&#x05D7;&#x05E4;&#x05E9; &#x05DC;&#x05E4;&#x05D9; &#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; &#x05DE;&#x05D9;&#x05DC;&#x05D9;&#x05DD; &#x05DE;&#x05D5;&#x05E4;&#x05E8;&#x05D3;&#x05D5;&#x05EA;)" />
 
-        <!-- Refresh (reload the project list through IProjectQueryService). -->
+            <Popup x:Name="ResultsPopup"
+                   PlacementTarget="{Binding ElementName=SearchBox}"
+                   Placement="Bottom"
+                   StaysOpen="True"
+                   AllowsTransparency="True"
+                   IsOpen="{Binding IsResultsOpen, Mode=TwoWay}">
+                <Border BorderBrush="#CCC"
+                        BorderThickness="1"
+                        Background="White"
+                        MaxHeight="280"
+                        Width="{Binding ActualWidth, ElementName=SearchBox}">
+                    <ListBox x:Name="ResultsList"
+                             ItemsSource="{Binding Projects}"
+                             SelectionChanged="ResultsList_OnSelectionChanged"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             PreviewMouseLeftButtonUp="ResultsList_OnPreviewMouseLeftButtonUp">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ProjectNumber}" FontWeight="Bold" Foreground="#1565C0" />
+                                    <TextBlock Text=" &#x2014; " Foreground="#999" />
+                                    <TextBlock Text="{Binding ProjectName}" />
+                                    <TextBlock Text="  ·  " Foreground="#CCC" />
+                                    <TextBlock Text="{Binding PlaceName}" Foreground="#777" />
+                                    <TextBlock Text="  ·  " Foreground="#CCC" />
+                                    <TextBlock Text="{Binding CompanyName}" Foreground="#777" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Popup>
+
+            <TextBlock Text="{Binding SelectedProjectDisplay}"
+                       Margin="0,2,0,0"
+                       Foreground="#1565C0"
+                       FontSize="11"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="&#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8; &#x05E0;&#x05D1;&#x05D7;&#x05E8;" />
+        </StackPanel>
+
         <Button Content="&#x1F504;"
                 Command="{Binding RefreshCommand}"
                 Margin="0,0,10,4"
@@ -56,40 +74,34 @@
                 Cursor="Hand"
                 ToolTip="&#x05E8;&#x05E2;&#x05E0;&#x05DF; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05EA; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD;" />
 
-        <!-- Job Type filter. -->
-        <ComboBox Width="140"
-                  Margin="0,0,8,4"
-                  ItemsSource="{Binding JobTypeOptions}"
-                  SelectedItem="{Binding SelectedJobType}"
-                  ToolTip="&#x05E1;&#x05D5;&#x05D2; &#x05E2;&#x05D1;&#x05D5;&#x05D3;&#x05D4;">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" />
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+        <StackPanel Orientation="Horizontal" Margin="0,0,8,4">
+            <TextBlock Text="&#x05E1;&#x05D5;&#x05D2; &#x05E2;&#x05D1;&#x05D5;&#x05D3;&#x05D4;:"
+                       VerticalAlignment="Center"
+                       Margin="0,0,6,0" />
+            <ComboBox Width="140"
+                      ItemsSource="{Binding JobTypeOptions}"
+                      SelectedValue="{Binding SelectedJobTypeId}"
+                      SelectedValuePath="Id"
+                      DisplayMemberPath="DisplayName" />
+        </StackPanel>
 
-        <!-- Status filter. -->
-        <ComboBox Width="140"
-                  Margin="0,0,8,4"
-                  ItemsSource="{Binding StatusOptions}"
-                  SelectedItem="{Binding SelectedStatus}"
-                  ToolTip="&#x05E1;&#x05D8;&#x05D8;&#x05D5;&#x05E1;">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" />
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+        <StackPanel Orientation="Horizontal" Margin="0,0,8,4">
+            <TextBlock Text="&#x05E1;&#x05D8;&#x05D8;&#x05D5;&#x05E1;:"
+                       VerticalAlignment="Center"
+                       Margin="0,0,6,0" />
+            <ComboBox Width="140"
+                      ItemsSource="{Binding StatusOptions}"
+                      SelectedValue="{Binding SelectedStatusId}"
+                      SelectedValuePath="Id"
+                      DisplayMemberPath="DisplayName" />
+        </StackPanel>
 
-        <!-- Include closed projects. -->
         <CheckBox Content="&#x05DB;&#x05D5;&#x05DC;&#x05DC; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;"
                   IsChecked="{Binding IncludeClosed}"
                   VerticalAlignment="Center"
                   Margin="0,0,10,4"
                   ToolTip="&#x05D4;&#x05E6;&#x05D2; &#x05D2;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;" />
 
-        <!-- Loading / status message. -->
         <TextBlock Text="{Binding StatusMessage}"
                    VerticalAlignment="Center"
                    Margin="4,0,0,4"

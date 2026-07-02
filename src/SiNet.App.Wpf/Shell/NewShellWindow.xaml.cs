@@ -15,6 +15,7 @@ public partial class NewShellWindow : Window
 {
     private readonly NewShellViewModel _viewModel;
     private readonly ICurrentProjectContext? _currentProjectContext;
+    private readonly ProjectSelectorView? _projectSelector;
 
     /// <summary>
     /// Creates the shell.
@@ -41,6 +42,7 @@ public partial class NewShellWindow : Window
 
         if (projectSelector is not null)
         {
+            _projectSelector = projectSelector;
             ProjectSelectorHost.Content = projectSelector;
         }
 
@@ -50,7 +52,24 @@ public partial class NewShellWindow : Window
             // marshal to the dispatcher before touching the view model (per ICurrentProjectContext).
             UpdateProjectDisplay(_currentProjectContext.CurrentProject);
             _currentProjectContext.CurrentProjectChanged += OnCurrentProjectChanged;
-            Closed += (_, _) => _currentProjectContext.CurrentProjectChanged -= OnCurrentProjectChanged;
+            Closed += OnClosed;
+        }
+        else
+        {
+            Closed += OnClosed;
+        }
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        if (_currentProjectContext is not null)
+        {
+            _currentProjectContext.CurrentProjectChanged -= OnCurrentProjectChanged;
+        }
+
+        if (_projectSelector?.DataContext is IDisposable disposable)
+        {
+            disposable.Dispose();
         }
     }
 

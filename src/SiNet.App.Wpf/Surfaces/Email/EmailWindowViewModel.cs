@@ -81,7 +81,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         ProjectSelector = new ProjectSelectorViewModel(projectQuery, _currentProject);
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
-        _ = ProjectSelector.LoadAsync();
+        _ = ProjectSelector.InitializeAsync();
 
         RefreshCommand = Stub();
         SearchCommand = Stub();

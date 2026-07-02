@@ -68,6 +68,7 @@ public static class ProjectContextServiceCollectionExtensions
         // Fake read side (stateless) — safe as a singleton. Only for design-time/tests; runtime uses the
         // real read-only IProjectQueryService from the composition root.
         services.AddSingleton<IProjectQueryService, FakeProjectQueryService>();
+        services.AddSingleton<IProjectFilterOptionsService, FakeProjectFilterOptionsService>();
 
         return services;
     }

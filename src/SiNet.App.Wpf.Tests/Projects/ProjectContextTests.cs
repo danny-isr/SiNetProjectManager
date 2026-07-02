@@ -97,7 +97,7 @@ public sealed class ProjectContextTests
         var sut = new ProjectSelectorViewModel(new StubProjectQueryService(projects), context);
         await sut.LoadAsync();
 
-        sut.SelectedProject = sut.Projects.Single();
+        sut.SelectProjectCommand.Execute(sut.Projects.Single());
 
         Assert.NotNull(context.CurrentProject);
         Assert.Equal(7, context.CurrentProject!.ProjectId);
@@ -113,7 +113,7 @@ public sealed class ProjectContextTests
         var sut = new EmailWindowViewModel(new StubProjectQueryService(projects), context);
         await sut.ProjectSelector.LoadAsync();
 
-        sut.ProjectSelector.SelectedProject = sut.ProjectSelector.Projects.Single();
+        sut.ProjectSelector.SelectProjectCommand.Execute(sut.ProjectSelector.Projects.Single());
 
         Assert.Contains("1042", sut.ActiveProjectDisplay);
         Assert.Contains("North Towers", sut.ActiveProjectDisplay);
@@ -132,7 +132,7 @@ public sealed class ProjectContextTests
         await selectorA.LoadAsync();
         await selectorB.LoadAsync();
 
-        selectorA.SelectedProject = selectorA.Projects.First(p => p.ProjectId == 4);
+        selectorA.SelectProjectCommand.Execute(selectorA.Projects.First(p => p.ProjectId == 4));
 
         Assert.NotNull(selectorB.SelectedProject);
         Assert.Equal(4, selectorB.SelectedProject!.ProjectId);
@@ -168,8 +168,8 @@ public sealed class ProjectContextTests
         var sut = new ProjectSelectorViewModel(new StubProjectQueryService(projects), sharedContext);
         await sut.LoadAsync();
 
-        sut.SelectedProject = sut.Projects.Single(); // first select -> raises once
-        sut.SelectedProject = sut.Projects.Single(); // same project -> no new event
+        sut.SelectProjectCommand.Execute(sut.Projects.Single()); // first select -> raises once
+        sut.SelectProjectCommand.Execute(sut.Projects.Single()); // same project -> no new event
 
         Assert.Equal(1, raised);
     }

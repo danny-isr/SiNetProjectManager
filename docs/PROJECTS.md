@@ -149,15 +149,21 @@ SiNet.App.Wpf/Shared/Projects/ProjectSelectorDesignData.cs
 
 It must support the existing legacy project-selection behavior (parity target, do not redesign the UX):
 
-- **Searchable** project selection (type-to-filter).
-- Search across **number / title / place (city) / company (client)**.
+- **Searchable** project selection (type-to-filter) via a **separate search box and results list**
+  (not an editable ComboBox). User-typed `SearchText` must never be overwritten by async reloads or
+  programmatic selection changes.
+- Search across **number / title / place (city) / company (client)**. **Multi-word** search: every
+  token must match at least one field; token order does not matter (parity with legacy
+  `SearchableProjectSelector`).
 - Default **sort by project number, descending** (newest first).
 - **Exclusion of dummy project numbers** (e.g. 0 / 9999).
-- **Job Type** filter (see §6).
-- **Status** filter (see §6).
-- **User** filter (see §6).
-- **Refresh** (reload the project list through `IProjectQueryService`).
-- Loading / status message (`IsBusy` / `StatusMessage`).
+- **Job Type** / **Status** filters with visible labels (see §6). Filter dropdown options load from
+  `IProjectFilterOptionsService` — **not** from the capped project result list (`MaxResults`).
+- **User** filter — *deferred* (hidden in UI until semantics are defined).
+- **Refresh** (reload filter options + project list through Application ports).
+- Loading / status message (`IsBusy` / `StatusMessage`). Search input stays enabled while loading.
+- Explicit project selection only (click/choose from the results list); typing does not set
+  `SelectedProject`. The selected project is shown separately (`SelectedProjectDisplay`).
 
 > **Legacy source:** `SiNetProjectManagerV2/Controls/SearchableProjectSelector` already implements this
 > behavior (default `FilterProperties = NameAndNumber,Title,Place.Title,Company.Title`, sort by
@@ -177,7 +183,13 @@ Email/ProjectWork filter strip):
 | **Status** | Restrict by project status/state. | `ProjectSearchQuery.Status`, `ProjectSummaryDto.Status` |
 | **User** | Restrict by assigned/responsible user. | `ProjectSearchQuery.AssignedUserId`, `ProjectSummaryDto.AssignedUserName` — *deferred* in the real source: the DTO carries a user *name*, not an id, so `AssignedUserId` is not applied yet (see migration §8a). |
 | **Include closed / active** | Include or hide closed projects. | `ProjectSearchQuery.IncludeClosed`, `ProjectSummaryDto.IsActive` |
-| **Free-text search** | number / title / city / client. | `ProjectSearchQuery.SearchText` |
+| **Free-text search** | number / title / city / client (multi-token AND). | `ProjectSearchQuery.SearchText`, `ProjectSummaryQuery.MatchesText` |
+| **MaxResults** | Cap displayed project rows for responsiveness. | `ProjectSearchQuery.MaxResults` (default 200) — applies **only** to the project list, never to filter option lists. |
+
+Filter option lists (`Status`, `Job Type`) are loaded through **`IProjectFilterOptionsService`**
+(read-only, full lists from reference tables). Selection is stored by stable id
+(`SelectedStatusId`, `SelectedJobTypeId`) and resolved to display names when building
+`ProjectSearchQuery`.
 
 Not part of the Project Selector (must stay in their owning surface):
 
