@@ -20,7 +20,7 @@ User Management and Add User are implemented as **native** `SiNet.App.Wpf.Admin.
 `SiNet.App.Wpf` must **not**:
 
 - Reference `SiNetSQL`, `SiNetProjectManagerV2`, or `SiNetSQL.MVVM` (project or assembly)
-- Open legacy windows (`ActionPermissionWindow`, legacy `UserManagementWindow`, legacy `AddUserWindow`, …)
+- Open legacy windows (`ActionPermissionWindow`, legacy `UserManagementWindow`, legacy `AddUserWindow`, legacy `SecretSetupWindow`, …)
 - Depend on legacy ViewModels or `SiNetProjectManagerV2.Dialogs`
 
 Legacy startup (`StartupMode.Legacy` → `SiNetProjectManagerV2.MainWindow`) may continue to use legacy UI unchanged.
@@ -55,21 +55,37 @@ Menu items **ניהול משתמשים** / **הוספת משתמש** in `NewShel
 Menu item **הרשאות פעולה** in `NewShellFactory` is gated by `AppFeatureCodes.ActionPermissionsManage`.
 Native permissions SQL must **not** use `SiNetSQL.Data`, `SiNetSQL.Models`, or `SiNetSQLDbContext`.
 
-## Native secret setup (2026-07-03)
+## Native secret setup (2026-07-03, implemented)
 
 | Surface | Location |
 | --- | --- |
 | Keys and secrets | `SecretSetupWindow` + `SecretSetupView` + `SecretSetupViewModel` |
 | Service | `CredentialVaultSecretSetupService` → `ISecretSetupService` in `SiNet.Infrastructure.Secrets` |
+| Export / Import | `SecretProvisioningFileService` — encrypted `.secrets` (AES-256-CBC + PBKDF2, legacy `SNET` format) |
+| AccService | `AccServiceSecretDiagnostics` — Generate (32-byte Base64) + Test (presence/format or network diag) |
+| Google OAuth | `GoogleClientSecretsMaterializer` + `VaultGoogleClientSecretsPathProvider` |
 
 Menu item **מפתחות וסודות** in `NewShellFactory` is gated by `AppFeatureCodes.SystemSettingsWrite`.
-The general **הגדרות** menu item remains a disabled placeholder until a native system-settings surface exists.
+Opens native `SecretSetupWindow` — **not** legacy `SiNetProjectManagerV2.WPF_Window.SecretSetupWindow`.
+
+**Credential Vault is the single source of truth** for secret values. Google OAuth follows:
+Vault → materialized file (`%LocalAppData%/SiNet/Secrets/google-client-secrets.json`) → config fallback
+only when Vault is empty (with explicit warning). The materialized file exists for consumers that still
+require a filesystem path (e.g. `GmailClientProvider`); it is not a second source of truth.
+
+Boundary tests: `NativeSecretSetupTests.cs`, `NativeSecretSetupGapTests.cs` (export encryption, import
+catalog-only, preview without values, AccService generate/test, Google materializer LocalAppData-only,
+no legacy window, no `SiNetSQL.MVVM`).
+
+The general **הגדרות** menu item remains a disabled placeholder until a native system-settings surface
+exists (distinct from keys/secrets).
 
 ## Revoked pattern (do not extend)
 
 | Pattern | Status |
 | --- | --- |
-| `IActionPermissionAdminWindowFactory` → legacy `ActionPermissionWindow` | **Removed** |
+| `IActionPermissionAdminWindowFactory` → legacy `ActionPermissionWindow` | **Removed** — use native `ActionPermissionsWindow` |
+| Legacy `SecretSetupWindow` (`SiNetProjectManagerV2.WPF_Window`) | **Removed** from NewShell — use native `SecretSetupWindow` |
 | `IUserManagementWindowFactory` → legacy `UserManagementWindow` | **Removed** |
 | `IAddUserWindowFactory` → legacy `AddUserWindow` | **Removed** |
 | `UserManagementPortAdapter` / SiNetSQL adapter for New System | **Not used** |
@@ -77,11 +93,13 @@ The general **הגדרות** menu item remains a disabled placeholder until a na
 
 ## Architecture tests
 
-Enforced by `NewSystemBoundaryTests.cs` and `Admin/NewShellNativeUserAdminMenuTests.cs`:
+Enforced by `NewSystemBoundaryTests.cs`, `Admin/NewShellNativeUserAdminMenuTests.cs`, and
+`Admin/NativeSecretSetupTests.cs` + `Admin/NativeSecretSetupGapTests.cs`:
 
 - csproj / assembly must not reference SiNetSQL or V2
-- Forbidden legacy identifiers (`SiNetSQL.MVVM`, `Dialogs.*Window`, legacy factories)
+- Forbidden legacy identifiers (`SiNetSQL.MVVM`, `Dialogs.*Window`, legacy factories, legacy `SecretSetupWindow`)
 - Native user menu allowed when opening `UserListWindow` / `AddUserDialogWindow`
+- Native secret setup: encrypted export, catalog-only import, AccService generate/test, Google vault-first materializer
 
 ## Rebuild path (remaining)
 

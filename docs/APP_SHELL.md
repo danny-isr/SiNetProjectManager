@@ -106,7 +106,8 @@ helper (`StartupModeRouter`) so the decision can be tested without WPF.
 - Migrated Work Surfaces opened **on demand** from the shell menu:
   - **Email visual clone** via `IEmailWindowFactory.Create()`.
   - **Inspection shell** via DI-resolved `InspectionShellView` / `InspectionShellViewModel`.
-- The already-built modular DI registrations (`AddSiNet*`) that these surfaces depend on.
+  - **Native admin** (when authorized): user management, action permissions, keys/secrets (`SecretSetupWindow`).
+- The already-built modular DI registrations (`AddSiNet*`, `AddSiNetSecrets`) that these surfaces depend on.
 
 Everything above is resolved from the **existing** `App.ServiceProvider`; New system mode does not
 build a second container.
@@ -176,11 +177,31 @@ backed by `SqlUserManagementService` in Infrastructure.Sql — not legacy window
 authorized. Opens native `ActionPermissionsWindow` in `SiNet.App.Wpf.Admin.Permissions` backed by
 `SqlActionPermissionAdminService` → `IActionPermissionAdminService` in Infrastructure.Sql.
 
-**Keys and secrets (native):** Administrators see **מפתחות וסודות** when `System.Settings.Write` is
-authorized. Opens native `SecretSetupWindow` in `SiNet.App.Wpf.Admin.Security` backed by
-`CredentialVaultSecretSetupService` in Infrastructure.Secrets (Credential Vault). General system settings
-(`ManagementSettingsWindow` parity) remain a separate future surface — the **הגדרות** menu item stays
-disabled until that surface exists.
+**Keys and secrets (native, implemented):** Administrators see **מפתחות וסודות** when
+`System.Settings.Write` is authorized. Opens native `SecretSetupWindow` in `SiNet.App.Wpf.Admin.Security`
+(`SecretSetupView` + `SecretSetupViewModel`) backed by `CredentialVaultSecretSetupService` →
+`ISecretSetupService` in `SiNet.Infrastructure.Secrets`. **Credential Vault is the single source of
+truth** for all secret values — not `appsettings.json`, not repo files, not legacy `SecretSetupWindow`.
+
+Implemented capabilities in this surface:
+
+| Capability | Port / service | Notes |
+| --- | --- | --- |
+| Vault read/write + validation | `ISecretSetupService.SaveAndValidateAsync` | 11 keys from `SecretCatalog`; post-save validators |
+| **Export** `.secrets` | `ExportAsync` | AES-256-CBC + PBKDF2 encrypted file (legacy-compatible `SNET` format); never plain-text JSON |
+| **Import** `.secrets` | `PreviewImportAsync`, `ImportAsync` | Preview shows key names only (no secret values); unknown keys skipped; overwrite requires confirmation |
+| **AccService Generate** | `GenerateAccServiceApiKeyAsync` | 32-byte cryptographic random → Base64; saved to `SecretCatalog.AccServiceApiKey` |
+| **AccService Test** | `TestAccServiceAsync` | Presence/format when `AccService:BaseUrl` unset; network `/v1/acc/diag` when configured |
+| **Google materializer** | `IGoogleClientSecretsMaterializer` | Reads `SecretCatalog.GoogleClientSecrets` from Vault; writes validated JSON to `%LocalAppData%/SiNet/Secrets/google-client-secrets.json` for consumers that still need a file path |
+
+**Google OAuth source of truth:** Vault → materialized temp file under `%LocalAppData%` → config fallback
+(`Gmail:ClientSecretsPath` / `GoogleReports:ClientSecretsPath`) **only when Vault has no Google secret**,
+with an explicit debug warning. The materialized file is a consumption artifact, not a second source of
+truth. New System `GmailClientProvider` resolves paths via `IGoogleClientSecretsPathProvider` (vault-first).
+
+General system settings (`ManagementSettingsWindow` parity) remain a **separate future surface** — the
+**הגדרות** menu item stays disabled until that surface exists; secret/key management is covered by
+**מפתחות וסודות**, not the Settings placeholder.
 
 ---
 

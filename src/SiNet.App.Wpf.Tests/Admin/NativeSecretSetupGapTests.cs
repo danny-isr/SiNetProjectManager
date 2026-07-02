@@ -103,7 +103,7 @@ public sealed class NativeSecretSetupGapTests
     }
 
     [Fact]
-    public async Task GenerateAccServiceApiKeyAsync_saves_to_vault()
+    public async Task GenerateAccServiceApiKeyAsync_saves_cryptographic_key_to_vault()
     {
         var vault = new InMemorySecretVaultStore();
         var service = new CredentialVaultSecretSetupService(vault, NullHost.Instance);
@@ -112,7 +112,9 @@ public sealed class NativeSecretSetupGapTests
 
         Assert.False(string.IsNullOrWhiteSpace(key));
         Assert.Equal(key, vault.GetSecret(SecretCatalog.AccServiceApiKey));
-        Assert.True(key.Length >= 16);
+
+        var keyBytes = Convert.FromBase64String(key);
+        Assert.Equal(32, keyBytes.Length);
     }
 
     [Fact]
@@ -127,6 +129,92 @@ public sealed class NativeSecretSetupGapTests
         Assert.True(result.Success);
         Assert.False(result.IsNetworkTest);
         Assert.Contains("presence/format", result.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TestAccServiceAsync_uses_network_diag_when_base_url_configured()
+    {
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, Convert.ToBase64String(new byte[32]));
+        var service = new CredentialVaultSecretSetupService(vault, HostWithBaseUrl.Instance);
+
+        var result = await service.TestAccServiceAsync();
+
+        Assert.True(result.IsNetworkTest);
+        Assert.Contains("AccService", result.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Google_path_provider_uses_vault_before_config_fallback()
+    {
+        const string vaultJson = """{"installed":{"client_id":"vault-id","client_secret":"vault-secret"}}""";
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.GoogleClientSecrets, vaultJson);
+
+        var fallbackFile = Path.Combine(Path.GetTempPath(), $"google-fallback-{Guid.NewGuid():N}.json");
+        File.WriteAllText(fallbackFile, """{"installed":{"client_id":"fallback","client_secret":"x"}}""");
+
+        try
+        {
+            var materializer = new GoogleClientSecretsMaterializer(vault);
+            var provider = new VaultGoogleClientSecretsPathProvider(
+                vault,
+                materializer,
+                new GoogleClientSecretsFallbackOptions { GmailClientSecretsPath = fallbackFile });
+
+            var vaultPath = await provider.ResolveClientSecretsPathAsync();
+
+            Assert.NotNull(vaultPath);
+            Assert.StartsWith(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SiNet", "Secrets"),
+                vaultPath!,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(vaultJson, File.ReadAllText(vaultPath!));
+            Assert.NotEqual(fallbackFile, vaultPath);
+        }
+        finally
+        {
+            if (File.Exists(fallbackFile))
+            {
+                File.Delete(fallbackFile);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Google_path_provider_uses_config_fallback_only_when_vault_empty()
+    {
+        var vault = new InMemorySecretVaultStore();
+        var fallbackFile = Path.Combine(Path.GetTempPath(), $"google-fallback-{Guid.NewGuid():N}.json");
+        File.WriteAllText(fallbackFile, """{"installed":{"client_id":"fallback","client_secret":"x"}}""");
+
+        try
+        {
+            var materializer = new GoogleClientSecretsMaterializer(vault);
+            var provider = new VaultGoogleClientSecretsPathProvider(
+                vault,
+                materializer,
+                new GoogleClientSecretsFallbackOptions { GmailClientSecretsPath = fallbackFile });
+
+            var path = await provider.ResolveClientSecretsPathAsync();
+
+            Assert.Equal(fallbackFile, path);
+        }
+        finally
+        {
+            if (File.Exists(fallbackFile))
+            {
+                File.Delete(fallbackFile);
+            }
+        }
+    }
+
+    [Fact]
+    public void Google_path_provider_fallback_emits_explicit_warning()
+    {
+        var source = ReadRepoFile("src/SiNet.Infrastructure.Secrets/GoogleClientSecretsMaterializer.cs");
+        Assert.Contains("WARNING: Using config fallback for client secrets", source, StringComparison.Ordinal);
+        Assert.Contains("Configure Google OAuth in Secret Setup (Vault)", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -214,5 +302,14 @@ public sealed class NativeSecretSetupGapTests
         public string? ActiveDirectoryDomainName => null;
 
         public string? AccServiceBaseUrl => null;
+    }
+
+    private sealed class HostWithBaseUrl : ISecretSetupHostConfiguration
+    {
+        public static HostWithBaseUrl Instance { get; } = new();
+
+        public string? ActiveDirectoryDomainName => null;
+
+        public string? AccServiceBaseUrl => "http://127.0.0.1:9";
     }
 }
