@@ -7,26 +7,38 @@
              mc:Ignorable="d"
              FlowDirection="RightToLeft"
              d:DesignWidth="720"
-             d:DataContext="{d:DesignInstance Type=local:ProjectSelectorViewModel, IsDesignTimeCreatable=True}">
+             d:DataContext="{d:DesignInstance Type=local:ProjectSelectorViewModel, IsDesignTimeCreatable=True}"
+             PreviewMouseDown="Selector_OnPreviewMouseDown">
 
-    <!--
-        Shared Project Selector (docs/PROJECTS.md §5). Search text, results list, and selected project
-        are separate controls so async reloads never overwrite user typing.
-    -->
+    <!-- Shared Project Selector (docs/PROJECTS.md §5): TextBox + Popup/ListBox. -->
     <WrapPanel Orientation="Horizontal">
-        <!-- Search box + popup results (not an editable ComboBox). -->
         <StackPanel Width="360" Margin="0,0,10,4">
-            <TextBox x:Name="SearchBox"
-                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                     GotFocus="SearchBox_OnGotFocus"
-                     PreviewLostKeyboardFocus="SearchBox_OnPreviewLostKeyboardFocus"
-                     PreviewKeyDown="SearchBox_OnPreviewKeyDown"
-                     ToolTip="&#x05D7;&#x05E4;&#x05E9; &#x05DC;&#x05E4;&#x05D9; &#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; &#x05DE;&#x05D9;&#x05DC;&#x05D9;&#x05DD; &#x05DE;&#x05D5;&#x05E4;&#x05E8;&#x05D3;&#x05D5;&#x05EA;)" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBox x:Name="SearchBox"
+                         Grid.Column="0"
+                         Text="{Binding EditorText, UpdateSourceTrigger=PropertyChanged}"
+                         GotFocus="SearchBox_OnGotFocus"
+                         PreviewKeyDown="SearchBox_OnPreviewKeyDown"
+                         ToolTip="&#x05D7;&#x05E4;&#x05E9; &#x05DC;&#x05E4;&#x05D9; &#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7; (&#x05DE;&#x05E1;&#x05E4;&#x05E8; &#x05DE;&#x05D9;&#x05DC;&#x05D9;&#x05DD; &#x05DE;&#x05D5;&#x05E4;&#x05E8;&#x05D3;&#x05D5;&#x05EA;)" />
+
+                <Button Grid.Column="1"
+                        Content="&#x25BC;"
+                        Width="28"
+                        Margin="4,0,0,0"
+                        Padding="0"
+                        Command="{Binding ToggleResultsCommand}"
+                        ToolTip="&#x05E4;&#x05EA;&#x05D7; / &#x05E1;&#x05D2;&#x05D5;&#x05E8; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05EA; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD;" />
+            </Grid>
 
             <Popup x:Name="ResultsPopup"
                    PlacementTarget="{Binding ElementName=SearchBox}"
                    Placement="Bottom"
-                   StaysOpen="True"
+                   StaysOpen="False"
                    AllowsTransparency="True"
                    IsOpen="{Binding IsResultsOpen, Mode=TwoWay}">
                 <Border BorderBrush="#CCC"
@@ -36,11 +48,10 @@
                         Width="{Binding ActualWidth, ElementName=SearchBox}">
                     <ListBox x:Name="ResultsList"
                              ItemsSource="{Binding Projects}"
-                             SelectionChanged="ResultsList_OnSelectionChanged"
+                             PreviewMouseLeftButtonDown="ResultsList_OnPreviewMouseLeftButtonDown"
                              ScrollViewer.CanContentScroll="True"
                              VirtualizingPanel.IsVirtualizing="True"
-                             VirtualizingPanel.VirtualizationMode="Recycling"
-                             PreviewMouseLeftButtonUp="ResultsList_OnPreviewMouseLeftButtonUp">
+                             VirtualizingPanel.VirtualizationMode="Recycling">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
@@ -57,13 +68,6 @@
                     </ListBox>
                 </Border>
             </Popup>
-
-            <TextBlock Text="{Binding SelectedProjectDisplay}"
-                       Margin="0,2,0,0"
-                       Foreground="#1565C0"
-                       FontSize="11"
-                       TextTrimming="CharacterEllipsis"
-                       ToolTip="&#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8; &#x05E0;&#x05D1;&#x05D7;&#x05E8;" />
         </StackPanel>
 
         <Button Content="&#x1F504;"
@@ -101,6 +105,12 @@
                   VerticalAlignment="Center"
                   Margin="0,0,10,4"
                   ToolTip="&#x05D4;&#x05E6;&#x05D2; &#x05D2;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD; &#x05E1;&#x05D2;&#x05D5;&#x05E8;&#x05D9;&#x05DD;" />
+
+        <CheckBox Content="&#x05D4;&#x05E6;&#x05D2; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05D4; &#x05DE;&#x05D5;&#x05E8;&#x05D7;&#x05D1;&#x05EA;"
+                  IsChecked="{Binding ShowExpandedResults}"
+                  VerticalAlignment="Center"
+                  Margin="0,0,10,4"
+                  ToolTip="&#x05DE;&#x05E2;&#x05DC;&#x05D4; &#x05E2;&#x05D3; 1000 &#x05EA;&#x05D5;&#x05E6;&#x05D0;&#x05D5;&#x05EA; (&#x05D1;&#x05DE;&#x05E7;&#x05D5;&#x05DD; 200)" />
 
         <TextBlock Text="{Binding StatusMessage}"
                    VerticalAlignment="Center"

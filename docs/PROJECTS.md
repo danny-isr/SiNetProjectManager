@@ -149,9 +149,8 @@ SiNet.App.Wpf/Shared/Projects/ProjectSelectorDesignData.cs
 
 It must support the existing legacy project-selection behavior (parity target, do not redesign the UX):
 
-- **Searchable** project selection (type-to-filter) via a **separate search box and results list**
-  (not an editable ComboBox). User-typed `SearchText` must never be overwritten by async reloads or
-  programmatic selection changes.
+- **Searchable** project selection via **TextBox + Popup/ListBox** (not an editable ComboBox).
+- Two editor modes (see below): **UserTyping** vs **SelectedProjectDisplay**.
 - Search across **number / title / place (city) / company (client)**. **Multi-word** search: every
   token must match at least one field; token order does not matter (parity with legacy
   `SearchableProjectSelector`).
@@ -163,7 +162,69 @@ It must support the existing legacy project-selection behavior (parity target, d
 - **Refresh** (reload filter options + project list through Application ports).
 - Loading / status message (`IsBusy` / `StatusMessage`). Search input stays enabled while loading.
 - Explicit project selection only (click/choose from the results list); typing does not set
-  `SelectedProject`. The selected project is shown separately (`SelectedProjectDisplay`).
+  `SelectedProject` until the user picks a row.
+- **Dropdown toggle** (▼) opens/closes the results popup; opening with no search text shows the
+  default browse list.
+- **Expanded list** checkbox (`ShowExpandedResults`): default cap **200** rows; expanded cap **1000**
+  rows (display only — search still runs against the full source).
+- Popup **closes** after project selection, focus leaving the control, click outside, or Escape.
+
+### TextBox modes: UserTyping vs SelectedProjectDisplay
+
+| Mode | When | TextBox content | Reload query text |
+| --- | --- | --- | --- |
+| **UserTyping** | User is typing / editing | Exactly what the user typed | Same as TextBox |
+| **SelectedProjectDisplay** | After explicit project pick (or external context sync) | `{ProjectNumber} — {ProjectName}` | `null` (browse) |
+
+Rules:
+
+- Async reloads **must not** overwrite TextBox text while the user is in **UserTyping** mode.
+- After **explicit selection**, TextBox switches to **SelectedProjectDisplay** and the popup closes.
+- Starting to type again switches back to **UserTyping** and opens the popup.
+- `SelectedProject` / `ICurrentProjectContext` update only on explicit selection (unchanged).
+
+### Search source vs display limit (critical)
+
+Two concepts must stay separate:
+
+| Concept | Meaning |
+| --- | --- |
+| **Search source** | The full, relevant project catalog in the data store (e.g. 2,000+ rows). |
+| **Display limit (`MaxResults`)** | How many rows the selector **shows** at once (default **200**). |
+
+**Correct pipeline:**
+
+```plaintext
+User types / changes filters
+  → query the full project source (SQL + shared parity rules)
+  → apply text / status / job type / include-closed filters
+  → order (relevance first when searching — see below)
+  → Take(MaxResults)
+  → bind up to 200 rows to the UI
+```
+
+**Wrong pipeline (forbidden):**
+
+```plaintext
+Load 200 projects → search only inside those 200
+```
+
+**Browse mode (no search text):** show up to `MaxResults` **newest** projects (number descending).
+This is a performance default only; it is **not** the search universe.
+
+**Search mode (search text present):** filter against **all** projects in the source, then cap
+display. Old projects (e.g. number `1`) must be findable even when they are not in the initial
+200-row browse list.
+
+When search text is present and many rows match, ordering uses **relevance rank** before project
+number: exact number match on a token ranks above substring matches, so `Take(MaxResults)` does not
+drop the intended old project just because newer rows also contain the same digit.
+
+**Status messages** must not imply the UI shows every project. Examples:
+
+- Browse (default cap): `מוצגים עד 200 פרויקטים. הקלד כדי לחפש בכל הפרויקטים.`
+- Browse (expanded): `מוצגות תוצאות מורחבות.`
+- Search at cap: `מוצגות עד {cap} תוצאות מתאימות. המשך להקליד כדי לצמצם.`
 
 > **Legacy source:** `SiNetProjectManagerV2/Controls/SearchableProjectSelector` already implements this
 > behavior (default `FilterProperties = NameAndNumber,Title,Place.Title,Company.Title`, sort by
@@ -184,12 +245,20 @@ Email/ProjectWork filter strip):
 | **User** | Restrict by assigned/responsible user. | `ProjectSearchQuery.AssignedUserId`, `ProjectSummaryDto.AssignedUserName` — *deferred* in the real source: the DTO carries a user *name*, not an id, so `AssignedUserId` is not applied yet (see migration §8a). |
 | **Include closed / active** | Include or hide closed projects. | `ProjectSearchQuery.IncludeClosed`, `ProjectSummaryDto.IsActive` |
 | **Free-text search** | number / title / city / client (multi-token AND). | `ProjectSearchQuery.SearchText`, `ProjectSummaryQuery.MatchesText` |
-| **MaxResults** | Cap displayed project rows for responsiveness. | `ProjectSearchQuery.MaxResults` (default 200) — applies **only** to the project list, never to filter option lists. |
+| **MaxResults** | Cap **displayed** project rows for responsiveness. | Default **200** (`DefaultMaxResults`); expanded **1000** (`ExpandedMaxResults`) when `ShowExpandedResults` is checked. Applied **after** filtering on the **full search source** — never before text filters, and never on filter-option lists. |
 
 Filter option lists (`Status`, `Job Type`) are loaded through **`IProjectFilterOptionsService`**
 (read-only, full lists from reference tables). Selection is stored by stable id
 (`SelectedStatusId`, `SelectedJobTypeId`) and resolved to display names when building
 `ProjectSearchQuery`.
+
+### SQL vs in-memory filtering (implementation)
+
+Prefer pushing base filters and text tokens to SQL (`IQueryable` → filter → order → `Take` when
+browsing). **Relevance ranking** for multi-match search may run in memory on the **already-filtered**
+SQL result set (documented performance trade-off in `PROJECT_CONTEXT_MIGRATION.md` §8a). Even when
+ranking is in-memory, the filtered set must come from the **full catalog**, not from a pre-capped
+browse list.
 
 Not part of the Project Selector (must stay in their owning surface):
 

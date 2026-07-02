@@ -9,13 +9,13 @@ using SiNet.Application.Projects;
 namespace SiNet.App.Wpf.Shared.Projects;
 
 /// <summary>
-/// Reusable view model for the shared <c>ProjectSelectorView</c> (see <c>docs/PROJECTS.md</c> §5/§13).
-/// Search text, filtered results, and selected project are intentionally separate so async reloads
-/// never overwrite what the user typed.
+/// Reusable view model for the shared <c>ProjectSelectorView</c> (see <c>docs/PROJECTS.md</c> §5).
+/// Supports UserTyping vs SelectedProjectDisplay editor modes; search source is always the full catalog.
 /// </summary>
 public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 {
     public const int DefaultMaxResults = 200;
+    public const int ExpandedMaxResults = 1000;
     public static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
 
     private const string LoadingText = "\u05D8\u05D5\u05E2\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD...";
@@ -31,10 +31,14 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _pendingReloadCts;
     private long _reloadRequestId;
 
-    private string _searchText = string.Empty;
+    private string _editorText = string.Empty;
+    private string _searchQueryText = string.Empty;
+    private bool _isUserTyping = true;
+    private bool _isUpdatingEditorText;
     private int? _selectedStatusId;
     private int? _selectedJobTypeId;
     private bool _includeClosed;
+    private bool _showExpandedResults;
     private ProjectSummaryDto? _selectedProject;
     private bool _isBusy;
     private bool _isSyncingFromContext;
@@ -77,6 +81,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         JobTypeOptions = new ObservableCollection<ProjectFilterOptionDto> { AllFilterOption };
 
         RefreshCommand = new AsyncRelayCommand(() => InitializeAsync());
+        ToggleResultsCommand = new RelayCommand(_ => ToggleResults());
         SelectProjectCommand = new RelayCommand(
             parameter =>
             {
@@ -87,6 +92,11 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             });
 
         _selectedProject = _currentProject.CurrentProject;
+        if (_selectedProject is not null)
+        {
+            ApplySelectedProjectDisplay(_selectedProject);
+        }
+
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
     }
 
@@ -96,17 +106,51 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ProjectFilterOptionDto> StatusOptions { get; }
 
-    /// <summary>User filter is deferred until user semantics are defined — always hidden in the UI.</summary>
     public bool IsUserFilterAvailable => false;
 
-    public string SearchText
+    /// <summary>TextBox content — user typing or selected-project display (see docs/PROJECTS.md §5).</summary>
+    public string EditorText
     {
-        get => _searchText;
+        get => _editorText;
         set
         {
-            if (SetField(ref _searchText, value))
+            if (!SetField(ref _editorText, value))
             {
-                IsResultsOpen = true;
+                return;
+            }
+
+            if (_isUpdatingEditorText)
+            {
+                return;
+            }
+
+            EnterUserTypingMode(value);
+        }
+    }
+
+    /// <summary>Backward-compatible alias used by tests; maps to editor typing mode.</summary>
+    public string SearchText
+    {
+        get => IsUserTyping ? _searchQueryText : EditorText;
+        set => EditorText = value;
+    }
+
+    public bool IsUserTyping
+    {
+        get => _isUserTyping;
+        private set => SetField(ref _isUserTyping, value);
+    }
+
+    public int EffectiveMaxResults => ShowExpandedResults ? ExpandedMaxResults : DefaultMaxResults;
+
+    public bool ShowExpandedResults
+    {
+        get => _showExpandedResults;
+        set
+        {
+            if (SetField(ref _showExpandedResults, value))
+            {
+                OnPropertyChanged(nameof(EffectiveMaxResults));
                 QueueReload();
             }
         }
@@ -148,10 +192,6 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// The currently selected project. Updated only by explicit user selection or external context sync.
-    /// Never derived from search text.
-    /// </summary>
     public ProjectSummaryDto? SelectedProject
     {
         get => _selectedProject;
@@ -164,11 +204,8 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Formatted label for the explicitly selected project (separate from search text).</summary>
     public string? SelectedProjectDisplay =>
-        SelectedProject is null
-            ? null
-            : FormatProjectLine(SelectedProject);
+        SelectedProject is null ? null : FormatCompact(SelectedProject);
 
     public bool IsResultsOpen
     {
@@ -190,9 +227,10 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
     public ICommand RefreshCommand { get; }
 
+    public ICommand ToggleResultsCommand { get; }
+
     public ICommand SelectProjectCommand { get; }
 
-    /// <summary>Loads filter options and the initial project list. Call after the view is loaded.</summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         await LoadFilterOptionsAsync(cancellationToken).ConfigureAwait(true);
@@ -211,10 +249,40 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         ApplyFilterOptions(options, previousStatusId, previousJobTypeId);
     }
 
+    public void ToggleResults()
+    {
+        if (IsResultsOpen)
+        {
+            IsResultsOpen = false;
+            return;
+        }
+
+        OpenResults();
+    }
+
+    public void OpenResults()
+    {
+        IsResultsOpen = true;
+        if (!IsUserTyping)
+        {
+            QueueReload();
+        }
+    }
+
+    public void CloseResults() => IsResultsOpen = false;
+
+    private void EnterUserTypingMode(string queryText)
+    {
+        IsUserTyping = true;
+        _searchQueryText = queryText;
+        IsResultsOpen = true;
+        QueueReload();
+    }
+
     private void QueueReload()
     {
         Debug.WriteLine(
-            $"[PERF] ProjectSelector filter changed (search='{_searchText}', jobTypeId={_selectedJobTypeId}, statusId={_selectedStatusId}, includeClosed={_includeClosed}) — scheduling debounced reload in {_debounce.TotalMilliseconds:F0} ms.");
+            $"[PERF] ProjectSelector filter changed (typing={IsUserTyping}, editor='{_editorText}', jobTypeId={_selectedJobTypeId}, statusId={_selectedStatusId}, includeClosed={_includeClosed}, expanded={ShowExpandedResults}) — scheduling debounced reload in {_debounce.TotalMilliseconds:F0} ms.");
 
         var cts = new CancellationTokenSource();
         var previous = Interlocked.Exchange(ref _pendingReloadCts, cts);
@@ -257,13 +325,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         IsBusy = true;
         try
         {
-            var query = new ProjectSearchQuery(
-                SearchText: string.IsNullOrWhiteSpace(_searchText) ? null : _searchText,
-                JobType: ResolveJobTypeDisplayName(),
-                Status: ResolveStatusDisplayName(),
-                AssignedUserId: null,
-                IncludeClosed: _includeClosed,
-                MaxResults: DefaultMaxResults);
+            var query = BuildSearchQuery();
 
             var results = await _projectQuery.SearchProjectsAsync(query, cancellationToken).ConfigureAwait(true);
 
@@ -284,9 +346,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
             SyncSelectionFromContext();
 
-            StatusMessage = results.Count == 0
-                ? "\u05D0\u05D9\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD \u05EA\u05D5\u05D0\u05DE\u05D9\u05DD"
-                : $"{results.Count} \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD";
+            StatusMessage = FormatStatusMessage(results, query);
 
             Debug.WriteLine(
                 $"[PERF] ProjectSelector LoadAsync #{requestId} loaded {results.Count} project(s) in {sw.ElapsedMilliseconds} ms.");
@@ -306,6 +366,21 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         }
     }
 
+    private ProjectSearchQuery BuildSearchQuery()
+    {
+        var searchText = IsUserTyping && !string.IsNullOrWhiteSpace(_searchQueryText)
+            ? _searchQueryText.Trim()
+            : null;
+
+        return new ProjectSearchQuery(
+            SearchText: searchText,
+            JobType: ResolveJobTypeDisplayName(),
+            Status: ResolveStatusDisplayName(),
+            AssignedUserId: null,
+            IncludeClosed: _includeClosed,
+            MaxResults: EffectiveMaxResults);
+    }
+
     private void SelectProject(ProjectSummaryDto? project)
     {
         if (project is null)
@@ -313,15 +388,33 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (_isSyncingFromContext)
+        SelectedProject = project;
+
+        if (!_isSyncingFromContext)
         {
-            SelectedProject = project;
-            return;
+            _ = _currentProject.SetCurrentProjectAsync(project);
         }
 
-        SelectedProject = project;
-        _ = _currentProject.SetCurrentProjectAsync(project);
+        ApplySelectedProjectDisplay(project);
         IsResultsOpen = false;
+    }
+
+    private void ApplySelectedProjectDisplay(ProjectSummaryDto? project)
+    {
+        IsUserTyping = false;
+        _searchQueryText = string.Empty;
+
+        _isUpdatingEditorText = true;
+        try
+        {
+            _editorText = project is null ? string.Empty : FormatCompact(project);
+            OnPropertyChanged(nameof(EditorText));
+            OnPropertyChanged(nameof(SearchText));
+        }
+        finally
+        {
+            _isUpdatingEditorText = false;
+        }
     }
 
     private void ApplyFilterOptions(
@@ -391,11 +484,42 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         try
         {
             SelectedProject = match;
+            ApplySelectedProjectDisplay(match);
         }
         finally
         {
             _isSyncingFromContext = false;
         }
+    }
+
+    private static string FormatStatusMessage(IReadOnlyList<ProjectSummaryDto> results, ProjectSearchQuery query)
+    {
+        if (results.Count == 0)
+        {
+            return "\u05D0\u05D9\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD \u05EA\u05D5\u05D0\u05DE\u05D9\u05DD";
+        }
+
+        var cap = query.MaxResults ?? DefaultMaxResults;
+        var hasSearch = !string.IsNullOrWhiteSpace(query.SearchText);
+        var atCap = query.MaxResults is int max && max > 0 && results.Count >= max;
+        var isExpanded = cap > DefaultMaxResults;
+
+        if (isExpanded && !hasSearch)
+        {
+            return "\u05DE\u05D5\u05E6\u05D2\u05D5\u05EA \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05DE\u05D5\u05E8\u05D7\u05D1\u05D5\u05EA.";
+        }
+
+        if (!hasSearch)
+        {
+            return $"\u05DE\u05D5\u05E6\u05D2\u05D9\u05DD \u05E2\u05D3 {DefaultMaxResults} \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD. \u05D4\u05E7\u05DC\u05D3 \u05DB\u05D3\u05D9 \u05DC\u05D7\u05E4\u05E9 \u05D1\u05DB\u05DC \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD.";
+        }
+
+        if (atCap)
+        {
+            return $"\u05DE\u05D5\u05E6\u05D2\u05D5\u05EA \u05E2\u05D3 {cap} \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05DE\u05EA\u05D0\u05D9\u05DE\u05D5\u05EA. \u05D4\u05DE\u05E9\u05DA \u05DC\u05D4\u05E7\u05DC\u05D9\u05D3 \u05DB\u05D3\u05D9 \u05DC\u05E6\u05DE\u05E6\u05DD.";
+        }
+
+        return $"{results.Count} \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD";
     }
 
     private static bool SameProject(ProjectSummaryDto? a, ProjectSummaryDto? b)
@@ -413,19 +537,8 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         return a.ProjectId == b.ProjectId;
     }
 
-    private static string FormatProjectLine(ProjectSummaryDto project)
-    {
-        var place = string.IsNullOrWhiteSpace(project.PlaceName) ? null : project.PlaceName;
-        var company = string.IsNullOrWhiteSpace(project.CompanyName) ? null : project.CompanyName;
-
-        var details = string.Join(
-            " · ",
-            new[] { place, company }.Where(s => s is not null));
-
-        return string.IsNullOrEmpty(details)
-            ? $"{project.ProjectNumber} — {project.ProjectName}"
-            : $"{project.ProjectNumber} — {project.ProjectName} · {details}";
-    }
+    internal static string FormatCompact(ProjectSummaryDto project)
+        => $"{project.ProjectNumber} \u2014 {project.ProjectName}";
 
     public void Dispose()
     {

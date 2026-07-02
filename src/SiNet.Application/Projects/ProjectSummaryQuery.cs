@@ -87,15 +87,9 @@ public static class ProjectSummaryQuery
             results = results.Where(p => MatchesText(p, text));
         }
 
-        // Parity ordering: project number descending (newest first). Numbers are display strings, so
-        // parse for a stable numeric sort and fall back to ordinal for anything non-numeric.
-        var ordered = results
-            .OrderByDescending(p => long.TryParse(p.ProjectNumber, out var n) ? n : long.MinValue)
-            .ThenByDescending(p => p.ProjectNumber, StringComparer.Ordinal);
+        var ordered = OrderResults(results, query);
 
-        // Optional responsiveness cap: after ordering, keep only the first N (highest numbers). A
-        // null/non-positive MaxResults means "no cap". This prevents flooding a non-virtualized selector
-        // with a very large project table; it changes no data, only how many display rows are returned.
+        // Display cap only — applied after filter + order on the full search source.
         if (query.MaxResults is int max && max > 0)
         {
             return ordered.Take(max).ToList();
@@ -103,6 +97,73 @@ public static class ProjectSummaryQuery
 
         return ordered.ToList();
     }
+
+    /// <summary>
+    /// Orders filtered projects for display. Browse mode: number descending. Search mode: relevance
+    /// rank first (exact number match on a token wins over substring matches) then number descending,
+    /// so <c>Take(MaxResults)</c> does not drop old projects such as number <c>1</c> when searching
+    /// <c>"1"</c>.
+    /// </summary>
+    public static IReadOnlyList<ProjectSummaryDto> OrderResults(
+        IEnumerable<ProjectSummaryDto> source,
+        ProjectSearchQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(query);
+
+        if (string.IsNullOrWhiteSpace(query.SearchText))
+        {
+            return source
+                .OrderByDescending(NumberSortKey)
+                .ThenByDescending(p => p.ProjectNumber, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        var text = query.SearchText.Trim();
+        return source
+            .OrderByDescending(p => GetSearchRank(p, text))
+            .ThenByDescending(NumberSortKey)
+            .ThenByDescending(p => p.ProjectNumber, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Relevance score for search ordering. Higher = shown first. Exact <see cref="ProjectSummaryDto.ProjectNumber"/>
+    /// match on a token ranks above prefix/substring matches.
+    /// </summary>
+    public static int GetSearchRank(ProjectSummaryDto project, string searchText)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(searchText);
+
+        var tokens = SplitSearchTokens(searchText.Trim());
+        if (tokens.Length == 0)
+        {
+            return 0;
+        }
+
+        var rank = 0;
+        foreach (var token in tokens)
+        {
+            if (string.Equals(project.ProjectNumber, token, StringComparison.OrdinalIgnoreCase))
+            {
+                rank += 10_000;
+            }
+            else if (project.ProjectNumber.StartsWith(token, StringComparison.OrdinalIgnoreCase))
+            {
+                rank += 1_000;
+            }
+            else if (TokenMatchesAnyField(project, token))
+            {
+                rank += 100;
+            }
+        }
+
+        return rank;
+    }
+
+    private static long NumberSortKey(ProjectSummaryDto project)
+        => long.TryParse(project.ProjectNumber, out var n) ? n : long.MinValue;
 
     /// <summary>
     /// Token separators for free-text search (parity with legacy

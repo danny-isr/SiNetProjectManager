@@ -396,12 +396,39 @@ include Place/Company, `OrderByDescending(Number)`, `AsNoTracking()`).
 | `AssignedUserName` | `Project.Worker` | Display-only string. |
 | `IsActive` | `Project.EndOfProject != true` | Used by the active / IncludeClosed filter. |
 
-Parity filtering/ordering is applied **after** projection by the shared, DB-free
+Parity filtering/ordering is applied by the shared, DB-free
 `SiNet.Application.Projects.ProjectSummaryQuery`, so the fake and real sources behave identically.
+
+### Search source vs `MaxResults` (display cap only)
+
+| Mode | Search source | Display |
+| --- | --- | --- |
+| **Browse** (empty `SearchText`) | All active/filtered projects in SQL | Up to `MaxResults` newest (number descending). SQL should `Take(MaxResults)` without loading the full table into memory. |
+| **Search** (`SearchText` set) | **All** projects matching tokens/filters in SQL | Up to `MaxResults` rows after **relevance rank** + number sort. Old projects (e.g. number `1`) must remain findable even when 200+ newer rows also match. |
+
+**Anti-pattern:** loading 200 rows once and treating them as the only searchable set.
+
+**Performance note (this slice):** browse mode caps in SQL; search mode filters in SQL then applies
+relevance ranking + `Take(MaxResults)` in memory on the matching subset via `ProjectSummaryQuery`.
+Loading the entire catalog into WPF is forbidden.
+
+### ProjectSelector UX (TextBox + Popup)
+
+Implemented in `ProjectSelectorView` / `ProjectSelectorViewModel`:
+
+- **TextBox + Popup/ListBox** — not ComboBox.
+- **UserTyping** vs **SelectedProjectDisplay** editor modes (see `docs/PROJECTS.md` §5).
+- **Toggle button** (▼) opens/closes results; empty search shows browse list.
+- Popup closes on: selection, focus leave, click outside, Escape.
+- **`ShowExpandedResults`**: raises display cap from 200 to 1000 (`ExpandedMaxResults`); search source
+  unchanged.
+- **`EffectiveMaxResults`** drives `ProjectSearchQuery.MaxResults` only — never limits SQL search scope.
 
 ### Filters supported now
 
-- Free-text search across number / name / place / company (case-insensitive, trimmed).
+- Free-text search across number / name / place / company (case-insensitive, multi-token AND).
+- **Relevance ranking** when searching: exact project-number token match ranks above substring
+  matches so `MaxResults` does not hide old projects (e.g. number `1` when searching `"1"`).
 - `Status` filter (exact match on the surfaced status title).
 - `JobType` filter (exact match on the surfaced job-type title — display value; see deferred note).
 - `IncludeClosed` / active filter (`IsActive` from `EndOfProject`).

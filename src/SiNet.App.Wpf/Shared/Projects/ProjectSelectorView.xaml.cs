@@ -7,16 +7,15 @@ using SiNet.Application.Projects;
 namespace SiNet.App.Wpf.Shared.Projects;
 
 /// <summary>
-/// Shared Project Selector control. Code-behind handles popup focus/list selection only — no business logic.
+/// Shared Project Selector control. Code-behind handles popup open/close and list selection only.
 /// </summary>
 public partial class ProjectSelectorView : UserControl
 {
-    private bool _isSelectingFromList;
-
     public ProjectSelectorView()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        LostKeyboardFocus += OnLostKeyboardFocus;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -31,33 +30,7 @@ public partial class ProjectSelectorView : UserControl
     {
         if (DataContext is ProjectSelectorViewModel viewModel)
         {
-            viewModel.IsResultsOpen = true;
-        }
-    }
-
-    private void SearchBox_OnPreviewLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (_isSelectingFromList)
-        {
-            return;
-        }
-
-        if (e.NewFocus is DependencyObject newFocus
-            && (IsWithinResultsPopup(newFocus) || ResultsPopup.IsMouseOver))
-        {
-            return;
-        }
-
-        if (DataContext is ProjectSelectorViewModel viewModel)
-        {
-            // Defer closing so a mouse click on the popup can complete before focus leaves the search box.
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (!_isSelectingFromList && !ResultsPopup.IsMouseOver && !ResultsList.IsMouseOver)
-                {
-                    viewModel.IsResultsOpen = false;
-                }
-            }), System.Windows.Threading.DispatcherPriority.Input);
+            viewModel.OpenResults();
         }
     }
 
@@ -71,7 +44,7 @@ public partial class ProjectSelectorView : UserControl
         switch (e.Key)
         {
             case Key.Escape:
-                viewModel.IsResultsOpen = false;
+                viewModel.CloseResults();
                 e.Handled = true;
                 break;
             case Key.Down when viewModel.Projects.Count > 0:
@@ -87,11 +60,51 @@ public partial class ProjectSelectorView : UserControl
         }
     }
 
-    private bool IsWithinResultsPopup(DependencyObject element)
+    private void OnLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (DataContext is not ProjectSelectorViewModel viewModel || !viewModel.IsResultsOpen)
+        {
+            return;
+        }
+
+        if (e.NewFocus is DependencyObject newFocus && IsInsideSelectorOrPopup(newFocus))
+        {
+            return;
+        }
+
+        viewModel.CloseResults();
+    }
+
+    private void Selector_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not ProjectSelectorViewModel viewModel || !viewModel.IsResultsOpen)
+        {
+            return;
+        }
+
+        if (e.OriginalSource is DependencyObject source && IsInsideSelectorOrPopup(source))
+        {
+            return;
+        }
+
+        viewModel.CloseResults();
+    }
+
+    private bool IsInsideSelectorOrPopup(DependencyObject element)
+    {
+        if (IsDescendantOf(element, this))
+        {
+            return true;
+        }
+
+        return ResultsPopup.Child is DependencyObject popupRoot && IsDescendantOf(element, popupRoot);
+    }
+
+    private static bool IsDescendantOf(DependencyObject? element, DependencyObject ancestor)
     {
         while (element is not null)
         {
-            if (ReferenceEquals(element, ResultsList) || ReferenceEquals(element, ResultsPopup.Child))
+            if (ReferenceEquals(element, ancestor))
             {
                 return true;
             }
@@ -102,27 +115,37 @@ public partial class ProjectSelectorView : UserControl
         return false;
     }
 
-    private void ResultsList_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        _isSelectingFromList = true;
-    }
-
-    private void ResultsList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ResultsList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is not ProjectSelectorViewModel viewModel)
         {
             return;
         }
 
-        if (e.AddedItems.Count == 0 || e.AddedItems[0] is not ProjectSummaryDto project)
+        var item = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
+        if (item?.DataContext is not ProjectSummaryDto project)
         {
-            _isSelectingFromList = false;
             return;
         }
 
         viewModel.SelectProjectCommand.Execute(project);
         ResultsList.SelectedItem = null;
-        _isSelectingFromList = false;
         SearchBox.Focus();
+        e.Handled = true;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 }

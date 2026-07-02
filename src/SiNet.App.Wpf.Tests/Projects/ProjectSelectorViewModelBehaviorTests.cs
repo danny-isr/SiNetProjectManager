@@ -206,6 +206,68 @@ public sealed class ProjectSelectorViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task Browse_status_message_explains_display_cap()
+    {
+        var many = Enumerable.Range(1, ProjectSelectorViewModel.DefaultMaxResults + 50)
+            .Select(i => Project(i, (1000 + i).ToString()))
+            .ToArray();
+
+        var sut = new ProjectSelectorViewModel(
+            new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(many, q))),
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.LoadAsync();
+
+        Assert.Contains("200", sut.StatusMessage);
+        Assert.Contains("\u05DC\u05D7\u05E4\u05E9", sut.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Search_at_cap_shows_narrowing_hint()
+    {
+        var many = Enumerable.Range(1, 2500)
+            .Select(i => Project(i, i.ToString()))
+            .ToArray();
+
+        var sut = new ProjectSelectorViewModel(
+            new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(many, q))),
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        sut.SearchText = "1";
+        await sut.LoadAsync();
+
+        Assert.Equal(ProjectSelectorViewModel.DefaultMaxResults, sut.Projects.Count);
+        Assert.Contains("\u05E6\u05DE\u05E6\u05DD", sut.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Search_finds_old_project_outside_browse_cap()
+    {
+        var many = Enumerable.Range(1, 2500)
+            .Select(i => Project(i, i.ToString(), place: i == 1 ? "\u05E8\u05E2\u05E0\u05E0\u05D4" : null))
+            .ToArray();
+
+        var sut = new ProjectSelectorViewModel(
+            new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(many, q))),
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+        Assert.DoesNotContain(sut.Projects, p => p.ProjectNumber == "1");
+
+        sut.SearchText = "1";
+        await sut.LoadAsync();
+
+        Assert.Contains(sut.Projects, p => p.ProjectNumber == "1");
+        Assert.Equal("1", sut.Projects[0].ProjectNumber);
+    }
+
+    [Fact]
     public async Task Stale_async_results_do_not_overwrite_newer_search()
     {
         var gates = new Dictionary<string, TaskCompletionSource<IReadOnlyList<ProjectSummaryDto>>>();
