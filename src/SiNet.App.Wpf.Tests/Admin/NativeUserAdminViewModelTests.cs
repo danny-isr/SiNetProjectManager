@@ -1,6 +1,9 @@
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.Application.Identity;
+using SiNet.Infrastructure.Sql.Data;
+using SiNet.Infrastructure.Sql.Services.Identity;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Admin;
@@ -80,8 +83,8 @@ public sealed class SqlUserManagementServiceAuthorizationTests
         auth.Setup(a => a.CanCurrentUserAccessFeatureAsync(AppFeatureCodes.UsersManage, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var dbFactory = new Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
-        var sut = new SiNet.Infrastructure.Sql.Services.Identity.SqlUserManagementService(dbFactory.Object, auth.Object);
+        var dbFactory = new Mock<IDbContextFactory<SiNetDbContext>>();
+        var sut = new SqlUserManagementService(dbFactory.Object, auth.Object);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             sut.AddUserAsync(new CreateUserCommand("user1", "User One"), CancellationToken.None));

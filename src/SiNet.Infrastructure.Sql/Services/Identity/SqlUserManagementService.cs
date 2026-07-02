@@ -1,21 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Identity;
-using SiNetSQL.Data;
-using SiNetSQL.Models;
+using SiNet.Infrastructure.Sql.Data;
+using SiNet.Infrastructure.Sql.Entities;
 
 namespace SiNet.Infrastructure.Sql.Services.Identity;
 
 /// <summary>
 /// Native New System implementation of <see cref="IUserManagementService"/> — EF/SQL only, no WPF,
-/// no legacy <c>UserService</c> adapter (see <c>docs/NEW_SYSTEM_BOUNDARY.md</c>).
+/// no SiNetSQL project references (see <c>docs/NEW_SYSTEM_BOUNDARY.md</c>).
 /// </summary>
 public sealed class SqlUserManagementService : IUserManagementService
 {
-    private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
+    private readonly IDbContextFactory<SiNetDbContext> _dbFactory;
     private readonly IAuthorizationQueryService _authorization;
 
     public SqlUserManagementService(
-        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        IDbContextFactory<SiNetDbContext> dbFactory,
         IAuthorizationQueryService authorization)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -29,7 +29,7 @@ public sealed class SqlUserManagementService : IUserManagementService
 
         await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var users = await context.Siusers
+        var users = await context.Users
             .AsNoTracking()
             .OrderBy(u => u.Name)
             .Select(u => new UserSummaryDto(
@@ -39,8 +39,8 @@ public sealed class SqlUserManagementService : IUserManagementService
                 LoginName: u.LoginName ?? string.Empty,
                 IsDomainGroup: u.IsDomainGroup,
                 IsActive: u.IsActive,
-                AccUserType: MapAccUserType(u.AccUserType),
-                Role: MapRole(u.Role),
+                AccUserType: (AppAccUserType)u.AccUserType,
+                Role: (AppRole)u.Role,
                 OpenTaskCount: context.ProjectAssignments.Count(pa =>
                     pa.AssignedToId == u.Id
                     && pa.StatusId != null
@@ -69,13 +69,13 @@ public sealed class SqlUserManagementService : IUserManagementService
             throw new InvalidOperationException($"Login name '{loginName}' already exists.");
         }
 
-        var user = new Siuser
+        var user = new SiUserEntity
         {
             LoginName = loginName,
             Name = string.IsNullOrWhiteSpace(command.DisplayName) ? null : command.DisplayName.Trim(),
             Email = string.IsNullOrWhiteSpace(command.Email) ? null : command.Email.Trim(),
-            Role = MapRole(command.Role),
-            AccUserType = MapAccUserType(command.AccUserType),
+            Role = (int)command.Role,
+            AccUserType = (int)command.AccUserType,
             IsActive = command.IsActive,
             IsDomainGroup = command.IsDomainGroup,
             MasterPlanEmployeeId = command.MasterPlanEmployeeId,
@@ -83,7 +83,7 @@ public sealed class SqlUserManagementService : IUserManagementService
         };
 
         await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        context.Siusers.Add(user);
+        context.Users.Add(user);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -106,7 +106,7 @@ public sealed class SqlUserManagementService : IUserManagementService
 
         await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var normalized = loginName.Trim().ToLowerInvariant();
-        return await context.Siusers
+        return await context.Users
             .AsNoTracking()
             .AnyAsync(
                 u => u.LoginName != null && u.LoginName.ToLower() == normalized,
@@ -119,7 +119,7 @@ public sealed class SqlUserManagementService : IUserManagementService
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var logins = await context.Siusers
+        var logins = await context.Users
             .AsNoTracking()
             .Where(u => u.LoginName != null)
             .Select(u => u.LoginName!.ToLower())
@@ -141,12 +141,4 @@ public sealed class SqlUserManagementService : IUserManagementService
                 "Users.Manage (Administrator) is required for this operation.");
         }
     }
-
-    private static AppRole MapRole(AppUserRole role) => (AppRole)(int)role;
-
-    private static AppUserRole MapRole(AppRole role) => (AppUserRole)(int)role;
-
-    private static AppAccUserType MapAccUserType(AccUserType accUserType) => (AppAccUserType)(int)accUserType;
-
-    private static AccUserType MapAccUserType(AppAccUserType accUserType) => (AccUserType)(int)accUserType;
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Infrastructure.Sql.Data;
 using Microsoft.Extensions.DependencyInjection;
 using SiNetSQL.Data;
 
@@ -67,6 +68,17 @@ public static class SqlServiceCollectionExtensions
             // Opt-in EF diagnostics. The host enables this only under #if DEBUG so the delegated
             // registration matches the previous inline host behavior exactly; in Release the flag
             // stays false and these calls are never made.
+            if (options.EnableEfDebugDiagnostics)
+            {
+                builder.EnableSensitiveDataLogging();
+                builder.EnableDetailedErrors();
+            }
+        });
+
+        services.AddDbContextFactory<SiNetDbContext>(builder =>
+        {
+            builder.UseSqlServer(connectionString, sql => sql.UseCompatibilityLevel(120));
+
             if (options.EnableEfDebugDiagnostics)
             {
                 builder.EnableSensitiveDataLogging();

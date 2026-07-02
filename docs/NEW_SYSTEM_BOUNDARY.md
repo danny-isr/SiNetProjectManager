@@ -39,7 +39,9 @@ SiNet.App.Wpf              → views, viewmodels, shell, navigation
 | --- | --- |
 | User list | `UserListWindow` + `UserManagementView` + `UserManagementViewModel` |
 | Add user | `AddUserDialogWindow` + `AddUserView` + `AddUserViewModel` |
-| Service | `SqlUserManagementService` → `IUserManagementService` |
+| Service | `SqlUserManagementService` → `IUserManagementService` via **`SiNetDbContext`** + `SiNet.Infrastructure.Sql.Entities` |
+
+Native user SQL must **not** use `SiNetSQL.Data`, `SiNetSQL.Models`, or `SiNetSQLDbContext`. Legacy monolith EF remains in the same assembly for other slices until migrated.
 
 Menu items **ניהול משתמשים** / **הוספת משתמש** in `NewShellFactory` are gated by `AppFeatureCodes.UsersManage`.
 
