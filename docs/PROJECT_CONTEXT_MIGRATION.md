@@ -117,6 +117,16 @@ Email-only additions on the same row (**not** part of project selection, must st
 **Design consequence:** the Job Type / Status / User filters are project-scoping filters and belong in
 the shared selector. The Gmail search + email triage controls stay in the Email surface.
 
+The shared `ProjectSelectorView` uses **field-specific default labels** (UI only — not DB values):
+
+| Combo | Default display | Meaning |
+| --- | --- | --- |
+| Job Type | **כל הסוגים** | No job-type filter (`SelectedJobTypeId = null`) |
+| Status | **כל הסטטוסים** | No status filter (`SelectedStatusId = null`) |
+
+These sentinel options use `Id = null`; the display text is never sent as a filter value to the query
+layer or database.
+
 ---
 
 ## 4. Where the current project is stored today

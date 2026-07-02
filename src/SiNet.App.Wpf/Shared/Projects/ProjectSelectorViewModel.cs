@@ -19,9 +19,15 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     public static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
 
     private const string LoadingText = "\u05D8\u05D5\u05E2\u05DF \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8\u05D9\u05DD...";
-    private const string AllFilterLabel = "\u05D4\u05DB\u05DC";
 
-    private static readonly ProjectFilterOptionDto AllFilterOption = new(null, AllFilterLabel);
+    /// <summary>UI-only sentinel label for the job-type filter (no DB filter when selected).</summary>
+    public const string AllJobTypesLabel = "\u05DB\u05DC \u05D4\u05E1\u05D5\u05D2\u05D9\u05DD";
+
+    /// <summary>UI-only sentinel label for the status filter (no DB filter when selected).</summary>
+    public const string AllStatusesLabel = "\u05DB\u05DC \u05D4\u05E1\u05D8\u05D8\u05D5\u05E1\u05D9\u05DD";
+
+    private static readonly ProjectFilterOptionDto AllJobTypesFilterOption = new(null, AllJobTypesLabel);
+    private static readonly ProjectFilterOptionDto AllStatusesFilterOption = new(null, AllStatusesLabel);
 
     private readonly IProjectQueryService _projectQuery;
     private readonly IProjectFilterOptionsService _filterOptionsService;
@@ -78,8 +84,8 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         _debounce = debounce < TimeSpan.Zero ? TimeSpan.Zero : debounce;
 
         Projects = new ObservableCollection<ProjectSummaryDto>();
-        StatusOptions = new ObservableCollection<ProjectFilterOptionDto> { AllFilterOption };
-        JobTypeOptions = new ObservableCollection<ProjectFilterOptionDto> { AllFilterOption };
+        StatusOptions = new ObservableCollection<ProjectFilterOptionDto> { AllStatusesFilterOption };
+        JobTypeOptions = new ObservableCollection<ProjectFilterOptionDto> { AllJobTypesFilterOption };
 
         RefreshCommand = new AsyncRelayCommand(() => InitializeAsync());
         ToggleResultsCommand = new RelayCommand(_ => ToggleResults());
@@ -436,14 +442,14 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         int? previousJobTypeId)
     {
         StatusOptions.Clear();
-        StatusOptions.Add(AllFilterOption);
+        StatusOptions.Add(AllStatusesFilterOption);
         foreach (var status in options.Statuses)
         {
             StatusOptions.Add(status);
         }
 
         JobTypeOptions.Clear();
-        JobTypeOptions.Add(AllFilterOption);
+        JobTypeOptions.Add(AllJobTypesFilterOption);
         foreach (var jobType in options.JobTypes)
         {
             JobTypeOptions.Add(jobType);

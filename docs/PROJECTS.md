@@ -307,8 +307,16 @@ Email/ProjectWork filter strip):
 
 Filter option lists (`Status`, `Job Type`) are loaded through **`IProjectFilterOptionsService`**
 (read-only, **distinct values present on selectable projects**). Selection is stored by stable id
-(`SelectedStatusId`, `SelectedJobTypeId`); `null` means **הכל** (no filter). Combo boxes show
-**הכל** or the selected value — no separate field labels.
+(`SelectedStatusId`, `SelectedJobTypeId`); `null` means **no filter** on that field.
+
+Each combo box prepends a **field-specific default option** (UI labels only — not sent to the DB):
+
+| Combo | Default display | Meaning |
+| --- | --- | --- |
+| Job Type | **כל הסוגים** | No job-type filter |
+| Status | **כל הסטטוסים** | No status filter |
+
+Combo boxes show the default label or the selected value — no separate field labels beside the control.
 
 ### SQL vs in-memory filtering (implementation)
 

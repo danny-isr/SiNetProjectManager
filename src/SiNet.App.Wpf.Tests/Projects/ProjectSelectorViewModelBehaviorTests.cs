@@ -179,8 +179,72 @@ public sealed class ProjectSelectorViewModelBehaviorTests
         await sut.InitializeAsync();
 
         Assert.Equal(ProjectSelectorViewModel.DefaultMaxResults, sut.Projects.Count);
-        Assert.Equal(3, sut.StatusOptions.Count); // "all" + 2 statuses from filter service
-        Assert.Equal(3, sut.JobTypeOptions.Count); // "all" + 2 job types from filter service
+        Assert.Equal(3, sut.StatusOptions.Count); // default sentinel + 2 statuses from filter service
+        Assert.Equal(3, sut.JobTypeOptions.Count); // default sentinel + 2 job types from filter service
+    }
+
+    [Fact]
+    public async Task Default_job_type_option_displays_all_types_label()
+    {
+        var sut = new ProjectSelectorViewModel(
+            new StubProjectQueryService(_ => Task.FromResult<IReadOnlyList<ProjectSummaryDto>>(Array.Empty<ProjectSummaryDto>())),
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+
+        Assert.Null(sut.SelectedJobTypeId);
+        Assert.Equal(ProjectSelectorViewModel.AllJobTypesLabel, sut.JobTypeOptions[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task Default_status_option_displays_all_statuses_label()
+    {
+        var sut = new ProjectSelectorViewModel(
+            new StubProjectQueryService(_ => Task.FromResult<IReadOnlyList<ProjectSummaryDto>>(Array.Empty<ProjectSummaryDto>())),
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+
+        Assert.Null(sut.SelectedStatusId);
+        Assert.Equal(ProjectSelectorViewModel.AllStatusesLabel, sut.StatusOptions[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task Reselecting_default_option_clears_only_that_field_filter()
+    {
+        var projects = new[]
+        {
+            Project(1, "1042", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [10]),
+            Project(2, "1041", status: "\u05E1\u05D2\u05D5\u05E8", statusId: 2, jobTypeIds: [20], isActive: false),
+            Project(3, "1040", status: "\u05E4\u05E2\u05D9\u05DC", statusId: 1, jobTypeIds: [20]),
+        };
+
+        var queryService = new StubProjectQueryService(q => Task.FromResult(ProjectSummaryQuery.Apply(projects, q)));
+        var sut = new ProjectSelectorViewModel(
+            queryService,
+            new StubFilterOptionsService(FullFilterOptions),
+            new InMemoryCurrentProjectContext(),
+            TimeSpan.Zero);
+
+        await sut.InitializeAsync();
+        sut.SelectedStatusId = 1;
+        sut.SelectedJobTypeId = 20;
+        sut.IncludeClosed = true;
+        await sut.LoadAsync();
+        Assert.Single(sut.Projects);
+
+        sut.SelectedJobTypeId = null;
+        await sut.LoadAsync();
+
+        Assert.Equal(2, sut.Projects.Count);
+        Assert.Equal(1, queryService.ReceivedQueries[^1].StatusId);
+        Assert.Null(queryService.ReceivedQueries[^1].JobTypeId);
+        Assert.Null(queryService.ReceivedQueries[^1].JobType);
+        Assert.Null(queryService.ReceivedQueries[^1].Status);
     }
 
     [Fact]
@@ -405,5 +469,7 @@ public sealed class ProjectSelectorViewModelBehaviorTests
         Assert.Equal(2, sut.Projects.Count);
         Assert.Null(queryService.ReceivedQueries[^1].StatusId);
         Assert.Null(queryService.ReceivedQueries[^1].JobTypeId);
+        Assert.Null(queryService.ReceivedQueries[^1].JobType);
+        Assert.Null(queryService.ReceivedQueries[^1].Status);
     }
 }
