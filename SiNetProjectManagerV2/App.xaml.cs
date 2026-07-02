@@ -291,6 +291,9 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNet.Application.Identity.ICurrentUserContext,
                 Services.CurrentUserContextAdapter>();
 
+            services.AddSingleton<SiNet.Application.Identity.ICurrentUserProfileService,
+                Services.LegacyCurrentUserProfileService>();
+
             // Completion-metadata port: binds the new clean ITaskCompletionMetadataResolver to the
             // legacy declarative ReviewCompletionEventBehavior mapping so feature screens can resolve
             // the completion event code for a BRANCHING task (where the chosen result selects between
@@ -1034,14 +1037,22 @@ namespace SiNetProjectManagerV2
         #region Startup Pipeline Steps
 
         /// <summary>
-        /// New System startup (see <c>docs/APP_SHELL.md</c> §3): builds DI then opens
-        /// <see cref="SiNet.App.Wpf.Shell.NewShellWindow"/> without legacy schema/auth gates or
-        /// <see cref="MainWindow"/>. No silent fallback to Legacy on failure.
+        /// New System startup (see <c>docs/APP_SHELL.md</c> §3): credential vault → DB → DI → optional
+        /// debug role selector → <see cref="AuthorizeCurrentUser"/> → <see cref="NewShellWindow"/>.
+        /// No legacy schema gate or <see cref="MainWindow"/>. No silent fallback to Legacy on failure.
         /// </summary>
         private void RunNewSystemStartup(StartupEventArgs e)
         {
             Log.Information("[STARTUP][NewSystem] Setting up credential vault (connection string)...");
             SetupCredentialVault();
+
+            Log.Information("[STARTUP][NewSystem] Ensuring database connection...");
+            if (!EnsureDatabaseConnection())
+            {
+                Log.Warning("[STARTUP][NewSystem] Database connection failed. Shutting down.");
+                Shutdown();
+                return;
+            }
 
             Log.Information("[STARTUP][NewSystem] Configuring logging...");
             ConfigureLoggingAndSettings();
@@ -1050,6 +1061,22 @@ namespace SiNetProjectManagerV2
             ServiceProvider = ConfigureServices();
             WireLegacyLocators();
             SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+
+#if DEBUG
+            Log.Information("[STARTUP][NewSystem] Debug Authorization Role Selector (when enabled)...");
+            RunDebugAuthorizationRoleSelector();
+#endif
+
+            Log.Information("[STARTUP][NewSystem] Authorizing current user...");
+            if (!AuthorizeCurrentUser())
+            {
+                Log.Warning("[STARTUP][NewSystem] User authorization failed. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            Log.Information("[STARTUP][NewSystem] Initializing status colors...");
+            InitializeStatusColors();
 
             base.OnStartup(e);
             LaunchNewSystemShell();
@@ -1569,25 +1596,28 @@ namespace SiNetProjectManagerV2
 
 #if DEBUG
         /// <summary>
-        /// Shows the debug authorization role selector if enabled in AppSettings.
-        /// This modifies the current user's role in the DB strictly for testing.
+        /// DEBUG-only: shows <see cref="Dialogs.DebugTools.DebugAuthorizationRoleSelectorWindow"/> when
+        /// <c>EnableAuthorizationTestMode</c> is true in app settings. Temporarily mutates the current
+        /// user's <c>SIUser</c> row for manual role testing — not compiled in Release builds.
         /// </summary>
         private static void RunDebugAuthorizationRoleSelector()
         {
-            if (AppSettings?.EnableAuthorizationTestMode == true)
+            if (AppSettings?.EnableAuthorizationTestMode != true)
             {
-                try
-                {
-                    var dbContextFactory = ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
-                    using var context = dbContextFactory.CreateDbContext();
+                return;
+            }
 
-                    var selectorWindow = new SiNetProjectManagerV2.Dialogs.DebugTools.DebugAuthorizationRoleSelectorWindow(context);
-                    selectorWindow.ShowDialog();
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Failed to run Debug Authorization Role Selector.");
-                }
+            try
+            {
+                var dbContextFactory = ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                using var context = dbContextFactory.CreateDbContext();
+
+                var selectorWindow = new SiNetProjectManagerV2.Dialogs.DebugTools.DebugAuthorizationRoleSelectorWindow(context);
+                selectorWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to run Debug Authorization Role Selector.");
             }
         }
 #endif

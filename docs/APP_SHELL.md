@@ -89,10 +89,10 @@ The mode prompt is shown **before any legacy gate** so New system mode can skip 
 dialogs entirely. The choice is captured as a `StartupMode` value and routed by a small, unit-testable
 helper (`StartupModeRouter`) so the decision can be tested without WPF.
 
-> Current-user selection: in **Legacy mode**, normal startup authorizes the current **Windows identity**
-> (there is no interactive user-picker in Release; the DEBUG `DebugAuthorizationRoleSelectorWindow` is
-> the developer picker). **New system mode** skips those legacy gates in this slice; the shell shows
-> whatever `ICurrentUserContext` the host registers when DI is composed.
+> Current-user selection: in **both modes**, startup authorizes the current **Windows identity**
+> against `SIUser` (`AuthorizeCurrentUser`) after optional DEBUG role-selector when enabled.
+> **New system mode** skips legacy schema gates but **not** user authorization (see
+> [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md) P1).
 
 ---
 
@@ -102,7 +102,7 @@ helper (`StartupModeRouter`) so the decision can be tested without WPF.
 - The shared **Project Context** slice: `ICurrentProjectContext` (singleton), compact embeddable
   `ProjectSelectorView` + `ProjectSelectorViewModel` (host-configurable DPs — see `PROJECTS.md` §5),
   real read-only `IProjectQueryService`.
-- The **current user** display via `ICurrentUserContext` (host adapter already registered).
+- The **current user** display via `ICurrentUserProfileService` (real name after P2 auth).
 - Migrated Work Surfaces opened **on demand** from the shell menu:
   - **Email visual clone** via `IEmailWindowFactory.Create()`.
   - **Inspection shell** via DI-resolved `InspectionShellView` / `InspectionShellViewModel`.

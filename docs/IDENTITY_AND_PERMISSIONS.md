@@ -58,7 +58,7 @@ Goals of this document:
 | Path | Authorization |
 | --- | --- |
 | **Legacy** (`RunLegacyStartup`) | Calls `AuthorizeCurrentUser()` → `CurrentUserContext.Initialize(db)` → blocks inactive / missing / `Unauthorized` users. |
-| **New System** (`RunNewSystemStartup`) | **Does not** call `AuthorizeCurrentUser()` today (see `docs/APP_SHELL.md` §3). `ICurrentUserContext.UserId` is typically **null** unless/until the host initializes legacy context. |
+| **New System** (`RunNewSystemStartup`) | Calls `AuthorizeCurrentUser()` after optional DEBUG role selector (same rules as Legacy). `ICurrentUserContext.UserId` populated when auth succeeds. |
 
 ### 2.4 Legacy documentation vs code (explicit discrepancies)
 
@@ -326,7 +326,7 @@ public interface ICurrentUserContext
 
 **Contract:** runtime-only; nullable; never authorization authority.
 
-### 7.2 Proposed — profile read (next likely slice after auth wiring)
+### 7.2 Implemented — profile read (P2)
 
 ```csharp
 public sealed record CurrentUserProfileDto(
@@ -344,10 +344,7 @@ public interface ICurrentUserProfileService
 }
 ```
 
-**Notes:**
-
-- `AppRole` should mirror `AppUserRole` values without forcing WPF to reference EF models.
-- Returns null when unauthenticated — same as `UserId == null`.
+**Host adapter:** `SiNetProjectManagerV2/Services/LegacyCurrentUserProfileService.cs` reads the authenticated legacy `CurrentUserContext` singleton (no WPF → EF). Shell display uses `CurrentUserProfileDisplay.Format`.
 
 ### 7.3 Proposed — role / feature authorization queries
 
@@ -443,8 +440,9 @@ Phased, documentation-driven slices:
 | Phase | Deliverable | DB/UI impact |
 | --- | --- | --- |
 | **P0 — this slice** | `docs/IDENTITY_AND_PERMISSIONS.md` (this file) | None |
-| **P1 — auth parity decision** | Resolve New System startup auth (§10 Q4); optionally call `AuthorizeCurrentUser` before shell | No schema change |
-| **P2 — profile display** | `ICurrentUserProfileService` + shell shows real name | Read-only |
+| **P1 — auth parity decision** | New System calls `AuthorizeCurrentUser` before shell | ✅ Implemented |
+| **P1.5 — DEBUG role selector** | Shared `DebugAuthorizationRoleSelectorWindow` on New + Legacy paths | ✅ Implemented |
+| **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + shell menu `IsAvailable` | Read-only |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | Read-only |
 | **P5 — user management port** | `IUserManagementService`; migrate User Management UI | Writes via existing `UserService` rules |
@@ -492,7 +490,7 @@ Do **not** guess — resolve with Product / legacy owner before implementation.
 | **Q1** | Does **Management** inherit **all** Employee capabilities in every screen? | Enum hierarchy says yes (`>= Employee`). Some UI gates use Management-only or Admin-only explicitly; no counter-example found for inherited Employee features. |
 | **Q2** | Does **Administrator** always bypass Action Permissions? | **Yes** in `ActionPermissionService` + tests. |
 | **Q3** | Are Action Permissions **user-only**, or will Role/Group grants be added? | **User-only today** (`ActionPermission.UserId`). Groups/project grants: **future only**. |
-| **Q4** | Should **New System** block startup with legacy `AuthorizeCurrentUser` **now**? | **Not today** — New path skips auth; shell shows unknown user. Needs explicit decision. |
+| **Q4** | Should **New System** block startup with legacy `AuthorizeCurrentUser` **now**? | **Yes (P1 implemented):** New System calls `AuthorizeCurrentUser()` after DB connection + DI; shutdown on failure. |
 | **Q5** | Should unauthorized shell menu items be **hidden** or **disabled**? | Legacy MainWindow mostly shows message on click. Target leans **hide** for New Shell once port exists. |
 | **Q6** | **ProjectSelector User filter** — `SIUser.Id`, `ProjectAssignments.AssignedToId`, or `Project.Worker` name? | Legacy Email filter uses `ProjectAssignments.AssignedToId`. DTO today carries `AssignedUserName` (worker string) only; filter **deferred** (`PROJECTS.md` §6). |
 | **Q7** | **Project-level permissions** — exist or future? | Legacy AuthorizationVerification doc: **postponed**. No app-wide project ACL in scanned code. **Future only.** |

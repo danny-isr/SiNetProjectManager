@@ -33,11 +33,11 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// <inheritdoc />
     public Window CreateShell()
     {
-        var currentUser = _services.GetService<ICurrentUserContext>();
+        var currentUserDisplay = ResolveCurrentUserDisplay();
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
         var menu = BuildMigratedOnlyMenu();
-        var viewModel = new NewShellViewModel(menu, DescribeUser(currentUser));
+        var viewModel = new NewShellViewModel(menu, currentUserDisplay);
 
         var selectorView = TryCreateProjectSelector();
 
@@ -123,11 +123,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         window.Show();
     }
 
-    private static string? DescribeUser(ICurrentUserContext? currentUser)
+    private string? ResolveCurrentUserDisplay()
     {
-        // The clean port only carries an id; show it when present so the shell reflects who is signed
-        // in without inventing a name. The host may bind a richer display later.
-        var userId = currentUser?.UserId;
-        return userId.HasValue ? $"משתמש #{userId.Value}" : null;
+        var profileService = _services.GetService<ICurrentUserProfileService>();
+        if (profileService is null)
+        {
+            return null;
+        }
+
+        // Shell construction is synchronous; profile is in-memory after startup auth.
+        var profile = profileService.GetCurrentUserAsync().GetAwaiter().GetResult();
+        return CurrentUserProfileDisplay.Format(profile);
     }
 }
