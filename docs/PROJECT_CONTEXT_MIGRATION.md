@@ -287,6 +287,8 @@ Design notes (carried over from the legacy `ActiveProjectContext` behavior, §4)
 - Treat `null` as "no current project" (title falls back to default) — never invent an id.
 - `CurrentProjectChanged` may be raised off the UI thread; WPF subscribers marshal to the Dispatcher.
 - Mirror the existing `ICurrentUserContext` house style (`src/SiNet.Application/Identity/`): minimal,
+  runtime-only, `null` when unbound, never an authorization authority (see
+  [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md) §3.1).
   runtime-only, `null` when unbound, never an authority for authorization.
 
 ### 7.3 Shared WPF component

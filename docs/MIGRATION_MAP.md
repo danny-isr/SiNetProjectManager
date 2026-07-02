@@ -188,6 +188,7 @@ Avoid:
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
 | Logging | scattered Serilog usage | `SiNet.Application` `IAppLogger` → `SiNet.Infrastructure.Logging` | ⬜ | |
+| Identity / Permissions | `CurrentUserContext`, `UserService`, `ActionPermissionService`, `MainWindow` menu gates | `SiNet.Application.Identity` ports → Infrastructure adapters | 🟡 | **Target spec:** [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md). `ICurrentUserContext` exists (attribution only). Authorization ports + New System auth parity **not implemented** this slice. |
 
 ---
 

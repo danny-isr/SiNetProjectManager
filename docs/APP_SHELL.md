@@ -186,6 +186,8 @@ No legacy menu is scanned or copied. Each item is added deliberately, one migrat
   action to a real user (see `ARCHITECTURE_TARGET.md`).
 - The shell is **not** an authorization authority. It does not grant/deny access; it only reflects who
   is signed in.
+- Full identity, roles, action permissions, and user-management target rules:
+  [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md).
 
 ---
 
