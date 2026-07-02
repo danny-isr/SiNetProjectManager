@@ -139,14 +139,40 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
     private void OpenNativeUserList()
     {
-        var window = _services.GetRequiredService<UserListWindow>();
-        ShowWindow(window);
+        try
+        {
+            var window = _services.GetRequiredService<UserListWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת ניהול משתמשים: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
     }
 
     private void OpenNativeAddUser()
     {
-        var window = _services.GetRequiredService<AddUserDialogWindow>();
-        ShowDialog(window);
+        try
+        {
+            var window = _services.GetRequiredService<AddUserDialogWindow>();
+            ShowDialog(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת הוספת משתמש: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
     }
 
     private void OpenNativeActionPermissions()

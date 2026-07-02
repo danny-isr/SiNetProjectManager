@@ -8,8 +8,8 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="0"/>
+            <RowDefinition Height="Auto" MaxHeight="220"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -30,16 +30,30 @@
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
                   CanUserAddRows="False"
-                  CanUserDeleteRows="False">
+                  CanUserDeleteRows="False"
+                  EnableRowVirtualization="True"
+                  VerticalAlignment="Stretch"
+                  ScrollViewer.CanContentScroll="True"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="שם" Binding="{Binding DisplayName}" Width="*"/>
-                <DataGridTextColumn Header="LoginName" Binding="{Binding LoginName}" Width="120"/>
-                <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="160"/>
-                <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="90"/>
-                <DataGridCheckBoxColumn Header="פעיל" Binding="{Binding IsActive}" Width="60"/>
-                <DataGridTextColumn Header="MasterPlan ID" Binding="{Binding MasterPlanEmployeeId}" Width="90"/>
-                <DataGridTextColumn Header="משימות פתוחות" Binding="{Binding OpenTaskCount}" Width="90"/>
-                <DataGridCheckBoxColumn Header="שונה" Binding="{Binding IsDirty}" Width="60" IsReadOnly="True"/>
+                <DataGridTextColumn Header="שם" Binding="{Binding DisplayName, Mode=OneWay}" Width="*"/>
+                <DataGridTextColumn Header="LoginName" Binding="{Binding LoginName, Mode=OneWay}" Width="120"/>
+                <DataGridTextColumn Header="Email" Binding="{Binding Email, Mode=OneWay}" Width="160"/>
+                <DataGridTextColumn Header="Role" Binding="{Binding Role, Mode=OneWay}" Width="90"/>
+                <DataGridCheckBoxColumn Header="פעיל" Binding="{Binding IsActive, Mode=OneWay}" Width="60" IsReadOnly="True"/>
+                <DataGridTextColumn Header="MasterPlan ID" Binding="{Binding MasterPlanEmployeeId, Mode=OneWay}" Width="90"/>
+                <DataGridTextColumn Header="משימות פתוחות" Binding="{Binding OpenTaskCount, Mode=OneWay}" Width="90"/>
+                <DataGridTemplateColumn Header="שונה" Width="60" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsDirty, Mode=OneWay}"
+                                      IsHitTestVisible="False"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 
