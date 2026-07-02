@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
 using SiNet.Infrastructure.Secrets;
 using SiNetProjectManagerV2.Services;
