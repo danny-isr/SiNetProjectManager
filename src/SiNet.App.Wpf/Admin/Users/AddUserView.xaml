@@ -7,79 +7,107 @@
         <local:AppAccUserTypeDisplayConverter x:Key="AccUserTypeDisplayConverter"/>
         <local:AppRoleDisplayConverter x:Key="RoleDisplayConverter"/>
     </UserControl.Resources>
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="120"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="LoginName:" VerticalAlignment="Center"/>
-        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding LoginName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
+            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                       Text="חיפוש משתמש ב-Active Directory"
+                       FontWeight="SemiBold" Margin="0,0,0,8"/>
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="שם תצוגה:" VerticalAlignment="Center"/>
-        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="חיפוש:" VerticalAlignment="Center"/>
+            <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,4">
+                <Button DockPanel.Dock="Left" Content="חפש"
+                        Command="{Binding SearchDirectoryCommand}"
+                        Padding="12,4" Margin="0,0,8,0"/>
+                <TextBox Text="{Binding DirectorySearchText, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center"/>
+            </DockPanel>
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="Email:" VerticalAlignment="Center"/>
-        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                       Text="{Binding DirectoryStatusMessage}"
+                       Foreground="Gray" Margin="0,0,0,4"/>
 
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="ACC הרשאת:" VerticalAlignment="Center"/>
-        <ComboBox Grid.Row="3" Grid.Column="1"
-                  ItemsSource="{Binding AvailableAccUserTypes}"
-                  SelectedItem="{Binding SelectedAccUserType}"
-                  Margin="0,4">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Converter={StaticResource AccUserTypeDisplayConverter}}"/>
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+            <ListBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                     ItemsSource="{Binding DirectorySearchResults}"
+                     SelectedItem="{Binding SelectedDirectoryUser, Mode=TwoWay}"
+                     DisplayMemberPath="DisplayName"
+                     MaxHeight="120" Margin="0,0,0,12"/>
 
-        <TextBlock Grid.Row="4" Grid.Column="0" Text="Role:" VerticalAlignment="Center"/>
-        <ComboBox Grid.Row="4" Grid.Column="1"
-                  ItemsSource="{Binding AvailableRoles}"
-                  SelectedItem="{Binding SelectedRole}"
-                  Margin="0,4">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Converter={StaticResource RoleDisplayConverter}}"/>
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+            <Separator Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,12"/>
 
-        <TextBlock Grid.Row="5" Grid.Column="0" Text="MasterPlan:" VerticalAlignment="Center"/>
-        <ComboBox Grid.Row="5" Grid.Column="1"
-                  ItemsSource="{Binding MasterPlanEmployees}"
-                  SelectedValuePath="Id"
-                  DisplayMemberPath="Name"
-                  SelectedValue="{Binding MasterPlanEmployeeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                  Margin="0,4"/>
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="LoginName:" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding LoginName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
 
-        <TextBlock Grid.Row="6" Grid.Column="0" Text="פעיל:" VerticalAlignment="Center"/>
-        <CheckBox Grid.Row="6" Grid.Column="1" IsChecked="{Binding IsActive}" Margin="0,4"/>
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="שם תצוגה:" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
 
-        <TextBlock Grid.Row="7" Grid.Column="0" Text="הערות:" VerticalAlignment="Top"/>
-        <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
-                 AcceptsReturn="True" Height="60" TextWrapping="Wrap" Margin="0,4"/>
+            <TextBlock Grid.Row="7" Grid.Column="0" Text="Email:" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
 
-        <TextBlock Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2"
-                   Text="{Binding ValidationMessage}" Foreground="Red" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="8" Grid.Column="0" Text="ACC הרשאת:" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="8" Grid.Column="1"
+                      ItemsSource="{Binding AvailableAccUserTypes}"
+                      SelectedItem="{Binding SelectedAccUserType}"
+                      Margin="0,4">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Converter={StaticResource AccUserTypeDisplayConverter}}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
 
-        <StackPanel Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
-                    HorizontalAlignment="Left" Margin="0,12,0,0">
-            <Button Content="שמור" Command="{Binding SaveCommand}" Padding="16,4" Margin="0,0,8,0"/>
-            <Button Content="ביטול" Command="{Binding CancelCommand}" Padding="16,4"/>
-        </StackPanel>
-    </Grid>
+            <TextBlock Grid.Row="9" Grid.Column="0" Text="Role:" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="9" Grid.Column="1"
+                      ItemsSource="{Binding AvailableRoles}"
+                      SelectedItem="{Binding SelectedRole}"
+                      Margin="0,4">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Converter={StaticResource RoleDisplayConverter}}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Grid.Row="10" Grid.Column="0" Text="MasterPlan:" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="10" Grid.Column="1"
+                      ItemsSource="{Binding MasterPlanEmployees}"
+                      SelectedValuePath="Id"
+                      DisplayMemberPath="Name"
+                      SelectedValue="{Binding MasterPlanEmployeeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      Margin="0,4"/>
+
+            <TextBlock Grid.Row="11" Grid.Column="0" Text="פעיל:" VerticalAlignment="Center"/>
+            <CheckBox Grid.Row="11" Grid.Column="1" IsChecked="{Binding IsActive}" Margin="0,4"/>
+
+            <TextBlock Grid.Row="12" Grid.Column="0" Text="הערות:" VerticalAlignment="Top"/>
+            <StackPanel Grid.Row="12" Grid.Column="1">
+                <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
+                         AcceptsReturn="True" Height="60" TextWrapping="Wrap" Margin="0,4"/>
+                <TextBlock Text="{Binding ValidationMessage}" Foreground="Red" Margin="0,8,0,0"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <Button Content="שמור" Command="{Binding SaveCommand}" Padding="16,4" Margin="0,0,8,0"/>
+                    <Button Content="ביטול" Command="{Binding CancelCommand}" Padding="16,4"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
 </UserControl>

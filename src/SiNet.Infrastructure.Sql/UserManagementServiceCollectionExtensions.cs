@@ -29,6 +29,17 @@ public static class UserManagementServiceCollectionExtensions
                 NullMasterPlanEmployeeConnectionProvider.Instance);
         }
 
+        if (!services.Any(d => d.ServiceType == typeof(IDirectoryUserConnectionProvider)))
+        {
+            services.AddSingleton<IDirectoryUserConnectionProvider>(
+                NullDirectoryUserConnectionProvider.Instance);
+        }
+
+        if (!services.Any(d => d.ServiceType == typeof(IDirectoryUserLookupService)))
+        {
+            services.AddTransient<IDirectoryUserLookupService>(_ => NullDirectoryUserLookupService.Instance);
+        }
+
         services.AddTransient<SqlUserManagementService>();
         services.AddTransient<IUserManagementService>(sp => sp.GetRequiredService<SqlUserManagementService>());
         services.AddTransient<SqlActionPermissionAdminService>();

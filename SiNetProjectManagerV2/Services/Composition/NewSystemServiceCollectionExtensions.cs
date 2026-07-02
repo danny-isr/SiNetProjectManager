@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Identity;
+using SiNetProjectManagerV2.Services;
 
 namespace SiNetProjectManagerV2.Services.Composition;
 
@@ -25,6 +26,8 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);
         SiNet.App.Wpf.Admin.Permissions.PermissionAdminServiceCollectionExtensions.AddSiNetPermissionAdminWpf(services);
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
+        services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
+        services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
         ShellServiceCollectionExtensions.AddSiNetShell(services);
 
         return services;

@@ -101,12 +101,15 @@ public sealed class UserEditRow : ObservableObject
             if (SetField(ref _role, value))
             {
                 OnPropertyChanged(nameof(RoleDisplay));
+                OnPropertyChanged(nameof(IsAdministrator));
                 NotifyDirtyChanged();
             }
         }
     }
 
     public string RoleDisplay => AppRoleDisplay.GetDisplayName(Role);
+
+    public bool IsAdministrator => Role == AppRole.Administrator;
 
     public bool IsActive
     {

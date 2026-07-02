@@ -19,7 +19,8 @@ public sealed class NativeUserAdminWindowTests
         Assert.Contains("IsDirty", xaml, StringComparison.Ordinal);
         Assert.Contains("Mode=OneWay", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Binding=\"{Binding IsDirty}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("DataGridTemplateColumn Header=\"שונה\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataGridTemplateColumn Header=\"לא נשמר\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("שינוי מקומי שלא נשמר", xaml, StringComparison.Ordinal);
         Assert.Contains("IsReadOnly=\"True\"", xaml, StringComparison.Ordinal);
     }
 
@@ -117,7 +118,7 @@ public sealed class NativeUserAdminWindowTests
     {
         services.AddSingleton<IUserAdminChangesNotifier, UserAdminChangesNotifier>();
         services.AddTransient<UserManagementViewModel>(_ => new UserManagementViewModel(new NoOpUserManagementService(), UserAdminTestDoubles.EmptyMasterPlanLookup()));
-        services.AddTransient<AddUserViewModel>(_ => new AddUserViewModel(new NoOpUserManagementService(), UserAdminTestDoubles.EmptyMasterPlanLookup()));
+        services.AddTransient<AddUserViewModel>(_ => new AddUserViewModel(new NoOpUserManagementService(), UserAdminTestDoubles.EmptyMasterPlanLookup(), UserAdminTestDoubles.EmptyDirectoryLookup()));
         services.AddTransient<UserManagementView>();
         services.AddTransient<AddUserView>();
         services.AddTransient<UserListWindow>();

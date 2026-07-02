@@ -79,7 +79,7 @@ public sealed class NativeUserAdminViewModelTests
         service.Setup(s => s.CheckDuplicateLoginNameAsync("dup", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup())
+        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), UserAdminTestDoubles.EmptyDirectoryLookup())
         {
             LoginName = "dup",
             DisplayName = "Dup User",
@@ -102,7 +102,7 @@ public sealed class NativeUserAdminViewModelTests
             .Callback<CreateUserCommand, CancellationToken>((cmd, _) => captured = cmd)
             .Returns(Task.CompletedTask);
 
-        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup())
+        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), UserAdminTestDoubles.EmptyDirectoryLookup())
         {
             LoginName = "new1",
             DisplayName = "New User",
@@ -129,7 +129,7 @@ public sealed class NativeUserAdminViewModelTests
         service.Setup(s => s.AddUserAsync(It.IsAny<CreateUserCommand>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), notifier)
+        var vm = new AddUserViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), UserAdminTestDoubles.EmptyDirectoryLookup(), notifier)
         {
             LoginName = "new1",
             DisplayName = "New User",

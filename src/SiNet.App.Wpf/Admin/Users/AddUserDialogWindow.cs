@@ -11,8 +11,8 @@ public sealed class AddUserDialogWindow : Window
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         Title = "הוספת משתמש — מערכת חדשה";
-        Width = 480;
-        Height = 520;
+        Width = 520;
+        Height = 640;
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;

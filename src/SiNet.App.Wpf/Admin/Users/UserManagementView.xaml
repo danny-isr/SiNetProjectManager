@@ -47,6 +47,23 @@
                   ScrollViewer.CanContentScroll="True"
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Background" Value="#EAF7EA"/>
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsActive}" Value="True"/>
+                                <Condition Binding="{Binding IsAdministrator}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Background" Value="#EAF2FF"/>
+                        </MultiDataTrigger>
+                        <DataTrigger Binding="{Binding IsActive}" Value="False">
+                            <Setter Property="Background" Value="#FDEAEA"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Header="פעיל" Binding="{Binding IsActive, Mode=OneWay}" Width="60" IsReadOnly="True"/>
                 <DataGridTextColumn Header="שם" Binding="{Binding DisplayName, Mode=OneWay}" Width="*"/>
@@ -56,11 +73,17 @@
                 <DataGridTextColumn Header="תפקיד" Binding="{Binding RoleDisplay, Mode=OneWay}" Width="100"/>
                 <DataGridTextColumn Header="עובד MasterPlan" Binding="{Binding MasterPlanEmployeeName, Mode=OneWay}" Width="160"/>
                 <DataGridTextColumn Header="משימות פתוחות" Binding="{Binding OpenTaskCount, Mode=OneWay}" Width="90"/>
-                <DataGridTemplateColumn Header="שונה" Width="60" IsReadOnly="True">
+                <DataGridTemplateColumn Header="לא נשמר" Width="72" IsReadOnly="True">
+                    <DataGridTemplateColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="ToolTip" Value="שינוי מקומי שלא נשמר"/>
+                        </Style>
+                    </DataGridTemplateColumn.HeaderStyle>
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsDirty, Mode=OneWay}"
                                       IsHitTestVisible="False"
+                                      ToolTip="שינוי מקומי שלא נשמר"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center"/>
                         </DataTemplate>
