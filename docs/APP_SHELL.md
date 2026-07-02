@@ -169,6 +169,10 @@ Project Context (`ProjectSelectorView`) is embedded in the shell header — not 
 migrated surfaces need them. Deny-by-default + Administrator bypass match legacy `ActionPermissionService`.
 Action permission **admin UI** (`ActionPermissionWindow`) is unchanged and still legacy-only.
 
+**User management (P5):** read/write user operations use `IUserManagementService` when migrated
+surfaces need them (`GetUsersAsync`, `AddUserAsync`, `UpdateUsersAsync`). Administrator-only writes
+and self-protection rules match legacy `UserService`. User Management / Add User windows remain legacy.
+
 ---
 
 ## 7. How migrated windows are added to the new menu

@@ -255,7 +255,7 @@ Opened surface / Application service re-checks before mutating state
 | **Role checks** | `CurrentUserContext` helpers + service `Require*` | `IAuthorizationQueryService` (P3) |
 | **Action permission rows** | `ActionPermission` table + `ActionPermissionService` | `IActionPermissionQueryService` (P4) |
 | **ActionCode catalog** | `ActionFollowUp` names + `ActionPermissionWindow` display map | `ActionPermissionCodes` (P4) |
-| **User records** | `SIUser` table via `UserService` | Future `IUserManagementService` port (Admin mutations) |
+| **User records** | `SIUser` table via `UserService` | `IUserManagementService` (P5) |
 | **ACC access tier** | `SIUser.AccUserType` + ACC bootstrap services | Remains **separate** from app Role (§10 Q8) |
 | **System settings** | `SystemSettings` table + `SystemSettingsService` | Admin write rule preserved |
 
@@ -395,18 +395,22 @@ public interface IActionPermissionQueryService
 
 **UI:** Action permission **management** remains legacy (`ActionPermissionWindow`). Migrated surfaces that need action checks should consume `IActionPermissionQueryService` — not registered in NewShell menu in P4.
 
-### 7.5 Proposed — user management (later slice)
+### 7.5 Implemented — user management (P5)
 
 ```csharp
 public interface IUserManagementService
 {
-    Task<IReadOnlyList<UserSummaryDto>> GetUsersAsync(CancellationToken cancellationToken = default);
-    Task AddUserAsync(CreateUserCommand command, CancellationToken cancellationToken = default);
-    Task UpdateUsersAsync(IReadOnlyList<UpdateUserCommand> updates, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<UserSummaryDto>> GetUsersAsync(...);
+    Task AddUserAsync(CreateUserCommand command, ...);
+    Task UpdateUsersAsync(IReadOnlyList<UpdateUserCommand> updates, ...);
 }
 ```
 
-All mutating methods: **Administrator-only**, preserving self-protection rules.
+**DTOs:** `UserSummaryDto`, `CreateUserCommand`, `UpdateUserCommand`, `AppAccUserType` (mirrors legacy `AccUserType`).
+
+**Host adapter:** `SiNetProjectManagerV2/Services/LegacyUserManagementService.cs` → legacy `UserService` (Administrator-only writes, self-protection, ACC reconciliation).
+
+**UI:** User Management / Add User windows remain legacy (`UserManagementViewModel`, `AddUserViewModel`). Migrated surfaces should consume `IUserManagementService` — not wired to NewShell menu in P5.
 
 ### 7.6 DI registration direction
 
@@ -435,7 +439,7 @@ Phased, documentation-driven slices:
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
-| **P5 — user management port** | `IUserManagementService`; migrate User Management UI | Writes via existing `UserService` rules |
+| **P5 — user management port** | `IUserManagementService`; migrate User Management UI | ✅ Implemented (port + adapter; admin UI still legacy) |
 | **P6 — action permission admin UI** | Migrate `ActionPermissionWindow` to New System menu | Uses existing save service |
 | **P7 — composition split** | Optional separate DI graphs (`AddSiNetClean` vs legacy bridge) per `ARCHITECTURE_TARGET.md` | None |
 

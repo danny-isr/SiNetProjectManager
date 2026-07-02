@@ -300,6 +300,9 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNet.Application.Identity.IActionPermissionQueryService,
                 Services.LegacyActionPermissionQueryService>();
 
+            services.AddSingleton<SiNet.Application.Identity.IUserManagementService,
+                Services.LegacyUserManagementService>();
+
             // Completion-metadata port: binds the new clean ITaskCompletionMetadataResolver to the
             // legacy declarative ReviewCompletionEventBehavior mapping so feature screens can resolve
             // the completion event code for a BRANCHING task (where the chosen result selects between
