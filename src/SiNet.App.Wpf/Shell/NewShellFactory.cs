@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -89,6 +90,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "הוספת משתמש חדש (מערכת חדשה)"));
         }
 
+        if (CanAccessFeature(AppFeatureCodes.ActionPermissionsManage))
+        {
+            items.Add(new NewShellMenuItem(
+                "הרשאות פעולה",
+                OpenNativeActionPermissions,
+                "ניהול הרשאות פעולה (מערכת חדשה)"));
+        }
+
         // Settings — surface not implemented yet; show disabled. When implemented, gate with
         // AppFeatureCodes.SystemSettingsWrite (Administrator).
         const bool settingsSurfaceImplemented = false;
@@ -138,6 +147,12 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     {
         var window = _services.GetRequiredService<AddUserDialogWindow>();
         ShowDialog(window);
+    }
+
+    private void OpenNativeActionPermissions()
+    {
+        var window = _services.GetRequiredService<ActionPermissionsWindow>();
+        ShowWindow(window);
     }
 
     private void OpenInspectionShell()

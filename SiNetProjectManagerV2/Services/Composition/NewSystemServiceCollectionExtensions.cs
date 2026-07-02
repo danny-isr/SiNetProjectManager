@@ -22,6 +22,7 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.Infrastructure.Sql.UserManagementServiceCollectionExtensions.AddSiNetUserManagementSql(services);
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);
+        SiNet.App.Wpf.Admin.Permissions.PermissionAdminServiceCollectionExtensions.AddSiNetPermissionAdminWpf(services);
         ShellServiceCollectionExtensions.AddSiNetShell(services);
 
         return services;

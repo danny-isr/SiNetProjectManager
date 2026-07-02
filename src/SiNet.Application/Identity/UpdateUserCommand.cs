@@ -12,4 +12,5 @@ public sealed record UpdateUserCommand(
     AppAccUserType AccUserType,
     AppRole Role,
     bool IsActive,
-    int? MasterPlanEmployeeId = null);
+    int? MasterPlanEmployeeId = null,
+    string? Notes = null);

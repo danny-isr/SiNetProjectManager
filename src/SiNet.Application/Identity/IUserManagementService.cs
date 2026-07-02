@@ -32,6 +32,8 @@ public interface IUserManagementService
     /// Self-protection (legacy <c>UserService.UpdateUsersAsync</c>): the current Administrator cannot
     /// deactivate themselves, demote themselves below Administrator, or change their own LoginName.
     /// Violations throw <see cref="InvalidOperationException"/>.
+    /// When <see cref="ICurrentUserContext.UserId"/> is <see langword="null"/> (preview hosts without
+    /// auth binding), self-protection is skipped — document this in admin UI status if needed.
     /// </remarks>
     Task UpdateUsersAsync(
         IReadOnlyList<UpdateUserCommand> updates,

@@ -47,7 +47,9 @@ public sealed class InfrastructureSqlBoundaryTests
             && !relativePath.StartsWith("Data\\SiNetDbContext", StringComparison.OrdinalIgnoreCase)
             && !relativePath.StartsWith("Data/SiNetDbContext", StringComparison.OrdinalIgnoreCase)
             && !relativePath.StartsWith("Data\\Configurations\\UserManagement", StringComparison.OrdinalIgnoreCase)
-            && !relativePath.StartsWith("Data/Configurations/UserManagement", StringComparison.OrdinalIgnoreCase))
+            && !relativePath.StartsWith("Data/Configurations/UserManagement", StringComparison.OrdinalIgnoreCase)
+            && !relativePath.StartsWith("Data\\Configurations\\ActionPermissionEntity", StringComparison.OrdinalIgnoreCase)
+            && !relativePath.StartsWith("Data/Configurations/ActionPermissionEntity", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -71,6 +73,19 @@ public sealed class InfrastructureSqlBoundaryTests
         Assert.DoesNotContain("SiNetSQL.Models", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SiNetSQLDbContext", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Siuser", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SqlActionPermissionAdminService_uses_SiNetDbContext_and_native_entities_only()
+    {
+        var path = Path.Combine(InfrastructureSqlRoot, "Services", "Identity", "SqlActionPermissionAdminService.cs");
+        var source = File.ReadAllText(path);
+        Assert.Contains("SiNetDbContext", source, StringComparison.Ordinal);
+        Assert.Contains("ActionPermissionEntity", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQL.Data", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQL.Models", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQLDbContext", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActionPermissionService", source, StringComparison.Ordinal);
     }
 
     private static string RepoRoot => RepoPaths.RepoRoot;

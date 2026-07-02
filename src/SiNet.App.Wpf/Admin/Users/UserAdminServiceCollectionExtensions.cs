@@ -15,6 +15,7 @@ public static class UserAdminServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddSingleton<IUserAdminChangesNotifier, UserAdminChangesNotifier>();
         services.AddTransient<UserManagementViewModel>();
         services.AddTransient<AddUserViewModel>();
         services.AddTransient<UserManagementView>();

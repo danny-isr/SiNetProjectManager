@@ -13,4 +13,5 @@ public sealed record UserSummaryDto(
     AppAccUserType AccUserType,
     AppRole Role,
     int OpenTaskCount,
-    int? MasterPlanEmployeeId = null);
+    int? MasterPlanEmployeeId = null,
+    string? Notes = null);

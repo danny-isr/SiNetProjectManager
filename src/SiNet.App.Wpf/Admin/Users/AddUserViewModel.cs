@@ -14,6 +14,7 @@ namespace SiNet.App.Wpf.Admin.Users;
 public sealed class AddUserViewModel : ObservableObject
 {
     private readonly IUserManagementService _userManagementService;
+    private readonly IUserAdminChangesNotifier? _changesNotifier;
     private string _loginName = string.Empty;
     private string _displayName = string.Empty;
     private string _email = string.Empty;
@@ -23,9 +24,12 @@ public sealed class AddUserViewModel : ObservableObject
     private bool _isSaving;
     private string _validationMessage = string.Empty;
 
-    public AddUserViewModel(IUserManagementService userManagementService)
+    public AddUserViewModel(
+        IUserManagementService userManagementService,
+        IUserAdminChangesNotifier? changesNotifier = null)
     {
         _userManagementService = userManagementService ?? throw new ArgumentNullException(nameof(userManagementService));
+        _changesNotifier = changesNotifier;
         AvailableRoles = new ObservableCollection<AppRole>(
             [AppRole.Employee, AppRole.Management, AppRole.Administrator]);
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanSave);
@@ -149,6 +153,7 @@ public sealed class AddUserViewModel : ObservableObject
                 Notes: string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim());
 
             await _userManagementService.AddUserAsync(command).ConfigureAwait(true);
+            _changesNotifier?.NotifyUsersChanged();
             RequestClose?.Invoke(true);
         }
         catch (Exception ex)

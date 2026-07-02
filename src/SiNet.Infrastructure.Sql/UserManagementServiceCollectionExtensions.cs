@@ -1,9 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Identity;
-using SiNet.Infrastructure.Sql.Data;
 using SiNet.Infrastructure.Sql.Services.Identity;
-
 namespace SiNet.Infrastructure.Sql;
 
 /// <summary>
@@ -19,8 +16,15 @@ public static class UserManagementServiceCollectionExtensions
     public static IServiceCollection AddSiNetUserManagementSql(this IServiceCollection services)    {
         ArgumentNullException.ThrowIfNull(services);
 
+        if (!services.Any(d => d.ServiceType == typeof(ICurrentUserContext)))
+        {
+            services.AddSingleton<ICurrentUserContext>(NullCurrentUserContext.Instance);
+        }
+
         services.AddTransient<SqlUserManagementService>();
         services.AddTransient<IUserManagementService>(sp => sp.GetRequiredService<SqlUserManagementService>());
+        services.AddTransient<SqlActionPermissionAdminService>();
+        services.AddTransient<IActionPermissionAdminService>(sp => sp.GetRequiredService<SqlActionPermissionAdminService>());
 
         return services;
     }

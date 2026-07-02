@@ -28,7 +28,8 @@ public sealed class NewSystemBoundaryTests
         "SiNetProjectManagerV2.Dialogs",
         "new UserManagementWindow",
         "new AddUserWindow",
-        "ActionPermissionWindow",
+        "new ActionPermissionWindow",
+        "Dialogs.ActionPermissionWindow",
     ];
 
     private static readonly string[] ForbiddenLegacyAdminFactoryFilesInShell =
@@ -94,7 +95,9 @@ public sealed class NewSystemBoundaryTests
         var source = File.ReadAllText(NewShellFactoryPath);
         Assert.Contains("UserListWindow", source, StringComparison.Ordinal);
         Assert.Contains("AddUserDialogWindow", source, StringComparison.Ordinal);
+        Assert.Contains("ActionPermissionsWindow", source, StringComparison.Ordinal);
         Assert.Contains("AppFeatureCodes.UsersManage", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.ActionPermissionsManage", source, StringComparison.Ordinal);
     }
 
     [Fact]

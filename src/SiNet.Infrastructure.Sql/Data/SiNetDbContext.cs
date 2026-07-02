@@ -21,10 +21,13 @@ public sealed class SiNetDbContext : DbContext
 
     public DbSet<ProjectAssignmentStatusEntity> ProjectAssignmentStatuses => Set<ProjectAssignmentStatusEntity>();
 
+    public DbSet<ActionPermissionEntity> ActionPermissions => Set<ActionPermissionEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new SiUserEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ProjectAssignmentEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ProjectAssignmentStatusEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ActionPermissionEntityConfiguration());
     }
 }
