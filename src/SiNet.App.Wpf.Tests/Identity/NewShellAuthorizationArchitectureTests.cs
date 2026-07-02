@@ -52,9 +52,8 @@ public sealed class NewShellAuthorizationArchitectureTests
         Assert.DoesNotContain("IActionPermissionAdminWindowFactory", source, StringComparison.Ordinal);
         Assert.DoesNotContain("IUserManagementWindowFactory", source, StringComparison.Ordinal);
         Assert.DoesNotContain("IAddUserWindowFactory", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ActionPermissionWindow", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("UserManagementWindow", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("AddUserWindow", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new UserManagementWindow", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new AddUserWindow", source, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -412,17 +412,19 @@ public interface IUserManagementService
 
 **DTOs:** `UserSummaryDto`, `CreateUserCommand`, `UpdateUserCommand`, `AppAccUserType` (mirrors legacy `AccUserType`).
 
-**Host adapter (target):** `SiNet.Infrastructure.Sql` — not `SiNetSQL` adapter for New System.
+**Host adapter (native):** `SiNet.Infrastructure.Sql/Services/Identity/SqlUserManagementService.cs`.
 
-**UI (legacy only):** `UserManagementViewModel` / `AddUserViewModel` in `SiNetSQL.MVVM` remain for Legacy path; do not wire to New System menu.
+**UI (native):** `SiNet.App.Wpf/Admin/Users/` — `UserManagementView` + `AddUserView`. Legacy `SiNetSQL.MVVM` unchanged for Legacy path only.
 
 ### 7.6 DI registration direction
 
 Modular host extensions (P7):
 
 ```text
-AddSiNetIdentityLegacyAdapters()   → read/query identity ports only (no user-management writes for New System)
-AddSiNetNewSystemGraph()           → project context + shell (no legacy window factories)
+AddSiNetIdentityLegacyAdapters()   → read/query identity ports (shell gating)
+AddSiNetUserManagementSql()        → SqlUserManagementService
+AddSiNetUserAdminWpf()             → native user admin views/VMs
+AddSiNetNewSystemGraph()           → project context + shell
 ```
 
 Full container split (`AddSiNetClean` vs `AddSiNetWithLegacyBridge`) remains deferred per `ARCHITECTURE_TARGET.md`.
@@ -452,7 +454,7 @@ Phased, documentation-driven slices:
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
-| **P5 — user management port** | `IUserManagementService` + native New System UI | 🟡 Port defined; **Infrastructure.Sql** impl + App.Wpf surface pending |
+| **P5 — user management port** | `IUserManagementService` + native New System UI | ✅ Native list + add-user (read-only list; `UpdateUsersAsync` deferred) |
 | **P6 — action permission admin UI** | Native App.Wpf admin surface | 🟡 Revoked legacy-window approach; rebuild pending |
 | **P7 — composition split** | Modular DI without legacy UI wiring | ⏸ Paused until boundary clean (see `NEW_SYSTEM_BOUNDARY.md`) |
 

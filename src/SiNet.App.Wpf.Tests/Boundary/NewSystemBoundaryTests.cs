@@ -13,11 +13,11 @@ public sealed class NewSystemBoundaryTests
 {
     private static readonly string[] ForbiddenLegacyIdentifiersInAppWpf =
     [
-        "ActionPermissionWindow",
-        "UserManagementWindow",
-        "AddUserWindow",
         "SiNetSQL.MVVM",
         "SiNetProjectManagerV2.Dialogs",
+        "Dialogs.UserManagementWindow",
+        "Dialogs.AddUserWindow",
+        "Dialogs.ActionPermissionWindow",
     ];
 
     private static readonly string[] ForbiddenLegacyAdminInNewShellFactory =
@@ -25,14 +25,10 @@ public sealed class NewSystemBoundaryTests
         "IActionPermissionAdminWindowFactory",
         "IUserManagementWindowFactory",
         "IAddUserWindowFactory",
+        "SiNetProjectManagerV2.Dialogs",
+        "new UserManagementWindow",
+        "new AddUserWindow",
         "ActionPermissionWindow",
-        "UserManagementWindow",
-        "AddUserWindow",
-        "AppFeatureCodes.ActionPermissionsManage",
-        "AppFeatureCodes.UsersManage",
-        "\u05D4\u05E8\u05E9\u05D0\u05D5\u05EA \u05E4\u05E2\u05D5\u05DC\u05D4", // הרשאות פעולה
-        "\u05E0\u05D9\u05D4\u05D5\u05DC \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD", // ניהול משתמשים
-        "\u05D4\u05D5\u05E1\u05E4\u05EA \u05DE\u05E9\u05EA\u05DE\u05E9", // הוספת משתמש
     ];
 
     private static readonly string[] ForbiddenLegacyAdminFactoryFilesInShell =
@@ -90,6 +86,15 @@ public sealed class NewSystemBoundaryTests
                 content.Contains(forbidden, StringComparison.Ordinal),
                 $"Forbidden legacy identifier '{forbidden}' found in src/SiNet.App.Wpf/{relativePath}");
         }
+    }
+
+    [Fact]
+    public void NewShellFactory_native_user_admin_uses_App_Wpf_host_windows()
+    {
+        var source = File.ReadAllText(NewShellFactoryPath);
+        Assert.Contains("UserListWindow", source, StringComparison.Ordinal);
+        Assert.Contains("AddUserDialogWindow", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.UsersManage", source, StringComparison.Ordinal);
     }
 
     [Fact]

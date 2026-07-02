@@ -160,13 +160,16 @@ Initial menu (P3 + P6):
 | --- | --- | --- | --- |
 | Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
-| Action permissions | `ActionPermissions.Manage` | Administrator | *native New System surface — not yet implemented* |
-| User management | `Users.Manage` | Administrator | *native New System surface — not yet implemented* |
+| Action permissions | `ActionPermissions.Manage` | Administrator | *native surface — not yet implemented* |
+| User management | `Users.Manage` | Administrator | `UserListWindow` → native `UserManagementView` |
+| Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |
 | Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
 
-**Action permissions / user management:** **Not** in the New System menu. Legacy admin windows remain on the Legacy startup path only (`MainWindow` menu). Rebuild as native `SiNet.App.Wpf` surfaces + `Infrastructure.Sql` — see [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md).
+**User management / add user (native):** Administrators see **ניהול משתמשים** and **הוספת משתמש** when
+`Users.Manage` is authorized. Opens native `UserListWindow` / `AddUserDialogWindow` in `SiNet.App.Wpf.Admin.Users`
+backed by `SqlUserManagementService` in Infrastructure.Sql — not legacy windows or SiNetSQL.MVVM.
 
 ---
 

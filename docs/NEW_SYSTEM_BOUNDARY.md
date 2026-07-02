@@ -13,15 +13,15 @@ No V2 Dialogs.
 Migration means rebuild into new architecture, not wrapping old windows.
 ```
 
-New System admin capabilities (Action Permissions, User Management, Add User) will be built **only** as native `SiNet.App.Wpf` surfaces backed by `SiNet.Application` ports and `SiNet.Infrastructure.Sql` — never by opening legacy windows from the New System menu.
+User Management and Add User are implemented as **native** `SiNet.App.Wpf.Admin.Users` surfaces backed by `SqlUserManagementService` in Infrastructure.Sql — not legacy `UserManagementWindow` / `AddUserWindow` or `SiNetSQL.MVVM`.
 
 ## Rule
 
 `SiNet.App.Wpf` must **not**:
 
 - Reference `SiNetSQL`, `SiNetProjectManagerV2`, or `SiNetSQL.MVVM` (project or assembly)
-- Open legacy windows (`ActionPermissionWindow`, `UserManagementWindow`, `AddUserWindow`, …)
-- Depend on legacy ViewModels, `SiNetProjectManagerV2.Dialogs`, or host window factories for admin UI
+- Open legacy windows (`ActionPermissionWindow`, legacy `UserManagementWindow`, legacy `AddUserWindow`, …)
+- Depend on legacy ViewModels or `SiNetProjectManagerV2.Dialogs`
 
 Legacy startup (`StartupMode.Legacy` → `SiNetProjectManagerV2.MainWindow`) may continue to use legacy UI unchanged.
 
@@ -33,41 +33,39 @@ SiNet.Infrastructure.Sql   → DB implementations (no WPF, no ViewModels)
 SiNet.App.Wpf              → views, viewmodels, shell, navigation
 ```
 
+## Native user admin (2026-07-02)
+
+| Surface | Location |
+| --- | --- |
+| User list | `UserListWindow` + `UserManagementView` + `UserManagementViewModel` |
+| Add user | `AddUserDialogWindow` + `AddUserView` + `AddUserViewModel` |
+| Service | `SqlUserManagementService` → `IUserManagementService` |
+
+Menu items **ניהול משתמשים** / **הוספת משתמש** in `NewShellFactory` are gated by `AppFeatureCodes.UsersManage`.
+
 ## Revoked pattern (do not extend)
 
 | Pattern | Status |
 | --- | --- |
-| `IActionPermissionAdminWindowFactory` → legacy `ActionPermissionWindow` | **Removed** from New System menu |
+| `IActionPermissionAdminWindowFactory` → legacy `ActionPermissionWindow` | **Removed** |
 | `IUserManagementWindowFactory` → legacy `UserManagementWindow` | **Removed** |
 | `IAddUserWindowFactory` → legacy `AddUserWindow` | **Removed** |
-| `UserManagementPortAdapter` in V2 DI for New System | **Removed** from `AddSiNetIdentityLegacyAdapters` |
+| `UserManagementPortAdapter` / SiNetSQL adapter for New System | **Not used** |
 | Changes to `SiNetSQL.MVVM` for New System consumption | **Stopped** |
 
-## Architecture tests (boundary hardening)
+## Architecture tests
 
-Enforced by `src/SiNet.App.Wpf.Tests/Boundary/NewSystemBoundaryTests.cs`:
+Enforced by `NewSystemBoundaryTests.cs` and `Admin/NewShellNativeUserAdminMenuTests.cs`:
 
-| Guard | What it checks |
-| --- | --- |
-| csproj references | `SiNet.App.Wpf.csproj` has no `SiNetSQL` / `SiNetProjectManagerV2` project refs |
-| assembly references | Loaded `SiNet.App.Wpf` assembly does not reference legacy assemblies |
-| source scan | All `.cs` / `.xaml` under `src/SiNet.App.Wpf` exclude forbidden legacy identifiers |
-| NewShellFactory | No legacy admin factories, feature gates, Hebrew admin menu labels, or legacy window types |
-| factory policy | Only `IEmailWindowFactory` may exist as a window factory in App.Wpf (native surfaces) |
+- csproj / assembly must not reference SiNetSQL or V2
+- Forbidden legacy identifiers (`SiNetSQL.MVVM`, `Dialogs.*Window`, legacy factories)
+- Native user menu allowed when opening `UserListWindow` / `AddUserDialogWindow`
 
-See also `Identity/NewShellAuthorizationArchitectureTests.cs` for authorization-port usage in the shell.
-
-## Rebuild path (next slices)
+## Rebuild path (remaining)
 
 | Capability | Target |
 | --- | --- |
-| Action Permissions Admin | New view + VM in `SiNet.App.Wpf`; write port in `Application`; SQL in `Infrastructure.Sql` |
-| User Management | New view + VM in `SiNet.App.Wpf`; `IUserManagementService` impl in `Infrastructure.Sql` |
+| Action Permissions Admin | New view + VM in `SiNet.App.Wpf`; SQL in `Infrastructure.Sql` |
+| User inline edit / `UpdateUsersAsync` | Extend native user admin + `SqlUserManagementService` |
 
-Menu items return only when the **native** New System surface exists.
-
-## Temporary legacy adapters (read-only, host)
-
-Until Infrastructure.Sql owns identity reads, the **V2 host** may still register read/query adapters for shell gating (`ICurrentUserContext`, `IAuthorizationQueryService`, …) when running New System mode. These do **not** open legacy UI.
-
-See also: [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md), [`APP_SHELL.md`](./APP_SHELL.md), [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md).
+See also: [`APP_SHELL.md`](./APP_SHELL.md), [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md).

@@ -19,7 +19,9 @@ public static class NewSystemServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
+        SiNet.Infrastructure.Sql.UserManagementServiceCollectionExtensions.AddSiNetUserManagementSql(services);
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
+        SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);
         ShellServiceCollectionExtensions.AddSiNetShell(services);
 
         return services;

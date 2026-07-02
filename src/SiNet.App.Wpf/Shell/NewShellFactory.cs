@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Identity;
@@ -74,9 +75,19 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "פתיחת מעטפת הביקורת החדשה"));
         }
 
-        // Action permissions / user management — NOT wired here. Legacy admin windows belong only on the
-        // Legacy startup path. New System will get native App.Wpf surfaces + Infrastructure.Sql (see
-        // docs/NEW_SYSTEM_BOUNDARY.md).
+        // Native user admin — App.Wpf surfaces + Infrastructure.Sql (see docs/NEW_SYSTEM_BOUNDARY.md).
+        if (CanAccessFeature(AppFeatureCodes.UsersManage))
+        {
+            items.Add(new NewShellMenuItem(
+                "ניהול משתמשים",
+                OpenNativeUserList,
+                "רשימת משתמשים (מערכת חדשה)"));
+
+            items.Add(new NewShellMenuItem(
+                "הוספת משתמש",
+                OpenNativeAddUser,
+                "הוספת משתמש חדש (מערכת חדשה)"));
+        }
 
         // Settings — surface not implemented yet; show disabled. When implemented, gate with
         // AppFeatureCodes.SystemSettingsWrite (Administrator).
@@ -115,6 +126,18 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         {
             return false;
         }
+    }
+
+    private void OpenNativeUserList()
+    {
+        var window = _services.GetRequiredService<UserListWindow>();
+        ShowWindow(window);
+    }
+
+    private void OpenNativeAddUser()
+    {
+        var window = _services.GetRequiredService<AddUserDialogWindow>();
+        ShowDialog(window);
     }
 
     private void OpenInspectionShell()
@@ -158,6 +181,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         window.Show();
+    }
+
+    private static void ShowDialog(Window window)
+    {
+        if (System.Windows.Application.Current?.MainWindow is { } owner && !ReferenceEquals(owner, window))
+        {
+            window.Owner = owner;
+        }
+
+        window.ShowDialog();
     }
 
     private string? ResolveCurrentUserDisplay()

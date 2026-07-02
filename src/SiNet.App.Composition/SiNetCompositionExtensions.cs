@@ -31,6 +31,7 @@ public static class SiNetCompositionExtensions
         services.AddSiNetSql();
         services.AddSiNetWorkflowReads();
         services.AddSiNetProjectQuerySql();
+        services.AddSiNetUserManagementSql();
         services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();
         services.AddSiNetLegacyBridge();
