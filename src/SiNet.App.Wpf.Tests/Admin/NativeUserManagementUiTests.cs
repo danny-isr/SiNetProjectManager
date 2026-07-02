@@ -13,9 +13,11 @@ public sealed class NativeUserManagementUiTests
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Admin/Users/UserManagementView.xaml");
 
-        Assert.Contains("#EAF7EA", xaml, StringComparison.Ordinal);
-        Assert.Contains("#EAF2FF", xaml, StringComparison.Ordinal);
-        Assert.Contains("#FDEAEA", xaml, StringComparison.Ordinal);
+        Assert.Contains("#F1FAF1", xaml, StringComparison.Ordinal);
+        Assert.Contains("#F1F6FF", xaml, StringComparison.Ordinal);
+        Assert.Contains("#FFF1F1", xaml, StringComparison.Ordinal);
+        Assert.Contains("TargetType=\"DataGridCell\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Value=\"Transparent\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Binding IsAdministrator", xaml, StringComparison.Ordinal);
         Assert.Contains("Binding IsActive", xaml, StringComparison.Ordinal);
     }
