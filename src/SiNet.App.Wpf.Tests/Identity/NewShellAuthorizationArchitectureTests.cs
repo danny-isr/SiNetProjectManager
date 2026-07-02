@@ -36,6 +36,27 @@ public sealed class NewShellAuthorizationArchitectureTests
         Assert.DoesNotContain("IsAdmin", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void NewShell_types_do_not_reference_action_permission_legacy_service()
+    {
+        var wpfAssembly = typeof(NewShellFactory).Assembly;
+        Assert.DoesNotContain(
+            wpfAssembly.GetReferencedAssemblies(),
+            a => a.Name == "SiNetSQL");
+
+        var factorySource = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
+        Assert.DoesNotContain("IActionPermissionService", factorySource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActionPermissionService", factorySource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NewShellViewModel_does_not_reference_action_permission_context()
+    {
+        var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellViewModel.cs");
+        Assert.DoesNotContain("IActionPermissionService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActionPermissionService", source, StringComparison.Ordinal);
+    }
+
     private static string ReadSourceRelativeToRepo(string relativePath)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

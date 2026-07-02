@@ -164,6 +164,11 @@ Initial menu (P3):
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
 
+**Action permissions (P4):** read-only checks for email/workflow follow-up actions use
+`IActionPermissionQueryService` (`CanUserExecuteActionAsync`, `GetAuthorizedUsersForActionAsync`) when
+migrated surfaces need them. Deny-by-default + Administrator bypass match legacy `ActionPermissionService`.
+Action permission **admin UI** (`ActionPermissionWindow`) is unchanged and still legacy-only.
+
 ---
 
 ## 7. How migrated windows are added to the new menu

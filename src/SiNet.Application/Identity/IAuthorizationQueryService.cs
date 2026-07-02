@@ -3,7 +3,7 @@ namespace SiNet.Application.Identity;
 /// <summary>
 /// Read-only role and feature authorization queries for the New System (see
 /// <c>docs/IDENTITY_AND_PERMISSIONS.md</c> §7.3). Does not mutate users or permissions; does not
-/// replace action-level allow-lists (future <c>IActionPermissionQueryService</c>).
+/// replace action-level allow-lists (<see cref="IActionPermissionQueryService"/>).
 /// </summary>
 public interface IAuthorizationQueryService
 {

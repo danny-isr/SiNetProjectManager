@@ -112,4 +112,9 @@
   <ItemGroup>
     <Folder Include="Commands\" />
   </ItemGroup>
+
+  <!-- Test-only visibility for host adapter integration tests in SiNetSQL.Tests -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SiNetSQL.Tests" />
+  </ItemGroup>
 </Project>

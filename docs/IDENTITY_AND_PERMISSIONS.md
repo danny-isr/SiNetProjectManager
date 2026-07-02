@@ -252,9 +252,9 @@ Opened surface / Application service re-checks before mutating state
 | **Who is logged in** | `CurrentUserContext` after `Initialize` (Legacy startup) | Same data via host adapter until native auth slice |
 | **UserId for attribution** | `ICurrentUserContext.UserId` | Keep minimal port |
 | **Role definitions** | `AppUserRole` enum + `SIUser.Role` column | Preserve values; no rename without migration slice |
-| **Role checks** | `CurrentUserContext` helpers + service `Require*` | Future `IAuthorizationQueryService` wrapping same rules |
-| **Action permission rows** | `ActionPermission` table + `ActionPermissionService` | Future `IActionPermissionQueryService` |
-| **ActionCode catalog** | `ActionFollowUp` names + `ActionPermissionWindow` display map | Centralize in Application constant/registry slice (future) |
+| **Role checks** | `CurrentUserContext` helpers + service `Require*` | `IAuthorizationQueryService` (P3) |
+| **Action permission rows** | `ActionPermission` table + `ActionPermissionService` | `IActionPermissionQueryService` (P4) |
+| **ActionCode catalog** | `ActionFollowUp` names + `ActionPermissionWindow` display map | `ActionPermissionCodes` (P4) |
 | **User records** | `SIUser` table via `UserService` | Future `IUserManagementService` port (Admin mutations) |
 | **ACC access tier** | `SIUser.AccUserType` + ACC bootstrap services | Remains **separate** from app Role (§10 Q8) |
 | **System settings** | `SystemSettings` table + `SystemSettingsService` | Admin write rule preserved |
@@ -307,7 +307,7 @@ Windows Identity
                 → feature surfaces (attribution only)
 ```
 
-Authorization checks remain on legacy services invoked by legacy or bridged code paths until ports exist.
+Authorization checks use Application ports (`IAuthorizationQueryService`, `IActionPermissionQueryService`) via host adapters; legacy services remain source of truth until native implementations exist.
 
 ---
 
@@ -374,27 +374,26 @@ public interface IAuthorizationQueryService
 
 **NewShell:** `NewShellFactory.BuildMigratedOnlyMenu()` resolves item visibility via `IAuthorizationQueryService` + `AppFeatureCodes` — no `CurrentUserContext` / `IsAdmin` in `SiNet.App.Wpf`.
 
-### 7.4 Proposed — action permission queries
+### 7.4 Implemented — action permission queries (P4)
 
 ```csharp
 public interface IActionPermissionQueryService
 {
-    Task<bool> CanUserExecuteActionAsync(
-        string actionCode,
-        int userId,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> CanCurrentUserExecuteActionAsync(
-        string actionCode,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<UserRefDto>> GetAuthorizedUsersForActionAsync(
-        string actionCode,
-        CancellationToken cancellationToken = default);
+    Task<bool> CanUserExecuteActionAsync(string actionCode, int userId, ...);
+    Task<bool> CanCurrentUserExecuteActionAsync(string actionCode, ...);
+    Task<IReadOnlyList<UserRefDto>> GetAuthorizedUsersForActionAsync(string actionCode, ...);
 }
 ```
 
-Wraps `ActionPermissionService` semantics exactly (deny-by-default, admin bypass).
+**DTO:** `UserRefDto` (`UserId`, `DisplayName`, `LoginName`).
+
+**Constants:** `ActionPermissionCodes` — documents legacy `ActionFollowUp` enum names; unknown codes are not approved silently (deny-by-default via empty permission rows).
+
+**Host adapter:** `SiNetProjectManagerV2/Services/LegacyActionPermissionQueryService.cs` → legacy `ActionPermissionService` (deny-by-default, Administrator bypass, inactive/unauthorized denied).
+
+**Current user:** `CanCurrentUserExecuteActionAsync` uses `ICurrentUserContext.UserId`; returns `false` when `UserId` is `null` — never invents an id.
+
+**UI:** Action permission **management** remains legacy (`ActionPermissionWindow`). Migrated surfaces that need action checks should consume `IActionPermissionQueryService` — not registered in NewShell menu in P4.
 
 ### 7.5 Proposed — user management (later slice)
 
@@ -435,7 +434,7 @@ Phased, documentation-driven slices:
 | **P1.5 — DEBUG role selector** | Shared `DebugAuthorizationRoleSelectorWindow` on New + Legacy paths | ✅ Implemented |
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
-| **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | Read-only |
+| **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
 | **P5 — user management port** | `IUserManagementService`; migrate User Management UI | Writes via existing `UserService` rules |
 | **P6 — action permission admin UI** | Migrate `ActionPermissionWindow` to New System menu | Uses existing save service |
 | **P7 — composition split** | Optional separate DI graphs (`AddSiNetClean` vs legacy bridge) per `ARCHITECTURE_TARGET.md` | None |
