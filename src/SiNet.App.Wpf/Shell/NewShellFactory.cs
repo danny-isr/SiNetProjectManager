@@ -47,14 +47,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// <summary>
     /// Builds the shell menu from surfaces that ALREADY exist in the refactored stack. Nothing legacy
     /// is scanned or copied; each item opens its surface through the same DI/factory the legacy host
-    /// uses, so behavior matches the reviewed clones.
+    /// uses. Menu availability is resolved via <see cref="IAuthorizationQueryService"/> (not legacy
+    /// singletons in this assembly).
     /// </summary>
     private IReadOnlyList<NewShellMenuItem> BuildMigratedOnlyMenu()
     {
         var items = new List<NewShellMenuItem>();
 
         // Email visual clone — opened via the shared factory so it binds the app-wide current project.
-        if (_services.GetService<IEmailWindowFactory>() is { } emailFactory)
+        if (_services.GetService<IEmailWindowFactory>() is { } emailFactory
+            && CanAccessFeature(AppFeatureCodes.ShellOpenEmailSurface))
         {
             items.Add(new NewShellMenuItem(
                 "דוא\"ל (שכפול חזותי)",
@@ -64,20 +66,51 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         // Inspection shell — the InspectionShellView is a UserControl; host it in a plain window
         // exactly like the legacy host's preview entry point (no task navigation here).
-        items.Add(new NewShellMenuItem(
-            "ביקורת (מעטפת)",
-            OpenInspectionShell,
-            "פתיחת מעטפת הביקורת החדשה"));
+        if (CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
+        {
+            items.Add(new NewShellMenuItem(
+                "ביקורת (מעטפת)",
+                OpenInspectionShell,
+                "פתיחת מעטפת הביקורת החדשה"));
+        }
 
-        // Settings — documented placeholder only for this slice (see docs/APP_SHELL.md §11); shown
-        // disabled so the menu communicates what is coming without opening anything.
+        // Settings — surface not implemented yet; show disabled. When implemented, gate with
+        // AppFeatureCodes.SystemSettingsWrite (Administrator).
+        const bool settingsSurfaceImplemented = false;
+        var settingsAuthorized = CanAccessFeature(AppFeatureCodes.SystemSettingsWrite);
         items.Add(new NewShellMenuItem(
             "הגדרות",
             static () => { },
-            "בקרוב — ראה docs/APP_SHELL.md §11",
-            isAvailable: false));
+            settingsSurfaceImplemented
+                ? "הגדרות מערכת"
+                : "בקרוב — ראה docs/APP_SHELL.md §11",
+            isAvailable: settingsSurfaceImplemented && settingsAuthorized));
 
         return items;
+    }
+
+    /// <summary>
+    /// Fail-closed feature check via the Application authorization port (host supplies legacy adapter).
+    /// </summary>
+    private bool CanAccessFeature(string featureCode)
+    {
+        var authorization = _services.GetService<IAuthorizationQueryService>();
+        if (authorization is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return authorization
+                .CanCurrentUserAccessFeatureAsync(featureCode)
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     private void OpenInspectionShell()

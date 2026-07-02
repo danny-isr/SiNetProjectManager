@@ -148,17 +148,21 @@ Rules:
   requires a real, DI-resolvable surface — no placeholders that throw.
 - Menu items open surfaces through the **same** DI/factory paths the legacy host already uses
   (`IEmailWindowFactory`, `InspectionShellView`), so behavior is identical to the reviewed clones.
+- **Menu availability (P3):** `NewShellFactory` resolves whether an item is included/enabled via
+  `IAuthorizationQueryService.CanCurrentUserAccessFeatureAsync` and `AppFeatureCodes` — not via legacy
+  `CurrentUserContext` or `IsAdmin` checks inside `NewShellViewModel`.
 - The menu carries **no business logic** and never mutates workflow (see §10 and
   `AI_DEVELOPMENT_GUIDE.md` rule 11).
 
-Initial menu (this slice):
+Initial menu (P3):
 
-| Item | Opens | Path |
-| --- | --- | --- |
-| Email (visual clone) | `EmailWindowView` | `IEmailWindowFactory.Create()` |
-| Inspection (shell) | `InspectionShellView` | DI-resolved view (harness) |
-| Project Context (selector) | in-shell `ProjectSelectorView` | shared Project Context slice |
-| Settings (placeholder) | *documented only* | see §11 — not implemented this slice |
+| Item | Feature code | Min role | Opens |
+| --- | --- | --- | --- |
+| Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
+| Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
+| Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until surface exists* |
+
+Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
 
 ---
 

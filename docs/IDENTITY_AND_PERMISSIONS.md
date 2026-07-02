@@ -346,42 +346,33 @@ public interface ICurrentUserProfileService
 
 **Host adapter:** `SiNetProjectManagerV2/Services/LegacyCurrentUserProfileService.cs` reads the authenticated legacy `CurrentUserContext` singleton (no WPF → EF). Shell display uses `CurrentUserProfileDisplay.Format`.
 
-### 7.3 Proposed — role / feature authorization queries
+### 7.3 Implemented — role / feature authorization queries (P3)
 
 ```csharp
-public enum AppRole
-{
-    Unauthorized = 0,
-    Employee = 1,
-    Management = 2,
-    Administrator = 3
-}
-
 public interface IAuthorizationQueryService
 {
-    Task<bool> IsCurrentUserInRoleAsync(
-        AppRole requiredRole,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> CanCurrentUserAccessFeatureAsync(
-        string featureCode,
-        CancellationToken cancellationToken = default);
+    Task<bool> IsCurrentUserInRoleAsync(AppRole requiredRole, ...);
+    Task<bool> CanCurrentUserAccessFeatureAsync(string featureCode, ...);
 }
 ```
 
-**Feature codes** (examples — finalize in implementation slice):
+**Constants:** `AppFeatureCodes` — stable feature code strings.
 
-| FeatureCode | Minimum role (target) |
+**Mapping:** `AppFeatureAuthorization` — minimum role per feature; unknown codes throw `ArgumentException` (deny-by-default, never silent allow).
+
+| FeatureCode (`AppFeatureCodes`) | Minimum role |
 | --- | --- |
-| `Shell.OpenEmailSurface` | Employee |
-| `Shell.OpenInspectionSurface` | Employee |
-| `Project.Create` | Management |
-| `Reports.Management` | Management |
-| `System.Settings.Write` | Administrator |
-| `Users.Manage` | Administrator |
-| `ActionPermissions.Manage` | Administrator |
+| `ShellOpenEmailSurface` | Employee |
+| `ShellOpenInspectionSurface` | Employee |
+| `ProjectCreate` | Management |
+| `ReportsManagement` | Management |
+| `SystemSettingsWrite` | Administrator |
+| `UsersManage` | Administrator |
+| `ActionPermissionsManage` | Administrator |
 
-Implementation initially delegates to legacy `CurrentUserContext` via Infrastructure adapter — **same rules, new port**.
+**Host adapter:** `SiNetProjectManagerV2/Services/LegacyAuthorizationQueryService.cs` → legacy `CurrentUserContext` (hierarchical `Role >= required`).
+
+**NewShell:** `NewShellFactory.BuildMigratedOnlyMenu()` resolves item visibility via `IAuthorizationQueryService` + `AppFeatureCodes` — no `CurrentUserContext` / `IsAdmin` in `SiNet.App.Wpf`.
 
 ### 7.4 Proposed — action permission queries
 
@@ -443,7 +434,7 @@ Phased, documentation-driven slices:
 | **P1 — auth parity decision** | New System calls `AuthorizeCurrentUser` before shell | ✅ Implemented |
 | **P1.5 — DEBUG role selector** | Shared `DebugAuthorizationRoleSelectorWindow` on New + Legacy paths | ✅ Implemented |
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
-| **P3 — authorization queries** | `IAuthorizationQueryService` + shell menu `IsAvailable` | Read-only |
+| **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | Read-only |
 | **P5 — user management port** | `IUserManagementService`; migrate User Management UI | Writes via existing `UserService` rules |
 | **P6 — action permission admin UI** | Migrate `ActionPermissionWindow` to New System menu | Uses existing save service |
