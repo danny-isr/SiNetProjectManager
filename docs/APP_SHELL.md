@@ -176,7 +176,7 @@ via `IActionPermissionAdminWindowFactory` — no visual clone yet; save still us
 **User management (P5 + menu):** Administrators see **ניהול משתמשים** in the New System menu when
 `Users.Manage` is authorized. The shell opens the existing legacy `UserManagementWindow` via
 `IUserManagementWindowFactory`. CRUD still flows through `IUserManagementService` / legacy `UserService`
-when migrated; the window itself still uses `UserManagementViewModel` today.
+when migrated; both view models now consume the port via `UserManagementPortAdapter`. `AddUserWindow` entry remains legacy host menu only.
 
 ---
 

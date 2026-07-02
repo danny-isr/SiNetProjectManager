@@ -410,20 +410,27 @@ public interface IUserManagementService
 
 **DTOs:** `UserSummaryDto`, `CreateUserCommand`, `UpdateUserCommand`, `AppAccUserType` (mirrors legacy `AccUserType`).
 
-**Host adapter:** `SiNetProjectManagerV2/Services/LegacyUserManagementService.cs` → legacy `UserService` (Administrator-only writes, self-protection, ACC reconciliation).
+**Host adapter (shared):** `SiNetSQL/Services/Users/UserManagementPortAdapter.cs` → legacy `UserService`.
 
-**UI:** User Management / Add User windows remain legacy implementations; the New System shell opens
-`UserManagementWindow` via `IUserManagementWindowFactory` when `Users.Manage` is authorized (menu wiring
-with P6 admin surfaces).
+**UI:** `UserManagementViewModel` and `AddUserViewModel` route user operations through `IUserManagementService` via `UserManagementPortAdapter` (constructors still accept `IUserService` for legacy DI). New System shell opens admin windows via host factories when authorized.
 
 ### 7.6 DI registration direction
 
-Follow the same pattern as Project Context / Workflow reads:
+Modular host extensions (P7):
+
+```text
+AddSiNetIdentityLegacyAdapters()   → ICurrentUserContext, profile, authorization, action permission, user management ports
+AddSiNetNewSystemGraph()           → project context + shell + admin window factories
+```
+
+Full container split (`AddSiNetClean` vs `AddSiNetWithLegacyBridge`) remains deferred per `ARCHITECTURE_TARGET.md`.
+
+Layering:
 
 ```text
 SiNet.Application          → ports + DTOs + enums
-SiNet.Infrastructure.Sql   → adapters calling legacy services OR extracted Sql services
-SiNetProjectManagerV2      → composition root registers adapters at startup
+SiNetSQL                   → UserManagementPortAdapter (shared legacy adapter)
+SiNetProjectManagerV2      → composition root + host-only adapters (CurrentUserContext, action permission)
 SiNet.App.Wpf              → consumes ports only; no EF
 ```
 
@@ -445,7 +452,7 @@ Phased, documentation-driven slices:
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
 | **P5 — user management port** | `IUserManagementService`; migrate User Management UI | ✅ Implemented (port + adapter; admin UI still legacy) |
 | **P6 — action permission admin UI** | `ActionPermissionWindow` in New System menu via factory | ✅ Implemented (legacy window; host factory) |
-| **P7 — composition split** | Optional separate DI graphs (`AddSiNetClean` vs legacy bridge) per `ARCHITECTURE_TARGET.md` | None |
+| **P7 — composition split** | Modular DI: `AddSiNetIdentityLegacyAdapters`, `AddSiNetNewSystemGraph` | ✅ Partial (host extensions; full clean/legacy container split deferred) |
 
 Each phase ends with: tests on service behavior, doc/code alignment check, explicit note in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md).
 

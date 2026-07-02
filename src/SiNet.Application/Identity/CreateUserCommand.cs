@@ -11,4 +11,5 @@ public sealed record CreateUserCommand(
     AppAccUserType AccUserType = AppAccUserType.NoAccUser,
     bool IsActive = true,
     bool? IsDomainGroup = null,
-    int? MasterPlanEmployeeId = null);
+    int? MasterPlanEmployeeId = null,
+    string? Notes = null);

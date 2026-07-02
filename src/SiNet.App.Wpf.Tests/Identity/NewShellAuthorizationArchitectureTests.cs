@@ -92,6 +92,26 @@ public sealed class NewShellAuthorizationArchitectureTests
         Assert.DoesNotContain("UserService", vmSource, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void UserManagementViewModel_uses_user_management_port_internally()
+    {
+        var source = ReadSourceRelativeToRepo("../SiNetSQL/SiNetSQL/MVVM/UserManagementViewModel.cs");
+        Assert.Contains("UserManagementPortAdapter", source, StringComparison.Ordinal);
+        Assert.Contains("IUserManagementService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_userService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UserUpdateDto", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddUserViewModel_uses_user_management_port_internally()
+    {
+        var source = ReadSourceRelativeToRepo("../SiNetSQL/SiNetSQL/MVVM/AddUserViewModel.cs");
+        Assert.Contains("UserManagementPortAdapter", source, StringComparison.Ordinal);
+        Assert.Contains("IUserManagementService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("_userService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Siuser", source, StringComparison.Ordinal);
+    }
+
     private static string ReadSourceRelativeToRepo(string relativePath)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

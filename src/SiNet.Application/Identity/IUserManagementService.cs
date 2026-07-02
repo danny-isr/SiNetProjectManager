@@ -26,4 +26,17 @@ public interface IUserManagementService
     Task UpdateUsersAsync(
         IReadOnlyList<UpdateUserCommand> updates,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns whether a login name already exists (case-insensitive).
+    /// </summary>
+    Task<bool> CheckDuplicateLoginNameAsync(
+        string loginName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns all existing login names (lowercased) for filtering AD import candidates.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetExistingLoginNamesAsync(
+        CancellationToken cancellationToken = default);
 }

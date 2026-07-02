@@ -1,4 +1,5 @@
 using SiNetProjectManagerV2.Services;
+using SiNetProjectManagerV2.Services.Composition;
 using SiNetProjectManagerV2.WPF;
 using System;
 using System.Diagnostics;
@@ -288,20 +289,7 @@ namespace SiNetProjectManagerV2
             // CurrentUserContext.Instance lifetime; the new SiNet.App.Wpf preview harness leaves this
             // unbound, in which case the shell falls back to an explicit dev input. Read-only adapter:
             // it exposes only the user id and makes no authorization decisions.
-            services.AddSingleton<SiNet.Application.Identity.ICurrentUserContext,
-                Services.CurrentUserContextAdapter>();
-
-            services.AddSingleton<SiNet.Application.Identity.ICurrentUserProfileService,
-                Services.LegacyCurrentUserProfileService>();
-
-            services.AddSingleton<SiNet.Application.Identity.IAuthorizationQueryService,
-                Services.LegacyAuthorizationQueryService>();
-
-            services.AddSingleton<SiNet.Application.Identity.IActionPermissionQueryService,
-                Services.LegacyActionPermissionQueryService>();
-
-            services.AddSingleton<SiNet.Application.Identity.IUserManagementService,
-                Services.LegacyUserManagementService>();
+            services.AddSiNetIdentityLegacyAdapters();
 
             // Completion-metadata port: binds the new clean ITaskCompletionMetadataResolver to the
             // legacy declarative ReviewCompletionEventBehavior mapping so feature screens can resolve
@@ -939,21 +927,7 @@ namespace SiNetProjectManagerV2
             // shell pieces (a single ICurrentProjectContext + Email window factory) via the runtime path,
             // so the Email selector loads real projects while every surface observes the SAME Current
             // Project. Read-only: no DB writes, no EF entities in WPF, no email filtering, no workflow mutation.
-            SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
-            SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
-
-            // Clean New System shell factory (docs/APP_SHELL.md). Registered after the surfaces it opens
-            // (Project Context above + the Inspection shell view registered earlier) so its migrated-only
-            // menu can resolve them. Additive: this only enables the optional New system startup mode and
-            // does NOT change the legacy MainWindow startup path.
-            SiNet.App.Wpf.Shell.ShellServiceCollectionExtensions.AddSiNetShell(services);
-
-            // Host-owned admin surfaces opened from the New System shell menu (P6).
-            services.AddSingleton<SiNet.App.Wpf.Shell.IActionPermissionAdminWindowFactory,
-                Services.ActionPermissionAdminWindowFactory>();
-
-            services.AddSingleton<SiNet.App.Wpf.Shell.IUserManagementWindowFactory,
-                Services.UserManagementWindowFactory>();
+            services.AddSiNetNewSystemGraph();
 
             return services.BuildServiceProvider();
         }
