@@ -80,6 +80,18 @@ no legacy window, no `SiNetSQL.MVVM`).
 The general **הגדרות** menu item remains a disabled placeholder until a native system-settings surface
 exists (distinct from keys/secrets).
 
+## Native logging (Stage 4, 2026-07-03)
+
+| Port | Adapter | Registration |
+| --- | --- | --- |
+| `IAppLogger` | `SerilogAppLogger` | `AddSiNetSerilogLogging()` in `AddSiNetNewSystemGraph()` |
+
+New System modules inject `IAppLogger` only — **not** `SiNetSQL.Services.AppLogger` or Serilog types.
+`SerilogAppLogger` forwards to the host's existing `Log.Logger` pipeline (one sink graph, no duplicate
+logger). Scaffold `AddSiNet()` still uses `ConsoleAppLogger` for standalone dev.
+
+See [`LOGGING.md`](./LOGGING.md). Boundary tests: `NewSystemLoggingBoundaryTests.cs`.
+
 ## Revoked pattern (do not extend)
 
 | Pattern | Status |

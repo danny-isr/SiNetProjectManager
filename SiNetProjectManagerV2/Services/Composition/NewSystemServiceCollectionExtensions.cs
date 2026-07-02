@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
+using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using SiNetProjectManagerV2.Services;
 
@@ -25,6 +26,7 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
         SiNet.Infrastructure.Sql.UserManagementServiceCollectionExtensions.AddSiNetUserManagementSql(services);
         services.AddSiNetSecrets();
+        services.AddSiNetSerilogLogging();
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);

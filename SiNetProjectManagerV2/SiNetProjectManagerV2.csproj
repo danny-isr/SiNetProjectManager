@@ -74,6 +74,7 @@
          SiNetSQL -> SiNet.Infrastructure.Sql; this makes the dependency explicit (no new cycle). -->
     <ProjectReference Include="..\src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
+    <ProjectReference Include="..\src\SiNet.Infrastructure.Logging\SiNet.Infrastructure.Logging.csproj" />
     <!-- Inspection migration (Phase 5): the new Inspection shell view + view-models live in the
          SiNet.App.Wpf preview harness. The main host references it ONLY to surface the new screen
          as an additive "Inspection (Preview)" developer entry point with live data through the

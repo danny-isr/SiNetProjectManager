@@ -1,8 +1,9 @@
 namespace SiNet.Application.Abstractions.Logging;
 
 /// <summary>
-/// Application logging port. Implemented by <c>SiNet.Infrastructure.Logging</c>
-/// (Serilog adapter). Keeps the rest of the codebase free of a concrete logger dependency.
+/// Application logging port. Implemented by <c>SiNet.Infrastructure.Logging</c>:
+/// <c>SerilogAppLogger</c> (production, host Serilog pipeline) or <c>ConsoleAppLogger</c> (scaffold/tests).
+/// See <c>docs/LOGGING.md</c>.
 /// </summary>
 public interface IAppLogger
 {
