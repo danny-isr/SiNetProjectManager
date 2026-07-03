@@ -181,11 +181,11 @@ Avoid:
 
 | Domain | Legacy source (approx. size) | New home | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted; native sign-in + real config done** (no `LegacyBridge`). Read-only; deferred: send/modify only. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below. |
+| Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted module/harness foundation; production host not switched.** Native Gmail **read** and native Gmail **send capability** now exist in the clean module and are exercised by the standalone `SiNet.App.Wpf` path; `SiNetProjectManagerV2` still runs the legacy Google runtime path. Gmail modify plus all Google Sheets/Drive work remain deferred. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below and [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md). |
 | Workflow | Legacy Workflow windows, `WorkflowTaskOrchestrator`, `WorkflowEngine`, task provisioning | `SiNet.Application.Workflow` `IWorkflowQueryService` + `IWorkflowCommandService`; SQL implementation keeps engine/provisioning internal | 🟡 | **Workflow is the process backbone.** Both boundaries exist and are DTO-clean: `IWorkflowQueryService` (reads) and `IWorkflowCommandService` (start / advance / auto-advance / stalled recovery). Internal `WorkflowEngine` + provisioning stay entity-based inside SQL/infrastructure. Next work should **connect new screens to workflow/task control** rather than rebuilding screens as isolated modules. See _Refactor Strategy_ + the Workflow sections below. |
-| ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ `LegacyBridge`) | ⬜ | ACC remains source of truth; DB is cache/helper. |
+| ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ optional bridge seam) | ⬜ | ACC remains source of truth; DB is cache/helper. Clean side currently has only ports (`IAccProjectService`, `IAccDocumentService`) and a stub `AddSiNetAutodesk()`; production behavior remains in the legacy host/runtime split. See [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md). |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
-| App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
+| App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and the Google host-switch / Sheets / Drive boundary. See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
 | Logging | scattered Serilog usage | `SiNet.Application` `IAppLogger` → `SiNet.Infrastructure.Logging` (`SerilogAppLogger` / `AddSiNetSerilogLogging`) | 🟡 | Stage 4: New System consumption port wired; bootstrap still in host. See [`LOGGING.md`](./LOGGING.md). |
 | Settings (logging + theme) | `SettingsManager` / `SystemSettings` `Logging.*` | Full settings ports + native Settings UI + theme runtime | 🟢 | Stage 5 slice 2 + Stage 6 theme. See [`SETTINGS.md`](./SETTINGS.md) §9. |
@@ -219,12 +219,13 @@ Avoid:
 > The legacy-backed Round 1 plan is retired and must not be reintroduced (`LegacyEmailGatewayAdapter`
 > removed; no `SiNet.LegacyBridge` reference in `SiNet.Infrastructure.Google`).
 
-The Email/Google slice now runs entirely on the new stack with a **native Gmail
-implementation**. `SiNet.Infrastructure.Google` talks to the Gmail API directly; there is no
-longer any dependency on the legacy `GoogleService` or on `SiNet.LegacyBridge`.
+The Email/Google slice has a **native Gmail implementation** in the clean stack.
+`SiNet.Infrastructure.Google` talks to the Gmail API directly; there is no dependency on the legacy
+`GoogleService` or on `SiNet.LegacyBridge` **inside the native module path**. This does **not** mean
+the production host has switched: `SiNetProjectManagerV2` still runs the legacy Google path.
 
-Active flow: `SiNet.App.Wpf` `InboxViewModel` → `IEmailGateway` → `GmailEmailGateway`
-→ `GmailClientProvider` (OAuth / silent token restore) → Gmail API.
+Active native flow: standalone `SiNet.App.Wpf` `InboxViewModel` → `IEmailGateway` →
+`GmailEmailGateway` → `GmailClientProvider` (OAuth / silent token restore) → Gmail API.
 
 | Deliverable | Status |
 | --- | --- |
@@ -232,15 +233,19 @@ Active flow: `SiNet.App.Wpf` `InboxViewModel` → `IEmailGateway` → `GmailEmai
 | `EmailAddress.TryParse` / `CreateOrFallback` (non-throwing, `Unknown` fallback) | ✅ |
 | Native `GmailEmailGateway` (Gmail API → `EmailSummary`, label-scoped per project) | ✅ |
 | `GmailClientProvider` (silent token restore; returns `null` when not signed in, never throws) | ✅ |
-| `GmailOptions` config model (client secrets path, token store, app name, scopes, interactive flag) | ✅ |
+| `GmailOptions` config model (client secrets path, token store, app name, root label, interactive flag) | ✅ |
 | `AddSiNetGoogle()` / `AddSiNetGoogle(Action<GmailOptions>)` register `IEmailGateway` → native gateway | ✅ |
 | `SiNet.App.Composition` `AddSiNet(Action<GmailOptions>)` host configuration overload | ✅ |
-| `SiNet.App.Wpf` host configures `GmailOptions` (env-var secrets/token store, no legacy coupling) | ✅ |
+| `SiNet.App.Wpf` harness configures `GmailOptions` (env-var token store, config fallback for client secrets) | ✅ |
 | `SiNet.App.Wpf` inbox consumer (VM + `DataGrid`, empty/not-signed-in handled) | ✅ |
 | `dotnet build SiNet.sln` green + legacy WPF host green (full MSBuild) | ✅ _0/0 both_ |
 
 > **No strangler debt remains for this slice.** `SiNet.Infrastructure.Google` references only
 > `SiNet.Application`, `SiNet.Domain`, and the Gmail NuGet packages.
+>
+> **Important host note:** the production host is still legacy for Google. The native Gmail module is
+> currently proven in the clean module / harness path, not yet adopted as the runtime Google path of
+> `SiNetProjectManagerV2`.
 
 ### Bridge cleanup (this round)
 
@@ -260,24 +265,26 @@ The legacy-backed bridge path is no longer the active implementation and was cle
 
 ### Deferred gaps — status
 
-This slice was accepted as a **foundation state** with five deferred gaps. Gaps #1, #2, and #5 were
-closed in the *Interactive sign-in + real config* round (below). Gaps #3 and #4 remain deferred and
-must not be addressed unless separately requested.
+This slice was accepted as a **foundation state** with five tracked gaps. Gaps #1, #2, and #5 were
+closed in the *Interactive sign-in + real config* round (below). Gap #4 later became **partial**
+when D6 added native send; the remaining Gmail parity gaps stay deferred unless separately requested.
 
 | # | Gap | Status |
 | --- | --- | --- |
 | 1 | Native interactive Gmail sign-in | ✅ Closed — `GmailClientProvider.SignInInteractiveAsync` + "Connect Google" UI |
 | 2 | Real Gmail configuration source (was env-var scaffold) | ✅ Closed — `appsettings.json` (`Gmail` section) bound to `GmailOptions`; env vars override |
-| 3 | Native gateway is read-only | ⬜ Deferred (out of scope) |
-| 4 | Send/modify Gmail capabilities | ⬜ Deferred (out of scope) |
+| 3 | Native inbox gateway is summary/read-oriented only | ⬜ Deferred (full body / attachments / modify still out of scope) |
+| 4 | Send/modify Gmail capabilities | 🟡 Partial — native send closed in D6; modify remains deferred |
 | 5 | App-startup first-time auth / token acquisition | ✅ Closed — startup silent restore (`TrySignInSilentlyAsync`) + on-demand interactive sign-in |
+| 6 | Vault wiring in standalone `SiNet.App.Wpf` harness | ⬜ Deferred — production host registers `AddSiNetSecrets()`, standalone harness does not |
 
 ---
 
 ## Email / Google — Interactive sign-in + real config (round 2) ✅
 
-Builds on the accepted native foundation. **Read-only scope unchanged** (`GmailReadonly`); no
-send/modify added.
+Builds on the accepted native foundation. This round established real config + interactive/silent
+sign-in. The **current** module scope set is now `GmailReadonly` + `GmailSend` because D6 later added
+native send; Gmail modify remains deferred.
 
 Active flow (sign-in): `SiNet.App.Wpf` "Connect Google" → `InboxViewModel.ConnectCommand`
 → `GmailClientProvider.SignInInteractiveAsync` → Gmail OAuth consent → token store.
@@ -297,6 +304,8 @@ At startup the host attempts `TrySignInSilentlyAsync` (no browser) to restore a 
 
 > Still independent of legacy `AppConfiguration`. `SiNet.Infrastructure.Google` references only
 > `SiNet.Application`, `SiNet.Domain`, and Gmail NuGet packages — no `LegacyBridge`.
+> The standalone `SiNet.App.Wpf` host, however, does **not** register `AddSiNetSecrets()`, so the
+> vault-first path is unavailable there unless the module is hosted through `SiNetProjectManagerV2`.
 
 ---
 
@@ -730,7 +739,7 @@ adopted until logging + Google reconciliation is approved.
 | 1 | SQL `DbContextFactory` | `AddSiNetSql(connectionString)` | ⛔ **Behavior mismatch — kept in host** *(→ resolved in D3)* | Vault sourcing *itself* is fine (host would pass the Credential-Manager string), **but** the host registration adds a `#if DEBUG` block — `EnableSensitiveDataLogging()` + `EnableDetailedErrors()` — that the clean `net10.0` module's fixed options lambda does **not** emit. Delegating would silently drop DEBUG diagnostics. Preserving it would require changing the shared module's signature (≈ "invent/alter a module"), which was out of Phase 2 scope. **Unblocked and delegated in D3** via the `SiNetSqlOptions.EnableEfDebugDiagnostics` opt-in. |
 | 2 | Workflow command port | `AddSiNetWorkflowCommands()` | ✅ **Already modular (no-op)** | Delegated since A5/P2; the host already calls `WorkflowCommandsServiceCollectionExtensions.AddSiNetWorkflowCommands(services)` at `App.xaml.cs` line 274. Nothing left to move. |
 | 3 | FileSystem / Logging | `AddSiNetFileSystem()` / `AddSiNetLogging()` | ⛔ **Dead/behavior-changing — kept in host** | The modules register clean ports `IFileStorage→LocalFileStorage` and `IAppLogger→ConsoleAppLogger`. A workspace scan shows the host **neither registers nor consumes** `IFileStorage`/`IAppLogger` anywhere; the host logs through `AddLogging`+Serilog and `AppLogger`. Calling these would add unused registrations and introduce a second logger abstraction — a behavior change with no consumer, not a like-for-like swap. |
-| 4 | Google / Gmail | `AddSiNetGoogle(configure)` | ⛔ **Auth/runtime change — kept in host** *(→ confirmed in D4)* | The module wires the **native** `IEmailGateway→GmailEmailGateway` (direct Gmail API via `GmailClientProvider`). The host runs the legacy `GoogleAuthService` + `GoogleService` + `GmailOutboundMailService` sign-in/throttle path (bridged via `ILegacyEmailSource`). Adopting the module would change Gmail sign-in/runtime behavior — explicitly forbidden this phase. **D4 confirmed not behavior-equivalent** (read-only scope, separate OAuth client + token store, 5 legacy consumers, 0 native consumers) — no consolidation executed. |
+| 4 | Google / Gmail | `AddSiNetGoogle(configure)` | ⛔ **Auth/runtime change — kept in host** *(→ confirmed in D4)* | The module wires the native Gmail stack (`IEmailGateway`, `IConnectorAuthService`, `IEmailSender`) over `GmailClientProvider`. The host runs the legacy `GoogleAuthService` + `GoogleService` + `GmailOutboundMailService` sign-in/throttle path (bridged via `ILegacyEmailSource`). Adopting the module would change Gmail sign-in/runtime behavior — explicitly forbidden this phase. **D4 confirmed not behavior-equivalent** (Gmail-only native capability set, separate OAuth client + token store, 5 legacy consumers, 0 native host consumers) — no consolidation executed. |
 
 **Net result:** group #2 was already modular; groups #1, #3, #4 remain host-specific for the
 documented blockers. The `ConfigureServices()` bucket map from D1 stands unchanged; bucket **(1b)
@@ -744,8 +753,9 @@ blocker reasons above.
 - **FileSystem/Logging #3:** only meaningful once host consumers are migrated to `IFileStorage` /
   `IAppLogger`; until then the modules have no consumer in this host.
 - **Google #4:** ~~part of the separately-gated Gmail consolidation~~ **Investigated in D4** — paths
-  are **not** behavior-equivalent (read-only native scope, separate OAuth client/token store, no
-  native consumers); legacy `GoogleService` retained. No further composition gate planned for Gmail.
+  are **not** behavior-equivalent (Gmail-only native capability set, separate OAuth client/token
+  store, no native host consumers); legacy `GoogleService` retained. No further composition gate
+  planned for Gmail without a separately approved parity design.
 
 | Deliverable | Status |
 | --- | --- |
