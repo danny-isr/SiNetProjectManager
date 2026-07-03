@@ -241,6 +241,20 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
+    public void Legacy_new_system_graph_registers_autodesk_core_before_status_window()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            Boundary.RepoPaths.RepoRoot,
+            "SiNetProjectManagerV2",
+            "Services",
+            "Composition",
+            "NewSystemServiceCollectionExtensions.cs"));
+
+        Assert.Contains("services.AddSiNetAutodesk();", source, StringComparison.Ordinal);
+        Assert.Contains("services.AddSiNetAutodeskStatusWpf();", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Wpf_harness_registers_native_secrets_before_startup()
     {
         var source = File.ReadAllText(Path.Combine(AppWpfRoot, "App.xaml.cs"));
