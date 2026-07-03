@@ -14,6 +14,7 @@ internal sealed record AccControlPlaneStatusPresentation(
     string ModeSummary,
     string KeySummary,
     string ProjectsSummary,
+    IReadOnlyList<string> KnownProjectIds,
     string HealthSummary,
     string DiagnosticsSummary);
 
@@ -59,7 +60,7 @@ public sealed class AccControlPlaneStatusPresenter(
         var keySummary = keyInfo.HasApiKey
             ? $"{labels.KeyPresentPrefix}, אורך {keyInfo.KeyLength}, hash {keyInfo.KeyHashPrefix}"
             : labels.KeyMissingText;
-        var projectsSummary = await BuildProjectsSummaryAsync(labels, cancellationToken).ConfigureAwait(true);
+        var (projectsSummary, knownProjectIds) = await BuildProjectsPresentationAsync(labels, cancellationToken).ConfigureAwait(true);
 
         if (mode != AccServiceMode.Remote || string.IsNullOrWhiteSpace(baseUrl))
         {
@@ -68,6 +69,7 @@ public sealed class AccControlPlaneStatusPresenter(
                 modeSummary,
                 keySummary,
                 projectsSummary,
+                knownProjectIds,
                 labels.HealthLocalText,
                 labels.DiagnosticsLocalText);
         }
@@ -90,11 +92,12 @@ public sealed class AccControlPlaneStatusPresenter(
             modeSummary,
             keySummary,
             projectsSummary,
+            knownProjectIds,
             healthSummary,
             diagnosticsSummary);
     }
 
-    private async Task<string> BuildProjectsSummaryAsync(
+    private async Task<(string Summary, IReadOnlyList<string> ProjectIds)> BuildProjectsPresentationAsync(
         AccControlPlaneStatusLabels labels,
         CancellationToken cancellationToken)
     {
@@ -103,17 +106,17 @@ public sealed class AccControlPlaneStatusPresenter(
             var projectIds = await _accProjectService.GetProjectIdsAsync(cancellationToken).ConfigureAwait(true);
             if (projectIds.Count == 0)
             {
-                return labels.ProjectsEmptyText;
+                return (labels.ProjectsEmptyText, []);
             }
 
             var preview = string.Join(", ", projectIds.Take(3));
             var extraCount = projectIds.Count - 3;
             var suffix = extraCount > 0 ? $" (+{extraCount} נוספים)" : string.Empty;
-            return $"{labels.ProjectsPrefix}: {projectIds.Count} ({preview}{suffix})";
+            return ($"{labels.ProjectsPrefix}: {projectIds.Count} ({preview}{suffix})", projectIds);
         }
         catch (Exception ex)
         {
-            return $"{labels.ProjectsErrorPrefix}: {ex.Message}";
+            return ($"{labels.ProjectsErrorPrefix}: {ex.Message}", []);
         }
     }
 

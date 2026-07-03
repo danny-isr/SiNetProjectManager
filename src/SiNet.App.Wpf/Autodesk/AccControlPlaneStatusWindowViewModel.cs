@@ -8,26 +8,31 @@ namespace SiNet.App.Wpf.Autodesk;
 
 public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 {
+    private const string RootBrowseLabel = "Project Files";
     private readonly AccControlPlaneStatusPresenter _presenter;
     private readonly IAccDocumentService _accDocumentService;
     private readonly IAccFolderBrowserService _accFolderBrowserService;
     private readonly IAccLookupSeedService _accLookupSeedService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
     private readonly IClipboardTextWriter _clipboardTextWriter;
+    private readonly List<AccBrowseLocation> _browseTrail = [];
     private string? _hintText;
     private string _modeSummary = "טוען...";
     private string _keySummary = "טוען...";
     private string _projectsSummary = "טוען...";
     private string _healthSummary = "טוען...";
     private string _diagnosticsSummary = "טוען...";
+    private string? _selectedKnownProjectId;
     private string _lookupProjectId = string.Empty;
     private string _lookupFolderId = string.Empty;
     private string _lookupFileName = string.Empty;
     private string _lookupResultSummary = "טרם בוצע חיפוש פריט ACC.";
     private string _lookupResolvedDocsUrl = string.Empty;
     private string _browseSummary = "טרם נטען תוכן ACC.";
+    private string _browseTrailText = RootBrowseLabel;
     private string _summaryMessage = string.Empty;
     private bool _isBusy;
+    private bool _isSynchronizingKnownProjectSelection;
     private AccFolderBrowseEntry? _selectedBrowseFolder;
     private AccFolderBrowseEntry? _selectedBrowseFile;
 
@@ -45,11 +50,13 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         _accLookupSeedService = accLookupSeedService ?? throw new ArgumentNullException(nameof(accLookupSeedService));
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher ?? throw new ArgumentNullException(nameof(resolvedDocsUrlLauncher));
         _clipboardTextWriter = clipboardTextWriter ?? throw new ArgumentNullException(nameof(clipboardTextWriter));
+        KnownProjectIds = [];
         BrowseFolders = [];
         BrowseFiles = [];
         RefreshCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
         LoadLookupSeedCommand = new AsyncRelayCommand(LoadLookupSeedAsync, () => !IsBusy);
         BrowseFolderCommand = new AsyncRelayCommand(BrowseFolderAsync, CanBrowseFolder);
+        BrowseParentFolderCommand = new AsyncRelayCommand(BrowseParentFolderAsync, CanBrowseParentFolder);
         OpenSelectedFolderCommand = new AsyncRelayCommand(OpenSelectedFolderAsync, CanOpenSelectedFolder);
         UseSelectedFileCommand = new RelayCommand(_ => UseSelectedFile(), _ => CanUseSelectedFile());
         ResolveDocumentCommand = new AsyncRelayCommand(ResolveDocumentAsync, CanResolveDocument);
@@ -91,6 +98,24 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     {
         get => _diagnosticsSummary;
         private set => SetField(ref _diagnosticsSummary, value);
+    }
+
+    public ObservableCollection<string> KnownProjectIds { get; }
+
+    public string? SelectedKnownProjectId
+    {
+        get => _selectedKnownProjectId;
+        set
+        {
+            if (SetField(ref _selectedKnownProjectId, value)
+                && !_isSynchronizingKnownProjectSelection
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                LookupProjectId = value;
+                ResetBrowseState(clearFolderId: true, clearFileName: true);
+                SummaryMessage = "נבחר projectId מתוך הרשימה המוכרת.";
+            }
+        }
     }
 
     public string LookupProjectId
@@ -155,6 +180,12 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         private set => SetField(ref _browseSummary, value);
     }
 
+    public string BrowseTrailText
+    {
+        get => _browseTrailText;
+        private set => SetField(ref _browseTrailText, value);
+    }
+
     public ObservableCollection<AccFolderBrowseEntry> BrowseFolders { get; }
 
     public ObservableCollection<AccFolderBrowseEntry> BrowseFiles { get; }
@@ -166,6 +197,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         {
             if (SetField(ref _selectedBrowseFolder, value))
             {
+                BrowseParentFolderCommand.RaiseCanExecuteChanged();
                 OpenSelectedFolderCommand.RaiseCanExecuteChanged();
             }
         }
@@ -199,6 +231,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
                 RefreshCommand.RaiseCanExecuteChanged();
                 LoadLookupSeedCommand.RaiseCanExecuteChanged();
                 BrowseFolderCommand.RaiseCanExecuteChanged();
+                BrowseParentFolderCommand.RaiseCanExecuteChanged();
                 OpenSelectedFolderCommand.RaiseCanExecuteChanged();
                 UseSelectedFileCommand.RaiseCanExecuteChanged();
                 ResolveDocumentCommand.RaiseCanExecuteChanged();
@@ -213,6 +246,8 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     public AsyncRelayCommand LoadLookupSeedCommand { get; }
 
     public AsyncRelayCommand BrowseFolderCommand { get; }
+
+    public AsyncRelayCommand BrowseParentFolderCommand { get; }
 
     public AsyncRelayCommand OpenSelectedFolderCommand { get; }
 
@@ -237,6 +272,8 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             ModeSummary = presentation.ModeSummary;
             KeySummary = presentation.KeySummary;
             ProjectsSummary = presentation.ProjectsSummary;
+            ReplaceKnownProjectIds(presentation.KnownProjectIds);
+            UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(LookupProjectId));
             HealthSummary = presentation.HealthSummary;
             DiagnosticsSummary = presentation.DiagnosticsSummary;
             SummaryMessage = "סטטוס ACC נטען.";
@@ -258,6 +295,9 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 
     private bool CanBrowseFolder() =>
         !IsBusy && !string.IsNullOrWhiteSpace(LookupProjectId);
+
+    private bool CanBrowseParentFolder() =>
+        !IsBusy && _browseTrail.Count > 1;
 
     private bool CanOpenSelectedFolder() =>
         !IsBusy && SelectedBrowseFolder is not null;
@@ -324,12 +364,8 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             LookupProjectId = seed.ProjectId;
             LookupFolderId = seed.FolderId;
             LookupFileName = seed.FileName;
-            LookupResolvedDocsUrl = string.Empty;
-            BrowseFolders.Clear();
-            BrowseFiles.Clear();
-            BrowseSummary = "טרם נטען תוכן ACC.";
-            SelectedBrowseFolder = null;
-            SelectedBrowseFile = null;
+            UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(seed.ProjectId));
+            ResetBrowseState(clearFolderId: false, clearFileName: false);
             LookupResultSummary =
                 $"נטענה דוגמה מה-DB: projectId={seed.ProjectId}; folderId={seed.FolderId}; fileName={seed.FileName}; source={seed.SourceLabel}";
             SummaryMessage = $"נטענה דוגמת lookup מה-DB ({seeds.Count} מועמדים זמינים).";
@@ -346,55 +382,9 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 
     public async Task BrowseFolderAsync()
     {
-        IsBusy = true;
-        try
-        {
-            var requestedFolderId = string.IsNullOrWhiteSpace(LookupFolderId) ? null : LookupFolderId.Trim();
-            var result = await _accFolderBrowserService
-                .BrowseAsync(LookupProjectId.Trim(), requestedFolderId)
-                .ConfigureAwait(true);
-            if (result is null)
-            {
-                BrowseFolders.Clear();
-                BrowseFiles.Clear();
-                SelectedBrowseFolder = null;
-                SelectedBrowseFile = null;
-                BrowseSummary = "לא נמצא תוכן ACC עבור הפרויקט/תיקייה שסופקו.";
-                SummaryMessage = BrowseSummary;
-                return;
-            }
-
-            LookupProjectId = result.ProjectId;
-            LookupFolderId = result.FolderId;
-            LookupResolvedDocsUrl = string.Empty;
-            LookupResultSummary = "טרם בוצע resolve עבור קובץ נבחר.";
-            SummaryMessage = "נטען תוכן תיקיית ACC.";
-
-            BrowseFolders.Clear();
-            BrowseFiles.Clear();
-            foreach (var entry in result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Folder))
-            {
-                BrowseFolders.Add(entry);
-            }
-
-            foreach (var entry in result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Item))
-            {
-                BrowseFiles.Add(entry);
-            }
-
-            SelectedBrowseFolder = BrowseFolders.FirstOrDefault();
-            SelectedBrowseFile = BrowseFiles.FirstOrDefault();
-            BrowseSummary = $"נטענו {BrowseFolders.Count} תיקיות ו-{BrowseFiles.Count} קבצים מתוך folderId={result.FolderId}.";
-        }
-        catch (Exception ex)
-        {
-            BrowseSummary = $"שגיאה בטעינת תוכן ACC: {ex.Message}";
-            SummaryMessage = ex.Message;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+        var requestedFolderId = string.IsNullOrWhiteSpace(LookupFolderId) ? null : LookupFolderId.Trim();
+        var requestedLabel = string.IsNullOrWhiteSpace(requestedFolderId) ? RootBrowseLabel : requestedFolderId;
+        await BrowseFolderCoreAsync(LookupProjectId.Trim(), requestedFolderId, requestedLabel, AccBrowseNavigationMode.Reset).ConfigureAwait(true);
     }
 
     public async Task OpenSelectedFolderAsync()
@@ -404,8 +394,28 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             return;
         }
 
-        LookupFolderId = SelectedBrowseFolder!.Id;
-        await BrowseFolderAsync().ConfigureAwait(true);
+        await BrowseFolderCoreAsync(
+                LookupProjectId.Trim(),
+                SelectedBrowseFolder!.Id,
+                SelectedBrowseFolder.DisplayName,
+                AccBrowseNavigationMode.Child)
+            .ConfigureAwait(true);
+    }
+
+    public async Task BrowseParentFolderAsync()
+    {
+        if (!CanBrowseParentFolder())
+        {
+            return;
+        }
+
+        var parent = _browseTrail[^2];
+        await BrowseFolderCoreAsync(
+                LookupProjectId.Trim(),
+                parent.FolderId,
+                parent.DisplayName,
+                AccBrowseNavigationMode.Back)
+            .ConfigureAwait(true);
     }
 
     private void UseSelectedFile()
@@ -455,5 +465,170 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         {
             SummaryMessage = $"שגיאה בפתיחת ACC Docs בדפדפן: {ex.Message}";
         }
+    }
+
+    private async Task BrowseFolderCoreAsync(
+        string projectId,
+        string? requestedFolderId,
+        string requestedLabel,
+        AccBrowseNavigationMode navigationMode)
+    {
+        IsBusy = true;
+        try
+        {
+            var result = await _accFolderBrowserService
+                .BrowseAsync(projectId, requestedFolderId)
+                .ConfigureAwait(true);
+            if (result is null)
+            {
+                BrowseFolders.Clear();
+                BrowseFiles.Clear();
+                SelectedBrowseFolder = null;
+                SelectedBrowseFile = null;
+                if (navigationMode == AccBrowseNavigationMode.Reset)
+                {
+                    ResetBrowseTrail();
+                }
+
+                BrowseSummary = "לא נמצא תוכן ACC עבור הפרויקט/תיקייה שסופקו.";
+                SummaryMessage = BrowseSummary;
+                return;
+            }
+
+            LookupProjectId = result.ProjectId;
+            UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(result.ProjectId));
+            LookupFolderId = result.FolderId;
+            LookupResolvedDocsUrl = string.Empty;
+            LookupResultSummary = "טרם בוצע resolve עבור קובץ נבחר.";
+            SummaryMessage = "נטען תוכן תיקיית ACC.";
+
+            BrowseFolders.Clear();
+            BrowseFiles.Clear();
+            foreach (var entry in result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Folder))
+            {
+                BrowseFolders.Add(entry);
+            }
+
+            foreach (var entry in result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Item))
+            {
+                BrowseFiles.Add(entry);
+            }
+
+            SelectedBrowseFolder = BrowseFolders.FirstOrDefault();
+            SelectedBrowseFile = BrowseFiles.FirstOrDefault();
+            UpdateBrowseTrail(navigationMode, result.FolderId, requestedLabel);
+            BrowseSummary = $"נטענו {BrowseFolders.Count} תיקיות ו-{BrowseFiles.Count} קבצים מתוך folderId={result.FolderId}.";
+        }
+        catch (Exception ex)
+        {
+            BrowseSummary = $"שגיאה בטעינת תוכן ACC: {ex.Message}";
+            SummaryMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void ReplaceKnownProjectIds(IReadOnlyList<string> projectIds)
+    {
+        KnownProjectIds.Clear();
+        foreach (var projectId in projectIds)
+        {
+            KnownProjectIds.Add(projectId);
+        }
+    }
+
+    private string? ResolveMatchingKnownProjectId(string? projectId) =>
+        string.IsNullOrWhiteSpace(projectId)
+            ? null
+            : KnownProjectIds.FirstOrDefault(knownProjectId =>
+                string.Equals(knownProjectId, projectId.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private void UpdateSelectedKnownProjectId(string? projectId)
+    {
+        _isSynchronizingKnownProjectSelection = true;
+        try
+        {
+            SetField(ref _selectedKnownProjectId, projectId);
+        }
+        finally
+        {
+            _isSynchronizingKnownProjectSelection = false;
+        }
+    }
+
+    private void ResetBrowseState(bool clearFolderId, bool clearFileName)
+    {
+        if (clearFolderId)
+        {
+            LookupFolderId = string.Empty;
+        }
+
+        if (clearFileName)
+        {
+            LookupFileName = string.Empty;
+        }
+
+        LookupResolvedDocsUrl = string.Empty;
+        LookupResultSummary = "טרם בוצע חיפוש פריט ACC.";
+        BrowseFolders.Clear();
+        BrowseFiles.Clear();
+        SelectedBrowseFolder = null;
+        SelectedBrowseFile = null;
+        BrowseSummary = "טרם נטען תוכן ACC.";
+        ResetBrowseTrail();
+    }
+
+    private void ResetBrowseTrail()
+    {
+        _browseTrail.Clear();
+        BrowseTrailText = RootBrowseLabel;
+        BrowseParentFolderCommand.RaiseCanExecuteChanged();
+    }
+
+    private void UpdateBrowseTrail(
+        AccBrowseNavigationMode navigationMode,
+        string folderId,
+        string folderLabel)
+    {
+        switch (navigationMode)
+        {
+            case AccBrowseNavigationMode.Reset:
+                _browseTrail.Clear();
+                _browseTrail.Add(new AccBrowseLocation(folderId, folderLabel));
+                break;
+
+            case AccBrowseNavigationMode.Child:
+                if (_browseTrail.Count == 0
+                    || !string.Equals(_browseTrail[^1].FolderId, folderId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _browseTrail.Add(new AccBrowseLocation(folderId, folderLabel));
+                }
+                break;
+
+            case AccBrowseNavigationMode.Back:
+                if (_browseTrail.Count > 1)
+                {
+                    _browseTrail.RemoveAt(_browseTrail.Count - 1);
+                }
+                else
+                {
+                    _browseTrail.Clear();
+                    _browseTrail.Add(new AccBrowseLocation(folderId, folderLabel));
+                }
+                break;
+        }
+
+        BrowseTrailText = string.Join(" / ", _browseTrail.Select(static location => location.DisplayName));
+        BrowseParentFolderCommand.RaiseCanExecuteChanged();
+    }
+    private sealed record AccBrowseLocation(string FolderId, string DisplayName);
+
+    private enum AccBrowseNavigationMode
+    {
+        Reset = 0,
+        Child = 1,
+        Back = 2,
     }
 }

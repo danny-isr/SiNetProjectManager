@@ -30,7 +30,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             presenter,
             new StubAccDocumentService(null),
-            new StubAccFolderBrowserService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -42,6 +42,7 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("b.project-1", vm.ProjectsSummary, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", vm.HealthSummary, StringComparison.Ordinal);
         Assert.Contains("DOMAIN\\acc", vm.DiagnosticsSummary, StringComparison.Ordinal);
+        Assert.Equal(["b.project-1", "b.project-2"], vm.KnownProjectIds);
     }
 
     [Fact]
@@ -58,6 +59,10 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("UseSelectedFileCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("BrowseFolders", xaml, StringComparison.Ordinal);
         Assert.Contains("BrowseFiles", xaml, StringComparison.Ordinal);
+        Assert.Contains("KnownProjectIds", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedKnownProjectId", xaml, StringComparison.Ordinal);
+        Assert.Contains("BrowseParentFolderCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("BrowseTrailText", xaml, StringComparison.Ordinal);
         Assert.Contains("LookupProjectId", xaml, StringComparison.Ordinal);
         Assert.Contains("LookupResolvedDocsUrl, Mode=OneWay", xaml, StringComparison.Ordinal);
         Assert.Contains("CopyResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
@@ -71,7 +76,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
             new StubAccDocumentService(null),
-            new StubAccFolderBrowserService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService(
             [
                 new AccDocumentLookupSeed("b.project-1", "folder-22", "drawing.pdf", "item-77", "EmailInboxAttachment 2026-07-03 23:00")
@@ -85,6 +90,30 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Equal("folder-22", vm.LookupFolderId);
         Assert.Equal("drawing.pdf", vm.LookupFileName);
         Assert.Contains("נטענה דוגמה מה-DB", vm.LookupResultSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_window_view_model_uses_selected_known_project_id()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter())
+        {
+            LookupFolderId = "old-folder",
+            LookupFileName = "old-file.pdf",
+        };
+
+        await vm.LoadAsync();
+        vm.SelectedKnownProjectId = "b.project-1";
+
+        Assert.Equal("b.project-1", vm.LookupProjectId);
+        Assert.Equal(string.Empty, vm.LookupFolderId);
+        Assert.Equal(string.Empty, vm.LookupFileName);
+        Assert.Equal("טרם נטען תוכן ACC.", vm.BrowseSummary);
     }
 
     [Fact]
@@ -121,6 +150,53 @@ public sealed class AccControlPlaneStatusWindowTests
     }
 
     [Fact]
+    public async Task Status_window_view_model_can_navigate_back_to_parent_folder()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService((_, folderId) =>
+            {
+                var normalizedFolderId = string.IsNullOrWhiteSpace(folderId) ? null : folderId;
+                return normalizedFolderId switch
+                {
+                    null or "root-folder" => new AccFolderBrowseResult(
+                        "b.project-1",
+                        "root-folder",
+                        [
+                            new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
+                        ]),
+                    "folder-a" => new AccFolderBrowseResult(
+                        "b.project-1",
+                        "folder-a",
+                        [
+                            new AccFolderBrowseEntry("item-b", "B File.pdf", AccFolderEntryKind.Item, 123, null, null),
+                        ]),
+                    _ => null,
+                };
+            }),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter())
+        {
+            LookupProjectId = "b.project-1",
+        };
+
+        await vm.BrowseFolderAsync();
+        await vm.OpenSelectedFolderAsync();
+
+        Assert.Equal("folder-a", vm.LookupFolderId);
+        Assert.Equal("Project Files / A Folder", vm.BrowseTrailText);
+        Assert.True(vm.BrowseParentFolderCommand.CanExecute(null));
+
+        await vm.BrowseParentFolderAsync();
+
+        Assert.Equal("root-folder", vm.LookupFolderId);
+        Assert.Equal("Project Files", vm.BrowseTrailText);
+        Assert.False(vm.BrowseParentFolderCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task Status_window_view_model_enables_copy_and_open_for_live_docs_url()
     {
         var launcher = new StubAccResolvedDocsUrlLauncher();
@@ -128,7 +204,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
-            new StubAccFolderBrowserService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
             launcher,
             clipboard)
@@ -158,7 +234,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
-            new StubAccFolderBrowserService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -230,10 +306,22 @@ public sealed class AccControlPlaneStatusWindowTests
             Task.FromResult(result);
     }
 
-    private sealed class StubAccFolderBrowserService(AccFolderBrowseResult? result) : IAccFolderBrowserService
+    private sealed class StubAccFolderBrowserService : IAccFolderBrowserService
     {
+        private readonly Func<string, string?, AccFolderBrowseResult?> _handler;
+
+        public StubAccFolderBrowserService(AccFolderBrowseResult? result)
+            : this((_, _) => result)
+        {
+        }
+
+        public StubAccFolderBrowserService(Func<string, string?, AccFolderBrowseResult?> handler)
+        {
+            _handler = handler;
+        }
+
         public Task<AccFolderBrowseResult?> BrowseAsync(string projectId, string? folderId = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult(result);
+            Task.FromResult(_handler(projectId, folderId));
     }
 
     private sealed class StubAccLookupSeedService(IReadOnlyList<AccDocumentLookupSeed> seeds) : IAccLookupSeedService
