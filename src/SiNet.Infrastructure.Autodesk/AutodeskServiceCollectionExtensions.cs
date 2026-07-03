@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using MyOffice.AutodeskConnector;
+using SiNet.Application.Abstractions.Autodesk;
 
 namespace SiNet.Infrastructure.Autodesk;
 
@@ -36,6 +38,14 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<SiNet.Application.Abstractions.Autodesk.IAccServiceDiagnosticsProbe, HttpAccServiceDiagnosticsProbe>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+
+        services.AddTransient<IAccFolderItemsReader>(sp =>
+            new Bim360AccFolderItemsReader(sp.GetService<ITokenProvider>()));
+        services.AddTransient<LocalAccDocumentService>();
+        services.AddHttpClient<RemoteAccDocumentService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddTransient<IAccDocumentService, ModeSwitchingAccDocumentService>();
 
         return services;
     }

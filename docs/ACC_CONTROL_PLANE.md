@@ -1,13 +1,14 @@
 # ACC Control Plane
 
-> **Status:** Slice 1 implemented (2026-07-03)  
-> **Scope:** mode + health + diagnostics + local key metadata only
+> **Status:** Slice 2 implemented (2026-07-03)  
+> **Scope:** mode + health + diagnostics + local key metadata + read-only document lookup
 
-This document describes the native ACC control-plane seam that now exists in the clean stack.
-It is intentionally narrower than the full ACC runtime. It does **not** migrate provisioning,
-inbox bootstrap, filing, metadata writes, or any side-effect-heavy document flows.
+This document describes the native ACC control-plane seam plus the first read-only ACC document
+lookup slice that now exist in the clean stack. It is intentionally narrower than the full ACC
+runtime. It does **not** migrate provisioning, inbox bootstrap, filing, metadata writes, or any
+side-effect-heavy document flows.
 
-## 1. What Slice 1 Includes
+## 1. What The Current Slice Includes
 
 ### Clean ports
 
@@ -15,11 +16,13 @@ inbox bootstrap, filing, metadata writes, or any side-effect-heavy document flow
 - `IAccServiceHealthProbe`
 - `IAccServiceDiagnosticsProbe`
 - `IAccServiceKeyDiagnostics`
+- `IAccDocumentService`
 - `AccServiceMode`
 - `AccServiceHealthState`
 - `AccServiceHealthResult`
 - `AccServiceDiagnosticsResult`
 - `AccServiceKeyInfo`
+- `AccItemRef`
 
 ### Infrastructure adapters
 
@@ -28,10 +31,14 @@ inbox bootstrap, filing, metadata writes, or any side-effect-heavy document flow
 - `HttpAccServiceDiagnosticsProbe`
 - `VaultAccServiceKeyDiagnostics`
 - `AccServiceHttpClientConfigurator`
+- `Bim360AccFolderItemsReader`
+- `LocalAccDocumentService`
+- `RemoteAccDocumentService`
+- `ModeSwitchingAccDocumentService`
 
 ### DI wiring
 
-- `AddSiNetAutodesk()` now registers the control-plane services only.
+- `AddSiNetAutodesk()` now registers the control-plane services plus `IAccDocumentService`.
 - `src/SiNet.App.Wpf/App.xaml.cs` explicitly calls `AddSiNetSecrets()` after `AddSiNet()` so the
   WPF harness can resolve vault-backed ACC key diagnostics.
 - `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` consumes the seam and exposes a
@@ -55,6 +62,8 @@ inbox bootstrap, filing, metadata writes, or any side-effect-heavy document flow
 
 - Health uses `GET {BaseUrl}/v1/acc/health`
 - Diagnostics uses `GET {BaseUrl}/v1/acc/diag`
+- Read-only item lookup uses
+  `GET {BaseUrl}/v1/acc/projects/{projectId}/folders/{folderId}/items/resolve?fileName=...`
 - Health timeout: 5 seconds
 - Diagnostics timeout: 10 seconds
 
@@ -72,7 +81,7 @@ needed.
 ## 3. Contract Note
 
 The privileged-service contract is still the legacy/frozen `AccServiceContracts` surface.
-For now, the clean control-plane mirrors the `/v1` prefix internally in
+For now, the clean Autodesk module mirrors the `/v1` prefix and the API-key header internally in
 `AccServiceContractConstants`.
 
 Why this is mirrored instead of referenced directly:
@@ -89,7 +98,6 @@ legacy source of truth.
 This slice does **not** implement:
 
 - `IAccProjectService`
-- `IAccDocumentService`
 - remote project provisioning
 - remote inbox provisioning
 - `IProjectFileFilingService`
@@ -101,7 +109,7 @@ filing, or remote privileged-write behavior.
 
 ## 5. Tests
 
-Offline coverage for slice 1 lives in:
+Offline coverage for this ACC slice lives in:
 
 - `src/SiNet.App.Wpf.Tests/Autodesk/AccControlPlaneTests.cs`
 
@@ -113,11 +121,19 @@ Current checks cover:
 - success and failure mapping for health
 - JSON mapping for diagnostics
 - safe local API-key hashing
-- DI guardrails: no `IAccProjectService`, `IAccDocumentService`, provisioning, inbox, or filing registrations
+- local read-only item lookup: found vs not found behavior
+- remote read-only item lookup: `/v1/acc/projects/.../items/resolve` request shape, API-key header,
+  and JSON mapping
+- DI guardrails: `IAccDocumentService` is registered, while `IAccProjectService`, provisioning,
+  inbox, and filing are still not registered
+- source-level coverage for the new read-only `SiOffice.AccService` endpoint
 - WPF harness secret wiring via `AddSiNetSecrets()`
 - shell/menu wiring for the dedicated ACC status window
 
 ## 6. Next Slice
 
-The next ACC step should decide whether to stop at runtime/status surfaces for now, or introduce a
-separate approved slice for ACC operational actions while keeping the write-heavy pipeline deferred.
+The next ACC step should stay read-safe:
+
+- either add the first native consumer of `IAccDocumentService`,
+- or introduce `IAccProjectService` discovery as a separate read-only slice,
+- while keeping provisioning, inbox bootstrap, filing, and metadata writes deferred.

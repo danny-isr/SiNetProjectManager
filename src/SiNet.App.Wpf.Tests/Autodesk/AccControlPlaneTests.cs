@@ -139,7 +139,7 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
-    public void AddSiNetAutodesk_registers_only_control_plane_services()
+    public void AddSiNetAutodesk_registers_document_lookup_without_write_side_services()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISecretSetupHostConfiguration>(new StubSecretSetupHostConfiguration("https://acc.example.com"));
@@ -150,11 +150,94 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceHealthProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceDiagnosticsProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceKeyDiagnostics));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
         Assert.DoesNotContain(services, d => d.ServiceType == typeof(IAccProjectService));
-        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IAccDocumentService));
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.Files.IProjectFileFilingService");
+    }
+
+    [Fact]
+    public async Task Local_document_service_returns_null_when_file_not_found()
+    {
+        var sut = new LocalAccDocumentService(new StubFolderItemsReader(
+        [
+            new AccDocumentLookupResult("project-123", "item-a", "Existing.pdf", null, null),
+        ]));
+
+        var result = await sut.FindItemAsync("project-123", "folder-456", "Missing.pdf");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Local_document_service_maps_matched_item_into_acc_item_ref()
+    {
+        var sut = new LocalAccDocumentService(new StubFolderItemsReader(
+        [
+            new AccDocumentLookupResult("project-123", "item-a", "other.pdf", null, null),
+            new AccDocumentLookupResult("project-123", "item-b", "Drawing.pdf", "version-9", "https://viewer.example/item-b"),
+        ]));
+
+        var result = await sut.FindItemAsync("project-123", "folder-456", "Drawing.pdf");
+
+        Assert.NotNull(result);
+        Assert.Equal("project-123", result!.ProjectId);
+        Assert.Equal("item-b", result.ItemId);
+        Assert.Equal("version-9", result.VersionId);
+        Assert.Equal("https://viewer.example/item-b", result.ViewerUrl);
+    }
+
+    [Fact]
+    public async Task Remote_document_service_uses_versioned_lookup_endpoint_and_maps_response()
+    {
+        const string body = """
+            {
+              "projectId": "project-123",
+              "itemId": "item-789",
+              "versionId": "version-5",
+              "viewerUrl": "https://viewer.example/item-789"
+            }
+            """;
+
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccDocumentService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var result = await sut.FindItemAsync("project-123", "folder-456", "Drawing Set.pdf");
+
+        Assert.NotNull(result);
+        Assert.Equal("https://acc.example.com/v1/acc/projects/project-123/folders/folder-456/items/resolve?fileName=Drawing%20Set.pdf", requestedUri?.ToString());
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.Equal("project-123", result!.ProjectId);
+        Assert.Equal("item-789", result.ItemId);
+        Assert.Equal("version-5", result.VersionId);
+        Assert.Equal("https://viewer.example/item-789", result.ViewerUrl);
+    }
+
+    [Fact]
+    public void Acc_service_source_contains_read_only_item_lookup_endpoint()
+    {
+        var source = File.ReadAllText(Path.Combine(Boundary.RepoPaths.RepoRoot, "SiOffice.AccService", "Endpoints", "AccEndpoints.cs"));
+
+        Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
+        Assert.Contains("GetFolderItemsAsync(projectId, folderId, ct)", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -193,6 +276,17 @@ public sealed class AccControlPlaneTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             _handler(request, cancellationToken);
+    }
+
+    private sealed class StubFolderItemsReader(IReadOnlyList<AccDocumentLookupResult> items) : IAccFolderItemsReader
+    {
+        private readonly IReadOnlyList<AccDocumentLookupResult> _items = items;
+
+        public Task<IReadOnlyList<AccDocumentLookupResult>> GetFolderItemsAsync(
+            string projectId,
+            string folderId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(_items);
     }
 
     private static string AppWpfRoot =>

@@ -135,6 +135,38 @@ internal static class AccEndpoints
             return Results.Ok(list.Select(t => new AccTemplateDto(t.Id, t.Name)));
         });
 
+        // ── Read-only ACC item lookup ───────────────────────────────────────
+        v1.MapGet("/projects/{projectId}/folders/{folderId}/items/resolve", async (
+            string projectId,
+            string folderId,
+            string fileName,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(folderId))
+                return Results.BadRequest(new { error = "folderId is required." });
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Results.BadRequest(new { error = "fileName is required." });
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var items = await bim360.GetFolderItemsAsync(projectId, folderId, ct);
+            var match = SelectFolderItem(items, fileName);
+            if (match is null)
+            {
+                return Results.NotFound();
+            }
+
+            return Results.Ok(new
+            {
+                ProjectId = projectId,
+                ItemId = match.ItemId,
+                VersionId = (string?)null,
+                ViewerUrl = (string?)null
+            });
+        });
+
         // ── Project mapping (find-or-create + provision + folder tree) ──────
         v1.MapPost("/projects/ensure-mapping", async (
             EnsureProjectMappingRequest body,
@@ -240,5 +272,16 @@ internal static class AccEndpoints
                 return Results.BadRequest(new ErrorDto("Inbox bootstrap failed.", ex.Message));
             }
         });
+    }
+
+    private static AccFolderItem? SelectFolderItem(IEnumerable<AccFolderItem> items, string fileName)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(fileName);
+
+        return items.FirstOrDefault(item =>
+                   string.Equals(item.DisplayName, fileName, StringComparison.Ordinal))
+            ?? items.FirstOrDefault(item =>
+                   string.Equals(item.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
     }
 }
