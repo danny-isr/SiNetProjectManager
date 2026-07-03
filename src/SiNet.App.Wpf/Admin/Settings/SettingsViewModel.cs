@@ -25,6 +25,7 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
+    private readonly IAccProjectCatalogService _accProjectCatalogService;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -53,6 +54,7 @@ public sealed class SettingsViewModel : ObservableObject
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
         AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
+        IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
@@ -69,6 +71,7 @@ public sealed class SettingsViewModel : ObservableObject
         _themeRuntime = themeRuntime ?? throw new ArgumentNullException(nameof(themeRuntime));
         _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
         _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter ?? throw new ArgumentNullException(nameof(accControlPlaneStatusPresenter));
+        _accProjectCatalogService = accProjectCatalogService ?? throw new ArgumentNullException(nameof(accProjectCatalogService));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
         Scope = scope;
@@ -1336,9 +1339,28 @@ public sealed class SettingsViewModel : ObservableObject
         AccServiceRuntimeModeSummary = presentation.ModeSummary;
         AccServiceRuntimeKeySummary = presentation.KeySummary;
         AccServiceRuntimeProjectsSummary = presentation.ProjectsSummary;
-        AccBrowser.LoadKnownProjectIds(presentation.KnownProjectIds);
+        await LoadAccBrowserProjectsAsync(presentation.KnownProjectIds).ConfigureAwait(true);
         AccServiceRuntimeHealthSummary = presentation.HealthSummary;
         AccServiceRuntimeDiagnosticsSummary = presentation.DiagnosticsSummary;
+    }
+
+    private async Task LoadAccBrowserProjectsAsync(IReadOnlyList<string> fallbackProjectIds)
+    {
+        try
+        {
+            var projects = await _accProjectCatalogService.GetProjectsAsync().ConfigureAwait(true);
+            if (projects.Count > 0)
+            {
+                AccBrowser.LoadKnownProjects(projects);
+                return;
+            }
+        }
+        catch
+        {
+            // Keep the settings surface usable even if the richer catalog lookup fails.
+        }
+
+        AccBrowser.LoadKnownProjectIds(fallbackProjectIds);
     }
 
     public async Task BrowseAccFolderAsync()

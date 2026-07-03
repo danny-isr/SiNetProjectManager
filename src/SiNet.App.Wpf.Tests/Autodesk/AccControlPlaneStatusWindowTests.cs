@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.Application.Abstractions.Autodesk;
 using Xunit;
@@ -29,6 +30,7 @@ public sealed class AccControlPlaneStatusWindowTests
 
         var vm = new AccControlPlaneStatusWindowViewModel(
             presenter,
+            BuildCatalogService("b.project-1", "b.project-2"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
@@ -53,6 +55,7 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("AccControlPlaneStatusView", xaml, StringComparison.Ordinal);
         Assert.Contains("AccReadOnlyDocumentBrowserView", xaml, StringComparison.Ordinal);
         Assert.Contains("DataContext=\"{Binding Browser}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComboBox ItemsSource=\"{Binding KnownProjectIds}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("LoadLookupSeedCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
     }
@@ -62,6 +65,7 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
+            BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService(
@@ -84,6 +88,7 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
+            BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
@@ -108,6 +113,7 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
+            BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService(new AccFolderBrowseResult(
                 "b.project-1",
@@ -140,6 +146,7 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
+            BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((_, folderId) =>
             {
@@ -188,6 +195,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var clipboard = new StubClipboardTextWriter();
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
+            BuildCatalogService("b.project-1"),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
@@ -216,6 +224,7 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
+            BuildCatalogService("b.project-1"),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
@@ -241,6 +250,11 @@ public sealed class AccControlPlaneStatusWindowTests
             new StubAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null)),
             new StubAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured")),
             new StubAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured")));
+
+    private static StubAccProjectCatalogService BuildCatalogService(params string[] projectIds) =>
+        new(projectIds
+            .Select(projectId => new AccProjectCatalogEntry(projectId, $"Project {projectId[^1]}", "ProjectAccMapping"))
+            .ToArray());
 
     private static string ReadRepoFile(string relativePath)
     {
@@ -275,6 +289,12 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         public Task<IReadOnlyList<string>> GetProjectIdsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(projectIds);
+    }
+
+    private sealed class StubAccProjectCatalogService(IReadOnlyList<AccProjectCatalogEntry> projects) : IAccProjectCatalogService
+    {
+        public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(projects);
     }
 
     private sealed class StubAccDocumentService(AccItemRef? result) : IAccDocumentService

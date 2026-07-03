@@ -8,6 +8,7 @@ namespace SiNet.App.Wpf.Autodesk;
 public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 {
     private readonly AccControlPlaneStatusPresenter _presenter;
+    private readonly IAccProjectCatalogService _accProjectCatalogService;
     private readonly IAccLookupSeedService _accLookupSeedService;
 
     private string? _hintText;
@@ -21,6 +22,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 
     public AccControlPlaneStatusWindowViewModel(
         AccControlPlaneStatusPresenter presenter,
+        IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
         IAccLookupSeedService accLookupSeedService,
@@ -28,6 +30,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         IClipboardTextWriter clipboardTextWriter)
     {
         _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+        _accProjectCatalogService = accProjectCatalogService ?? throw new ArgumentNullException(nameof(accProjectCatalogService));
         _accLookupSeedService = accLookupSeedService ?? throw new ArgumentNullException(nameof(accLookupSeedService));
 
         Browser = new AccReadOnlyDocumentBrowserViewModel(
@@ -124,7 +127,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             ModeSummary = presentation.ModeSummary;
             KeySummary = presentation.KeySummary;
             ProjectsSummary = presentation.ProjectsSummary;
-            Browser.LoadKnownProjectIds(presentation.KnownProjectIds);
+            await LoadBrowserProjectsAsync(presentation.KnownProjectIds).ConfigureAwait(true);
             HealthSummary = presentation.HealthSummary;
             DiagnosticsSummary = presentation.DiagnosticsSummary;
             SummaryMessage = "סטטוס ACC נטען.";
@@ -165,5 +168,24 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    private async Task LoadBrowserProjectsAsync(IReadOnlyList<string> fallbackProjectIds)
+    {
+        try
+        {
+            var projects = await _accProjectCatalogService.GetProjectsAsync().ConfigureAwait(true);
+            if (projects.Count > 0)
+            {
+                Browser.LoadKnownProjects(projects);
+                return;
+            }
+        }
+        catch
+        {
+            // Fall back to plain ID list so the status window remains usable even if the richer catalog fails.
+        }
+
+        Browser.LoadKnownProjectIds(fallbackProjectIds);
     }
 }

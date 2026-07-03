@@ -39,6 +39,7 @@ public sealed class SettingsViewModelFactory
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
+    private readonly IAccProjectCatalogService _accProjectCatalogService;
     private readonly IAccDocumentService _accDocumentService;
     private readonly IAccFolderBrowserService _accFolderBrowserService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
@@ -55,6 +56,7 @@ public sealed class SettingsViewModelFactory
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
         AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
+        IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
@@ -70,6 +72,7 @@ public sealed class SettingsViewModelFactory
         _themeRuntime = themeRuntime;
         _statusColors = statusColors;
         _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter;
+        _accProjectCatalogService = accProjectCatalogService;
         _accDocumentService = accDocumentService;
         _accFolderBrowserService = accFolderBrowserService;
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher;
@@ -88,6 +91,7 @@ public sealed class SettingsViewModelFactory
             _themeRuntime,
             _statusColors,
             _accControlPlaneStatusPresenter,
+            _accProjectCatalogService,
             _accDocumentService,
             _accFolderBrowserService,
             _resolvedDocsUrlLauncher,

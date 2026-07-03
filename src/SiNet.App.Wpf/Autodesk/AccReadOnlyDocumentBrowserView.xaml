@@ -7,9 +7,13 @@
         <TextBlock Text="Known ACC Project IDs"
                    Margin="0,8,0,0"
                    Opacity="0.8"/>
-        <ComboBox ItemsSource="{Binding KnownProjectIds}"
-                  SelectedItem="{Binding SelectedKnownProjectId, Mode=TwoWay}"
+        <ComboBox ItemsSource="{Binding KnownProjects}"
+                  SelectedItem="{Binding SelectedKnownProject, Mode=TwoWay}"
+                  DisplayMemberPath="DisplayText"
                   Margin="0,4,0,0"
+                  IsEditable="True"
+                  IsTextSearchEnabled="True"
+                  TextSearch.TextPath="DisplayText"
                   IsSynchronizedWithCurrentItem="False"/>
         <TextBox Text="{Binding LookupProjectId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
 

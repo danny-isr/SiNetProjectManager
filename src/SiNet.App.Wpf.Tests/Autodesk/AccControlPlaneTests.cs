@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.IO;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Autodesk;
@@ -153,6 +154,7 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceHealthProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceDiagnosticsProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceKeyDiagnostics));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectCatalogService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));
@@ -190,6 +192,35 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
+    public async Task Local_project_catalog_service_returns_display_names_when_available()
+    {
+        var dbName = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        await using (var seed = new SiNetSQLDbContext(options))
+        {
+            seed.ProjectAccMappings.AddRange(
+                new ProjectAccMapping { ProjectId = 1, AccHubId = 10, AccProjectId = " b.project-2 ", AccProjectName = "Zeta Tower", Project = null!, AccHub = null! },
+                new ProjectAccMapping { ProjectId = 2, AccHubId = 10, AccProjectId = "b.project-1", AccProjectName = "Alpha Campus", Project = null!, AccHub = null! });
+            seed.AccSystemResources.Add(
+                new AccSystemResource { Key = "OfficeInbox", AccHubId = 10, AccProjectId = "b.system-1", AccHub = null! });
+            await seed.SaveChangesAsync();
+        }
+
+        var sut = new LocalAccProjectCatalogService(new StubDbContextFactory(options));
+
+        var result = await sut.GetProjectsAsync();
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal("Alpha Campus", result[0].DisplayName);
+        Assert.Equal("b.project-1", result[0].ProjectId);
+        var systemProject = Assert.Single(result, static project => project.ProjectId == "b.system-1");
+        Assert.Equal("System: OfficeInbox", systemProject.DisplayName);
+    }
+
+    [Fact]
     public async Task Remote_project_service_uses_versioned_ids_endpoint_and_maps_response()
     {
         const string body = """
@@ -223,6 +254,47 @@ public sealed class AccControlPlaneTests
         Assert.Equal("https://acc.example.com/v1/acc/projects/ids", requestedUri?.ToString());
         Assert.Equal("native-api-key", apiKeyHeader);
         Assert.Equal(["b.project-1", "b.project-2"], result);
+    }
+
+    [Fact]
+    public async Task Remote_project_catalog_service_uses_versioned_catalog_endpoint_and_maps_response()
+    {
+        const string body = """
+            {
+              "projects": [
+                { "projectId": " b.project-2 ", "displayName": "Zeta Tower", "sourceLabel": "ProjectAccMapping" },
+                { "projectId": "b.project-1", "displayName": "Alpha Campus", "sourceLabel": "ProjectAccMapping" },
+                { "projectId": "b.project-2", "displayName": "Zeta Tower", "sourceLabel": "ProjectAccMapping" }
+              ]
+            }
+            """;
+
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccProjectCatalogService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var result = await sut.GetProjectsAsync();
+
+        Assert.Equal("https://acc.example.com/v1/acc/projects/catalog", requestedUri?.ToString());
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.Equal(["b.project-1", "b.project-2"], result.Select(static project => project.ProjectId).ToArray());
+        Assert.Equal("Alpha Campus", result[0].DisplayName);
     }
 
     [Fact]
@@ -440,6 +512,7 @@ public sealed class AccControlPlaneTests
         var source = File.ReadAllText(Path.Combine(Boundary.RepoPaths.RepoRoot, "SiOffice.AccService", "Endpoints", "AccEndpoints.cs"));
 
         Assert.Contains("/projects/ids", source, StringComparison.Ordinal);
+        Assert.Contains("/projects/catalog", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/browse", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
         Assert.Contains("ProjectAccMappings", source, StringComparison.Ordinal);

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SiNet.App.Wpf.Autodesk;
@@ -513,6 +514,7 @@ public sealed class NativeSettingsSurfaceTests
         Mock<IAccServiceKeyDiagnostics>? accKeyDiagnostics = null,
         Mock<IAccServiceHealthProbe>? accHealthProbe = null,
         Mock<IAccServiceDiagnosticsProbe>? accDiagnosticsProbe = null,
+        Mock<IAccProjectCatalogService>? accProjectCatalogService = null,
         Mock<IAccDocumentService>? accDocumentService = null,
         Mock<IAccFolderBrowserService>? accFolderBrowserService = null,
         IAccResolvedDocsUrlLauncher? resolvedDocsUrlLauncher = null,
@@ -528,6 +530,7 @@ public sealed class NativeSettingsSurfaceTests
         accKeyDiagnostics ??= MockAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null));
         accHealthProbe ??= MockAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured"));
         accDiagnosticsProbe ??= MockAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured"));
+        accProjectCatalogService ??= MockAccProjectCatalogService([]);
         accDocumentService ??= new Mock<IAccDocumentService>();
         accFolderBrowserService ??= new Mock<IAccFolderBrowserService>();
         resolvedDocsUrlLauncher ??= new StubAccResolvedDocsUrlLauncher();
@@ -560,6 +563,7 @@ public sealed class NativeSettingsSurfaceTests
                 accKeyDiagnostics.Object,
                 accHealthProbe.Object,
                 accDiagnosticsProbe.Object),
+            accProjectCatalogService.Object,
             accDocumentService.Object,
             accFolderBrowserService.Object,
             resolvedDocsUrlLauncher,
@@ -581,6 +585,14 @@ public sealed class NativeSettingsSurfaceTests
     {
         var mock = new Mock<IAccProjectService>();
         mock.Setup(x => x.GetProjectIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(projectIds);
+        return mock;
+    }
+
+    private static Mock<IAccProjectCatalogService> MockAccProjectCatalogService(IReadOnlyList<string> projectIds)
+    {
+        var mock = new Mock<IAccProjectCatalogService>();
+        mock.Setup(x => x.GetProjectsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(projectIds.Select(projectId => new AccProjectCatalogEntry(projectId, projectId, "ProjectAccMapping")).ToArray());
         return mock;
     }
 

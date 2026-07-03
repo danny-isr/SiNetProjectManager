@@ -165,6 +165,67 @@ internal static class AccEndpoints
             return Results.Ok(new { ProjectIds = projectIds });
         });
 
+        v1.MapGet("/projects/catalog", async (
+            IDbContextFactory<SiNetSQLDbContext> dbFactory,
+            CancellationToken ct) =>
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+            var mappedProjects = await db.ProjectAccMappings
+                .AsNoTracking()
+                .Where(mapping => mapping.AccProjectId != null && mapping.AccProjectId != string.Empty)
+                .Select(mapping => new
+                {
+                    ProjectId = mapping.AccProjectId!,
+                    DisplayName = mapping.AccProjectName,
+                    SourceLabel = "ProjectAccMapping",
+                    Priority = 0
+                })
+                .ToListAsync(ct);
+
+            var systemProjects = await db.AccSystemResources
+                .AsNoTracking()
+                .Where(resource => resource.AccProjectId != null && resource.AccProjectId != string.Empty)
+                .Select(resource => new
+                {
+                    ProjectId = resource.AccProjectId!,
+                    DisplayName = (string?)resource.Key,
+                    SourceLabel = "AccSystemResource",
+                    Priority = 1
+                })
+                .ToListAsync(ct);
+
+            var projects = mappedProjects
+                .Concat(systemProjects)
+                .Select(record => NormalizeProjectCatalogRecord(
+                    record.ProjectId,
+                    record.DisplayName,
+                    record.SourceLabel,
+                    record.Priority))
+                .Where(static record => record is not null)
+                .Cast<ProjectCatalogRecord>()
+                .GroupBy(static record => record.ProjectId, StringComparer.OrdinalIgnoreCase)
+                .Select(static group =>
+                {
+                    var best = group
+                        .OrderBy(static record => record.Priority)
+                        .ThenBy(static record => record.DisplayName, StringComparer.OrdinalIgnoreCase)
+                        .First();
+
+                    return new
+                    {
+                        best.ProjectId,
+                        best.DisplayName,
+                        best.SourceLabel
+                    };
+                })
+                .OrderBy(static record => record.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(static record => record.ProjectId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return Results.Ok(new { Projects = projects });
+        });
+
         // ── Read-only ACC item lookup ───────────────────────────────────────
         v1.MapGet("/projects/{projectId}/folders/{folderId}/items/resolve", async (
             string projectId,
@@ -416,4 +477,31 @@ internal static class AccEndpoints
             ? trimmed
             : $"b.{trimmed}";
     }
+
+    private static ProjectCatalogRecord? NormalizeProjectCatalogRecord(
+        string projectId,
+        string? displayName,
+        string sourceLabel,
+        int priority)
+    {
+        var trimmedProjectId = projectId.Trim();
+        if (trimmedProjectId.Length == 0)
+        {
+            return null;
+        }
+
+        var normalizedDisplayName = string.IsNullOrWhiteSpace(displayName)
+            ? trimmedProjectId
+            : priority == 1
+                ? $"System: {displayName.Trim()}"
+                : displayName.Trim();
+
+        return new ProjectCatalogRecord(trimmedProjectId, normalizedDisplayName, sourceLabel, priority);
+    }
+
+    private sealed record ProjectCatalogRecord(
+        string ProjectId,
+        string DisplayName,
+        string SourceLabel,
+        int Priority);
 }

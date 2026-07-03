@@ -44,10 +44,14 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<IAccFolderContentsReader>(sp =>
             new Bim360AccFolderContentsReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<IAccProjectRootFolderResolver, LocalAccProjectRootFolderResolver>();
+        services.AddTransient<LocalAccProjectCatalogService>();
         services.AddTransient<LocalAccProjectService>();
         services.AddTransient<LocalAccDocumentService>();
         services.AddTransient<LocalAccFolderBrowserService>();
         services.AddTransient<IAccLookupSeedService, LocalAccLookupSeedService>();
+        services.AddHttpClient<RemoteAccProjectCatalogService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddHttpClient<RemoteAccProjectService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
@@ -57,6 +61,7 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<RemoteAccFolderBrowserService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddTransient<IAccProjectCatalogService, ModeSwitchingAccProjectCatalogService>();
         services.AddTransient<IAccProjectService, ModeSwitchingAccProjectService>();
         services.AddTransient<IAccDocumentService, ModeSwitchingAccDocumentService>();
         services.AddTransient<IAccFolderBrowserService, ModeSwitchingAccFolderBrowserService>();

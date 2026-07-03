@@ -19,6 +19,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     private readonly Action<string>? _summaryMessageSink;
     private readonly List<AccBrowseLocation> _browseTrail = [];
 
+    private AccProjectCatalogEntry? _selectedKnownProject;
     private string? _selectedKnownProjectId;
     private string _lookupProjectId = string.Empty;
     private string _lookupFolderId = string.Empty;
@@ -49,6 +50,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         _isHostBusy = isHostBusy;
         _summaryMessageSink = summaryMessageSink;
 
+        KnownProjects = [];
         KnownProjectIds = [];
         BrowseFolders = [];
         BrowseFiles = [];
@@ -62,20 +64,56 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         OpenResolvedDocsUrlCommand = new RelayCommand(_ => OpenResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
     }
 
+    public ObservableCollection<AccProjectCatalogEntry> KnownProjects { get; }
+
     public ObservableCollection<string> KnownProjectIds { get; }
+
+    public AccProjectCatalogEntry? SelectedKnownProject
+    {
+        get => _selectedKnownProject;
+        set
+        {
+            if (SetField(ref _selectedKnownProject, value))
+            {
+                _selectedKnownProjectId = value?.ProjectId;
+                OnPropertyChanged(nameof(SelectedKnownProjectId));
+                if (!_isSynchronizingKnownProjectSelection && value is not null)
+                {
+                    LookupProjectId = value.ProjectId;
+                    ResetBrowseState(clearFolderId: true, clearFileName: true);
+                    PublishSummary("נבחר projectId מתוך הרשימה המוכרת.");
+                }
+            }
+        }
+    }
 
     public string? SelectedKnownProjectId
     {
         get => _selectedKnownProjectId;
         set
         {
-            if (SetField(ref _selectedKnownProjectId, value)
-                && !_isSynchronizingKnownProjectSelection
-                && !string.IsNullOrWhiteSpace(value))
+            if (string.Equals(_selectedKnownProjectId, value, StringComparison.Ordinal))
             {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                UpdateSelectedKnownProject(null);
+                return;
+            }
+
+            var match = ResolveMatchingKnownProject(value);
+            if (match is not null)
+            {
+                SelectedKnownProject = match;
+            }
+            else if (SetField(ref _selectedKnownProjectId, value))
+            {
+                UpdateSelectedKnownProject(null);
                 LookupProjectId = value;
                 ResetBrowseState(clearFolderId: true, clearFileName: true);
-                PublishSummary("נבחר projectId מתוך הרשימה המוכרת.");
+                PublishSummary("הוזן projectId ידני שאינו מופיע ברשימה המוכרת.");
             }
         }
     }
@@ -87,7 +125,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         {
             if (SetField(ref _lookupProjectId, value))
             {
-                UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(value));
+                UpdateSelectedKnownProject(ResolveMatchingKnownProject(value));
                 BrowseFolderCommand.RaiseCanExecuteChanged();
                 ResolveDocumentCommand.RaiseCanExecuteChanged();
             }
@@ -217,13 +255,28 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
     public void LoadKnownProjectIds(IReadOnlyList<string> projectIds)
     {
+        KnownProjects.Clear();
         KnownProjectIds.Clear();
         foreach (var projectId in projectIds)
         {
+            KnownProjects.Add(new AccProjectCatalogEntry(projectId, projectId, "ProjectIdList"));
             KnownProjectIds.Add(projectId);
         }
 
-        UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(LookupProjectId));
+        UpdateSelectedKnownProject(ResolveMatchingKnownProject(LookupProjectId));
+    }
+
+    public void LoadKnownProjects(IReadOnlyList<AccProjectCatalogEntry> projects)
+    {
+        KnownProjects.Clear();
+        KnownProjectIds.Clear();
+        foreach (var project in projects)
+        {
+            KnownProjects.Add(project);
+            KnownProjectIds.Add(project.ProjectId);
+        }
+
+        UpdateSelectedKnownProject(ResolveMatchingKnownProject(LookupProjectId));
     }
 
     public void ApplyLookupSeed(AccDocumentLookupSeed seed, string summaryMessage)
@@ -233,7 +286,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         LookupProjectId = seed.ProjectId;
         LookupFolderId = seed.FolderId;
         LookupFileName = seed.FileName;
-        UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(seed.ProjectId));
+        UpdateSelectedKnownProject(ResolveMatchingKnownProject(seed.ProjectId));
         ResetBrowseState(clearFolderId: false, clearFileName: false);
         LookupResultSummary = summaryMessage;
     }
@@ -382,7 +435,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
             }
 
             LookupProjectId = result.ProjectId;
-            UpdateSelectedKnownProjectId(ResolveMatchingKnownProjectId(result.ProjectId));
+            UpdateSelectedKnownProject(ResolveMatchingKnownProject(result.ProjectId));
             LookupFolderId = result.FolderId;
             LookupResolvedDocsUrl = string.Empty;
             LookupResultSummary = "טרם בוצע resolve עבור קובץ נבחר.";
@@ -465,12 +518,14 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         }
     }
 
-    private void UpdateSelectedKnownProjectId(string? projectId)
+    private void UpdateSelectedKnownProject(AccProjectCatalogEntry? project)
     {
         _isSynchronizingKnownProjectSelection = true;
         try
         {
-            SetField(ref _selectedKnownProjectId, projectId);
+            _selectedKnownProjectId = project?.ProjectId;
+            SetField(ref _selectedKnownProject, project);
+            OnPropertyChanged(nameof(SelectedKnownProjectId));
         }
         finally
         {
@@ -478,11 +533,11 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         }
     }
 
-    private string? ResolveMatchingKnownProjectId(string? projectId) =>
+    private AccProjectCatalogEntry? ResolveMatchingKnownProject(string? projectId) =>
         string.IsNullOrWhiteSpace(projectId)
             ? null
-            : KnownProjectIds.FirstOrDefault(knownProjectId =>
-                string.Equals(knownProjectId, projectId.Trim(), StringComparison.OrdinalIgnoreCase));
+            : KnownProjects.FirstOrDefault(knownProject =>
+                string.Equals(knownProject.ProjectId, projectId.Trim(), StringComparison.OrdinalIgnoreCase));
 
     private void ResetBrowseState(bool clearFolderId, bool clearFileName)
     {

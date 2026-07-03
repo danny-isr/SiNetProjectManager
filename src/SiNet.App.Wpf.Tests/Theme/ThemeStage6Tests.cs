@@ -533,6 +533,7 @@ public sealed class ThemeStage6Tests
                 accKeyDiagnostics.Object,
                 Mock.Of<IAccServiceHealthProbe>(),
                 Mock.Of<IAccServiceDiagnosticsProbe>()),
+            Mock.Of<IAccProjectCatalogService>(),
             Mock.Of<IAccDocumentService>(),
             Mock.Of<IAccFolderBrowserService>(),
             Mock.Of<IAccResolvedDocsUrlLauncher>(),
