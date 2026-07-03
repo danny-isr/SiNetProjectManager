@@ -198,7 +198,7 @@ XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResourc
 | Startup | `ThemeStartupInitializer` in New System pipeline (after auth) |
 | Save | `SettingsViewModel` → `IAppSettingsService` (persist only; theme already live) |
 | Live preview | `SettingsViewModel` → `IThemeRuntimeApplier` on every appearance change (sliders immediately; colors when hex valid; color picker sliders before OK) |
-| Color picker | `WpfColorPickerDialog` preview callback → `ThemeColorEditor` → ViewModel; Cancel restores pre-dialog hex |
+| Color picker | `WpfColorPickerDialog` — RGB + Brightness (-100…+100) sliders; preview callback before OK; Cancel restores pre-dialog hex |
 | Status colors | Personal/global status tabs use `ThemeColorEditor` (swatch + picker + reset; hex secondary) |
 | Reload | Re-reads JSON, updates UI + snapshot, applies theme immediately via `IThemeRuntimeApplier` |
 | Cancel / close without save | `RollbackAppearanceIfNeeded()` restores `_originalAppearance` snapshot |

@@ -13,6 +13,7 @@ public sealed class WpfColorPickerDialog : Window
     private readonly Slider _red;
     private readonly Slider _green;
     private readonly Slider _blue;
+    private readonly Slider _brightness;
     private readonly TextBox _hexBox;
     private bool _isSyncingHexBox;
 
@@ -23,7 +24,7 @@ public sealed class WpfColorPickerDialog : Window
 
         Title = "בחר צבע";
         Width = 360;
-        Height = 300;
+        Height = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Owner = owner;
         FlowDirection = FlowDirection.RightToLeft;
@@ -39,9 +40,10 @@ public sealed class WpfColorPickerDialog : Window
             BorderThickness = new Thickness(1),
         };
 
-        _red = CreateSlider(initial.R);
-        _green = CreateSlider(initial.G);
-        _blue = CreateSlider(initial.B);
+        _red = CreateRgbSlider(initial.R);
+        _green = CreateRgbSlider(initial.G);
+        _blue = CreateRgbSlider(initial.B);
+        _brightness = CreateBrightnessSlider();
 
         _hexBox = new TextBox
         {
@@ -63,6 +65,7 @@ public sealed class WpfColorPickerDialog : Window
         panel.Children.Add(CreateLabeledRow("R", _red));
         panel.Children.Add(CreateLabeledRow("G", _green));
         panel.Children.Add(CreateLabeledRow("B", _blue));
+        panel.Children.Add(CreateLabeledRow("בהירות", _brightness));
         panel.Children.Add(new TextBlock { Text = "Hex", Margin = new Thickness(12, 0, 12, 4) });
         panel.Children.Add(_hexBox);
 
@@ -81,6 +84,7 @@ public sealed class WpfColorPickerDialog : Window
         _red.ValueChanged += (_, _) => SyncFromSliders();
         _green.ValueChanged += (_, _) => SyncFromSliders();
         _blue.ValueChanged += (_, _) => SyncFromSliders();
+        _brightness.ValueChanged += (_, _) => SyncFromSliders();
         _hexBox.TextChanged += (_, _) => SyncFromHex();
 
         UpdatePreview(initial);
@@ -98,11 +102,41 @@ public sealed class WpfColorPickerDialog : Window
         SyncFromSliders();
     }
 
+    internal void TestSetBrightness(double brightness)
+    {
+        _brightness.Value = brightness;
+        SyncFromSliders();
+    }
+
     internal string OriginalHex => _originalHex;
+
+    internal static Color ApplyBrightness(Color baseColor, double brightness)
+    {
+        var factor = Math.Clamp(brightness, -100, 100) / 100.0;
+
+        byte Adjust(byte channel)
+        {
+            if (factor >= 0)
+            {
+                return (byte)Math.Round(channel + (255 - channel) * factor);
+            }
+
+            return (byte)Math.Round(channel * (1 + factor));
+        }
+
+        return Color.FromRgb(
+            Adjust(baseColor.R),
+            Adjust(baseColor.G),
+            Adjust(baseColor.B));
+    }
+
+    private Color BaseColor => Color.FromRgb((byte)_red.Value, (byte)_green.Value, (byte)_blue.Value);
+
+    private Color FinalColor => ApplyBrightness(BaseColor, _brightness.Value);
 
     private void SyncFromSliders()
     {
-        var color = Color.FromRgb((byte)_red.Value, (byte)_green.Value, (byte)_blue.Value);
+        var color = FinalColor;
         var hex = ToHex(color);
 
         _isSyncingHexBox = true;
@@ -138,6 +172,7 @@ public sealed class WpfColorPickerDialog : Window
             _red.Value = color.R;
             _green.Value = color.G;
             _blue.Value = color.B;
+            _brightness.Value = 0;
             UpdatePreview(color);
             NotifyPreview(hex);
         }
@@ -160,7 +195,7 @@ public sealed class WpfColorPickerDialog : Window
     private void UpdatePreview(Color color)
         => _preview.Background = new SolidColorBrush(color);
 
-    private static Slider CreateSlider(byte value) => new()
+    private static Slider CreateRgbSlider(byte value) => new()
     {
         Minimum = 0,
         Maximum = 255,
@@ -168,10 +203,20 @@ public sealed class WpfColorPickerDialog : Window
         Margin = new Thickness(0, 0, 12, 0),
     };
 
+    private static Slider CreateBrightnessSlider() => new()
+    {
+        Minimum = -100,
+        Maximum = 100,
+        Value = 0,
+        TickFrequency = 25,
+        IsSnapToTickEnabled = false,
+        Margin = new Thickness(0, 0, 12, 0),
+    };
+
     private static Grid CreateLabeledRow(string label, Slider slider)
     {
         var grid = new Grid { Margin = new Thickness(12, 0, 12, 4) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var caption = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };

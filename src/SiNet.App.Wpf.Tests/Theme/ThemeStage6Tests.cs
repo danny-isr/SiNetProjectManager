@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SiNet.App.Wpf.Admin.Settings;
@@ -369,6 +370,35 @@ public sealed class ThemeStage6Tests
         var globalSection = ExtractXamlSection(xaml, "צבעי סטטוס (גלובלי)", "</TabControl>");
         Assert.Contains("ThemeColorEditor", globalSection, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding ColorHex", globalSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Color_picker_brightness_adjusts_final_color()
+    {
+        var baseColor = Color.FromRgb(0x80, 0x80, 0x80);
+        var lighter = WpfColorPickerDialog.ApplyBrightness(baseColor, 100);
+        var darker = WpfColorPickerDialog.ApplyBrightness(baseColor, -100);
+        var unchanged = WpfColorPickerDialog.ApplyBrightness(baseColor, 0);
+
+        Assert.Equal("#FFFFFF", $"#{lighter.R:X2}{lighter.G:X2}{lighter.B:X2}");
+        Assert.Equal("#000000", $"#{darker.R:X2}{darker.G:X2}{darker.B:X2}");
+        Assert.Equal("#808080", $"#{unchanged.R:X2}{unchanged.G:X2}{unchanged.B:X2}");
+    }
+
+    [Fact]
+    public void Color_picker_brightness_slider_triggers_live_preview_callback()
+    {
+        RunSta(() =>
+        {
+            var previews = new List<string>();
+            var dialog = new WpfColorPickerDialog("#808080", null, previews.Add);
+            previews.Clear();
+            dialog.TestSetBrightness(50);
+
+            Assert.NotEmpty(previews);
+            Assert.All(previews, hex => Assert.True(TypographyThemeDefaults.IsValidHexColor(hex)));
+            Assert.NotEqual("#808080", previews[^1], StringComparer.OrdinalIgnoreCase);
+        });
     }
 
     [Fact]
