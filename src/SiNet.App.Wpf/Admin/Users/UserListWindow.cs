@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Admin.Users;
 
@@ -13,6 +14,7 @@ public sealed class UserListWindow : Window
         Height = 560;
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new UserManagementView { DataContext = viewModel };
         Loaded += async (_, _) => await viewModel.LoadUsersAsync().ConfigureAwait(true);
     }

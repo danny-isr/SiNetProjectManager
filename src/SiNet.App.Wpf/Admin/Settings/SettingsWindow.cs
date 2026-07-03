@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Admin.Settings;
 
@@ -20,6 +21,7 @@ public sealed class SettingsWindow : Window
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResizeWithGrip;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new SettingsView { DataContext = _viewModel };
         _viewModel.RequestClose += OnRequestClose;
         Closed += (_, _) => _viewModel.RequestClose -= OnRequestClose;

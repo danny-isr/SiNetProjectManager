@@ -1,25 +1,33 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Theme;
 
 public sealed class WpfColorPickerDialog : Window
 {
+    private readonly string _originalHex;
+    private readonly Action<string>? _previewColorChanged;
     private readonly Border _preview;
     private readonly Slider _red;
     private readonly Slider _green;
     private readonly Slider _blue;
     private readonly TextBox _hexBox;
+    private bool _isSyncingHexBox;
 
-    public WpfColorPickerDialog(string initialHex, Window? owner)
+    public WpfColorPickerDialog(string initialHex, Window? owner, Action<string>? previewColorChanged = null)
     {
+        _originalHex = initialHex;
+        _previewColorChanged = previewColorChanged;
+
         Title = "בחר צבע";
         Width = 360;
         Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Owner = owner;
         FlowDirection = FlowDirection.RightToLeft;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
 
         var initial = ParseColor(initialHex);
 
@@ -80,27 +88,73 @@ public sealed class WpfColorPickerDialog : Window
 
     public string? SelectedColorHex { get; private set; }
 
+    internal void TestSyncFromSliders() => SyncFromSliders();
+
+    internal void TestSetRgb(byte red, byte green, byte blue)
+    {
+        _red.Value = red;
+        _green.Value = green;
+        _blue.Value = blue;
+        SyncFromSliders();
+    }
+
+    internal string OriginalHex => _originalHex;
+
     private void SyncFromSliders()
     {
         var color = Color.FromRgb((byte)_red.Value, (byte)_green.Value, (byte)_blue.Value);
-        _hexBox.Text = ToHex(color);
+        var hex = ToHex(color);
+
+        _isSyncingHexBox = true;
+        try
+        {
+            _hexBox.Text = hex;
+        }
+        finally
+        {
+            _isSyncingHexBox = false;
+        }
+
         UpdatePreview(color);
+        NotifyPreview(hex);
     }
 
     private void SyncFromHex()
     {
+        if (_isSyncingHexBox)
+        {
+            return;
+        }
+
         try
         {
-            var color = ParseColor(_hexBox.Text);
+            var hex = _hexBox.Text.Trim();
+            if (!TypographyThemeDefaults.IsValidHexColor(hex))
+            {
+                return;
+            }
+
+            var color = ParseColor(hex);
             _red.Value = color.R;
             _green.Value = color.G;
             _blue.Value = color.B;
             UpdatePreview(color);
+            NotifyPreview(hex);
         }
         catch
         {
             // ignore invalid hex while typing
         }
+    }
+
+    private void NotifyPreview(string hex)
+    {
+        if (_previewColorChanged is null || !TypographyThemeDefaults.IsValidHexColor(hex))
+        {
+            return;
+        }
+
+        _previewColorChanged(hex);
     }
 
     private void UpdatePreview(Color color)

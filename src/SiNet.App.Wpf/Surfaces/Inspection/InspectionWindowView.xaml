@@ -66,7 +66,7 @@
         </Style>
     </Window.Resources>
 
-    <Border x:Name="ContentBorder" Background="#F5F5F5" CornerRadius="8" Margin="8" ClipToBounds="True">
+    <Border x:Name="ContentBorder" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="8" Margin="8" ClipToBounds="True">
         <Border.Effect>
             <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black" />
         </Border.Effect>
@@ -203,7 +203,7 @@
             </Border>
 
             <!-- ═══════ Create New Report Strip ═══════ -->
-            <Border x:Name="CreateBar" Grid.Row="1" Background="#F5F5F5" Padding="8,6"
+            <Border x:Name="CreateBar" Grid.Row="1" Background="{DynamicResource SiBackgroundBrush}" Padding="8,6"
                     BorderBrush="#C0C0C0" BorderThickness="0,0,0,1"
                     Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
                 <Grid>
@@ -239,7 +239,7 @@
 
             <!-- ═══════ Selected report body (notes area) ═══════ -->
             <Border Grid.Row="2"
-                    Background="#F5F5F5"
+                    Background="{DynamicResource SiBackgroundBrush}"
                     Padding="6"
                     Visibility="{Binding HasSelectedReport, Converter={StaticResource BoolToVisibility}}">
                 <Grid>
@@ -522,7 +522,7 @@
 
             <!-- ═══════ Report Cards List (bottom) ═══════ -->
             <Border Grid.Row="3"
-                    Background="#F5F5F5"
+                    Background="{DynamicResource SiBackgroundBrush}"
                     BorderBrush="#C0C0C0"
                     BorderThickness="0,1,0,0"
                     Padding="6,4"
@@ -579,7 +579,7 @@
             </Border>
 
             <!-- ═══════ Status Bar ═══════ -->
-            <Border Grid.Row="4" Background="#F5F5F5" Padding="8,4" CornerRadius="0,0,8,8">
+            <Border Grid.Row="4" Background="{DynamicResource SiBackgroundBrush}" Padding="8,4" CornerRadius="0,0,8,8">
                 <TextBlock Text="{Binding StatusMessage}"
                            Foreground="#555"
                            TextTrimming="CharacterEllipsis" />

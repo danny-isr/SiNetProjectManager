@@ -8,7 +8,7 @@
         <local:AppAccUserTypeDisplayConverter x:Key="AccUserTypeDisplayConverter"/>
         <local:AppRoleDisplayConverter x:Key="RoleDisplayConverter"/>
     </UserControl.Resources>
-    <Grid Margin="12">
+    <Grid Margin="12" Background="{DynamicResource SiBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -49,6 +49,7 @@
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   GridLinesVisibility="None"
+                  Background="{DynamicResource SiBackgroundBrush}"
                   AlternatingRowBackground="{x:Null}">
             <DataGrid.CellStyle>
                 <Style TargetType="DataGridCell">

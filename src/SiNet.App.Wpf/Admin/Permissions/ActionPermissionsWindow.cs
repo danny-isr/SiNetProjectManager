@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Admin.Permissions;
 
@@ -13,6 +14,7 @@ public sealed class ActionPermissionsWindow : Window
         Height = 620;
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new ActionPermissionsView { DataContext = viewModel };
         Loaded += async (_, _) => await viewModel.LoadAsync().ConfigureAwait(true);
     }

@@ -7,8 +7,8 @@
         <local:AppAccUserTypeDisplayConverter x:Key="AccUserTypeDisplayConverter"/>
         <local:AppRoleDisplayConverter x:Key="RoleDisplayConverter"/>
     </UserControl.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid Margin="16">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource SiBackgroundBrush}">
+        <Grid Margin="16" Background="{DynamicResource SiBackgroundBrush}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>

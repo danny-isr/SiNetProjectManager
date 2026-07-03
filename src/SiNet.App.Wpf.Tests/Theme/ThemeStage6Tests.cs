@@ -347,12 +347,124 @@ public sealed class ThemeStage6Tests
     [InlineData("Inspection/InspectionShellView.xaml")]
     [InlineData("Surfaces/Email/EmailWindowView.xaml")]
     [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
+    public void Migrated_native_xaml_uses_si_background_brush(string relativePath)
+    {
+        var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
+        Assert.Contains("SiBackgroundBrush", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Settings_personal_status_colors_use_theme_color_editor()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Admin", "Settings", "SettingsView.xaml"));
+        var personalSection = ExtractXamlSection(xaml, "צבעי סטטוס (משתמש)", "צבעי סטטוס (גלובלי)");
+        Assert.Contains("ThemeColorEditor", personalSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding ColorHex", personalSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Settings_global_status_colors_use_theme_color_editor()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Admin", "Settings", "SettingsView.xaml"));
+        var globalSection = ExtractXamlSection(xaml, "צבעי סטטוס (גלובלי)", "</TabControl>");
+        Assert.Contains("ThemeColorEditor", globalSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding ColorHex", globalSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Color_picker_preview_callback_receives_valid_hex_on_slider_change()
+    {
+        RunSta(() =>
+        {
+            var previews = new List<string>();
+            var dialog = new WpfColorPickerDialog("#112233", null, previews.Add);
+            dialog.TestSetRgb(0xAB, 0xCD, 0xEF);
+
+            Assert.Contains("#ABCDEF", previews);
+        });
+    }
+
+    [Fact]
+    public void Color_picker_cancel_restores_original_hex_via_editor_rollback_pattern()
+    {
+        RunSta(() =>
+        {
+            var current = "#112233";
+            var original = current;
+            var dialog = new WpfColorPickerDialog(original, null, previewHex => current = previewHex);
+            dialog.TestSetRgb(0xFF, 0x00, 0x00);
+            Assert.Equal("#FF0000", current);
+
+            current = original;
+            Assert.Equal("#112233", current);
+            Assert.Equal(dialog.OriginalHex, current);
+        });
+    }
+
+    [Fact]
+    public async Task Dialog_preview_color_change_applies_theme_runtime_when_bound_to_appearance()
+    {
+        var themeRuntime = new Mock<IThemeRuntimeApplier>();
+        var vm = CreatePersonalViewModel(MockAppSettings(new TaskCompletionSource()), themeRuntime: themeRuntime);
+        await vm.LoadAsync();
+
+        themeRuntime.Invocations.Clear();
+        vm.PrimaryColor = "#FF0000";
+
+        themeRuntime.Verify(
+            t => t.ApplyUserAppearance(It.Is<UserAppearanceSettingsDto>(a => a.PrimaryColor == "#FF0000")),
+            Times.Once);
+    }
+
+    [Theory]
+    [InlineData("Shell/NewShellWindow.xaml")]
+    [InlineData("Shared/Projects/ProjectSelectorView.xaml")]
+    [InlineData("Admin/Users/UserManagementView.xaml")]
+    [InlineData("Admin/Users/AddUserView.xaml")]
+    [InlineData("Admin/Permissions/ActionPermissionsView.xaml")]
+    [InlineData("Admin/Security/SecretSetupView.xaml")]
+    [InlineData("Admin/Settings/SettingsView.xaml")]
+    [InlineData("Inspection/InspectionShellView.xaml")]
+    [InlineData("Surfaces/Email/EmailWindowView.xaml")]
+    [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
     public void Migrated_native_xaml_does_not_use_hardcoded_font_size_literals(string relativePath)
     {
         var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
         var matches = Regex.Matches(content, @"FontSize\s*=\s*""[0-9]");
         Assert.True(matches.Count == 0,
             $"Hardcoded FontSize literals found in {relativePath}: {string.Join(", ", matches.Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value))}");
+    }
+
+    private static string ExtractXamlSection(string xaml, string startMarker, string endMarker)
+    {
+        var start = xaml.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Start marker '{startMarker}' not found.");
+        var end = xaml.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(end > start, $"End marker '{endMarker}' not found after start.");
+        return xaml[start..end];
+    }
+
+    private static void RunSta(Action action)
+    {
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join(TimeSpan.FromSeconds(10));
+        if (error is not null)
+        {
+            throw error;
+        }
     }
 
     private static SettingsViewModel CreatePersonalViewModel(

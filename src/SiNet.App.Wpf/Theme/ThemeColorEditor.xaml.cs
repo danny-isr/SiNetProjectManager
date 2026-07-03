@@ -68,11 +68,28 @@ public partial class ThemeColorEditor : UserControl
 
     private void PickColor()
     {
+        var original = ColorHex ?? string.Empty;
         var owner = Window.GetWindow(this);
-        var dialog = new WpfColorPickerDialog(ColorHex, owner);
-        if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.SelectedColorHex))
+        var dialog = new WpfColorPickerDialog(
+            string.IsNullOrWhiteSpace(original) ? TypographyThemeDefaults.PrimaryColor : original,
+            owner,
+            previewHex =>
+            {
+                if (TypographyThemeDefaults.IsValidHexColor(previewHex))
+                {
+                    ColorHex = previewHex;
+                }
+            });
+
+        if (dialog.ShowDialog() == true
+            && !string.IsNullOrWhiteSpace(dialog.SelectedColorHex)
+            && TypographyThemeDefaults.IsValidHexColor(dialog.SelectedColorHex))
         {
             ColorHex = dialog.SelectedColorHex;
+        }
+        else
+        {
+            ColorHex = original;
         }
     }
 

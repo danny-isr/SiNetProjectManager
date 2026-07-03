@@ -1215,12 +1215,14 @@ public sealed class GlobalStatusColorRowViewModel : ObservableObject
         _service = service;
         StatusId = dto.StatusId;
         StatusName = dto.StatusName;
+        DefaultColorHex = dto.ColorHex;
         _colorHex = dto.ColorHex;
         SaveCommand = new AsyncRelayCommand(SaveAsync);
     }
 
     public int StatusId { get; }
     public string StatusName { get; }
+    public string DefaultColorHex { get; }
 
     private string _colorHex;
 

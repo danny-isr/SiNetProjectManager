@@ -63,7 +63,7 @@
         </Style>
     </Window.Resources>
 
-    <Border x:Name="ContentBorder" Background="#F5F5F5" CornerRadius="8" Margin="8" ClipToBounds="True">
+    <Border x:Name="ContentBorder" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="8" Margin="8" ClipToBounds="True">
         <Border.Effect>
             <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black" />
         </Border.Effect>
@@ -105,7 +105,7 @@
 
             <!-- ROW 0 (of source): Status bar + project/Gmail filters (combined). -->
             <Border Grid.Row="1"
-                    Background="#F5F5F5"
+                    Background="{DynamicResource SiBackgroundBrush}"
                     Padding="10,5"
                     Margin="0,0,0,8"
                     BorderBrush="#E0E0E0"
@@ -222,7 +222,7 @@
                         </Grid.RowDefinitions>
 
                         <!-- List header: title + All/Unread toggle + unread count. -->
-                        <Border Grid.Row="0" Background="#F5F5F5" Padding="10">
+                        <Border Grid.Row="0" Background="{DynamicResource SiBackgroundBrush}" Padding="10">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="\u05DE\u05D9\u05D9\u05DC\u05D9\u05DD \u05DC\u05EA\u05D9\u05D5\u05E7"
                                            FontWeight="Bold"

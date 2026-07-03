@@ -7,14 +7,14 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <theme:HexToBrushConverter x:Key="HexToBrush"/>
     </UserControl.Resources>
-    <Grid Margin="12">
+    <Grid Margin="12" Background="{DynamicResource SiBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0">
+        <TabControl Grid.Row="0" Background="{DynamicResource SiBackgroundBrush}">
             <!-- Per-user -->
             <TabItem Header="מראה (משתמש)" Visibility="{Binding CanViewPersonalSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditPersonalSettings}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
@@ -147,15 +147,15 @@
                             <DataTemplate>
                                 <Grid Margin="0,4">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="120"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding StatusName}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Column="1" Text="{Binding ColorHex, UpdateSourceTrigger=PropertyChanged}" Margin="8,0"/>
-                                    <Button Grid.Column="2" Content="שמור" Command="{Binding SaveOverrideCommand}" Padding="8,4" Margin="0,0,4,0"/>
-                                    <Button Grid.Column="3" Content="איפוס" Command="{Binding ResetCommand}" Padding="8,4"/>
+                                    <theme:ThemeColorEditor Label="{Binding StatusName}"
+                                                              ColorHex="{Binding ColorHex, UpdateSourceTrigger=PropertyChanged}"
+                                                              DefaultColorHex="{Binding DefaultColorHex}"/>
+                                    <Button Grid.Column="1" Content="שמור" Command="{Binding SaveOverrideCommand}" Padding="8,4" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="2" Content="איפוס" Command="{Binding ResetCommand}" Padding="8,4" VerticalAlignment="Center"/>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -300,13 +300,13 @@
                             <DataTemplate>
                                 <Grid Margin="0,4">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="120"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding StatusName}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Column="1" Text="{Binding ColorHex, UpdateSourceTrigger=PropertyChanged}" Margin="8,0"/>
-                                    <Button Grid.Column="2" Content="שמור" Command="{Binding SaveCommand}" Padding="8,4"/>
+                                    <theme:ThemeColorEditor Label="{Binding StatusName}"
+                                                              ColorHex="{Binding ColorHex, UpdateSourceTrigger=PropertyChanged}"
+                                                              DefaultColorHex="{Binding DefaultColorHex}"/>
+                                    <Button Grid.Column="1" Content="שמור" Command="{Binding SaveCommand}" Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Center"/>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

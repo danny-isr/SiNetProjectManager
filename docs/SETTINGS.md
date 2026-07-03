@@ -197,20 +197,22 @@ XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResourc
 | `ThemeResourceLoader` | Merges theme XAML into Application resources (V2 host) |
 | Startup | `ThemeStartupInitializer` in New System pipeline (after auth) |
 | Save | `SettingsViewModel` → `IAppSettingsService` (persist only; theme already live) |
-| Live preview | `SettingsViewModel` → `IThemeRuntimeApplier` on every appearance change (sliders immediately; colors when hex valid) |
+| Live preview | `SettingsViewModel` → `IThemeRuntimeApplier` on every appearance change (sliders immediately; colors when hex valid; color picker sliders before OK) |
+| Color picker | `WpfColorPickerDialog` preview callback → `ThemeColorEditor` → ViewModel; Cancel restores pre-dialog hex |
+| Status colors | Personal/global status tabs use `ThemeColorEditor` (swatch + picker + reset; hex secondary) |
 | Reload | Re-reads JSON, updates UI + snapshot, applies theme immediately via `IThemeRuntimeApplier` |
 | Cancel / close without save | `RollbackAppearanceIfNeeded()` restores `_originalAppearance` snapshot |
 | Startup | `ThemeStartupInitializer` loads saved JSON → `IThemeRuntimeApplier` |
 
 Logging applier remains separate — appearance preview/save does **not** call `ILoggingRuntimeApplier`.
 
-**Live preview policy:** while the personal Settings window is open, appearance edits apply immediately to all windows using `DynamicResource`. Save writes JSON only. Reload re-applies the saved JSON to all windows and resets the rollback snapshot. Cancel or closing without save rolls back to the snapshot taken at the last load/save. Startup loads the persisted values via `ThemeStartupInitializer`.
+**Live preview policy:** while the personal Settings window is open, appearance edits apply immediately to all windows using `DynamicResource`. Color picker RGB sliders preview before OK; Cancel in the picker restores the pre-dialog color (and theme). Save writes JSON only. Reload re-applies the saved JSON to all windows and resets the rollback snapshot. Cancel or closing Settings without save rolls back to the snapshot taken at the last load/save. Startup loads the persisted values via `ThemeStartupInitializer`.
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`, `InspectionShellView`, Email visual clone, Inspection visual clone.
+`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `InspectionShellView`, Email visual clone (content areas), Inspection visual clone (content areas). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
 
-**Deferred:** legacy windows, `StartupModeSelectionWindow`, semantic/status colors (warning red, success green) in Email/Inspection detail rows, `SiCardStyle`.
+**Deferred:** legacy windows, `StartupModeSelectionWindow`, Email/Inspection **title-bar chrome** (brand blue/green headers — intentional visual-clone fidelity), semantic row tints in User Management DataGrid, `SiCardStyle`.
 
 ---
 

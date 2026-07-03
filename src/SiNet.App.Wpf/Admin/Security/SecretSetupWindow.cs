@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Admin.Security;
 
@@ -16,6 +17,7 @@ public sealed class SecretSetupWindow : Window
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResizeWithGrip;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new SecretSetupView { DataContext = _viewModel };
         _viewModel.RequestClose += OnRequestClose;
         Closed += (_, _) => _viewModel.RequestClose -= OnRequestClose;

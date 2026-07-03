@@ -1,5 +1,6 @@
 using System.Windows;
 using SiNet.App.Wpf.Infrastructure;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Admin.Users;
 
@@ -17,6 +18,7 @@ public sealed class AddUserDialogWindow : Window
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new AddUserView { DataContext = _viewModel };
         _viewModel.RequestClose += OnRequestClose;
         Closed += (_, _) => _viewModel.RequestClose -= OnRequestClose;
