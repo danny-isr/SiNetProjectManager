@@ -1,3 +1,6 @@
+using SiNet.App.Wpf.Shared.Projects;
+using SiNet.Application.Projects;
+
 namespace SiNet.App.Wpf.Shell;
 
 /// <summary>
@@ -8,9 +11,25 @@ namespace SiNet.App.Wpf.Shell;
 public sealed class NewShellDesignData : NewShellViewModel
 {
     public NewShellDesignData()
-        : base(CreateSampleMenu(), currentUserDisplay: "דני ישראל", currentProjectDisplay: "מגדל השחר — 1234")
+        : base(CreateSampleMenu(), currentUserDisplay: "דני ישראל", currentProjectContext: CreateDesignProjectContext())
     {
         StatusText = "מוכן — מצב עיצוב";
+    }
+
+    private static ICurrentProjectContext CreateDesignProjectContext()
+    {
+        var context = new InMemoryCurrentProjectContext();
+        context.SetCurrentProjectAsync(new ProjectSummaryDto(
+            ProjectId: 1,
+            ProjectNumber: "1234",
+            ProjectName: "מגדל השחר",
+            PlaceName: null,
+            CompanyName: null,
+            JobType: null,
+            Status: null,
+            AssignedUserName: null,
+            IsActive: true)).GetAwaiter().GetResult();
+        return context;
     }
 
     private static IEnumerable<NewShellMenuItem> CreateSampleMenu() =>

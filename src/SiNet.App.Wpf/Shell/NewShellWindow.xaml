@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:SiNet.App.Wpf.Shell"
         mc:Ignorable="d"
         FlowDirection="RightToLeft"
-        Title="{Binding Title}"
+        Title="{Binding WindowTitle}"
         Height="600" Width="960"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource SiBackgroundBrush}"

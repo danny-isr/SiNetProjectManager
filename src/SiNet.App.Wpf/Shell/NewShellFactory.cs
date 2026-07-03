@@ -44,11 +44,11 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
         var menu = BuildMigratedOnlyMenu();
-        var viewModel = new NewShellViewModel(menu, currentUserDisplay);
+        var viewModel = new NewShellViewModel(menu, currentUserDisplay, currentProject);
 
         var selectorView = TryCreateProjectSelector();
 
-        return new NewShellWindow(viewModel, selectorView, currentProject);
+        return new NewShellWindow(viewModel, selectorView);
     }
 
     /// <summary>

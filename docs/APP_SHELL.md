@@ -243,6 +243,8 @@ No legacy menu is scanned or copied. Each item is added deliberately, one migrat
   `ICurrentProjectContext` (singleton) and the reusable `ProjectSelectorView`.
 - Selecting a project in the shell updates the same context observed by every migrated surface
   (e.g. the Email clone), so the Current Project stays consistent across windows.
+- **`NewShellViewModel.WindowTitle`** is bound to `NewShellWindow.Title` and reflects the selected
+  project (`SiNet Project Manager — New System — <number> — <name>` when available; base title when none).
 - WPF binds only to `ProjectSummaryDto`, never to EF entities.
 
 ---
