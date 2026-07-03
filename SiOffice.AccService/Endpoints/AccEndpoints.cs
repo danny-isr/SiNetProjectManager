@@ -197,6 +197,47 @@ internal static class AccEndpoints
             });
         });
 
+        // ── Read-only ACC folder browse ──────────────────────────────────────
+        v1.MapGet("/projects/{projectId}/folders/browse", async (
+            string projectId,
+            string? folderId,
+            IDbContextFactory<SiNetSQLDbContext> dbFactory,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+
+            var normalizedProjectId = NormalizeProjectId(projectId);
+
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var resolvedFolderId = string.IsNullOrWhiteSpace(folderId)
+                ? await ResolveProjectFilesRootFolderIdAsync(db, tokenProvider, normalizedProjectId, ct)
+                : folderId.Trim();
+            if (string.IsNullOrWhiteSpace(resolvedFolderId))
+            {
+                return Results.NotFound();
+            }
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var entries = await bim360.GetFolderContentsAsync(normalizedProjectId, resolvedFolderId, ct);
+
+            return Results.Ok(new
+            {
+                ProjectId = normalizedProjectId,
+                FolderId = resolvedFolderId,
+                Entries = entries.Select(entry => new
+                {
+                    entry.Id,
+                    entry.DisplayName,
+                    Kind = entry.IsFolder ? 0 : 1,
+                    entry.FileSize,
+                    entry.LastModifiedTime,
+                    entry.CreateTime
+                }).ToArray()
+            });
+        });
+
         // ── Project mapping (find-or-create + provision + folder tree) ──────
         v1.MapPost("/projects/ensure-mapping", async (
             EnsureProjectMappingRequest body,
@@ -313,5 +354,66 @@ internal static class AccEndpoints
                    string.Equals(item.DisplayName, fileName, StringComparison.Ordinal))
             ?? items.FirstOrDefault(item =>
                    string.Equals(item.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static async Task<string?> ResolveProjectFilesRootFolderIdAsync(
+        SiNetSQLDbContext db,
+        ITokenProvider tokenProvider,
+        string normalizedProjectId,
+        CancellationToken ct)
+    {
+        var hubId = await ResolveHubIdAsync(db, normalizedProjectId, ct);
+        if (string.IsNullOrWhiteSpace(hubId))
+        {
+            return null;
+        }
+
+        return await new Bim360Service(tokenProvider)
+            .GetProjectRootFolderIdAsync(hubId, normalizedProjectId);
+    }
+
+    private static async Task<string?> ResolveHubIdAsync(
+        SiNetSQLDbContext db,
+        string normalizedProjectId,
+        CancellationToken ct)
+    {
+        var mappedHubId = await db.ProjectAccMappings
+            .AsNoTracking()
+            .Where(mapping => mapping.AccProjectId != null && mapping.AccProjectId.Trim() == normalizedProjectId)
+            .Join(
+                db.AccHubs.AsNoTracking(),
+                mapping => mapping.AccHubId,
+                hub => hub.Id,
+                (_, hub) => hub.HubId)
+            .FirstOrDefaultAsync(ct);
+        if (!string.IsNullOrWhiteSpace(mappedHubId))
+        {
+            return mappedHubId.Trim();
+        }
+
+        var systemHubId = await db.AccSystemResources
+            .AsNoTracking()
+            .Where(resource => resource.AccProjectId != null && resource.AccProjectId.Trim() == normalizedProjectId)
+            .Join(
+                db.AccHubs.AsNoTracking(),
+                resource => resource.AccHubId,
+                hub => hub.Id,
+                (_, hub) => hub.HubId)
+            .FirstOrDefaultAsync(ct);
+
+        return string.IsNullOrWhiteSpace(systemHubId) ? null : systemHubId.Trim();
+    }
+
+    private static string NormalizeProjectId(string projectId)
+    {
+        var trimmed = projectId.Trim();
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return trimmed.StartsWith("b.", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : $"b.{trimmed}";
     }
 }

@@ -51,6 +51,7 @@ public sealed class NewShellAccStatusMenuTests
                     new StubAccHealthProbe(),
                     new StubAccDiagnosticsProbe()),
                 new StubAccDocumentService(),
+                new StubAccFolderBrowserService(),
                 new StubAccLookupSeedService(),
                 new StubAccResolvedDocsUrlLauncher(),
                 new StubClipboardTextWriter())));
@@ -119,6 +120,12 @@ public sealed class NewShellAccStatusMenuTests
             string fileName,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<AccItemRef?>(null);
+    }
+
+    private sealed class StubAccFolderBrowserService : IAccFolderBrowserService
+    {
+        public Task<AccFolderBrowseResult?> BrowseAsync(string projectId, string? folderId = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult<AccFolderBrowseResult?>(null);
     }
 
     private sealed class StubAccLookupSeedService : IAccLookupSeedService

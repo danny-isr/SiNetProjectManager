@@ -41,6 +41,56 @@
                         <TextBlock Text="File Name" Margin="0,10,0,0"/>
                         <TextBox Text="{Binding LookupFileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
 
+                        <TextBlock Text="ACC Browser (Project Files / current folder)"
+                                   Margin="0,12,0,0"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding BrowseSummary}"
+                                   Margin="0,6,0,0"
+                                   Opacity="0.8"
+                                   TextWrapping="Wrap"/>
+
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,8,0,0">
+                            <Button Content="טען תיקיות/קבצים"
+                                    Command="{Binding BrowseFolderCommand}"
+                                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="היכנס לתיקייה נבחרת"
+                                    Command="{Binding OpenSelectedFolderCommand}"
+                                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="בחר קובץ נבחר"
+                                    Command="{Binding UseSelectedFileCommand}"
+                                    Style="{DynamicResource SiSecondaryButtonStyle}"/>
+                        </StackPanel>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="תיקיות" FontWeight="SemiBold"/>
+                                <ListBox ItemsSource="{Binding BrowseFolders}"
+                                         SelectedItem="{Binding SelectedBrowseFolder}"
+                                         Margin="0,4,0,0"
+                                         MinHeight="120"
+                                         DisplayMemberPath="DisplayName"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="קבצים" FontWeight="SemiBold"/>
+                                <ListBox ItemsSource="{Binding BrowseFiles}"
+                                         SelectedItem="{Binding SelectedBrowseFile}"
+                                         Margin="0,4,0,0"
+                                         MinHeight="120"
+                                         DisplayMemberPath="DisplayName"/>
+                            </StackPanel>
+                        </Grid>
+
                         <TextBlock Text="{Binding LookupResultSummary}"
                                    Margin="0,12,0,0"
                                    TextWrapping="Wrap"/>

@@ -155,6 +155,7 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceKeyDiagnostics));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccLookupSeedService));
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
@@ -222,6 +223,72 @@ public sealed class AccControlPlaneTests
         Assert.Equal("https://acc.example.com/v1/acc/projects/ids", requestedUri?.ToString());
         Assert.Equal("native-api-key", apiKeyHeader);
         Assert.Equal(["b.project-1", "b.project-2"], result);
+    }
+
+    [Fact]
+    public async Task Local_folder_browser_service_resolves_root_folder_and_maps_entries()
+    {
+        var sut = new LocalAccFolderBrowserService(
+            new StubAccProjectRootFolderResolver("root-folder"),
+            new StubFolderContentsReader(
+            [
+                new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
+                new AccFolderBrowseEntry("item-b", "B File.pdf", AccFolderEntryKind.Item, 123, null, null),
+            ]));
+
+        var result = await sut.BrowseAsync("project-123");
+
+        Assert.NotNull(result);
+        Assert.Equal("b.project-123", result!.ProjectId);
+        Assert.Equal("root-folder", result.FolderId);
+        Assert.Equal(2, result.Entries.Count);
+        Assert.Equal(AccFolderEntryKind.Folder, result.Entries[0].Kind);
+        Assert.Equal(AccFolderEntryKind.Item, result.Entries[1].Kind);
+    }
+
+    [Fact]
+    public async Task Remote_folder_browser_service_uses_versioned_browse_endpoint_and_maps_response()
+    {
+        const string body = """
+            {
+              "projectId": "b.project-123",
+              "folderId": "root-folder",
+              "entries": [
+                { "id": "folder-a", "displayName": "A Folder", "kind": 0, "fileSize": 0, "lastModifiedTime": null, "createTime": null },
+                { "id": "item-b", "displayName": "B File.pdf", "kind": 1, "fileSize": 123, "lastModifiedTime": null, "createTime": null }
+              ]
+            }
+            """;
+
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccFolderBrowserService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var result = await sut.BrowseAsync("b.project-123", "root-folder");
+
+        Assert.NotNull(result);
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-123/folders/browse?folderId=root-folder", requestedUri?.AbsoluteUri);
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.Equal("root-folder", result!.FolderId);
+        Assert.Equal(2, result.Entries.Count);
+        Assert.Equal(AccFolderEntryKind.Folder, result.Entries[0].Kind);
+        Assert.Equal(AccFolderEntryKind.Item, result.Entries[1].Kind);
     }
 
     [Fact]
@@ -373,10 +440,12 @@ public sealed class AccControlPlaneTests
         var source = File.ReadAllText(Path.Combine(Boundary.RepoPaths.RepoRoot, "SiOffice.AccService", "Endpoints", "AccEndpoints.cs"));
 
         Assert.Contains("/projects/ids", source, StringComparison.Ordinal);
+        Assert.Contains("/projects/{projectId}/folders/browse", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
         Assert.Contains("ProjectAccMappings", source, StringComparison.Ordinal);
         Assert.Contains("AccSystemResources", source, StringComparison.Ordinal);
         Assert.Contains("GetFolderItemsAsync(projectId, folderId, ct)", source, StringComparison.Ordinal);
+        Assert.Contains("GetFolderContentsAsync", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -440,6 +509,25 @@ public sealed class AccControlPlaneTests
             string folderId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(_items);
+    }
+
+    private sealed class StubFolderContentsReader(IReadOnlyList<AccFolderBrowseEntry> entries) : IAccFolderContentsReader
+    {
+        private readonly IReadOnlyList<AccFolderBrowseEntry> _entries = entries;
+
+        public Task<IReadOnlyList<AccFolderBrowseEntry>> GetFolderContentsAsync(
+            string projectId,
+            string folderId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(_entries);
+    }
+
+    private sealed class StubAccProjectRootFolderResolver(string? folderId) : IAccProjectRootFolderResolver
+    {
+        public Task<string?> ResolveProjectFilesRootFolderIdAsync(
+            string projectId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(folderId);
     }
 
     private sealed class StubDbContextFactory(DbContextOptions<SiNetSQLDbContext> options) : IDbContextFactory<SiNetSQLDbContext>
