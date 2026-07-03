@@ -203,7 +203,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _fontFamily, value))
             {
-                TryApplyAppearancePreview();
+                ApplyAppearancePreviewIfValid();
             }
         }
     }
@@ -299,7 +299,10 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _primaryColor, value))
             {
-                TryApplyAppearancePreviewIfColorValid(value);
+                if (TypographyThemeDefaults.IsValidHexColor(value))
+                {
+                    ApplyAppearancePreviewIfValid();
+                }
             }
         }
     }
@@ -311,7 +314,10 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _secondaryColor, value))
             {
-                TryApplyAppearancePreviewIfColorValid(value);
+                if (TypographyThemeDefaults.IsValidHexColor(value))
+                {
+                    ApplyAppearancePreviewIfValid();
+                }
             }
         }
     }
@@ -335,7 +341,10 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _foregroundColor, value))
             {
-                TryApplyAppearancePreviewIfColorValid(value);
+                if (TypographyThemeDefaults.IsValidHexColor(value))
+                {
+                    ApplyAppearancePreviewIfValid();
+                }
             }
         }
     }
@@ -347,7 +356,10 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _backgroundColor, value))
             {
-                TryApplyAppearancePreviewIfColorValid(value);
+                if (TypographyThemeDefaults.IsValidHexColor(value))
+                {
+                    ApplyAppearancePreviewIfValid();
+                }
             }
         }
     }
@@ -663,6 +675,8 @@ public sealed class SettingsViewModel : ObservableObject
                 {
                     _isLoadingAppearance = false;
                 }
+
+                _themeRuntime.ApplyUserAppearance(user.Appearance);
 
                 _loadedLogging = user.Logging;
 
@@ -1041,28 +1055,20 @@ public sealed class SettingsViewModel : ObservableObject
     private void OnAppearanceTypographyChanged()
     {
         NotifyPreviewTypographyChanged();
-        TryApplyAppearancePreview();
+        ApplyAppearancePreviewIfValid();
     }
 
-    private void TryApplyAppearancePreviewIfColorValid(string colorValue)
-    {
-        if (TypographyThemeDefaults.IsValidHexColor(colorValue))
-        {
-            TryApplyAppearancePreview();
-        }
-    }
-
-    private void TryApplyAppearancePreview()
+    private void ApplyAppearancePreviewIfValid()
     {
         if (_isLoadingAppearance || !CanEditPersonalSettings || !_hasAppearanceSnapshot)
         {
             return;
         }
 
-        _themeRuntime.ApplyUserAppearance(BuildPreviewAppearance());
+        _themeRuntime.ApplyUserAppearance(BuildAppearancePreviewDto());
     }
 
-    private UserAppearanceSettingsDto BuildPreviewAppearance() => new(
+    private UserAppearanceSettingsDto BuildAppearancePreviewDto() => new(
         FontFamily,
         BaseFontSize,
         TextTinyScale,

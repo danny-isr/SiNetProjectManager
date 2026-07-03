@@ -100,7 +100,7 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-                        <TextBlock Text="שמירה מפעילה IThemeRuntimeApplier — ללא restart." Style="{DynamicResource SiTextSmallStyle}" Opacity="0.6" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        <TextBlock Text="שינויי מראה מוחלים מיד על כל החלונות. שמירה כותבת ל-JSON; ביטול או סגירה מחזירים לערך לפני פתיחת ההגדרות." Style="{DynamicResource SiTextSmallStyle}" Opacity="0.6" TextWrapping="Wrap" Margin="0,8,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

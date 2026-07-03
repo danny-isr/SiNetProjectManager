@@ -17,8 +17,7 @@
         <Border x:Name="ColorSwatch" Grid.Column="1" Width="28" Height="28" Margin="4,0"
                 BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" CornerRadius="2"/>
 
-        <TextBox Grid.Column="2" Margin="8,0"
-                 Text="{Binding ColorHex, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}"
+        <TextBox x:Name="HexBox" Grid.Column="2" Margin="8,0"
                  Style="{DynamicResource SiTextBoxStyle}"
                  ToolTip="Hex (#RRGGBB) — אופציה משנית"/>
 

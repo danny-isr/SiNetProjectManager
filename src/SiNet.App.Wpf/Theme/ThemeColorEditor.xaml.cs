@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using SiNet.App.Wpf.Shell;
@@ -6,8 +8,10 @@ using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Theme;
 
-public partial class ThemeColorEditor : System.Windows.Controls.UserControl
+public partial class ThemeColorEditor : UserControl
 {
+    private bool _isSyncingHexBox;
+
     public static readonly DependencyProperty ColorHexProperty =
         DependencyProperty.Register(
             nameof(ColorHex),
@@ -33,7 +37,12 @@ public partial class ThemeColorEditor : System.Windows.Controls.UserControl
         InitializeComponent();
         PickColorCommand = new RelayCommand(_ => PickColor());
         ResetColorCommand = new RelayCommand(_ => ColorHex = DefaultColorHex);
-        Loaded += (_, _) => UpdateSwatch();
+        HexBox.TextChanged += OnHexBoxTextChanged;
+        Loaded += (_, _) =>
+        {
+            SyncHexBoxFromProperty();
+            UpdateSwatch();
+        };
     }
 
     public string ColorHex
@@ -67,11 +76,49 @@ public partial class ThemeColorEditor : System.Windows.Controls.UserControl
         }
     }
 
+    private void OnHexBoxTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isSyncingHexBox)
+        {
+            return;
+        }
+
+        ColorHex = HexBox.Text;
+    }
+
     private static void OnColorHexChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is ThemeColorEditor editor)
+        if (d is not ThemeColorEditor editor)
         {
-            editor.UpdateSwatch();
+            return;
+        }
+
+        editor.SyncHexBoxFromProperty();
+        editor.UpdateSwatch();
+        editor.GetBindingExpression(ColorHexProperty)?.UpdateSource();
+    }
+
+    private void SyncHexBoxFromProperty()
+    {
+        if (HexBox is null)
+        {
+            return;
+        }
+
+        var hex = ColorHex ?? string.Empty;
+        if (string.Equals(HexBox.Text, hex, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _isSyncingHexBox = true;
+        try
+        {
+            HexBox.Text = hex;
+        }
+        finally
+        {
+            _isSyncingHexBox = false;
         }
     }
 
@@ -88,7 +135,7 @@ public partial class ThemeColorEditor : System.Windows.Controls.UserControl
         }
         catch
         {
-            ColorSwatch.Background = System.Windows.Media.Brushes.Transparent;
+            ColorSwatch.Background = Brushes.Transparent;
         }
     }
 }

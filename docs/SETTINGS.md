@@ -198,12 +198,13 @@ XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResourc
 | Startup | `ThemeStartupInitializer` in New System pipeline (after auth) |
 | Save | `SettingsViewModel` → `IAppSettingsService` (persist only; theme already live) |
 | Live preview | `SettingsViewModel` → `IThemeRuntimeApplier` on every appearance change (sliders immediately; colors when hex valid) |
+| Reload | Re-reads JSON, updates UI + snapshot, applies theme immediately via `IThemeRuntimeApplier` |
 | Cancel / close without save | `RollbackAppearanceIfNeeded()` restores `_originalAppearance` snapshot |
 | Startup | `ThemeStartupInitializer` loads saved JSON → `IThemeRuntimeApplier` |
 
 Logging applier remains separate — appearance preview/save does **not** call `ILoggingRuntimeApplier`.
 
-**Live preview policy:** while the personal Settings window is open, appearance edits apply immediately to all windows using `DynamicResource`. Save writes JSON only. Cancel or closing without save rolls back to the snapshot taken at `LoadAsync`. Startup loads the persisted values via `ThemeStartupInitializer`.
+**Live preview policy:** while the personal Settings window is open, appearance edits apply immediately to all windows using `DynamicResource`. Save writes JSON only. Reload re-applies the saved JSON to all windows and resets the rollback snapshot. Cancel or closing without save rolls back to the snapshot taken at the last load/save. Startup loads the persisted values via `ThemeStartupInitializer`.
 
 ### Connected native surfaces (Stage 6)
 
