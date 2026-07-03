@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 
@@ -22,6 +23,10 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly ILoggingRuntimeApplier _loggingRuntime;
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
+    private readonly IAccServiceModeProvider _accServiceModeProvider;
+    private readonly IAccServiceKeyDiagnostics _accServiceKeyDiagnostics;
+    private readonly IAccServiceHealthProbe _accServiceHealthProbe;
+    private readonly IAccServiceDiagnosticsProbe _accServiceDiagnosticsProbe;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -33,6 +38,12 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _isLoadingAppearance;
     private string _summaryMessage = string.Empty;
     private bool _isBusy;
+    private string _accServiceRuntimeHint =
+        "מצב הריצה להלן משקף את ההוסט הנוכחי בלבד. שמירת Base URL כותבת ל-DB; restart נדרש כדי להחיל את הערך החדש.";
+    private string _accServiceRuntimeModeSummary = "מצב ריצה ACC: לא נטען.";
+    private string _accServiceRuntimeKeySummary = "מפתח ריצה ACC: לא נטען.";
+    private string _accServiceRuntimeHealthSummary = "בריאות ריצה ACC: לא נטענה.";
+    private string _accServiceRuntimeDiagnosticsSummary = "אבחון ריצה ACC: לא נטען.";
 
     public SettingsViewModel(
         IAppSettingsService appSettings,
@@ -42,6 +53,10 @@ public sealed class SettingsViewModel : ObservableObject
         ILoggingRuntimeApplier loggingRuntime,
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
+        IAccServiceModeProvider accServiceModeProvider,
+        IAccServiceKeyDiagnostics accServiceKeyDiagnostics,
+        IAccServiceHealthProbe accServiceHealthProbe,
+        IAccServiceDiagnosticsProbe accServiceDiagnosticsProbe,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser,
         SettingsSurfaceScope scope)
@@ -53,6 +68,10 @@ public sealed class SettingsViewModel : ObservableObject
         _loggingRuntime = loggingRuntime ?? throw new ArgumentNullException(nameof(loggingRuntime));
         _themeRuntime = themeRuntime ?? throw new ArgumentNullException(nameof(themeRuntime));
         _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
+        _accServiceModeProvider = accServiceModeProvider ?? throw new ArgumentNullException(nameof(accServiceModeProvider));
+        _accServiceKeyDiagnostics = accServiceKeyDiagnostics ?? throw new ArgumentNullException(nameof(accServiceKeyDiagnostics));
+        _accServiceHealthProbe = accServiceHealthProbe ?? throw new ArgumentNullException(nameof(accServiceHealthProbe));
+        _accServiceDiagnosticsProbe = accServiceDiagnosticsProbe ?? throw new ArgumentNullException(nameof(accServiceDiagnosticsProbe));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
         Scope = scope;
@@ -644,6 +663,36 @@ public sealed class SettingsViewModel : ObservableObject
 
     public string CentralLoggingRestartHint => CentralLoggingSettingsDto.RequiresRestartMessage;
 
+    public string AccServiceRuntimeHint
+    {
+        get => _accServiceRuntimeHint;
+        private set => SetField(ref _accServiceRuntimeHint, value);
+    }
+
+    public string AccServiceRuntimeModeSummary
+    {
+        get => _accServiceRuntimeModeSummary;
+        private set => SetField(ref _accServiceRuntimeModeSummary, value);
+    }
+
+    public string AccServiceRuntimeKeySummary
+    {
+        get => _accServiceRuntimeKeySummary;
+        private set => SetField(ref _accServiceRuntimeKeySummary, value);
+    }
+
+    public string AccServiceRuntimeHealthSummary
+    {
+        get => _accServiceRuntimeHealthSummary;
+        private set => SetField(ref _accServiceRuntimeHealthSummary, value);
+    }
+
+    public string AccServiceRuntimeDiagnosticsSummary
+    {
+        get => _accServiceRuntimeDiagnosticsSummary;
+        private set => SetField(ref _accServiceRuntimeDiagnosticsSummary, value);
+    }
+
     public AsyncRelayCommand SaveCommand { get; }
     public AsyncRelayCommand ReloadCommand { get; }
     public RelayCommand CancelCommand { get; }
@@ -702,6 +751,8 @@ public sealed class SettingsViewModel : ObservableObject
                 {
                     GlobalStatusColors.Add(new GlobalStatusColorRowViewModel(row, _statusColors));
                 }
+
+                await RefreshAccRuntimeStatusAsync().ConfigureAwait(true);
             }
 
             SummaryMessage = CanViewPersonalSettings && CanViewSystemSettings
@@ -873,6 +924,15 @@ public sealed class SettingsViewModel : ObservableObject
             return false;
         }
 
+        if (!string.IsNullOrWhiteSpace(AccServiceBaseUrl)
+            && (!Uri.TryCreate(AccServiceBaseUrl.Trim(), UriKind.Absolute, out var uri)
+                || string.IsNullOrWhiteSpace(uri.Host)
+                || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)))
+        {
+            error = "נא להזין כתובת URL תקינה לשירות ACC, למשל https://SI-WIN-2K19:8443, או להשאיר ריק למצב מקומי.";
+            return false;
+        }
+
         if (LocalRetentionDays <= 0 || CentralRetentionDays <= 0)
         {
             error = "ימי שמירת לוג חייבים להיות מספרים חיוביים.";
@@ -925,7 +985,7 @@ public sealed class SettingsViewModel : ObservableObject
             string.IsNullOrWhiteSpace(InboxProjectName) ? null : InboxProjectName.Trim(),
             AccViewerMaxTabs),
         new AccSystemSettingsDto(
-            AccServiceBaseUrl.Trim(),
+            NormalizeAccServiceBaseUrl(AccServiceBaseUrl),
             AccBootstrapAdminEmail.Trim(),
             AccProjectTemplateName.Trim(),
             AccManualUploadAllowedExtensions.Trim()),
@@ -1137,6 +1197,59 @@ public sealed class SettingsViewModel : ObservableObject
         {
             UserStatusColors.Add(new UserStatusColorRowViewModel(row, userId, _statusColors, ReloadUserColorsAsync));
         }
+    }
+
+    private async Task RefreshAccRuntimeStatusAsync()
+    {
+        var mode = _accServiceModeProvider.Mode;
+        var baseUrl = _accServiceModeProvider.BaseUrl;
+
+        AccServiceRuntimeModeSummary = mode switch
+        {
+            AccServiceMode.Remote when !string.IsNullOrWhiteSpace(baseUrl)
+                => $"מצב ריצה ACC: שירות מרכזי ({baseUrl})",
+            _ => "מצב ריצה ACC: מקומי (AccService:BaseUrl לא מוגדר בהוסט הנוכחי)",
+        };
+
+        var keyInfo = _accServiceKeyDiagnostics.Describe();
+        AccServiceRuntimeKeySummary = keyInfo.HasApiKey
+            ? $"מפתח ריצה ACC: קיים ב-Vault, אורך {keyInfo.KeyLength}, hash {keyInfo.KeyHashPrefix}"
+            : "מפתח ריצה ACC: לא הוגדר ב-Vault.";
+
+        if (mode != AccServiceMode.Remote || string.IsNullOrWhiteSpace(baseUrl))
+        {
+            AccServiceRuntimeHealthSummary = "בריאות ריצה ACC: לא רלוונטי במצב מקומי.";
+            AccServiceRuntimeDiagnosticsSummary = "אבחון ריצה ACC: מצב מקומי, ללא קריאת /v1/acc/diag.";
+            return;
+        }
+
+        var health = await _accServiceHealthProbe.CheckAsync().ConfigureAwait(true);
+        AccServiceRuntimeHealthSummary = health.State switch
+        {
+            AccServiceHealthState.Online => $"בריאות ריצה ACC: זמין ({health.Endpoint})",
+            AccServiceHealthState.NotConfigured => "בריאות ריצה ACC: לא מוגדר.",
+            _ => $"בריאות ריצה ACC: לא זמין ({health.Detail ?? "ללא פירוט"})",
+        };
+
+        var diagnostics = await _accServiceDiagnosticsProbe.ProbeAsync().ConfigureAwait(true);
+        if (!diagnostics.Reachable)
+        {
+            AccServiceRuntimeDiagnosticsSummary =
+                $"אבחון ריצה ACC: לא זמין. Autodesk={diagnostics.AutodeskDetail ?? "ללא פירוט"}; DB={diagnostics.DbDetail ?? "ללא פירוט"}";
+            return;
+        }
+
+        var keySource = string.IsNullOrWhiteSpace(diagnostics.KeySource) ? "unknown" : diagnostics.KeySource;
+        var windowsUser = string.IsNullOrWhiteSpace(diagnostics.WindowsUser) ? "unknown" : diagnostics.WindowsUser;
+        var keyHash = string.IsNullOrWhiteSpace(diagnostics.KeyHashPrefix) ? "(none)" : diagnostics.KeyHashPrefix;
+        AccServiceRuntimeDiagnosticsSummary =
+            $"אבחון ריצה ACC: user={windowsUser}; keySource={keySource}; keyHash={keyHash}; Autodesk={(diagnostics.AutodeskOk ? "ok" : "fail")}; DB={(diagnostics.DbOk ? "ok" : "fail")}";
+    }
+
+    private static string NormalizeAccServiceBaseUrl(string value)
+    {
+        var trimmed = value.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? string.Empty : trimmed.TrimEnd('/');
     }
 
     private static LogLevelDto ParseLevel(string value)

@@ -44,6 +44,7 @@ production host. It exists to separate:
 | `src/SiNet.Infrastructure.Autodesk/HttpAccServiceDiagnosticsProbe.cs` | Remote `/v1/acc/diag` adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/VaultAccServiceKeyDiagnostics.cs` | Local ACC API-key metadata adapter | Implemented |
 | `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` | First native UI consumer of the ACC control-plane seam | Implemented for read-only status/diag display |
+| `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` | Native ACC settings consumer of the control-plane seam | Implemented for read-only runtime display beside stored ACC settings |
 | `src/SiNet.LegacyBridge/LegacyBridgeServiceCollectionExtensions.cs` | Temporary bridge slot | No ACC bridge wired |
 
 Implication: the clean Autodesk module is now a **real control-plane seam**, but not yet a

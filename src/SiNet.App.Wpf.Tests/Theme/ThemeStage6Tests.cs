@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Theme;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Logging;
@@ -504,6 +505,12 @@ public sealed class ThemeStage6Tests
     {
         loggingRuntime ??= new Mock<ILoggingRuntimeApplier>();
         themeRuntime ??= new Mock<IThemeRuntimeApplier>();
+        var accModeProvider = new Mock<IAccServiceModeProvider>();
+        accModeProvider.SetupGet(x => x.Mode).Returns(AccServiceMode.Local);
+        accModeProvider.SetupGet(x => x.BaseUrl).Returns((string?)null);
+
+        var accKeyDiagnostics = new Mock<IAccServiceKeyDiagnostics>();
+        accKeyDiagnostics.Setup(x => x.Describe()).Returns(new AccServiceKeyInfo(false, 0, null));
 
         var auth = new Mock<IAuthorizationQueryService>();
         auth.Setup(a => a.CanCurrentUserAccessFeatureAsync(
@@ -519,6 +526,10 @@ public sealed class ThemeStage6Tests
             loggingRuntime.Object,
             themeRuntime.Object,
             new Mock<IStatusColorSettingsService>().Object,
+            accModeProvider.Object,
+            accKeyDiagnostics.Object,
+            Mock.Of<IAccServiceHealthProbe>(),
+            Mock.Of<IAccServiceDiagnosticsProbe>(),
             auth.Object,
             new StubCurrentUser(1),
             SettingsSurfaceScope.Personal);

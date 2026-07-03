@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SiNet.App.Wpf.Admin.Settings;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Logging;
@@ -109,9 +110,11 @@ public sealed class NativeSettingsSurfaceTests
         var systemSaved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var appSettings = new Mock<IAppSettingsService>();
         var systemCommand = new Mock<ISystemSettingsCommandService>();
+        SystemSettingsDto? savedDto = null;
         systemCommand.Setup(s => s.SaveSystemSettingsAsync(It.IsAny<SystemSettingsDto>(), It.IsAny<CancellationToken>()))
-            .Returns<SystemSettingsDto, CancellationToken>((_, _) =>
+            .Returns<SystemSettingsDto, CancellationToken>((dto, _) =>
             {
+                savedDto = dto;
                 systemSaved.TrySetResult();
                 return Task.CompletedTask;
             });
@@ -121,15 +124,84 @@ public sealed class NativeSettingsSurfaceTests
             userId: 1,
             SettingsSurfaceScope.SystemAdmin,
             appSettings,
+            systemQuery: MockSystemQuery(CreateNonDefaultSystemSettings()),
             systemCommand: systemCommand);
 
         await vm.LoadAsync();
+        vm.AccServiceBaseUrl = " https://acc.example.com/ ";
         vm.SaveCommand.Execute(null);
         await systemSaved.Task.WaitAsync(TimeSpan.FromSeconds(3));
 
         systemCommand.Verify(s => s.SaveSystemSettingsAsync(It.IsAny<SystemSettingsDto>(), It.IsAny<CancellationToken>()), Times.Once);
         appSettings.Verify(s => s.SaveUserAppSettingsAsync(It.IsAny<UserAppSettingsDto>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal("https://acc.example.com", savedDto?.Acc.AccServiceBaseUrl);
         Assert.Contains("הפעלה מחדש", vm.SummaryMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task System_load_populates_acc_runtime_status_panel()
+    {
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            accModeProvider: MockAccModeProvider(AccServiceMode.Remote, "https://runtime-acc.example.com"),
+            accKeyDiagnostics: MockAccKeyDiagnostics(new AccServiceKeyInfo(true, 44, "abc123def456")),
+            accHealthProbe: MockAccHealthProbe(new AccServiceHealthResult(true, AccServiceHealthState.Online, "https://runtime-acc.example.com/v1/acc/health", "Connected")),
+            accDiagnosticsProbe: MockAccDiagnosticsProbe(new AccServiceDiagnosticsResult(
+                Reachable: true,
+                WindowsUser: "DOMAIN\\runtime",
+                HasApiKey: true,
+                KeySource: "CredentialManager",
+                KeyLength: 44,
+                KeyHashPrefix: "abc123def456",
+                AutodeskOk: true,
+                AutodeskDetail: "Autodesk token retrieved successfully.",
+                DbOk: true,
+                DbDetail: "Database connection successful.")));
+
+        await vm.LoadAsync();
+
+        Assert.Contains("runtime-acc.example.com", vm.AccServiceRuntimeModeSummary, StringComparison.Ordinal);
+        Assert.Contains("abc123def456", vm.AccServiceRuntimeKeySummary, StringComparison.Ordinal);
+        Assert.Contains("/v1/acc/health", vm.AccServiceRuntimeHealthSummary, StringComparison.Ordinal);
+        Assert.Contains("DOMAIN\\runtime", vm.AccServiceRuntimeDiagnosticsSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task System_save_rejects_invalid_acc_service_base_url()
+    {
+        var systemCommand = new Mock<ISystemSettingsCommandService>();
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            systemCommand: systemCommand);
+
+        await vm.LoadAsync();
+        vm.AccServiceBaseUrl = "not-a-url";
+
+        vm.SaveCommand.Execute(null);
+
+        systemCommand.Verify(s => s.SaveSystemSettingsAsync(It.IsAny<SystemSettingsDto>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Contains("URL תקינה", vm.SummaryMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Settings_xaml_shows_acc_runtime_status_panel()
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            Boundary.RepoPaths.RepoRoot,
+            "src",
+            "SiNet.App.Wpf",
+            "Admin",
+            "Settings",
+            "SettingsView.xaml"));
+
+        Assert.Contains("AccServiceRuntimeHint", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccServiceRuntimeModeSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccServiceRuntimeHealthSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccServiceRuntimeDiagnosticsSummary", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -349,13 +421,21 @@ public sealed class NativeSettingsSurfaceTests
         Mock<ISystemSettingsQueryService>? systemQuery = null,
         Mock<ISystemSettingsCommandService>? systemCommand = null,
         Mock<ILoggingRuntimeApplier>? loggingRuntime = null,
-        Mock<IThemeRuntimeApplier>? themeRuntime = null)
+        Mock<IThemeRuntimeApplier>? themeRuntime = null,
+        Mock<IAccServiceModeProvider>? accModeProvider = null,
+        Mock<IAccServiceKeyDiagnostics>? accKeyDiagnostics = null,
+        Mock<IAccServiceHealthProbe>? accHealthProbe = null,
+        Mock<IAccServiceDiagnosticsProbe>? accDiagnosticsProbe = null)
     {
         appSettings ??= MockAppSettings();
         systemQuery ??= MockSystemQuery();
         systemCommand ??= new Mock<ISystemSettingsCommandService>();
         loggingRuntime ??= new Mock<ILoggingRuntimeApplier>();
         themeRuntime ??= new Mock<IThemeRuntimeApplier>();
+        accModeProvider ??= MockAccModeProvider(AccServiceMode.Local, null);
+        accKeyDiagnostics ??= MockAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null));
+        accHealthProbe ??= MockAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured"));
+        accDiagnosticsProbe ??= MockAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured"));
 
         var loggingCommand = new Mock<ILoggingSettingsCommandService>();
         var statusColors = new Mock<IStatusColorSettingsService>();
@@ -378,9 +458,42 @@ public sealed class NativeSettingsSurfaceTests
             loggingRuntime.Object,
             themeRuntime.Object,
             statusColors.Object,
+            accModeProvider.Object,
+            accKeyDiagnostics.Object,
+            accHealthProbe.Object,
+            accDiagnosticsProbe.Object,
             auth.Object,
             new StubCurrentUser(userId),
             scope);
+    }
+
+    private static Mock<IAccServiceModeProvider> MockAccModeProvider(AccServiceMode mode, string? baseUrl)
+    {
+        var mock = new Mock<IAccServiceModeProvider>();
+        mock.SetupGet(x => x.Mode).Returns(mode);
+        mock.SetupGet(x => x.BaseUrl).Returns(baseUrl);
+        return mock;
+    }
+
+    private static Mock<IAccServiceKeyDiagnostics> MockAccKeyDiagnostics(AccServiceKeyInfo info)
+    {
+        var mock = new Mock<IAccServiceKeyDiagnostics>();
+        mock.Setup(x => x.Describe()).Returns(info);
+        return mock;
+    }
+
+    private static Mock<IAccServiceHealthProbe> MockAccHealthProbe(AccServiceHealthResult result)
+    {
+        var mock = new Mock<IAccServiceHealthProbe>();
+        mock.Setup(x => x.CheckAsync(It.IsAny<CancellationToken>())).ReturnsAsync(result);
+        return mock;
+    }
+
+    private static Mock<IAccServiceDiagnosticsProbe> MockAccDiagnosticsProbe(AccServiceDiagnosticsResult result)
+    {
+        var mock = new Mock<IAccServiceDiagnosticsProbe>();
+        mock.Setup(x => x.ProbeAsync(It.IsAny<CancellationToken>())).ReturnsAsync(result);
+        return mock;
     }
 
     private static Mock<IAppSettingsService> MockAppSettings(TaskCompletionSource? onSave = null)
@@ -402,6 +515,14 @@ public sealed class NativeSettingsSurfaceTests
         var mock = new Mock<ISystemSettingsQueryService>();
         mock.Setup(s => s.GetSystemSettingsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(CreateEmptySystemSettings());
+        return mock;
+    }
+
+    private static Mock<ISystemSettingsQueryService> MockSystemQuery(SystemSettingsDto dto)
+    {
+        var mock = new Mock<ISystemSettingsQueryService>();
+        mock.Setup(s => s.GetSystemSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(dto);
         return mock;
     }
 

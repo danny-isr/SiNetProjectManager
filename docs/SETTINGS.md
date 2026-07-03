@@ -46,6 +46,9 @@ Defaults in `SystemSettingsDefaults`.
 
 **Deferred in native UI (stored only):** User Groups button, Google folder validate, ACC template refresh, AiModelCatalogWindow.
 
+`AccService.BaseUrl` validation mirrors legacy expectations: empty = local mode; otherwise it must
+be an absolute `http`/`https` URL and is normalized without a trailing slash on save.
+
 ### 2.3 Status colors (separate tables)
 
 | Store | Table | Scope |
@@ -136,6 +139,10 @@ Menu **הגדרות אישיות** — any authenticated user (`ICurrentUserCont
 Menu **הגדרות מערכת** — gated by `System.Settings.Write` (Administrator).
 
 Save / Reload / Cancel. Central log path probe via `ILoggingSettingsCommandService.ProbeCentralLogPathAsync`.
+
+The `ACC (גלובלי)` tab also shows a read-only **runtime ACC status panel** from the clean
+control-plane seam. That panel reflects the **current host process** (mode, key metadata, health,
+diag) and is intentionally separate from the editable stored `AccService.BaseUrl` field.
 
 ---
 

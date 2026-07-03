@@ -1,5 +1,6 @@
 namespace SiNet.App.Wpf.Admin.Settings;
 
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 
@@ -36,6 +37,10 @@ public sealed class SettingsViewModelFactory
     private readonly ILoggingRuntimeApplier _loggingRuntime;
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
+    private readonly IAccServiceModeProvider _accServiceModeProvider;
+    private readonly IAccServiceKeyDiagnostics _accServiceKeyDiagnostics;
+    private readonly IAccServiceHealthProbe _accServiceHealthProbe;
+    private readonly IAccServiceDiagnosticsProbe _accServiceDiagnosticsProbe;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -47,6 +52,10 @@ public sealed class SettingsViewModelFactory
         ILoggingRuntimeApplier loggingRuntime,
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
+        IAccServiceModeProvider accServiceModeProvider,
+        IAccServiceKeyDiagnostics accServiceKeyDiagnostics,
+        IAccServiceHealthProbe accServiceHealthProbe,
+        IAccServiceDiagnosticsProbe accServiceDiagnosticsProbe,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser = null)
     {
@@ -57,6 +66,10 @@ public sealed class SettingsViewModelFactory
         _loggingRuntime = loggingRuntime;
         _themeRuntime = themeRuntime;
         _statusColors = statusColors;
+        _accServiceModeProvider = accServiceModeProvider;
+        _accServiceKeyDiagnostics = accServiceKeyDiagnostics;
+        _accServiceHealthProbe = accServiceHealthProbe;
+        _accServiceDiagnosticsProbe = accServiceDiagnosticsProbe;
         _authorization = authorization;
         _currentUser = currentUser;
     }
@@ -70,6 +83,10 @@ public sealed class SettingsViewModelFactory
             _loggingRuntime,
             _themeRuntime,
             _statusColors,
+            _accServiceModeProvider,
+            _accServiceKeyDiagnostics,
+            _accServiceHealthProbe,
+            _accServiceDiagnosticsProbe,
             _authorization,
             _currentUser,
             scope);

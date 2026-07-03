@@ -34,8 +34,11 @@ inbox bootstrap, filing, metadata writes, or any side-effect-heavy document flow
 - `AddSiNetAutodesk()` now registers the control-plane services only.
 - `src/SiNet.App.Wpf/App.xaml.cs` explicitly calls `AddSiNetSecrets()` after `AddSiNet()` so the
   WPF harness can resolve vault-backed ACC key diagnostics.
-- `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` now consumes the seam and exposes a
+- `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` consumes the seam and exposes a
   read-only ACC panel in `SecretSetupView` for mode, endpoint, key metadata, health, and diag state.
+- `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` consumes the same seam in the
+  `ACC (גלובלי)` tab for current-process runtime status, while keeping the stored
+  `AccService.BaseUrl` field separate.
 
 ## 2. Runtime Rules
 
@@ -91,8 +94,9 @@ This slice does **not** implement:
 - metadata writes or reconciliation writes
 - native UI consumption of the control-plane seam
 
-The first native consumer now exists only for **status/diagnostics display** inside Secret Setup.
-It does not change provisioning, filing, or remote privileged-write behavior.
+Native consumers currently exist only for **status/diagnostics display** inside Secret Setup and
+the ACC system-settings tab. They do not change provisioning, filing, or remote privileged-write
+behavior.
 
 ## 5. Tests
 
@@ -113,5 +117,5 @@ Current checks cover:
 
 ## 6. Next Slice
 
-The next ACC step should expand this from Secret Setup into broader native admin/status UI while
-keeping the write-heavy ACC pipeline deferred until a separate approved slice.
+The next ACC step should expand this into broader native admin/status UI while keeping the
+write-heavy ACC pipeline deferred until a separate approved slice.
