@@ -39,6 +39,8 @@ inbox bootstrap, filing, metadata writes, or any side-effect-heavy document flow
 - `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` consumes the same seam in the
   `ACC (גלובלי)` tab for current-process runtime status, while keeping the stored
   `AccService.BaseUrl` field separate.
+- `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` exposes a dedicated shell-opened
+  runtime-only ACC status window built on the same presenter/control.
 
 ## 2. Runtime Rules
 
@@ -92,11 +94,10 @@ This slice does **not** implement:
 - remote inbox provisioning
 - `IProjectFileFilingService`
 - metadata writes or reconciliation writes
-- native UI consumption of the control-plane seam
 
-Native consumers currently exist only for **status/diagnostics display** inside Secret Setup and
-the ACC system-settings tab. They do not change provisioning, filing, or remote privileged-write
-behavior.
+Native consumers currently exist only for **status/diagnostics display** inside Secret Setup, the
+ACC system-settings tab, and the dedicated ACC status window. They do not change provisioning,
+filing, or remote privileged-write behavior.
 
 ## 5. Tests
 
@@ -114,8 +115,9 @@ Current checks cover:
 - safe local API-key hashing
 - DI guardrails: no `IAccProjectService`, `IAccDocumentService`, provisioning, inbox, or filing registrations
 - WPF harness secret wiring via `AddSiNetSecrets()`
+- shell/menu wiring for the dedicated ACC status window
 
 ## 6. Next Slice
 
-The next ACC step should expand this into broader native admin/status UI while keeping the
-write-heavy ACC pipeline deferred until a separate approved slice.
+The next ACC step should decide whether to stop at runtime/status surfaces for now, or introduce a
+separate approved slice for ACC operational actions while keeping the write-heavy pipeline deferred.

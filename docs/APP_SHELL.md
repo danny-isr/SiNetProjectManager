@@ -165,6 +165,7 @@ Initial menu (P3 + P6 + native admin):
 | Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |
 | Action permissions | `ActionPermissions.Manage` | Administrator | `ActionPermissionsWindow` → native `ActionPermissionsView` |
 | Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
+| ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native runtime-only ACC status window |
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 
@@ -183,6 +184,12 @@ authorized. Opens native `ActionPermissionsWindow` in `SiNet.App.Wpf.Admin.Permi
 (`SecretSetupView` + `SecretSetupViewModel`) backed by `CredentialVaultSecretSetupService` →
 `ISecretSetupService` in `SiNet.Infrastructure.Secrets`. **Credential Vault is the single source of
 truth** for all secret values — not `appsettings.json`, not repo files, not legacy `SecretSetupWindow`.
+
+**ACC status (native, implemented):** Administrators also see **סטטוס ACC** when
+`System.Settings.Write` is authorized. Opens native `AccControlPlaneStatusWindow` in
+`SiNet.App.Wpf.Autodesk`, backed by the clean ACC control-plane seam. This window is **runtime-only**:
+it shows mode, key metadata, health, and diagnostics for the current host process, and performs no
+settings writes or privileged ACC operations.
 
 Implemented capabilities in this surface:
 

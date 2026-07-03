@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
@@ -32,6 +33,7 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.Infrastructure.Sql.SystemSettingsServiceCollectionExtensions.AddSiNetSystemSettingsSql(services);
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
+        services.AddSiNetAutodeskStatusWpf();
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);

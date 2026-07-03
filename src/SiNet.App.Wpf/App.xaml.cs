@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Composition;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inbox;
@@ -36,6 +37,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton(_configuration);
         services.AddSiNet(ConfigureGmail);
         services.AddSiNetSecrets();
+        services.AddSiNetAutodeskStatusWpf();
         services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainWindow>();
 

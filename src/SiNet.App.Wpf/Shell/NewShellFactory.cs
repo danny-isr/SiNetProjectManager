@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
@@ -109,6 +110,11 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "מפתחות וסודות",
                 OpenNativeSecretSetup,
                 "הגדרת מפתחות וסודות (Credential Vault)"));
+
+            items.Add(new NewShellMenuItem(
+                "סטטוס ACC",
+                OpenNativeAccControlPlaneStatus,
+                "מצב ריצה / health / diag של AccService"));
         }
 
         if (HasAuthenticatedUser())
@@ -224,6 +230,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת מפתחות וסודות: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeAccControlPlaneStatus()
+    {
+        try
+        {
+            var window = _services.GetRequiredService<AccControlPlaneStatusWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת סטטוס ACC: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

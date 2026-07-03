@@ -6,6 +6,7 @@ internal enum AccControlPlaneStatusPresentationKind
 {
     SecretSetup = 0,
     SettingsRuntime = 1,
+    StatusWindow = 2,
 }
 
 internal sealed record AccControlPlaneStatusPresentation(
@@ -38,6 +39,7 @@ public sealed class AccControlPlaneStatusPresenter(
         {
             AccControlPlaneStatusPresentationKind.SecretSetup => SecretSetupLabels,
             AccControlPlaneStatusPresentationKind.SettingsRuntime => SettingsRuntimeLabels,
+            AccControlPlaneStatusPresentationKind.StatusWindow => StatusWindowLabels,
             _ => SecretSetupLabels,
         };
 
@@ -107,6 +109,20 @@ public sealed class AccControlPlaneStatusPresenter(
 
     private static readonly AccControlPlaneStatusLabels SettingsRuntimeLabels = new(
         Hint: "מצב הריצה להלן משקף את ההוסט הנוכחי בלבד. שמירת Base URL כותבת ל-DB; restart נדרש כדי להחיל את הערך החדש.",
+        ModeRemotePrefix: "מצב ריצה ACC: שירות מרכזי",
+        ModeLocalText: "מצב ריצה ACC: מקומי (AccService:BaseUrl לא מוגדר בהוסט הנוכחי)",
+        KeyPresentPrefix: "מפתח ריצה ACC: קיים ב-Vault",
+        KeyMissingText: "מפתח ריצה ACC: לא הוגדר ב-Vault.",
+        HealthLocalText: "בריאות ריצה ACC: לא רלוונטי במצב מקומי.",
+        HealthOnlinePrefix: "בריאות ריצה ACC: זמין",
+        HealthNotConfiguredText: "בריאות ריצה ACC: לא מוגדר.",
+        HealthOfflinePrefix: "בריאות ריצה ACC: לא זמין",
+        DiagnosticsLocalText: "אבחון ריצה ACC: מצב מקומי, ללא קריאת /v1/acc/diag.",
+        DiagnosticsUnreachablePrefix: "אבחון ריצה ACC: לא זמין",
+        DiagnosticsReachablePrefix: "אבחון ריצה ACC");
+
+    private static readonly AccControlPlaneStatusLabels StatusWindowLabels = new(
+        Hint: "חלון זה מציג את מצב הריצה הנוכחי של ההוסט בלבד. אין כאן שינוי הגדרות או כתיבה ל-ACC.",
         ModeRemotePrefix: "מצב ריצה ACC: שירות מרכזי",
         ModeLocalText: "מצב ריצה ACC: מקומי (AccService:BaseUrl לא מוגדר בהוסט הנוכחי)",
         KeyPresentPrefix: "מפתח ריצה ACC: קיים ב-Vault",
