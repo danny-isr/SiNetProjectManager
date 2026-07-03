@@ -189,7 +189,8 @@ truth** for all secret values — not `appsettings.json`, not repo files, not le
 `System.Settings.Write` is authorized. Opens native `AccControlPlaneStatusWindow` in
 `SiNet.App.Wpf.Autodesk`, backed by the clean ACC control-plane seam. This window is **runtime-only**:
 it shows mode, key metadata, known ACC project IDs, health, and diagnostics for the current host
-process, and performs no settings writes or privileged ACC operations.
+process, and performs no settings writes or privileged ACC operations. It also includes a manual
+read-only `projectId + folderId + fileName` lookup tester through `IAccDocumentService`.
 
 Implemented capabilities in this surface:
 

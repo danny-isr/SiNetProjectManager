@@ -27,7 +27,9 @@ public sealed class AccControlPlaneStatusWindowTests
                 DbOk: true,
                 DbDetail: "Database connection successful.")));
 
-        var vm = new AccControlPlaneStatusWindowViewModel(presenter);
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            presenter,
+            new StubAccDocumentService(null));
         await vm.LoadAsync();
 
         Assert.Contains("מצב הריצה הנוכחי", vm.HintText, StringComparison.Ordinal);
@@ -45,7 +47,34 @@ public sealed class AccControlPlaneStatusWindowTests
 
         Assert.Contains("AccControlPlaneStatusView", xaml, StringComparison.Ordinal);
         Assert.Contains("ProjectsSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("ResolveDocumentCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("LookupProjectId", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_window_view_model_resolves_document_lookup_summary()
+    {
+        var presenter = new AccControlPlaneStatusPresenter(
+            new StubAccModeProvider(AccServiceMode.Local, null),
+            new StubAccProjectService(["b.project-1"]),
+            new StubAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null)),
+            new StubAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured")),
+            new StubAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured")));
+
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            presenter,
+            new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)))
+        {
+            LookupProjectId = "b.project-1",
+            LookupFolderId = "folder-22",
+            LookupFileName = "drawing.pdf",
+        };
+
+        await vm.ResolveDocumentAsync();
+
+        Assert.Contains("item-77", vm.LookupResultSummary, StringComparison.Ordinal);
+        Assert.Contains("version-3", vm.LookupResultSummary, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)
@@ -81,6 +110,16 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         public Task<IReadOnlyList<string>> GetProjectIdsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(projectIds);
+    }
+
+    private sealed class StubAccDocumentService(AccItemRef? result) : IAccDocumentService
+    {
+        public Task<AccItemRef?> FindItemAsync(
+            string projectId,
+            string folderId,
+            string fileName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
     }
 
     private sealed class StubAccHealthProbe(AccServiceHealthResult result) : IAccServiceHealthProbe

@@ -49,7 +49,8 @@ public sealed class NewShellAccStatusMenuTests
                     new StubAccProjectService(),
                     new StubAccKeyDiagnostics(),
                     new StubAccHealthProbe(),
-                    new StubAccDiagnosticsProbe()))));
+                    new StubAccDiagnosticsProbe()),
+                new StubAccDocumentService())));
 
         var sp = services.BuildServiceProvider();
         var factory = new NewShellFactory(sp);
@@ -105,6 +106,16 @@ public sealed class NewShellAccStatusMenuTests
     {
         public Task<AccServiceHealthResult> CheckAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured"));
+    }
+
+    private sealed class StubAccDocumentService : IAccDocumentService
+    {
+        public Task<AccItemRef?> FindItemAsync(
+            string projectId,
+            string folderId,
+            string fileName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AccItemRef?>(null);
     }
 
     private sealed class StubAccDiagnosticsProbe : IAccServiceDiagnosticsProbe

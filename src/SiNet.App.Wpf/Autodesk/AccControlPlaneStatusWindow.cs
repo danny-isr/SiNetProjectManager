@@ -10,8 +10,8 @@ public sealed class AccControlPlaneStatusWindow : Window
         ArgumentNullException.ThrowIfNull(viewModel);
 
         Title = "סטטוס ACC — מערכת חדשה";
-        Width = 620;
-        Height = 380;
+        Width = 760;
+        Height = 620;
         FlowDirection = FlowDirection.RightToLeft;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResizeWithGrip;

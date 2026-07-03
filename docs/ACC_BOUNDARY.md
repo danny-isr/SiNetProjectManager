@@ -54,7 +54,7 @@ production host. It exists to separate:
 | `SiOffice.AccService/Endpoints/AccEndpoints.cs` | Service-mode read-only ACC project/item lookup endpoints | Implemented |
 | `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` | First native UI consumer of the ACC control-plane seam | Implemented for read-only status/diag display |
 | `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` | Native ACC settings consumer of the control-plane seam | Implemented for read-only runtime display beside stored ACC settings |
-| `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` | Dedicated native ACC runtime-status surface | Implemented for shell-opened read-only status display |
+| `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` | Dedicated native ACC runtime-status surface | Implemented for shell-opened read-only status display plus manual item lookup via `IAccDocumentService` |
 | `src/SiNet.LegacyBridge/LegacyBridgeServiceCollectionExtensions.cs` | Temporary bridge slot | No ACC bridge wired |
 
 Implication: the clean Autodesk module is now a **real control-plane seam plus the first ACC
@@ -181,7 +181,7 @@ Until a separately approved slice says otherwise:
 
 Slices 1-3 are now in place. The next useful ACC work item is:
 
-- decide whether the next read-only slice is native consumption of `IAccProjectService` /
-  `IAccDocumentService`, or a separate live Autodesk-enumeration seam,
+- decide whether the next read-only slice is a richer native `IAccDocumentService` open/preview
+  flow beyond the current tester, or a separate live Autodesk-enumeration seam,
 - keep provisioning, inbox bootstrap, filing, metadata writes, and MoveToProject semantics
   deferred to later slices.

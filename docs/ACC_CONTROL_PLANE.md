@@ -52,7 +52,8 @@ side-effect-heavy document flows.
   `ACC (גלובלי)` tab for current-process runtime status, while keeping the stored
   `AccService.BaseUrl` field separate.
 - `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` exposes a dedicated shell-opened
-  runtime-only ACC status window built on the same presenter/control.
+  runtime-only ACC status window built on the same presenter/control, and now hosts a manual
+  read-only `IAccDocumentService` lookup tester (`projectId + folderId + fileName`).
 
 ## 2. Runtime Rules
 
@@ -146,11 +147,13 @@ Current checks cover:
 - source-level coverage for the new read-only `SiOffice.AccService` endpoint
 - WPF harness secret wiring via `AddSiNetSecrets()`
 - shell/menu wiring for the dedicated ACC status window
+- status-window read-only document lookup over `IAccDocumentService`
 
 ## 6. Next Slice
 
 The next ACC step should stay read-safe:
 
 - either add the first native consumer of `IAccDocumentService` / `IAccProjectService`,
+- or extend the current status-window tester into a richer open/preview flow,
 - or, if the product really needs it, introduce a separate live Autodesk project-enumeration slice,
 - while keeping provisioning, inbox bootstrap, filing, and metadata writes deferred.
