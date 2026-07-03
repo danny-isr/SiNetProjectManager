@@ -1,10 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Settings;
 
 namespace SiNet.Infrastructure.Logging;
 
 /// <summary>
-/// Modular DI registration for the logging module (see <c>docs/LOGGING.md</c>).
+/// Modular DI registration for the logging module (see <c>docs/LOGGING.md</c>, <c>docs/SETTINGS.md</c>).
 /// </summary>
 public static class LoggingServiceCollectionExtensions
 {
@@ -25,6 +26,16 @@ public static class LoggingServiceCollectionExtensions
     public static IServiceCollection AddSiNetSerilogLogging(this IServiceCollection services)
     {
         services.AddSingleton<IAppLogger, SerilogAppLogger>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers per-user logging settings (<see cref="IAppSettingsService"/> →
+    /// <see cref="JsonUserLoggingSettingsService"/>). Stage 5 settings slice — see <c>docs/SETTINGS.md</c>.
+    /// </summary>
+    public static IServiceCollection AddSiNetUserLoggingSettings(this IServiceCollection services)
+    {
+        services.AddSingleton<IAppSettingsService, JsonUserLoggingSettingsService>();
         return services;
     }
 }

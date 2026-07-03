@@ -1,6 +1,14 @@
 using System.IO;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Logging;
+using SiNet.Infrastructure.Sql;
+using SiNet.Infrastructure.Sql.Services.Settings;
+using SiNetProjectManagerV2.Services.Composition;
+using SiNetSQL.Data;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Boundary;
@@ -22,13 +30,48 @@ public sealed class SettingsStage5BoundaryTests
     ];
 
     [Fact]
-    public void NewSystemServiceCollectionExtensions_registers_settings_ports()
+    public void AddSiNetUserLoggingSettings_resolves_JsonUserLoggingSettingsService()
     {
-        var source = File.ReadAllText(NewSystemExtensionsPath);
-        Assert.Contains("AddSiNetUserLoggingSettings", source, StringComparison.Ordinal);
-        Assert.Contains("AddSiNetLoggingSettingsSql", source, StringComparison.Ordinal);
-        Assert.Contains("ILoggingRuntimeApplier", source, StringComparison.Ordinal);
-        Assert.Contains("LegacyLoggingRuntimeApplier", source, StringComparison.Ordinal);
+        var services = new ServiceCollection();
+        services.AddSiNetUserLoggingSettings();
+
+        var provider = services.BuildServiceProvider();
+        var settings = provider.GetRequiredService<IAppSettingsService>();
+
+        Assert.IsType<JsonUserLoggingSettingsService>(settings);
+    }
+
+    [Fact]
+    public void AddSiNetLoggingSettingsSql_resolves_SqlLoggingSettingsService_for_query_and_command()
+    {
+        var services = new ServiceCollection();
+        RegisterSqlLoggingSettingsDependencies(services);
+        services.AddSiNetLoggingSettingsSql();
+
+        var provider = services.BuildServiceProvider();
+
+        var query = provider.GetRequiredService<ILoggingSettingsQueryService>();
+        var command = provider.GetRequiredService<ILoggingSettingsCommandService>();
+
+        Assert.IsType<SqlLoggingSettingsService>(query);
+        Assert.IsType<SqlLoggingSettingsService>(command);
+        Assert.Same(query, command);
+    }
+
+    [Fact]
+    public void New_system_settings_slice_resolves_LegacyLoggingRuntimeApplier()
+    {
+        var services = new ServiceCollection();
+        services.AddSiNetUserLoggingSettings();
+        RegisterSqlLoggingSettingsDependencies(services);
+        services.AddSiNetLoggingSettingsSql();
+        services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
+
+        var provider = services.BuildServiceProvider();
+
+        Assert.IsType<JsonUserLoggingSettingsService>(provider.GetRequiredService<IAppSettingsService>());
+        Assert.IsType<SqlLoggingSettingsService>(provider.GetRequiredService<ILoggingSettingsQueryService>());
+        Assert.IsType<LegacyLoggingRuntimeApplier>(provider.GetRequiredService<ILoggingRuntimeApplier>());
     }
 
     [Fact]
@@ -39,6 +82,7 @@ public sealed class SettingsStage5BoundaryTests
         Assert.Contains("ILoggingSettingsQueryService", doc, StringComparison.Ordinal);
         Assert.Contains("ILoggingRuntimeApplier", doc, StringComparison.Ordinal);
         Assert.Contains("settings.json", doc, StringComparison.Ordinal);
+        Assert.Contains("AddSiNetUserLoggingSettings", doc, StringComparison.Ordinal);
     }
 
     public static IEnumerable<object[]> AppWpfSourceFiles()
@@ -114,7 +158,7 @@ public sealed class SettingsStage5BoundaryTests
             new() { SettingKey = LoggingSettingKeys.ClientFileLevel, SettingValue = "Debug" },
         };
 
-        var dto = SiNet.Infrastructure.Sql.Services.Settings.SqlLoggingSettingsService.MapToDto(rows);
+        var dto = SqlLoggingSettingsService.MapToDto(rows);
 
         Assert.Equal(@"\\server\logs", dto.CentralLogPath);
         Assert.Equal(30, dto.LocalRetentionDays);
@@ -122,16 +166,28 @@ public sealed class SettingsStage5BoundaryTests
         Assert.True(dto.CentralLoggingEnabled);
     }
 
+    private static void RegisterSqlLoggingSettingsDependencies(IServiceCollection services)
+    {
+        var auth = new Mock<IAuthorizationQueryService>();
+        auth.Setup(a => a.CanCurrentUserAccessFeatureAsync(
+                AppFeatureCodes.SystemSettingsWrite,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var dbFactory = new Mock<IDbContextFactory<SiNetSQLDbContext>>();
+        dbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new SiNetSQLDbContext(
+                new DbContextOptionsBuilder<SiNetSQLDbContext>()
+                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                    .Options));
+
+        services.AddSingleton(auth.Object);
+        services.AddSingleton(dbFactory.Object);
+    }
+
     private static string RepoRoot => RepoPaths.RepoRoot;
 
     private static string AppWpfRoot => Path.Combine(RepoRoot, "src", "SiNet.App.Wpf");
-
-    private static string NewSystemExtensionsPath => Path.Combine(
-        RepoRoot,
-        "SiNetProjectManagerV2",
-        "Services",
-        "Composition",
-        "NewSystemServiceCollectionExtensions.cs");
 
     private static string SettingsDocPath => Path.Combine(RepoRoot, "docs", "SETTINGS.md");
 

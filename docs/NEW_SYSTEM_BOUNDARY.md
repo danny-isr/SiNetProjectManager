@@ -96,7 +96,7 @@ See [`LOGGING.md`](./LOGGING.md). Boundary tests: `NewSystemLoggingBoundaryTests
 
 | Port | Adapter | Registration |
 | --- | --- | --- |
-| `IAppSettingsService` | `JsonUserLoggingSettingsService` | `AddSiNetUserLoggingSettings()` |
+| `IAppSettingsService` | `JsonUserLoggingSettingsService` | `AddSiNetUserLoggingSettings()` in `LoggingServiceCollectionExtensions` |
 | `ILoggingSettingsQueryService` / `ILoggingSettingsCommandService` | `SqlLoggingSettingsService` | `AddSiNetLoggingSettingsSql()` |
 | `ILoggingRuntimeApplier` | `LegacyLoggingRuntimeApplier` (host) | `AddSiNetNewSystemGraph()` |
 

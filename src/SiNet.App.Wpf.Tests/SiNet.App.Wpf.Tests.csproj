@@ -30,6 +30,7 @@
 	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Logging\SiNet.Infrastructure.Logging.csproj" />
+	<ProjectReference Include="..\..\SiNetProjectManagerV2\SiNetProjectManagerV2.csproj" />
   </ItemGroup>
 
 </Project>

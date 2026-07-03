@@ -107,7 +107,7 @@ DTOs: `UserLoggingSettingsDto`, `CentralLoggingSettingsDto`, `AppLogLevelsDto`, 
 | `SqlLoggingSettingsService` | `SiNet.Infrastructure.Sql` | `SystemSettings` rows where `SettingKey LIKE 'Logging.%'` |
 | `LegacyLoggingRuntimeApplier` | `SiNetProjectManagerV2` (host) | Calls `AppLogger.Configure` — **not** referenced from App.Wpf |
 
-Registration: `AddSiNetSettings()` in Logging + Sql extensions; wired in `AddSiNetNewSystemGraph()`.
+Registration: `AddSiNetUserLoggingSettings()` in `LoggingServiceCollectionExtensions`, `AddSiNetLoggingSettingsSql()` in Sql; wired in `AddSiNetNewSystemGraph()`.
 
 ---
 
