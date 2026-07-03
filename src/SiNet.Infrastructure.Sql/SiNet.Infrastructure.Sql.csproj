@@ -29,4 +29,10 @@
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+	<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+	  <_Parameter1>SiNet.App.Wpf.Tests</_Parameter1>
+	</AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

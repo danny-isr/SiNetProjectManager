@@ -33,12 +33,11 @@ Host bootstrap (SiNetProjectManagerV2 App.xaml.cs)  (central + local sinks, unch
 | MEL bridge | `AddLogging` + `AddSerilog(Log.Logger)` | Same `Log.Logger` — `SerilogAppLogger` writes to it |
 
 **Per-user toggle:** `AppSettings.LoggingEnabled` + `LogDirectory` (`SettingsWindow`) still control
-`AppLogger.Configure` / file sink level. That remains legacy host behavior until a native settings
-surface migrates it behind an Application port.
+`AppLogger.Configure` / file sink level via host adapter `ILoggingRuntimeApplier` (Stage 5). Native
+Settings UI is deferred; ports are in `SiNet.Application.Settings` — see [`SETTINGS.md`](./SETTINGS.md).
 
-**Global / central logging:** DB keys `Logging.*` (`CentralLoggingSettings`) remain in SiNetSQL for now.
-Extracting bootstrap into `SiNet.Infrastructure.Logging` is a later slice — Stage 4 only wires the
-**consumption port** for New System modules.
+**Global / central logging:** DB keys `Logging.*` are read/written via `ILoggingSettingsQueryService` /
+`ILoggingSettingsCommandService` (Stage 5). Bootstrap in SiNetSQL remains in the host for now.
 
 ---
 

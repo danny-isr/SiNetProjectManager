@@ -92,6 +92,19 @@ logger). Scaffold `AddSiNet()` still uses `ConsoleAppLogger` for standalone dev.
 
 See [`LOGGING.md`](./LOGGING.md). Boundary tests: `NewSystemLoggingBoundaryTests.cs`.
 
+## Native settings ports (Stage 5 — logging slice, 2026-07-03)
+
+| Port | Adapter | Registration |
+| --- | --- | --- |
+| `IAppSettingsService` | `JsonUserLoggingSettingsService` | `AddSiNetUserLoggingSettings()` |
+| `ILoggingSettingsQueryService` / `ILoggingSettingsCommandService` | `SqlLoggingSettingsService` | `AddSiNetLoggingSettingsSql()` |
+| `ILoggingRuntimeApplier` | `LegacyLoggingRuntimeApplier` (host) | `AddSiNetNewSystemGraph()` |
+
+`SiNet.App.Wpf` must **not** reference `SettingsManager`, `AppSettings`, `CentralLoggingSettings`, or
+`AppLogger`. Native **הגדרות** UI is deferred; ports are ready for a future Settings surface.
+
+See [`SETTINGS.md`](./SETTINGS.md). Boundary tests: `SettingsStage5BoundaryTests.cs`.
+
 ## Revoked pattern (do not extend)
 
 | Pattern | Status |

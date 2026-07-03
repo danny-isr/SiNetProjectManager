@@ -256,32 +256,32 @@ No legacy menu is scanned or copied. Each item is added deliberately, one migrat
 
 ---
 
-## 11. Settings mechanism target
+## 11. Settings mechanism (Stage 5 — logging ports)
 
-Two settings mechanisms exist today (findings, to be migrated later — **not** in this slice):
+Full inventory: [`SETTINGS.md`](./SETTINGS.md).
+
+Two settings mechanisms exist today:
 
 | Mechanism | Scope | Storage | Windows | Notes |
 | --- | --- | --- | --- | --- |
-| `AppSettings` via `SettingsManager` | **Per-user** | **File** — `%LOCALAPPDATA%\SiNetProjectManagerV2\settings.json` (legacy path next to exe read once, migrated) | `SettingsWindow` | UI/theme (font, colors), `AllowMultipleInstances`, logging on/off + log directory. Applied via `App.ApplySettings()`. |
-| `SystemSettingsService` (SiNetSQL) | **Global** (system) | **DB** — key/value keyed by `SystemSettingKeys` | `ManagementSettingsWindow` | Default project title, Google folder IDs, ACC base URL, model preference, etc. Cached; `InvalidateCache()` on change. |
-| `appsettings.json` | **Per-machine/deploy** | File next to exe | — | Bootstrap config (connection string, `AccService:BaseUrl`, Gemini/model defaults). Read-only at runtime. |
+| `AppSettings` via `SettingsManager` | **Per-user** | **File** — `%LOCALAPPDATA%\SiNetProjectManagerV2\settings.json` | `SettingsWindow` | UI/theme, logging on/off + log directory. |
+| `SystemSettingsService` (SiNetSQL) | **Global** | **DB** — `SystemSettings` keyed by `SystemSettingKeys` | `ManagementSettingsWindow` | Includes `Logging.*` keys for central logging. |
+| `appsettings.json` | **Per-machine/deploy** | File next to exe | — | Bootstrap config (connection string, etc.). |
 
-Startup requirement: the shell needs **no** settings persistence to run. It only needs the current
-user (host adapter) and the shared Project Context, both already available.
-
-Target ports (proposed, to be documented in a dedicated settings migration doc before any
-implementation):
+**Stage 5 ports (implemented — logging slice):**
 
 ```plaintext
-IAppSettingsService      → per-user UI/app settings (replaces SettingsManager/AppSettings file path)
-IUserSettingsService     → per-user preferences that are logically user-scoped
-ISettingsQueryService    → read system/global settings (wraps SystemSettingsService reads)
-ISettingsCommandService  → write system/global settings (wraps SystemSettingsService writes)
+IAppSettingsService              → per-user logging (JsonUserLoggingSettingsService)
+ILoggingSettingsQueryService     → read global Logging.* from DB
+ILoggingSettingsCommandService   → admin write Logging.* (System.Settings.Write)
+ILoggingRuntimeApplier           → host applies user toggle (LegacyLoggingRuntimeApplier → AppLogger)
 ```
 
-Guardrails for settings migration (future work): reads/writes go behind Application ports;
-`Infrastructure.Sql` keeps `IDbContextFactory<>`; no `DbContext` in the UI; **no** hand-edited
-migrations/`ModelSnapshot`. Persistence is implemented **only after** the target is documented.
+Native **הגדרות** UI is **not** in Stage 5 slice 1 — menu item stays disabled in `NewShellFactory`.
+**מפתחות וסודות** remains the native admin surface for secrets.
+
+Guardrails: reads/writes behind Application ports; no schema/migrations; `SiNet.App.Wpf` does not touch
+legacy settings types directly.
 
 ---
 

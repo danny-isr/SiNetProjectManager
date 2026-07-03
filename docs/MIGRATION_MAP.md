@@ -188,6 +188,7 @@ Avoid:
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and Google (native Gmail auth). See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
 | Logging | scattered Serilog usage | `SiNet.Application` `IAppLogger` → `SiNet.Infrastructure.Logging` (`SerilogAppLogger` / `AddSiNetSerilogLogging`) | 🟡 | Stage 4: New System consumption port wired; bootstrap still in host. See [`LOGGING.md`](./LOGGING.md). |
+| Settings (logging) | `SettingsManager` / `SystemSettings` `Logging.*` | `IAppSettingsService`, `ILoggingSettingsQueryService`, `ILoggingSettingsCommandService`, `ILoggingRuntimeApplier` | 🟡 | Stage 5 slice 1: ports + adapters; native Settings UI deferred. See [`SETTINGS.md`](./SETTINGS.md). |
 | Identity / Permissions | `CurrentUserContext`, `UserService`, `MainWindow` menu | `IUserManagementService` → `SqlUserManagementService` + native App.Wpf admin | 🟡 | Native list/add-user in New System; legacy admin on Legacy path; Action Permissions admin pending. |
 
 ---
