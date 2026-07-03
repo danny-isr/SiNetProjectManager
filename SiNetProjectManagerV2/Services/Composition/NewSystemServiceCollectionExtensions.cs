@@ -29,13 +29,14 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSiNetSecrets();
         services.AddSiNetSerilogLogging();
         services.AddSiNetUserLoggingSettings();
-        SiNet.Infrastructure.Sql.LoggingSettingsServiceCollectionExtensions.AddSiNetLoggingSettingsSql(services);
+        SiNet.Infrastructure.Sql.SystemSettingsServiceCollectionExtensions.AddSiNetSystemSettingsSql(services);
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);
         SiNet.App.Wpf.Admin.Permissions.PermissionAdminServiceCollectionExtensions.AddSiNetPermissionAdminWpf(services);
         SiNet.App.Wpf.Admin.Security.SecretAdminServiceCollectionExtensions.AddSiNetSecretAdminWpf(services);
+        SiNet.App.Wpf.Admin.Settings.SettingsAdminServiceCollectionExtensions.AddSiNetSettingsAdminWpf(services);
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();

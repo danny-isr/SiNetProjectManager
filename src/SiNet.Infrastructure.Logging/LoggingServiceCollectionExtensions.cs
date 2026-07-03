@@ -30,12 +30,12 @@ public static class LoggingServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers per-user logging settings (<see cref="IAppSettingsService"/> →
-    /// <see cref="JsonUserLoggingSettingsService"/>). Stage 5 settings slice — see <c>docs/SETTINGS.md</c>.
+    /// Registers per-user settings (<see cref="IAppSettingsService"/> →
+    /// <see cref="JsonAppSettingsService"/>). Stage 5 — see <c>docs/SETTINGS.md</c>.
     /// </summary>
     public static IServiceCollection AddSiNetUserLoggingSettings(this IServiceCollection services)
     {
-        services.AddSingleton<IAppSettingsService, JsonUserLoggingSettingsService>();
+        services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
         return services;
     }
 }

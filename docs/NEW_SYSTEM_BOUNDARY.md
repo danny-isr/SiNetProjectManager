@@ -92,18 +92,19 @@ logger). Scaffold `AddSiNet()` still uses `ConsoleAppLogger` for standalone dev.
 
 See [`LOGGING.md`](./LOGGING.md). Boundary tests: `NewSystemLoggingBoundaryTests.cs`.
 
-## Native settings ports (Stage 5 — logging slice, 2026-07-03)
+## Native settings (Stage 5 slice 2, 2026-07-03)
 
-| Port | Adapter | Registration |
-| --- | --- | --- |
-| `IAppSettingsService` | `JsonUserLoggingSettingsService` | `AddSiNetUserLoggingSettings()` in `LoggingServiceCollectionExtensions` |
-| `ILoggingSettingsQueryService` / `ILoggingSettingsCommandService` | `SqlLoggingSettingsService` | `AddSiNetLoggingSettingsSql()` |
-| `ILoggingRuntimeApplier` | `LegacyLoggingRuntimeApplier` (host) | `AddSiNetNewSystemGraph()` |
+| Surface | Location |
+| --- | --- |
+| Settings | `SettingsWindow` + `SettingsView` + `SettingsViewModel` |
+| Per-user JSON | `JsonAppSettingsService` → `IAppSettingsService` |
+| Global DB | `SqlSystemSettingsService` → `ISystemSettingsQuery/CommandService` |
+| Status colors | `SqlStatusColorSettingsService` → `IStatusColorSettingsService` |
+| Runtime logging | `LegacyLoggingRuntimeApplier` → `ILoggingRuntimeApplier` |
 
-`SiNet.App.Wpf` must **not** reference `SettingsManager`, `AppSettings`, `CentralLoggingSettings`, or
-`AppLogger`. Native **הגדרות** UI is deferred; ports are ready for a future Settings surface.
+Menu **הגדרות** gated by `AppFeatureCodes.SystemSettingsWrite`. Does **not** open legacy settings windows.
 
-See [`SETTINGS.md`](./SETTINGS.md). Boundary tests: `SettingsStage5BoundaryTests.cs`.
+See [`SETTINGS.md`](./SETTINGS.md). Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
 
 ## Revoked pattern (do not extend)
 

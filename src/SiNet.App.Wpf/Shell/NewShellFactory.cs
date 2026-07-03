@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
+using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -107,16 +108,13 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "הגדרת מפתחות וסודות (Credential Vault)"));
         }
 
-        // Legacy settings placeholder — native secrets moved to dedicated menu item above.
-        const bool settingsSurfaceImplemented = false;
-        var settingsAuthorized = CanAccessFeature(AppFeatureCodes.SystemSettingsWrite);
-        items.Add(new NewShellMenuItem(
-            "הגדרות",
-            static () => { },
-            settingsSurfaceImplemented
-                ? "הגדרות מערכת"
-                : "בקרוב — ראה docs/APP_SHELL.md §11",
-            isAvailable: settingsSurfaceImplemented && settingsAuthorized));
+        if (CanAccessFeature(AppFeatureCodes.SystemSettingsWrite))
+        {
+            items.Add(new NewShellMenuItem(
+                "הגדרות",
+                OpenNativeSettings,
+                "הגדרות מערכת (מערכת חדשה)"));
+        }
 
         return items;
     }
@@ -214,6 +212,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת מפתחות וסודות: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeSettings()
+    {
+        try
+        {
+            var window = _services.GetRequiredService<SettingsWindow>();
+            ShowDialog(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת הגדרות: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

@@ -21,16 +21,17 @@ public sealed class SettingsStage5BoundaryTests
     private static readonly string[] ForbiddenLegacySettingsInAppWpf =
     [
         "SettingsManager",
-        "AppSettings",
-        "CentralLoggingSettings",
+        "SiNetProjectManagerV2.AppSettings",
+        "SiNetSQL.Services.Logging.CentralLoggingSettings",
         "SiNetSQL.Services.AppLogger",
         "AppLogger.Configure",
-        "SystemSettingKeys",
+        "SiNetSQL.Services.SystemSettingKeys",
         "SiNetSQL.Services.Logging",
+        "SiNetProjectManagerV2.WPF_Window",
     ];
 
     [Fact]
-    public void AddSiNetUserLoggingSettings_resolves_JsonUserLoggingSettingsService()
+    public void AddSiNetUserLoggingSettings_resolves_JsonAppSettingsService()
     {
         var services = new ServiceCollection();
         services.AddSiNetUserLoggingSettings();
@@ -38,24 +39,28 @@ public sealed class SettingsStage5BoundaryTests
         var provider = services.BuildServiceProvider();
         var settings = provider.GetRequiredService<IAppSettingsService>();
 
-        Assert.IsType<JsonUserLoggingSettingsService>(settings);
+        Assert.IsType<JsonAppSettingsService>(settings);
     }
 
     [Fact]
-    public void AddSiNetLoggingSettingsSql_resolves_SqlLoggingSettingsService_for_query_and_command()
+    public void AddSiNetSystemSettingsSql_resolves_SqlSystemSettingsService_for_all_ports()
     {
         var services = new ServiceCollection();
-        RegisterSqlLoggingSettingsDependencies(services);
-        services.AddSiNetLoggingSettingsSql();
+        RegisterSqlSettingsDependencies(services);
+        services.AddSiNetSystemSettingsSql();
 
         var provider = services.BuildServiceProvider();
 
         var query = provider.GetRequiredService<ILoggingSettingsQueryService>();
         var command = provider.GetRequiredService<ILoggingSettingsCommandService>();
+        var systemQuery = provider.GetRequiredService<ISystemSettingsQueryService>();
+        var systemCommand = provider.GetRequiredService<ISystemSettingsCommandService>();
 
-        Assert.IsType<SqlLoggingSettingsService>(query);
-        Assert.IsType<SqlLoggingSettingsService>(command);
-        Assert.Same(query, command);
+        Assert.IsType<SqlSystemSettingsService>(query);
+        Assert.IsType<SqlSystemSettingsService>(command);
+        Assert.IsType<SqlSystemSettingsService>(systemQuery);
+        Assert.IsType<SqlSystemSettingsService>(systemCommand);
+        Assert.Same(query, systemQuery);
     }
 
     [Fact]
@@ -63,14 +68,14 @@ public sealed class SettingsStage5BoundaryTests
     {
         var services = new ServiceCollection();
         services.AddSiNetUserLoggingSettings();
-        RegisterSqlLoggingSettingsDependencies(services);
-        services.AddSiNetLoggingSettingsSql();
+        RegisterSqlSettingsDependencies(services);
+        services.AddSiNetSystemSettingsSql();
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
 
         var provider = services.BuildServiceProvider();
 
-        Assert.IsType<JsonUserLoggingSettingsService>(provider.GetRequiredService<IAppSettingsService>());
-        Assert.IsType<SqlLoggingSettingsService>(provider.GetRequiredService<ILoggingSettingsQueryService>());
+        Assert.IsType<JsonAppSettingsService>(provider.GetRequiredService<IAppSettingsService>());
+        Assert.IsType<SqlSystemSettingsService>(provider.GetRequiredService<ISystemSettingsQueryService>());
         Assert.IsType<LegacyLoggingRuntimeApplier>(provider.GetRequiredService<ILoggingRuntimeApplier>());
     }
 
@@ -79,7 +84,7 @@ public sealed class SettingsStage5BoundaryTests
     {
         var doc = File.ReadAllText(SettingsDocPath);
         Assert.Contains("IAppSettingsService", doc, StringComparison.Ordinal);
-        Assert.Contains("ILoggingSettingsQueryService", doc, StringComparison.Ordinal);
+        Assert.Contains("ISystemSettingsQueryService", doc, StringComparison.Ordinal);
         Assert.Contains("ILoggingRuntimeApplier", doc, StringComparison.Ordinal);
         Assert.Contains("settings.json", doc, StringComparison.Ordinal);
         Assert.Contains("AddSiNetUserLoggingSettings", doc, StringComparison.Ordinal);
@@ -108,7 +113,7 @@ public sealed class SettingsStage5BoundaryTests
     }
 
     [Fact]
-    public void JsonUserLoggingSettingsService_round_trips_logging_fields()
+    public void JsonAppSettingsService_round_trips_and_preserves_unknown_fields()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "sinet-settings-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -121,23 +126,29 @@ public sealed class SettingsStage5BoundaryTests
                 """
                 {
                   "fontSize": 12,
-                  "loggingEnabled": true,
-                  "logDirectory": "C:\\Custom\\Logs"
+                  "customFutureField": "keep-me",
+                  "LoggingEnabled": true,
+                  "LogDirectory": "C:\\Custom\\Logs"
                 }
                 """);
 
-            var (enabled, directory) = JsonUserLoggingSettingsService.ReadLoggingFields(settingsPath);
-            Assert.True(enabled);
-            Assert.Equal("C:\\Custom\\Logs", directory);
+            var dto = JsonAppSettingsService.ReadDto(settingsPath);
+            Assert.True(dto.Logging.LoggingEnabled);
+            Assert.Equal("C:\\Custom\\Logs", dto.Logging.LogDirectory);
+            Assert.Equal(12, dto.Appearance.FontSize);
 
-            JsonUserLoggingSettingsService.WriteLoggingFields(settingsPath, false, null);
+            var mergedDto = dto with
+            {
+                Logging = dto.Logging with { LoggingEnabled = false },
+            };
+            JsonAppSettingsService.WriteDto(settingsPath, mergedDto);
 
             var merged = File.ReadAllText(settingsPath);
-            Assert.Contains("\"fontSize\": 12", merged, StringComparison.Ordinal);
-            Assert.Contains("\"loggingEnabled\": false", merged, StringComparison.Ordinal);
+            Assert.Contains("\"customFutureField\": \"keep-me\"", merged, StringComparison.Ordinal);
+            Assert.Contains("\"LoggingEnabled\": false", merged, StringComparison.Ordinal);
 
-            var dto = JsonUserLoggingSettingsService.CreateDto(false, null);
-            Assert.Equal(LoggingSettingsPaths.BootstrapDefaultLocalLogDirectory, dto.EffectiveLocalLogDirectory);
+            var defaultDto = JsonAppSettingsService.CreateDefaultDto();
+            Assert.Equal(LoggingSettingsMetadata.BootstrapDefaultLocalLogDirectory, defaultDto.Logging.EffectiveLocalLogDirectory);
         }
         finally
         {
@@ -149,24 +160,36 @@ public sealed class SettingsStage5BoundaryTests
     }
 
     [Fact]
-    public void SqlLoggingSettingsService_maps_db_rows_to_dto()
+    public void JsonAppSettingsService_defaults_match_legacy_AppSettings()
+    {
+        var dto = JsonAppSettingsService.CreateDefaultDto();
+        Assert.Equal(UserAppSettingsDefaults.FontFamily, dto.Appearance.FontFamily);
+        Assert.Equal(UserAppSettingsDefaults.FontSize, dto.Appearance.FontSize);
+        Assert.Equal(UserAppSettingsDefaults.AllowMultipleInstances, dto.Behavior.AllowMultipleInstances);
+        Assert.Equal(UserAppSettingsDefaults.LoggingEnabled, dto.Logging.LoggingEnabled);
+        Assert.Equal(UserAppSettingsDefaults.FloatingActiveOpacity, dto.FloatingOpacity.ActiveOpacity);
+    }
+
+    [Fact]
+    public void SqlSystemSettingsService_maps_db_rows_to_dto()
     {
         var rows = new List<SiNetSQL.Models.SystemSetting>
         {
             new() { SettingKey = LoggingSettingKeys.CentralLogPath, SettingValue = @"\\server\logs" },
             new() { SettingKey = LoggingSettingKeys.LocalRetentionDays, SettingValue = "30" },
+            new() { SettingKey = SystemSettingKeys.DefaultProjectTitle, SettingValue = "Test Project" },
             new() { SettingKey = LoggingSettingKeys.ClientFileLevel, SettingValue = "Debug" },
         };
 
-        var dto = SqlLoggingSettingsService.MapToDto(rows);
+        var dto = SqlSystemSettingsService.MapToSystemDto(rows);
 
-        Assert.Equal(@"\\server\logs", dto.CentralLogPath);
-        Assert.Equal(30, dto.LocalRetentionDays);
-        Assert.Equal(LogLevelDto.Debug, dto.Client.FileLevel);
-        Assert.True(dto.CentralLoggingEnabled);
+        Assert.Equal(@"\\server\logs", dto.Logging.CentralLogPath);
+        Assert.Equal(30, dto.Logging.LocalRetentionDays);
+        Assert.Equal("Test Project", dto.EmailOffice.DefaultProjectTitle);
+        Assert.Equal(LogLevelDto.Debug, dto.Logging.Client.FileLevel);
     }
 
-    private static void RegisterSqlLoggingSettingsDependencies(IServiceCollection services)
+    private static void RegisterSqlSettingsDependencies(IServiceCollection services)
     {
         var auth = new Mock<IAuthorizationQueryService>();
         auth.Setup(a => a.CanCurrentUserAccessFeatureAsync(

@@ -1,148 +1,124 @@
-# Settings — New System target (Stage 5)
+# Settings — New System (Stage 5)
 
-> **Status:** Stage 5 in progress (2026-07-03) — logging settings ports + adapters; native Settings UI later.
-> **Related:** [`LOGGING.md`](./LOGGING.md), [`APP_SHELL.md`](./APP_SHELL.md) §11, legacy ops [`SiNetProjectManagerV2/Docs/LOGGING.md`](../SiNetProjectManagerV2/Docs/LOGGING.md).
+> **Status:** Stage 5 slice 2 (2026-07-03) — full settings ports + native Settings UI.
+> **Related:** [`LOGGING.md`](./LOGGING.md), [`APP_SHELL.md`](./APP_SHELL.md) §11.
 
 ---
 
 ## 1. Goal
 
-Move settings behind clean Application ports so **New System** (`SiNet.App.Wpf`) never references
-legacy `AppSettings`, `SettingsManager`, `AppLogger`, Serilog, or `CentralLoggingSettings` directly.
+All settings (per-user JSON + global DB + status colors) behind Application ports. Native **הגדרות**
+in New System replaces legacy `SettingsWindow` + `ManagementSettingsWindow` for the NewShell menu.
 
-Stage 5 **starts with logging-related settings** (local toggle/path + central/server DB keys).
-Native **הגדרות** UI comes **after** ports and adapters are stable — distinct from **מפתחות וסודות**.
-
----
-
-## 2. What exists today (legacy)
-
-### 2.1 Per-user file settings
-
-| Item | Location |
-| --- | --- |
-| POCO | `SiNetProjectManagerV2/AppSettings.cs` |
-| Persistence | `SiNetProjectManagerV2/SettingsManager.cs` |
-| File | `%LOCALAPPDATA%\SiNetProjectManagerV2\settings.json` |
-| Legacy read-once | `{exe dir}\settings.json` (migrated, never written) |
-| UI | `SiNetProjectManagerV2/WPF Window/SettingsWindow.xaml(.cs)` |
-
-**Logging fields in JSON:**
-
-| JSON key | C# property | Default | Pipeline effect |
-| --- | --- | --- | --- |
-| `loggingEnabled` | `LoggingEnabled` | `false` | Sets `AppLogger.FileLevelSwitch` → local file min `Debug` vs `Error` |
-| `logDirectory` | `LogDirectory` | `""` | Updates `AppLogger.LogDirectory` for UI utilities; **Serilog local sink path is fixed at static bootstrap** unless host is refactored |
-
-**Other fields in same file (future `IAppSettingsService` slices):** font/colors,
-`allowMultipleInstances`, floating window geometry, DEBUG auth test mode.
-
-### 2.2 Global / DB settings (central logging)
-
-| Item | Location |
-| --- | --- |
-| Table | `dbo.SystemSettings` (`SettingKey`, `SettingValue`, …) |
-| Service | `SiNetSQL/Services/SystemSettingsService.cs` |
-| Keys | `SiNetSQL/Services/SystemSettingKeys.cs` — `Logging.*` prefix |
-| Loader | `SiNetSQL/Services/Logging/CentralLogging.cs` — `CentralLoggingSettings.LoadFromDatabase` |
-| Admin UI | `ManagementSettingsWindow.xaml(.cs)` |
-
-**All DB keys affecting the logging pipeline:**
-
-| DB key | Scope | Local file | Central share | Applied |
-| --- | --- | --- | --- | --- |
-| `Logging.CentralLogPath` | Global | — | Enable + UNC root | **Next restart** |
-| `Logging.LocalRetentionDays` | Global | Retention | — | Next restart |
-| `Logging.CentralRetentionDays` | Global | — | Retention | Next restart |
-| `Logging.Client.FileLevel` | Global | Default min level | — | **Overridden on WPF client** by `FileLevelSwitch` at runtime |
-| `Logging.Client.CentralLevel` | Global | — | Client central min level | Next restart |
-| `Logging.AccService.FileLevel` | Global | AccService local | — | Next AccService restart |
-| `Logging.AccService.CentralLevel` | Global | — | AccService central | Next AccService restart |
-| `Logging.SyncEngine.FileLevel` | Global | SyncEngine local | — | Next SyncEngine restart |
-| `Logging.SyncEngine.CentralLevel` | Global | — | SyncEngine central | Next SyncEngine restart |
-
-### 2.3 Host bootstrap (unchanged in Stage 5)
-
-`SiNetProjectManagerV2/App.xaml.cs` static ctor:
-
-1. `_logDir = GetLogDirectory()` → `%LOCALAPPDATA%\SiNet\SiNetProjectManagerV2\Logs`
-2. `CentralLoggingSettings.LoadFromDatabase(..., SiNetApp.Client, localFileLevelSwitch: AppLogger.FileLevelSwitch)`
-3. Serilog `Log.Logger` + `AddSiNetCentralLogging`
-
-After settings load: `ConfigureLoggingAndSettings()` → `AppLogger.Configure(LoggingEnabled, LogDirectory)`.
-
-### 2.4 Local log path inconsistency (documented gap)
-
-| Source | Path |
-| --- | --- |
-| Serilog bootstrap (`App.GetLogDirectory`) | `%LOCALAPPDATA%\SiNet\SiNetProjectManagerV2\Logs` |
-| `AppLogger.GetDefaultLogDirectory()` / Settings UI hint | `%LOCALAPPDATA%\SiNetProjectManager\Logs` |
-
-Stage 5 ports expose both **bootstrap default** and **AppLogger default** in DTO metadata; unification is a later bootstrap refactor.
+`SiNet.App.Wpf` must **not** reference legacy settings types, Serilog, or `AppLogger`.
 
 ---
 
-## 3. Application ports (Stage 5)
+## 2. Legacy inventory (reference)
+
+### 2.1 Per-user — `%LOCALAPPDATA%\SiNetProjectManagerV2\settings.json`
+
+| JSON key (PascalCase) | Default | Runtime / restart |
+| --- | --- | --- |
+| `FontFamily` | Segoe UI | Runtime (legacy `ApplySettings`) |
+| `FontSize` | 12 | Runtime |
+| `ForegroundColor` / `BackgroundColor` | #000 / #FFF | Runtime |
+| `AllowMultipleInstances` | true | **Restart** |
+| `LoggingEnabled` | false | **Runtime** via `ILoggingRuntimeApplier` |
+| `LogDirectory` | "" | Partial runtime |
+| `FloatingWindowActiveOpacity` / `IdleOpacity` | 1.0 / 0.7 | Runtime (floating windows) |
+| `FloatingTasks*` / `FloatingInspection*` geometry | NaN / defaults | Next window open |
+| `EnableAuthorizationTestMode` | false | **Restart** (no legacy UI) |
+
+### 2.2 Global — `dbo.SystemSettings`
+
+All keys mirrored in `SiNet.Application.Settings.SystemSettingKeys` + `LoggingSettingKeys`.
+Defaults in `SystemSettingsDefaults`.
+
+| Group | Keys | Legacy UI |
+| --- | --- | --- |
+| Email/office | `DefaultProjectTitle`, `OfficeManagementProjectId`, `HourPriceDefault`, `InboxFolderName`, `InboxProjectName`, `AccViewerMaxTabs` | ManagementSettings |
+| ACC | `AccService.BaseUrl`, `AccBootstrapAdminEmail`, `AccProjectTemplateName`, `AccManualUploadAllowedExtensions` | ManagementSettings |
+| Inspection | `InspectionTemplatesFolderId`, `InspectionReportsFolderId`, `ReportsOutputRoot`, `StampTemplatePath` | ManagementSettings |
+| Status labels | `StatusLabel_*` | ManagementSettings |
+| AI | `Ollama*`, `AiModel.*`, `AiProvider.*`, `AiConfiguredCloudModels` | ManagementSettings + AiModelCatalog |
+| Logging | `Logging.*` | ManagementSettings |
+
+**Deferred in native UI (stored only):** User Groups button, Google folder validate, ACC template refresh, AiModelCatalogWindow.
+
+### 2.3 Status colors (separate tables)
+
+| Store | Table | Scope |
+| --- | --- | --- |
+| Personal override | `UserStatusPreference` | Per-user |
+| Global default | `ProjectAssignmentStatus.DefaultColorHex` | Admin |
+
+Port: `IStatusColorSettingsService`.
+
+---
+
+## 3. Application ports
 
 Location: `src/SiNet.Application/Settings/`
 
 | Port | Purpose |
 | --- | --- |
-| `IAppSettingsService` | Per-user settings — **logging slice first** (`UserLoggingSettingsDto`) |
-| `ILoggingSettingsQueryService` | Read global central logging from DB |
-| `ILoggingSettingsCommandService` | Admin write global central logging (requires `System.Settings.Write`) |
-| `ILoggingRuntimeApplier` | Host applies user logging toggle to live pipeline (`AppLogger.Configure`) |
-
-DTOs: `UserLoggingSettingsDto`, `CentralLoggingSettingsDto`, `AppLogLevelsDto`, `LogLevelDto`.
-
-**No** legacy types in Application or App.Wpf.
+| `IAppSettingsService` | Full per-user JSON (`UserAppSettingsDto`) |
+| `ISystemSettingsQueryService` | Read all global settings (`SystemSettingsDto`) |
+| `ISystemSettingsCommandService` | Admin write global settings |
+| `ILoggingSettingsQueryService` / `ILoggingSettingsCommandService` | Logging slice (same SQL adapter) |
+| `ILoggingRuntimeApplier` | Apply user logging toggle at runtime (host) |
+| `IStatusColorSettingsService` | User overrides + global default colors |
 
 ---
 
-## 4. Infrastructure adapters (Stage 5)
+## 4. Infrastructure adapters
 
 | Adapter | Module | Storage |
 | --- | --- | --- |
-| `JsonUserLoggingSettingsService` | `SiNet.Infrastructure.Logging` | `%LOCALAPPDATA%\SiNetProjectManagerV2\settings.json` (merge JSON; preserves non-logging keys) |
-| `SqlLoggingSettingsService` | `SiNet.Infrastructure.Sql` | `SystemSettings` rows where `SettingKey LIKE 'Logging.%'` |
-| `LegacyLoggingRuntimeApplier` | `SiNetProjectManagerV2` (host) | Calls `AppLogger.Configure` — **not** referenced from App.Wpf |
+| `JsonAppSettingsService` | `SiNet.Infrastructure.Logging` | `settings.json` — merge write, preserves unknown fields |
+| `SqlSystemSettingsService` | `SiNet.Infrastructure.Sql` | All managed `SystemSettings` keys |
+| `SqlStatusColorSettingsService` | `SiNet.Infrastructure.Sql` | Status color tables |
+| `LegacyLoggingRuntimeApplier` | `SiNetProjectManagerV2` | `AppLogger.Configure` |
 
-Registration: `AddSiNetUserLoggingSettings()` in `LoggingServiceCollectionExtensions`, `AddSiNetLoggingSettingsSql()` in Sql; wired in `AddSiNetNewSystemGraph()`.
+Registration:
+
+- `AddSiNetUserLoggingSettings()` → `IAppSettingsService`
+- `AddSiNetSystemSettingsSql()` → system + logging + status color ports
+- `AddSiNetSettingsAdminWpf()` → native UI
+
+Wired in `AddSiNetNewSystemGraph()`.
 
 ---
 
-## 5. New System UI (deferred)
+## 5. Native UI (slice 2)
 
-| Menu item | Status |
+| Component | Location |
 | --- | --- |
-| **מפתחות וסודות** | Implemented — `SecretSetupWindow` (Credential Vault) |
-| **הגדרות** | Placeholder disabled in `NewShellFactory` until native Settings surface exists |
+| Window | `SiNet.App.Wpf/Admin/Settings/SettingsWindow.cs` |
+| View | `SettingsView.xaml` (TabControl sections) |
+| ViewModel | `SettingsViewModel.cs` |
 
-Native Settings will bind to `IAppSettingsService` + admin section to `ILoggingSettingsCommandService`.
-**Not part of Stage 5 slice 1.**
+Menu **הגדרות** in `NewShellFactory` — gated by `System.Settings.Write` (Administrator).
+
+Save / Reload / Cancel. Central log path probe via `ILoggingSettingsCommandService.ProbeCentralLogPathAsync`.
 
 ---
 
 ## 6. Boundaries
 
-`SiNet.App.Wpf` must **not**:
+No schema/migrations. No Serilog bootstrap changes. Settings stored for features not yet migrated are **display + persist only**.
 
-- Reference `SettingsManager`, `AppSettings`, `AppLogger`, `CentralLoggingSettings`
-- Read/write `settings.json` directly
-- Call Serilog APIs
-
-Enforced by `SettingsStage5BoundaryTests.cs`.
+Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
 
 ---
 
-## 7. Remaining work (post–Stage 5 slice 1)
+## 7. Remaining work
 
-| Item | Target |
+| Item | Notes |
 | --- | --- |
-| Native Settings window | `SettingsWindow` parity → App.Wpf Admin/Settings |
-| Theme / layout on `IAppSettingsService` | Font, colors, floating windows |
-| Bootstrap unification | Single local log directory; optional Serilog path reload |
-| Extract `CentralLogging` bootstrap | `SiNet.Infrastructure.Logging` host extension |
-| `ManagementSettingsWindow` parity | Full admin settings beyond logging |
-
-No schema / migration changes in Stage 5.
+| Google folder validate / ACC template refresh | Needs migrated Google/ACC ports |
+| User Groups admin | Legacy `UserGroupManagementWindow` |
+| AiModelCatalogWindow parity | CSV field exposed; catalog UI deferred |
+| Appearance runtime in New System | Stored; legacy `ApplySettings` still host-owned |
+| Bootstrap log path unification | See §2.4 in prior slice docs / `LOGGING.md` |

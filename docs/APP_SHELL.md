@@ -268,17 +268,18 @@ Two settings mechanisms exist today:
 | `SystemSettingsService` (SiNetSQL) | **Global** | **DB** — `SystemSettings` keyed by `SystemSettingKeys` | `ManagementSettingsWindow` | Includes `Logging.*` keys for central logging. |
 | `appsettings.json` | **Per-machine/deploy** | File next to exe | — | Bootstrap config (connection string, etc.). |
 
-**Stage 5 ports (implemented — logging slice):**
+**Stage 5 ports + native UI (implemented):**
 
 ```plaintext
-IAppSettingsService              → per-user logging (JsonUserLoggingSettingsService)
-ILoggingSettingsQueryService     → read global Logging.* from DB
-ILoggingSettingsCommandService   → admin write Logging.* (System.Settings.Write)
-ILoggingRuntimeApplier           → host applies user toggle (LegacyLoggingRuntimeApplier → AppLogger)
+IAppSettingsService              → per-user JSON (JsonAppSettingsService)
+ISystemSettingsQueryService      → global SystemSettings (SqlSystemSettingsService)
+ISystemSettingsCommandService    → admin write
+ILoggingSettingsQuery/Command    → logging slice (same SQL adapter)
+IStatusColorSettingsService      → status color tables
+ILoggingRuntimeApplier           → host applies user logging toggle
 ```
 
-Native **הגדרות** UI is **not** in Stage 5 slice 1 — menu item stays disabled in `NewShellFactory`.
-**מפתחות וסודות** remains the native admin surface for secrets.
+Native **הגדרות** — `SettingsWindow` in `SiNet.App.Wpf/Admin/Settings`, menu enabled in `NewShellFactory`.
 
 Guardrails: reads/writes behind Application ports; no schema/migrations; `SiNet.App.Wpf` does not touch
 legacy settings types directly.
