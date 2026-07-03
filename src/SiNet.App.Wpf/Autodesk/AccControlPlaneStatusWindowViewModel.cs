@@ -9,6 +9,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 {
     private readonly AccControlPlaneStatusPresenter _presenter;
     private readonly IAccDocumentService _accDocumentService;
+    private readonly IAccLookupSeedService _accLookupSeedService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
     private readonly IClipboardTextWriter _clipboardTextWriter;
     private string? _hintText;
@@ -28,14 +29,17 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     public AccControlPlaneStatusWindowViewModel(
         AccControlPlaneStatusPresenter presenter,
         IAccDocumentService accDocumentService,
+        IAccLookupSeedService accLookupSeedService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter)
     {
         _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
         _accDocumentService = accDocumentService ?? throw new ArgumentNullException(nameof(accDocumentService));
+        _accLookupSeedService = accLookupSeedService ?? throw new ArgumentNullException(nameof(accLookupSeedService));
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher ?? throw new ArgumentNullException(nameof(resolvedDocsUrlLauncher));
         _clipboardTextWriter = clipboardTextWriter ?? throw new ArgumentNullException(nameof(clipboardTextWriter));
         RefreshCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
+        LoadLookupSeedCommand = new AsyncRelayCommand(LoadLookupSeedAsync, () => !IsBusy);
         ResolveDocumentCommand = new AsyncRelayCommand(ResolveDocumentAsync, CanResolveDocument);
         CopyResolvedDocsUrlCommand = new RelayCommand(_ => CopyResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
         OpenResolvedDocsUrlCommand = new RelayCommand(_ => OpenResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
@@ -146,6 +150,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             if (SetField(ref _isBusy, value))
             {
                 RefreshCommand.RaiseCanExecuteChanged();
+                LoadLookupSeedCommand.RaiseCanExecuteChanged();
                 ResolveDocumentCommand.RaiseCanExecuteChanged();
                 CopyResolvedDocsUrlCommand.RaiseCanExecuteChanged();
                 OpenResolvedDocsUrlCommand.RaiseCanExecuteChanged();
@@ -154,6 +159,8 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     }
 
     public AsyncRelayCommand RefreshCommand { get; }
+
+    public AsyncRelayCommand LoadLookupSeedCommand { get; }
 
     public AsyncRelayCommand ResolveDocumentCommand { get; }
 
@@ -229,6 +236,37 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             LookupResultSummary = $"שגיאה ב-lookup של פריט ACC: {ex.Message}";
             LookupResolvedDocsUrl = string.Empty;
             SummaryMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task LoadLookupSeedAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var seeds = await _accLookupSeedService.GetRecentSeedsAsync().ConfigureAwait(true);
+            var seed = seeds.FirstOrDefault();
+            if (seed is null)
+            {
+                SummaryMessage = "לא נמצאה דוגמת lookup מתאימה ב-DB.";
+                return;
+            }
+
+            LookupProjectId = seed.ProjectId;
+            LookupFolderId = seed.FolderId;
+            LookupFileName = seed.FileName;
+            LookupResolvedDocsUrl = string.Empty;
+            LookupResultSummary =
+                $"נטענה דוגמה מה-DB: projectId={seed.ProjectId}; folderId={seed.FolderId}; fileName={seed.FileName}; source={seed.SourceLabel}";
+            SummaryMessage = $"נטענה דוגמת lookup מה-DB ({seeds.Count} מועמדים זמינים).";
+        }
+        catch (Exception ex)
+        {
+            SummaryMessage = $"שגיאה בטעינת דוגמת lookup מה-DB: {ex.Message}";
         }
         finally
         {

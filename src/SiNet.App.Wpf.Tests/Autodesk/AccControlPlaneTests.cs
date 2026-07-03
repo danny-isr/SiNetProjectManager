@@ -155,6 +155,7 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceKeyDiagnostics));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccLookupSeedService));
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.Files.IProjectFileFilingService");
@@ -221,6 +222,75 @@ public sealed class AccControlPlaneTests
         Assert.Equal("https://acc.example.com/v1/acc/projects/ids", requestedUri?.ToString());
         Assert.Equal("native-api-key", apiKeyHeader);
         Assert.Equal(["b.project-1", "b.project-2"], result);
+    }
+
+    [Fact]
+    public async Task Local_lookup_seed_service_returns_recent_db_backed_candidates()
+    {
+        var dbName = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        await using (var seed = new SiNetSQLDbContext(options))
+        {
+            seed.EmailInboxMessages.AddRange(
+                new EmailInboxMessage
+                {
+                    Id = 10,
+                    MessageUniqueId = "msg-10",
+                    ProjectId = 1,
+                    InternetMessageId = "<msg-10@example.com>",
+                    ThreadUniqueId = "thread-10",
+                    ThreadKey = "thr010",
+                    ReceivedUtc = new DateTime(2026, 7, 3, 20, 00, 00, DateTimeKind.Utc),
+                    InboxAccProjectId = " b.project-1 ",
+                    InboxAccFolderId = " folder-22 "
+                },
+                new EmailInboxMessage
+                {
+                    Id = 11,
+                    MessageUniqueId = "msg-11",
+                    ProjectId = 1,
+                    InternetMessageId = "<msg-11@example.com>",
+                    ThreadUniqueId = "thread-11",
+                    ThreadKey = "thr011",
+                    ReceivedUtc = new DateTime(2026, 7, 3, 19, 00, 00, DateTimeKind.Utc),
+                    InboxAccProjectId = "b.project-1",
+                    InboxAccFolderId = "folder-22"
+                });
+            seed.EmailInboxAttachments.AddRange(
+                new EmailInboxAttachment
+                {
+                    Id = 100,
+                    MessageId = 10,
+                    AttachmentIndex = 0,
+                    SavedFileName = "Drawing Set.pdf",
+                    ContentSha256 = new string('a', 64),
+                    AccItemId = "item-100"
+                },
+                new EmailInboxAttachment
+                {
+                    Id = 101,
+                    MessageId = 11,
+                    AttachmentIndex = 0,
+                    OriginalFileName = "Drawing Set.pdf",
+                    ContentSha256 = new string('b', 64),
+                    AccItemId = "item-101"
+                });
+            await seed.SaveChangesAsync();
+        }
+
+        var sut = new LocalAccLookupSeedService(new StubDbContextFactory(options));
+
+        var result = await sut.GetRecentSeedsAsync();
+
+        var candidate = Assert.Single(result);
+        Assert.Equal("b.project-1", candidate.ProjectId);
+        Assert.Equal("folder-22", candidate.FolderId);
+        Assert.Equal("Drawing Set.pdf", candidate.FileName);
+        Assert.Equal("item-100", candidate.ItemId);
+        Assert.Contains("EmailInboxAttachment", candidate.SourceLabel, StringComparison.Ordinal);
     }
 
     [Fact]

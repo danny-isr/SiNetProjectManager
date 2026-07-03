@@ -57,7 +57,9 @@ side-effect-heavy document flows.
   runtime-only ACC status window built on the same presenter/control, and now hosts a manual
   read-only `IAccDocumentService` lookup tester (`projectId + folderId + fileName`) plus a
   docs URL preview generated only from the live-resolved ACC identifiers, including copy/open
-  actions.
+  actions. The same window can now prefill the tester from recent SQL-backed
+  `EmailInboxMessage + EmailInboxAttachment` candidates so operators do not need to invent ACC ids
+  by hand.
 
 ## 2. Runtime Rules
 
@@ -152,6 +154,7 @@ Current checks cover:
 - WPF harness secret wiring via `AddSiNetSecrets()`
 - shell/menu wiring for the dedicated ACC status window
 - status-window read-only document lookup over `IAccDocumentService`
+- status-window DB-backed prefill for manual document lookup (`IAccLookupSeedService`)
 - settings-tab runtime-only read-only document lookup over `IAccDocumentService`
 
 ## 6. Next Slice

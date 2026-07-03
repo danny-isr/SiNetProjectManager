@@ -247,7 +247,7 @@ public sealed class NativeSettingsSurfaceTests
         Assert.Contains("AccServiceRuntimeDiagnosticsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccLookupProjectId", xaml, StringComparison.Ordinal);
         Assert.Contains("ResolveAccDocumentCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("AccLookupResolvedDocsUrl", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccLookupResolvedDocsUrl, Mode=OneWay", xaml, StringComparison.Ordinal);
         Assert.Contains("CopyAccResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("OpenAccResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
     }

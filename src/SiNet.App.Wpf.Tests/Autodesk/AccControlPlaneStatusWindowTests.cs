@@ -30,6 +30,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             presenter,
             new StubAccDocumentService(null),
+            new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
         await vm.LoadAsync();
@@ -50,11 +51,33 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("AccControlPlaneStatusView", xaml, StringComparison.Ordinal);
         Assert.Contains("ProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("ResolveDocumentCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("LoadLookupSeedCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LookupProjectId", xaml, StringComparison.Ordinal);
-        Assert.Contains("LookupResolvedDocsUrl", xaml, StringComparison.Ordinal);
+        Assert.Contains("LookupResolvedDocsUrl, Mode=OneWay", xaml, StringComparison.Ordinal);
         Assert.Contains("CopyResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("OpenResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_window_view_model_loads_lookup_seed_from_db_hints()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            new StubAccDocumentService(null),
+            new StubAccLookupSeedService(
+            [
+                new AccDocumentLookupSeed("b.project-1", "folder-22", "drawing.pdf", "item-77", "EmailInboxAttachment 2026-07-03 23:00")
+            ]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
+
+        await vm.LoadLookupSeedAsync();
+
+        Assert.Equal("b.project-1", vm.LookupProjectId);
+        Assert.Equal("folder-22", vm.LookupFolderId);
+        Assert.Equal("drawing.pdf", vm.LookupFileName);
+        Assert.Contains("נטענה דוגמה מה-DB", vm.LookupResultSummary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -65,6 +88,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
+            new StubAccLookupSeedService([]),
             launcher,
             clipboard)
         {
@@ -93,6 +117,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var vm = new AccControlPlaneStatusWindowViewModel(
             BuildPresenter(),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
+            new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
         {
@@ -161,6 +186,12 @@ public sealed class AccControlPlaneStatusWindowTests
             string fileName,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(result);
+    }
+
+    private sealed class StubAccLookupSeedService(IReadOnlyList<AccDocumentLookupSeed> seeds) : IAccLookupSeedService
+    {
+        public Task<IReadOnlyList<AccDocumentLookupSeed>> GetRecentSeedsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(seeds);
     }
 
     private sealed class StubAccResolvedDocsUrlLauncher : IAccResolvedDocsUrlLauncher

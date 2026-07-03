@@ -231,7 +231,7 @@
 
                             <TextBlock Text="ACC Docs URL (נגזר רק אחרי resolve חי)"
                                        Margin="0,12,0,0"/>
-                            <TextBox Text="{Binding AccLookupResolvedDocsUrl}"
+                            <TextBox Text="{Binding AccLookupResolvedDocsUrl, Mode=OneWay}"
                                      Margin="0,4,0,0"
                                      IsReadOnly="True"
                                      TextWrapping="Wrap"

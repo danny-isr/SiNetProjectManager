@@ -43,6 +43,7 @@ public static class AutodeskServiceCollectionExtensions
             new Bim360AccFolderItemsReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<LocalAccProjectService>();
         services.AddTransient<LocalAccDocumentService>();
+        services.AddTransient<IAccLookupSeedService, LocalAccLookupSeedService>();
         services.AddHttpClient<RemoteAccProjectService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
