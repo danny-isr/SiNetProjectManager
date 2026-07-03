@@ -1,0 +1,83 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Style x:Key="SiTextTinyStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextTinyFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <Style x:Key="SiTextSmallStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <Style x:Key="SiTextNormalStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <Style x:Key="SiTextMediumStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextMediumFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <Style x:Key="SiTextLargeStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextLargeFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="SiTextHugeStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextHugeFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="SiSectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource SiTextMediumStyle}">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+
+    <Style x:Key="SiPrimaryButtonStyle" TargetType="Button">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{DynamicResource SiPrimaryBrush}"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style x:Key="SiSecondaryButtonStyle" TargetType="Button">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style x:Key="SiTextBoxStyle" TargetType="TextBox">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
+        <Setter Property="Padding" Value="4,2"/>
+    </Style>
+
+    <Style x:Key="SiComboBoxStyle" TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
+    </Style>
+
+</ResourceDictionary>

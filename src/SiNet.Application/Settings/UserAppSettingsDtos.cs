@@ -3,9 +3,17 @@ namespace SiNet.Application.Settings;
 /// <summary>Appearance / theme fields from per-user <c>settings.json</c>.</summary>
 public sealed record UserAppearanceSettingsDto(
     string FontFamily,
-    double FontSize,
+    double BaseFontSize,
+    double TextTinyScale,
+    double TextSmallScale,
+    double TextNormalScale,
+    double TextMediumScale,
+    double TextLargeScale,
+    double TextHugeScale,
     string ForegroundColor,
-    string BackgroundColor);
+    string BackgroundColor,
+    string PrimaryColor,
+    string SecondaryColor);
 
 /// <summary>General per-user behavior flags.</summary>
 public sealed record UserBehaviorSettingsDto(bool AllowMultipleInstances);
@@ -36,7 +44,7 @@ public sealed record UserAppSettingsDto(
 public static class UserAppSettingsDefaults
 {
     public const string FontFamily = "Segoe UI";
-    public const double FontSize = 12.0;
+    public const double BaseFontSize = 12.0;
     public const string ForegroundColor = "#000000";
     public const string BackgroundColor = "#FFFFFF";
     public const bool AllowMultipleInstances = true;
@@ -49,7 +57,7 @@ public static class UserAppSettingsDefaults
     public const double FloatingInspectionHeight = 850;
 
     public static UserAppSettingsDto Create() => new(
-        new UserAppearanceSettingsDto(FontFamily, FontSize, ForegroundColor, BackgroundColor),
+        TypographyThemeDefaults.CreateDefaultAppearance(),
         new UserBehaviorSettingsDto(AllowMultipleInstances),
         new UserLoggingSettingsDto(
             LoggingEnabled,

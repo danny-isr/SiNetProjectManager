@@ -16,38 +16,40 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-        <Style x:Key="CompactTextBoxStyle" TargetType="TextBox">
+        <Style x:Key="CompactTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource SiTextBoxStyle}">
             <Setter Property="Height" Value="26" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Padding" Value="4,0" />
+            <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
                     <Setter Property="Height" Value="24" />
-                    <Setter Property="FontSize" Value="12" />
+                    <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="FilterComboStyle" TargetType="ComboBox">
+        <Style x:Key="FilterComboStyle" TargetType="ComboBox" BasedOn="{StaticResource SiComboBoxStyle}">
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Width" Value="128" />
             <Setter Property="Height" Value="26" />
+            <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
                     <Setter Property="Width" Value="88" />
                     <Setter Property="Height" Value="24" />
-                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="FilterLabelStyle" TargetType="TextBlock">
+        <Style x:Key="FilterLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource SiTextNormalStyle}">
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,0,4,0" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
-                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                     <Setter Property="Margin" Value="0,0,3,0" />
                 </DataTrigger>
             </Style.Triggers>
@@ -56,15 +58,18 @@
         <Style x:Key="CompactCheckBoxStyle" TargetType="CheckBox">
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
-                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                     <Setter Property="Margin" Value="0,0,6,0" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="ToggleButtonStyle" TargetType="Button">
+        <Style x:Key="ToggleButtonStyle" TargetType="Button" BasedOn="{StaticResource SiSecondaryButtonStyle}">
             <Setter Property="Width" Value="26" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="3,0,0,0" />
@@ -72,23 +77,22 @@
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
                     <Setter Property="Width" Value="24" />
                     <Setter Property="Height" Value="24" />
-                    <Setter Property="FontSize" Value="10" />
+                    <Setter Property="FontSize" Value="{DynamicResource SiTextTinyFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="RefreshButtonStyle" TargetType="Button">
+        <Style x:Key="RefreshButtonStyle" TargetType="Button" BasedOn="{StaticResource SiSecondaryButtonStyle}">
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="MinWidth" Value="26" />
             <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="Cursor" Value="Hand" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
                     <Setter Property="Padding" Value="4,1" />
                     <Setter Property="MinWidth" Value="24" />
                     <Setter Property="Height" Value="24" />
                     <Setter Property="Margin" Value="0,0,4,0" />
-                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -123,9 +127,9 @@
                StaysOpen="False"
                AllowsTransparency="True"
                IsOpen="{Binding IsResultsOpen, Mode=TwoWay}">
-            <Border BorderBrush="#CCC"
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
                     BorderThickness="1"
-                    Background="White"
+                    Background="{DynamicResource SiBackgroundBrush}"
                     MaxHeight="280"
                     Width="{Binding ActualWidth, ElementName=SearchBox}">
                 <ListBox x:Name="ResultsList"
@@ -137,13 +141,16 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding ProjectNumber}" FontWeight="Bold" Foreground="#1565C0" />
-                                <TextBlock Text=" &#x2014; " Foreground="#999" />
-                                <TextBlock Text="{Binding ProjectName}" />
-                                <TextBlock Text="  ·  " Foreground="#CCC" />
-                                <TextBlock Text="{Binding PlaceName}" Foreground="#777" />
-                                <TextBlock Text="  ·  " Foreground="#CCC" />
-                                <TextBlock Text="{Binding CompanyName}" Foreground="#777" />
+                                <TextBlock Text="{Binding ProjectNumber}" Style="{DynamicResource SiTextNormalStyle}" FontWeight="Bold"
+                                           Foreground="{DynamicResource SiPrimaryBrush}" />
+                                <TextBlock Text=" &#x2014; " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.6" />
+                                <TextBlock Text="{Binding ProjectName}" Style="{DynamicResource SiTextNormalStyle}" />
+                                <TextBlock Text="  ·  " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.4" />
+                                <TextBlock Text="{Binding PlaceName}" Style="{DynamicResource SiTextSmallStyle}"
+                                           Foreground="{DynamicResource SiSecondaryBrush}" />
+                                <TextBlock Text="  ·  " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.4" />
+                                <TextBlock Text="{Binding CompanyName}" Style="{DynamicResource SiTextSmallStyle}"
+                                           Foreground="{DynamicResource SiSecondaryBrush}" />
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -190,17 +197,16 @@
 
         <TextBlock Text="{Binding StatusMessage}"
                    VerticalAlignment="Center"
-                   Foreground="#777"
+                   Foreground="{DynamicResource SiSecondaryBrush}"
                    TextTrimming="CharacterEllipsis"
                    MaxWidth="200"
                    Visibility="{Binding ShowStatusMessage, ElementName=Root, Converter={StaticResource BoolToVis}}">
             <TextBlock.Style>
-                <Style TargetType="TextBlock">
-                    <Setter Property="FontSize" Value="11" />
+                <Style TargetType="TextBlock" BasedOn="{StaticResource SiTextSmallStyle}">
                     <Setter Property="Margin" Value="2,0,0,0" />
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
-                            <Setter Property="FontSize" Value="10" />
+                            <Setter Property="FontSize" Value="{DynamicResource SiTextTinyFontSize}" />
                             <Setter Property="MaxWidth" Value="160" />
                         </DataTrigger>
                     </Style.Triggers>

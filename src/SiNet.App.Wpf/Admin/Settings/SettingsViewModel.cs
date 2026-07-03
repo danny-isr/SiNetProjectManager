@@ -20,11 +20,13 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly ISystemSettingsCommandService _systemCommand;
     private readonly ILoggingSettingsCommandService _loggingCommand;
     private readonly ILoggingRuntimeApplier _loggingRuntime;
+    private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
     private UserLoggingSettingsDto _loadedLogging = null!;
+    private UserAppearanceSettingsDto _loadedAppearance = null!;
     private string _summaryMessage = string.Empty;
     private bool _isBusy;
 
@@ -34,6 +36,7 @@ public sealed class SettingsViewModel : ObservableObject
         ISystemSettingsCommandService systemCommand,
         ILoggingSettingsCommandService loggingCommand,
         ILoggingRuntimeApplier loggingRuntime,
+        IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser,
@@ -44,6 +47,7 @@ public sealed class SettingsViewModel : ObservableObject
         _systemCommand = systemCommand ?? throw new ArgumentNullException(nameof(systemCommand));
         _loggingCommand = loggingCommand ?? throw new ArgumentNullException(nameof(loggingCommand));
         _loggingRuntime = loggingRuntime ?? throw new ArgumentNullException(nameof(loggingRuntime));
+        _themeRuntime = themeRuntime ?? throw new ArgumentNullException(nameof(themeRuntime));
         _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
@@ -131,9 +135,17 @@ public sealed class SettingsViewModel : ObservableObject
     }
 
     private string _fontFamily = UserAppSettingsDefaults.FontFamily;
-    private double _fontSize = UserAppSettingsDefaults.FontSize;
+    private double _baseFontSize = UserAppSettingsDefaults.BaseFontSize;
+    private double _textTinyScale = TypographyThemeDefaults.TextTinyScale;
+    private double _textSmallScale = TypographyThemeDefaults.TextSmallScale;
+    private double _textNormalScale = TypographyThemeDefaults.TextNormalScale;
+    private double _textMediumScale = TypographyThemeDefaults.TextMediumScale;
+    private double _textLargeScale = TypographyThemeDefaults.TextLargeScale;
+    private double _textHugeScale = TypographyThemeDefaults.TextHugeScale;
     private string _foregroundColor = UserAppSettingsDefaults.ForegroundColor;
     private string _backgroundColor = UserAppSettingsDefaults.BackgroundColor;
+    private string _primaryColor = TypographyThemeDefaults.PrimaryColor;
+    private string _secondaryColor = TypographyThemeDefaults.SecondaryColor;
     private bool _allowMultipleInstances = UserAppSettingsDefaults.AllowMultipleInstances;
     private bool _enableAuthorizationTestMode;
     private bool _loggingEnabled;
@@ -186,11 +198,113 @@ public sealed class SettingsViewModel : ObservableObject
         set => SetField(ref _fontFamily, value);
     }
 
-    public double FontSize
+    public double BaseFontSize
     {
-        get => _fontSize;
-        set => SetField(ref _fontSize, value);
+        get => _baseFontSize;
+        set
+        {
+            if (SetField(ref _baseFontSize, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
     }
+
+    public double TextTinyScale
+    {
+        get => _textTinyScale;
+        set
+        {
+            if (SetField(ref _textTinyScale, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
+    }
+
+    public double TextSmallScale
+    {
+        get => _textSmallScale;
+        set
+        {
+            if (SetField(ref _textSmallScale, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
+    }
+
+    public double TextNormalScale
+    {
+        get => _textNormalScale;
+        set
+        {
+            if (SetField(ref _textNormalScale, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
+    }
+
+    public double TextMediumScale
+    {
+        get => _textMediumScale;
+        set
+        {
+            if (SetField(ref _textMediumScale, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
+    }
+
+    public double TextLargeScale
+    {
+        get => _textLargeScale;
+        set
+        {
+            if (SetField(ref _textLargeScale, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
+    }
+
+    public double TextHugeScale
+    {
+        get => _textHugeScale;
+        set
+        {
+            if (SetField(ref _textHugeScale, value))
+            {
+                NotifyPreviewTypographyChanged();
+            }
+        }
+    }
+
+    public string PrimaryColor
+    {
+        get => _primaryColor;
+        set => SetField(ref _primaryColor, value);
+    }
+
+    public string SecondaryColor
+    {
+        get => _secondaryColor;
+        set => SetField(ref _secondaryColor, value);
+    }
+
+    public string DefaultPrimaryColor => TypographyThemeDefaults.PrimaryColor;
+    public string DefaultSecondaryColor => TypographyThemeDefaults.SecondaryColor;
+    public string DefaultForegroundColor => UserAppSettingsDefaults.ForegroundColor;
+    public string DefaultBackgroundColor => UserAppSettingsDefaults.BackgroundColor;
+
+    public double PreviewTinyFontSize => ThemeCalculator.ComputeFontSize(BaseFontSize, TextTinyScale);
+    public double PreviewSmallFontSize => ThemeCalculator.ComputeFontSize(BaseFontSize, TextSmallScale);
+    public double PreviewNormalFontSize => ThemeCalculator.ComputeFontSize(BaseFontSize, TextNormalScale);
+    public double PreviewMediumFontSize => ThemeCalculator.ComputeFontSize(BaseFontSize, TextMediumScale);
+    public double PreviewLargeFontSize => ThemeCalculator.ComputeFontSize(BaseFontSize, TextLargeScale);
+    public double PreviewHugeFontSize => ThemeCalculator.ComputeFontSize(BaseFontSize, TextHugeScale);
 
     public string ForegroundColor
     {
@@ -504,6 +618,7 @@ public sealed class SettingsViewModel : ObservableObject
                 var user = await _appSettings.GetUserAppSettingsAsync().ConfigureAwait(true);
                 ApplyUserSettings(user);
                 _loadedLogging = user.Logging;
+                _loadedAppearance = user.Appearance;
 
                 UserStatusColors.Clear();
                 if (_currentUser?.UserId is int userId)
@@ -593,6 +708,12 @@ public sealed class SettingsViewModel : ObservableObject
                     _loadedLogging = userDto.Logging;
                 }
 
+                if (AppearanceChanged(userDto.Appearance))
+                {
+                    _themeRuntime.ApplyUserAppearance(userDto.Appearance);
+                    _loadedAppearance = userDto.Appearance;
+                }
+
                 messages.Add("הגדרות אישיות נשמרו.");
             }
 
@@ -637,13 +758,31 @@ public sealed class SettingsViewModel : ObservableObject
 
     private bool ValidatePersonal(out string error)
     {
-        foreach (var hex in new[] { ForegroundColor, BackgroundColor })
+        foreach (var hex in new[] { ForegroundColor, BackgroundColor, PrimaryColor, SecondaryColor })
         {
-            if (!IsValidHexColor(hex))
+            if (!TypographyThemeDefaults.IsValidHexColor(hex))
             {
                 error = $"צבע לא תקין: {hex}";
                 return false;
             }
+        }
+
+        if (BaseFontSize < 8 || BaseFontSize > 32)
+        {
+            error = "גודל פונט בסיס חייב להיות בין 8 ל-32.";
+            return false;
+        }
+
+        if (!TypographyThemeDefaults.TryValidateScales(
+                TextTinyScale,
+                TextSmallScale,
+                TextNormalScale,
+                TextMediumScale,
+                TextLargeScale,
+                TextHugeScale,
+                out error))
+        {
+            return false;
         }
 
         error = string.Empty;
@@ -690,7 +829,7 @@ public sealed class SettingsViewModel : ObservableObject
     {
         var defaults = UserAppSettingsDefaults.Create();
         return new UserAppSettingsDto(
-            new UserAppearanceSettingsDto(FontFamily, FontSize, ForegroundColor.Trim(), BackgroundColor.Trim()),
+            BuildAppearanceDto(),
             new UserBehaviorSettingsDto(AllowMultipleInstances),
             new UserLoggingSettingsDto(
                 LoggingEnabled,
@@ -704,6 +843,20 @@ public sealed class SettingsViewModel : ObservableObject
             defaults.FloatingInspection,
             EnableAuthorizationTestMode);
     }
+
+    private UserAppearanceSettingsDto BuildAppearanceDto() => new(
+        FontFamily,
+        BaseFontSize,
+        TextTinyScale,
+        TextSmallScale,
+        TextNormalScale,
+        TextMediumScale,
+        TextLargeScale,
+        TextHugeScale,
+        ForegroundColor.Trim(),
+        BackgroundColor.Trim(),
+        PrimaryColor.Trim(),
+        SecondaryColor.Trim());
 
     private SystemSettingsDto BuildSystemDto() => new(
         new EmailOfficeSystemSettingsDto(
@@ -748,9 +901,17 @@ public sealed class SettingsViewModel : ObservableObject
     private void ApplyUserSettings(UserAppSettingsDto user)
     {
         FontFamily = user.Appearance.FontFamily;
-        FontSize = user.Appearance.FontSize;
+        BaseFontSize = user.Appearance.BaseFontSize;
+        TextTinyScale = user.Appearance.TextTinyScale;
+        TextSmallScale = user.Appearance.TextSmallScale;
+        TextNormalScale = user.Appearance.TextNormalScale;
+        TextMediumScale = user.Appearance.TextMediumScale;
+        TextLargeScale = user.Appearance.TextLargeScale;
+        TextHugeScale = user.Appearance.TextHugeScale;
         ForegroundColor = user.Appearance.ForegroundColor;
         BackgroundColor = user.Appearance.BackgroundColor;
+        PrimaryColor = user.Appearance.PrimaryColor;
+        SecondaryColor = user.Appearance.SecondaryColor;
         AllowMultipleInstances = user.Behavior.AllowMultipleInstances;
         EnableAuthorizationTestMode = user.EnableAuthorizationTestMode;
         LoggingEnabled = user.Logging.LoggingEnabled;
@@ -806,6 +967,9 @@ public sealed class SettingsViewModel : ObservableObject
     private bool LoggingChanged(UserLoggingSettingsDto current)
         => current.LoggingEnabled != _loadedLogging.LoggingEnabled
            || !string.Equals(current.LogDirectory, _loadedLogging.LogDirectory, StringComparison.Ordinal);
+
+    private bool AppearanceChanged(UserAppearanceSettingsDto current)
+        => !current.Equals(_loadedAppearance);
 
     private async Task ProbeCentralLogPathAsync()
     {
@@ -864,20 +1028,14 @@ public sealed class SettingsViewModel : ObservableObject
     private static LogLevelDto ParseLevel(string value)
         => Enum.TryParse<LogLevelDto>(value, ignoreCase: true, out var level) ? level : LogLevelDto.Error;
 
-    private static bool IsValidHexColor(string value)
+    private void NotifyPreviewTypographyChanged()
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var hex = value.Trim();
-        if (!hex.StartsWith('#'))
-        {
-            hex = "#" + hex;
-        }
-
-        return hex.Length is 7 or 9 && hex.Skip(1).All(Uri.IsHexDigit);
+        OnPropertyChanged(nameof(PreviewTinyFontSize));
+        OnPropertyChanged(nameof(PreviewSmallFontSize));
+        OnPropertyChanged(nameof(PreviewNormalFontSize));
+        OnPropertyChanged(nameof(PreviewMediumFontSize));
+        OnPropertyChanged(nameof(PreviewLargeFontSize));
+        OnPropertyChanged(nameof(PreviewHugeFontSize));
     }
 }
 

@@ -1,9 +1,11 @@
 <UserControl x:Class="SiNet.App.Wpf.Admin.Settings.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theme="clr-namespace:SiNet.App.Wpf.Theme"
              FlowDirection="RightToLeft">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <theme:HexToBrushConverter x:Key="HexToBrush"/>
     </UserControl.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -16,20 +18,89 @@
             <!-- Per-user -->
             <TabItem Header="מראה (משתמש)" Visibility="{Binding CanViewPersonalSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditPersonalSettings}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
-                    <StackPanel MaxWidth="640">
-                        <TextBlock Text="הגדרות מקומיות — settings.json" Opacity="0.7" Margin="0,0,0,12"/>
-                        <TextBlock Text="פונט"/>
-                        <ComboBox ItemsSource="{Binding AvailableFonts}" SelectedItem="{Binding FontFamily}" Margin="0,4,0,12"/>
-                        <TextBlock Text="גודל פונט"/>
+                    <StackPanel MaxWidth="720">
+                        <TextBlock Text="הגדרות מקומיות — settings.json" Style="{DynamicResource SiTextSmallStyle}" Opacity="0.7" Margin="0,0,0,12"/>
+                        <TextBlock Text="פונט" Style="{DynamicResource SiTextNormalStyle}"/>
+                        <ComboBox ItemsSource="{Binding AvailableFonts}" SelectedItem="{Binding FontFamily}"
+                                  Style="{DynamicResource SiComboBoxStyle}" Margin="0,4,0,12"/>
+                        <TextBlock Text="גודל פונט בסיס (Normal = 1.00×)" Style="{DynamicResource SiTextNormalStyle}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,12">
-                            <Slider Minimum="10" Maximum="30" Value="{Binding FontSize}" Width="220"/>
-                            <TextBlock Text="{Binding FontSize}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <Slider Minimum="8" Maximum="32" Value="{Binding BaseFontSize}" Width="220"/>
+                            <TextBlock Text="{Binding BaseFontSize}" Style="{DynamicResource SiTextNormalStyle}" Margin="12,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock Text="צבע טקסט (#RRGGBB)"/>
-                        <TextBox Text="{Binding ForegroundColor, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="צבע רקע (#RRGGBB)"/>
-                        <TextBox Text="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="שמירה משפיעה על legacy ב-runtime (ApplySettings) — consumer עדיין ב-host." Opacity="0.6" TextWrapping="Wrap"/>
+
+                        <TextBlock Text="מכפילי גודל טקסט" Style="{DynamicResource SiTextMediumStyle}" Margin="0,0,0,8"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="48"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Tiny" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="0" Grid.Column="1" Minimum="0.60" Maximum="0.95" Value="{Binding TextTinyScale}" Margin="8,2"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding TextTinyScale, StringFormat={}{0:0.00}}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Small" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="1" Grid.Column="1" Minimum="0.70" Maximum="1.00" Value="{Binding TextSmallScale}" Margin="8,2"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding TextSmallScale, StringFormat={}{0:0.00}}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Normal" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="2" Grid.Column="1" Minimum="0.90" Maximum="1.10" Value="{Binding TextNormalScale}" Margin="8,2"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding TextNormalScale, StringFormat={}{0:0.00}}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Medium" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="3" Grid.Column="1" Minimum="1.05" Maximum="1.35" Value="{Binding TextMediumScale}" Margin="8,2"/>
+                            <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding TextMediumScale, StringFormat={}{0:0.00}}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Large" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="4" Grid.Column="1" Minimum="1.30" Maximum="1.80" Value="{Binding TextLargeScale}" Margin="8,2"/>
+                            <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding TextLargeScale, StringFormat={}{0:0.00}}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Huge" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Row="5" Grid.Column="1" Minimum="1.60" Maximum="2.40" Value="{Binding TextHugeScale}" Margin="8,2"/>
+                            <TextBlock Grid.Row="5" Grid.Column="2" Text="{Binding TextHugeScale, StringFormat={}{0:0.00}}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <theme:ThemeColorEditor Label="צבע ראשי" ColorHex="{Binding PrimaryColor, UpdateSourceTrigger=PropertyChanged}"
+                                                DefaultColorHex="{Binding DefaultPrimaryColor}"/>
+                        <theme:ThemeColorEditor Label="צבע משני" ColorHex="{Binding SecondaryColor, UpdateSourceTrigger=PropertyChanged}"
+                                                DefaultColorHex="{Binding DefaultSecondaryColor}"/>
+                        <theme:ThemeColorEditor Label="צבע טקסט" ColorHex="{Binding ForegroundColor, UpdateSourceTrigger=PropertyChanged}"
+                                                DefaultColorHex="{Binding DefaultForegroundColor}"/>
+                        <theme:ThemeColorEditor Label="צבע רקע" ColorHex="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}"
+                                                DefaultColorHex="{Binding DefaultBackgroundColor}"/>
+
+                        <TextBlock Text="תצוגה מקדימה" Style="{DynamicResource SiTextMediumStyle}" Margin="0,12,0,8"/>
+                        <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="12" CornerRadius="4"
+                                Background="{Binding BackgroundColor, Converter={StaticResource HexToBrush}}">
+                            <StackPanel>
+                                <TextBlock Text="כותרת גדולה (Large)" FontFamily="{Binding FontFamily}"
+                                           FontSize="{Binding PreviewLargeFontSize}"
+                                           Foreground="{Binding PrimaryColor, Converter={StaticResource HexToBrush}}" FontWeight="SemiBold"/>
+                                <TextBlock Text="טקסט רגיל (Normal)" FontFamily="{Binding FontFamily}"
+                                           FontSize="{Binding PreviewNormalFontSize}"
+                                           Foreground="{Binding ForegroundColor, Converter={StaticResource HexToBrush}}" Margin="0,8,0,0"/>
+                                <TextBlock Text="טקסט קטן (Small)" FontFamily="{Binding FontFamily}"
+                                           FontSize="{Binding PreviewSmallFontSize}"
+                                           Foreground="{Binding SecondaryColor, Converter={StaticResource HexToBrush}}" Margin="0,4,0,12"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="כפתור ראשי" FontFamily="{Binding FontFamily}"
+                                            FontSize="{Binding PreviewNormalFontSize}"
+                                            Background="{Binding PrimaryColor, Converter={StaticResource HexToBrush}}" Foreground="White"
+                                            Padding="12,6" Margin="0,0,8,0" BorderThickness="0"/>
+                                    <Button Content="כפתור משני" FontFamily="{Binding FontFamily}"
+                                            FontSize="{Binding PreviewNormalFontSize}"
+                                            Foreground="{Binding ForegroundColor, Converter={StaticResource HexToBrush}}"
+                                            Background="{Binding BackgroundColor, Converter={StaticResource HexToBrush}}"
+                                            BorderBrush="{Binding SecondaryColor, Converter={StaticResource HexToBrush}}" BorderThickness="1"
+                                            Padding="12,6"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="שמירה מפעילה IThemeRuntimeApplier — ללא restart." Style="{DynamicResource SiTextSmallStyle}" Opacity="0.6" TextWrapping="Wrap" Margin="0,8,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

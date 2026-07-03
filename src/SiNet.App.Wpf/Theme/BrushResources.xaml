@@ -1,0 +1,8 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Bootstrap defaults — overwritten at runtime by WpfThemeRuntimeApplier -->
+    <SolidColorBrush x:Key="SiPrimaryBrush" Color="#1F3A5F"/>
+    <SolidColorBrush x:Key="SiSecondaryBrush" Color="#757575"/>
+    <SolidColorBrush x:Key="SiBackgroundBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SiForegroundBrush" Color="#000000"/>
+</ResourceDictionary>

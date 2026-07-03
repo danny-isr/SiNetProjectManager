@@ -163,7 +163,7 @@ public sealed class NativeSettingsSurfaceTests
         await vm.LoadAsync();
 
         Assert.Equal("Arial", vm.FontFamily);
-        Assert.Equal(18, vm.FontSize);
+        Assert.Equal(18, vm.BaseFontSize);
         Assert.Equal("#FF0000", vm.ForegroundColor);
         Assert.True(vm.LoggingEnabled);
         Assert.Equal(@"D:\TestLogs", vm.LogDirectory);
@@ -289,7 +289,13 @@ public sealed class NativeSettingsSurfaceTests
         var defaults = UserAppSettingsDefaults.Create();
         return defaults with
         {
-            Appearance = new UserAppearanceSettingsDto("Arial", 18, "#FF0000", "#00FF00"),
+            Appearance = TypographyThemeDefaults.CreateDefaultAppearance() with
+            {
+                FontFamily = "Arial",
+                BaseFontSize = 18,
+                ForegroundColor = "#FF0000",
+                BackgroundColor = "#00FF00",
+            },
             Logging = new UserLoggingSettingsDto(
                 true,
                 @"D:\TestLogs",
@@ -342,12 +348,14 @@ public sealed class NativeSettingsSurfaceTests
         Mock<IAppSettingsService>? appSettings = null,
         Mock<ISystemSettingsQueryService>? systemQuery = null,
         Mock<ISystemSettingsCommandService>? systemCommand = null,
-        Mock<ILoggingRuntimeApplier>? loggingRuntime = null)
+        Mock<ILoggingRuntimeApplier>? loggingRuntime = null,
+        Mock<IThemeRuntimeApplier>? themeRuntime = null)
     {
         appSettings ??= MockAppSettings();
         systemQuery ??= MockSystemQuery();
         systemCommand ??= new Mock<ISystemSettingsCommandService>();
         loggingRuntime ??= new Mock<ILoggingRuntimeApplier>();
+        themeRuntime ??= new Mock<IThemeRuntimeApplier>();
 
         var loggingCommand = new Mock<ILoggingSettingsCommandService>();
         var statusColors = new Mock<IStatusColorSettingsService>();
@@ -368,6 +376,7 @@ public sealed class NativeSettingsSurfaceTests
             systemCommand.Object,
             loggingCommand.Object,
             loggingRuntime.Object,
+            themeRuntime.Object,
             statusColors.Object,
             auth.Object,
             new StubCurrentUser(userId),

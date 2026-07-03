@@ -102,10 +102,13 @@ See [`LOGGING.md`](./LOGGING.md). Boundary tests: `NewSystemLoggingBoundaryTests
 | Status colors | `SqlStatusColorSettingsService` → `IStatusColorSettingsService` |
 | Runtime logging | `LegacyLoggingRuntimeApplier` → `ILoggingRuntimeApplier` |
 
+| Theme runtime | `WpfThemeRuntimeApplier` → `IThemeRuntimeApplier` |
+| Theme resources | `SiNet.App.Wpf/Theme/*.xaml` merged in `App.xaml` |
+
 Menu **הגדרות אישיות** — authenticated user. Menu **הגדרות מערכת** — `AppFeatureCodes.SystemSettingsWrite`.
 Does **not** open legacy settings windows.
 
-See [`SETTINGS.md`](./SETTINGS.md). Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
+See [`SETTINGS.md`](./SETTINGS.md) §5 (authorization), §9 (theme). Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`, `ThemeStage6Tests.cs`.
 
 ## Revoked pattern (do not extend)
 

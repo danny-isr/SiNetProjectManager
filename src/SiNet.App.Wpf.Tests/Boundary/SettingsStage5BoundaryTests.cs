@@ -138,7 +138,7 @@ public sealed class SettingsStage5BoundaryTests
             var dto = JsonAppSettingsService.ReadDto(settingsPath);
             Assert.True(dto.Logging.LoggingEnabled);
             Assert.Equal("C:\\Custom\\Logs", dto.Logging.LogDirectory);
-            Assert.Equal(12, dto.Appearance.FontSize);
+            Assert.Equal(12, dto.Appearance.BaseFontSize);
 
             var mergedDto = dto with
             {
@@ -167,7 +167,7 @@ public sealed class SettingsStage5BoundaryTests
     {
         var dto = JsonAppSettingsService.CreateDefaultDto();
         Assert.Equal(UserAppSettingsDefaults.FontFamily, dto.Appearance.FontFamily);
-        Assert.Equal(UserAppSettingsDefaults.FontSize, dto.Appearance.FontSize);
+        Assert.Equal(UserAppSettingsDefaults.BaseFontSize, dto.Appearance.BaseFontSize);
         Assert.Equal(UserAppSettingsDefaults.AllowMultipleInstances, dto.Behavior.AllowMultipleInstances);
         Assert.Equal(UserAppSettingsDefaults.LoggingEnabled, dto.Logging.LoggingEnabled);
         Assert.Equal(UserAppSettingsDefaults.FloatingActiveOpacity, dto.FloatingOpacity.ActiveOpacity);

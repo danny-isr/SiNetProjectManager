@@ -285,6 +285,8 @@ ILoggingRuntimeApplier           → host applies user logging toggle
 Native **הגדרות אישיות** + **הגדרות מערכת** — `SettingsWindow` in `SiNet.App.Wpf/Admin/Settings`
 (personal vs admin menu entries; see `SETTINGS.md` §5).
 
+**Stage 6 theme:** per-user typography/colors via `IThemeRuntimeApplier` — see `SETTINGS.md` §9.
+
 Guardrails: reads/writes behind Application ports; no schema/migrations; `SiNet.App.Wpf` does not touch
 legacy settings types directly.
 

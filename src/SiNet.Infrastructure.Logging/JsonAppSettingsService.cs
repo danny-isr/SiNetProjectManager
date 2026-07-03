@@ -130,9 +130,18 @@ public sealed class JsonAppSettingsService : IAppSettingsService
             Appearance = defaults.Appearance with
             {
                 FontFamily = GetString(obj, "FontFamily", defaults.Appearance.FontFamily),
-                FontSize = GetDouble(obj, "FontSize", defaults.Appearance.FontSize),
+                BaseFontSize = GetDouble(obj, "BaseFontSize",
+                    GetDouble(obj, "FontSize", defaults.Appearance.BaseFontSize)),
+                TextTinyScale = GetDouble(obj, "TextTinyScale", defaults.Appearance.TextTinyScale),
+                TextSmallScale = GetDouble(obj, "TextSmallScale", defaults.Appearance.TextSmallScale),
+                TextNormalScale = GetDouble(obj, "TextNormalScale", defaults.Appearance.TextNormalScale),
+                TextMediumScale = GetDouble(obj, "TextMediumScale", defaults.Appearance.TextMediumScale),
+                TextLargeScale = GetDouble(obj, "TextLargeScale", defaults.Appearance.TextLargeScale),
+                TextHugeScale = GetDouble(obj, "TextHugeScale", defaults.Appearance.TextHugeScale),
                 ForegroundColor = GetString(obj, "ForegroundColor", defaults.Appearance.ForegroundColor),
                 BackgroundColor = GetString(obj, "BackgroundColor", defaults.Appearance.BackgroundColor),
+                PrimaryColor = GetString(obj, "PrimaryColor", defaults.Appearance.PrimaryColor),
+                SecondaryColor = GetString(obj, "SecondaryColor", defaults.Appearance.SecondaryColor),
             },
             Behavior = defaults.Behavior with
             {
@@ -157,9 +166,18 @@ public sealed class JsonAppSettingsService : IAppSettingsService
     internal static void ApplyToJson(JsonObject root, UserAppSettingsDto settings)
     {
         root["FontFamily"] = settings.Appearance.FontFamily;
-        root["FontSize"] = settings.Appearance.FontSize;
+        root["BaseFontSize"] = settings.Appearance.BaseFontSize;
+        root["FontSize"] = settings.Appearance.BaseFontSize;
+        root["TextTinyScale"] = settings.Appearance.TextTinyScale;
+        root["TextSmallScale"] = settings.Appearance.TextSmallScale;
+        root["TextNormalScale"] = settings.Appearance.TextNormalScale;
+        root["TextMediumScale"] = settings.Appearance.TextMediumScale;
+        root["TextLargeScale"] = settings.Appearance.TextLargeScale;
+        root["TextHugeScale"] = settings.Appearance.TextHugeScale;
         root["ForegroundColor"] = settings.Appearance.ForegroundColor;
         root["BackgroundColor"] = settings.Appearance.BackgroundColor;
+        root["PrimaryColor"] = settings.Appearance.PrimaryColor;
+        root["SecondaryColor"] = settings.Appearance.SecondaryColor;
         root["AllowMultipleInstances"] = settings.Behavior.AllowMultipleInstances;
         root["LoggingEnabled"] = settings.Logging.LoggingEnabled;
         root["logDirectory"] = settings.Logging.LogDirectory ?? string.Empty;

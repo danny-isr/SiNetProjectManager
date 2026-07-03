@@ -1,0 +1,12 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <!-- Bootstrap defaults — overwritten at runtime by WpfThemeRuntimeApplier -->
+    <FontFamily x:Key="SiFontFamily">Segoe UI</FontFamily>
+    <sys:Double x:Key="SiTextTinyFontSize">9.6</sys:Double>
+    <sys:Double x:Key="SiTextSmallFontSize">10.8</sys:Double>
+    <sys:Double x:Key="SiTextNormalFontSize">12</sys:Double>
+    <sys:Double x:Key="SiTextMediumFontSize">14.4</sys:Double>
+    <sys:Double x:Key="SiTextLargeFontSize">18</sys:Double>
+    <sys:Double x:Key="SiTextHugeFontSize">21.6</sys:Double>
+</ResourceDictionary>

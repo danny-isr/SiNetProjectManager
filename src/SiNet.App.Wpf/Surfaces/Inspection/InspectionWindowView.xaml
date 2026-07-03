@@ -265,35 +265,35 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Button Content="✅"
                                         Command="{Binding MarkResponseReceivedCommand}"
-                                        Width="28" Height="24" Padding="0" FontSize="14"
+                                        Width="28" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="#43A047" Foreground="White"
                                         BorderBrush="#2E7D32" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="התקבלה תגובה מהמתכנן" />
                                 <Button Content="🔄"
                                         Command="{Binding RepullPlannerResponsesCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#2E7D32"
                                         BorderBrush="#2E7D32" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="משיכת תגובות המתכנן מחדש" />
                                 <Button Content="🔗"
                                         Command="{Binding OpenSourceReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#1565C0"
                                         BorderBrush="#1565C0" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="פתח את דוח המקור" />
                                 <Button Content="🔓"
                                         Command="{Binding UnlockReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="שחרר נעילה" />
                                 <Button Content="🌐"
                                         Command="{Binding ShareReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="13"
+                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
                                         Cursor="Hand"
@@ -432,13 +432,13 @@
                                             <!-- Reorder buttons -->
                                             <StackPanel Grid.Column="0" Orientation="Vertical"
                                                         VerticalAlignment="Center" Margin="0,0,2,0">
-                                                <Button Content="▲" FontSize="9"
+                                                <Button Content="▲" FontSize="{DynamicResource SiTextTinyFontSize}"
                                                         Width="14" Height="11" Padding="0"
                                                         Command="{Binding DataContext.MoveNoteUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource CardActionButton}"
                                                         ToolTip="הזז למעלה" />
-                                                <Button Content="▼" FontSize="9"
+                                                <Button Content="▼" FontSize="{DynamicResource SiTextTinyFontSize}"
                                                         Width="14" Height="11" Padding="0"
                                                         Command="{Binding DataContext.MoveNoteDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
@@ -449,7 +449,7 @@
                                             <!-- Linked file + screenshot buttons -->
                                             <StackPanel Grid.Column="1" Orientation="Horizontal"
                                                         VerticalAlignment="Center" Margin="2,0,4,0">
-                                                <Button Content="📂" FontSize="11"
+                                                <Button Content="📂" FontSize="{DynamicResource SiTextSmallFontSize}"
                                                         Width="18" Height="18" Padding="0" Margin="0,0,3,0"
                                                         Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
@@ -465,7 +465,7 @@
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                                <Button Content="📷" FontSize="11"
+                                                <Button Content="📷" FontSize="{DynamicResource SiTextSmallFontSize}"
                                                         Width="18" Height="18" Padding="0"
                                                         Command="{Binding DataContext.ScreenshotPrimaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
@@ -483,7 +483,7 @@
 
                                             <!-- Planner-response indicator -->
                                             <TextBlock Grid.Column="3" Text="💬"
-                                                       FontSize="11" VerticalAlignment="Center"
+                                                       FontSize="{DynamicResource SiTextSmallFontSize}" VerticalAlignment="Center"
                                                        Margin="0,0,4,0"
                                                        ToolTip="התקבלה תגובת מתכנן">
                                                 <TextBlock.Style>
@@ -502,7 +502,7 @@
                                             <ComboBox Grid.Column="4"
                                                       ItemsSource="{Binding DataContext.StatusOptions, RelativeSource={RelativeSource AncestorType=Window}}"
                                                       SelectedItem="{Binding StatusText, Mode=OneWay}"
-                                                      FontSize="11" Padding="1,0" Margin="0,0,4,0"
+                                                      FontSize="{DynamicResource SiTextSmallFontSize}" Padding="1,0" Margin="0,0,4,0"
                                                       Height="20" VerticalAlignment="Center"
                                                       ToolTip="סטטוס ההערה" />
 

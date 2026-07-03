@@ -34,6 +34,7 @@ public sealed class SettingsViewModelFactory
     private readonly ISystemSettingsCommandService _systemCommand;
     private readonly ILoggingSettingsCommandService _loggingCommand;
     private readonly ILoggingRuntimeApplier _loggingRuntime;
+    private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
@@ -44,6 +45,7 @@ public sealed class SettingsViewModelFactory
         ISystemSettingsCommandService systemCommand,
         ILoggingSettingsCommandService loggingCommand,
         ILoggingRuntimeApplier loggingRuntime,
+        IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser = null)
@@ -53,6 +55,7 @@ public sealed class SettingsViewModelFactory
         _systemCommand = systemCommand;
         _loggingCommand = loggingCommand;
         _loggingRuntime = loggingRuntime;
+        _themeRuntime = themeRuntime;
         _statusColors = statusColors;
         _authorization = authorization;
         _currentUser = currentUser;
@@ -65,6 +68,7 @@ public sealed class SettingsViewModelFactory
             _systemCommand,
             _loggingCommand,
             _loggingRuntime,
+            _themeRuntime,
             _statusColors,
             _authorization,
             _currentUser,

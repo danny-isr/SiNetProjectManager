@@ -1068,6 +1068,8 @@ namespace SiNetProjectManagerV2
             Log.Information("[STARTUP][NewSystem] Initializing status colors...");
             InitializeStatusColors();
 
+            ApplyNewSystemThemeFromSavedSettings();
+
             base.OnStartup(e);
             LaunchNewSystemShell();
         }
@@ -1634,6 +1636,20 @@ namespace SiNetProjectManagerV2
             {
                 // Non-fatal: colors degrade gracefully to gray fallback
                 Log.Warning(colorEx, "StatusColorService initialization failed. Colors will use fallback.");
+            }
+        }
+
+        private static void ApplyNewSystemThemeFromSavedSettings()
+        {
+            try
+            {
+                var initializer = ServiceProvider.GetRequiredService<SiNet.App.Wpf.Theme.ThemeStartupInitializer>();
+                initializer.ApplySavedThemeAsync().GetAwaiter().GetResult();
+                AppLogger.Debug("[Theme] Applied saved user appearance to Application resources.");
+            }
+            catch (Exception themeEx)
+            {
+                Log.Warning(themeEx, "Theme startup apply failed. Default theme resources remain active.");
             }
         }
 

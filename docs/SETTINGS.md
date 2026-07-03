@@ -143,7 +143,65 @@ Save / Reload / Cancel. Central log path probe via `ILoggingSettingsCommandServi
 
 No schema/migrations. No Serilog bootstrap changes. Settings stored for features not yet migrated are **display + persist only**.
 
-Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
+Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`, `ThemeStage6Tests.cs`.
+
+---
+
+## 9. Theme / Typography policy (Stage 6)
+
+Per-user appearance in `settings.json` drives **dynamic WPF resources** — no restart required.
+
+### Typography levels
+
+Base size: `BaseFontSize` (legacy JSON key `FontSize` still read/written).
+
+| Level | Scale default | Validation range |
+| --- | --- | --- |
+| TextTiny | 0.80× | 0.60–0.95 |
+| TextSmall | 0.90× | 0.70–1.00 |
+| TextNormal | 1.00× | 0.90–1.10 |
+| TextMedium | 1.20× | 1.05–1.35 |
+| TextLarge | 1.50× | 1.30–1.80 |
+| TextHuge | 1.80× | 1.60–2.40 |
+
+Resolved sizes: `ThemeCalculator.Compute()` → applied to Application resources.
+
+### Theme colors (per-user JSON)
+
+| Field | Default |
+| --- | --- |
+| `PrimaryColor` | `#1F3A5F` |
+| `SecondaryColor` | `#757575` |
+| `ForegroundColor` | `#000000` |
+| `BackgroundColor` | `#FFFFFF` |
+
+Settings UI: color picker + preview swatch + hex (secondary) + reset.
+
+### Resource keys (`SiNet.Application.Settings.ThemeResourceKeys`)
+
+Font: `SiFontFamily`, `SiTextTinyFontSize` … `SiTextHugeFontSize`
+
+Brushes: `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroundBrush`
+
+Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`
+
+XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml` (merged in `App.xaml`).
+
+### Runtime
+
+| Port | Implementation |
+| --- | --- |
+| `IThemeRuntimeApplier` | `WpfThemeRuntimeApplier` (updates `Application.Current.Resources`) |
+| Startup | `ThemeStartupInitializer` in New System pipeline (after auth) |
+| Save | `SettingsViewModel` → `IThemeRuntimeApplier.ApplyUserAppearance` when appearance changed |
+
+Logging applier remains separate — appearance save does **not** call `ILoggingRuntimeApplier`.
+
+### Connected native surfaces (Stage 6)
+
+`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions (partial), Secret Setup (partial), `SettingsView`, `InspectionShellView`, Email visual clone, Inspection visual clone.
+
+**Deferred:** legacy windows, `StartupModeSelectionWindow`, semantic/status colors (warning red, success green) in Email/Inspection detail rows, `SiCardStyle`.
 
 ---
 
@@ -154,5 +212,5 @@ Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
 | Google folder validate / ACC template refresh | Needs migrated Google/ACC ports |
 | User Groups admin | Legacy `UserGroupManagementWindow` |
 | AiModelCatalogWindow parity | CSV field exposed; catalog UI deferred |
-| Appearance runtime in New System | Stored; legacy `ApplySettings` still host-owned |
+| Appearance runtime in New System | **Done (Stage 6)** — `IThemeRuntimeApplier` + `WpfThemeRuntimeApplier` |
 | Bootstrap log path unification | See §2.4 in prior slice docs / `LOGGING.md` |

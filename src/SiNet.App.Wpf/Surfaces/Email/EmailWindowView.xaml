@@ -88,13 +88,13 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="10,6">
-                    <TextBlock Text="&#x2709;" FontSize="16" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="&#x2709;" FontSize="{DynamicResource SiTextMediumFontSize}" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" />
                 </StackPanel>
                 <Button Grid.Column="1"
                         Content="&#x2715;"
                         Foreground="White"
-                        FontSize="14"
+                        FontSize="{DynamicResource SiTextNormalFontSize}"
                         Width="34"
                         BorderThickness="0"
                         Background="Transparent"
@@ -234,8 +234,8 @@
                                         Padding="8,2"
                                         Margin="10,0,0,0">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#x1F4E9; \u05DC\u05D0 \u05E0\u05E7\u05E8\u05D0\u05D5 " Foreground="#1565C0" FontSize="11" />
-                                        <TextBlock Text="2" Foreground="#1565C0" FontWeight="Bold" FontSize="11" />
+                                        <TextBlock Text="&#x1F4E9; \u05DC\u05D0 \u05E0\u05E7\u05E8\u05D0\u05D5 " Foreground="#1565C0" FontSize="{DynamicResource SiTextSmallFontSize}" />
+                                        <TextBlock Text="2" Foreground="#1565C0" FontWeight="Bold" FontSize="{DynamicResource SiTextSmallFontSize}" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -274,24 +274,24 @@
                                                 <TextBlock Text="{Binding Preview}"
                                                            Margin="14,2,0,0"
                                                            Foreground="#888"
-                                                           FontSize="11"
+                                                           FontSize="{DynamicResource SiTextSmallFontSize}"
                                                            TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" HorizontalAlignment="Left">
                                                 <TextBlock Text="{Binding ReceivedDisplay}"
                                                            Foreground="#999"
-                                                           FontSize="10"
+                                                           FontSize="{DynamicResource SiTextTinyFontSize}"
                                                            HorizontalAlignment="Left" />
                                                 <TextBlock Text="{Binding AttachmentBadge}"
                                                            Foreground="#666"
-                                                           FontSize="11"
+                                                           FontSize="{DynamicResource SiTextSmallFontSize}"
                                                            HorizontalAlignment="Left"
                                                            Margin="0,2,0,0"
                                                            Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
                                                 <!-- Assigned marker. -->
                                                 <TextBlock Text="&#x2713; \u05DE\u05E9\u05D5\u05D9\u05DA"
                                                            Foreground="#2E7D32"
-                                                           FontSize="10"
+                                                           FontSize="{DynamicResource SiTextTinyFontSize}"
                                                            FontWeight="SemiBold"
                                                            HorizontalAlignment="Left"
                                                            Margin="0,2,0,0"
@@ -323,7 +323,7 @@
                         <StackPanel VerticalAlignment="Center"
                                     HorizontalAlignment="Center"
                                     Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
-                            <TextBlock Text="&#x2709;" FontSize="64" HorizontalAlignment="Center" Foreground="#CCC" />
+                            <TextBlock Text="&#x2709;" FontSize="{DynamicResource SiTextHugeFontSize}" HorizontalAlignment="Center" Foreground="#CCC" />
                             <TextBlock Text="Select an email from the list"
                                        Opacity="0.7"
                                        HorizontalAlignment="Center"
@@ -342,7 +342,7 @@
                             <!-- Row 0: Header (subject + sender + date). -->
                             <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="12,8">
                                 <StackPanel>
-                                    <TextBlock Text="{Binding SelectedEmail.Subject}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding SelectedEmail.Subject}" FontWeight="Bold" FontSize="{DynamicResource SiTextNormalFontSize}" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                         <TextBlock Text="{Binding SelectedEmail.Sender}" Foreground="#555" />
                                         <TextBlock Text="  •  " Foreground="#AAA" />
@@ -354,7 +354,7 @@
                             <!-- Row 1: Attachments chips. -->
                             <Border Grid.Row="1" Padding="12,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
                                 <StackPanel>
-                                    <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="11" Foreground="#666" />
+                                    <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="{DynamicResource SiTextSmallFontSize}" Foreground="#666" />
                                     <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
@@ -465,7 +465,7 @@
                             <TextBlock Text="\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05EA\u05D4\u05DC\u05D9\u05DB\u05D9\u05DD"
                                        TextWrapping="Wrap"
                                        Foreground="#8D6E63"
-                                       FontSize="11" />
+                                       FontSize="{DynamicResource SiTextSmallFontSize}" />
                         </Border>
                     </StackPanel>
                 </Border>
@@ -487,7 +487,7 @@
                     <TextBlock Grid.Column="1"
                                Text="\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D3\u05D5\u05D2\u05DE\u05D4 \u05D1\u05DC\u05D1\u05D3"
                                Foreground="#999"
-                               FontSize="11"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
                                VerticalAlignment="Center" />
                 </Grid>
             </Border>

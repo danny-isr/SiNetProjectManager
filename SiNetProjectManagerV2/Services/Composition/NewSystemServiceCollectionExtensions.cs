@@ -31,6 +31,7 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSiNetUserLoggingSettings();
         SiNet.Infrastructure.Sql.SystemSettingsServiceCollectionExtensions.AddSiNetSystemSettingsSql(services);
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
+        SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
         SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);

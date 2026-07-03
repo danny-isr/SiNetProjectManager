@@ -9,13 +9,9 @@
         Title="{Binding Title}"
         Height="600" Width="960"
         WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SiBackgroundBrush}"
         d:DataContext="{d:DesignInstance Type=local:NewShellDesignData, IsDesignTimeCreatable=True}">
 
-    <!--
-        Clean New System shell (docs/APP_SHELL.md). This is NOT the legacy MainWindow: it opens only
-        migrated/refactored surfaces via DI/factories and shows a migrated-only menu. No legacy menu is
-        loaded or copied here.
-    -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -24,8 +20,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header: title/subtitle (right in RTL) + current user (left) -->
-        <Border Grid.Row="0" Background="#1F3A5F" Padding="16,10">
+        <Border Grid.Row="0" Background="{DynamicResource SiPrimaryBrush}" Padding="16,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -33,20 +28,22 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding HeaderSubtitle}" Foreground="#BBD4F0" FontSize="12" Margin="0,2,0,0" />
+                    <TextBlock Text="{Binding Title}" Style="{DynamicResource SiTextLargeStyle}" Foreground="White" />
+                    <TextBlock Text="{Binding HeaderSubtitle}" Style="{DynamicResource SiTextSmallStyle}"
+                               Foreground="White" Opacity="0.75" Margin="0,2,0,0" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
-                    <TextBlock Text="משתמש נוכחי" Foreground="#BBD4F0" FontSize="11" HorizontalAlignment="Left" />
-                    <TextBlock Text="{Binding CurrentUserDisplay}" Foreground="White" FontSize="13"
-                               FontWeight="SemiBold" HorizontalAlignment="Left" />
+                    <TextBlock Text="משתמש נוכחי" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="White" Opacity="0.75" HorizontalAlignment="Left" />
+                    <TextBlock Text="{Binding CurrentUserDisplay}" Style="{DynamicResource SiTextNormalStyle}"
+                               Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Left" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Current Project bar: hosts the shared ProjectSelectorView (compact, reusable — docs/PROJECTS.md §5) -->
-        <Border Grid.Row="1" Background="#EEF3F9" Padding="12,5" BorderBrush="#D5DEE9" BorderThickness="0,0,0,1">
+        <Border Grid.Row="1" Background="{DynamicResource SiBackgroundBrush}" Padding="12,5"
+                BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="0,0,0,1" Opacity="0.95">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -55,32 +52,31 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="פרויקט נוכחי:" VerticalAlignment="Center"
-                           FontWeight="SemiBold" Margin="0,0,10,0" />
+                           Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,10,0" />
 
-                <!-- The shared, reusable Project Selector is dropped in here by the code-behind. -->
                 <ContentControl Grid.Column="1" x:Name="ProjectSelectorHost" VerticalAlignment="Center" />
 
                 <TextBlock Grid.Column="2" Text="{Binding CurrentProjectDisplay}" VerticalAlignment="Center"
-                           Margin="10,0,0,0" Opacity="0.85" />
+                           Style="{DynamicResource SiTextSmallStyle}" Margin="10,0,0,0" Opacity="0.85" />
             </Grid>
         </Border>
 
-        <!-- Body: migrated-only menu (right) + content/open-window area (left) -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="240" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Menu area: data-driven, migrated-only. Each button opens a surface via its command. -->
-            <Border Grid.Column="0" Background="#F7F9FC" BorderBrush="#D5DEE9" BorderThickness="1,0,0,0">
+            <Border Grid.Column="0" Background="{DynamicResource SiBackgroundBrush}"
+                    BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1,0,0,0" Opacity="0.5">
                 <DockPanel LastChildFill="True">
-                    <TextBlock DockPanel.Dock="Top" Text="תפריט מערכת חדשה" FontWeight="SemiBold"
-                               Margin="12,12,12,6" Foreground="#33475B" />
+                    <TextBlock DockPanel.Dock="Top" Text="תפריט מערכת חדשה" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" Margin="12,12,12,6" />
                     <ItemsControl ItemsSource="{Binding MenuItems}" Margin="8,0,8,8">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Button Command="{Binding OpenCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"
                                         ToolTip="{Binding Description}"
                                         IsEnabled="{Binding IsAvailable}"
                                         HorizontalContentAlignment="Right"
@@ -92,19 +88,18 @@
                 </DockPanel>
             </Border>
 
-            <!-- Content/open-window area: hosts an in-shell surface when one is set. Migrated surfaces
-                 currently open as their own windows (Email/Inspection), so this stays a hint for now. -->
             <Grid Grid.Column="1" Margin="16">
                 <TextBlock Text="בחר פריט מהתפריט כדי לפתוח מסך חדש."
+                           Style="{DynamicResource SiTextNormalStyle}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="#7A8CA0" FontSize="14" />
+                           Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.85" />
                 <ContentControl x:Name="ContentHost" />
             </Grid>
         </Grid>
 
-        <!-- Status bar -->
-        <Border Grid.Row="3" Background="#1F3A5F" Padding="12,4">
-            <TextBlock Text="{Binding StatusText}" Foreground="#D6E4F5" FontSize="11" />
+        <Border Grid.Row="3" Background="{DynamicResource SiPrimaryBrush}" Padding="12,4">
+            <TextBlock Text="{Binding StatusText}" Style="{DynamicResource SiTextTinyStyle}"
+                       Foreground="White" Opacity="0.85" />
         </Border>
     </Grid>
 </Window>

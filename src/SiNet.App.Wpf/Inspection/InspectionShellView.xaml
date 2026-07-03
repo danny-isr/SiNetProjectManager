@@ -23,7 +23,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+        <TextBlock Grid.Row="0" Text="{Binding Title}" Style="{DynamicResource SiTextMediumStyle}"
                    Margin="0,0,0,8" />
 
         <Border Grid.Row="1" Margin="0,0,0,8" Padding="8,6" CornerRadius="3"
