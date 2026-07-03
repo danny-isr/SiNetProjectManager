@@ -147,6 +147,194 @@ public sealed class NativeSettingsSurfaceTests
         systemQuery.Verify(s => s.GetSystemSettingsAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Personal_load_applies_non_default_user_settings_to_view_model()
+    {
+        var appSettings = new Mock<IAppSettingsService>();
+        appSettings.Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateNonDefaultUserSettings());
+
+        var vm = CreateViewModel(
+            isAdmin: false,
+            userId: 1,
+            SettingsSurfaceScope.Personal,
+            appSettings: appSettings);
+
+        await vm.LoadAsync();
+
+        Assert.Equal("Arial", vm.FontFamily);
+        Assert.Equal(18, vm.FontSize);
+        Assert.Equal("#FF0000", vm.ForegroundColor);
+        Assert.True(vm.LoggingEnabled);
+        Assert.Equal(@"D:\TestLogs", vm.LogDirectory);
+    }
+
+    [Fact]
+    public async Task System_load_applies_non_default_system_settings_to_view_model()
+    {
+        var systemQuery = new Mock<ISystemSettingsQueryService>();
+        systemQuery.Setup(s => s.GetSystemSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateNonDefaultSystemSettings());
+
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            systemQuery: systemQuery);
+
+        await vm.LoadAsync();
+
+        Assert.Equal("Custom Project Title", vm.DefaultProjectTitle);
+        Assert.Equal("https://acc.example.com", vm.AccServiceBaseUrl);
+        Assert.Equal(@"\\server\logs", vm.CentralLogPath);
+        Assert.Equal(LogLevelDto.Debug.ToString(), vm.ClientFileLevel);
+    }
+
+    [Fact]
+    public async Task Personal_load_raises_property_changed_for_bound_personal_fields()
+    {
+        var appSettings = new Mock<IAppSettingsService>();
+        appSettings.Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateNonDefaultUserSettings());
+
+        var vm = CreateViewModel(
+            isAdmin: false,
+            userId: 1,
+            SettingsSurfaceScope.Personal,
+            appSettings: appSettings);
+
+        var changed = new List<string>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+
+        await vm.LoadAsync();
+
+        Assert.Contains(nameof(SettingsViewModel.FontFamily), changed);
+        Assert.Contains(nameof(SettingsViewModel.LoggingEnabled), changed);
+    }
+
+    [Fact]
+    public async Task System_load_raises_property_changed_for_bound_system_fields()
+    {
+        var systemQuery = new Mock<ISystemSettingsQueryService>();
+        systemQuery.Setup(s => s.GetSystemSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateNonDefaultSystemSettings());
+
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            systemQuery: systemQuery);
+
+        var changed = new List<string>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+
+        await vm.LoadAsync();
+
+        Assert.Contains(nameof(SettingsViewModel.DefaultProjectTitle), changed);
+        Assert.Contains(nameof(SettingsViewModel.CentralLogPath), changed);
+    }
+
+    [Fact]
+    public async Task Personal_save_without_logging_change_does_not_apply_runtime_logging()
+    {
+        var saveCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appSettings = MockAppSettings(saveCompleted);
+        appSettings.Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(JsonAppSettingsService.CreateDefaultDto());
+
+        var loggingRuntime = new Mock<ILoggingRuntimeApplier>();
+
+        var vm = CreateViewModel(
+            isAdmin: false,
+            userId: 1,
+            SettingsSurfaceScope.Personal,
+            appSettings,
+            loggingRuntime: loggingRuntime);
+
+        await vm.LoadAsync();
+        vm.FontFamily = "Tahoma";
+        vm.SaveCommand.Execute(null);
+        await saveCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        loggingRuntime.Verify(r => r.ApplyUserLogging(It.IsAny<UserLoggingSettingsDto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Personal_save_with_logging_change_applies_runtime_logging()
+    {
+        var saveCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appSettings = MockAppSettings(saveCompleted);
+        appSettings.Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(JsonAppSettingsService.CreateDefaultDto());
+
+        var loggingRuntime = new Mock<ILoggingRuntimeApplier>();
+
+        var vm = CreateViewModel(
+            isAdmin: false,
+            userId: 1,
+            SettingsSurfaceScope.Personal,
+            appSettings,
+            loggingRuntime: loggingRuntime);
+
+        await vm.LoadAsync();
+        vm.LoggingEnabled = true;
+        vm.SaveCommand.Execute(null);
+        await saveCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        loggingRuntime.Verify(r => r.ApplyUserLogging(It.Is<UserLoggingSettingsDto>(d => d.LoggingEnabled)), Times.Once);
+    }
+
+    private static UserAppSettingsDto CreateNonDefaultUserSettings()
+    {
+        var defaults = UserAppSettingsDefaults.Create();
+        return defaults with
+        {
+            Appearance = new UserAppearanceSettingsDto("Arial", 18, "#FF0000", "#00FF00"),
+            Logging = new UserLoggingSettingsDto(
+                true,
+                @"D:\TestLogs",
+                LoggingSettingsMetadata.BootstrapDefaultLocalLogDirectory,
+                LoggingSettingsMetadata.AppLoggerDefaultLocalLogDirectory),
+        };
+    }
+
+    private static SystemSettingsDto CreateNonDefaultSystemSettings()
+    {
+        var log = new CentralLoggingSettingsDto(
+            @"\\server\logs",
+            21,
+            45,
+            new AppLogLevelsDto(LogLevelDto.Debug, LogLevelDto.Information),
+            new AppLogLevelsDto(LogLevelDto.Warning, LogLevelDto.Error),
+            new AppLogLevelsDto(LogLevelDto.Error, LogLevelDto.Error),
+            true);
+
+        return new SystemSettingsDto(
+            new EmailOfficeSystemSettingsDto(
+                "Custom Project Title",
+                "99",
+                "250",
+                "CustomInbox",
+                "Inbox Project",
+                5),
+            new AccSystemSettingsDto(
+                "https://acc.example.com",
+                "admin@example.com",
+                "Template-X",
+                ".pdf,.dwg"),
+            new InspectionSystemSettingsDto("tpl-folder", "rpt-folder", "C:\\Reports", "C:\\stamp.png"),
+            new InspectionStatusLabelsDto("OK", "Fail", "ReFail", "N/A"),
+            new AiSystemSettingsDto(
+                "http://ollama.local",
+                "llama3",
+                new AiModelLevelSelectionDto("simple-model", "openai"),
+                new AiModelLevelSelectionDto("qc-model", "openai"),
+                new AiModelLevelSelectionDto("write-model", "openai"),
+                new AiModelLevelSelectionDto("deep-model", "openai"),
+                "model-a,model-b"),
+            log);
+    }
+
     private static SettingsViewModel CreateViewModel(
         bool isAdmin,
         int userId,
