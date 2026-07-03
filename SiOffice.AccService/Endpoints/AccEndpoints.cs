@@ -135,6 +135,36 @@ internal static class AccEndpoints
             return Results.Ok(list.Select(t => new AccTemplateDto(t.Id, t.Name)));
         });
 
+        // ── Read-only ACC project discovery ─────────────────────────────────
+        v1.MapGet("/projects/ids", async (
+            IDbContextFactory<SiNetSQLDbContext> dbFactory,
+            CancellationToken ct) =>
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+            var mappedProjectIds = await db.ProjectAccMappings
+                .AsNoTracking()
+                .Where(mapping => mapping.AccProjectId != null && mapping.AccProjectId != string.Empty)
+                .Select(mapping => mapping.AccProjectId!)
+                .ToListAsync(ct);
+
+            var systemProjectIds = await db.AccSystemResources
+                .AsNoTracking()
+                .Where(resource => resource.AccProjectId != null && resource.AccProjectId != string.Empty)
+                .Select(resource => resource.AccProjectId!)
+                .ToListAsync(ct);
+
+            var projectIds = mappedProjectIds
+                .Concat(systemProjectIds)
+                .Select(projectId => projectId.Trim())
+                .Where(projectId => projectId.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(projectId => projectId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return Results.Ok(new { ProjectIds = projectIds });
+        });
+
         // ── Read-only ACC item lookup ───────────────────────────────────────
         v1.MapGet("/projects/{projectId}/folders/{folderId}/items/resolve", async (
             string projectId,

@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http;
 using System.IO;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
+using SiNetSQL.Data;
+using SiNetSQL.Models;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Autodesk;
@@ -139,7 +142,7 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
-    public void AddSiNetAutodesk_registers_document_lookup_without_write_side_services()
+    public void AddSiNetAutodesk_registers_read_only_project_and_document_services_without_write_side_services()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISecretSetupHostConfiguration>(new StubSecretSetupHostConfiguration("https://acc.example.com"));
@@ -150,11 +153,74 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceHealthProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceDiagnosticsProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceKeyDiagnostics));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
-        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.Files.IProjectFileFilingService");
+    }
+
+    [Fact]
+    public async Task Local_project_service_returns_known_acc_project_ids_from_mappings_and_system_resources()
+    {
+        var dbName = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        await using (var seed = new SiNetSQLDbContext(options))
+        {
+            seed.ProjectAccMappings.AddRange(
+                new ProjectAccMapping { ProjectId = 1, AccHubId = 10, AccProjectId = " b.project-2 ", Project = null!, AccHub = null! },
+                new ProjectAccMapping { ProjectId = 2, AccHubId = 10, AccProjectId = "b.project-1", Project = null!, AccHub = null! },
+                new ProjectAccMapping { ProjectId = 3, AccHubId = 10, AccProjectId = "b.project-2", Project = null!, AccHub = null! });
+            seed.AccSystemResources.AddRange(
+                new AccSystemResource { Key = "OfficeInbox", AccHubId = 10, AccProjectId = "b.system-1", AccHub = null! },
+                new AccSystemResource { Key = "Other", AccHubId = 10, AccProjectId = " ", AccHub = null! });
+            await seed.SaveChangesAsync();
+        }
+
+        var sut = new LocalAccProjectService(new StubDbContextFactory(options));
+
+        var result = await sut.GetProjectIdsAsync();
+
+        Assert.Equal(["b.project-1", "b.project-2", "b.system-1"], result);
+    }
+
+    [Fact]
+    public async Task Remote_project_service_uses_versioned_ids_endpoint_and_maps_response()
+    {
+        const string body = """
+            {
+              "projectIds": [" b.project-2 ", "b.project-1", "b.project-2"]
+            }
+            """;
+
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccProjectService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var result = await sut.GetProjectIdsAsync();
+
+        Assert.Equal("https://acc.example.com/v1/acc/projects/ids", requestedUri?.ToString());
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.Equal(["b.project-1", "b.project-2"], result);
     }
 
     [Fact]
@@ -236,7 +302,10 @@ public sealed class AccControlPlaneTests
     {
         var source = File.ReadAllText(Path.Combine(Boundary.RepoPaths.RepoRoot, "SiOffice.AccService", "Endpoints", "AccEndpoints.cs"));
 
+        Assert.Contains("/projects/ids", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
+        Assert.Contains("ProjectAccMappings", source, StringComparison.Ordinal);
+        Assert.Contains("AccSystemResources", source, StringComparison.Ordinal);
         Assert.Contains("GetFolderItemsAsync(projectId, folderId, ct)", source, StringComparison.Ordinal);
     }
 
@@ -301,6 +370,16 @@ public sealed class AccControlPlaneTests
             string folderId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(_items);
+    }
+
+    private sealed class StubDbContextFactory(DbContextOptions<SiNetSQLDbContext> options) : IDbContextFactory<SiNetSQLDbContext>
+    {
+        private readonly DbContextOptions<SiNetSQLDbContext> _options = options;
+
+        public SiNetSQLDbContext CreateDbContext() => new(_options);
+
+        public Task<SiNetSQLDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new SiNetSQLDbContext(_options));
     }
 
     private static string AppWpfRoot =>

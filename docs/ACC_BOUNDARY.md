@@ -1,6 +1,6 @@
 # ACC Boundary
 
-> **Status:** Slice 2 implemented - control plane + read-only document lookup (2026-07-03)  
+> **Status:** Slice 3 implemented - control plane + read-only project/document discovery (2026-07-03)  
 > **Branch:** `SiWorkNet10`
 
 This document records the current ACC / Autodesk boundary across the clean stack and the legacy
@@ -14,11 +14,11 @@ production host. It exists to separate:
 
 - The clean architecture already defines a **minimal ACC seam** in `SiNet.Application`:
   `IAccProjectService`, `IAccDocumentService`, and `AccItemRef`.
-- `SiNet.Infrastructure.Autodesk` now owns a **control-plane seam plus a first read-only document
-  slice**: mode resolution, remote health/diag probes, local API-key diagnostics, and
-  `IAccDocumentService`.
+- `SiNet.Infrastructure.Autodesk` now owns a **control-plane seam plus read-only ACC discovery
+  slices**: mode resolution, remote health/diag probes, local API-key diagnostics,
+  `IAccProjectService`, and `IAccDocumentService`.
 - `AddSiNetAutodesk()` now registers ACC control-plane services plus the read-only
-  `IAccDocumentService`, but it still does **not** register `IAccProjectService` or any
+  `IAccProjectService` and `IAccDocumentService`, but it still does **not** register any
   write-heavy provisioning/file services.
 - There is **no ACC LegacyBridge adapter** in `src/SiNet.LegacyBridge` today.
 - The legacy production host still owns the real ACC behavior: token/bootstrap wiring, remote-vs-local
@@ -32,7 +32,7 @@ production host. It exists to separate:
 
 | Artifact | Role | Current status |
 | --- | --- | --- |
-| `src/SiNet.Application/Abstractions/Autodesk/IAccProjectService.cs` | Clean port for discovering ACC projects | Port only; no implementation |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccProjectService.cs` | Clean port for discovering ACC projects | Implemented in slice 3 via local/remote read-only adapters |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccDocumentService.cs` | Clean port for ACC item lookup by project/folder/file name | Implemented in slice 2 via local/remote read-only adapters |
 | `src/SiNet.Application/Abstractions/Autodesk/AccItemRef.cs` | Value object for resolved ACC items | Flowing through the read-only document adapter |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceModeProvider.cs` | Clean port for resolving local vs remote ACC service mode | Implemented in slice 1 |
@@ -40,22 +40,25 @@ production host. It exists to separate:
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceDiagnosticsProbe.cs` | Clean port for safe remote ACC diagnostics | Implemented in slice 1 |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceKeyDiagnostics.cs` | Clean port for local ACC API-key diagnostics | Implemented in slice 1 |
 | `src/SiNet.Application/Abstractions/Autodesk/AccServiceControlPlaneDtos.cs` | Mode/health/diag/key-info value objects | Implemented in slice 1 |
-| `src/SiNet.Infrastructure.Autodesk/AutodeskServiceCollectionExtensions.cs` | DI entry point for ACC module | Registers control-plane services plus `IAccDocumentService` |
+| `src/SiNet.Infrastructure.Autodesk/AutodeskServiceCollectionExtensions.cs` | DI entry point for ACC module | Registers control-plane services plus `IAccProjectService` and `IAccDocumentService` |
 | `src/SiNet.Infrastructure.Autodesk/ConfigurationAccServiceModeProvider.cs` | Resolves `AccService:BaseUrl` mode through the existing host configuration seam | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/HttpAccServiceHealthProbe.cs` | Remote `/v1/acc/health` adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/HttpAccServiceDiagnosticsProbe.cs` | Remote `/v1/acc/diag` adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/VaultAccServiceKeyDiagnostics.cs` | Local ACC API-key metadata adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccProjectService.cs` | Local-mode read-only project discovery from known SQL mappings/resources | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/RemoteAccProjectService.cs` | Remote-mode read-only project discovery via `SiOffice.AccService` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccProjectService.cs` | Delegates read-only project discovery by `IAccServiceModeProvider.Mode` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/LocalAccDocumentService.cs` | Local-mode read-only item lookup over `Bim360Service.GetFolderItemsAsync(...)` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/RemoteAccDocumentService.cs` | Remote-mode read-only item lookup via `SiOffice.AccService` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccDocumentService.cs` | Delegates read-only item lookup by `IAccServiceModeProvider.Mode` | Implemented |
-| `SiOffice.AccService/Endpoints/AccEndpoints.cs` | Service-mode read-only ACC item lookup endpoint | Implemented |
+| `SiOffice.AccService/Endpoints/AccEndpoints.cs` | Service-mode read-only ACC project/item lookup endpoints | Implemented |
 | `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` | First native UI consumer of the ACC control-plane seam | Implemented for read-only status/diag display |
 | `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` | Native ACC settings consumer of the control-plane seam | Implemented for read-only runtime display beside stored ACC settings |
 | `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` | Dedicated native ACC runtime-status surface | Implemented for shell-opened read-only status display |
 | `src/SiNet.LegacyBridge/LegacyBridgeServiceCollectionExtensions.cs` | Temporary bridge slot | No ACC bridge wired |
 
-Implication: the clean Autodesk module is now a **real control-plane seam plus a first ACC
-read-only runtime slice**, but it is still far from the migrated write/runtime path.
+Implication: the clean Autodesk module is now a **real control-plane seam plus the first ACC
+read-only discovery/runtime slices**, but it is still far from the migrated write/runtime path.
 
 ## 3. Legacy / Production Inventory
 
@@ -125,6 +128,7 @@ The smallest safe migration area remains the read side, not the write-heavy data
 - remote service health / diagnostics
 - secret setup + AccService API-key diagnostics
 - service-mode status/probe UX
+- read-only discovery of known ACC project IDs
 - read-only ACC item resolution by project/folder/file name
 
 This area is still non-trivial, but it is much safer than migrating filing semantics first.
@@ -144,12 +148,13 @@ This area is still non-trivial, but it is much safer than migrating filing seman
 
 Recommended first migration slice for ACC:
 
-### ACC control-plane + read-only document slice
+### ACC control-plane + read-only project/document discovery slices
 
 Scope:
 
 - document and isolate the `AccService:BaseUrl` mode switch
 - formalize mode/health/diagnostics/key-info as clean ports
+- discover known ACC project IDs in read-only fashion through `IAccProjectService`
 - resolve real ACC items in read-only fashion through `IAccDocumentService`
 - keep remote health/probe behavior explicit
 - keep filing, file-store, metadata writes, and MoveToProject semantics untouched
@@ -174,9 +179,9 @@ Until a separately approved slice says otherwise:
 
 ## 8. Immediate Next Step
 
-Slices 1-2 are now in place. The next useful ACC work item is:
+Slices 1-3 are now in place. The next useful ACC work item is:
 
-- decide whether the next read-only slice is native consumption of `IAccDocumentService` or
-  clean `IAccProjectService` discovery,
+- decide whether the next read-only slice is native consumption of `IAccProjectService` /
+  `IAccDocumentService`, or a separate live Autodesk-enumeration seam,
 - keep provisioning, inbox bootstrap, filing, metadata writes, and MoveToProject semantics
   deferred to later slices.

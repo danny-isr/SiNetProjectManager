@@ -1,7 +1,7 @@
 # ACC Control Plane
 
-> **Status:** Slice 2 implemented (2026-07-03)  
-> **Scope:** mode + health + diagnostics + local key metadata + read-only document lookup
+> **Status:** Slice 3 implemented (2026-07-03)  
+> **Scope:** mode + health + diagnostics + local key metadata + read-only document lookup + read-only project discovery
 
 This document describes the native ACC control-plane seam plus the first read-only ACC document
 lookup slice that now exist in the clean stack. It is intentionally narrower than the full ACC
@@ -16,6 +16,7 @@ side-effect-heavy document flows.
 - `IAccServiceHealthProbe`
 - `IAccServiceDiagnosticsProbe`
 - `IAccServiceKeyDiagnostics`
+- `IAccProjectService`
 - `IAccDocumentService`
 - `AccServiceMode`
 - `AccServiceHealthState`
@@ -31,6 +32,9 @@ side-effect-heavy document flows.
 - `HttpAccServiceDiagnosticsProbe`
 - `VaultAccServiceKeyDiagnostics`
 - `AccServiceHttpClientConfigurator`
+- `LocalAccProjectService`
+- `RemoteAccProjectService`
+- `ModeSwitchingAccProjectService`
 - `Bim360AccFolderItemsReader`
 - `LocalAccDocumentService`
 - `RemoteAccDocumentService`
@@ -38,7 +42,8 @@ side-effect-heavy document flows.
 
 ### DI wiring
 
-- `AddSiNetAutodesk()` now registers the control-plane services plus `IAccDocumentService`.
+- `AddSiNetAutodesk()` now registers the control-plane services plus `IAccProjectService` and
+  `IAccDocumentService`.
 - `src/SiNet.App.Wpf/App.xaml.cs` explicitly calls `AddSiNetSecrets()` after `AddSiNet()` so the
   WPF harness can resolve vault-backed ACC key diagnostics.
 - `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` consumes the seam and exposes a
@@ -62,10 +67,20 @@ side-effect-heavy document flows.
 
 - Health uses `GET {BaseUrl}/v1/acc/health`
 - Diagnostics uses `GET {BaseUrl}/v1/acc/diag`
+- Read-only project discovery uses `GET {BaseUrl}/v1/acc/projects/ids`
 - Read-only item lookup uses
   `GET {BaseUrl}/v1/acc/projects/{projectId}/folders/{folderId}/items/resolve?fileName=...`
 - Health timeout: 5 seconds
 - Diagnostics timeout: 10 seconds
+
+### Project discovery rules
+
+- `IAccProjectService` returns the distinct set of **known ACC project IDs** already recorded in the
+  shared SQL database.
+- Local mode reads the union of `ProjectAccMapping.AccProjectId` and `AccSystemResource.AccProjectId`.
+- Remote mode reads the same union through `SiOffice.AccService`.
+- This slice is intentionally **not** a live Autodesk account scan and does not enumerate every
+  project visible to the connector.
 
 ### TLS policy
 
@@ -97,7 +112,6 @@ legacy source of truth.
 
 This slice does **not** implement:
 
-- `IAccProjectService`
 - remote project provisioning
 - remote inbox provisioning
 - `IProjectFileFilingService`
@@ -121,10 +135,13 @@ Current checks cover:
 - success and failure mapping for health
 - JSON mapping for diagnostics
 - safe local API-key hashing
+- local read-only project discovery from `ProjectAccMapping` + `AccSystemResource`
+- remote read-only project discovery: `/v1/acc/projects/ids` request shape, API-key header, and
+  JSON mapping
 - local read-only item lookup: found vs not found behavior
 - remote read-only item lookup: `/v1/acc/projects/.../items/resolve` request shape, API-key header,
   and JSON mapping
-- DI guardrails: `IAccDocumentService` is registered, while `IAccProjectService`, provisioning,
+- DI guardrails: `IAccProjectService` and `IAccDocumentService` are registered, while provisioning,
   inbox, and filing are still not registered
 - source-level coverage for the new read-only `SiOffice.AccService` endpoint
 - WPF harness secret wiring via `AddSiNetSecrets()`
@@ -134,6 +151,6 @@ Current checks cover:
 
 The next ACC step should stay read-safe:
 
-- either add the first native consumer of `IAccDocumentService`,
-- or introduce `IAccProjectService` discovery as a separate read-only slice,
+- either add the first native consumer of `IAccDocumentService` / `IAccProjectService`,
+- or, if the product really needs it, introduce a separate live Autodesk project-enumeration slice,
 - while keeping provisioning, inbox bootstrap, filing, and metadata writes deferred.

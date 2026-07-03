@@ -17,6 +17,7 @@
   <ItemGroup>
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
+	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
 	<ProjectReference Include="..\..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
 
