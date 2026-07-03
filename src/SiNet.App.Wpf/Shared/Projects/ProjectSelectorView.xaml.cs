@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using SiNet.Application.Projects;
+using SiNet.App.Wpf.Infrastructure;
 
 namespace SiNet.App.Wpf.Shared.Projects;
 
@@ -134,9 +135,18 @@ public partial class ProjectSelectorView : UserControl
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (DataContext is ProjectSelectorViewModel viewModel && viewModel.Projects.Count == 0)
+        if (DataContext is not ProjectSelectorViewModel viewModel || viewModel.Projects.Count != 0)
+        {
+            return;
+        }
+
+        try
         {
             await viewModel.InitializeAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppErrorReporter.Report(ex, "ProjectSelectorView.OnLoaded");
         }
     }
 

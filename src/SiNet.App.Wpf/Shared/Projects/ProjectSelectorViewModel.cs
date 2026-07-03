@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Input;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
@@ -248,11 +249,23 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         var previousStatusId = SelectedStatusId;
         var previousJobTypeId = SelectedJobTypeId;
 
-        var options = await _filterOptionsService
-            .GetFilterOptionsAsync(cancellationToken)
-            .ConfigureAwait(true);
+        try
+        {
+            var options = await _filterOptionsService
+                .GetFilterOptionsAsync(cancellationToken)
+                .ConfigureAwait(true);
 
-        ApplyFilterOptions(options, previousStatusId, previousJobTypeId);
+            ApplyFilterOptions(options, previousStatusId, previousJobTypeId);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(LoadFilterOptionsAsync));
+        }
     }
 
     public void ToggleResults()
@@ -326,6 +339,11 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(DebouncedReloadAsync));
+        }
         finally
         {
             if (Interlocked.CompareExchange(ref _pendingReloadCts, null, cts) == cts)
@@ -374,6 +392,11 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             Debug.WriteLine(
                 $"[PERF] ProjectSelector LoadAsync #{requestId} cancelled after {sw.ElapsedMilliseconds} ms.");
             throw;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(LoadAsync));
         }
         finally
         {

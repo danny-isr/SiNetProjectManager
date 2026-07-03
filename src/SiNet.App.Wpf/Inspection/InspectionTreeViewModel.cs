@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.Application.Abstractions.Inspection;
 
 namespace SiNet.App.Wpf.Inspection;
@@ -16,6 +17,7 @@ public sealed class InspectionTreeViewModel : ObservableObject
     private int _projectId;
     private InspectionSeriesSummary? _selectedSeries;
     private InspectionReportRow? _selectedReport;
+    private string? _errorMessage;
 
     public InspectionTreeViewModel(IInspectionWorkspace workspace)
     {
@@ -53,11 +55,18 @@ public sealed class InspectionTreeViewModel : ObservableObject
         private set => SetField(ref _isLoading, value);
     }
 
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetField(ref _errorMessage, value);
+    }
+
     /// <summary>Loads series for a project. Empty when no source is bound (early-migration default).</summary>
     public async Task LoadSeriesAsync(int projectId, CancellationToken cancellationToken = default)
     {
         _projectId = projectId;
         IsLoading = true;
+        ErrorMessage = null;
         try
         {
             var series = await _workspace.GetSeriesAsync(projectId, cancellationToken).ConfigureAwait(true);
@@ -70,6 +79,11 @@ public sealed class InspectionTreeViewModel : ObservableObject
 
             SelectedSeries = Series.Count > 0 ? Series[0] : null;
         }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(LoadSeriesAsync));
+        }
         finally
         {
             IsLoading = false;
@@ -81,20 +95,29 @@ public sealed class InspectionTreeViewModel : ObservableObject
     {
         Reports.Clear();
         SelectedReport = null;
+        ErrorMessage = null;
         if (_selectedSeries is not { } series || _projectId <= 0)
         {
             return;
         }
 
-        var rows = await _workspace
-            .GetReportsAsync(_projectId, series.SeriesId, cancellationToken)
-            .ConfigureAwait(true);
-        foreach (var row in rows)
+        try
         {
-            Reports.Add(row);
-        }
+            var rows = await _workspace
+                .GetReportsAsync(_projectId, series.SeriesId, cancellationToken)
+                .ConfigureAwait(true);
+            foreach (var row in rows)
+            {
+                Reports.Add(row);
+            }
 
-        SelectedReport = Reports.Count > 0 ? Reports[0] : null;
+            SelectedReport = Reports.Count > 0 ? Reports[0] : null;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(LoadReportsAsync));
+        }
     }
 
     /// <summary>
@@ -108,40 +131,48 @@ public sealed class InspectionTreeViewModel : ObservableObject
     public async Task<bool> SelectReportByIdAsync(
         int projectId, int reportId, CancellationToken cancellationToken = default)
     {
-        await LoadSeriesAsync(projectId, cancellationToken).ConfigureAwait(true);
-
-        foreach (var series in Series)
+        ErrorMessage = null;
+        try
         {
-            var rows = await _workspace
-                .GetReportsAsync(projectId, series.SeriesId, cancellationToken)
-                .ConfigureAwait(true);
+            await LoadSeriesAsync(projectId, cancellationToken).ConfigureAwait(true);
 
-            if (!rows.Any(r => r.ReportId == reportId))
+            foreach (var series in Series)
             {
-                continue;
+                var rows = await _workspace
+                    .GetReportsAsync(projectId, series.SeriesId, cancellationToken)
+                    .ConfigureAwait(true);
+
+                if (!rows.Any(r => r.ReportId == reportId))
+                {
+                    continue;
+                }
+
+                _selectedSeries = series;
+                OnPropertyChanged(nameof(SelectedSeries));
+
+                Reports.Clear();
+                foreach (var row in rows)
+                {
+                    Reports.Add(row);
+                }
+
+                var target = Reports.FirstOrDefault(r => r.ReportId == reportId);
+                if (target.ReportId == reportId)
+                {
+                    SelectedReport = target;
+                    return true;
+                }
             }
 
-            // Found the owning series. Select it (loads its rows via the setter) then pick the
-            // exact report. Set the field directly here so we don't re-trigger an extra reload race.
-            _selectedSeries = series;
-            OnPropertyChanged(nameof(SelectedSeries));
-
-            Reports.Clear();
-            foreach (var row in rows)
-            {
-                Reports.Add(row);
-            }
-
-            var target = Reports.FirstOrDefault(r => r.ReportId == reportId);
-            if (target.ReportId == reportId)
-            {
-                SelectedReport = target;
-                return true;
-            }
+            SelectedReport = null;
+            return false;
         }
-
-        // Exact target not found anywhere in the project. Do not guess.
-        SelectedReport = null;
-        return false;
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(SelectReportByIdAsync));
+            SelectedReport = null;
+            return false;
+        }
     }
 }

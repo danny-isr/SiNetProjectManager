@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Composition;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -25,6 +26,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        AppGlobalExceptionHandling.Configure(this);
         base.OnStartup(e);
 
         _configuration = BuildConfiguration();

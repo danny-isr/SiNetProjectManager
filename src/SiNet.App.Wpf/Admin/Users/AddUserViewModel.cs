@@ -12,6 +12,8 @@ using SiNet.Application.Identity;
 
 
 
+using SiNet.App.Wpf.Infrastructure;
+
 namespace SiNet.App.Wpf.Admin.Users;
 
 
@@ -381,29 +383,28 @@ public sealed class AddUserViewModel : ObservableObject
 
 
     public async Task InitializeAsync()
-
     {
-
-        MasterPlanEmployees.Clear();
-
-        var employees = await _masterPlanEmployeeLookup.GetEmployeesAsync().ConfigureAwait(true);
-
-        foreach (var employee in employees)
-
+        try
         {
+            MasterPlanEmployees.Clear();
 
-            MasterPlanEmployees.Add(employee);
+            var employees = await _masterPlanEmployeeLookup.GetEmployeesAsync().ConfigureAwait(true);
 
+            foreach (var employee in employees)
+            {
+                MasterPlanEmployees.Add(employee);
+            }
+
+            DirectoryStatusMessage = _directoryUserLookup.IsConfigured
+                ? "חפש משתמש ב-Active Directory כדי למלא את הטופס."
+                : "Active Directory לא מוגדר — הזן פרטים ידנית או הגדר דומיין ופרטי התחברות.";
         }
-
-
-
-        DirectoryStatusMessage = _directoryUserLookup.IsConfigured
-
-            ? "חפש משתמש ב-Active Directory כדי למלא את הטופס."
-
-            : "Active Directory לא מוגדר — הזן פרטים ידנית או הגדר דומיין ופרטי התחברות.";
-
+        catch (Exception ex)
+        {
+            ValidationMessage = ex.Message;
+            DirectoryStatusMessage = "שגיאה בטעינת נתוני הטופס.";
+            AppErrorReporter.Report(ex, nameof(InitializeAsync));
+        }
     }
 
 

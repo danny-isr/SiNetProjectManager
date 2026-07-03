@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.Application.Abstractions.Inspection;
 
 namespace SiNet.App.Wpf.Inspection;
@@ -12,6 +13,7 @@ public sealed class InspectionNotesViewModel : ObservableObject
 {
     private readonly IInspectionWorkspace _workspace;
     private bool _isLoading;
+    private string? _errorMessage;
 
     public InspectionNotesViewModel(IInspectionWorkspace workspace)
     {
@@ -28,10 +30,17 @@ public sealed class InspectionNotesViewModel : ObservableObject
         private set => SetField(ref _isLoading, value);
     }
 
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetField(ref _errorMessage, value);
+    }
+
     /// <summary>Loads read-only notes for a report. Clears the list when <paramref name="reportId"/> is null.</summary>
     public async Task LoadNotesAsync(int? reportId, CancellationToken cancellationToken = default)
     {
         Notes.Clear();
+        ErrorMessage = null;
         if (reportId is not int id || id <= 0)
         {
             return;
@@ -45,6 +54,11 @@ public sealed class InspectionNotesViewModel : ObservableObject
             {
                 Notes.Add(note);
             }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            AppErrorReporter.Report(ex, nameof(LoadNotesAsync));
         }
         finally
         {

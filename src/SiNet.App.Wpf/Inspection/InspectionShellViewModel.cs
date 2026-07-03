@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inbox;
 using SiNet.Application.Identity;
 using SiNet.Application.Tasks;
@@ -81,7 +82,15 @@ public sealed class InspectionShellViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(InspectionTreeViewModel.SelectedReport))
             {
-                await Notes.LoadNotesAsync(Tree.SelectedReport?.ReportId).ConfigureAwait(true);
+                try
+                {
+                    await Notes.LoadNotesAsync(Tree.SelectedReport?.ReportId).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    TaskStatusMessage = ex.Message;
+                    AppErrorReporter.Report(ex, "InspectionShell.SelectedReportChanged");
+                }
             }
         };
 

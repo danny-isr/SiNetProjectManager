@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using SiNet.App.Wpf.Infrastructure;
 
 namespace SiNet.App.Wpf.Inbox;
 
@@ -32,6 +33,10 @@ public sealed class AsyncRelayCommand : ICommand
             _isExecuting = true;
             RaiseCanExecuteChanged();
             await _execute().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppErrorReporter.Report(ex, "AsyncRelayCommand");
         }
         finally
         {

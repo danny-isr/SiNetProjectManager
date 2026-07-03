@@ -185,8 +185,21 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
     private void OpenNativeActionPermissions()
     {
-        var window = _services.GetRequiredService<ActionPermissionsWindow>();
-        ShowWindow(window);
+        try
+        {
+            var window = _services.GetRequiredService<ActionPermissionsWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת הרשאות פעולה: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
     }
 
     private void OpenNativeSecretSetup()
@@ -210,17 +223,30 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
     private void OpenInspectionShell()
     {
-        var shellView = _services.GetRequiredService<InspectionShellView>();
-        var window = new Window
+        try
         {
-            Title = "ביקורת (מעטפת) — מערכת חדשה",
-            Content = shellView,
-            Width = 900,
-            Height = 620,
-            FlowDirection = FlowDirection.RightToLeft,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
-        ShowWindow(window);
+            var shellView = _services.GetRequiredService<InspectionShellView>();
+            var window = new Window
+            {
+                Title = "ביקורת (מעטפת) — מערכת חדשה",
+                Content = shellView,
+                Width = 900,
+                Height = 620,
+                FlowDirection = FlowDirection.RightToLeft,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            };
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת מעטפת הביקורת: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
     }
 
     private ProjectSelectorView? TryCreateProjectSelector()

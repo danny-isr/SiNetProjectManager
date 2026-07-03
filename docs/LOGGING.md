@@ -94,7 +94,11 @@ different adapter for the same port.
 - Reference Serilog packages directly
 - Call `Log.Logger` or `ILogger<T>` from views/viewmodels
 
-Enforced by `NewSystemLoggingBoundaryTests.cs` + `NewSystemBoundaryTests.cs`.
+Enforced by `NewSystemLoggingBoundaryTests.cs`, `ErrorHandlingSafetyNetTests.cs`, and
+`NewSystemBoundaryTests.cs`.
+
+`AppErrorReporter` records unexpected WPF-layer exceptions without referencing Serilog or legacy
+`AppLogger`. The production host may subscribe to forward reports to `IAppLogger`.
 
 ---
 

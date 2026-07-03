@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Infrastructure;
 
 namespace SiNet.App.Wpf.Admin.Users;
 
@@ -19,7 +20,17 @@ public sealed class AddUserDialogWindow : Window
         Content = new AddUserView { DataContext = _viewModel };
         _viewModel.RequestClose += OnRequestClose;
         Closed += (_, _) => _viewModel.RequestClose -= OnRequestClose;
-        Loaded += async (_, _) => await _viewModel.InitializeAsync().ConfigureAwait(true);
+        Loaded += async (_, _) =>
+        {
+            try
+            {
+                await _viewModel.InitializeAsync().ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                AppErrorReporter.Report(ex, "AddUserDialogWindow.OnLoaded");
+            }
+        };
     }
 
     private void OnRequestClose(bool dialogResult)
