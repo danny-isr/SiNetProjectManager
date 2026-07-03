@@ -50,7 +50,9 @@ public sealed class NewShellAccStatusMenuTests
                     new StubAccKeyDiagnostics(),
                     new StubAccHealthProbe(),
                     new StubAccDiagnosticsProbe()),
-                new StubAccDocumentService())));
+                new StubAccDocumentService(),
+                new StubAccResolvedDocsUrlLauncher(),
+                new StubClipboardTextWriter())));
 
         var sp = services.BuildServiceProvider();
         var factory = new NewShellFactory(sp);
@@ -116,6 +118,20 @@ public sealed class NewShellAccStatusMenuTests
             string fileName,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<AccItemRef?>(null);
+    }
+
+    private sealed class StubAccResolvedDocsUrlLauncher : IAccResolvedDocsUrlLauncher
+    {
+        public void Open(string url)
+        {
+        }
+    }
+
+    private sealed class StubClipboardTextWriter : IClipboardTextWriter
+    {
+        public void SetText(string text)
+        {
+        }
     }
 
     private sealed class StubAccDiagnosticsProbe : IAccServiceDiagnosticsProbe

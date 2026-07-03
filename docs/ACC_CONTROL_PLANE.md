@@ -53,7 +53,8 @@ side-effect-heavy document flows.
   `AccService.BaseUrl` field separate.
 - `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` exposes a dedicated shell-opened
   runtime-only ACC status window built on the same presenter/control, and now hosts a manual
-  read-only `IAccDocumentService` lookup tester (`projectId + folderId + fileName`).
+  read-only `IAccDocumentService` lookup tester (`projectId + folderId + fileName`) plus a
+  docs URL preview generated only from the live-resolved ACC identifiers.
 
 ## 2. Runtime Rules
 

@@ -29,7 +29,9 @@ public sealed class AccControlPlaneStatusWindowTests
 
         var vm = new AccControlPlaneStatusWindowViewModel(
             presenter,
-            new StubAccDocumentService(null));
+            new StubAccDocumentService(null),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
         await vm.LoadAsync();
 
         Assert.Contains("מצב הריצה הנוכחי", vm.HintText, StringComparison.Ordinal);
@@ -49,22 +51,50 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("ProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("ResolveDocumentCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LookupProjectId", xaml, StringComparison.Ordinal);
+        Assert.Contains("LookupResolvedDocsUrl", xaml, StringComparison.Ordinal);
+        Assert.Contains("CopyResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_window_view_model_enables_copy_and_open_for_live_docs_url()
+    {
+        var launcher = new StubAccResolvedDocsUrlLauncher();
+        var clipboard = new StubClipboardTextWriter();
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
+            launcher,
+            clipboard)
+        {
+            LookupProjectId = "b.project-1",
+            LookupFolderId = "folder-22",
+            LookupFileName = "drawing.pdf",
+        };
+
+        await vm.ResolveDocumentAsync();
+
+        Assert.True(vm.CopyResolvedDocsUrlCommand.CanExecute(null));
+        Assert.True(vm.OpenResolvedDocsUrlCommand.CanExecute(null));
+
+        vm.CopyResolvedDocsUrlCommand.Execute(null);
+        Assert.Equal(vm.LookupResolvedDocsUrl, clipboard.LastText);
+        Assert.Contains("הועתק", vm.SummaryMessage, StringComparison.Ordinal);
+
+        vm.OpenResolvedDocsUrlCommand.Execute(null);
+        Assert.Equal(vm.LookupResolvedDocsUrl, launcher.LastOpenedUrl);
+        Assert.Contains("נפתח בדפדפן", vm.SummaryMessage, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Status_window_view_model_resolves_document_lookup_summary()
     {
-        var presenter = new AccControlPlaneStatusPresenter(
-            new StubAccModeProvider(AccServiceMode.Local, null),
-            new StubAccProjectService(["b.project-1"]),
-            new StubAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null)),
-            new StubAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured")),
-            new StubAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured")));
-
         var vm = new AccControlPlaneStatusWindowViewModel(
-            presenter,
-            new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)))
+            BuildPresenter(),
+            new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter())
         {
             LookupProjectId = "b.project-1",
             LookupFolderId = "folder-22",
@@ -75,7 +105,18 @@ public sealed class AccControlPlaneStatusWindowTests
 
         Assert.Contains("item-77", vm.LookupResultSummary, StringComparison.Ordinal);
         Assert.Contains("version-3", vm.LookupResultSummary, StringComparison.Ordinal);
+        Assert.Equal(
+            "https://acc.autodesk.com/docs/files/projects/project-1?folderUrn=folder-22&entityId=item-77",
+            vm.LookupResolvedDocsUrl);
     }
+
+    private static AccControlPlaneStatusPresenter BuildPresenter() =>
+        new(
+            new StubAccModeProvider(AccServiceMode.Local, null),
+            new StubAccProjectService(["b.project-1"]),
+            new StubAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null)),
+            new StubAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured")),
+            new StubAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured")));
 
     private static string ReadRepoFile(string relativePath)
     {
@@ -120,6 +161,20 @@ public sealed class AccControlPlaneStatusWindowTests
             string fileName,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(result);
+    }
+
+    private sealed class StubAccResolvedDocsUrlLauncher : IAccResolvedDocsUrlLauncher
+    {
+        public string? LastOpenedUrl { get; private set; }
+
+        public void Open(string url) => LastOpenedUrl = url;
+    }
+
+    private sealed class StubClipboardTextWriter : IClipboardTextWriter
+    {
+        public string? LastText { get; private set; }
+
+        public void SetText(string text) => LastText = text;
     }
 
     private sealed class StubAccHealthProbe(AccServiceHealthResult result) : IAccServiceHealthProbe

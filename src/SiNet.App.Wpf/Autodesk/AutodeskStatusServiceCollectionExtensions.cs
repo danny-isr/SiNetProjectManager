@@ -9,6 +9,8 @@ public static class AutodeskStatusServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<AccControlPlaneStatusPresenter>();
+        services.AddSingleton<IAccResolvedDocsUrlLauncher, ShellExecuteAccResolvedDocsUrlLauncher>();
+        services.AddSingleton<IClipboardTextWriter, WpfClipboardTextWriter>();
         services.AddTransient<AccControlPlaneStatusWindowViewModel>();
         services.AddTransient<AccControlPlaneStatusWindowView>();
         services.AddTransient<AccControlPlaneStatusWindow>();

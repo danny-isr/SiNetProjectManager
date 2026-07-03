@@ -289,7 +289,7 @@ public sealed class AccControlPlaneTests
         var result = await sut.FindItemAsync("project-123", "folder-456", "Drawing Set.pdf");
 
         Assert.NotNull(result);
-        Assert.Equal("https://acc.example.com/v1/acc/projects/project-123/folders/folder-456/items/resolve?fileName=Drawing%20Set.pdf", requestedUri?.ToString());
+        Assert.Equal("https://acc.example.com/v1/acc/projects/project-123/folders/folder-456/items/resolve?fileName=Drawing%20Set.pdf", requestedUri?.AbsoluteUri);
         Assert.Equal("native-api-key", apiKeyHeader);
         Assert.Equal("project-123", result!.ProjectId);
         Assert.Equal("item-789", result.ItemId);

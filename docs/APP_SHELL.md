@@ -190,7 +190,8 @@ truth** for all secret values — not `appsettings.json`, not repo files, not le
 `SiNet.App.Wpf.Autodesk`, backed by the clean ACC control-plane seam. This window is **runtime-only**:
 it shows mode, key metadata, known ACC project IDs, health, and diagnostics for the current host
 process, and performs no settings writes or privileged ACC operations. It also includes a manual
-read-only `projectId + folderId + fileName` lookup tester through `IAccDocumentService`.
+read-only `projectId + folderId + fileName` lookup tester through `IAccDocumentService`, plus a
+derived ACC Docs URL that is shown only after a live resolve succeeds.
 
 Implemented capabilities in this surface:
 
