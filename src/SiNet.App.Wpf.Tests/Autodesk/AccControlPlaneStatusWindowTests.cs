@@ -62,6 +62,16 @@ public sealed class AccControlPlaneStatusWindowTests
     }
 
     [Fact]
+    public void Shared_acc_browser_view_exposes_tree_search_actions()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Autodesk/AccReadOnlyDocumentBrowserView.xaml");
+
+        Assert.Contains("SearchProjectTreeCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("UseSelectedSearchResultCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("SearchResults", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Status_window_view_model_loads_lookup_seed_from_db_hints()
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
@@ -280,6 +290,100 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Equal("Live Tower", vm.Browser.SelectedKnownProject?.DisplayName);
         Assert.Single(vm.Browser.BrowseFolders);
         Assert.Contains("Project Files", vm.Browser.BrowseTrailText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_window_view_model_filters_browse_folders_and_files()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            BuildCatalogService("b.project-1"),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService(new AccFolderBrowseResult(
+                "b.project-1",
+                "root-folder",
+                [
+                    new AccFolderBrowseEntry("folder-a", "Architecture", AccFolderEntryKind.Folder, 0, null, null),
+                    new AccFolderBrowseEntry("folder-b", "Electrical", AccFolderEntryKind.Folder, 0, null, null),
+                    new AccFolderBrowseEntry("item-a", "Architectural Plan.pdf", AccFolderEntryKind.Item, 10, null, null),
+                    new AccFolderBrowseEntry("item-b", "Electrical Notes.pdf", AccFolderEntryKind.Item, 20, null, null),
+                ])),
+            BuildLiveDiscoveryService(),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
+        vm.Browser.LookupProjectId = "b.project-1";
+
+        await vm.Browser.BrowseFolderAsync();
+        vm.Browser.BrowseFolderFilterText = "arch";
+        vm.Browser.BrowseFileFilterText = "notes";
+
+        Assert.Single(vm.Browser.BrowseFolders);
+        Assert.Equal("Architecture", vm.Browser.BrowseFolders[0].DisplayName);
+        Assert.Single(vm.Browser.BrowseFiles);
+        Assert.Equal("Electrical Notes.pdf", vm.Browser.BrowseFiles[0].DisplayName);
+        Assert.Contains("אחרי סינון", vm.Browser.BrowseSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_window_view_model_can_search_project_tree_and_use_result()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            BuildCatalogService("b.project-1"),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService((projectId, folderId) =>
+            {
+                var normalizedFolderId = string.IsNullOrWhiteSpace(folderId) ? null : folderId;
+                return normalizedFolderId switch
+                {
+                    null => new AccFolderBrowseResult(
+                        projectId,
+                        "root-folder",
+                        [
+                            new AccFolderBrowseEntry("folder-a", "Discipline A", AccFolderEntryKind.Folder, 0, null, null),
+                            new AccFolderBrowseEntry("folder-b", "Discipline B", AccFolderEntryKind.Folder, 0, null, null),
+                        ]),
+                    "folder-a" => new AccFolderBrowseResult(
+                        projectId,
+                        "folder-a",
+                        [
+                            new AccFolderBrowseEntry("folder-a1", "Sheets", AccFolderEntryKind.Folder, 0, null, null),
+                        ]),
+                    "folder-a1" => new AccFolderBrowseResult(
+                        projectId,
+                        "folder-a1",
+                        [
+                            new AccFolderBrowseEntry("item-1", "Tower Plan.pdf", AccFolderEntryKind.Item, 10, null, null),
+                        ]),
+                    "folder-b" => new AccFolderBrowseResult(
+                        projectId,
+                        "folder-b",
+                        [
+                            new AccFolderBrowseEntry("item-2", "Other Notes.pdf", AccFolderEntryKind.Item, 10, null, null),
+                        ]),
+                    _ => null,
+                };
+            }),
+            BuildLiveDiscoveryService(),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
+        vm.Browser.LookupProjectId = "b.project-1";
+        vm.Browser.LookupFileName = "plan";
+
+        await vm.Browser.SearchProjectTreeAsync();
+
+        Assert.Single(vm.Browser.SearchResults);
+        Assert.Equal("folder-a1", vm.Browser.SearchResults[0].FolderId);
+        Assert.Contains("Discipline A / Sheets", vm.Browser.SearchResults[0].FolderPath, StringComparison.Ordinal);
+        Assert.Contains("נמצאו 1 קבצים", vm.Browser.TreeSearchSummary, StringComparison.Ordinal);
+
+        vm.Browser.UseSelectedSearchResultCommand.Execute(null);
+
+        Assert.Equal("folder-a1", vm.Browser.LookupFolderId);
+        Assert.Equal("Tower Plan.pdf", vm.Browser.LookupFileName);
+        Assert.Contains("Tower Plan.pdf", vm.Browser.LookupResultSummary, StringComparison.Ordinal);
     }
 
     private static AccControlPlaneStatusPresenter BuildPresenter() =>

@@ -10,6 +10,9 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 {
     private const string RootBrowseLabel = "Project Files";
     private const string LiveDiscoveryInitialSummary = "טרם בוצעה טעינת hubs/projects חיה מ-ACC.";
+    private const string TreeSearchInitialSummary = "טרם בוצע חיפוש היררכי בעץ התיקיות של ACC.";
+    private const int MaxTreeSearchFolders = 250;
+    private const int MaxTreeSearchResults = 50;
 
     private readonly IAccDocumentService _accDocumentService;
     private readonly IAccFolderBrowserService _accFolderBrowserService;
@@ -20,6 +23,8 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     private readonly Func<bool>? _isHostBusy;
     private readonly Action<string>? _summaryMessageSink;
     private readonly List<AccBrowseLocation> _browseTrail = [];
+    private readonly List<AccFolderBrowseEntry> _allBrowseFolders = [];
+    private readonly List<AccFolderBrowseEntry> _allBrowseFiles = [];
 
     private AccHubCatalogEntry? _selectedLiveHub;
     private AccProjectCatalogEntry? _selectedLiveProject;
@@ -32,11 +37,15 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     private string _lookupResolvedDocsUrl = string.Empty;
     private string _browseSummary = "טרם נטען תוכן ACC.";
     private string _browseTrailText = RootBrowseLabel;
+    private string _browseFolderFilterText = string.Empty;
+    private string _browseFileFilterText = string.Empty;
+    private string _treeSearchSummary = TreeSearchInitialSummary;
     private string _liveDiscoverySummary = LiveDiscoveryInitialSummary;
     private bool _isBusy;
     private bool _isSynchronizingKnownProjectSelection;
     private AccFolderBrowseEntry? _selectedBrowseFolder;
     private AccFolderBrowseEntry? _selectedBrowseFile;
+    private AccDocumentSearchResult? _selectedSearchResult;
 
     public AccReadOnlyDocumentBrowserViewModel(
         IAccDocumentService accDocumentService,
@@ -63,6 +72,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         KnownProjectIds = [];
         BrowseFolders = [];
         BrowseFiles = [];
+        SearchResults = [];
 
         LoadLiveHubsCommand = new AsyncRelayCommand(LoadLiveHubsAsync, CanLoadLiveHubs);
         LoadLiveProjectsCommand = new AsyncRelayCommand(LoadLiveProjectsAsync, CanLoadLiveProjects);
@@ -71,6 +81,8 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         BrowseParentFolderCommand = new AsyncRelayCommand(BrowseParentFolderAsync, CanBrowseParentFolder);
         OpenSelectedFolderCommand = new AsyncRelayCommand(OpenSelectedFolderAsync, CanOpenSelectedFolder);
         UseSelectedFileCommand = new RelayCommand(_ => UseSelectedFile(), _ => CanUseSelectedFile());
+        SearchProjectTreeCommand = new AsyncRelayCommand(SearchProjectTreeAsync, CanSearchProjectTree);
+        UseSelectedSearchResultCommand = new RelayCommand(_ => UseSelectedSearchResult(), _ => CanUseSelectedSearchResult());
         ResolveDocumentCommand = new AsyncRelayCommand(ResolveDocumentAsync, CanResolveDocument);
         CopyResolvedDocsUrlCommand = new RelayCommand(_ => CopyResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
         OpenResolvedDocsUrlCommand = new RelayCommand(_ => OpenResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
@@ -175,6 +187,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
             {
                 UpdateSelectedKnownProject(ResolveMatchingKnownProject(value));
                 BrowseFolderCommand.RaiseCanExecuteChanged();
+                SearchProjectTreeCommand.RaiseCanExecuteChanged();
                 ResolveDocumentCommand.RaiseCanExecuteChanged();
             }
         }
@@ -187,6 +200,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         {
             if (SetField(ref _lookupFolderId, value))
             {
+                SearchProjectTreeCommand.RaiseCanExecuteChanged();
                 ResolveDocumentCommand.RaiseCanExecuteChanged();
             }
         }
@@ -199,6 +213,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         {
             if (SetField(ref _lookupFileName, value))
             {
+                SearchProjectTreeCommand.RaiseCanExecuteChanged();
                 ResolveDocumentCommand.RaiseCanExecuteChanged();
             }
         }
@@ -235,9 +250,41 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         private set => SetField(ref _browseTrailText, value);
     }
 
+    public string BrowseFolderFilterText
+    {
+        get => _browseFolderFilterText;
+        set
+        {
+            if (SetField(ref _browseFolderFilterText, value))
+            {
+                ApplyBrowseFilters();
+            }
+        }
+    }
+
+    public string BrowseFileFilterText
+    {
+        get => _browseFileFilterText;
+        set
+        {
+            if (SetField(ref _browseFileFilterText, value))
+            {
+                ApplyBrowseFilters();
+            }
+        }
+    }
+
     public ObservableCollection<AccFolderBrowseEntry> BrowseFolders { get; }
 
     public ObservableCollection<AccFolderBrowseEntry> BrowseFiles { get; }
+
+    public string TreeSearchSummary
+    {
+        get => _treeSearchSummary;
+        private set => SetField(ref _treeSearchSummary, value);
+    }
+
+    public ObservableCollection<AccDocumentSearchResult> SearchResults { get; }
 
     public AccFolderBrowseEntry? SelectedBrowseFolder
     {
@@ -264,6 +311,18 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         }
     }
 
+    public AccDocumentSearchResult? SelectedSearchResult
+    {
+        get => _selectedSearchResult;
+        set
+        {
+            if (SetField(ref _selectedSearchResult, value))
+            {
+                UseSelectedSearchResultCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     public AsyncRelayCommand BrowseFolderCommand { get; }
 
     public AsyncRelayCommand BrowseParentFolderCommand { get; }
@@ -271,6 +330,10 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     public AsyncRelayCommand OpenSelectedFolderCommand { get; }
 
     public RelayCommand UseSelectedFileCommand { get; }
+
+    public AsyncRelayCommand SearchProjectTreeCommand { get; }
+
+    public RelayCommand UseSelectedSearchResultCommand { get; }
 
     public AsyncRelayCommand ResolveDocumentCommand { get; }
 
@@ -305,6 +368,8 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         BrowseParentFolderCommand.RaiseCanExecuteChanged();
         OpenSelectedFolderCommand.RaiseCanExecuteChanged();
         UseSelectedFileCommand.RaiseCanExecuteChanged();
+        SearchProjectTreeCommand.RaiseCanExecuteChanged();
+        UseSelectedSearchResultCommand.RaiseCanExecuteChanged();
         ResolveDocumentCommand.RaiseCanExecuteChanged();
         CopyResolvedDocsUrlCommand.RaiseCanExecuteChanged();
         OpenResolvedDocsUrlCommand.RaiseCanExecuteChanged();
@@ -431,6 +496,93 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         }
     }
 
+    public async Task SearchProjectTreeAsync()
+    {
+        if (!CanSearchProjectTree())
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var query = LookupFileName.Trim();
+            var projectId = LookupProjectId.Trim();
+            var startFolderId = string.IsNullOrWhiteSpace(LookupFolderId) ? null : LookupFolderId.Trim();
+            var pendingFolders = new Queue<AccTreeSearchLocation>();
+            var visitedFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var matches = new List<AccDocumentSearchResult>();
+            var visitedFolderCount = 0;
+
+            pendingFolders.Enqueue(new AccTreeSearchLocation(startFolderId, ResolveTreeSearchStartPath(startFolderId)));
+
+            while (pendingFolders.Count > 0 && visitedFolderCount < MaxTreeSearchFolders && matches.Count < MaxTreeSearchResults)
+            {
+                var currentLocation = pendingFolders.Dequeue();
+                var browseResult = await _accFolderBrowserService
+                    .BrowseAsync(projectId, currentLocation.FolderId)
+                    .ConfigureAwait(true);
+
+                if (browseResult is null || !visitedFolderIds.Add(browseResult.FolderId))
+                {
+                    continue;
+                }
+
+                visitedFolderCount++;
+
+                foreach (var entry in browseResult.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Item))
+                {
+                    if (!entry.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    matches.Add(new AccDocumentSearchResult(
+                        browseResult.ProjectId,
+                        browseResult.FolderId,
+                        currentLocation.FolderPath,
+                        entry.DisplayName));
+
+                    if (matches.Count >= MaxTreeSearchResults)
+                    {
+                        break;
+                    }
+                }
+
+                if (matches.Count >= MaxTreeSearchResults || visitedFolderCount >= MaxTreeSearchFolders)
+                {
+                    break;
+                }
+
+                foreach (var entry in browseResult.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Folder))
+                {
+                    if (!visitedFolderIds.Contains(entry.Id))
+                    {
+                        pendingFolders.Enqueue(new AccTreeSearchLocation(
+                            entry.Id,
+                            BuildChildTreeSearchPath(currentLocation.FolderPath, entry.DisplayName)));
+                    }
+                }
+            }
+
+            ReplaceSearchResults(matches);
+            var hitFolderLimit = pendingFolders.Count > 0 && visitedFolderCount >= MaxTreeSearchFolders;
+            var hitResultLimit = pendingFolders.Count > 0 && matches.Count >= MaxTreeSearchResults;
+            TreeSearchSummary = BuildTreeSearchSummary(query, visitedFolderCount, matches.Count, hitFolderLimit, hitResultLimit);
+            PublishSummary("חיפוש היררכי בעץ ACC הושלם.");
+        }
+        catch (Exception ex)
+        {
+            ReplaceSearchResults([]);
+            TreeSearchSummary = $"שגיאה בחיפוש היררכי בעץ ACC: {ex.Message}";
+            PublishSummary(TreeSearchSummary);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     public async Task LoadLiveHubsAsync()
     {
         if (!CanLoadLiveHubs())
@@ -540,6 +692,15 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         !IsInteractionBlocked()
         && SelectedBrowseFile is not null;
 
+    private bool CanSearchProjectTree() =>
+        !IsInteractionBlocked()
+        && !string.IsNullOrWhiteSpace(LookupProjectId)
+        && !string.IsNullOrWhiteSpace(LookupFileName);
+
+    private bool CanUseSelectedSearchResult() =>
+        !IsInteractionBlocked()
+        && SelectedSearchResult is not null;
+
     private bool CanUseResolvedDocsUrl() =>
         !IsInteractionBlocked()
         && !string.IsNullOrWhiteSpace(LookupResolvedDocsUrl);
@@ -564,6 +725,8 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
             if (result is null)
             {
+                _allBrowseFolders.Clear();
+                _allBrowseFiles.Clear();
                 BrowseFolders.Clear();
                 BrowseFiles.Clear();
                 SelectedBrowseFolder = null;
@@ -584,22 +747,13 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
             LookupResolvedDocsUrl = string.Empty;
             LookupResultSummary = "טרם בוצע resolve עבור קובץ נבחר.";
 
-            BrowseFolders.Clear();
-            BrowseFiles.Clear();
-            foreach (var entry in result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Folder))
-            {
-                BrowseFolders.Add(entry);
-            }
-
-            foreach (var entry in result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Item))
-            {
-                BrowseFiles.Add(entry);
-            }
-
-            SelectedBrowseFolder = BrowseFolders.FirstOrDefault();
-            SelectedBrowseFile = BrowseFiles.FirstOrDefault();
+            _allBrowseFolders.Clear();
+            _allBrowseFolders.AddRange(result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Folder));
+            _allBrowseFiles.Clear();
+            _allBrowseFiles.AddRange(result.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Item));
+            ApplyBrowseFilters();
             UpdateBrowseTrail(navigationMode, result.FolderId, requestedLabel);
-            BrowseSummary = $"נטענו {BrowseFolders.Count} תיקיות ו-{BrowseFiles.Count} קבצים מתוך folderId={result.FolderId}.";
+            BrowseSummary = BuildBrowseSummary(result.FolderId);
             PublishSummary("נטען תוכן תיקיית ACC.");
         }
         catch (Exception ex)
@@ -624,6 +778,21 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         LookupResolvedDocsUrl = string.Empty;
         LookupResultSummary = $"נבחר קובץ ל-resolve: {SelectedBrowseFile.DisplayName}";
         PublishSummary("נבחר קובץ מתיקיית ACC.");
+    }
+
+    private void UseSelectedSearchResult()
+    {
+        if (!CanUseSelectedSearchResult())
+        {
+            return;
+        }
+
+        LookupProjectId = SelectedSearchResult!.ProjectId;
+        LookupFolderId = SelectedSearchResult.FolderId;
+        LookupFileName = SelectedSearchResult.FileName;
+        LookupResolvedDocsUrl = string.Empty;
+        LookupResultSummary = $"נבחרה תוצאת חיפוש: {SelectedSearchResult.FileName} מתוך {SelectedSearchResult.FolderPath}";
+        PublishSummary("נבחרה תוצאה מחיפוש היררכי ב-ACC.");
     }
 
     public async Task UseSelectedLiveProjectAsync()
@@ -730,10 +899,16 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
         LookupResolvedDocsUrl = string.Empty;
         LookupResultSummary = "טרם בוצע חיפוש פריט ACC.";
+        BrowseFolderFilterText = string.Empty;
+        BrowseFileFilterText = string.Empty;
+        _allBrowseFolders.Clear();
+        _allBrowseFiles.Clear();
         BrowseFolders.Clear();
         BrowseFiles.Clear();
         SelectedBrowseFolder = null;
         SelectedBrowseFile = null;
+        ReplaceSearchResults([]);
+        TreeSearchSummary = TreeSearchInitialSummary;
         BrowseSummary = "טרם נטען תוכן ACC.";
         ResetBrowseTrail();
     }
@@ -784,7 +959,133 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
     private void PublishSummary(string message) => _summaryMessageSink?.Invoke(message);
 
+    private void ReplaceSearchResults(IReadOnlyList<AccDocumentSearchResult> results)
+    {
+        SearchResults.Clear();
+        foreach (var result in results)
+        {
+            SearchResults.Add(result);
+        }
+
+        SelectedSearchResult = SearchResults.FirstOrDefault();
+    }
+
+    private string ResolveTreeSearchStartPath(string? startFolderId)
+    {
+        if (string.IsNullOrWhiteSpace(startFolderId))
+        {
+            return RootBrowseLabel;
+        }
+
+        return _browseTrail.Count > 0
+            ? BrowseTrailText
+            : startFolderId.Trim();
+    }
+
+    private static string BuildChildTreeSearchPath(string parentPath, string folderName)
+    {
+        var normalizedFolderName = folderName.Trim();
+        return string.IsNullOrWhiteSpace(parentPath)
+            ? normalizedFolderName
+            : $"{parentPath} / {normalizedFolderName}";
+    }
+
+    private static string BuildTreeSearchSummary(
+        string query,
+        int visitedFolderCount,
+        int matchCount,
+        bool hitFolderLimit,
+        bool hitResultLimit)
+    {
+        var baseSummary = matchCount == 0
+            ? $"לא נמצאו קבצים עבור \"{query}\" אחרי סריקה של {visitedFolderCount} תיקיות."
+            : $"נמצאו {matchCount} קבצים עבור \"{query}\" אחרי סריקה של {visitedFolderCount} תיקיות.";
+
+        if (!hitFolderLimit && !hitResultLimit)
+        {
+            return baseSummary;
+        }
+
+        if (hitFolderLimit && hitResultLimit)
+        {
+            return $"{baseSummary} החיפוש נעצר בגלל מגבלת תיקיות ותוצאות.";
+        }
+
+        return hitFolderLimit
+            ? $"{baseSummary} החיפוש נעצר בגלל מגבלת תיקיות."
+            : $"{baseSummary} החיפוש נעצר בגלל מגבלת תוצאות.";
+    }
+
+    private void ApplyBrowseFilters()
+    {
+        var visibleFolders = FilterBrowseEntries(_allBrowseFolders, BrowseFolderFilterText);
+        var visibleFiles = FilterBrowseEntries(_allBrowseFiles, BrowseFileFilterText);
+
+        ReplaceVisibleEntries(BrowseFolders, visibleFolders);
+        ReplaceVisibleEntries(BrowseFiles, visibleFiles);
+
+        SelectedBrowseFolder = ResolveVisibleSelection(BrowseFolders, SelectedBrowseFolder);
+        SelectedBrowseFile = ResolveVisibleSelection(BrowseFiles, SelectedBrowseFile);
+
+        if (!string.IsNullOrWhiteSpace(LookupFolderId))
+        {
+            BrowseSummary = BuildBrowseSummary(LookupFolderId);
+        }
+    }
+
+    private string BuildBrowseSummary(string folderId)
+    {
+        var baseSummary = $"נטענו {_allBrowseFolders.Count} תיקיות ו-{_allBrowseFiles.Count} קבצים מתוך folderId={folderId}.";
+        if (string.IsNullOrWhiteSpace(BrowseFolderFilterText) && string.IsNullOrWhiteSpace(BrowseFileFilterText))
+        {
+            return baseSummary;
+        }
+
+        return $"{baseSummary} מוצגים {BrowseFolders.Count} תיקיות ו-{BrowseFiles.Count} קבצים אחרי סינון.";
+    }
+
+    private static IReadOnlyList<AccFolderBrowseEntry> FilterBrowseEntries(
+        IReadOnlyList<AccFolderBrowseEntry> source,
+        string filterText)
+    {
+        if (string.IsNullOrWhiteSpace(filterText))
+        {
+            return source.ToArray();
+        }
+
+        var normalizedFilter = filterText.Trim();
+        return source
+            .Where(entry => entry.DisplayName.Contains(normalizedFilter, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
+    private static void ReplaceVisibleEntries(
+        ObservableCollection<AccFolderBrowseEntry> target,
+        IReadOnlyList<AccFolderBrowseEntry> source)
+    {
+        target.Clear();
+        foreach (var entry in source)
+        {
+            target.Add(entry);
+        }
+    }
+
+    private static AccFolderBrowseEntry? ResolveVisibleSelection(
+        ObservableCollection<AccFolderBrowseEntry> visibleEntries,
+        AccFolderBrowseEntry? currentSelection)
+    {
+        if (currentSelection is not null
+            && visibleEntries.Any(entry => string.Equals(entry.Id, currentSelection.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            return currentSelection;
+        }
+
+        return visibleEntries.FirstOrDefault();
+    }
+
     private sealed record AccBrowseLocation(string FolderId, string DisplayName);
+
+    private sealed record AccTreeSearchLocation(string? FolderId, string FolderPath);
 
     private enum AccBrowseNavigationMode
     {
@@ -792,4 +1093,13 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         Child = 1,
         Back = 2,
     }
+}
+
+public sealed record AccDocumentSearchResult(
+    string ProjectId,
+    string FolderId,
+    string FolderPath,
+    string FileName)
+{
+    public string DisplayText => $"{FileName} ({FolderPath})";
 }
