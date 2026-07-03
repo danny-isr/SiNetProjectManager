@@ -149,6 +149,24 @@ public sealed class ThemeStage6Tests
     }
 
     [Fact]
+    public void ThemeResourceLoader_is_invoked_from_theme_startup_and_runtime_applier()
+    {
+        var loaderSource = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "ThemeResourceLoader.cs"));
+        var applierSource = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "WpfThemeRuntimeApplier.cs"));
+        Assert.Contains("EnsureApplicationResourcesMerged", loaderSource, StringComparison.Ordinal);
+        Assert.Contains("EnsureApplicationResourcesMerged", applierSource, StringComparison.Ordinal);
+        Assert.Contains("Theme/TypographyResources.xaml", loaderSource, StringComparison.Ordinal);
+        Assert.Contains("ThemeStyles.xaml", loaderSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NewShellFactory_ensures_theme_resources_before_creating_shell()
+    {
+        var source = File.ReadAllText(Path.Combine(AppWpfRoot, "Shell", "NewShellFactory.cs"));
+        Assert.Contains("ThemeResourceLoader.EnsureApplicationResourcesMerged", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Theme_xaml_files_define_required_resource_keys()
     {
         var themeDir = Path.Combine(RepoRoot, "src", "SiNet.App.Wpf", "Theme");

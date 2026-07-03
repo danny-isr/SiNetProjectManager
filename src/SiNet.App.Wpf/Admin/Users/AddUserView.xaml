@@ -31,20 +31,23 @@
 
             <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
                        Text="חיפוש משתמש ב-Active Directory"
-                       FontWeight="SemiBold" Margin="0,0,0,8"/>
+                       Style="{DynamicResource SiTextMediumStyle}" Margin="0,0,0,8"/>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="חיפוש:" VerticalAlignment="Center"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="חיפוש:" VerticalAlignment="Center"
+                       Style="{DynamicResource SiTextNormalStyle}"/>
             <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,4">
                 <Button DockPanel.Dock="Left" Content="חפש"
                         Command="{Binding SearchDirectoryCommand}"
-                        Padding="12,4" Margin="0,0,8,0"/>
+                        Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,8,0"/>
                 <TextBox Text="{Binding DirectorySearchText, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{DynamicResource SiTextBoxStyle}"
                          VerticalContentAlignment="Center"/>
             </DockPanel>
 
             <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
                        Text="{Binding DirectoryStatusMessage}"
-                       Foreground="Gray" Margin="0,0,0,4"/>
+                       Style="{DynamicResource SiTextSmallStyle}"
+                       Foreground="{DynamicResource SiSecondaryBrush}" Margin="0,0,0,4"/>
 
             <ListBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
                      ItemsSource="{Binding DirectorySearchResults}"
@@ -104,8 +107,8 @@
                          AcceptsReturn="True" Height="60" TextWrapping="Wrap" Margin="0,4"/>
                 <TextBlock Text="{Binding ValidationMessage}" Foreground="Red" Margin="0,8,0,0"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
-                    <Button Content="שמור" Command="{Binding SaveCommand}" Padding="16,4" Margin="0,0,8,0"/>
-                    <Button Content="ביטול" Command="{Binding CancelCommand}" Padding="16,4"/>
+                    <Button Content="שמור" Command="{Binding SaveCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,8,0"/>
+                    <Button Content="ביטול" Command="{Binding CancelCommand}" Style="{DynamicResource SiSecondaryButtonStyle}"/>
                 </StackPanel>
             </StackPanel>
         </Grid>

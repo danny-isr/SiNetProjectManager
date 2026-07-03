@@ -12,6 +12,8 @@ public sealed class WpfThemeRuntimeApplier : IThemeRuntimeApplier
     {
         ArgumentNullException.ThrowIfNull(appearance);
 
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+
         if (System.Windows.Application.Current is not { Resources: { } resources })
         {
             return;
@@ -67,6 +69,7 @@ public sealed class ThemeStartupInitializer
 
     public async Task ApplySavedThemeAsync(CancellationToken cancellationToken = default)
     {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
         var settings = await _appSettings.GetUserAppSettingsAsync(cancellationToken).ConfigureAwait(false);
         _themeApplier.ApplyUserAppearance(settings.Appearance);
     }

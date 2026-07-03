@@ -185,13 +185,16 @@ Brushes: `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroun
 
 Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`
 
-XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml` (merged in `App.xaml`).
+XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml`.
+
+**V2 host:** production runs under `SiNetProjectManagerV2` — theme XAML is **not** in V2 `App.xaml`. `ThemeResourceLoader.EnsureApplicationResourcesMerged()` merges dictionaries into `Application.Current.Resources` at New System startup and before shell/native windows open.
 
 ### Runtime
 
-| Port | Implementation |
+| Port / component | Implementation |
 | --- | --- |
-| `IThemeRuntimeApplier` | `WpfThemeRuntimeApplier` (updates `Application.Current.Resources`) |
+| `IThemeRuntimeApplier` | `WpfThemeRuntimeApplier` (updates dynamic font/brush keys) |
+| `ThemeResourceLoader` | Merges theme XAML into Application resources (V2 host) |
 | Startup | `ThemeStartupInitializer` in New System pipeline (after auth) |
 | Save | `SettingsViewModel` → `IThemeRuntimeApplier.ApplyUserAppearance` when appearance changed |
 
@@ -199,7 +202,7 @@ Logging applier remains separate — appearance save does **not** call `ILogging
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions (partial), Secret Setup (partial), `SettingsView`, `InspectionShellView`, Email visual clone, Inspection visual clone.
+`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`, `InspectionShellView`, Email visual clone, Inspection visual clone.
 
 **Deferred:** legacy windows, `StartupModeSelectionWindow`, semantic/status colors (warning red, success green) in Email/Inspection detail rows, `SiCardStyle`.
 

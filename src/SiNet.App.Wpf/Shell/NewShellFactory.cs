@@ -6,6 +6,7 @@ using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 
@@ -37,6 +38,8 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// <inheritdoc />
     public Window CreateShell()
     {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+
         var currentUserDisplay = ResolveCurrentUserDisplay();
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
@@ -153,6 +156,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
     private void OpenNativeUserList()
     {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
         try
         {
             var window = _services.GetRequiredService<UserListWindow>();
@@ -229,6 +233,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
     private void OpenNativePersonalSettings()
     {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
         try
         {
             var factory = _services.GetRequiredService<ISettingsWindowFactory>();

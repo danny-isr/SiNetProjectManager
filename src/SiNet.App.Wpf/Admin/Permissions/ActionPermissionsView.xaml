@@ -13,13 +13,14 @@
         </Grid.RowDefinitions>
 
         <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
-            <Button Content="רענון" Command="{Binding RefreshCommand}" Padding="12,4" Margin="0,0,8,0"/>
-            <Button Content="שמור" Command="{Binding SaveCommand}" Padding="12,4" Margin="0,0,8,0"/>
+            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,8,0"/>
+            <Button Content="שמור" Command="{Binding SaveCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,8,0"/>
             <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
+                       Style="{DynamicResource SiTextSmallStyle}"
                        Text="* יש שינויים שלא נשמרו"
                        Foreground="DarkOrange"
                        Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibility}}"/>
-            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center" Margin="12,0,0,0"/>
         </StackPanel>
 
         <Grid Grid.Row="1">

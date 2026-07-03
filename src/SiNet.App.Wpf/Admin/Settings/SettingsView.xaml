@@ -318,9 +318,9 @@
         <TextBlock Grid.Row="1" Text="{Binding SummaryMessage}" Margin="0,12,0,8" TextWrapping="Wrap"/>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
-            <Button Content="שמור" Command="{Binding SaveCommand}" Padding="16,6" Margin="0,0,8,0"/>
-            <Button Content="טען מחדש" Command="{Binding ReloadCommand}" Padding="16,6" Margin="0,0,8,0"/>
-            <Button Content="ביטול" Command="{Binding CancelCommand}" Padding="16,6"/>
+            <Button Content="שמור" Command="{Binding SaveCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,8,0"/>
+            <Button Content="טען מחדש" Command="{Binding ReloadCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,8,0"/>
+            <Button Content="ביטול" Command="{Binding CancelCommand}" Style="{DynamicResource SiSecondaryButtonStyle}"/>
         </StackPanel>
     </Grid>
 </UserControl>
