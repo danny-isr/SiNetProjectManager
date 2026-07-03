@@ -27,6 +27,10 @@ public sealed class SettingsViewModel : ObservableObject
 
     private UserLoggingSettingsDto _loadedLogging = null!;
     private UserAppearanceSettingsDto _loadedAppearance = null!;
+    private UserAppearanceSettingsDto _originalAppearance = TypographyThemeDefaults.CreateDefaultAppearance();
+    private bool _hasAppearanceSnapshot;
+    private bool _savedSuccessfully;
+    private bool _isLoadingAppearance;
     private string _summaryMessage = string.Empty;
     private bool _isBusy;
 
@@ -58,7 +62,7 @@ public sealed class SettingsViewModel : ObservableObject
 
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy && (CanEditPersonalSettings || CanEditSystemSettings));
         ReloadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
-        CancelCommand = new RelayCommand(_ => RequestClose?.Invoke(false));
+        CancelCommand = new RelayCommand(_ => CancelAndClose());
         BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory(), _ => CanEditPersonalSettings);
         ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy && CanEditSystemSettings);
     }
@@ -195,7 +199,13 @@ public sealed class SettingsViewModel : ObservableObject
     public string FontFamily
     {
         get => _fontFamily;
-        set => SetField(ref _fontFamily, value);
+        set
+        {
+            if (SetField(ref _fontFamily, value))
+            {
+                TryApplyAppearancePreview();
+            }
+        }
     }
 
     public double BaseFontSize
@@ -205,7 +215,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _baseFontSize, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -217,7 +227,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _textTinyScale, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -229,7 +239,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _textSmallScale, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -241,7 +251,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _textNormalScale, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -253,7 +263,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _textMediumScale, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -265,7 +275,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _textLargeScale, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -277,7 +287,7 @@ public sealed class SettingsViewModel : ObservableObject
         {
             if (SetField(ref _textHugeScale, value))
             {
-                NotifyPreviewTypographyChanged();
+                OnAppearanceTypographyChanged();
             }
         }
     }
@@ -285,13 +295,25 @@ public sealed class SettingsViewModel : ObservableObject
     public string PrimaryColor
     {
         get => _primaryColor;
-        set => SetField(ref _primaryColor, value);
+        set
+        {
+            if (SetField(ref _primaryColor, value))
+            {
+                TryApplyAppearancePreviewIfColorValid(value);
+            }
+        }
     }
 
     public string SecondaryColor
     {
         get => _secondaryColor;
-        set => SetField(ref _secondaryColor, value);
+        set
+        {
+            if (SetField(ref _secondaryColor, value))
+            {
+                TryApplyAppearancePreviewIfColorValid(value);
+            }
+        }
     }
 
     public string DefaultPrimaryColor => TypographyThemeDefaults.PrimaryColor;
@@ -309,13 +331,25 @@ public sealed class SettingsViewModel : ObservableObject
     public string ForegroundColor
     {
         get => _foregroundColor;
-        set => SetField(ref _foregroundColor, value);
+        set
+        {
+            if (SetField(ref _foregroundColor, value))
+            {
+                TryApplyAppearancePreviewIfColorValid(value);
+            }
+        }
     }
 
     public string BackgroundColor
     {
         get => _backgroundColor;
-        set => SetField(ref _backgroundColor, value);
+        set
+        {
+            if (SetField(ref _backgroundColor, value))
+            {
+                TryApplyAppearancePreviewIfColorValid(value);
+            }
+        }
     }
 
     public bool AllowMultipleInstances
@@ -616,9 +650,21 @@ public sealed class SettingsViewModel : ObservableObject
             if (CanViewPersonalSettings)
             {
                 var user = await _appSettings.GetUserAppSettingsAsync().ConfigureAwait(true);
-                ApplyUserSettings(user);
+                _isLoadingAppearance = true;
+                try
+                {
+                    ApplyUserSettings(user);
+                    _originalAppearance = user.Appearance;
+                    _loadedAppearance = user.Appearance;
+                    _hasAppearanceSnapshot = true;
+                    _savedSuccessfully = false;
+                }
+                finally
+                {
+                    _isLoadingAppearance = false;
+                }
+
                 _loadedLogging = user.Logging;
-                _loadedAppearance = user.Appearance;
 
                 UserStatusColors.Clear();
                 if (_currentUser?.UserId is int userId)
@@ -708,11 +754,9 @@ public sealed class SettingsViewModel : ObservableObject
                     _loadedLogging = userDto.Logging;
                 }
 
-                if (AppearanceChanged(userDto.Appearance))
-                {
-                    _themeRuntime.ApplyUserAppearance(userDto.Appearance);
-                    _loadedAppearance = userDto.Appearance;
-                }
+                _loadedAppearance = userDto.Appearance;
+                _originalAppearance = userDto.Appearance;
+                _savedSuccessfully = true;
 
                 messages.Add("הגדרות אישיות נשמרו.");
             }
@@ -968,8 +1012,72 @@ public sealed class SettingsViewModel : ObservableObject
         => current.LoggingEnabled != _loadedLogging.LoggingEnabled
            || !string.Equals(current.LogDirectory, _loadedLogging.LogDirectory, StringComparison.Ordinal);
 
-    private bool AppearanceChanged(UserAppearanceSettingsDto current)
-        => !current.Equals(_loadedAppearance);
+    internal bool SavedSuccessfully => _savedSuccessfully;
+
+    internal void RollbackAppearanceIfNeeded()
+    {
+        if (_savedSuccessfully || !_hasAppearanceSnapshot || !CanEditPersonalSettings)
+        {
+            return;
+        }
+
+        _isLoadingAppearance = true;
+        try
+        {
+            _themeRuntime.ApplyUserAppearance(_originalAppearance);
+        }
+        finally
+        {
+            _isLoadingAppearance = false;
+        }
+    }
+
+    private void CancelAndClose()
+    {
+        RollbackAppearanceIfNeeded();
+        RequestClose?.Invoke(false);
+    }
+
+    private void OnAppearanceTypographyChanged()
+    {
+        NotifyPreviewTypographyChanged();
+        TryApplyAppearancePreview();
+    }
+
+    private void TryApplyAppearancePreviewIfColorValid(string colorValue)
+    {
+        if (TypographyThemeDefaults.IsValidHexColor(colorValue))
+        {
+            TryApplyAppearancePreview();
+        }
+    }
+
+    private void TryApplyAppearancePreview()
+    {
+        if (_isLoadingAppearance || !CanEditPersonalSettings || !_hasAppearanceSnapshot)
+        {
+            return;
+        }
+
+        _themeRuntime.ApplyUserAppearance(BuildPreviewAppearance());
+    }
+
+    private UserAppearanceSettingsDto BuildPreviewAppearance() => new(
+        FontFamily,
+        BaseFontSize,
+        TextTinyScale,
+        TextSmallScale,
+        TextNormalScale,
+        TextMediumScale,
+        TextLargeScale,
+        TextHugeScale,
+        ResolvePreviewColor(ForegroundColor, _originalAppearance.ForegroundColor),
+        ResolvePreviewColor(BackgroundColor, _originalAppearance.BackgroundColor),
+        ResolvePreviewColor(PrimaryColor, _originalAppearance.PrimaryColor),
+        ResolvePreviewColor(SecondaryColor, _originalAppearance.SecondaryColor));
+
+    private static string ResolvePreviewColor(string current, string fallback)
+        => TypographyThemeDefaults.IsValidHexColor(current) ? current.Trim() : fallback;
 
     private async Task ProbeCentralLogPathAsync()
     {

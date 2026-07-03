@@ -100,7 +100,84 @@ public sealed class ThemeStage6Tests
     }
 
     [Fact]
-    public async Task Personal_save_with_appearance_change_applies_theme_runtime_applier()
+    public async Task BaseFontSize_change_after_load_applies_theme_runtime_preview()
+    {
+        var themeRuntime = new Mock<IThemeRuntimeApplier>();
+        var vm = CreatePersonalViewModel(MockAppSettings(new TaskCompletionSource()), themeRuntime: themeRuntime);
+        await vm.LoadAsync();
+
+        vm.BaseFontSize = 16;
+
+        themeRuntime.Verify(
+            t => t.ApplyUserAppearance(It.Is<UserAppearanceSettingsDto>(a => a.BaseFontSize == 16)),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PrimaryColor_change_after_load_applies_theme_runtime_preview()
+    {
+        var themeRuntime = new Mock<IThemeRuntimeApplier>();
+        var vm = CreatePersonalViewModel(MockAppSettings(new TaskCompletionSource()), themeRuntime: themeRuntime);
+        await vm.LoadAsync();
+
+        vm.PrimaryColor = "#ABCDEF";
+
+        themeRuntime.Verify(
+            t => t.ApplyUserAppearance(It.Is<UserAppearanceSettingsDto>(a => a.PrimaryColor == "#ABCDEF")),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Invalid_hex_color_does_not_apply_theme_runtime_preview()
+    {
+        var themeRuntime = new Mock<IThemeRuntimeApplier>();
+        var vm = CreatePersonalViewModel(MockAppSettings(new TaskCompletionSource()), themeRuntime: themeRuntime);
+        await vm.LoadAsync();
+
+        vm.PrimaryColor = "#ZZZZZZ";
+
+        themeRuntime.Verify(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Cancel_rolls_back_appearance_to_original_snapshot()
+    {
+        var themeRuntime = new Mock<IThemeRuntimeApplier>();
+        UserAppearanceSettingsDto? lastApplied = null;
+        themeRuntime.Setup(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()))
+            .Callback<UserAppearanceSettingsDto>(a => lastApplied = a);
+
+        var vm = CreatePersonalViewModel(MockAppSettings(new TaskCompletionSource()), themeRuntime: themeRuntime);
+        await vm.LoadAsync();
+
+        vm.BaseFontSize = 20;
+        vm.CancelCommand.Execute(null);
+
+        Assert.NotNull(lastApplied);
+        Assert.Equal(UserAppSettingsDefaults.BaseFontSize, lastApplied.BaseFontSize);
+    }
+
+    [Fact]
+    public async Task Save_does_not_roll_back_appearance_after_successful_save()
+    {
+        var saveCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var themeRuntime = new Mock<IThemeRuntimeApplier>();
+        var vm = CreatePersonalViewModel(MockAppSettings(saveCompleted), themeRuntime: themeRuntime);
+        await vm.LoadAsync();
+
+        vm.BaseFontSize = 16;
+        vm.SaveCommand.Execute(null);
+        await saveCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        themeRuntime.Invocations.Clear();
+        vm.RollbackAppearanceIfNeeded();
+
+        themeRuntime.Verify(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()), Times.Never);
+        Assert.True(vm.SavedSuccessfully);
+    }
+
+    [Fact]
+    public async Task Personal_save_with_appearance_change_persists_without_extra_theme_apply_on_save()
     {
         var saveCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var appSettings = MockAppSettings(saveCompleted);
@@ -108,11 +185,19 @@ public sealed class ThemeStage6Tests
 
         var vm = CreatePersonalViewModel(appSettings, themeRuntime: themeRuntime);
         await vm.LoadAsync();
+
+        themeRuntime.Invocations.Clear();
         vm.PrimaryColor = "#ABCDEF";
+        themeRuntime.Verify(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()), Times.Once);
+
+        themeRuntime.Invocations.Clear();
         vm.SaveCommand.Execute(null);
         await saveCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
 
-        themeRuntime.Verify(t => t.ApplyUserAppearance(It.Is<UserAppearanceSettingsDto>(a => a.PrimaryColor == "#ABCDEF")), Times.Once);
+        appSettings.Verify(s => s.SaveUserAppSettingsAsync(
+            It.Is<UserAppSettingsDto>(d => d.Appearance.PrimaryColor == "#ABCDEF"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        themeRuntime.Verify(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()), Times.Never);
     }
 
     [Fact]
@@ -145,7 +230,7 @@ public sealed class ThemeStage6Tests
         await saveCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
 
         loggingRuntime.Verify(l => l.ApplyUserLogging(It.IsAny<UserLoggingSettingsDto>()), Times.Never);
-        themeRuntime.Verify(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()), Times.Once);
+        themeRuntime.Verify(t => t.ApplyUserAppearance(It.IsAny<UserAppearanceSettingsDto>()), Times.AtLeastOnce);
     }
 
     [Fact]

@@ -23,6 +23,7 @@ public sealed class SettingsWindow : Window
         Content = new SettingsView { DataContext = _viewModel };
         _viewModel.RequestClose += OnRequestClose;
         Closed += (_, _) => _viewModel.RequestClose -= OnRequestClose;
+        Closing += (_, _) => _viewModel.RollbackAppearanceIfNeeded();
         Loaded += async (_, _) => await _viewModel.LoadAsync().ConfigureAwait(true);
     }
 
