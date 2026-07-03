@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Infrastructure.Google;
+using SiNet.Infrastructure.Secrets;
 
 namespace SiNet.App.Wpf;
 
@@ -34,6 +35,7 @@ public partial class App : System.Windows.Application
         var services = new ServiceCollection();
         services.AddSingleton(_configuration);
         services.AddSiNet(ConfigureGmail);
+        services.AddSiNetSecrets();
         services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainWindow>();
 

@@ -7,6 +7,7 @@ using Microsoft.Win32;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 
 namespace SiNet.App.Wpf.Admin.Security;
@@ -17,10 +18,28 @@ public sealed class SecretSetupViewModel : ObservableObject
     private string _summaryMessage = string.Empty;
     private bool _isBusy;
     private string? _pendingGoogleJsonContent;
+    private string _accServiceModeSummary = "מצב ACC: טוען...";
+    private string _accServiceKeySummary = "מפתח ACC: טוען...";
+    private string _accServiceHealthSummary = "בריאות שירות ACC: טוען...";
+    private string _accServiceDiagnosticsSummary = "אבחון ACC: טוען...";
 
-    public SecretSetupViewModel(ISecretSetupService secretSetupService)
+    private readonly IAccServiceModeProvider _accServiceModeProvider;
+    private readonly IAccServiceKeyDiagnostics _accServiceKeyDiagnostics;
+    private readonly IAccServiceHealthProbe _accServiceHealthProbe;
+    private readonly IAccServiceDiagnosticsProbe _accServiceDiagnosticsProbe;
+
+    public SecretSetupViewModel(
+        ISecretSetupService secretSetupService,
+        IAccServiceModeProvider accServiceModeProvider,
+        IAccServiceKeyDiagnostics accServiceKeyDiagnostics,
+        IAccServiceHealthProbe accServiceHealthProbe,
+        IAccServiceDiagnosticsProbe accServiceDiagnosticsProbe)
     {
         _secretSetupService = secretSetupService ?? throw new ArgumentNullException(nameof(secretSetupService));
+        _accServiceModeProvider = accServiceModeProvider ?? throw new ArgumentNullException(nameof(accServiceModeProvider));
+        _accServiceKeyDiagnostics = accServiceKeyDiagnostics ?? throw new ArgumentNullException(nameof(accServiceKeyDiagnostics));
+        _accServiceHealthProbe = accServiceHealthProbe ?? throw new ArgumentNullException(nameof(accServiceHealthProbe));
+        _accServiceDiagnosticsProbe = accServiceDiagnosticsProbe ?? throw new ArgumentNullException(nameof(accServiceDiagnosticsProbe));
         Rows = new ObservableCollection<SecretRowViewModel>(
             SecretCatalog.All.Select(e => new SecretRowViewModel(e)));
         SaveCommand = new AsyncRelayCommand(SaveAndValidateAsync, () => !IsBusy);
@@ -71,6 +90,30 @@ public sealed class SecretSetupViewModel : ObservableObject
 
     public ICommand BrowseGoogleCredentialsCommand { get; }
 
+    public string AccServiceModeSummary
+    {
+        get => _accServiceModeSummary;
+        private set => SetField(ref _accServiceModeSummary, value);
+    }
+
+    public string AccServiceKeySummary
+    {
+        get => _accServiceKeySummary;
+        private set => SetField(ref _accServiceKeySummary, value);
+    }
+
+    public string AccServiceHealthSummary
+    {
+        get => _accServiceHealthSummary;
+        private set => SetField(ref _accServiceHealthSummary, value);
+    }
+
+    public string AccServiceDiagnosticsSummary
+    {
+        get => _accServiceDiagnosticsSummary;
+        private set => SetField(ref _accServiceDiagnosticsSummary, value);
+    }
+
     public event Action<bool>? RequestClose;
 
     public async Task LoadAsync()
@@ -96,6 +139,7 @@ public sealed class SecretSetupViewModel : ObservableObject
                 row.ApplyStatus(statuses.First(s => s.Key == row.Key));
             }
 
+            await RefreshAccControlPlaneAsync().ConfigureAwait(true);
             SummaryMessage = "טען סטטוס מפתחות מה-Vault.";
         }
         catch (Exception ex)
@@ -297,6 +341,7 @@ public sealed class SecretSetupViewModel : ObservableObject
                 result.Summary));
 
             SummaryMessage = result.Summary + (result.IsNetworkTest ? " (network test)" : " (local validation)");
+            await RefreshAccControlPlaneAsync().ConfigureAwait(true);
             MessageBox.Show(
                 result.Summary + Environment.NewLine + (result.Detail ?? string.Empty),
                 "AccService Test",
@@ -366,6 +411,7 @@ public sealed class SecretSetupViewModel : ObservableObject
                 .ConfigureAwait(true);
 
             await ApplyValidationResultsAsync(result).ConfigureAwait(true);
+            await RefreshAccControlPlaneAsync().ConfigureAwait(true);
 
             var sb = new StringBuilder();
             sb.AppendLine($"נשמרו {result.SavedCount} מפתחות ב-Credential Manager.");
@@ -403,5 +449,52 @@ public sealed class SecretSetupViewModel : ObservableObject
         {
             row.ApplyStatus(statuses.First(s => s.Key == row.Key));
         }
+    }
+
+    private async Task RefreshAccControlPlaneAsync()
+    {
+        var mode = _accServiceModeProvider.Mode;
+        var baseUrl = _accServiceModeProvider.BaseUrl;
+
+        AccServiceModeSummary = mode switch
+        {
+            AccServiceMode.Remote when !string.IsNullOrWhiteSpace(baseUrl)
+                => $"מצב ACC: שירות מרכזי ({baseUrl})",
+            _ => "מצב ACC: מקומי (AccService:BaseUrl לא מוגדר)",
+        };
+
+        var keyInfo = _accServiceKeyDiagnostics.Describe();
+        AccServiceKeySummary = keyInfo.HasApiKey
+            ? $"מפתח ACC: קיים ב-Vault, אורך {keyInfo.KeyLength}, hash {keyInfo.KeyHashPrefix}"
+            : "מפתח ACC: לא הוגדר ב-Vault.";
+
+        if (mode != AccServiceMode.Remote || string.IsNullOrWhiteSpace(baseUrl))
+        {
+            AccServiceHealthSummary = "בריאות שירות ACC: לא רלוונטי במצב מקומי.";
+            AccServiceDiagnosticsSummary = "אבחון ACC: מצב מקומי, ללא קריאת /v1/acc/diag.";
+            return;
+        }
+
+        var health = await _accServiceHealthProbe.CheckAsync().ConfigureAwait(true);
+        AccServiceHealthSummary = health.State switch
+        {
+            AccServiceHealthState.Online => $"בריאות שירות ACC: זמין ({health.Endpoint})",
+            AccServiceHealthState.NotConfigured => "בריאות שירות ACC: לא מוגדר.",
+            _ => $"בריאות שירות ACC: לא זמין ({health.Detail ?? "ללא פירוט"})",
+        };
+
+        var diagnostics = await _accServiceDiagnosticsProbe.ProbeAsync().ConfigureAwait(true);
+        if (!diagnostics.Reachable)
+        {
+            AccServiceDiagnosticsSummary =
+                $"אבחון ACC: לא זמין. Autodesk={diagnostics.AutodeskDetail ?? "ללא פירוט"}; DB={diagnostics.DbDetail ?? "ללא פירוט"}";
+            return;
+        }
+
+        var keySource = string.IsNullOrWhiteSpace(diagnostics.KeySource) ? "unknown" : diagnostics.KeySource;
+        var windowsUser = string.IsNullOrWhiteSpace(diagnostics.WindowsUser) ? "unknown" : diagnostics.WindowsUser;
+        var keyHash = string.IsNullOrWhiteSpace(diagnostics.KeyHashPrefix) ? "(none)" : diagnostics.KeyHashPrefix;
+        AccServiceDiagnosticsSummary =
+            $"אבחון ACC: user={windowsUser}; keySource={keySource}; keyHash={keyHash}; Autodesk={(diagnostics.AutodeskOk ? "ok" : "fail")}; DB={(diagnostics.DbOk ? "ok" : "fail")}";
     }
 }

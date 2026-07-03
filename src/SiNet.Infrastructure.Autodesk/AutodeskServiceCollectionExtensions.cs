@@ -10,8 +10,33 @@ namespace SiNet.Infrastructure.Autodesk;
 public static class AutodeskServiceCollectionExtensions
 {
     public static IServiceCollection AddSiNetAutodesk(this IServiceCollection services)
+        => services.AddSiNetAutodesk(static _ => { });
+
+    public static IServiceCollection AddSiNetAutodesk(
+        this IServiceCollection services,
+        Action<AccServiceControlPlaneOptions> configure)
     {
-        // TODO (ACC/Autodesk migration round): register IAccProjectService / IAccDocumentService.
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        services.AddSingleton(sp =>
+        {
+            var options = new AccServiceControlPlaneOptions();
+            configure(options);
+            return options;
+        });
+
+        services.AddSingleton<SiNet.Application.Abstractions.Autodesk.IAccServiceModeProvider, ConfigurationAccServiceModeProvider>();
+        services.AddSingleton<SiNet.Application.Abstractions.Autodesk.IAccServiceKeyDiagnostics, VaultAccServiceKeyDiagnostics>();
+
+        services.AddHttpClient<SiNet.Application.Abstractions.Autodesk.IAccServiceHealthProbe, HttpAccServiceHealthProbe>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+
+        services.AddHttpClient<SiNet.Application.Abstractions.Autodesk.IAccServiceDiagnosticsProbe, HttpAccServiceDiagnosticsProbe>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+
         return services;
     }
 }

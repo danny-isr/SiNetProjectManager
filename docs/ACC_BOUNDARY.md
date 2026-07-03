@@ -1,6 +1,6 @@
 # ACC Boundary
 
-> **Status:** Draft - boundary mapping round (2026-07-03)  
+> **Status:** Slice 1 implemented - control-plane seam only (2026-07-03)  
 > **Branch:** `SiWorkNet10`
 
 This document records the current ACC / Autodesk boundary across the clean stack and the legacy
@@ -14,8 +14,10 @@ production host. It exists to separate:
 
 - The clean architecture already defines a **minimal ACC seam** in `SiNet.Application`:
   `IAccProjectService`, `IAccDocumentService`, and `AccItemRef`.
-- `SiNet.Infrastructure.Autodesk` is still a **stub**. `AddSiNetAutodesk()` exists but does not
-  register any real implementations yet.
+- `SiNet.Infrastructure.Autodesk` now owns a **control-plane seam only**:
+  mode resolution, remote health/diag probes, and local API-key diagnostics.
+- `AddSiNetAutodesk()` now registers ACC control-plane services, but it still does **not**
+  register project/document adapters or any write-heavy provisioning/file services.
 - There is **no ACC LegacyBridge adapter** in `src/SiNet.LegacyBridge` today.
 - The legacy production host still owns the real ACC behavior: token/bootstrap wiring, remote-vs-local
   provisioning, filing/file IO, metadata, inbox reconciliation, health checks, and admin probes.
@@ -31,10 +33,21 @@ production host. It exists to separate:
 | `src/SiNet.Application/Abstractions/Autodesk/IAccProjectService.cs` | Clean port for discovering ACC projects | Port only; no implementation |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccDocumentService.cs` | Clean port for ACC item lookup by project/folder/file name | Port only; no implementation |
 | `src/SiNet.Application/Abstractions/Autodesk/AccItemRef.cs` | Value object for resolved ACC items | Present; not yet flowing through real adapter |
-| `src/SiNet.Infrastructure.Autodesk/AutodeskServiceCollectionExtensions.cs` | DI entry point for ACC module | Stub; no registrations |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccServiceModeProvider.cs` | Clean port for resolving local vs remote ACC service mode | Implemented in slice 1 |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccServiceHealthProbe.cs` | Clean port for probing remote ACC service health | Implemented in slice 1 |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccServiceDiagnosticsProbe.cs` | Clean port for safe remote ACC diagnostics | Implemented in slice 1 |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccServiceKeyDiagnostics.cs` | Clean port for local ACC API-key diagnostics | Implemented in slice 1 |
+| `src/SiNet.Application/Abstractions/Autodesk/AccServiceControlPlaneDtos.cs` | Mode/health/diag/key-info value objects | Implemented in slice 1 |
+| `src/SiNet.Infrastructure.Autodesk/AutodeskServiceCollectionExtensions.cs` | DI entry point for ACC module | Registers control-plane services only |
+| `src/SiNet.Infrastructure.Autodesk/ConfigurationAccServiceModeProvider.cs` | Resolves `AccService:BaseUrl` mode through the existing host configuration seam | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/HttpAccServiceHealthProbe.cs` | Remote `/v1/acc/health` adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/HttpAccServiceDiagnosticsProbe.cs` | Remote `/v1/acc/diag` adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/VaultAccServiceKeyDiagnostics.cs` | Local ACC API-key metadata adapter | Implemented |
+| `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` | First native UI consumer of the ACC control-plane seam | Implemented for read-only status/diag display |
 | `src/SiNet.LegacyBridge/LegacyBridgeServiceCollectionExtensions.cs` | Temporary bridge slot | No ACC bridge wired |
 
-Implication: the clean Autodesk module is currently a **shape**, not a migrated runtime.
+Implication: the clean Autodesk module is now a **real control-plane seam**, but not yet a
+migrated ACC runtime.
 
 ## 3. Legacy / Production Inventory
 
@@ -52,6 +65,14 @@ These files control:
 - remote `SiOffice.AccService` registration vs local in-process provisioning
 - API-key wiring for remote `AccService`
 - custom TLS/self-signed behavior for approved internal ACC service hosts
+
+Additional host note:
+
+- `src/SiNet.App.Wpf/App.xaml.cs` now explicitly calls `AddSiNetSecrets()` after `AddSiNet()`.
+  This host-level wiring is intentional: `SiNet.App.Composition` remains `net10.0`, while
+  `SiNet.Infrastructure.Secrets` is Windows-targeted. The ACC control-plane needs vault-backed
+  diagnostics, but that dependency cannot be pushed directly into the cross-platform composition
+  project without breaking the build graph.
 
 ### 3.2 Main concerns still owned by legacy
 
@@ -119,8 +140,8 @@ Recommended first migration slice for ACC:
 Scope:
 
 - document and isolate the `AccService:BaseUrl` mode switch
-- formalize remote provisioning / inbox-provisioning adapters as clean ports
-- keep health/probe behavior explicit
+- formalize mode/health/diagnostics/key-info as clean ports
+- keep remote health/probe behavior explicit
 - keep filing, file-store, metadata writes, and MoveToProject semantics untouched
 
 Why this slice first:
@@ -143,7 +164,8 @@ Until a separately approved slice says otherwise:
 
 ## 8. Immediate Next Step
 
-If ACC becomes the next implementation domain, the next useful work item is:
+Slice 1 is now in place. The next useful ACC work item is:
 
-- define the **ACC control-plane boundary** in clean terms (ports + adapters + host-mode rules),
-- while explicitly **deferring** filing/file-store/metadata write migration to later slices.
+- consume the new control-plane seam from native admin/status UI,
+- keep `IAccProjectService`, `IAccDocumentService`, provisioning, inbox bootstrap, filing,
+  metadata writes, and MoveToProject semantics deferred to later slices.

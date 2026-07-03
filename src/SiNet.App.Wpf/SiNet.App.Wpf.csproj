@@ -31,6 +31,7 @@
 	<ProjectReference Include="..\SiNet.App.Composition\SiNet.App.Composition.csproj" />
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
+	<ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
   </ItemGroup>
 
 </Project>
