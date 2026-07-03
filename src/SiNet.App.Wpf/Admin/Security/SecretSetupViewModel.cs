@@ -20,6 +20,7 @@ public sealed class SecretSetupViewModel : ObservableObject
     private string? _pendingGoogleJsonContent;
     private string _accServiceModeSummary = "מצב ACC: טוען...";
     private string _accServiceKeySummary = "מפתח ACC: טוען...";
+    private string _accServiceProjectsSummary = "פרויקטי ACC מוכרים: טוען...";
     private string _accServiceHealthSummary = "בריאות שירות ACC: טוען...";
     private string _accServiceDiagnosticsSummary = "אבחון ACC: טוען...";
 
@@ -91,6 +92,12 @@ public sealed class SecretSetupViewModel : ObservableObject
     {
         get => _accServiceKeySummary;
         private set => SetField(ref _accServiceKeySummary, value);
+    }
+
+    public string AccServiceProjectsSummary
+    {
+        get => _accServiceProjectsSummary;
+        private set => SetField(ref _accServiceProjectsSummary, value);
     }
 
     public string AccServiceHealthSummary
@@ -450,6 +457,7 @@ public sealed class SecretSetupViewModel : ObservableObject
 
         AccServiceModeSummary = presentation.ModeSummary;
         AccServiceKeySummary = presentation.KeySummary;
+        AccServiceProjectsSummary = presentation.ProjectsSummary;
         AccServiceHealthSummary = presentation.HealthSummary;
         AccServiceDiagnosticsSummary = presentation.DiagnosticsSummary;
     }

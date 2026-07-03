@@ -12,6 +12,7 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         var presenter = new AccControlPlaneStatusPresenter(
             new StubAccModeProvider(AccServiceMode.Remote, "https://acc.example.com"),
+            new StubAccProjectService(["b.project-1", "b.project-2"]),
             new StubAccKeyDiagnostics(new AccServiceKeyInfo(true, 44, "abc123def456")),
             new StubAccHealthProbe(new AccServiceHealthResult(true, AccServiceHealthState.Online, "https://acc.example.com/v1/acc/health", "Connected")),
             new StubAccDiagnosticsProbe(new AccServiceDiagnosticsResult(
@@ -32,6 +33,7 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("מצב הריצה הנוכחי", vm.HintText, StringComparison.Ordinal);
         Assert.Contains("acc.example.com", vm.ModeSummary, StringComparison.Ordinal);
         Assert.Contains("abc123def456", vm.KeySummary, StringComparison.Ordinal);
+        Assert.Contains("b.project-1", vm.ProjectsSummary, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", vm.HealthSummary, StringComparison.Ordinal);
         Assert.Contains("DOMAIN\\acc", vm.DiagnosticsSummary, StringComparison.Ordinal);
     }
@@ -42,6 +44,7 @@ public sealed class AccControlPlaneStatusWindowTests
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindowView.xaml");
 
         Assert.Contains("AccControlPlaneStatusView", xaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
     }
 
@@ -72,6 +75,12 @@ public sealed class AccControlPlaneStatusWindowTests
     private sealed class StubAccKeyDiagnostics(AccServiceKeyInfo result) : IAccServiceKeyDiagnostics
     {
         public AccServiceKeyInfo Describe() => result;
+    }
+
+    private sealed class StubAccProjectService(IReadOnlyList<string> projectIds) : IAccProjectService
+    {
+        public Task<IReadOnlyList<string>> GetProjectIdsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(projectIds);
     }
 
     private sealed class StubAccHealthProbe(AccServiceHealthResult result) : IAccServiceHealthProbe

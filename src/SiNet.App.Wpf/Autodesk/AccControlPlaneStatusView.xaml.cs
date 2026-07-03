@@ -33,6 +33,13 @@ public partial class AccControlPlaneStatusView : UserControl
             typeof(AccControlPlaneStatusView),
             new PropertyMetadata(string.Empty));
 
+    public static readonly DependencyProperty ProjectsSummaryProperty =
+        DependencyProperty.Register(
+            nameof(ProjectsSummary),
+            typeof(string),
+            typeof(AccControlPlaneStatusView),
+            new PropertyMetadata(string.Empty));
+
     public static readonly DependencyProperty DiagnosticsSummaryProperty =
         DependencyProperty.Register(
             nameof(DiagnosticsSummary),
@@ -67,6 +74,12 @@ public partial class AccControlPlaneStatusView : UserControl
     {
         get => (string)GetValue(HealthSummaryProperty);
         set => SetValue(HealthSummaryProperty, value);
+    }
+
+    public string ProjectsSummary
+    {
+        get => (string)GetValue(ProjectsSummaryProperty);
+        set => SetValue(ProjectsSummaryProperty, value);
     }
 
     public string DiagnosticsSummary

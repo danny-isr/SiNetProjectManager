@@ -529,6 +529,7 @@ public sealed class ThemeStage6Tests
             new Mock<IStatusColorSettingsService>().Object,
             new AccControlPlaneStatusPresenter(
                 accModeProvider.Object,
+                Mock.Of<IAccProjectService>(),
                 accKeyDiagnostics.Object,
                 Mock.Of<IAccServiceHealthProbe>(),
                 Mock.Of<IAccServiceDiagnosticsProbe>()),

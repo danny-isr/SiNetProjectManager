@@ -46,6 +46,7 @@ public sealed class NewShellAccStatusMenuTests
             new AccControlPlaneStatusWindowViewModel(
                 new AccControlPlaneStatusPresenter(
                     new StubAccModeProvider(),
+                    new StubAccProjectService(),
                     new StubAccKeyDiagnostics(),
                     new StubAccHealthProbe(),
                     new StubAccDiagnosticsProbe()))));
@@ -92,6 +93,12 @@ public sealed class NewShellAccStatusMenuTests
     private sealed class StubAccKeyDiagnostics : IAccServiceKeyDiagnostics
     {
         public AccServiceKeyInfo Describe() => new(false, 0, null);
+    }
+
+    private sealed class StubAccProjectService : IAccProjectService
+    {
+        public Task<IReadOnlyList<string>> GetProjectIdsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class StubAccHealthProbe : IAccServiceHealthProbe

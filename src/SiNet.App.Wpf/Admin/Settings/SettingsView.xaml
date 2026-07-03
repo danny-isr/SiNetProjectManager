@@ -193,6 +193,7 @@
                                                          HintText="{Binding AccServiceRuntimeHint}"
                                                          ModeSummary="{Binding AccServiceRuntimeModeSummary}"
                                                          KeySummary="{Binding AccServiceRuntimeKeySummary}"
+                                                         ProjectsSummary="{Binding AccServiceRuntimeProjectsSummary}"
                                                          HealthSummary="{Binding AccServiceRuntimeHealthSummary}"
                                                          DiagnosticsSummary="{Binding AccServiceRuntimeDiagnosticsSummary}"/>
                     <TextBlock Text="Bootstrap Admin Email"/>

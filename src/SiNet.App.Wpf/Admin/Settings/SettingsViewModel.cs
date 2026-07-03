@@ -39,6 +39,7 @@ public sealed class SettingsViewModel : ObservableObject
         "מצב הריצה להלן משקף את ההוסט הנוכחי בלבד. שמירת Base URL כותבת ל-DB; restart נדרש כדי להחיל את הערך החדש.";
     private string _accServiceRuntimeModeSummary = "מצב ריצה ACC: לא נטען.";
     private string _accServiceRuntimeKeySummary = "מפתח ריצה ACC: לא נטען.";
+    private string _accServiceRuntimeProjectsSummary = "פרויקטי ריצה ACC מוכרים: לא נטענו.";
     private string _accServiceRuntimeHealthSummary = "בריאות ריצה ACC: לא נטענה.";
     private string _accServiceRuntimeDiagnosticsSummary = "אבחון ריצה ACC: לא נטען.";
 
@@ -672,6 +673,12 @@ public sealed class SettingsViewModel : ObservableObject
         private set => SetField(ref _accServiceRuntimeKeySummary, value);
     }
 
+    public string AccServiceRuntimeProjectsSummary
+    {
+        get => _accServiceRuntimeProjectsSummary;
+        private set => SetField(ref _accServiceRuntimeProjectsSummary, value);
+    }
+
     public string AccServiceRuntimeHealthSummary
     {
         get => _accServiceRuntimeHealthSummary;
@@ -1199,6 +1206,7 @@ public sealed class SettingsViewModel : ObservableObject
         AccServiceRuntimeHint = presentation.Hint ?? AccServiceRuntimeHint;
         AccServiceRuntimeModeSummary = presentation.ModeSummary;
         AccServiceRuntimeKeySummary = presentation.KeySummary;
+        AccServiceRuntimeProjectsSummary = presentation.ProjectsSummary;
         AccServiceRuntimeHealthSummary = presentation.HealthSummary;
         AccServiceRuntimeDiagnosticsSummary = presentation.DiagnosticsSummary;
     }

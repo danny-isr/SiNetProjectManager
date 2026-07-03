@@ -25,6 +25,7 @@
             </TextBlock>
             <TextBlock Text="{Binding ModeSummary, ElementName=Root}" Margin="0,8,0,0" TextWrapping="Wrap"/>
             <TextBlock Text="{Binding KeySummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding ProjectsSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <TextBlock Text="{Binding HealthSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <TextBlock Text="{Binding DiagnosticsSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>

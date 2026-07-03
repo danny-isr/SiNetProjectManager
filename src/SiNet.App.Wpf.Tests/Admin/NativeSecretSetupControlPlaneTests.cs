@@ -14,6 +14,7 @@ public sealed class NativeSecretSetupControlPlaneTests
     {
         var vm = CreateViewModel(
             new StubAccModeProvider(AccServiceMode.Remote, "https://acc.example.com"),
+            new StubAccProjectService(["b.project-1", "b.project-2"]),
             new StubAccKeyDiagnostics(new AccServiceKeyInfo(true, 44, "abc123def456")),
             new StubAccHealthProbe(new AccServiceHealthResult(true, AccServiceHealthState.Online, "https://acc.example.com/v1/acc/health", "Connected")),
             new StubAccDiagnosticsProbe(new AccServiceDiagnosticsResult(
@@ -32,6 +33,7 @@ public sealed class NativeSecretSetupControlPlaneTests
 
         Assert.Contains("https://acc.example.com", vm.AccServiceModeSummary, StringComparison.Ordinal);
         Assert.Contains("abc123def456", vm.AccServiceKeySummary, StringComparison.Ordinal);
+        Assert.Contains("b.project-1", vm.AccServiceProjectsSummary, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", vm.AccServiceHealthSummary, StringComparison.Ordinal);
         Assert.Contains("DOMAIN\\user", vm.AccServiceDiagnosticsSummary, StringComparison.Ordinal);
         Assert.Contains("CredentialManager", vm.AccServiceDiagnosticsSummary, StringComparison.Ordinal);
@@ -44,6 +46,7 @@ public sealed class NativeSecretSetupControlPlaneTests
         var diagnosticsProbe = new CountingAccDiagnosticsProbe();
         var vm = CreateViewModel(
             new StubAccModeProvider(AccServiceMode.Local, null),
+            new StubAccProjectService([]),
             new StubAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null)),
             healthProbe,
             diagnosticsProbe);
@@ -52,6 +55,7 @@ public sealed class NativeSecretSetupControlPlaneTests
 
         Assert.Contains("מקומי", vm.AccServiceModeSummary, StringComparison.Ordinal);
         Assert.Contains("לא הוגדר", vm.AccServiceKeySummary, StringComparison.Ordinal);
+        Assert.Contains("לא נמצאו", vm.AccServiceProjectsSummary, StringComparison.Ordinal);
         Assert.Contains("לא רלוונטי", vm.AccServiceHealthSummary, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/diag", vm.AccServiceDiagnosticsSummary, StringComparison.Ordinal);
         Assert.Equal(0, healthProbe.CallCount);
@@ -65,12 +69,14 @@ public sealed class NativeSecretSetupControlPlaneTests
 
         Assert.Contains("AccServiceModeSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceKeySummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccServiceProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceHealthSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceDiagnosticsSummary", xaml, StringComparison.Ordinal);
     }
 
     private static SecretSetupViewModel CreateViewModel(
         IAccServiceModeProvider modeProvider,
+        IAccProjectService projectService,
         IAccServiceKeyDiagnostics keyDiagnostics,
         IAccServiceHealthProbe healthProbe,
         IAccServiceDiagnosticsProbe diagnosticsProbe) =>
@@ -78,6 +84,7 @@ public sealed class NativeSecretSetupControlPlaneTests
             new StubSecretSetupService(),
             new AccControlPlaneStatusPresenter(
                 modeProvider,
+                projectService,
                 keyDiagnostics,
                 healthProbe,
                 diagnosticsProbe));
@@ -142,6 +149,12 @@ public sealed class NativeSecretSetupControlPlaneTests
     private sealed class StubAccKeyDiagnostics(AccServiceKeyInfo result) : IAccServiceKeyDiagnostics
     {
         public AccServiceKeyInfo Describe() => result;
+    }
+
+    private sealed class StubAccProjectService(IReadOnlyList<string> projectIds) : IAccProjectService
+    {
+        public Task<IReadOnlyList<string>> GetProjectIdsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(projectIds);
     }
 
     private sealed class StubAccHealthProbe(AccServiceHealthResult result) : IAccServiceHealthProbe

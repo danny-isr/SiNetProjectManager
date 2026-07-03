@@ -9,6 +9,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     private string? _hintText;
     private string _modeSummary = "טוען...";
     private string _keySummary = "טוען...";
+    private string _projectsSummary = "טוען...";
     private string _healthSummary = "טוען...";
     private string _diagnosticsSummary = "טוען...";
     private string _summaryMessage = string.Empty;
@@ -36,6 +37,12 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     {
         get => _keySummary;
         private set => SetField(ref _keySummary, value);
+    }
+
+    public string ProjectsSummary
+    {
+        get => _projectsSummary;
+        private set => SetField(ref _projectsSummary, value);
     }
 
     public string HealthSummary
@@ -82,6 +89,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             HintText = presentation.Hint;
             ModeSummary = presentation.ModeSummary;
             KeySummary = presentation.KeySummary;
+            ProjectsSummary = presentation.ProjectsSummary;
             HealthSummary = presentation.HealthSummary;
             DiagnosticsSummary = presentation.DiagnosticsSummary;
             SummaryMessage = "סטטוס ACC נטען.";

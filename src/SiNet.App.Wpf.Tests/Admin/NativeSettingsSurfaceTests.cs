@@ -146,6 +146,7 @@ public sealed class NativeSettingsSurfaceTests
             isAdmin: true,
             userId: 1,
             SettingsSurfaceScope.SystemAdmin,
+            accProjectService: MockAccProjectService(["b.project-1", "b.project-2"]),
             accModeProvider: MockAccModeProvider(AccServiceMode.Remote, "https://runtime-acc.example.com"),
             accKeyDiagnostics: MockAccKeyDiagnostics(new AccServiceKeyInfo(true, 44, "abc123def456")),
             accHealthProbe: MockAccHealthProbe(new AccServiceHealthResult(true, AccServiceHealthState.Online, "https://runtime-acc.example.com/v1/acc/health", "Connected")),
@@ -165,6 +166,7 @@ public sealed class NativeSettingsSurfaceTests
 
         Assert.Contains("runtime-acc.example.com", vm.AccServiceRuntimeModeSummary, StringComparison.Ordinal);
         Assert.Contains("abc123def456", vm.AccServiceRuntimeKeySummary, StringComparison.Ordinal);
+        Assert.Contains("b.project-1", vm.AccServiceRuntimeProjectsSummary, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", vm.AccServiceRuntimeHealthSummary, StringComparison.Ordinal);
         Assert.Contains("DOMAIN\\runtime", vm.AccServiceRuntimeDiagnosticsSummary, StringComparison.Ordinal);
     }
@@ -201,6 +203,7 @@ public sealed class NativeSettingsSurfaceTests
 
         Assert.Contains("AccServiceRuntimeHint", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeModeSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccServiceRuntimeProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeHealthSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeDiagnosticsSummary", xaml, StringComparison.Ordinal);
     }
@@ -423,6 +426,7 @@ public sealed class NativeSettingsSurfaceTests
         Mock<ISystemSettingsCommandService>? systemCommand = null,
         Mock<ILoggingRuntimeApplier>? loggingRuntime = null,
         Mock<IThemeRuntimeApplier>? themeRuntime = null,
+        Mock<IAccProjectService>? accProjectService = null,
         Mock<IAccServiceModeProvider>? accModeProvider = null,
         Mock<IAccServiceKeyDiagnostics>? accKeyDiagnostics = null,
         Mock<IAccServiceHealthProbe>? accHealthProbe = null,
@@ -433,6 +437,7 @@ public sealed class NativeSettingsSurfaceTests
         systemCommand ??= new Mock<ISystemSettingsCommandService>();
         loggingRuntime ??= new Mock<ILoggingRuntimeApplier>();
         themeRuntime ??= new Mock<IThemeRuntimeApplier>();
+        accProjectService ??= MockAccProjectService([]);
         accModeProvider ??= MockAccModeProvider(AccServiceMode.Local, null);
         accKeyDiagnostics ??= MockAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null));
         accHealthProbe ??= MockAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured"));
@@ -461,6 +466,7 @@ public sealed class NativeSettingsSurfaceTests
             statusColors.Object,
             new AccControlPlaneStatusPresenter(
                 accModeProvider.Object,
+                accProjectService.Object,
                 accKeyDiagnostics.Object,
                 accHealthProbe.Object,
                 accDiagnosticsProbe.Object),
@@ -474,6 +480,13 @@ public sealed class NativeSettingsSurfaceTests
         var mock = new Mock<IAccServiceModeProvider>();
         mock.SetupGet(x => x.Mode).Returns(mode);
         mock.SetupGet(x => x.BaseUrl).Returns(baseUrl);
+        return mock;
+    }
+
+    private static Mock<IAccProjectService> MockAccProjectService(IReadOnlyList<string> projectIds)
+    {
+        var mock = new Mock<IAccProjectService>();
+        mock.Setup(x => x.GetProjectIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(projectIds);
         return mock;
     }
 

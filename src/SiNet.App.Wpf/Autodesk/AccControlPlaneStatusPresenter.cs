@@ -13,17 +13,21 @@ internal sealed record AccControlPlaneStatusPresentation(
     string? Hint,
     string ModeSummary,
     string KeySummary,
+    string ProjectsSummary,
     string HealthSummary,
     string DiagnosticsSummary);
 
 public sealed class AccControlPlaneStatusPresenter(
     IAccServiceModeProvider accServiceModeProvider,
+    IAccProjectService accProjectService,
     IAccServiceKeyDiagnostics accServiceKeyDiagnostics,
     IAccServiceHealthProbe accServiceHealthProbe,
     IAccServiceDiagnosticsProbe accServiceDiagnosticsProbe)
 {
     private readonly IAccServiceModeProvider _accServiceModeProvider = accServiceModeProvider
         ?? throw new ArgumentNullException(nameof(accServiceModeProvider));
+    private readonly IAccProjectService _accProjectService = accProjectService
+        ?? throw new ArgumentNullException(nameof(accProjectService));
     private readonly IAccServiceKeyDiagnostics _accServiceKeyDiagnostics = accServiceKeyDiagnostics
         ?? throw new ArgumentNullException(nameof(accServiceKeyDiagnostics));
     private readonly IAccServiceHealthProbe _accServiceHealthProbe = accServiceHealthProbe
@@ -55,6 +59,7 @@ public sealed class AccControlPlaneStatusPresenter(
         var keySummary = keyInfo.HasApiKey
             ? $"{labels.KeyPresentPrefix}, אורך {keyInfo.KeyLength}, hash {keyInfo.KeyHashPrefix}"
             : labels.KeyMissingText;
+        var projectsSummary = await BuildProjectsSummaryAsync(labels, cancellationToken).ConfigureAwait(true);
 
         if (mode != AccServiceMode.Remote || string.IsNullOrWhiteSpace(baseUrl))
         {
@@ -62,6 +67,7 @@ public sealed class AccControlPlaneStatusPresenter(
                 labels.Hint,
                 modeSummary,
                 keySummary,
+                projectsSummary,
                 labels.HealthLocalText,
                 labels.DiagnosticsLocalText);
         }
@@ -83,8 +89,32 @@ public sealed class AccControlPlaneStatusPresenter(
             labels.Hint,
             modeSummary,
             keySummary,
+            projectsSummary,
             healthSummary,
             diagnosticsSummary);
+    }
+
+    private async Task<string> BuildProjectsSummaryAsync(
+        AccControlPlaneStatusLabels labels,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var projectIds = await _accProjectService.GetProjectIdsAsync(cancellationToken).ConfigureAwait(true);
+            if (projectIds.Count == 0)
+            {
+                return labels.ProjectsEmptyText;
+            }
+
+            var preview = string.Join(", ", projectIds.Take(3));
+            var extraCount = projectIds.Count - 3;
+            var suffix = extraCount > 0 ? $" (+{extraCount} נוספים)" : string.Empty;
+            return $"{labels.ProjectsPrefix}: {projectIds.Count} ({preview}{suffix})";
+        }
+        catch (Exception ex)
+        {
+            return $"{labels.ProjectsErrorPrefix}: {ex.Message}";
+        }
     }
 
     private static string ResolveOrUnknown(string? value) =>
@@ -99,6 +129,9 @@ public sealed class AccControlPlaneStatusPresenter(
         ModeLocalText: "מצב ACC: מקומי (AccService:BaseUrl לא מוגדר)",
         KeyPresentPrefix: "מפתח ACC: קיים ב-Vault",
         KeyMissingText: "מפתח ACC: לא הוגדר ב-Vault.",
+        ProjectsPrefix: "פרויקטי ACC מוכרים",
+        ProjectsEmptyText: "פרויקטי ACC מוכרים: לא נמצאו מזהים ידועים.",
+        ProjectsErrorPrefix: "פרויקטי ACC מוכרים: שגיאה בקריאה",
         HealthLocalText: "בריאות שירות ACC: לא רלוונטי במצב מקומי.",
         HealthOnlinePrefix: "בריאות שירות ACC: זמין",
         HealthNotConfiguredText: "בריאות שירות ACC: לא מוגדר.",
@@ -113,6 +146,9 @@ public sealed class AccControlPlaneStatusPresenter(
         ModeLocalText: "מצב ריצה ACC: מקומי (AccService:BaseUrl לא מוגדר בהוסט הנוכחי)",
         KeyPresentPrefix: "מפתח ריצה ACC: קיים ב-Vault",
         KeyMissingText: "מפתח ריצה ACC: לא הוגדר ב-Vault.",
+        ProjectsPrefix: "פרויקטי ריצה ACC מוכרים",
+        ProjectsEmptyText: "פרויקטי ריצה ACC מוכרים: לא נמצאו מזהים ידועים.",
+        ProjectsErrorPrefix: "פרויקטי ריצה ACC מוכרים: שגיאה בקריאה",
         HealthLocalText: "בריאות ריצה ACC: לא רלוונטי במצב מקומי.",
         HealthOnlinePrefix: "בריאות ריצה ACC: זמין",
         HealthNotConfiguredText: "בריאות ריצה ACC: לא מוגדר.",
@@ -127,6 +163,9 @@ public sealed class AccControlPlaneStatusPresenter(
         ModeLocalText: "מצב ריצה ACC: מקומי (AccService:BaseUrl לא מוגדר בהוסט הנוכחי)",
         KeyPresentPrefix: "מפתח ריצה ACC: קיים ב-Vault",
         KeyMissingText: "מפתח ריצה ACC: לא הוגדר ב-Vault.",
+        ProjectsPrefix: "פרויקטי ריצה ACC מוכרים",
+        ProjectsEmptyText: "פרויקטי ריצה ACC מוכרים: לא נמצאו מזהים ידועים.",
+        ProjectsErrorPrefix: "פרויקטי ריצה ACC מוכרים: שגיאה בקריאה",
         HealthLocalText: "בריאות ריצה ACC: לא רלוונטי במצב מקומי.",
         HealthOnlinePrefix: "בריאות ריצה ACC: זמין",
         HealthNotConfiguredText: "בריאות ריצה ACC: לא מוגדר.",
@@ -142,6 +181,9 @@ internal sealed record AccControlPlaneStatusLabels(
     string ModeLocalText,
     string KeyPresentPrefix,
     string KeyMissingText,
+    string ProjectsPrefix,
+    string ProjectsEmptyText,
+    string ProjectsErrorPrefix,
     string HealthLocalText,
     string HealthOnlinePrefix,
     string HealthNotConfiguredText,

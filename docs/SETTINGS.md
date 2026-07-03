@@ -141,8 +141,9 @@ Menu **הגדרות מערכת** — gated by `System.Settings.Write` (Administr
 Save / Reload / Cancel. Central log path probe via `ILoggingSettingsCommandService.ProbeCentralLogPathAsync`.
 
 The `ACC (גלובלי)` tab also shows a read-only **runtime ACC status panel** from the clean
-control-plane seam. That panel reflects the **current host process** (mode, key metadata, health,
-diag) and is intentionally separate from the editable stored `AccService.BaseUrl` field.
+control-plane seam. That panel reflects the **current host process** (mode, key metadata, known ACC
+project IDs, health, diag) and is intentionally separate from the editable stored
+`AccService.BaseUrl` field.
 
 ---
 
