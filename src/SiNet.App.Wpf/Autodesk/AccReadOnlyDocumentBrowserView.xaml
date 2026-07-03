@@ -3,6 +3,49 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              FlowDirection="RightToLeft">
     <StackPanel>
+        <TextBlock Text="Live ACC Discovery (read-only)"
+                   FontWeight="SemiBold"/>
+        <TextBlock Text="{Binding LiveDiscoverySummary}"
+                   Margin="0,6,0,0"
+                   Opacity="0.8"
+                   TextWrapping="Wrap"/>
+
+        <TextBlock Text="ACC Hubs" Margin="0,10,0,0"/>
+        <ComboBox ItemsSource="{Binding LiveHubs}"
+                  SelectedItem="{Binding SelectedLiveHub, Mode=TwoWay}"
+                  DisplayMemberPath="DisplayText"
+                  Margin="0,4,0,0"
+                  IsEditable="True"
+                  IsTextSearchEnabled="True"
+                  TextSearch.TextPath="DisplayText"
+                  IsSynchronizedWithCurrentItem="False"/>
+
+        <TextBlock Text="Live ACC Projects" Margin="0,10,0,0"/>
+        <ComboBox ItemsSource="{Binding LiveProjects}"
+                  SelectedItem="{Binding SelectedLiveProject, Mode=TwoWay}"
+                  DisplayMemberPath="DisplayText"
+                  Margin="0,4,0,0"
+                  IsEditable="True"
+                  IsTextSearchEnabled="True"
+                  TextSearch.TextPath="DisplayText"
+                  IsSynchronizedWithCurrentItem="False"/>
+
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Left"
+                    Margin="0,8,0,0">
+            <Button Content="טען hubs חיים"
+                    Command="{Binding LoadLiveHubsCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Margin="0,0,8,0"/>
+            <Button Content="טען פרויקטים חיים"
+                    Command="{Binding LoadLiveProjectsCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Margin="0,0,8,0"/>
+            <Button Content="השתמש בפרויקט live"
+                    Command="{Binding UseSelectedLiveProjectCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"/>
+        </StackPanel>
+
         <TextBlock Text="ACC Project ID" Margin="0,12,0,0"/>
         <TextBlock Text="Known ACC Project IDs"
                    Margin="0,8,0,0"

@@ -53,6 +53,7 @@ public sealed class NewShellAccStatusMenuTests
                 new StubAccProjectCatalogService(),
                 new StubAccDocumentService(),
                 new StubAccFolderBrowserService(),
+                new StubAccLiveProjectDiscoveryService(),
                 new StubAccLookupSeedService(),
                 new StubAccResolvedDocsUrlLauncher(),
                 new StubClipboardTextWriter())));
@@ -110,6 +111,15 @@ public sealed class NewShellAccStatusMenuTests
     private sealed class StubAccProjectCatalogService : IAccProjectCatalogService
     {
         public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<AccProjectCatalogEntry>>([]);
+    }
+
+    private sealed class StubAccLiveProjectDiscoveryService : IAccLiveProjectDiscoveryService
+    {
+        public Task<IReadOnlyList<AccHubCatalogEntry>> GetHubsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<AccHubCatalogEntry>>([]);
+
+        public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(string hubId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<AccProjectCatalogEntry>>([]);
     }
 

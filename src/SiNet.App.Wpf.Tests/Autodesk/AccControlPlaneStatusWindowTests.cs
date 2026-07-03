@@ -33,6 +33,7 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1", "b.project-2"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -68,6 +69,7 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService(
             [
                 new AccDocumentLookupSeed("b.project-1", "folder-22", "drawing.pdf", "item-77", "EmailInboxAttachment 2026-07-03 23:00")
@@ -91,6 +93,7 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -122,6 +125,7 @@ public sealed class AccControlPlaneStatusWindowTests
                     new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
                     new AccFolderBrowseEntry("item-b", "B File.pdf", AccFolderEntryKind.Item, 123, null, null),
                 ])),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -168,6 +172,7 @@ public sealed class AccControlPlaneStatusWindowTests
                     _ => null,
                 };
             }),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -198,6 +203,7 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService([]),
             launcher,
             clipboard);
@@ -227,6 +233,7 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildLiveDiscoveryService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -243,6 +250,30 @@ public sealed class AccControlPlaneStatusWindowTests
             vm.Browser.LookupResolvedDocsUrl);
     }
 
+    [Fact]
+    public async Task Status_window_view_model_can_load_live_hubs_projects_and_use_selected_project()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            BuildCatalogService("b.project-1"),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            new StubAccLiveProjectDiscoveryService(
+                [new AccHubCatalogEntry("b.hub-1", "Primary Hub", "EMEA")],
+                [new AccProjectCatalogEntry("b.live-2", "Live Tower", "LiveAcc")]),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
+
+        await vm.Browser.LoadLiveHubsAsync();
+        await vm.Browser.LoadLiveProjectsAsync();
+        vm.Browser.UseSelectedLiveProjectCommand.Execute(null);
+
+        Assert.Equal("b.live-2", vm.Browser.LookupProjectId);
+        Assert.Equal("Live Tower", vm.Browser.SelectedKnownProject?.DisplayName);
+        Assert.Contains("נטענו", vm.Browser.LiveDiscoverySummary, StringComparison.Ordinal);
+    }
+
     private static AccControlPlaneStatusPresenter BuildPresenter() =>
         new(
             new StubAccModeProvider(AccServiceMode.Local, null),
@@ -255,6 +286,9 @@ public sealed class AccControlPlaneStatusWindowTests
         new(projectIds
             .Select(projectId => new AccProjectCatalogEntry(projectId, $"Project {projectId[^1]}", "ProjectAccMapping"))
             .ToArray());
+
+    private static StubAccLiveProjectDiscoveryService BuildLiveDiscoveryService() =>
+        new([], []);
 
     private static string ReadRepoFile(string relativePath)
     {
@@ -294,6 +328,17 @@ public sealed class AccControlPlaneStatusWindowTests
     private sealed class StubAccProjectCatalogService(IReadOnlyList<AccProjectCatalogEntry> projects) : IAccProjectCatalogService
     {
         public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(projects);
+    }
+
+    private sealed class StubAccLiveProjectDiscoveryService(
+        IReadOnlyList<AccHubCatalogEntry> hubs,
+        IReadOnlyList<AccProjectCatalogEntry> projects) : IAccLiveProjectDiscoveryService
+    {
+        public Task<IReadOnlyList<AccHubCatalogEntry>> GetHubsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(hubs);
+
+        public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(string hubId, CancellationToken cancellationToken = default) =>
             Task.FromResult(projects);
     }
 

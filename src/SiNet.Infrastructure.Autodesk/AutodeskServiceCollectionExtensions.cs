@@ -43,13 +43,21 @@ public static class AutodeskServiceCollectionExtensions
             new Bim360AccFolderItemsReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<IAccFolderContentsReader>(sp =>
             new Bim360AccFolderContentsReader(sp.GetService<ITokenProvider>()));
+        services.AddTransient<IAccHubReader>(sp =>
+            new Bim360AccHubReader(sp.GetService<ITokenProvider>()));
+        services.AddTransient<IAccLiveProjectReader>(sp =>
+            new Bim360AccLiveProjectReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<IAccProjectRootFolderResolver, LocalAccProjectRootFolderResolver>();
         services.AddTransient<LocalAccProjectCatalogService>();
+        services.AddTransient<LocalAccLiveProjectDiscoveryService>();
         services.AddTransient<LocalAccProjectService>();
         services.AddTransient<LocalAccDocumentService>();
         services.AddTransient<LocalAccFolderBrowserService>();
         services.AddTransient<IAccLookupSeedService, LocalAccLookupSeedService>();
         services.AddHttpClient<RemoteAccProjectCatalogService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccLiveProjectDiscoveryService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddHttpClient<RemoteAccProjectService>()
@@ -61,6 +69,7 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<RemoteAccFolderBrowserService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddTransient<IAccLiveProjectDiscoveryService, ModeSwitchingAccLiveProjectDiscoveryService>();
         services.AddTransient<IAccProjectCatalogService, ModeSwitchingAccProjectCatalogService>();
         services.AddTransient<IAccProjectService, ModeSwitchingAccProjectService>();
         services.AddTransient<IAccDocumentService, ModeSwitchingAccDocumentService>();

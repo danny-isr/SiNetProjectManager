@@ -57,6 +57,7 @@ public sealed class SettingsViewModel : ObservableObject
         IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
+        IAccLiveProjectDiscoveryService accLiveProjectDiscoveryService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
@@ -81,6 +82,7 @@ public sealed class SettingsViewModel : ObservableObject
         AccBrowser = new AccReadOnlyDocumentBrowserViewModel(
             accDocumentService,
             accFolderBrowserService,
+            accLiveProjectDiscoveryService,
             resolvedDocsUrlLauncher,
             clipboardTextWriter,
             canInteract: () => CanViewSystemSettings,

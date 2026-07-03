@@ -517,6 +517,7 @@ public sealed class NativeSettingsSurfaceTests
         Mock<IAccProjectCatalogService>? accProjectCatalogService = null,
         Mock<IAccDocumentService>? accDocumentService = null,
         Mock<IAccFolderBrowserService>? accFolderBrowserService = null,
+        Mock<IAccLiveProjectDiscoveryService>? accLiveProjectDiscoveryService = null,
         IAccResolvedDocsUrlLauncher? resolvedDocsUrlLauncher = null,
         IClipboardTextWriter? clipboardTextWriter = null)
     {
@@ -533,6 +534,7 @@ public sealed class NativeSettingsSurfaceTests
         accProjectCatalogService ??= MockAccProjectCatalogService([]);
         accDocumentService ??= new Mock<IAccDocumentService>();
         accFolderBrowserService ??= new Mock<IAccFolderBrowserService>();
+        accLiveProjectDiscoveryService ??= MockAccLiveProjectDiscoveryService();
         resolvedDocsUrlLauncher ??= new StubAccResolvedDocsUrlLauncher();
         clipboardTextWriter ??= new StubClipboardTextWriter();
 
@@ -566,6 +568,7 @@ public sealed class NativeSettingsSurfaceTests
             accProjectCatalogService.Object,
             accDocumentService.Object,
             accFolderBrowserService.Object,
+            accLiveProjectDiscoveryService.Object,
             resolvedDocsUrlLauncher,
             clipboardTextWriter,
             auth.Object,
@@ -593,6 +596,14 @@ public sealed class NativeSettingsSurfaceTests
         var mock = new Mock<IAccProjectCatalogService>();
         mock.Setup(x => x.GetProjectsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(projectIds.Select(projectId => new AccProjectCatalogEntry(projectId, projectId, "ProjectAccMapping")).ToArray());
+        return mock;
+    }
+
+    private static Mock<IAccLiveProjectDiscoveryService> MockAccLiveProjectDiscoveryService()
+    {
+        var mock = new Mock<IAccLiveProjectDiscoveryService>();
+        mock.Setup(x => x.GetHubsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        mock.Setup(x => x.GetProjectsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
         return mock;
     }
 

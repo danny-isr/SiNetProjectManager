@@ -9,9 +9,11 @@ namespace SiNet.App.Wpf.Autodesk;
 public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 {
     private const string RootBrowseLabel = "Project Files";
+    private const string LiveDiscoveryInitialSummary = "טרם בוצעה טעינת hubs/projects חיה מ-ACC.";
 
     private readonly IAccDocumentService _accDocumentService;
     private readonly IAccFolderBrowserService _accFolderBrowserService;
+    private readonly IAccLiveProjectDiscoveryService _accLiveProjectDiscoveryService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
     private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly Func<bool>? _canInteract;
@@ -19,6 +21,8 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     private readonly Action<string>? _summaryMessageSink;
     private readonly List<AccBrowseLocation> _browseTrail = [];
 
+    private AccHubCatalogEntry? _selectedLiveHub;
+    private AccProjectCatalogEntry? _selectedLiveProject;
     private AccProjectCatalogEntry? _selectedKnownProject;
     private string? _selectedKnownProjectId;
     private string _lookupProjectId = string.Empty;
@@ -28,6 +32,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     private string _lookupResolvedDocsUrl = string.Empty;
     private string _browseSummary = "טרם נטען תוכן ACC.";
     private string _browseTrailText = RootBrowseLabel;
+    private string _liveDiscoverySummary = LiveDiscoveryInitialSummary;
     private bool _isBusy;
     private bool _isSynchronizingKnownProjectSelection;
     private AccFolderBrowseEntry? _selectedBrowseFolder;
@@ -36,6 +41,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     public AccReadOnlyDocumentBrowserViewModel(
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
+        IAccLiveProjectDiscoveryService accLiveProjectDiscoveryService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
         Func<bool>? canInteract = null,
@@ -44,17 +50,23 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     {
         _accDocumentService = accDocumentService ?? throw new ArgumentNullException(nameof(accDocumentService));
         _accFolderBrowserService = accFolderBrowserService ?? throw new ArgumentNullException(nameof(accFolderBrowserService));
+        _accLiveProjectDiscoveryService = accLiveProjectDiscoveryService ?? throw new ArgumentNullException(nameof(accLiveProjectDiscoveryService));
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher ?? throw new ArgumentNullException(nameof(resolvedDocsUrlLauncher));
         _clipboardTextWriter = clipboardTextWriter ?? throw new ArgumentNullException(nameof(clipboardTextWriter));
         _canInteract = canInteract;
         _isHostBusy = isHostBusy;
         _summaryMessageSink = summaryMessageSink;
 
+        LiveHubs = [];
+        LiveProjects = [];
         KnownProjects = [];
         KnownProjectIds = [];
         BrowseFolders = [];
         BrowseFiles = [];
 
+        LoadLiveHubsCommand = new AsyncRelayCommand(LoadLiveHubsAsync, CanLoadLiveHubs);
+        LoadLiveProjectsCommand = new AsyncRelayCommand(LoadLiveProjectsAsync, CanLoadLiveProjects);
+        UseSelectedLiveProjectCommand = new RelayCommand(_ => UseSelectedLiveProject(), _ => CanUseSelectedLiveProject());
         BrowseFolderCommand = new AsyncRelayCommand(BrowseFolderAsync, CanBrowseFolder);
         BrowseParentFolderCommand = new AsyncRelayCommand(BrowseParentFolderAsync, CanBrowseParentFolder);
         OpenSelectedFolderCommand = new AsyncRelayCommand(OpenSelectedFolderAsync, CanOpenSelectedFolder);
@@ -62,6 +74,42 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         ResolveDocumentCommand = new AsyncRelayCommand(ResolveDocumentAsync, CanResolveDocument);
         CopyResolvedDocsUrlCommand = new RelayCommand(_ => CopyResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
         OpenResolvedDocsUrlCommand = new RelayCommand(_ => OpenResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
+    }
+
+    public ObservableCollection<AccHubCatalogEntry> LiveHubs { get; }
+
+    public ObservableCollection<AccProjectCatalogEntry> LiveProjects { get; }
+
+    public string LiveDiscoverySummary
+    {
+        get => _liveDiscoverySummary;
+        private set => SetField(ref _liveDiscoverySummary, value);
+    }
+
+    public AccHubCatalogEntry? SelectedLiveHub
+    {
+        get => _selectedLiveHub;
+        set
+        {
+            if (SetField(ref _selectedLiveHub, value))
+            {
+                LiveProjects.Clear();
+                SelectedLiveProject = null;
+                LoadLiveProjectsCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public AccProjectCatalogEntry? SelectedLiveProject
+    {
+        get => _selectedLiveProject;
+        set
+        {
+            if (SetField(ref _selectedLiveProject, value))
+            {
+                UseSelectedLiveProjectCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public ObservableCollection<AccProjectCatalogEntry> KnownProjects { get; }
@@ -230,6 +278,12 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
     public RelayCommand OpenResolvedDocsUrlCommand { get; }
 
+    public AsyncRelayCommand LoadLiveHubsCommand { get; }
+
+    public AsyncRelayCommand LoadLiveProjectsCommand { get; }
+
+    public RelayCommand UseSelectedLiveProjectCommand { get; }
+
     public bool IsBusy
     {
         get => _isBusy;
@@ -244,6 +298,9 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
     public void NotifyHostStateChanged()
     {
+        LoadLiveHubsCommand.RaiseCanExecuteChanged();
+        LoadLiveProjectsCommand.RaiseCanExecuteChanged();
+        UseSelectedLiveProjectCommand.RaiseCanExecuteChanged();
         BrowseFolderCommand.RaiseCanExecuteChanged();
         BrowseParentFolderCommand.RaiseCanExecuteChanged();
         OpenSelectedFolderCommand.RaiseCanExecuteChanged();
@@ -374,11 +431,98 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         }
     }
 
+    public async Task LoadLiveHubsAsync()
+    {
+        if (!CanLoadLiveHubs())
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var hubs = await _accLiveProjectDiscoveryService
+                .GetHubsAsync()
+                .ConfigureAwait(true);
+
+            LiveHubs.Clear();
+            foreach (var hub in hubs)
+            {
+                LiveHubs.Add(hub);
+            }
+
+            LiveProjects.Clear();
+            SelectedLiveProject = null;
+            SelectedLiveHub = LiveHubs.FirstOrDefault();
+            LiveDiscoverySummary = hubs.Count == 0
+                ? "לא נמצאו hubs חיים ב-ACC."
+                : $"נטענו {hubs.Count} hubs חיים מ-ACC.";
+            PublishSummary(LiveDiscoverySummary);
+        }
+        catch (Exception ex)
+        {
+            LiveDiscoverySummary = $"שגיאה בטעינת hubs חיים מ-ACC: {ex.Message}";
+            PublishSummary(LiveDiscoverySummary);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task LoadLiveProjectsAsync()
+    {
+        if (!CanLoadLiveProjects())
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var projects = await _accLiveProjectDiscoveryService
+                .GetProjectsAsync(SelectedLiveHub!.HubId)
+                .ConfigureAwait(true);
+
+            LiveProjects.Clear();
+            foreach (var project in projects)
+            {
+                LiveProjects.Add(project);
+            }
+
+            SelectedLiveProject = ResolveMatchingLiveProject(LookupProjectId) ?? LiveProjects.FirstOrDefault();
+            LiveDiscoverySummary = projects.Count == 0
+                ? $"לא נמצאו פרויקטים חיים ב-hub {SelectedLiveHub.HubId}."
+                : $"נטענו {projects.Count} פרויקטים חיים מתוך hub {SelectedLiveHub.HubId}.";
+            PublishSummary(LiveDiscoverySummary);
+        }
+        catch (Exception ex)
+        {
+            LiveDiscoverySummary = $"שגיאה בטעינת פרויקטים חיים מ-ACC: {ex.Message}";
+            PublishSummary(LiveDiscoverySummary);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private bool CanResolveDocument() =>
         !IsInteractionBlocked()
         && !string.IsNullOrWhiteSpace(LookupProjectId)
         && !string.IsNullOrWhiteSpace(LookupFolderId)
         && !string.IsNullOrWhiteSpace(LookupFileName);
+
+    private bool CanLoadLiveHubs() =>
+        !IsInteractionBlocked();
+
+    private bool CanLoadLiveProjects() =>
+        !IsInteractionBlocked()
+        && SelectedLiveHub is not null;
+
+    private bool CanUseSelectedLiveProject() =>
+        !IsInteractionBlocked()
+        && SelectedLiveProject is not null;
 
     private bool CanBrowseFolder() =>
         !IsInteractionBlocked()
@@ -482,6 +626,19 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         PublishSummary("נבחר קובץ מתיקיית ACC.");
     }
 
+    private void UseSelectedLiveProject()
+    {
+        if (!CanUseSelectedLiveProject())
+        {
+            return;
+        }
+
+        var selectedProject = EnsureKnownProject(SelectedLiveProject!);
+        SelectedKnownProject = selectedProject;
+        LiveDiscoverySummary = $"נבחר פרויקט live: {selectedProject.DisplayText}";
+        PublishSummary("נבחר פרויקט חי מ-ACC.");
+    }
+
     private void CopyResolvedDocsUrl()
     {
         if (!CanUseResolvedDocsUrl())
@@ -538,6 +695,25 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
             ? null
             : KnownProjects.FirstOrDefault(knownProject =>
                 string.Equals(knownProject.ProjectId, projectId.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private AccProjectCatalogEntry? ResolveMatchingLiveProject(string? projectId) =>
+        string.IsNullOrWhiteSpace(projectId)
+            ? null
+            : LiveProjects.FirstOrDefault(liveProject =>
+                string.Equals(liveProject.ProjectId, projectId.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private AccProjectCatalogEntry EnsureKnownProject(AccProjectCatalogEntry project)
+    {
+        var existing = ResolveMatchingKnownProject(project.ProjectId);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        KnownProjects.Add(project);
+        KnownProjectIds.Add(project.ProjectId);
+        return project;
+    }
 
     private void ResetBrowseState(bool clearFolderId, bool clearFileName)
     {

@@ -25,6 +25,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
+        IAccLiveProjectDiscoveryService accLiveProjectDiscoveryService,
         IAccLookupSeedService accLookupSeedService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter)
@@ -36,6 +37,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         Browser = new AccReadOnlyDocumentBrowserViewModel(
             accDocumentService,
             accFolderBrowserService,
+            accLiveProjectDiscoveryService,
             resolvedDocsUrlLauncher,
             clipboardTextWriter,
             isHostBusy: () => IsBusy,

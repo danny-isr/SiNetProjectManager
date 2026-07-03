@@ -42,6 +42,7 @@ public sealed class SettingsViewModelFactory
     private readonly IAccProjectCatalogService _accProjectCatalogService;
     private readonly IAccDocumentService _accDocumentService;
     private readonly IAccFolderBrowserService _accFolderBrowserService;
+    private readonly IAccLiveProjectDiscoveryService _accLiveProjectDiscoveryService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
     private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly IAuthorizationQueryService _authorization;
@@ -59,6 +60,7 @@ public sealed class SettingsViewModelFactory
         IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
+        IAccLiveProjectDiscoveryService accLiveProjectDiscoveryService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
@@ -75,6 +77,7 @@ public sealed class SettingsViewModelFactory
         _accProjectCatalogService = accProjectCatalogService;
         _accDocumentService = accDocumentService;
         _accFolderBrowserService = accFolderBrowserService;
+        _accLiveProjectDiscoveryService = accLiveProjectDiscoveryService;
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher;
         _clipboardTextWriter = clipboardTextWriter;
         _authorization = authorization;
@@ -94,6 +97,7 @@ public sealed class SettingsViewModelFactory
             _accProjectCatalogService,
             _accDocumentService,
             _accFolderBrowserService,
+            _accLiveProjectDiscoveryService,
             _resolvedDocsUrlLauncher,
             _clipboardTextWriter,
             _authorization,

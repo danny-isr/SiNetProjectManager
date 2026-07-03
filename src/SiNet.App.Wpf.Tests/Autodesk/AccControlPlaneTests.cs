@@ -155,6 +155,7 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceDiagnosticsProbe));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccServiceKeyDiagnostics));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectCatalogService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccLiveProjectDiscoveryService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));
@@ -295,6 +296,71 @@ public sealed class AccControlPlaneTests
         Assert.Equal("native-api-key", apiKeyHeader);
         Assert.Equal(["b.project-1", "b.project-2"], result.Select(static project => project.ProjectId).ToArray());
         Assert.Equal("Alpha Campus", result[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task Local_live_project_discovery_service_returns_hubs_and_projects_from_readers()
+    {
+        var sut = new LocalAccLiveProjectDiscoveryService(
+            new StubAccHubReader([new AccHubCatalogEntry("b.hub-1", "Primary Hub", "EMEA")]),
+            new StubAccLiveProjectReader([new AccProjectCatalogEntry("b.project-1", "Alpha Campus", "LiveAcc")]));
+
+        var hubs = await sut.GetHubsAsync();
+        var projects = await sut.GetProjectsAsync("b.hub-1");
+
+        Assert.Single(hubs);
+        Assert.Equal("b.hub-1", hubs[0].HubId);
+        Assert.Single(projects);
+        Assert.Equal("b.project-1", projects[0].ProjectId);
+        Assert.Equal("Alpha Campus", projects[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task Remote_live_project_discovery_service_uses_versioned_live_endpoints_and_maps_response()
+    {
+        const string hubsBody = """
+            {
+              "hubs": [
+                { "hubId": "b.hub-2", "displayName": "Zeta Hub", "region": "US" },
+                { "hubId": "b.hub-1", "displayName": "Alpha Hub", "region": "EMEA" }
+              ]
+            }
+            """;
+        const string projectsBody = """
+            {
+              "projects": [
+                { "projectId": " b.project-2 ", "displayName": "Zeta Tower" },
+                { "projectId": "b.project-1", "displayName": "Alpha Campus" }
+              ]
+            }
+            """;
+
+        var requestedUris = new List<string>();
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccLiveProjectDiscoveryService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUris.Add(request.RequestUri!.ToString());
+                var body = request.RequestUri!.AbsoluteUri.EndsWith("/live/hubs", StringComparison.Ordinal)
+                    ? hubsBody
+                    : projectsBody;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var hubs = await sut.GetHubsAsync();
+        var projects = await sut.GetProjectsAsync("b.hub-1");
+
+        Assert.Equal("https://acc.example.com/v1/acc/live/hubs", requestedUris[0]);
+        Assert.Equal("https://acc.example.com/v1/acc/live/hubs/b.hub-1/projects", requestedUris[1]);
+        Assert.Equal(["b.hub-1", "b.hub-2"], hubs.Select(static hub => hub.HubId).ToArray());
+        Assert.Equal(["b.project-1", "b.project-2"], projects.Select(static project => project.ProjectId).ToArray());
     }
 
     [Fact]
@@ -513,6 +579,8 @@ public sealed class AccControlPlaneTests
 
         Assert.Contains("/projects/ids", source, StringComparison.Ordinal);
         Assert.Contains("/projects/catalog", source, StringComparison.Ordinal);
+        Assert.Contains("/live/hubs", source, StringComparison.Ordinal);
+        Assert.Contains("/live/hubs/{hubId}/projects", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/browse", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
         Assert.Contains("ProjectAccMappings", source, StringComparison.Ordinal);
@@ -601,6 +669,20 @@ public sealed class AccControlPlaneTests
             string projectId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(folderId);
+    }
+
+    private sealed class StubAccHubReader(IReadOnlyList<AccHubCatalogEntry> hubs) : IAccHubReader
+    {
+        public Task<IReadOnlyList<AccHubCatalogEntry>> GetHubsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(hubs);
+    }
+
+    private sealed class StubAccLiveProjectReader(IReadOnlyList<AccProjectCatalogEntry> projects) : IAccLiveProjectReader
+    {
+        public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(
+            string hubId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(projects);
     }
 
     private sealed class StubDbContextFactory(DbContextOptions<SiNetSQLDbContext> options) : IDbContextFactory<SiNetSQLDbContext>

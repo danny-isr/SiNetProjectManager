@@ -226,6 +226,57 @@ internal static class AccEndpoints
             return Results.Ok(new { Projects = projects });
         });
 
+        v1.MapGet("/live/hubs", async (
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            var hubs = await new Bim360Service(tokenProvider)
+                .ListHubsAsync(ct);
+
+            return Results.Ok(new
+            {
+                Hubs = hubs
+                    .Where(static hub => !string.IsNullOrWhiteSpace(hub.Id))
+                    .Select(static hub => new
+                    {
+                        HubId = hub.Id.Trim(),
+                        DisplayName = string.IsNullOrWhiteSpace(hub.Name) ? hub.Id.Trim() : hub.Name.Trim(),
+                        hub.Region
+                    })
+                    .OrderBy(static hub => hub.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(static hub => hub.HubId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+            });
+        });
+
+        v1.MapGet("/live/hubs/{hubId}/projects", async (
+            string hubId,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(hubId))
+            {
+                return Results.BadRequest(new { error = "hubId is required." });
+            }
+
+            var projects = await new Bim360Service(tokenProvider)
+                .ListAccNativeProjectsAsync(hubId.Trim(), ct);
+
+            return Results.Ok(new
+            {
+                Projects = projects
+                    .Where(static project => !string.IsNullOrWhiteSpace(project.Id))
+                    .Select(static project => new
+                    {
+                        ProjectId = project.Id.Trim(),
+                        DisplayName = string.IsNullOrWhiteSpace(project.Name) ? project.Id.Trim() : project.Name.Trim()
+                    })
+                    .OrderBy(static project => project.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(static project => project.ProjectId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+            });
+        });
+
         // ── Read-only ACC item lookup ───────────────────────────────────────
         v1.MapGet("/projects/{projectId}/folders/{folderId}/items/resolve", async (
             string projectId,
