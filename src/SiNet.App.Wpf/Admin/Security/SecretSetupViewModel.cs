@@ -4,10 +4,10 @@ using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Win32;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
-using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 
 namespace SiNet.App.Wpf.Admin.Security;
@@ -23,23 +23,14 @@ public sealed class SecretSetupViewModel : ObservableObject
     private string _accServiceHealthSummary = "בריאות שירות ACC: טוען...";
     private string _accServiceDiagnosticsSummary = "אבחון ACC: טוען...";
 
-    private readonly IAccServiceModeProvider _accServiceModeProvider;
-    private readonly IAccServiceKeyDiagnostics _accServiceKeyDiagnostics;
-    private readonly IAccServiceHealthProbe _accServiceHealthProbe;
-    private readonly IAccServiceDiagnosticsProbe _accServiceDiagnosticsProbe;
+    private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
 
     public SecretSetupViewModel(
         ISecretSetupService secretSetupService,
-        IAccServiceModeProvider accServiceModeProvider,
-        IAccServiceKeyDiagnostics accServiceKeyDiagnostics,
-        IAccServiceHealthProbe accServiceHealthProbe,
-        IAccServiceDiagnosticsProbe accServiceDiagnosticsProbe)
+        AccControlPlaneStatusPresenter accControlPlaneStatusPresenter)
     {
         _secretSetupService = secretSetupService ?? throw new ArgumentNullException(nameof(secretSetupService));
-        _accServiceModeProvider = accServiceModeProvider ?? throw new ArgumentNullException(nameof(accServiceModeProvider));
-        _accServiceKeyDiagnostics = accServiceKeyDiagnostics ?? throw new ArgumentNullException(nameof(accServiceKeyDiagnostics));
-        _accServiceHealthProbe = accServiceHealthProbe ?? throw new ArgumentNullException(nameof(accServiceHealthProbe));
-        _accServiceDiagnosticsProbe = accServiceDiagnosticsProbe ?? throw new ArgumentNullException(nameof(accServiceDiagnosticsProbe));
+        _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter ?? throw new ArgumentNullException(nameof(accControlPlaneStatusPresenter));
         Rows = new ObservableCollection<SecretRowViewModel>(
             SecretCatalog.All.Select(e => new SecretRowViewModel(e)));
         SaveCommand = new AsyncRelayCommand(SaveAndValidateAsync, () => !IsBusy);
@@ -453,48 +444,13 @@ public sealed class SecretSetupViewModel : ObservableObject
 
     private async Task RefreshAccControlPlaneAsync()
     {
-        var mode = _accServiceModeProvider.Mode;
-        var baseUrl = _accServiceModeProvider.BaseUrl;
+        var presentation = await _accControlPlaneStatusPresenter
+            .BuildAsync(AccControlPlaneStatusPresentationKind.SecretSetup)
+            .ConfigureAwait(true);
 
-        AccServiceModeSummary = mode switch
-        {
-            AccServiceMode.Remote when !string.IsNullOrWhiteSpace(baseUrl)
-                => $"מצב ACC: שירות מרכזי ({baseUrl})",
-            _ => "מצב ACC: מקומי (AccService:BaseUrl לא מוגדר)",
-        };
-
-        var keyInfo = _accServiceKeyDiagnostics.Describe();
-        AccServiceKeySummary = keyInfo.HasApiKey
-            ? $"מפתח ACC: קיים ב-Vault, אורך {keyInfo.KeyLength}, hash {keyInfo.KeyHashPrefix}"
-            : "מפתח ACC: לא הוגדר ב-Vault.";
-
-        if (mode != AccServiceMode.Remote || string.IsNullOrWhiteSpace(baseUrl))
-        {
-            AccServiceHealthSummary = "בריאות שירות ACC: לא רלוונטי במצב מקומי.";
-            AccServiceDiagnosticsSummary = "אבחון ACC: מצב מקומי, ללא קריאת /v1/acc/diag.";
-            return;
-        }
-
-        var health = await _accServiceHealthProbe.CheckAsync().ConfigureAwait(true);
-        AccServiceHealthSummary = health.State switch
-        {
-            AccServiceHealthState.Online => $"בריאות שירות ACC: זמין ({health.Endpoint})",
-            AccServiceHealthState.NotConfigured => "בריאות שירות ACC: לא מוגדר.",
-            _ => $"בריאות שירות ACC: לא זמין ({health.Detail ?? "ללא פירוט"})",
-        };
-
-        var diagnostics = await _accServiceDiagnosticsProbe.ProbeAsync().ConfigureAwait(true);
-        if (!diagnostics.Reachable)
-        {
-            AccServiceDiagnosticsSummary =
-                $"אבחון ACC: לא זמין. Autodesk={diagnostics.AutodeskDetail ?? "ללא פירוט"}; DB={diagnostics.DbDetail ?? "ללא פירוט"}";
-            return;
-        }
-
-        var keySource = string.IsNullOrWhiteSpace(diagnostics.KeySource) ? "unknown" : diagnostics.KeySource;
-        var windowsUser = string.IsNullOrWhiteSpace(diagnostics.WindowsUser) ? "unknown" : diagnostics.WindowsUser;
-        var keyHash = string.IsNullOrWhiteSpace(diagnostics.KeyHashPrefix) ? "(none)" : diagnostics.KeyHashPrefix;
-        AccServiceDiagnosticsSummary =
-            $"אבחון ACC: user={windowsUser}; keySource={keySource}; keyHash={keyHash}; Autodesk={(diagnostics.AutodeskOk ? "ok" : "fail")}; DB={(diagnostics.DbOk ? "ok" : "fail")}";
+        AccServiceModeSummary = presentation.ModeSummary;
+        AccServiceKeySummary = presentation.KeySummary;
+        AccServiceHealthSummary = presentation.HealthSummary;
+        AccServiceDiagnosticsSummary = presentation.DiagnosticsSummary;
     }
 }

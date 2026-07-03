@@ -1,6 +1,7 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
@@ -458,10 +459,11 @@ public sealed class NativeSettingsSurfaceTests
             loggingRuntime.Object,
             themeRuntime.Object,
             statusColors.Object,
-            accModeProvider.Object,
-            accKeyDiagnostics.Object,
-            accHealthProbe.Object,
-            accDiagnosticsProbe.Object,
+            new AccControlPlaneStatusPresenter(
+                accModeProvider.Object,
+                accKeyDiagnostics.Object,
+                accHealthProbe.Object,
+                accDiagnosticsProbe.Object),
             auth.Object,
             new StubCurrentUser(userId),
             scope);

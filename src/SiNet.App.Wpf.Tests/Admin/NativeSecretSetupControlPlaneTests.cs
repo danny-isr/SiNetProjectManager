@@ -1,4 +1,5 @@
 using System.IO;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
@@ -75,10 +76,11 @@ public sealed class NativeSecretSetupControlPlaneTests
         IAccServiceDiagnosticsProbe diagnosticsProbe) =>
         new(
             new StubSecretSetupService(),
-            modeProvider,
-            keyDiagnostics,
-            healthProbe,
-            diagnosticsProbe);
+            new AccControlPlaneStatusPresenter(
+                modeProvider,
+                keyDiagnostics,
+                healthProbe,
+                diagnosticsProbe));
 
     private static string ReadRepoFile(string relativePath)
     {

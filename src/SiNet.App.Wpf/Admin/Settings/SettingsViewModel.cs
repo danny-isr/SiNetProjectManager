@@ -4,11 +4,11 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shell;
-using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 
@@ -23,10 +23,7 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly ILoggingRuntimeApplier _loggingRuntime;
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
-    private readonly IAccServiceModeProvider _accServiceModeProvider;
-    private readonly IAccServiceKeyDiagnostics _accServiceKeyDiagnostics;
-    private readonly IAccServiceHealthProbe _accServiceHealthProbe;
-    private readonly IAccServiceDiagnosticsProbe _accServiceDiagnosticsProbe;
+    private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -53,10 +50,7 @@ public sealed class SettingsViewModel : ObservableObject
         ILoggingRuntimeApplier loggingRuntime,
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
-        IAccServiceModeProvider accServiceModeProvider,
-        IAccServiceKeyDiagnostics accServiceKeyDiagnostics,
-        IAccServiceHealthProbe accServiceHealthProbe,
-        IAccServiceDiagnosticsProbe accServiceDiagnosticsProbe,
+        AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser,
         SettingsSurfaceScope scope)
@@ -68,10 +62,7 @@ public sealed class SettingsViewModel : ObservableObject
         _loggingRuntime = loggingRuntime ?? throw new ArgumentNullException(nameof(loggingRuntime));
         _themeRuntime = themeRuntime ?? throw new ArgumentNullException(nameof(themeRuntime));
         _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
-        _accServiceModeProvider = accServiceModeProvider ?? throw new ArgumentNullException(nameof(accServiceModeProvider));
-        _accServiceKeyDiagnostics = accServiceKeyDiagnostics ?? throw new ArgumentNullException(nameof(accServiceKeyDiagnostics));
-        _accServiceHealthProbe = accServiceHealthProbe ?? throw new ArgumentNullException(nameof(accServiceHealthProbe));
-        _accServiceDiagnosticsProbe = accServiceDiagnosticsProbe ?? throw new ArgumentNullException(nameof(accServiceDiagnosticsProbe));
+        _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter ?? throw new ArgumentNullException(nameof(accControlPlaneStatusPresenter));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
         Scope = scope;
@@ -1201,49 +1192,15 @@ public sealed class SettingsViewModel : ObservableObject
 
     private async Task RefreshAccRuntimeStatusAsync()
     {
-        var mode = _accServiceModeProvider.Mode;
-        var baseUrl = _accServiceModeProvider.BaseUrl;
+        var presentation = await _accControlPlaneStatusPresenter
+            .BuildAsync(AccControlPlaneStatusPresentationKind.SettingsRuntime)
+            .ConfigureAwait(true);
 
-        AccServiceRuntimeModeSummary = mode switch
-        {
-            AccServiceMode.Remote when !string.IsNullOrWhiteSpace(baseUrl)
-                => $"מצב ריצה ACC: שירות מרכזי ({baseUrl})",
-            _ => "מצב ריצה ACC: מקומי (AccService:BaseUrl לא מוגדר בהוסט הנוכחי)",
-        };
-
-        var keyInfo = _accServiceKeyDiagnostics.Describe();
-        AccServiceRuntimeKeySummary = keyInfo.HasApiKey
-            ? $"מפתח ריצה ACC: קיים ב-Vault, אורך {keyInfo.KeyLength}, hash {keyInfo.KeyHashPrefix}"
-            : "מפתח ריצה ACC: לא הוגדר ב-Vault.";
-
-        if (mode != AccServiceMode.Remote || string.IsNullOrWhiteSpace(baseUrl))
-        {
-            AccServiceRuntimeHealthSummary = "בריאות ריצה ACC: לא רלוונטי במצב מקומי.";
-            AccServiceRuntimeDiagnosticsSummary = "אבחון ריצה ACC: מצב מקומי, ללא קריאת /v1/acc/diag.";
-            return;
-        }
-
-        var health = await _accServiceHealthProbe.CheckAsync().ConfigureAwait(true);
-        AccServiceRuntimeHealthSummary = health.State switch
-        {
-            AccServiceHealthState.Online => $"בריאות ריצה ACC: זמין ({health.Endpoint})",
-            AccServiceHealthState.NotConfigured => "בריאות ריצה ACC: לא מוגדר.",
-            _ => $"בריאות ריצה ACC: לא זמין ({health.Detail ?? "ללא פירוט"})",
-        };
-
-        var diagnostics = await _accServiceDiagnosticsProbe.ProbeAsync().ConfigureAwait(true);
-        if (!diagnostics.Reachable)
-        {
-            AccServiceRuntimeDiagnosticsSummary =
-                $"אבחון ריצה ACC: לא זמין. Autodesk={diagnostics.AutodeskDetail ?? "ללא פירוט"}; DB={diagnostics.DbDetail ?? "ללא פירוט"}";
-            return;
-        }
-
-        var keySource = string.IsNullOrWhiteSpace(diagnostics.KeySource) ? "unknown" : diagnostics.KeySource;
-        var windowsUser = string.IsNullOrWhiteSpace(diagnostics.WindowsUser) ? "unknown" : diagnostics.WindowsUser;
-        var keyHash = string.IsNullOrWhiteSpace(diagnostics.KeyHashPrefix) ? "(none)" : diagnostics.KeyHashPrefix;
-        AccServiceRuntimeDiagnosticsSummary =
-            $"אבחון ריצה ACC: user={windowsUser}; keySource={keySource}; keyHash={keyHash}; Autodesk={(diagnostics.AutodeskOk ? "ok" : "fail")}; DB={(diagnostics.DbOk ? "ok" : "fail")}";
+        AccServiceRuntimeHint = presentation.Hint ?? AccServiceRuntimeHint;
+        AccServiceRuntimeModeSummary = presentation.ModeSummary;
+        AccServiceRuntimeKeySummary = presentation.KeySummary;
+        AccServiceRuntimeHealthSummary = presentation.HealthSummary;
+        AccServiceRuntimeDiagnosticsSummary = presentation.DiagnosticsSummary;
     }
 
     private static string NormalizeAccServiceBaseUrl(string value)

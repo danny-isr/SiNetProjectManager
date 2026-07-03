@@ -4,6 +4,7 @@ using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SiNet.App.Wpf.Admin.Settings;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
@@ -526,10 +527,11 @@ public sealed class ThemeStage6Tests
             loggingRuntime.Object,
             themeRuntime.Object,
             new Mock<IStatusColorSettingsService>().Object,
-            accModeProvider.Object,
-            accKeyDiagnostics.Object,
-            Mock.Of<IAccServiceHealthProbe>(),
-            Mock.Of<IAccServiceDiagnosticsProbe>(),
+            new AccControlPlaneStatusPresenter(
+                accModeProvider.Object,
+                accKeyDiagnostics.Object,
+                Mock.Of<IAccServiceHealthProbe>(),
+                Mock.Of<IAccServiceDiagnosticsProbe>()),
             auth.Object,
             new StubCurrentUser(1),
             SettingsSurfaceScope.Personal);

@@ -1,6 +1,7 @@
 <UserControl x:Class="SiNet.App.Wpf.Admin.Settings.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:autodesk="clr-namespace:SiNet.App.Wpf.Autodesk"
              xmlns:theme="clr-namespace:SiNet.App.Wpf.Theme"
              FlowDirection="RightToLeft">
     <UserControl.Resources>
@@ -188,15 +189,12 @@
                 <StackPanel Margin="12" MaxWidth="640">
                     <TextBlock Text="AccService Base URL"/>
                     <TextBox Text="{Binding AccServiceBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock Text="{Binding AccServiceRuntimeHint}" Opacity="0.7" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding AccServiceRuntimeModeSummary}" Margin="0,8,0,0" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding AccServiceRuntimeKeySummary}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding AccServiceRuntimeHealthSummary}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding AccServiceRuntimeDiagnosticsSummary}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
+                    <autodesk:AccControlPlaneStatusView Margin="0,0,0,12"
+                                                         HintText="{Binding AccServiceRuntimeHint}"
+                                                         ModeSummary="{Binding AccServiceRuntimeModeSummary}"
+                                                         KeySummary="{Binding AccServiceRuntimeKeySummary}"
+                                                         HealthSummary="{Binding AccServiceRuntimeHealthSummary}"
+                                                         DiagnosticsSummary="{Binding AccServiceRuntimeDiagnosticsSummary}"/>
                     <TextBlock Text="Bootstrap Admin Email"/>
                     <TextBox Text="{Binding AccBootstrapAdminEmail, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                     <TextBlock Text="שם תבנית פרויקט ACC (stored — ללא refresh מ-ACC)"/>
