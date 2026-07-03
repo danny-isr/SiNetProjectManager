@@ -102,7 +102,8 @@ See [`LOGGING.md`](./LOGGING.md). Boundary tests: `NewSystemLoggingBoundaryTests
 | Status colors | `SqlStatusColorSettingsService` → `IStatusColorSettingsService` |
 | Runtime logging | `LegacyLoggingRuntimeApplier` → `ILoggingRuntimeApplier` |
 
-Menu **הגדרות** gated by `AppFeatureCodes.SystemSettingsWrite`. Does **not** open legacy settings windows.
+Menu **הגדרות אישיות** — authenticated user. Menu **הגדרות מערכת** — `AppFeatureCodes.SystemSettingsWrite`.
+Does **not** open legacy settings windows.
 
 See [`SETTINGS.md`](./SETTINGS.md). Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
 

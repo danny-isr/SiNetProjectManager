@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace SiNet.App.Wpf.Admin.Settings;
 
-/// <summary>Native New System settings window (replaces legacy settings UIs in NewShell).</summary>
+/// <summary>Native New System settings window (personal or system-admin scope).</summary>
 public sealed class SettingsWindow : Window
 {
     private readonly SettingsViewModel _viewModel;
@@ -10,7 +10,9 @@ public sealed class SettingsWindow : Window
     public SettingsWindow(SettingsViewModel viewModel)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        Title = "הגדרות — מערכת חדשה";
+        Title = viewModel.Scope == SettingsSurfaceScope.Personal
+            ? "הגדרות אישיות — מערכת חדשה"
+            : "הגדרות מערכת — מערכת חדשה";
         Width = 820;
         Height = 720;
         MinWidth = 640;

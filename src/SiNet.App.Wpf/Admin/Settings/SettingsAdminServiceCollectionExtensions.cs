@@ -8,9 +8,9 @@ public static class SettingsAdminServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddTransient<SettingsViewModel>();
+        services.AddSingleton<SettingsViewModelFactory>();
+        services.AddSingleton<ISettingsWindowFactory, SettingsWindowFactory>();
         services.AddTransient<SettingsView>();
-        services.AddTransient<SettingsWindow>();
 
         return services;
     }

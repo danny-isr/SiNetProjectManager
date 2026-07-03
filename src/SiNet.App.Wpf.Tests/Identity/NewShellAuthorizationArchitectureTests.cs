@@ -41,7 +41,8 @@ public sealed class NewShellAuthorizationArchitectureTests
         var source = ReadSourceRelativeToRepo("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
         Assert.Contains("IAuthorizationQueryService", source, StringComparison.Ordinal);
         Assert.Contains("AppFeatureCodes", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentUserContext", source, StringComparison.Ordinal);
+        Assert.Contains("ICurrentUserContext", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CurrentUserContext.", source, StringComparison.Ordinal);
         Assert.DoesNotContain("IsAdmin", source, StringComparison.Ordinal);
     }
 

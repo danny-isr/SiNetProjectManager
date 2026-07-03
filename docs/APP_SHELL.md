@@ -165,7 +165,8 @@ Initial menu (P3 + P6 + native admin):
 | Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |
 | Action permissions | `ActionPermissions.Manage` | Administrator | `ActionPermissionsWindow` → native `ActionPermissionsView` |
 | Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
-| Settings (placeholder) | `System.Settings.Write` | Administrator | *disabled until general settings surface exists* |
+| Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
+| System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 
 Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
 
@@ -199,9 +200,11 @@ Implemented capabilities in this surface:
 with an explicit debug warning. The materialized file is a consumption artifact, not a second source of
 truth. New System `GmailClientProvider` resolves paths via `IGoogleClientSecretsPathProvider` (vault-first).
 
-General system settings (`ManagementSettingsWindow` parity) remain a **separate future surface** — the
-**הגדרות** menu item stays disabled until that surface exists; secret/key management is covered by
-**מפתחות וסודות**, not the Settings placeholder.
+**Settings (native, Stage 5 slice 2):** **הגדרות אישיות** opens for any authenticated user
+(`ICurrentUserContext.UserId`) — per-user JSON, local logging, personal status colors. **הגדרות מערכת**
+opens for administrators (`System.Settings.Write`) — global `SystemSettings`, central logging, global
+status colors. Both use `SiNet.App.Wpf.Admin.Settings` — not legacy `SettingsWindow` or
+`ManagementSettingsWindow`. See [`SETTINGS.md`](./SETTINGS.md) §5 (authorization policy).
 
 ---
 
@@ -279,7 +282,8 @@ IStatusColorSettingsService      → status color tables
 ILoggingRuntimeApplier           → host applies user logging toggle
 ```
 
-Native **הגדרות** — `SettingsWindow` in `SiNet.App.Wpf/Admin/Settings`, menu enabled in `NewShellFactory`.
+Native **הגדרות אישיות** + **הגדרות מערכת** — `SettingsWindow` in `SiNet.App.Wpf/Admin/Settings`
+(personal vs admin menu entries; see `SETTINGS.md` §5).
 
 Guardrails: reads/writes behind Application ports; no schema/migrations; `SiNet.App.Wpf` does not touch
 legacy settings types directly.
@@ -328,9 +332,9 @@ Slice 1 (this round)
   6. Menu opens Inspection shell (if available) via DI.
   7. Do not migrate settings unless required for the shell to run (it is not).
 
-Slice 2 (next)
-  - Investigate + document settings target doc; port read-only system settings first
-	(ISettingsQueryService), keeping ManagementSettingsWindow behavior.
+Slice 2 (Stage 5 — settings)
+  - Native Settings UI with personal/admin split (see SETTINGS.md §5).
+  - Personal menu for authenticated users; system menu for System.Settings.Write.
 
 Slice 3+
   - Add migrated surfaces to the shell one at a time (recorded in the migration map).

@@ -87,7 +87,10 @@ public sealed class SettingsStage5BoundaryTests
         Assert.Contains("ISystemSettingsQueryService", doc, StringComparison.Ordinal);
         Assert.Contains("ILoggingRuntimeApplier", doc, StringComparison.Ordinal);
         Assert.Contains("settings.json", doc, StringComparison.Ordinal);
-        Assert.Contains("AddSiNetUserLoggingSettings", doc, StringComparison.Ordinal);
+        Assert.Contains("Authorization policy", doc, StringComparison.Ordinal);
+        Assert.Contains("CanViewPersonalSettings", doc, StringComparison.Ordinal);
+        Assert.Contains("הגדרות אישיות", doc, StringComparison.Ordinal);
+        Assert.Contains("הגדרות מערכת", doc, StringComparison.Ordinal);
     }
 
     public static IEnumerable<object[]> AppWpfSourceFiles()

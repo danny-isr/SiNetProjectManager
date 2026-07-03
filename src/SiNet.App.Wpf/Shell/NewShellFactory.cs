@@ -108,12 +108,20 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "הגדרת מפתחות וסודות (Credential Vault)"));
         }
 
+        if (HasAuthenticatedUser())
+        {
+            items.Add(new NewShellMenuItem(
+                "הגדרות אישיות",
+                OpenNativePersonalSettings,
+                "הגדרות אישיות (JSON מקומי)"));
+        }
+
         if (CanAccessFeature(AppFeatureCodes.SystemSettingsWrite))
         {
             items.Add(new NewShellMenuItem(
-                "הגדרות",
-                OpenNativeSettings,
-                "הגדרות מערכת (מערכת חדשה)"));
+                "הגדרות מערכת",
+                OpenNativeSystemSettings,
+                "הגדרות מערכת / שרת (Administrator)"));
         }
 
         return items;
@@ -219,24 +227,46 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
     }
 
-    private void OpenNativeSettings()
+    private void OpenNativePersonalSettings()
     {
         try
         {
-            var window = _services.GetRequiredService<SettingsWindow>();
-            ShowDialog(window);
+            var factory = _services.GetRequiredService<ISettingsWindowFactory>();
+            ShowDialog(factory.CreatePersonal());
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
-                $"שגיאה בפתיחת הגדרות: {ex.Message}",
+                $"שגיאה בפתיחת הגדרות אישיות: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             throw;
         }
     }
+
+    private void OpenNativeSystemSettings()
+    {
+        try
+        {
+            var factory = _services.GetRequiredService<ISettingsWindowFactory>();
+            ShowDialog(factory.CreateSystemAdmin());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת הגדרות מערכת: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private bool HasAuthenticatedUser()
+        => _services.GetService<ICurrentUserContext>()?.UserId is not null;
 
     private void OpenInspectionShell()
     {

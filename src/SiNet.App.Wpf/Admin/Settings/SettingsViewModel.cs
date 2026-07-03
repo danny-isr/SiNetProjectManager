@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -22,6 +21,7 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly ILoggingSettingsCommandService _loggingCommand;
     private readonly ILoggingRuntimeApplier _loggingRuntime;
     private readonly IStatusColorSettingsService _statusColors;
+    private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
     private UserLoggingSettingsDto _loadedLogging = null!;
@@ -35,31 +35,44 @@ public sealed class SettingsViewModel : ObservableObject
         ILoggingSettingsCommandService loggingCommand,
         ILoggingRuntimeApplier loggingRuntime,
         IStatusColorSettingsService statusColors,
-        ICurrentUserContext? currentUser = null)
+        IAuthorizationQueryService authorization,
+        ICurrentUserContext? currentUser,
+        SettingsSurfaceScope scope)
     {
-        _appSettings = appSettings;
-        _systemQuery = systemQuery;
-        _systemCommand = systemCommand;
-        _loggingCommand = loggingCommand;
-        _loggingRuntime = loggingRuntime;
-        _statusColors = statusColors;
+        _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
+        _systemQuery = systemQuery ?? throw new ArgumentNullException(nameof(systemQuery));
+        _systemCommand = systemCommand ?? throw new ArgumentNullException(nameof(systemCommand));
+        _loggingCommand = loggingCommand ?? throw new ArgumentNullException(nameof(loggingCommand));
+        _loggingRuntime = loggingRuntime ?? throw new ArgumentNullException(nameof(loggingRuntime));
+        _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
+        _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
+        Scope = scope;
 
         AvailableFonts = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(f => f).ToList();
         LogLevels = Enum.GetNames<LogLevelDto>();
 
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+        SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy && (CanEditPersonalSettings || CanEditSystemSettings));
         ReloadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
         CancelCommand = new RelayCommand(_ => RequestClose?.Invoke(false));
-        BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory());
-        ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy);
+        BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory(), _ => CanEditPersonalSettings);
+        ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy && CanEditSystemSettings);
     }
+
+    public SettingsSurfaceScope Scope { get; }
 
     public IReadOnlyList<string> AvailableFonts { get; }
     public IReadOnlyList<string> LogLevels { get; }
 
     public ObservableCollection<UserStatusColorRowViewModel> UserStatusColors { get; } = [];
     public ObservableCollection<GlobalStatusColorRowViewModel> GlobalStatusColors { get; } = [];
+
+    public bool CanViewPersonalSettings { get; private set; }
+    public bool CanEditPersonalSettings { get; private set; }
+    public bool CanViewSystemSettings { get; private set; }
+    public bool CanEditSystemSettings { get; private set; }
+    public bool CanViewGlobalStatusColors { get; private set; }
+    public bool CanEditGlobalStatusColors { get; private set; }
 
     public string SummaryMessage
     {
@@ -81,55 +94,39 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
-    // —— Per-user: appearance ——
     public string FontFamily { get; set; } = UserAppSettingsDefaults.FontFamily;
     public double FontSize { get; set; } = UserAppSettingsDefaults.FontSize;
     public string ForegroundColor { get; set; } = UserAppSettingsDefaults.ForegroundColor;
     public string BackgroundColor { get; set; } = UserAppSettingsDefaults.BackgroundColor;
-
-    // —— Per-user: behavior ——
     public bool AllowMultipleInstances { get; set; } = UserAppSettingsDefaults.AllowMultipleInstances;
     public bool EnableAuthorizationTestMode { get; set; }
-
-    // —— Per-user: logging ——
     public bool LoggingEnabled { get; set; }
     public string? LogDirectory { get; set; }
     public string LogDirectoryDisplay =>
         string.IsNullOrWhiteSpace(LogDirectory)
             ? $"(ברירת מחדל: {LoggingSettingsMetadata.AppLoggerDefaultLocalLogDirectory})"
             : LogDirectory;
-
-    // —— Per-user: floating ——
     public double FloatingActiveOpacity { get; set; } = UserAppSettingsDefaults.FloatingActiveOpacity;
     public double FloatingIdleOpacity { get; set; } = UserAppSettingsDefaults.FloatingIdleOpacity;
 
-    // —— Global: email/office ——
     public string DefaultProjectTitle { get; set; } = SystemSettingsDefaults.DefaultProjectTitle;
     public string OfficeManagementProjectId { get; set; } = SystemSettingsDefaults.OfficeManagementProjectId;
     public string HourPriceDefault { get; set; } = SystemSettingsDefaults.HourPriceDefault;
     public string InboxFolderName { get; set; } = SystemSettingsDefaults.InboxFolderNameFallback;
     public string? InboxProjectName { get; set; }
     public int AccViewerMaxTabs { get; set; } = 10;
-
-    // —— Global: ACC ——
     public string AccServiceBaseUrl { get; set; } = string.Empty;
     public string AccBootstrapAdminEmail { get; set; } = string.Empty;
     public string AccProjectTemplateName { get; set; } = string.Empty;
     public string AccManualUploadAllowedExtensions { get; set; } = SystemSettingsDefaults.AccManualUploadAllowedExtensions;
-
-    // —— Global: inspection ——
     public string InspectionTemplatesFolderId { get; set; } = string.Empty;
     public string InspectionReportsFolderId { get; set; } = string.Empty;
     public string ReportsOutputRoot { get; set; } = string.Empty;
     public string StampTemplatePath { get; set; } = string.Empty;
-
-    // —— Global: status labels ——
     public string StatusLabelPassed { get; set; } = SystemSettingsDefaults.StatusLabelPassed;
     public string StatusLabelFailed { get; set; } = SystemSettingsDefaults.StatusLabelFailed;
     public string StatusLabelRecurringFailed { get; set; } = SystemSettingsDefaults.StatusLabelRecurringFailed;
     public string StatusLabelNotApplicable { get; set; } = SystemSettingsDefaults.StatusLabelNotApplicable;
-
-    // —— Global: AI ——
     public string OllamaBaseUrl { get; set; } = SystemSettingsDefaults.OllamaBaseUrl;
     public string OllamaModel { get; set; } = SystemSettingsDefaults.OllamaModel;
     public string AiModelSimple { get; set; } = string.Empty;
@@ -141,8 +138,6 @@ public sealed class SettingsViewModel : ObservableObject
     public string AiModelDeepAnalysis { get; set; } = string.Empty;
     public string AiProviderDeepAnalysis { get; set; } = string.Empty;
     public string AiConfiguredCloudModelsCsv { get; set; } = string.Empty;
-
-    // —— Global: centralized logging ——
     public string? CentralLogPath { get; set; }
     public int LocalRetentionDays { get; set; } = 14;
     public int CentralRetentionDays { get; set; } = 90;
@@ -154,7 +149,7 @@ public sealed class SettingsViewModel : ObservableObject
     public string SyncEngineCentralLevel { get; set; } = LogLevelDto.Warning.ToString();
 
     public string RestartRequiredHint =>
-        "הגדרות מסומנות כ״נדרש restart״ נשמרות במערכת; legacy consumers יקראו אותן בהפעלה הבאה.";
+        "הגדרות גלובליות נשמרות ב-DB; consumers שקוראים ב-bootstrap דורשים restart.";
 
     public string CentralLoggingRestartHint => CentralLoggingSettingsDto.RequiresRestartMessage;
 
@@ -171,32 +166,45 @@ public sealed class SettingsViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var user = await _appSettings.GetUserAppSettingsAsync().ConfigureAwait(true);
-            ApplyUserSettings(user);
-            _loadedLogging = user.Logging;
+            await RefreshPermissionFlagsAsync().ConfigureAwait(true);
 
-            var system = await _systemQuery.GetSystemSettingsAsync().ConfigureAwait(true);
-            ApplySystemSettings(system);
-
-            UserStatusColors.Clear();
-            GlobalStatusColors.Clear();
-
-            if (_currentUser?.UserId is int userId)
+            if (CanViewPersonalSettings)
             {
-                var personal = await _statusColors.GetUserStatusColorsAsync(userId).ConfigureAwait(true);
-                foreach (var row in personal)
+                var user = await _appSettings.GetUserAppSettingsAsync().ConfigureAwait(true);
+                ApplyUserSettings(user);
+                _loadedLogging = user.Logging;
+
+                UserStatusColors.Clear();
+                if (_currentUser?.UserId is int userId)
                 {
-                    UserStatusColors.Add(new UserStatusColorRowViewModel(row, userId, _statusColors, ReloadUserColorsAsync));
+                    var personal = await _statusColors.GetUserStatusColorsAsync(userId).ConfigureAwait(true);
+                    foreach (var row in personal)
+                    {
+                        UserStatusColors.Add(new UserStatusColorRowViewModel(row, userId, _statusColors, ReloadUserColorsAsync));
+                    }
                 }
             }
 
-            var global = await _statusColors.GetGlobalStatusColorsAsync().ConfigureAwait(true);
-            foreach (var row in global)
+            if (CanViewSystemSettings)
             {
-                GlobalStatusColors.Add(new GlobalStatusColorRowViewModel(row, _statusColors));
+                var system = await _systemQuery.GetSystemSettingsAsync().ConfigureAwait(true);
+                ApplySystemSettings(system);
+
+                GlobalStatusColors.Clear();
+                var global = await _statusColors.GetGlobalStatusColorsAsync().ConfigureAwait(true);
+                foreach (var row in global)
+                {
+                    GlobalStatusColors.Add(new GlobalStatusColorRowViewModel(row, _statusColors));
+                }
             }
 
-            SummaryMessage = "ההגדרות נטענו.";
+            SummaryMessage = CanViewPersonalSettings && CanViewSystemSettings
+                ? "ההגדרות נטענו."
+                : CanViewPersonalSettings
+                    ? "ההגדרות האישיות נטענו."
+                    : CanViewSystemSettings
+                        ? "הגדרות המערכת נטענו."
+                        : "אין הרשאה לצפות בהגדרות במסך זה.";
         }
         catch (Exception ex)
         {
@@ -206,6 +214,34 @@ public sealed class SettingsViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    internal async Task RefreshPermissionFlagsAsync(CancellationToken cancellationToken = default)
+    {
+        var hasUser = _currentUser?.UserId is not null;
+        var isAdmin = await _authorization
+            .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.SystemSettingsWrite, cancellationToken)
+            .ConfigureAwait(false);
+
+        var personalScope = Scope == SettingsSurfaceScope.Personal;
+        var systemScope = Scope == SettingsSurfaceScope.SystemAdmin;
+
+        CanViewPersonalSettings = personalScope && hasUser;
+        CanEditPersonalSettings = CanViewPersonalSettings;
+        CanViewSystemSettings = systemScope && isAdmin;
+        CanEditSystemSettings = CanViewSystemSettings;
+        CanViewGlobalStatusColors = CanViewSystemSettings;
+        CanEditGlobalStatusColors = CanEditSystemSettings;
+
+        OnPropertyChanged(nameof(CanViewPersonalSettings));
+        OnPropertyChanged(nameof(CanEditPersonalSettings));
+        OnPropertyChanged(nameof(CanViewSystemSettings));
+        OnPropertyChanged(nameof(CanEditSystemSettings));
+        OnPropertyChanged(nameof(CanViewGlobalStatusColors));
+        OnPropertyChanged(nameof(CanEditGlobalStatusColors));
+        SaveCommand.RaiseCanExecuteChanged();
+        BrowseLogDirectoryCommand.RaiseCanExecuteChanged();
+        ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
     }
 
     private async Task SaveAsync()
@@ -219,19 +255,34 @@ public sealed class SettingsViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var userDto = BuildUserDto();
-            await _appSettings.SaveUserAppSettingsAsync(userDto).ConfigureAwait(true);
+            var messages = new List<string>();
 
-            if (LoggingChanged(userDto.Logging))
+            if (CanEditPersonalSettings)
             {
-                _loggingRuntime.ApplyUserLogging(userDto.Logging);
-                _loadedLogging = userDto.Logging;
+                var userDto = BuildUserDto();
+                await _appSettings.SaveUserAppSettingsAsync(userDto).ConfigureAwait(true);
+
+                if (LoggingChanged(userDto.Logging))
+                {
+                    _loggingRuntime.ApplyUserLogging(userDto.Logging);
+                    _loadedLogging = userDto.Logging;
+                }
+
+                messages.Add("הגדרות אישיות נשמרו.");
             }
 
-            await _systemCommand.SaveSystemSettingsAsync(BuildSystemDto()).ConfigureAwait(true);
+            if (CanEditSystemSettings)
+            {
+                await _systemCommand.SaveSystemSettingsAsync(BuildSystemDto()).ConfigureAwait(true);
+                messages.Add("הגדרות מערכת נשמרו. " + CentralLoggingSettingsDto.RequiresRestartMessage);
+            }
 
-            SummaryMessage = "ההגדרות נשמרו. הגדרות גלובליות/לוג מרכזי — restart נדרש לצריכה מלאה ב-legacy.";
+            SummaryMessage = string.Join(" ", messages);
             RequestClose?.Invoke(true);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            SummaryMessage = "אין הרשאה לשמור הגדרות מערכת.";
         }
         catch (Exception ex)
         {
@@ -244,6 +295,37 @@ public sealed class SettingsViewModel : ObservableObject
     }
 
     private bool Validate(out string error)
+    {
+        if (CanEditPersonalSettings && !ValidatePersonal(out error))
+        {
+            return false;
+        }
+
+        if (CanEditSystemSettings && !ValidateSystem(out error))
+        {
+            return false;
+        }
+
+        error = string.Empty;
+        return CanEditPersonalSettings || CanEditSystemSettings;
+    }
+
+    private bool ValidatePersonal(out string error)
+    {
+        foreach (var hex in new[] { ForegroundColor, BackgroundColor })
+        {
+            if (!IsValidHexColor(hex))
+            {
+                error = $"צבע לא תקין: {hex}";
+                return false;
+            }
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private bool ValidateSystem(out string error)
     {
         if (string.IsNullOrWhiteSpace(DefaultProjectTitle))
         {
@@ -273,15 +355,6 @@ public sealed class SettingsViewModel : ObservableObject
         {
             error = "ימי שמירת לוג חייבים להיות מספרים חיוביים.";
             return false;
-        }
-
-        foreach (var hex in new[] { ForegroundColor, BackgroundColor })
-        {
-            if (!IsValidHexColor(hex))
-            {
-                error = $"צבע לא תקין: {hex}";
-                return false;
-            }
         }
 
         error = string.Empty;
@@ -412,6 +485,12 @@ public sealed class SettingsViewModel : ObservableObject
 
     private async Task ProbeCentralLogPathAsync()
     {
+        if (!CanEditSystemSettings)
+        {
+            SummaryMessage = "אין הרשאה לבדוק נתיב לוג מרכזי.";
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(CentralLogPath))
         {
             SummaryMessage = "נא להזין נתיב לוג מרכזי.";
@@ -436,11 +515,7 @@ public sealed class SettingsViewModel : ObservableObject
 
     private void BrowseLogDirectory()
     {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "בחר תיקיית לוג",
-        };
-
+        var dialog = new OpenFolderDialog { Title = "בחר תיקיית לוג" };
         if (dialog.ShowDialog() == true)
         {
             LogDirectory = dialog.FolderName;
@@ -479,8 +554,7 @@ public sealed class SettingsViewModel : ObservableObject
             hex = "#" + hex;
         }
 
-        return hex.Length is 7 or 9
-               && hex.Skip(1).All(Uri.IsHexDigit);
+        return hex.Length is 7 or 9 && hex.Skip(1).All(Uri.IsHexDigit);
     }
 }
 
@@ -502,7 +576,7 @@ public sealed class UserStatusColorRowViewModel : ObservableObject
         StatusId = dto.StatusId;
         StatusName = dto.StatusName;
         DefaultColorHex = dto.DefaultColorHex;
-        ColorHex = dto.ResolvedColorHex;
+        _colorHex = dto.ResolvedColorHex;
         HasOverride = dto.HasOverride;
         SaveOverrideCommand = new AsyncRelayCommand(SaveOverrideAsync);
         ResetCommand = new AsyncRelayCommand(ResetAsync);
@@ -546,7 +620,7 @@ public sealed class GlobalStatusColorRowViewModel : ObservableObject
         _service = service;
         StatusId = dto.StatusId;
         StatusName = dto.StatusName;
-        ColorHex = dto.ColorHex;
+        _colorHex = dto.ColorHex;
         SaveCommand = new AsyncRelayCommand(SaveAsync);
     }
 
@@ -563,6 +637,5 @@ public sealed class GlobalStatusColorRowViewModel : ObservableObject
 
     public AsyncRelayCommand SaveCommand { get; }
 
-    private Task SaveAsync()
-        => _service.SetGlobalDefaultColorAsync(StatusId, ColorHex);
+    private Task SaveAsync() => _service.SetGlobalDefaultColorAsync(StatusId, ColorHex);
 }

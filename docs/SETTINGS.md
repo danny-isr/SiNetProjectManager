@@ -91,7 +91,40 @@ Wired in `AddSiNetNewSystemGraph()`.
 
 ---
 
-## 5. Native UI (slice 2)
+## 5. Authorization policy (slice 2)
+
+Settings are split by **storage** and **who may view/edit**:
+
+| Category | Storage | View | Edit | Menu |
+| --- | --- | --- | --- | --- |
+| Personal appearance / behavior / floating | `settings.json` | Any authenticated user | Same | **הגדרות אישיות** |
+| Local logging toggle + path | `settings.json` | Authenticated user | Same; **runtime** via `ILoggingRuntimeApplier` | **הגדרות אישיות** |
+| User status colors | `UserStatusPreference` | Owner user | Owner user | **הגדרות אישיות** |
+| Global / admin settings | `SystemSettings` DB | `System.Settings.Write` | Same | **הגדרות מערכת** |
+| Central / server logging | `SystemSettings` `Logging.*` | Admin | Admin; **restart required** for bootstrap consumers | **הגדרות מערכת** |
+| Global status colors | `ProjectAssignmentStatus` | Admin | Admin | **הגדרות מערכת** |
+
+**Important:** Bootstrap reads (Serilog central path, retention, levels) require **application restart** to take effect.
+Storage remains JSON/DB — there is no separate “bootstrap storage”.
+
+### ViewModel flags
+
+`SettingsViewModel` exposes:
+
+- `CanViewPersonalSettings` / `CanEditPersonalSettings`
+- `CanViewSystemSettings` / `CanEditSystemSettings`
+- `CanViewGlobalStatusColors` / `CanEditGlobalStatusColors`
+
+Two shell menu entries open the same `SettingsWindow` with different `SettingsSurfaceScope`:
+
+- `Personal` — personal tabs only
+- `SystemAdmin` — admin/global tabs only
+
+Save is split: personal scope → `IAppSettingsService` (+ runtime applier for local logging); system scope → `ISystemSettingsCommandService` only.
+
+---
+
+## 6. Native UI
 
 | Component | Location |
 | --- | --- |
@@ -99,13 +132,14 @@ Wired in `AddSiNetNewSystemGraph()`.
 | View | `SettingsView.xaml` (TabControl sections) |
 | ViewModel | `SettingsViewModel.cs` |
 
-Menu **הגדרות** in `NewShellFactory` — gated by `System.Settings.Write` (Administrator).
+Menu **הגדרות אישיות** — any authenticated user (`ICurrentUserContext.UserId`).
+Menu **הגדרות מערכת** — gated by `System.Settings.Write` (Administrator).
 
 Save / Reload / Cancel. Central log path probe via `ILoggingSettingsCommandService.ProbeCentralLogPathAsync`.
 
 ---
 
-## 6. Boundaries
+## 7. Boundaries
 
 No schema/migrations. No Serilog bootstrap changes. Settings stored for features not yet migrated are **display + persist only**.
 
@@ -113,7 +147,7 @@ Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`.
 
 ---
 
-## 7. Remaining work
+## 8. Remaining work
 
 | Item | Notes |
 | --- | --- |
