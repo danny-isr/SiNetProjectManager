@@ -74,7 +74,7 @@ internal sealed class LocalAccProjectCatalogService(IDbContextFactory<SiNetSQLDb
             .ThenBy(static record => record.DisplayName, StringComparer.OrdinalIgnoreCase)
             .First();
 
-        return new AccProjectCatalogEntry(best.ProjectId, best.DisplayName, best.SourceLabel);
+        return new AccProjectCatalogEntry(best.ProjectId, best.DisplayName ?? best.ProjectId, best.SourceLabel);
     }
 
     private sealed record RawAccProjectCatalogRecord(

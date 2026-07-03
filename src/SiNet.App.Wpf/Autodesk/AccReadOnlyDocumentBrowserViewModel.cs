@@ -66,7 +66,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
         LoadLiveHubsCommand = new AsyncRelayCommand(LoadLiveHubsAsync, CanLoadLiveHubs);
         LoadLiveProjectsCommand = new AsyncRelayCommand(LoadLiveProjectsAsync, CanLoadLiveProjects);
-        UseSelectedLiveProjectCommand = new RelayCommand(_ => UseSelectedLiveProject(), _ => CanUseSelectedLiveProject());
+        UseSelectedLiveProjectCommand = new AsyncRelayCommand(UseSelectedLiveProjectAsync, CanUseSelectedLiveProject);
         BrowseFolderCommand = new AsyncRelayCommand(BrowseFolderAsync, CanBrowseFolder);
         BrowseParentFolderCommand = new AsyncRelayCommand(BrowseParentFolderAsync, CanBrowseParentFolder);
         OpenSelectedFolderCommand = new AsyncRelayCommand(OpenSelectedFolderAsync, CanOpenSelectedFolder);
@@ -282,7 +282,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
     public AsyncRelayCommand LoadLiveProjectsCommand { get; }
 
-    public RelayCommand UseSelectedLiveProjectCommand { get; }
+    public AsyncRelayCommand UseSelectedLiveProjectCommand { get; }
 
     public bool IsBusy
     {
@@ -626,7 +626,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         PublishSummary("נבחר קובץ מתיקיית ACC.");
     }
 
-    private void UseSelectedLiveProject()
+    public async Task UseSelectedLiveProjectAsync()
     {
         if (!CanUseSelectedLiveProject())
         {
@@ -635,8 +635,9 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
 
         var selectedProject = EnsureKnownProject(SelectedLiveProject!);
         SelectedKnownProject = selectedProject;
-        LiveDiscoverySummary = $"נבחר פרויקט live: {selectedProject.DisplayText}";
+        LiveDiscoverySummary = $"נבחר פרויקט live ונפתחת תיקיית Project Files: {selectedProject.DisplayText}";
         PublishSummary("נבחר פרויקט חי מ-ACC.");
+        await BrowseFolderCoreAsync(selectedProject.ProjectId, null, RootBrowseLabel, AccBrowseNavigationMode.Reset).ConfigureAwait(true);
     }
 
     private void CopyResolvedDocsUrl()

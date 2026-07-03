@@ -41,7 +41,7 @@
                     Command="{Binding LoadLiveProjectsCommand}"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
                     Margin="0,0,8,0"/>
-            <Button Content="השתמש בפרויקט live"
+            <Button Content="השתמש ופתח Project Files"
                     Command="{Binding UseSelectedLiveProjectCommand}"
                     Style="{DynamicResource SiSecondaryButtonStyle}"/>
         </StackPanel>

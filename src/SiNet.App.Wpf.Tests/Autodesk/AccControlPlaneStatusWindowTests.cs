@@ -257,7 +257,12 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildPresenter(),
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
-            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            new StubAccFolderBrowserService(new AccFolderBrowseResult(
+                "b.live-2",
+                "root-folder",
+                [
+                    new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
+                ])),
             new StubAccLiveProjectDiscoveryService(
                 [new AccHubCatalogEntry("b.hub-1", "Primary Hub", "EMEA")],
                 [new AccProjectCatalogEntry("b.live-2", "Live Tower", "LiveAcc")]),
@@ -268,10 +273,13 @@ public sealed class AccControlPlaneStatusWindowTests
         await vm.Browser.LoadLiveHubsAsync();
         await vm.Browser.LoadLiveProjectsAsync();
         vm.Browser.UseSelectedLiveProjectCommand.Execute(null);
+        await Task.Yield();
 
         Assert.Equal("b.live-2", vm.Browser.LookupProjectId);
+        Assert.Equal("root-folder", vm.Browser.LookupFolderId);
         Assert.Equal("Live Tower", vm.Browser.SelectedKnownProject?.DisplayName);
-        Assert.Contains("נטענו", vm.Browser.LiveDiscoverySummary, StringComparison.Ordinal);
+        Assert.Single(vm.Browser.BrowseFolders);
+        Assert.Contains("Project Files", vm.Browser.BrowseTrailText, StringComparison.Ordinal);
     }
 
     private static AccControlPlaneStatusPresenter BuildPresenter() =>
