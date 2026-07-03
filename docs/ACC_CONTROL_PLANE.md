@@ -50,11 +50,14 @@ side-effect-heavy document flows.
   read-only ACC panel in `SecretSetupView` for mode, endpoint, key metadata, health, and diag state.
 - `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` consumes the same seam in the
   `ACC (גלובלי)` tab for current-process runtime status, while keeping the stored
-  `AccService.BaseUrl` field separate.
+  `AccService.BaseUrl` field separate. The same tab now also hosts a manual runtime-only
+  `IAccDocumentService` lookup tester (`projectId + folderId + fileName`) plus copy/open actions
+  for the live-derived ACC Docs URL.
 - `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` exposes a dedicated shell-opened
   runtime-only ACC status window built on the same presenter/control, and now hosts a manual
   read-only `IAccDocumentService` lookup tester (`projectId + folderId + fileName`) plus a
-  docs URL preview generated only from the live-resolved ACC identifiers.
+  docs URL preview generated only from the live-resolved ACC identifiers, including copy/open
+  actions.
 
 ## 2. Runtime Rules
 
@@ -149,6 +152,7 @@ Current checks cover:
 - WPF harness secret wiring via `AddSiNetSecrets()`
 - shell/menu wiring for the dedicated ACC status window
 - status-window read-only document lookup over `IAccDocumentService`
+- settings-tab runtime-only read-only document lookup over `IAccDocumentService`
 
 ## 6. Next Slice
 

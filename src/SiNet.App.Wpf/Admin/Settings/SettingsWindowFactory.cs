@@ -1,6 +1,7 @@
 namespace SiNet.App.Wpf.Admin.Settings;
 
 using SiNet.App.Wpf.Autodesk;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 
@@ -38,6 +39,9 @@ public sealed class SettingsViewModelFactory
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
+    private readonly IAccDocumentService _accDocumentService;
+    private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
+    private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -50,6 +54,9 @@ public sealed class SettingsViewModelFactory
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
         AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
+        IAccDocumentService accDocumentService,
+        IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
+        IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser = null)
     {
@@ -61,6 +68,9 @@ public sealed class SettingsViewModelFactory
         _themeRuntime = themeRuntime;
         _statusColors = statusColors;
         _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter;
+        _accDocumentService = accDocumentService;
+        _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher;
+        _clipboardTextWriter = clipboardTextWriter;
         _authorization = authorization;
         _currentUser = currentUser;
     }
@@ -75,6 +85,9 @@ public sealed class SettingsViewModelFactory
             _themeRuntime,
             _statusColors,
             _accControlPlaneStatusPresenter,
+            _accDocumentService,
+            _resolvedDocsUrlLauncher,
+            _clipboardTextWriter,
             _authorization,
             _currentUser,
             scope);

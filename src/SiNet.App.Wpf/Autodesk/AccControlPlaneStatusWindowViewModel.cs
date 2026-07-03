@@ -217,7 +217,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             {
                 var versionText = string.IsNullOrWhiteSpace(result.VersionId) ? "(none)" : result.VersionId;
                 var viewerText = string.IsNullOrWhiteSpace(result.ViewerUrl) ? "(none)" : result.ViewerUrl;
-                LookupResolvedDocsUrl = BuildAccDocsUrl(result.ProjectId, LookupFolderId.Trim(), result.ItemId);
+                LookupResolvedDocsUrl = AccResolvedDocsUrlBuilder.Build(result.ProjectId, LookupFolderId.Trim(), result.ItemId);
                 LookupResultSummary =
                     $"נמצא פריט ACC: projectId={result.ProjectId}; itemId={result.ItemId}; versionId={versionText}; viewerUrl={viewerText}";
             }
@@ -234,25 +234,6 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         {
             IsBusy = false;
         }
-    }
-
-    private static string BuildAccDocsUrl(string projectId, string folderId, string itemId)
-    {
-        var docsProjectId = projectId.StartsWith("b.", StringComparison.OrdinalIgnoreCase)
-            ? projectId[2..]
-            : projectId;
-
-        var url = $"https://acc.autodesk.com/docs/files/projects/{docsProjectId}";
-        if (!string.IsNullOrWhiteSpace(folderId))
-        {
-            url += $"?folderUrn={Uri.EscapeDataString(folderId)}&entityId={Uri.EscapeDataString(itemId)}";
-        }
-        else
-        {
-            url += $"?entityId={Uri.EscapeDataString(itemId)}";
-        }
-
-        return url;
     }
 
     private void CopyResolvedDocsUrl()

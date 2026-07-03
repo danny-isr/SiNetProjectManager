@@ -533,6 +533,9 @@ public sealed class ThemeStage6Tests
                 accKeyDiagnostics.Object,
                 Mock.Of<IAccServiceHealthProbe>(),
                 Mock.Of<IAccServiceDiagnosticsProbe>()),
+            Mock.Of<IAccDocumentService>(),
+            Mock.Of<IAccResolvedDocsUrlLauncher>(),
+            Mock.Of<IClipboardTextWriter>(),
             auth.Object,
             new StubCurrentUser(1),
             SettingsSurfaceScope.Personal);

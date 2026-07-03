@@ -9,6 +9,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 
@@ -24,6 +25,9 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
+    private readonly IAccDocumentService _accDocumentService;
+    private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
+    private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -42,6 +46,11 @@ public sealed class SettingsViewModel : ObservableObject
     private string _accServiceRuntimeProjectsSummary = "פרויקטי ריצה ACC מוכרים: לא נטענו.";
     private string _accServiceRuntimeHealthSummary = "בריאות ריצה ACC: לא נטענה.";
     private string _accServiceRuntimeDiagnosticsSummary = "אבחון ריצה ACC: לא נטען.";
+    private string _accLookupProjectId = string.Empty;
+    private string _accLookupFolderId = string.Empty;
+    private string _accLookupFileName = string.Empty;
+    private string _accLookupResultSummary = "טרם בוצע חיפוש פריט ACC.";
+    private string _accLookupResolvedDocsUrl = string.Empty;
 
     public SettingsViewModel(
         IAppSettingsService appSettings,
@@ -52,6 +61,9 @@ public sealed class SettingsViewModel : ObservableObject
         IThemeRuntimeApplier themeRuntime,
         IStatusColorSettingsService statusColors,
         AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
+        IAccDocumentService accDocumentService,
+        IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
+        IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser,
         SettingsSurfaceScope scope)
@@ -64,6 +76,9 @@ public sealed class SettingsViewModel : ObservableObject
         _themeRuntime = themeRuntime ?? throw new ArgumentNullException(nameof(themeRuntime));
         _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
         _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter ?? throw new ArgumentNullException(nameof(accControlPlaneStatusPresenter));
+        _accDocumentService = accDocumentService ?? throw new ArgumentNullException(nameof(accDocumentService));
+        _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher ?? throw new ArgumentNullException(nameof(resolvedDocsUrlLauncher));
+        _clipboardTextWriter = clipboardTextWriter ?? throw new ArgumentNullException(nameof(clipboardTextWriter));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
         Scope = scope;
@@ -76,6 +91,9 @@ public sealed class SettingsViewModel : ObservableObject
         CancelCommand = new RelayCommand(_ => CancelAndClose());
         BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory(), _ => CanEditPersonalSettings);
         ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy && CanEditSystemSettings);
+        ResolveAccDocumentCommand = new AsyncRelayCommand(ResolveAccDocumentAsync, CanResolveAccDocument);
+        CopyAccResolvedDocsUrlCommand = new RelayCommand(_ => CopyAccResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
+        OpenAccResolvedDocsUrlCommand = new RelayCommand(_ => OpenAccResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
     }
 
     public SettingsSurfaceScope Scope { get; }
@@ -145,6 +163,9 @@ public sealed class SettingsViewModel : ObservableObject
                 SaveCommand.RaiseCanExecuteChanged();
                 ReloadCommand.RaiseCanExecuteChanged();
                 ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
+                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+                CopyAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+                OpenAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -691,11 +712,69 @@ public sealed class SettingsViewModel : ObservableObject
         private set => SetField(ref _accServiceRuntimeDiagnosticsSummary, value);
     }
 
+    public string AccLookupProjectId
+    {
+        get => _accLookupProjectId;
+        set
+        {
+            if (SetField(ref _accLookupProjectId, value))
+            {
+                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string AccLookupFolderId
+    {
+        get => _accLookupFolderId;
+        set
+        {
+            if (SetField(ref _accLookupFolderId, value))
+            {
+                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string AccLookupFileName
+    {
+        get => _accLookupFileName;
+        set
+        {
+            if (SetField(ref _accLookupFileName, value))
+            {
+                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string AccLookupResultSummary
+    {
+        get => _accLookupResultSummary;
+        private set => SetField(ref _accLookupResultSummary, value);
+    }
+
+    public string AccLookupResolvedDocsUrl
+    {
+        get => _accLookupResolvedDocsUrl;
+        private set
+        {
+            if (SetField(ref _accLookupResolvedDocsUrl, value))
+            {
+                CopyAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+                OpenAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     public AsyncRelayCommand SaveCommand { get; }
     public AsyncRelayCommand ReloadCommand { get; }
     public RelayCommand CancelCommand { get; }
     public RelayCommand BrowseLogDirectoryCommand { get; }
     public AsyncRelayCommand ProbeCentralLogPathCommand { get; }
+    public AsyncRelayCommand ResolveAccDocumentCommand { get; }
+    public RelayCommand CopyAccResolvedDocsUrlCommand { get; }
+    public RelayCommand OpenAccResolvedDocsUrlCommand { get; }
 
     public event Action<bool>? RequestClose;
 
@@ -791,6 +870,9 @@ public sealed class SettingsViewModel : ObservableObject
         SaveCommand.RaiseCanExecuteChanged();
         BrowseLogDirectoryCommand.RaiseCanExecuteChanged();
         ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
+        ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+        CopyAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+        OpenAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
     }
 
     private async Task SaveAsync()
@@ -1211,6 +1293,46 @@ public sealed class SettingsViewModel : ObservableObject
         AccServiceRuntimeDiagnosticsSummary = presentation.DiagnosticsSummary;
     }
 
+    public async Task ResolveAccDocumentAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var result = await _accDocumentService
+                .FindItemAsync(
+                    AccLookupProjectId.Trim(),
+                    AccLookupFolderId.Trim(),
+                    AccLookupFileName.Trim())
+                .ConfigureAwait(true);
+
+            if (result is null)
+            {
+                AccLookupResultSummary = "פריט ACC לא נמצא עבור projectId + folderId + fileName שסופקו.";
+                AccLookupResolvedDocsUrl = string.Empty;
+            }
+            else
+            {
+                var versionText = string.IsNullOrWhiteSpace(result.VersionId) ? "(none)" : result.VersionId;
+                var viewerText = string.IsNullOrWhiteSpace(result.ViewerUrl) ? "(none)" : result.ViewerUrl;
+                AccLookupResolvedDocsUrl = AccResolvedDocsUrlBuilder.Build(result.ProjectId, AccLookupFolderId.Trim(), result.ItemId);
+                AccLookupResultSummary =
+                    $"נמצא פריט ACC: projectId={result.ProjectId}; itemId={result.ItemId}; versionId={versionText}; viewerUrl={viewerText}";
+            }
+
+            SummaryMessage = "בדיקת lookup של פריט ACC הושלמה.";
+        }
+        catch (Exception ex)
+        {
+            AccLookupResultSummary = $"שגיאה ב-lookup של פריט ACC: {ex.Message}";
+            AccLookupResolvedDocsUrl = string.Empty;
+            SummaryMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private static string NormalizeAccServiceBaseUrl(string value)
     {
         var trimmed = value.Trim();
@@ -1219,6 +1341,54 @@ public sealed class SettingsViewModel : ObservableObject
 
     private static LogLevelDto ParseLevel(string value)
         => Enum.TryParse<LogLevelDto>(value, ignoreCase: true, out var level) ? level : LogLevelDto.Error;
+
+    private bool CanResolveAccDocument() =>
+        !IsBusy
+        && CanViewSystemSettings
+        && !string.IsNullOrWhiteSpace(AccLookupProjectId)
+        && !string.IsNullOrWhiteSpace(AccLookupFolderId)
+        && !string.IsNullOrWhiteSpace(AccLookupFileName);
+
+    private bool CanUseResolvedDocsUrl() =>
+        !IsBusy
+        && CanViewSystemSettings
+        && !string.IsNullOrWhiteSpace(AccLookupResolvedDocsUrl);
+
+    private void CopyAccResolvedDocsUrl()
+    {
+        if (!CanUseResolvedDocsUrl())
+        {
+            return;
+        }
+
+        try
+        {
+            _clipboardTextWriter.SetText(AccLookupResolvedDocsUrl);
+            SummaryMessage = "קישור ACC Docs הועתק ללוח.";
+        }
+        catch (Exception ex)
+        {
+            SummaryMessage = $"שגיאה בהעתקת קישור ACC Docs: {ex.Message}";
+        }
+    }
+
+    private void OpenAccResolvedDocsUrl()
+    {
+        if (!CanUseResolvedDocsUrl())
+        {
+            return;
+        }
+
+        try
+        {
+            _resolvedDocsUrlLauncher.Open(AccLookupResolvedDocsUrl);
+            SummaryMessage = "ACC Docs נפתח בדפדפן ברירת המחדל.";
+        }
+        catch (Exception ex)
+        {
+            SummaryMessage = $"שגיאה בפתיחת ACC Docs בדפדפן: {ex.Message}";
+        }
+    }
 
     private void NotifyPreviewTypographyChanged()
     {

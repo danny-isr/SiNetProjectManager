@@ -186,6 +186,7 @@
             </TabItem>
 
             <TabItem Header="ACC (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                 <StackPanel Margin="12" MaxWidth="640">
                     <TextBlock Text="AccService Base URL"/>
                     <TextBox Text="{Binding AccServiceBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
@@ -196,6 +197,60 @@
                                                          ProjectsSummary="{Binding AccServiceRuntimeProjectsSummary}"
                                                          HealthSummary="{Binding AccServiceRuntimeHealthSummary}"
                                                          DiagnosticsSummary="{Binding AccServiceRuntimeDiagnosticsSummary}"/>
+                    <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12"
+                            Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="בדיקת resolve חיה של פריט ACC (runtime בלבד)"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="בדיקה זו משתמשת ב-runtime הנוכחי של ההוסט בלבד. היא לא קוראת מה-Base URL שנערך למעלה עד שלא נשמר ומאותחל מחדש."
+                                       Margin="0,6,0,0"
+                                       Opacity="0.75"
+                                       TextWrapping="Wrap"/>
+
+                            <TextBlock Text="ACC Project ID" Margin="0,12,0,0"/>
+                            <TextBox Text="{Binding AccLookupProjectId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
+
+                            <TextBlock Text="ACC Folder ID" Margin="0,10,0,0"/>
+                            <TextBox Text="{Binding AccLookupFolderId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
+
+                            <TextBlock Text="File Name" Margin="0,10,0,0"/>
+                            <TextBox Text="{Binding AccLookupFileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
+
+                            <Button Content="בדוק פריט"
+                                    Command="{Binding ResolveAccDocumentCommand}"
+                                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,12,0,0"/>
+
+                            <TextBlock Text="{Binding AccLookupResultSummary}"
+                                       Margin="0,12,0,0"
+                                       TextWrapping="Wrap"/>
+
+                            <TextBlock Text="ACC Docs URL (נגזר רק אחרי resolve חי)"
+                                       Margin="0,12,0,0"/>
+                            <TextBox Text="{Binding AccLookupResolvedDocsUrl}"
+                                     Margin="0,4,0,0"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     MinHeight="52"/>
+
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,8,0,0">
+                                <Button Content="העתק קישור"
+                                        Command="{Binding CopyAccResolvedDocsUrlCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="פתח בדפדפן"
+                                        Command="{Binding OpenAccResolvedDocsUrlCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <TextBlock Text="Bootstrap Admin Email"/>
                     <TextBox Text="{Binding AccBootstrapAdminEmail, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                     <TextBlock Text="שם תבנית פרויקט ACC (stored — ללא refresh מ-ACC)"/>
@@ -204,6 +259,7 @@
                     <TextBox Text="{Binding AccManualUploadAllowedExtensions, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                     <TextBlock Text="ניהול קבוצות משתמשים — deferred (legacy UserGroupManagementWindow)" Opacity="0.6" TextWrapping="Wrap"/>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem Header="ביקורת / Drive (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">

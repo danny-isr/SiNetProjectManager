@@ -172,6 +172,45 @@ public sealed class NativeSettingsSurfaceTests
     }
 
     [Fact]
+    public async Task System_scope_resolves_live_acc_document_and_enables_copy_open_actions()
+    {
+        var documentService = new Mock<IAccDocumentService>();
+        documentService
+            .Setup(x => x.FindItemAsync("b.project-1", "folder-22", "drawing.pdf", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AccItemRef("b.project-1", "item-77", "version-3", null));
+
+        var launcher = new StubAccResolvedDocsUrlLauncher();
+        var clipboard = new StubClipboardTextWriter();
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            accDocumentService: documentService,
+            resolvedDocsUrlLauncher: launcher,
+            clipboardTextWriter: clipboard);
+
+        await vm.LoadAsync();
+        vm.AccLookupProjectId = "b.project-1";
+        vm.AccLookupFolderId = "folder-22";
+        vm.AccLookupFileName = "drawing.pdf";
+
+        await vm.ResolveAccDocumentAsync();
+
+        Assert.Contains("item-77", vm.AccLookupResultSummary, StringComparison.Ordinal);
+        Assert.Equal(
+            "https://acc.autodesk.com/docs/files/projects/project-1?folderUrn=folder-22&entityId=item-77",
+            vm.AccLookupResolvedDocsUrl);
+        Assert.True(vm.CopyAccResolvedDocsUrlCommand.CanExecute(null));
+        Assert.True(vm.OpenAccResolvedDocsUrlCommand.CanExecute(null));
+
+        vm.CopyAccResolvedDocsUrlCommand.Execute(null);
+        Assert.Equal(vm.AccLookupResolvedDocsUrl, clipboard.LastText);
+
+        vm.OpenAccResolvedDocsUrlCommand.Execute(null);
+        Assert.Equal(vm.AccLookupResolvedDocsUrl, launcher.LastOpenedUrl);
+    }
+
+    [Fact]
     public async Task System_save_rejects_invalid_acc_service_base_url()
     {
         var systemCommand = new Mock<ISystemSettingsCommandService>();
@@ -206,6 +245,11 @@ public sealed class NativeSettingsSurfaceTests
         Assert.Contains("AccServiceRuntimeProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeHealthSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeDiagnosticsSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccLookupProjectId", xaml, StringComparison.Ordinal);
+        Assert.Contains("ResolveAccDocumentCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccLookupResolvedDocsUrl", xaml, StringComparison.Ordinal);
+        Assert.Contains("CopyAccResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenAccResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -430,7 +474,10 @@ public sealed class NativeSettingsSurfaceTests
         Mock<IAccServiceModeProvider>? accModeProvider = null,
         Mock<IAccServiceKeyDiagnostics>? accKeyDiagnostics = null,
         Mock<IAccServiceHealthProbe>? accHealthProbe = null,
-        Mock<IAccServiceDiagnosticsProbe>? accDiagnosticsProbe = null)
+        Mock<IAccServiceDiagnosticsProbe>? accDiagnosticsProbe = null,
+        Mock<IAccDocumentService>? accDocumentService = null,
+        IAccResolvedDocsUrlLauncher? resolvedDocsUrlLauncher = null,
+        IClipboardTextWriter? clipboardTextWriter = null)
     {
         appSettings ??= MockAppSettings();
         systemQuery ??= MockSystemQuery();
@@ -442,6 +489,9 @@ public sealed class NativeSettingsSurfaceTests
         accKeyDiagnostics ??= MockAccKeyDiagnostics(new AccServiceKeyInfo(false, 0, null));
         accHealthProbe ??= MockAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured"));
         accDiagnosticsProbe ??= MockAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured"));
+        accDocumentService ??= new Mock<IAccDocumentService>();
+        resolvedDocsUrlLauncher ??= new StubAccResolvedDocsUrlLauncher();
+        clipboardTextWriter ??= new StubClipboardTextWriter();
 
         var loggingCommand = new Mock<ILoggingSettingsCommandService>();
         var statusColors = new Mock<IStatusColorSettingsService>();
@@ -470,6 +520,9 @@ public sealed class NativeSettingsSurfaceTests
                 accKeyDiagnostics.Object,
                 accHealthProbe.Object,
                 accDiagnosticsProbe.Object),
+            accDocumentService.Object,
+            resolvedDocsUrlLauncher,
+            clipboardTextWriter,
             auth.Object,
             new StubCurrentUser(userId),
             scope);
@@ -585,5 +638,19 @@ public sealed class NativeSettingsSurfaceTests
     private sealed class StubCurrentUser(int userId) : ICurrentUserContext
     {
         public int? UserId { get; } = userId;
+    }
+
+    private sealed class StubAccResolvedDocsUrlLauncher : IAccResolvedDocsUrlLauncher
+    {
+        public string? LastOpenedUrl { get; private set; }
+
+        public void Open(string url) => LastOpenedUrl = url;
+    }
+
+    private sealed class StubClipboardTextWriter : IClipboardTextWriter
+    {
+        public string? LastText { get; private set; }
+
+        public void SetText(string text) => LastText = text;
     }
 }
