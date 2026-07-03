@@ -31,105 +31,7 @@
                                    Margin="0,6,0,0"
                                    Opacity="0.75"
                                    TextWrapping="Wrap"/>
-
-                        <TextBlock Text="ACC Project ID" Margin="0,12,0,0"/>
-                        <TextBlock Text="Known ACC Project IDs"
-                                   Margin="0,8,0,0"
-                                   Opacity="0.8"/>
-                        <ComboBox ItemsSource="{Binding KnownProjectIds}"
-                                  SelectedItem="{Binding SelectedKnownProjectId, Mode=TwoWay}"
-                                  Margin="0,4,0,0"
-                                  IsSynchronizedWithCurrentItem="False"/>
-                        <TextBox Text="{Binding LookupProjectId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
-
-                        <TextBlock Text="ACC Folder ID" Margin="0,10,0,0"/>
-                        <TextBox Text="{Binding LookupFolderId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
-
-                        <TextBlock Text="File Name" Margin="0,10,0,0"/>
-                        <TextBox Text="{Binding LookupFileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"/>
-
-                        <TextBlock Text="ACC Browser (Project Files / current folder)"
-                                   Margin="0,12,0,0"
-                                   FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding BrowseSummary}"
-                                   Margin="0,6,0,0"
-                                   Opacity="0.8"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding BrowseTrailText}"
-                                   Margin="0,6,0,0"
-                                   FontWeight="SemiBold"
-                                   TextWrapping="Wrap"/>
-
-                        <StackPanel Orientation="Horizontal"
-                                    HorizontalAlignment="Left"
-                                    Margin="0,8,0,0">
-                            <Button Content="טען תיקיות/קבצים"
-                                    Command="{Binding BrowseFolderCommand}"
-                                    Style="{DynamicResource SiSecondaryButtonStyle}"
-                                    Margin="0,0,8,0"/>
-                            <Button Content="חזור אחורה"
-                                    Command="{Binding BrowseParentFolderCommand}"
-                                    Style="{DynamicResource SiSecondaryButtonStyle}"
-                                    Margin="0,0,8,0"/>
-                            <Button Content="היכנס לתיקייה נבחרת"
-                                    Command="{Binding OpenSelectedFolderCommand}"
-                                    Style="{DynamicResource SiSecondaryButtonStyle}"
-                                    Margin="0,0,8,0"/>
-                            <Button Content="בחר קובץ נבחר"
-                                    Command="{Binding UseSelectedFileCommand}"
-                                    Style="{DynamicResource SiSecondaryButtonStyle}"/>
-                        </StackPanel>
-
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="תיקיות" FontWeight="SemiBold"/>
-                                <ListBox ItemsSource="{Binding BrowseFolders}"
-                                         SelectedItem="{Binding SelectedBrowseFolder}"
-                                         Margin="0,4,0,0"
-                                         MinHeight="120"
-                                         DisplayMemberPath="DisplayName"/>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="קבצים" FontWeight="SemiBold"/>
-                                <ListBox ItemsSource="{Binding BrowseFiles}"
-                                         SelectedItem="{Binding SelectedBrowseFile}"
-                                         Margin="0,4,0,0"
-                                         MinHeight="120"
-                                         DisplayMemberPath="DisplayName"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBlock Text="{Binding LookupResultSummary}"
-                                   Margin="0,12,0,0"
-                                   TextWrapping="Wrap"/>
-
-                        <TextBlock Text="ACC Docs URL (נגזר רק אחרי resolve חי)"
-                                   Margin="0,12,0,0"/>
-                        <TextBox Text="{Binding LookupResolvedDocsUrl, Mode=OneWay}"
-                                 Margin="0,4,0,0"
-                                 IsReadOnly="True"
-                                 TextWrapping="Wrap"
-                                 AcceptsReturn="True"
-                                 MinHeight="52"/>
-
-                        <StackPanel Orientation="Horizontal"
-                                    HorizontalAlignment="Left"
-                                    Margin="0,8,0,0">
-                            <Button Content="העתק קישור"
-                                    Command="{Binding CopyResolvedDocsUrlCommand}"
-                                    Style="{DynamicResource SiSecondaryButtonStyle}"
-                                    Margin="0,0,8,0"/>
-                            <Button Content="פתח בדפדפן"
-                                    Command="{Binding OpenResolvedDocsUrlCommand}"
-                                    Style="{DynamicResource SiSecondaryButtonStyle}"/>
-                        </StackPanel>
+                        <autodesk:AccReadOnlyDocumentBrowserView DataContext="{Binding Browser}"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -145,10 +47,6 @@
             <Button Content="טען דוגמה מה-DB"
                     Command="{Binding LoadLookupSeedCommand}"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
-                    Margin="0,0,8,0"/>
-            <Button Content="בדוק פריט"
-                    Command="{Binding ResolveDocumentCommand}"
-                    Style="{DynamicResource SiPrimaryButtonStyle}"
                     Margin="0,0,8,0"/>
             <Button Content="רענון"
                     Command="{Binding RefreshCommand}"

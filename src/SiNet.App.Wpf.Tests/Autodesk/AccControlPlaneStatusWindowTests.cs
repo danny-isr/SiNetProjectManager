@@ -42,7 +42,7 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("b.project-1", vm.ProjectsSummary, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", vm.HealthSummary, StringComparison.Ordinal);
         Assert.Contains("DOMAIN\\acc", vm.DiagnosticsSummary, StringComparison.Ordinal);
-        Assert.Equal(["b.project-1", "b.project-2"], vm.KnownProjectIds);
+        Assert.Equal(["b.project-1", "b.project-2"], vm.Browser.KnownProjectIds);
     }
 
     [Fact]
@@ -51,22 +51,9 @@ public sealed class AccControlPlaneStatusWindowTests
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindowView.xaml");
 
         Assert.Contains("AccControlPlaneStatusView", xaml, StringComparison.Ordinal);
-        Assert.Contains("ProjectsSummary", xaml, StringComparison.Ordinal);
-        Assert.Contains("ResolveDocumentCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccReadOnlyDocumentBrowserView", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataContext=\"{Binding Browser}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("LoadLookupSeedCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("BrowseFolderCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("OpenSelectedFolderCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("UseSelectedFileCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("BrowseFolders", xaml, StringComparison.Ordinal);
-        Assert.Contains("BrowseFiles", xaml, StringComparison.Ordinal);
-        Assert.Contains("KnownProjectIds", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedKnownProjectId", xaml, StringComparison.Ordinal);
-        Assert.Contains("BrowseParentFolderCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("BrowseTrailText", xaml, StringComparison.Ordinal);
-        Assert.Contains("LookupProjectId", xaml, StringComparison.Ordinal);
-        Assert.Contains("LookupResolvedDocsUrl, Mode=OneWay", xaml, StringComparison.Ordinal);
-        Assert.Contains("CopyResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("OpenResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
     }
 
@@ -86,10 +73,10 @@ public sealed class AccControlPlaneStatusWindowTests
 
         await vm.LoadLookupSeedAsync();
 
-        Assert.Equal("b.project-1", vm.LookupProjectId);
-        Assert.Equal("folder-22", vm.LookupFolderId);
-        Assert.Equal("drawing.pdf", vm.LookupFileName);
-        Assert.Contains("נטענה דוגמה מה-DB", vm.LookupResultSummary, StringComparison.Ordinal);
+        Assert.Equal("b.project-1", vm.Browser.LookupProjectId);
+        Assert.Equal("folder-22", vm.Browser.LookupFolderId);
+        Assert.Equal("drawing.pdf", vm.Browser.LookupFileName);
+        Assert.Contains("נטענה דוגמה מה-DB", vm.Browser.LookupResultSummary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -103,17 +90,17 @@ public sealed class AccControlPlaneStatusWindowTests
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
         {
-            LookupFolderId = "old-folder",
-            LookupFileName = "old-file.pdf",
         };
+        vm.Browser.LookupFolderId = "old-folder";
+        vm.Browser.LookupFileName = "old-file.pdf";
 
         await vm.LoadAsync();
-        vm.SelectedKnownProjectId = "b.project-1";
+        vm.Browser.SelectedKnownProjectId = "b.project-1";
 
-        Assert.Equal("b.project-1", vm.LookupProjectId);
-        Assert.Equal(string.Empty, vm.LookupFolderId);
-        Assert.Equal(string.Empty, vm.LookupFileName);
-        Assert.Equal("טרם נטען תוכן ACC.", vm.BrowseSummary);
+        Assert.Equal("b.project-1", vm.Browser.LookupProjectId);
+        Assert.Equal(string.Empty, vm.Browser.LookupFolderId);
+        Assert.Equal(string.Empty, vm.Browser.LookupFileName);
+        Assert.Equal("טרם נטען תוכן ACC.", vm.Browser.BrowseSummary);
     }
 
     [Fact]
@@ -132,21 +119,20 @@ public sealed class AccControlPlaneStatusWindowTests
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
-        {
-            LookupProjectId = "b.project-1",
-        };
+        ;
+        vm.Browser.LookupProjectId = "b.project-1";
 
-        await vm.BrowseFolderAsync();
+        await vm.Browser.BrowseFolderAsync();
 
-        Assert.Equal("root-folder", vm.LookupFolderId);
-        Assert.Single(vm.BrowseFolders);
-        Assert.Single(vm.BrowseFiles);
-        Assert.Equal("A Folder", vm.BrowseFolders[0].DisplayName);
-        Assert.Equal("B File.pdf", vm.BrowseFiles[0].DisplayName);
+        Assert.Equal("root-folder", vm.Browser.LookupFolderId);
+        Assert.Single(vm.Browser.BrowseFolders);
+        Assert.Single(vm.Browser.BrowseFiles);
+        Assert.Equal("A Folder", vm.Browser.BrowseFolders[0].DisplayName);
+        Assert.Equal("B File.pdf", vm.Browser.BrowseFiles[0].DisplayName);
 
-        vm.SelectedBrowseFile = vm.BrowseFiles[0];
-        vm.UseSelectedFileCommand.Execute(null);
-        Assert.Equal("B File.pdf", vm.LookupFileName);
+        vm.Browser.SelectedBrowseFile = vm.Browser.BrowseFiles[0];
+        vm.Browser.UseSelectedFileCommand.Execute(null);
+        Assert.Equal("B File.pdf", vm.Browser.LookupFileName);
     }
 
     [Fact]
@@ -178,22 +164,21 @@ public sealed class AccControlPlaneStatusWindowTests
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
-        {
-            LookupProjectId = "b.project-1",
-        };
+        ;
+        vm.Browser.LookupProjectId = "b.project-1";
 
-        await vm.BrowseFolderAsync();
-        await vm.OpenSelectedFolderAsync();
+        await vm.Browser.BrowseFolderAsync();
+        await vm.Browser.OpenSelectedFolderAsync();
 
-        Assert.Equal("folder-a", vm.LookupFolderId);
-        Assert.Equal("Project Files / A Folder", vm.BrowseTrailText);
-        Assert.True(vm.BrowseParentFolderCommand.CanExecute(null));
+        Assert.Equal("folder-a", vm.Browser.LookupFolderId);
+        Assert.Equal("Project Files / A Folder", vm.Browser.BrowseTrailText);
+        Assert.True(vm.Browser.BrowseParentFolderCommand.CanExecute(null));
 
-        await vm.BrowseParentFolderAsync();
+        await vm.Browser.BrowseParentFolderAsync();
 
-        Assert.Equal("root-folder", vm.LookupFolderId);
-        Assert.Equal("Project Files", vm.BrowseTrailText);
-        Assert.False(vm.BrowseParentFolderCommand.CanExecute(null));
+        Assert.Equal("root-folder", vm.Browser.LookupFolderId);
+        Assert.Equal("Project Files", vm.Browser.BrowseTrailText);
+        Assert.False(vm.Browser.BrowseParentFolderCommand.CanExecute(null));
     }
 
     [Fact]
@@ -207,24 +192,22 @@ public sealed class AccControlPlaneStatusWindowTests
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
             launcher,
-            clipboard)
-        {
-            LookupProjectId = "b.project-1",
-            LookupFolderId = "folder-22",
-            LookupFileName = "drawing.pdf",
-        };
+            clipboard);
+        vm.Browser.LookupProjectId = "b.project-1";
+        vm.Browser.LookupFolderId = "folder-22";
+        vm.Browser.LookupFileName = "drawing.pdf";
 
-        await vm.ResolveDocumentAsync();
+        await vm.Browser.ResolveDocumentAsync();
 
-        Assert.True(vm.CopyResolvedDocsUrlCommand.CanExecute(null));
-        Assert.True(vm.OpenResolvedDocsUrlCommand.CanExecute(null));
+        Assert.True(vm.Browser.CopyResolvedDocsUrlCommand.CanExecute(null));
+        Assert.True(vm.Browser.OpenResolvedDocsUrlCommand.CanExecute(null));
 
-        vm.CopyResolvedDocsUrlCommand.Execute(null);
-        Assert.Equal(vm.LookupResolvedDocsUrl, clipboard.LastText);
+        vm.Browser.CopyResolvedDocsUrlCommand.Execute(null);
+        Assert.Equal(vm.Browser.LookupResolvedDocsUrl, clipboard.LastText);
         Assert.Contains("הועתק", vm.SummaryMessage, StringComparison.Ordinal);
 
-        vm.OpenResolvedDocsUrlCommand.Execute(null);
-        Assert.Equal(vm.LookupResolvedDocsUrl, launcher.LastOpenedUrl);
+        vm.Browser.OpenResolvedDocsUrlCommand.Execute(null);
+        Assert.Equal(vm.Browser.LookupResolvedDocsUrl, launcher.LastOpenedUrl);
         Assert.Contains("נפתח בדפדפן", vm.SummaryMessage, StringComparison.Ordinal);
     }
 
@@ -237,20 +220,18 @@ public sealed class AccControlPlaneStatusWindowTests
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
-            new StubClipboardTextWriter())
-        {
-            LookupProjectId = "b.project-1",
-            LookupFolderId = "folder-22",
-            LookupFileName = "drawing.pdf",
-        };
+            new StubClipboardTextWriter());
+        vm.Browser.LookupProjectId = "b.project-1";
+        vm.Browser.LookupFolderId = "folder-22";
+        vm.Browser.LookupFileName = "drawing.pdf";
 
-        await vm.ResolveDocumentAsync();
+        await vm.Browser.ResolveDocumentAsync();
 
-        Assert.Contains("item-77", vm.LookupResultSummary, StringComparison.Ordinal);
-        Assert.Contains("version-3", vm.LookupResultSummary, StringComparison.Ordinal);
+        Assert.Contains("item-77", vm.Browser.LookupResultSummary, StringComparison.Ordinal);
+        Assert.Contains("version-3", vm.Browser.LookupResultSummary, StringComparison.Ordinal);
         Assert.Equal(
             "https://acc.autodesk.com/docs/files/projects/project-1?folderUrn=folder-22&entityId=item-77",
-            vm.LookupResolvedDocsUrl);
+            vm.Browser.LookupResolvedDocsUrl);
     }
 
     private static AccControlPlaneStatusPresenter BuildPresenter() =>

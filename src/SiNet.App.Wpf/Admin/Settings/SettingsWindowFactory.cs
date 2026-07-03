@@ -40,6 +40,7 @@ public sealed class SettingsViewModelFactory
     private readonly IStatusColorSettingsService _statusColors;
     private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
     private readonly IAccDocumentService _accDocumentService;
+    private readonly IAccFolderBrowserService _accFolderBrowserService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
     private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly IAuthorizationQueryService _authorization;
@@ -55,6 +56,7 @@ public sealed class SettingsViewModelFactory
         IStatusColorSettingsService statusColors,
         AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
         IAccDocumentService accDocumentService,
+        IAccFolderBrowserService accFolderBrowserService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
@@ -69,6 +71,7 @@ public sealed class SettingsViewModelFactory
         _statusColors = statusColors;
         _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter;
         _accDocumentService = accDocumentService;
+        _accFolderBrowserService = accFolderBrowserService;
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher;
         _clipboardTextWriter = clipboardTextWriter;
         _authorization = authorization;
@@ -86,6 +89,7 @@ public sealed class SettingsViewModelFactory
             _statusColors,
             _accControlPlaneStatusPresenter,
             _accDocumentService,
+            _accFolderBrowserService,
             _resolvedDocsUrlLauncher,
             _clipboardTextWriter,
             _authorization,

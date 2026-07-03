@@ -167,8 +167,49 @@ public sealed class NativeSettingsSurfaceTests
         Assert.Contains("runtime-acc.example.com", vm.AccServiceRuntimeModeSummary, StringComparison.Ordinal);
         Assert.Contains("abc123def456", vm.AccServiceRuntimeKeySummary, StringComparison.Ordinal);
         Assert.Contains("b.project-1", vm.AccServiceRuntimeProjectsSummary, StringComparison.Ordinal);
+        Assert.Equal(["b.project-1", "b.project-2"], vm.AccKnownProjectIds);
         Assert.Contains("/v1/acc/health", vm.AccServiceRuntimeHealthSummary, StringComparison.Ordinal);
         Assert.Contains("DOMAIN\\runtime", vm.AccServiceRuntimeDiagnosticsSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task System_scope_can_select_known_acc_project_and_browse_runtime_folder_contents()
+    {
+        var folderBrowserService = new Mock<IAccFolderBrowserService>();
+        folderBrowserService
+            .Setup(x => x.BrowseAsync("b.project-1", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AccFolderBrowseResult(
+                "b.project-1",
+                "root-folder",
+                [
+                    new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
+                    new AccFolderBrowseEntry("item-b", "B File.pdf", AccFolderEntryKind.Item, 123, null, null),
+                ]));
+
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            accProjectService: MockAccProjectService(["b.project-1", "b.project-2"]),
+            accFolderBrowserService: folderBrowserService);
+
+        await vm.LoadAsync();
+        vm.SelectedAccKnownProjectId = "b.project-1";
+
+        Assert.Equal("b.project-1", vm.AccLookupProjectId);
+        Assert.Equal(string.Empty, vm.AccLookupFolderId);
+        Assert.Equal(string.Empty, vm.AccLookupFileName);
+
+        await vm.BrowseAccFolderAsync();
+
+        Assert.Equal("root-folder", vm.AccLookupFolderId);
+        Assert.Single(vm.AccBrowseFolders);
+        Assert.Single(vm.AccBrowseFiles);
+        Assert.Equal("Project Files", vm.AccBrowseTrailText);
+
+        vm.SelectedAccBrowseFile = vm.AccBrowseFiles[0];
+        vm.UseSelectedAccFileCommand.Execute(null);
+        Assert.Equal("B File.pdf", vm.AccLookupFileName);
     }
 
     [Fact]
@@ -245,11 +286,8 @@ public sealed class NativeSettingsSurfaceTests
         Assert.Contains("AccServiceRuntimeProjectsSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeHealthSummary", xaml, StringComparison.Ordinal);
         Assert.Contains("AccServiceRuntimeDiagnosticsSummary", xaml, StringComparison.Ordinal);
-        Assert.Contains("AccLookupProjectId", xaml, StringComparison.Ordinal);
-        Assert.Contains("ResolveAccDocumentCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("AccLookupResolvedDocsUrl, Mode=OneWay", xaml, StringComparison.Ordinal);
-        Assert.Contains("CopyAccResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("OpenAccResolvedDocsUrlCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("AccReadOnlyDocumentBrowserView", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataContext=\"{Binding AccBrowser}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -476,6 +514,7 @@ public sealed class NativeSettingsSurfaceTests
         Mock<IAccServiceHealthProbe>? accHealthProbe = null,
         Mock<IAccServiceDiagnosticsProbe>? accDiagnosticsProbe = null,
         Mock<IAccDocumentService>? accDocumentService = null,
+        Mock<IAccFolderBrowserService>? accFolderBrowserService = null,
         IAccResolvedDocsUrlLauncher? resolvedDocsUrlLauncher = null,
         IClipboardTextWriter? clipboardTextWriter = null)
     {
@@ -490,6 +529,7 @@ public sealed class NativeSettingsSurfaceTests
         accHealthProbe ??= MockAccHealthProbe(new AccServiceHealthResult(false, AccServiceHealthState.NotConfigured, null, "Not configured"));
         accDiagnosticsProbe ??= MockAccDiagnosticsProbe(new AccServiceDiagnosticsResult(false, null, false, null, 0, null, false, "Not configured", false, "Not configured"));
         accDocumentService ??= new Mock<IAccDocumentService>();
+        accFolderBrowserService ??= new Mock<IAccFolderBrowserService>();
         resolvedDocsUrlLauncher ??= new StubAccResolvedDocsUrlLauncher();
         clipboardTextWriter ??= new StubClipboardTextWriter();
 
@@ -521,6 +561,7 @@ public sealed class NativeSettingsSurfaceTests
                 accHealthProbe.Object,
                 accDiagnosticsProbe.Object),
             accDocumentService.Object,
+            accFolderBrowserService.Object,
             resolvedDocsUrlLauncher,
             clipboardTextWriter,
             auth.Object,

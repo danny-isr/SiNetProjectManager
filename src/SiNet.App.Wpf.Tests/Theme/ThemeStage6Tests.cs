@@ -534,6 +534,7 @@ public sealed class ThemeStage6Tests
                 Mock.Of<IAccServiceHealthProbe>(),
                 Mock.Of<IAccServiceDiagnosticsProbe>()),
             Mock.Of<IAccDocumentService>(),
+            Mock.Of<IAccFolderBrowserService>(),
             Mock.Of<IAccResolvedDocsUrlLauncher>(),
             Mock.Of<IClipboardTextWriter>(),
             auth.Object,

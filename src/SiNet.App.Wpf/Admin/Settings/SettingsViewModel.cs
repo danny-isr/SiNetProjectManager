@@ -25,9 +25,6 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly IThemeRuntimeApplier _themeRuntime;
     private readonly IStatusColorSettingsService _statusColors;
     private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
-    private readonly IAccDocumentService _accDocumentService;
-    private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
-    private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -46,11 +43,6 @@ public sealed class SettingsViewModel : ObservableObject
     private string _accServiceRuntimeProjectsSummary = "פרויקטי ריצה ACC מוכרים: לא נטענו.";
     private string _accServiceRuntimeHealthSummary = "בריאות ריצה ACC: לא נטענה.";
     private string _accServiceRuntimeDiagnosticsSummary = "אבחון ריצה ACC: לא נטען.";
-    private string _accLookupProjectId = string.Empty;
-    private string _accLookupFolderId = string.Empty;
-    private string _accLookupFileName = string.Empty;
-    private string _accLookupResultSummary = "טרם בוצע חיפוש פריט ACC.";
-    private string _accLookupResolvedDocsUrl = string.Empty;
 
     public SettingsViewModel(
         IAppSettingsService appSettings,
@@ -62,6 +54,7 @@ public sealed class SettingsViewModel : ObservableObject
         IStatusColorSettingsService statusColors,
         AccControlPlaneStatusPresenter accControlPlaneStatusPresenter,
         IAccDocumentService accDocumentService,
+        IAccFolderBrowserService accFolderBrowserService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
@@ -76,30 +69,41 @@ public sealed class SettingsViewModel : ObservableObject
         _themeRuntime = themeRuntime ?? throw new ArgumentNullException(nameof(themeRuntime));
         _statusColors = statusColors ?? throw new ArgumentNullException(nameof(statusColors));
         _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter ?? throw new ArgumentNullException(nameof(accControlPlaneStatusPresenter));
-        _accDocumentService = accDocumentService ?? throw new ArgumentNullException(nameof(accDocumentService));
-        _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher ?? throw new ArgumentNullException(nameof(resolvedDocsUrlLauncher));
-        _clipboardTextWriter = clipboardTextWriter ?? throw new ArgumentNullException(nameof(clipboardTextWriter));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
         Scope = scope;
 
         AvailableFonts = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(f => f).ToList();
         LogLevels = Enum.GetNames<LogLevelDto>();
+        AccBrowser = new AccReadOnlyDocumentBrowserViewModel(
+            accDocumentService,
+            accFolderBrowserService,
+            resolvedDocsUrlLauncher,
+            clipboardTextWriter,
+            canInteract: () => CanViewSystemSettings,
+            isHostBusy: () => IsBusy,
+            summaryMessageSink: message => SummaryMessage = message);
+        AccBrowser.PropertyChanged += (_, e) => ForwardAccBrowserPropertyChanged(e.PropertyName);
 
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy && (CanEditPersonalSettings || CanEditSystemSettings));
-        ReloadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
+        SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy && !AccBrowser.IsBusy && (CanEditPersonalSettings || CanEditSystemSettings));
+        ReloadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy && !AccBrowser.IsBusy);
         CancelCommand = new RelayCommand(_ => CancelAndClose());
-        BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory(), _ => CanEditPersonalSettings);
-        ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy && CanEditSystemSettings);
-        ResolveAccDocumentCommand = new AsyncRelayCommand(ResolveAccDocumentAsync, CanResolveAccDocument);
-        CopyAccResolvedDocsUrlCommand = new RelayCommand(_ => CopyAccResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
-        OpenAccResolvedDocsUrlCommand = new RelayCommand(_ => OpenAccResolvedDocsUrl(), _ => CanUseResolvedDocsUrl());
+        BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory(), _ => !AccBrowser.IsBusy && CanEditPersonalSettings);
+        ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy && !AccBrowser.IsBusy && CanEditSystemSettings);
+        BrowseAccFolderCommand = AccBrowser.BrowseFolderCommand;
+        BrowseAccParentFolderCommand = AccBrowser.BrowseParentFolderCommand;
+        OpenSelectedAccFolderCommand = AccBrowser.OpenSelectedFolderCommand;
+        UseSelectedAccFileCommand = AccBrowser.UseSelectedFileCommand;
+        ResolveAccDocumentCommand = AccBrowser.ResolveDocumentCommand;
+        CopyAccResolvedDocsUrlCommand = AccBrowser.CopyResolvedDocsUrlCommand;
+        OpenAccResolvedDocsUrlCommand = AccBrowser.OpenResolvedDocsUrlCommand;
     }
 
     public SettingsSurfaceScope Scope { get; }
 
     public IReadOnlyList<string> AvailableFonts { get; }
     public IReadOnlyList<string> LogLevels { get; }
+    public AccReadOnlyDocumentBrowserViewModel AccBrowser { get; }
 
     public ObservableCollection<UserStatusColorRowViewModel> UserStatusColors { get; } = [];
     public ObservableCollection<GlobalStatusColorRowViewModel> GlobalStatusColors { get; } = [];
@@ -163,9 +167,7 @@ public sealed class SettingsViewModel : ObservableObject
                 SaveCommand.RaiseCanExecuteChanged();
                 ReloadCommand.RaiseCanExecuteChanged();
                 ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
-                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
-                CopyAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
-                OpenAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+                AccBrowser.NotifyHostStateChanged();
             }
         }
     }
@@ -712,57 +714,100 @@ public sealed class SettingsViewModel : ObservableObject
         private set => SetField(ref _accServiceRuntimeDiagnosticsSummary, value);
     }
 
-    public string AccLookupProjectId
+    public ObservableCollection<string> AccKnownProjectIds => AccBrowser.KnownProjectIds;
+
+    public string? SelectedAccKnownProjectId
     {
-        get => _accLookupProjectId;
+        get => AccBrowser.SelectedKnownProjectId;
         set
         {
-            if (SetField(ref _accLookupProjectId, value))
+            if (!string.Equals(AccBrowser.SelectedKnownProjectId, value, StringComparison.Ordinal))
             {
-                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+                AccBrowser.SelectedKnownProjectId = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AccLookupProjectId));
+                OnPropertyChanged(nameof(AccLookupFolderId));
+                OnPropertyChanged(nameof(AccLookupFileName));
+                OnPropertyChanged(nameof(AccBrowseSummary));
+                OnPropertyChanged(nameof(AccBrowseTrailText));
+            }
+        }
+    }
+
+    public string AccLookupProjectId
+    {
+        get => AccBrowser.LookupProjectId;
+        set
+        {
+            if (!string.Equals(AccBrowser.LookupProjectId, value, StringComparison.Ordinal))
+            {
+                AccBrowser.LookupProjectId = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectedAccKnownProjectId));
             }
         }
     }
 
     public string AccLookupFolderId
     {
-        get => _accLookupFolderId;
+        get => AccBrowser.LookupFolderId;
         set
         {
-            if (SetField(ref _accLookupFolderId, value))
+            if (!string.Equals(AccBrowser.LookupFolderId, value, StringComparison.Ordinal))
             {
-                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+                AccBrowser.LookupFolderId = value;
+                OnPropertyChanged();
             }
         }
     }
 
     public string AccLookupFileName
     {
-        get => _accLookupFileName;
+        get => AccBrowser.LookupFileName;
         set
         {
-            if (SetField(ref _accLookupFileName, value))
+            if (!string.Equals(AccBrowser.LookupFileName, value, StringComparison.Ordinal))
             {
-                ResolveAccDocumentCommand.RaiseCanExecuteChanged();
+                AccBrowser.LookupFileName = value;
+                OnPropertyChanged();
             }
         }
     }
 
-    public string AccLookupResultSummary
+    public string AccLookupResultSummary => AccBrowser.LookupResultSummary;
+
+    public string AccLookupResolvedDocsUrl => AccBrowser.LookupResolvedDocsUrl;
+
+    public string AccBrowseSummary => AccBrowser.BrowseSummary;
+
+    public string AccBrowseTrailText => AccBrowser.BrowseTrailText;
+
+    public ObservableCollection<AccFolderBrowseEntry> AccBrowseFolders => AccBrowser.BrowseFolders;
+
+    public ObservableCollection<AccFolderBrowseEntry> AccBrowseFiles => AccBrowser.BrowseFiles;
+
+    public AccFolderBrowseEntry? SelectedAccBrowseFolder
     {
-        get => _accLookupResultSummary;
-        private set => SetField(ref _accLookupResultSummary, value);
+        get => AccBrowser.SelectedBrowseFolder;
+        set
+        {
+            if (!Equals(AccBrowser.SelectedBrowseFolder, value))
+            {
+                AccBrowser.SelectedBrowseFolder = value;
+                OnPropertyChanged();
+            }
+        }
     }
 
-    public string AccLookupResolvedDocsUrl
+    public AccFolderBrowseEntry? SelectedAccBrowseFile
     {
-        get => _accLookupResolvedDocsUrl;
-        private set
+        get => AccBrowser.SelectedBrowseFile;
+        set
         {
-            if (SetField(ref _accLookupResolvedDocsUrl, value))
+            if (!Equals(AccBrowser.SelectedBrowseFile, value))
             {
-                CopyAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
-                OpenAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+                AccBrowser.SelectedBrowseFile = value;
+                OnPropertyChanged();
             }
         }
     }
@@ -772,6 +817,10 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand CancelCommand { get; }
     public RelayCommand BrowseLogDirectoryCommand { get; }
     public AsyncRelayCommand ProbeCentralLogPathCommand { get; }
+    public AsyncRelayCommand BrowseAccFolderCommand { get; }
+    public AsyncRelayCommand BrowseAccParentFolderCommand { get; }
+    public AsyncRelayCommand OpenSelectedAccFolderCommand { get; }
+    public RelayCommand UseSelectedAccFileCommand { get; }
     public AsyncRelayCommand ResolveAccDocumentCommand { get; }
     public RelayCommand CopyAccResolvedDocsUrlCommand { get; }
     public RelayCommand OpenAccResolvedDocsUrlCommand { get; }
@@ -870,9 +919,7 @@ public sealed class SettingsViewModel : ObservableObject
         SaveCommand.RaiseCanExecuteChanged();
         BrowseLogDirectoryCommand.RaiseCanExecuteChanged();
         ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
-        ResolveAccDocumentCommand.RaiseCanExecuteChanged();
-        CopyAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
-        OpenAccResolvedDocsUrlCommand.RaiseCanExecuteChanged();
+        AccBrowser.NotifyHostStateChanged();
     }
 
     private async Task SaveAsync()
@@ -1289,49 +1336,22 @@ public sealed class SettingsViewModel : ObservableObject
         AccServiceRuntimeModeSummary = presentation.ModeSummary;
         AccServiceRuntimeKeySummary = presentation.KeySummary;
         AccServiceRuntimeProjectsSummary = presentation.ProjectsSummary;
+        AccBrowser.LoadKnownProjectIds(presentation.KnownProjectIds);
         AccServiceRuntimeHealthSummary = presentation.HealthSummary;
         AccServiceRuntimeDiagnosticsSummary = presentation.DiagnosticsSummary;
     }
 
+    public async Task BrowseAccFolderAsync()
+        => await AccBrowser.BrowseFolderAsync().ConfigureAwait(true);
+
+    public async Task OpenSelectedAccFolderAsync()
+        => await AccBrowser.OpenSelectedFolderAsync().ConfigureAwait(true);
+
+    public async Task BrowseAccParentFolderAsync()
+        => await AccBrowser.BrowseParentFolderAsync().ConfigureAwait(true);
+
     public async Task ResolveAccDocumentAsync()
-    {
-        IsBusy = true;
-        try
-        {
-            var result = await _accDocumentService
-                .FindItemAsync(
-                    AccLookupProjectId.Trim(),
-                    AccLookupFolderId.Trim(),
-                    AccLookupFileName.Trim())
-                .ConfigureAwait(true);
-
-            if (result is null)
-            {
-                AccLookupResultSummary = "פריט ACC לא נמצא עבור projectId + folderId + fileName שסופקו.";
-                AccLookupResolvedDocsUrl = string.Empty;
-            }
-            else
-            {
-                var versionText = string.IsNullOrWhiteSpace(result.VersionId) ? "(none)" : result.VersionId;
-                var viewerText = string.IsNullOrWhiteSpace(result.ViewerUrl) ? "(none)" : result.ViewerUrl;
-                AccLookupResolvedDocsUrl = AccResolvedDocsUrlBuilder.Build(result.ProjectId, AccLookupFolderId.Trim(), result.ItemId);
-                AccLookupResultSummary =
-                    $"נמצא פריט ACC: projectId={result.ProjectId}; itemId={result.ItemId}; versionId={versionText}; viewerUrl={viewerText}";
-            }
-
-            SummaryMessage = "בדיקת lookup של פריט ACC הושלמה.";
-        }
-        catch (Exception ex)
-        {
-            AccLookupResultSummary = $"שגיאה ב-lookup של פריט ACC: {ex.Message}";
-            AccLookupResolvedDocsUrl = string.Empty;
-            SummaryMessage = ex.Message;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+        => await AccBrowser.ResolveDocumentAsync().ConfigureAwait(true);
 
     private static string NormalizeAccServiceBaseUrl(string value)
     {
@@ -1342,51 +1362,49 @@ public sealed class SettingsViewModel : ObservableObject
     private static LogLevelDto ParseLevel(string value)
         => Enum.TryParse<LogLevelDto>(value, ignoreCase: true, out var level) ? level : LogLevelDto.Error;
 
-    private bool CanResolveAccDocument() =>
-        !IsBusy
-        && CanViewSystemSettings
-        && !string.IsNullOrWhiteSpace(AccLookupProjectId)
-        && !string.IsNullOrWhiteSpace(AccLookupFolderId)
-        && !string.IsNullOrWhiteSpace(AccLookupFileName);
-
-    private bool CanUseResolvedDocsUrl() =>
-        !IsBusy
-        && CanViewSystemSettings
-        && !string.IsNullOrWhiteSpace(AccLookupResolvedDocsUrl);
-
-    private void CopyAccResolvedDocsUrl()
+    private void ForwardAccBrowserPropertyChanged(string? propertyName)
     {
-        if (!CanUseResolvedDocsUrl())
+        if (propertyName == nameof(AccReadOnlyDocumentBrowserViewModel.IsBusy))
         {
+            SaveCommand.RaiseCanExecuteChanged();
+            ReloadCommand.RaiseCanExecuteChanged();
+            BrowseLogDirectoryCommand.RaiseCanExecuteChanged();
+            ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
             return;
         }
 
-        try
+        switch (propertyName)
         {
-            _clipboardTextWriter.SetText(AccLookupResolvedDocsUrl);
-            SummaryMessage = "קישור ACC Docs הועתק ללוח.";
-        }
-        catch (Exception ex)
-        {
-            SummaryMessage = $"שגיאה בהעתקת קישור ACC Docs: {ex.Message}";
-        }
-    }
-
-    private void OpenAccResolvedDocsUrl()
-    {
-        if (!CanUseResolvedDocsUrl())
-        {
-            return;
-        }
-
-        try
-        {
-            _resolvedDocsUrlLauncher.Open(AccLookupResolvedDocsUrl);
-            SummaryMessage = "ACC Docs נפתח בדפדפן ברירת המחדל.";
-        }
-        catch (Exception ex)
-        {
-            SummaryMessage = $"שגיאה בפתיחת ACC Docs בדפדפן: {ex.Message}";
+            case nameof(AccReadOnlyDocumentBrowserViewModel.SelectedKnownProjectId):
+                OnPropertyChanged(nameof(SelectedAccKnownProjectId));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.LookupProjectId):
+                OnPropertyChanged(nameof(AccLookupProjectId));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.LookupFolderId):
+                OnPropertyChanged(nameof(AccLookupFolderId));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.LookupFileName):
+                OnPropertyChanged(nameof(AccLookupFileName));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.LookupResultSummary):
+                OnPropertyChanged(nameof(AccLookupResultSummary));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.LookupResolvedDocsUrl):
+                OnPropertyChanged(nameof(AccLookupResolvedDocsUrl));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.BrowseSummary):
+                OnPropertyChanged(nameof(AccBrowseSummary));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.BrowseTrailText):
+                OnPropertyChanged(nameof(AccBrowseTrailText));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.SelectedBrowseFolder):
+                OnPropertyChanged(nameof(SelectedAccBrowseFolder));
+                break;
+            case nameof(AccReadOnlyDocumentBrowserViewModel.SelectedBrowseFile):
+                OnPropertyChanged(nameof(SelectedAccBrowseFile));
+                break;
         }
     }
 
@@ -1399,6 +1417,7 @@ public sealed class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewLargeFontSize));
         OnPropertyChanged(nameof(PreviewHugeFontSize));
     }
+
 }
 
 public sealed class UserStatusColorRowViewModel : ObservableObject
