@@ -32,4 +32,10 @@ public interface IEmailGateway
 
     /// <summary>Gets a single email summary by its message id, or <c>null</c> if not found.</summary>
     Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the full read-only details for one email message: summary headers, best-effort plain-text
+    /// body, and attachment metadata. Returns <c>null</c> when the message cannot be loaded.
+    /// </summary>
+    Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default);
 }

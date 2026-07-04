@@ -105,8 +105,8 @@ The old `EmailManagementView` is the **visual reference / legacy source** only; 
 | Aspect | Status | Notes |
 | --- | --- | --- |
 | EmailManagementView visual clone | Done | EmailWindowView(.xaml/.cs) + EmailWindowViewModel + EmailWindowDesignData created. Borderless RTL window mirroring the 3-row source: top status + project/Gmail filters strip, selected-project info strip, and the 3-pane content area (email list on the right, viewer in the center, context/calendar placeholder on the left), plus a bottom status bar. |
-| Real email data | Connected (read-only) | `EmailWindowViewModel` now loads real Gmail summaries through `IEmailGateway` and `IConnectorAuthService`, using the selected project's canonical Gmail label leaf. No DB write path, no Outlook path, no ACC inbox coupling, and no file-system side effects. |
-| Actions | Mixed | `Connect`, `Refresh`, and `Search` are real read-only actions. `LinkToProject`, `CreateTaskFromEmail`, `MarkHandled`, `Archive`, `Reply`, `Forward`, `OpenAttachment`, and `CompleteTask` remain explicitly deferred/stubbed. |
+| Real email data | Connected (read-only) | `EmailWindowViewModel` now loads real Gmail summaries, full plain-text body, and attachment metadata through `IEmailGateway` and `IConnectorAuthService`, using the selected project's canonical Gmail label leaf. No DB write path, no Outlook path, no ACC inbox coupling, and no file-system side effects. |
+| Actions | Mixed | `Connect`, `Refresh`, `Search`, and selected-email detail loading are real read-only actions. `LinkToProject`, `CreateTaskFromEmail`, `MarkHandled`, `Archive`, `Reply`, `Forward`, `OpenAttachment`, and `CompleteTask` remain explicitly deferred/stubbed. |
 | Workflow / Task integration | Pending | EmailWindowView.ApplyContext(WorkSurfaceContext?) placeholder exists so the window can later be opened from a task; no task opening, no task completion, and no workflow mutation implemented. |
 
 ### Email visual gaps deferred for later slices
@@ -122,7 +122,7 @@ The old `EmailManagementView` is the **visual reference / legacy source** only; 
   (file / unfile / mark pending / mark personal / mark irrelevant).
 - Real pagination, unread counts, Job Type / Status / User project filters bound to live data.
 - Move-to-project block-reason warnings and "all attachments placed" state.
-- Full body / attachment-detail parity, Gmail modify/labels, and any send/reply/forward behavior.
+- Attachment open/download behavior, Gmail modify/labels, and any send/reply/forward behavior.
 
 > **Cross-application note:** the project selector + Job Type / Status / User filters and the
 > "selected project" concept are **not** Email-only. They are shared across Email, ProjectWork,

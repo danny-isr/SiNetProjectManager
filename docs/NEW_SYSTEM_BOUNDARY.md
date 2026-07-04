@@ -97,8 +97,9 @@ New System Gmail rules:
 - The native Gmail module may be registered additively in the host graph without switching active
   legacy Google runtime behavior.
 - `EmailWindowViewModel` now hosts the first real read-only Gmail window over `IEmailGateway` +
-  `IConnectorAuthService`, but it must stay summary-only: no send/modify, no workflow mutation, and
-  no Drive / Sheets / report-export behavior in this slice.
+  `IConnectorAuthService`, and it may load full body plus attachment metadata, but it must not grow
+  send/modify, attachment-open/download, workflow mutation, or Drive / Sheets / report-export behavior
+  in this slice.
 - Drive / Sheets / report/export work is **not** part of Gmail window migration and stays deferred
   until a `ProjectFiles` or `Reports` consumer slice is selected.
 

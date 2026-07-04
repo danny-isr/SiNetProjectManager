@@ -1,4 +1,7 @@
 using System.Globalization;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Email;
@@ -173,6 +176,34 @@ public sealed class GmailEmailGateway : IEmailGateway
         return await TryGetSummaryAsync(gmail, messageId, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(messageId))
+        {
+            return null;
+        }
+
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var getRequest = gmail.Users.Messages.Get("me", messageId);
+            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
+
+            var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            return MapDetails(message);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Gmail] Messages.Get(full) failed for id '{messageId}': {ex.Message}");
+            return null;
+        }
+    }
+
     private static async Task<string?> ResolveLabelIdAsync(
         GmailService gmail,
         string labelPath,
@@ -229,6 +260,22 @@ public sealed class GmailEmailGateway : IEmailGateway
             hasAttachments);
     }
 
+    private EmailMessageDetails MapDetails(Message message)
+    {
+        var summary = Map(message);
+        var bodyText = ExtractBodyText(message.Payload);
+        var attachments = ExtractAttachmentDetails(message.Payload);
+
+        return new EmailMessageDetails(
+            summary.MessageId,
+            summary.ThreadId,
+            summary.From,
+            summary.Subject,
+            summary.ReceivedAt,
+            bodyText,
+            attachments);
+    }
+
     private static string? GetHeader(IList<MessagePartHeader>? headers, string name)
         => headers?.FirstOrDefault(h => string.Equals(h.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
 
@@ -278,5 +325,175 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
 
         return false;
+    }
+
+    private static string ExtractBodyText(MessagePart? payload)
+    {
+        if (payload == null)
+        {
+            return string.Empty;
+        }
+
+        string? plainBody = null;
+        string? htmlBody = null;
+        ExtractBodiesRecursive(payload, ref plainBody, ref htmlBody);
+
+        if (!string.IsNullOrWhiteSpace(plainBody))
+        {
+            return plainBody.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(htmlBody))
+        {
+            return StripHtml(htmlBody);
+        }
+
+        return string.Empty;
+    }
+
+    private static void ExtractBodiesRecursive(MessagePart part, ref string? plainBody, ref string? htmlBody)
+    {
+        var mimeType = part.MimeType?.ToLowerInvariant() ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(part.Body?.Data))
+        {
+            if (mimeType == "text/plain" && string.IsNullOrWhiteSpace(plainBody))
+            {
+                plainBody = DecodeBase64UrlSafe(part.Body.Data);
+            }
+            else if (mimeType == "text/html" && string.IsNullOrWhiteSpace(htmlBody))
+            {
+                htmlBody = DecodeBase64UrlSafe(part.Body.Data);
+            }
+        }
+
+        if (part.Parts == null)
+        {
+            return;
+        }
+
+        foreach (var nested in part.Parts)
+        {
+            ExtractBodiesRecursive(nested, ref plainBody, ref htmlBody);
+        }
+    }
+
+    private static IReadOnlyList<EmailMessageAttachmentDetails> ExtractAttachmentDetails(MessagePart? payload)
+    {
+        if (payload == null)
+        {
+            return [];
+        }
+
+        var attachments = new List<EmailMessageAttachmentDetails>();
+        CollectAttachmentsRecursive(payload, attachments);
+        return attachments;
+    }
+
+    private static void CollectAttachmentsRecursive(
+        MessagePart part,
+        ICollection<EmailMessageAttachmentDetails> attachments)
+    {
+        var filename = ResolveFileName(part);
+        if (!string.IsNullOrWhiteSpace(filename) && part.Body?.AttachmentId is { Length: > 0 } attachmentId)
+        {
+            if (!IsInlineAttachment(part))
+            {
+                attachments.Add(new EmailMessageAttachmentDetails(
+                    attachmentId,
+                    filename,
+                    string.IsNullOrWhiteSpace(part.MimeType) ? "application/octet-stream" : part.MimeType!,
+                    part.Body.Size));
+            }
+        }
+
+        if (part.Parts == null)
+        {
+            return;
+        }
+
+        foreach (var nested in part.Parts)
+        {
+            CollectAttachmentsRecursive(nested, attachments);
+        }
+    }
+
+    private static string ResolveFileName(MessagePart part)
+    {
+        if (!string.IsNullOrWhiteSpace(part.Filename))
+        {
+            return part.Filename;
+        }
+
+        var disposition = GetHeader(part.Headers, "Content-Disposition");
+        if (string.IsNullOrWhiteSpace(disposition))
+        {
+            return string.Empty;
+        }
+
+        var match = Regex.Match(disposition, "filename=\"?([^\"]+)\"?", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value : string.Empty;
+    }
+
+    private static bool IsInlineAttachment(MessagePart part)
+    {
+        var disposition = GetHeader(part.Headers, "Content-Disposition") ?? string.Empty;
+        var contentId = GetHeader(part.Headers, "Content-ID");
+        var mimeType = part.MimeType ?? string.Empty;
+
+        if (disposition.Contains("inline", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(contentId)
+            && mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DecodeBase64UrlSafe(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var base64 = value.Replace('-', '+').Replace('_', '/');
+            var padding = base64.Length % 4;
+            if (padding > 0)
+            {
+                base64 += new string('=', 4 - padding);
+            }
+
+            return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string StripHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var normalized = html
+            .Replace("<br>", "\n", StringComparison.OrdinalIgnoreCase)
+            .Replace("<br/>", "\n", StringComparison.OrdinalIgnoreCase)
+            .Replace("<br />", "\n", StringComparison.OrdinalIgnoreCase)
+            .Replace("</p>", "\n\n", StringComparison.OrdinalIgnoreCase)
+            .Replace("</div>", "\n", StringComparison.OrdinalIgnoreCase)
+            .Replace("</li>", "\n", StringComparison.OrdinalIgnoreCase);
+
+        normalized = Regex.Replace(normalized, "<[^>]+>", " ");
+        normalized = WebUtility.HtmlDecode(normalized);
+        normalized = Regex.Replace(normalized, @"[ \t]+\n", "\n");
+        normalized = Regex.Replace(normalized, @"\n{3,}", "\n\n");
+        normalized = Regex.Replace(normalized, @"[ \t]{2,}", " ");
+        return normalized.Trim();
     }
 }

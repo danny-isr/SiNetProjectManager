@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
@@ -15,11 +16,12 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// View model for <see cref="EmailWindowView"/> — the first real read-only New System slice of the
 /// legacy <c>EmailManagementView</c> (email management window).
 /// <para>
-/// <b>Read-only summary slice.</b> This view model keeps the visual-clone layout but now loads real
-/// Gmail-backed email summaries for the selected project through <see cref="IEmailGateway"/> and
-/// drives auth/session through <see cref="IConnectorAuthService"/>. It remains intentionally narrow:
-/// no send/reply/forward/mark-handled workflow, no project-linking side effects, no task creation,
-/// no file opens, and no workflow mutation.
+/// <b>Read-only Gmail slice.</b> This view model keeps the visual-clone layout but now loads real
+/// Gmail-backed email summaries and best-effort message details for the selected project through
+/// <see cref="IEmailGateway"/>, while auth/session stays behind
+/// <see cref="IConnectorAuthService"/>. It remains intentionally narrow: no
+/// send/reply/forward/mark-handled workflow, no project-linking side effects, no task creation,
+/// no attachment download/open, and no workflow mutation.
 /// </para>
 /// <para>
 /// Workflow-first direction is preserved structurally: the window can later be opened from a
@@ -35,8 +37,8 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// </para>
 /// <para>
 /// The old <c>EmailManagementView</c> remains the visual reference / legacy source and is not modified.
-/// Body and attachment-detail parity are intentionally deferred; the viewer therefore renders explicit
-/// placeholder text once a summary is selected.
+/// This slice now shows full plain-text body plus attachment metadata, but keeps all write/send and
+/// file-opening behavior deferred.
 /// </para>
 /// </summary>
 public sealed class EmailWindowViewModel : ObservableObject, IDisposable
@@ -50,7 +52,9 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
     private EmailListRow? _selectedEmail;
+    private string _selectedEmailBody = string.Empty;
     private bool _isBusy;
+    private int _selectedEmailLoadVersion;
     private string _activeProjectDisplay = "לא נבחר פרויקט";
     private string _statusMessage = "בחר פרויקט וחבר Gmail כדי לטעון מיילים.";
 
@@ -124,7 +128,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         ArchiveCommand = DeferredAction("ארכוב וטיפול בסטטוסים עדיין לא חלק מהסלייס הזה.");
         ReplyCommand = DeferredAction("Reply/Send נשארים מחוץ לסלייס עד לאישור policy מפורש.");
         ForwardCommand = DeferredAction("Forward/Send נשארים מחוץ לסלייס עד לאישור policy מפורש.");
-        OpenAttachmentCommand = DeferredAction("קריאת attachment details תגיע רק אם parity מלא יאושר.");
+        OpenAttachmentCommand = DeferredAction("פתיחת או הורדת attachment עדיין לא חלק מהסלייס הזה.");
         CompleteTaskCommand = DeferredAction("סיום משימה עדיין לא מחובר בחלון הדוא\"ל החדש.");
     }
 
@@ -151,7 +155,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public string RuntimeSummary =>
         IsConnected
-            ? "Gmail מחובר — טעינת summaries בלבד"
+            ? "Gmail מחובר — טעינת קריאה בלבד"
             : "Gmail לא מחובר";
 
     public string SearchText
@@ -179,20 +183,29 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _selectedEmail, value))
             {
-                ReplaceAttachmentsForSelectedEmail();
                 OnPropertyChanged(nameof(HasSelectedEmail));
-                OnPropertyChanged(nameof(SelectedEmailBody));
                 (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+
+                if (value is null)
+                {
+                    ClearSelectedEmailDetails();
+                    return;
+                }
+
+                var loadVersion = ++_selectedEmailLoadVersion;
+                PrepareSelectedEmailDetailsLoading();
+                _ = LoadSelectedEmailDetailsAsync(value.Id, loadVersion);
             }
         }
     }
 
     public bool HasSelectedEmail => _selectedEmail is not null;
 
-    public string SelectedEmailBody =>
-        _selectedEmail is null
-            ? string.Empty
-            : $"נבחר מייל אמיתי מ-Gmail.\n\nשולח: {_selectedEmail.Sender}\nנושא: {_selectedEmail.Subject}\nהתקבל: {_selectedEmail.ReceivedDisplay}\n\nתוכן מלא וקריאת attachments עדיין מחוץ לסלייס הקריאה בלבד.";
+    public string SelectedEmailBody
+    {
+        get => _selectedEmailBody;
+        private set => SetField(ref _selectedEmailBody, value);
+    }
 
     public bool IsBusy
     {
@@ -308,8 +321,9 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             return Task.CompletedTask;
         }
 
-        StatusMessage = "Summary email נטען. body מלא ו-attachments עדיין deferred.";
-        return Task.CompletedTask;
+        var loadVersion = ++_selectedEmailLoadVersion;
+        PrepareSelectedEmailDetailsLoading();
+        return LoadSelectedEmailDetailsAsync(SelectedEmail.Id, loadVersion);
     }
 
     private bool CanLoadEmails() =>
@@ -326,6 +340,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         UpdateActiveProjectDisplay(e.Project);
         ReplaceEmailRows([]);
         _loadedEmails = [];
+        ClearSelectedEmailDetails();
         StatusMessage = e.Project is null
             ? "לא נבחר פרויקט."
             : IsConnected
@@ -344,6 +359,11 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             StatusMessage = isAuthenticated
                 ? "החיבור ל-Google זמין. ניתן לרענן כדי לטעון מיילים."
                 : "החיבור ל-Google נותק.";
+        }
+
+        if (!isAuthenticated)
+        {
+            ClearSelectedEmailDetails();
         }
 
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -400,21 +420,94 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         UpdateFolderSummaries(rows);
     }
 
-    private void ReplaceAttachmentsForSelectedEmail()
+    private void PrepareSelectedEmailDetailsLoading()
     {
+        SelectedEmailBody = "טוען תוכן מייל...";
         Attachments.Clear();
-        if (SelectedEmail is null)
-        {
-            return;
-        }
-
-        if (SelectedEmail.HasAttachments)
+        if (SelectedEmail?.HasAttachments == true)
         {
             Attachments.Add(new EmailAttachmentRow(
-                "Attachment details pending parity slice",
-                "Deferred",
-                "Summary only"));
+                "טוען פרטי קבצים...",
+                "Loading",
+                "..."));
         }
+    }
+
+    private async Task LoadSelectedEmailDetailsAsync(string messageId, int loadVersion)
+    {
+        try
+        {
+            var details = await _emailGateway.GetDetailsAsync(messageId).ConfigureAwait(true);
+            if (!ShouldApplySelectedEmailLoad(messageId, loadVersion))
+            {
+                return;
+            }
+
+            if (details is null)
+            {
+                ApplyMissingSelectedEmailDetails();
+                StatusMessage = "לא ניתן היה לטעון את תוכן המייל המלא.";
+                return;
+            }
+
+            ApplySelectedEmailDetails(details);
+            StatusMessage = details.HasAttachments
+                ? $"נטען תוכן המייל ו-{details.Attachments.Count} קבצים מצורפים."
+                : "נטען תוכן המייל המלא.";
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldApplySelectedEmailLoad(messageId, loadVersion))
+            {
+                return;
+            }
+
+            ApplyMissingSelectedEmailDetails();
+            StatusMessage = $"טעינת תוכן המייל נכשלה: {ex.Message}";
+        }
+    }
+
+    private bool ShouldApplySelectedEmailLoad(string messageId, int loadVersion) =>
+        loadVersion == _selectedEmailLoadVersion
+        && string.Equals(SelectedEmail?.Id, messageId, StringComparison.Ordinal);
+
+    private void ApplySelectedEmailDetails(EmailMessageDetails details)
+    {
+        SelectedEmailBody = string.IsNullOrWhiteSpace(details.BodyText)
+            ? "לא התקבל תוכן טקסטואלי זמין עבור המייל הזה."
+            : details.BodyText;
+
+        Attachments.Clear();
+        foreach (var attachment in details.Attachments)
+        {
+            Attachments.Add(new EmailAttachmentRow(
+                attachment.FileName,
+                FormatAttachmentKind(attachment),
+                FormatAttachmentSize(attachment.SizeBytes)));
+        }
+    }
+
+    private void ApplyMissingSelectedEmailDetails()
+    {
+        SelectedEmailBody = SelectedEmail is null
+            ? string.Empty
+            : $"לא ניתן היה לטעון את תוכן המייל המלא.\n\nשולח: {SelectedEmail.Sender}\nנושא: {SelectedEmail.Subject}\nהתקבל: {SelectedEmail.ReceivedDisplay}";
+
+        Attachments.Clear();
+        if (SelectedEmail?.HasAttachments == true)
+        {
+            Attachments.Add(new EmailAttachmentRow(
+                "פרטי הקבצים לא זמינים כרגע",
+                "Unavailable",
+                "..."));
+        }
+    }
+
+    private void ClearSelectedEmailDetails()
+    {
+        _selectedEmailLoadVersion++;
+        SelectedEmailBody = string.Empty;
+        Attachments.Clear();
     }
 
     private void UpdateFolderSummaries(IReadOnlyList<EmailListRow> rows)
@@ -445,13 +538,46 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         Id: summary.MessageId,
         Sender: summary.From.Value,
         Subject: string.IsNullOrWhiteSpace(summary.Subject) ? "(ללא נושא)" : summary.Subject,
-        Preview: summary.HasAttachments ? "Gmail summary loaded. Attachment/body details are deferred." : "Gmail summary loaded.",
+        Preview: summary.HasAttachments ? "Gmail summary loaded. Full body and attachment metadata available on selection." : "Gmail summary loaded.",
         ReceivedOn: summary.ReceivedAt == DateTimeOffset.MinValue ? DateTime.MinValue : summary.ReceivedAt.LocalDateTime,
         GroupName: "מיילים לפרויקט",
         IsUnread: false,
         IsAssigned: true,
         AssignedProjectName: null,
         AttachmentCount: summary.HasAttachments ? 1 : 0);
+
+    private static string FormatAttachmentKind(EmailMessageAttachmentDetails attachment)
+    {
+        var extension = Path.GetExtension(attachment.FileName);
+        if (!string.IsNullOrWhiteSpace(extension))
+        {
+            return extension.TrimStart('.').ToUpperInvariant();
+        }
+
+        return string.IsNullOrWhiteSpace(attachment.ContentType) ? "FILE" : attachment.ContentType;
+    }
+
+    private static string FormatAttachmentSize(long? sizeBytes)
+    {
+        if (sizeBytes is null || sizeBytes <= 0)
+        {
+            return "Unknown";
+        }
+
+        const double kilobyte = 1024d;
+        const double megabyte = kilobyte * 1024d;
+        if (sizeBytes >= megabyte)
+        {
+            return $"{sizeBytes.Value / megabyte:0.#} MB";
+        }
+
+        if (sizeBytes >= kilobyte)
+        {
+            return $"{sizeBytes.Value / kilobyte:0.#} KB";
+        }
+
+        return $"{sizeBytes.Value} B";
+    }
 
     public void Dispose()
     {
@@ -485,6 +611,30 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
             Task.FromResult(SampleEmails.FirstOrDefault(email => string.Equals(email.MessageId, messageId, StringComparison.Ordinal)));
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default)
+        {
+            var summary = SampleEmails.FirstOrDefault(email => string.Equals(email.MessageId, messageId, StringComparison.Ordinal));
+            if (summary is null)
+            {
+                return Task.FromResult<EmailMessageDetails?>(null);
+            }
+
+            return Task.FromResult<EmailMessageDetails?>(new EmailMessageDetails(
+                summary.MessageId,
+                summary.ThreadId,
+                summary.From,
+                summary.Subject,
+                summary.ReceivedAt,
+                EmailWindowDesignData.SampleBody,
+                EmailWindowDesignData.SampleAttachments
+                    .Select((attachment, index) => new EmailMessageAttachmentDetails(
+                        $"att-{index + 1}",
+                        attachment.FileName,
+                        attachment.Kind,
+                        null))
+                    .ToList()));
+        }
     }
 
     private sealed class DesignConnectorAuthService : IConnectorAuthService

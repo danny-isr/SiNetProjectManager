@@ -82,7 +82,8 @@ public sealed class GoogleFoundationClosureTests
 
         Assert.Contains("Reply/Send נשארים מחוץ לסלייס", source, StringComparison.Ordinal);
         Assert.Contains("Move-to-project / mark-handled עדיין מחוץ לסלייס", source, StringComparison.Ordinal);
-        Assert.Contains("קריאת attachment details תגיע רק אם parity מלא יאושר", source, StringComparison.Ordinal);
+        Assert.Contains("פתיחת או הורדת attachment עדיין לא חלק מהסלייס הזה", source, StringComparison.Ordinal);
+        Assert.Contains("GetDetailsAsync", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -115,7 +116,40 @@ public sealed class GoogleFoundationClosureTests
         Assert.Equal("(1042) North Towers", gateway.LastProjectLabelName);
         Assert.Single(sut.Emails);
         Assert.Equal("msg-42", sut.Emails[0].Id);
-        Assert.Contains("נטענו 1 מיילים", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Email_window_view_model_loads_selected_email_details()
+    {
+        var auth = new StubConnectorAuthService(isAuthenticated: true);
+        var gateway = new RecordingEmailGateway();
+        var context = new InMemoryCurrentProjectContext();
+        await context.SetCurrentProjectAsync(new ProjectSummaryDto(
+            ProjectId: 1042,
+            ProjectNumber: "1042",
+            ProjectName: "North Towers",
+            PlaceName: null,
+            CompanyName: null,
+            JobType: null,
+            Status: null,
+            AssignedUserName: null,
+            IsActive: true,
+            ProjectLabelName: "(1042) North Towers"));
+
+        using var sut = new EmailWindowViewModel(
+            new FakeProjectQueryService(),
+            new FakeProjectFilterOptionsService(),
+            context,
+            gateway,
+            auth);
+
+        await sut.RefreshAsync();
+        await sut.OpenSelectedEmailAsync();
+
+        Assert.Equal("msg-42", gateway.LastDetailsMessageId);
+        Assert.Contains("Detailed body for North update", sut.SelectedEmailBody, StringComparison.Ordinal);
+        Assert.Single(sut.Attachments);
+        Assert.Contains("quote.pdf", sut.Attachments[0].DisplayLabel, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -133,9 +167,10 @@ public sealed class GoogleFoundationClosureTests
     {
         var source = ReadRepoFile("docs/GOOGLE_BOUNDARY.md");
 
-        Assert.Contains("First real email window (read-only summaries)", source, StringComparison.Ordinal);
+        Assert.Contains("First real email window (read-only content/details)", source, StringComparison.Ordinal);
         Assert.Contains("now consumes the same shared", source, StringComparison.Ordinal);
         Assert.Contains("not consume `GmailClientProvider` or `IEmailSender` directly", source, StringComparison.Ordinal);
+        Assert.Contains("full body/attachment metadata by the project's canonical label leaf", source, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)
@@ -179,11 +214,22 @@ public sealed class GoogleFoundationClosureTests
 
         public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
             Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(new EmailMessageDetails(
+                messageId,
+                "thread-1",
+                EmailAddress.CreateOrFallback("sender@example.com"),
+                "Subject",
+                DateTimeOffset.UtcNow,
+                "Body",
+                []));
     }
 
     private sealed class RecordingEmailGateway : IEmailGateway
     {
         public string? LastProjectLabelName { get; private set; }
+        public string? LastDetailsMessageId { get; private set; }
 
         public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
             string location,
@@ -210,6 +256,21 @@ public sealed class GoogleFoundationClosureTests
 
         public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
             Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default)
+        {
+            LastDetailsMessageId = messageId;
+            return Task.FromResult<EmailMessageDetails?>(new EmailMessageDetails(
+                messageId,
+                "thread-42",
+                EmailAddress.CreateOrFallback("north@example.com"),
+                "North update",
+                DateTimeOffset.UtcNow,
+                "Detailed body for North update",
+                [
+                    new EmailMessageAttachmentDetails("att-1", "quote.pdf", "application/pdf", 2048),
+                ]));
+        }
     }
 
     private sealed class StubConnectorAuthService(bool isAuthenticated) : IConnectorAuthService

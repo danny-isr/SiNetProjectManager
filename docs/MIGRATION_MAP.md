@@ -350,7 +350,7 @@ when D6 added native send; the remaining Gmail parity gaps stay deferred unless 
 | --- | --- | --- |
 | 1 | Native interactive Gmail sign-in | ✅ Closed — `GmailClientProvider.SignInInteractiveAsync` + "Connect Google" UI |
 | 2 | Real Gmail configuration source (was env-var scaffold) | ✅ Closed — `appsettings.json` (`Gmail` section) bound to `GmailOptions`; env vars override |
-| 3 | Native inbox gateway is summary/read-oriented only | ⬜ Deferred (full body / attachments / modify still out of scope) |
+| 3 | Native inbox gateway lacked message details | ✅ Closed for read-only body + attachment metadata; Gmail modify and attachment-open/download remain out of scope |
 | 4 | Send/modify Gmail capabilities | 🟡 Partial — native send closed in D6; modify remains deferred |
 | 5 | App-startup first-time auth / token acquisition | ✅ Closed — startup silent restore (`TrySignInSilentlyAsync`) + on-demand interactive sign-in |
 | 6 | Vault wiring in standalone `SiNet.App.Wpf` harness | ✅ Closed — standalone harness now registers `AddSiNetSecrets()` and uses vault-first Gmail client-secrets resolution |
