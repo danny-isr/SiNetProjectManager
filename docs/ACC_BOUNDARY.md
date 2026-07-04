@@ -225,8 +225,9 @@ Wave 1 now contains the following implemented pieces:
    - `AccInboxReconciliationService` ZIP companion-metadata JSON reads now use the clean download port.
 10. **Inbox read/navigation cutover**
    - `AttachmentTaggingService` and `AccInboxReconciliationService` now prefer `IAccFolderBrowserService` for inbox folder browsing / ZIP companion-metadata lookup, so those reads also route through `SiOffice.AccService` in remote mode.
-11. **Move-to-project inbox seam cutover (partial)**
-   - `MoveToProjectProcessActionHandler` now prefers `IAccFolderBrowserService` for ZIP inbox folder browsing and `IAccFileUploadService` for ZIP move-metadata JSON updates, while keeping the legacy client only as a compatibility fallback.
+11. **Post-Wave-1 cleanup**
+   - `MoveToProjectProcessActionHandler` now requires the clean download/upload/browser seams directly; the internal compatibility constructor and legacy ACC transfer fallbacks have been retired.
+   - `AttachmentTaggingService`, `AccInboxReconciliationService`, and the touched inbox metadata-repair paths now require DI-provided ACC metadata/transfer services instead of constructing ad-hoc legacy fallbacks at runtime.
 
 Wave 1 is considered **closed at the runtime boundary**. What remains is the next phase:
 extracting more orchestration/provisioning behavior out of `SiNetSQL` without reopening direct
@@ -249,5 +250,5 @@ The next ACC work is no longer "finish the Wave 1 seams" - that boundary is now 
 The next useful slices are:
 
 - extract remaining orchestration/provisioning responsibilities out of `SiNetSQL` where it now makes sense architecturally,
-- decide whether the move-to-project compatibility constructor/fallbacks should be retired in the next orchestration slice,
+- retire the last remaining privileged transfer compatibility pockets (for example `ProjectFileRefileService`) while keeping runtime behavior unchanged,
 - and keep the rule stable that service-mode privileged ACC work continues to route through `SiOffice.AccService`.
