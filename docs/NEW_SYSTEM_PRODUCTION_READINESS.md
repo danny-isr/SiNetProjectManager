@@ -101,9 +101,16 @@ use existing `AppFeatureCodes` + `IAuthorizationQueryService`.
 | Deferred commands disabled | `DeferredProductionPilotAction` → `CanExecute` always `false` |
 | Code preserved | Commands remain for future slices — **not deleted** |
 | Title / menu | "ניהול דואר — קריאה בלבד" |
+| Visual placeholders hidden | `ShowDeferredVisualPlaceholders == false` hides pagination (`1 / 3`), calendar, help, date pickers |
+| Clear search | `ClearSearchCommand` clears `SearchText` and reloads (real, minimal) |
+| Production notice | `ProductionPilotNotice` in sidebar + viewer footer (replaces "שלד ויזואלי" copy) |
+| Unread badge | Shown only when `ShowUnreadCount` (`UnreadEmailCount > 0`) |
 
 Deferred actions (hidden + disabled): LinkToProject, CreateTaskFromEmail, MarkHandled, Archive,
 Reply, Forward, OpenAttachment, CompleteTask.
+
+**Still suspended (markup retained, hidden/disabled):** real pagination, Gmail date-range filtering,
+calendar integration, help system. No new `IEmailGateway` query wiring in this polish slice.
 
 ---
 
@@ -152,17 +159,35 @@ Key test classes:
 - `NewSystemBoundaryTests`
 - `WorkSurfaceWorkflowIntegrationBoundaryTests`
 
+### 9.1 SiWorkNet10 file checklist (audit)
+
+These paths must exist on branch `SiWorkNet10` for the production pilot envelope to be considered
+**closed on GitHub** (not only in a local workspace):
+
+| Path | Purpose |
+| --- | --- |
+| `docs/NEW_SYSTEM_PRODUCTION_READINESS.md` | This envelope |
+| `src/SiNet.App.Wpf.Tests/Boundary/ProductionPilotBoundaryTests.cs` | Pilot guard tests |
+| `src/SiNet.App.Wpf/Shell/NewShellFactory.cs` | Email read-only menu; Inspection `#if DEBUG` only |
+| `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` | `ShowDeferredWriteActions`, disabled deferred commands |
+| `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml` | Hidden write UI; read-only attachment chips |
+| `docs/ACC_CONTROL_PLANE.md` | §5.1 Production host checklist |
+| `docs/NEW_SYSTEM_BOUNDARY.md` | Cross-ref to this doc |
+
 ---
 
 ## 10. Recommended next production slice
 
-**Option A (safest):** Email read-only production polish — keep envelope, improve UX (unread counts,
-remove remaining visual placeholders), no write buttons.
+**Email read-only production polish** — **closed** in this slice: visual placeholders hidden/disabled,
+production-friendly notice copy, `ClearSearchCommand`, Hebrew empty state, unread badge when count > 0.
+No write/send/workflow wiring.
 
 **Option B (higher value, higher risk):** Email filing task-aware slice — only via existing
 `MoveToProject` → handler → `ITaskCompletionCoordinator` path; no new ACC write from WPF.
 
 **Do not** start with Option B until G-Policy + filing slice are explicitly approved.
+
+**After polish:** run real smoke on V2 New System with limited users before expanding pilot audience.
 
 ---
 
@@ -174,5 +199,6 @@ remove remaining visual placeholders), no write buttons.
 | Broad legacy window migration | **Suspended** |
 | InspectionShellView in production menu | **Suspended** (DEBUG/dev only) |
 | Stub visual-clone actions | **Hidden/disabled**, code retained |
+| Email visual placeholders (pagination, calendar, help, dates) | **Hidden/disabled**, markup retained — real integration deferred |
 | GmailSend / Drive / Sheets / ACC write | **Suspended** |
 | Legacy windows / GoogleService / old tasking model | **Retained** — not deleted |

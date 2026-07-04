@@ -57,6 +57,60 @@ public sealed class ProductionPilotBoundaryTests
         Assert.Contains("ShowDeferredWriteActions", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{Binding ShowDeferredWriteActions", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenAttachmentCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("שלד ויזואלי", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Select an email from the list", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_window_view_hides_deferred_visual_placeholders_in_production_pilot()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+
+        Assert.Contains("ShowDeferredVisualPlaceholders => false", vmSource, StringComparison.Ordinal);
+
+        Assert.Contains("ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
+        Assert.Contains("1 / 3", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
+
+        var paginationIdx = xaml.IndexOf("1 / 3", StringComparison.Ordinal);
+        var placeholderBindingIdx = xaml.LastIndexOf("ShowDeferredVisualPlaceholders", paginationIdx, StringComparison.Ordinal);
+        Assert.True(placeholderBindingIdx >= 0, "Pagination placeholder must be inside a ShowDeferredVisualPlaceholders region.");
+
+        Assert.Contains("ClearSearchCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding ClearSearchCommand}\"", xaml, StringComparison.Ordinal);
+
+        Assert.Contains("ProductionPilotNotice", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ProductionPilotNotice}\"", xaml, StringComparison.Ordinal);
+
+        var calendarButtonIdx = xaml.IndexOf("Content=\"&#x1F4C5;\"", StringComparison.Ordinal);
+        Assert.True(calendarButtonIdx >= 0);
+        var calendarRegion = xaml.Substring(calendarButtonIdx, Math.Min(400, xaml.Length - calendarButtonIdx));
+        Assert.Contains("ShowDeferredVisualPlaceholders", calendarRegion, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"False\"", calendarRegion, StringComparison.Ordinal);
+
+        var helpButtonIdx = xaml.IndexOf("Content=\"?\"", StringComparison.Ordinal);
+        Assert.True(helpButtonIdx >= 0);
+        var helpRegion = xaml.Substring(helpButtonIdx, Math.Min(400, xaml.Length - helpButtonIdx));
+        Assert.Contains("ShowDeferredVisualPlaceholders", helpRegion, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"False\"", helpRegion, StringComparison.Ordinal);
+
+        var datePickerIdx = xaml.IndexOf("<DatePicker", StringComparison.Ordinal);
+        Assert.True(datePickerIdx >= 0);
+        var datePickerRegion = xaml.Substring(datePickerIdx, Math.Min(500, xaml.Length - datePickerIdx));
+        Assert.Contains("ShowDeferredVisualPlaceholders", datePickerRegion, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"False\"", datePickerRegion, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_window_view_model_exposes_clear_search_and_production_pilot_properties()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+
+        Assert.Contains("ClearSearchCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ClearSearchAsync", source, StringComparison.Ordinal);
+        Assert.Contains("ProductionPilotNotice", source, StringComparison.Ordinal);
+        Assert.Contains("ShowUnreadCount", source, StringComparison.Ordinal);
     }
 
     [Fact]

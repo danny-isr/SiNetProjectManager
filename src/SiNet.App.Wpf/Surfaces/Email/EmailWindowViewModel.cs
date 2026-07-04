@@ -120,6 +120,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, CanLoadEmails);
         SearchCommand = new AsyncRelayCommand(SearchAsync, CanLoadEmails);
+        ClearSearchCommand = new AsyncRelayCommand(ClearSearchAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(SearchText));
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         OpenEmailCommand = new AsyncRelayCommand(OpenSelectedEmailAsync, () => !IsBusy && SelectedEmail is not null);
         LinkToProjectCommand = DeferredProductionPilotAction("שיוך בפועל לפרויקט — מושהה (production pilot read-only).");
@@ -141,7 +142,19 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     public bool ShowDeferredWriteActions => false;
 
+    /// <summary>
+    /// Production pilot: hide non-functional visual placeholders (pagination, calendar, date filters, help).
+    /// Markup remains for a future slice — not deleted.
+    /// </summary>
+    public bool ShowDeferredVisualPlaceholders => false;
+
+    /// <summary>Sidebar notice shown instead of deferred workflow/calendar placeholders.</summary>
+    public string ProductionPilotNotice { get; } =
+        "מצב פרודקשן ראשוני: צפייה במיילים ובפרטי קבצים מצורפים בלבד. פעולות תיוק ושליחה יחוברו בסלייס נפרד.";
+
     public int UnreadEmailCount => Emails.Count(static row => row.IsUnread);
+
+    public bool ShowUnreadCount => UnreadEmailCount > 0;
 
     public ProjectSelectorViewModel ProjectSelector { get; }
 
@@ -169,7 +182,13 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     public string SearchText
     {
         get => _searchText;
-        set => SetField(ref _searchText, value);
+        set
+        {
+            if (SetField(ref _searchText, value))
+            {
+                (ClearSearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public EmailFolderRow? SelectedFolder
@@ -224,6 +243,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             {
                 (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (ClearSearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
@@ -238,6 +258,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public ICommand RefreshCommand { get; }
     public ICommand SearchCommand { get; }
+    public ICommand ClearSearchCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand OpenEmailCommand { get; }
     public ICommand LinkToProjectCommand { get; }
@@ -320,6 +341,12 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     }
 
     public Task SearchAsync() => RefreshAsync();
+
+    public async Task ClearSearchAsync()
+    {
+        SearchText = string.Empty;
+        await RefreshAsync().ConfigureAwait(true);
+    }
 
     public Task OpenSelectedEmailAsync()
     {
@@ -432,6 +459,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         SelectedEmail = Emails.FirstOrDefault();
         UpdateFolderSummaries(rows);
         OnPropertyChanged(nameof(UnreadEmailCount));
+        OnPropertyChanged(nameof(ShowUnreadCount));
     }
 
     private void PrepareSelectedEmailDetailsLoading()
@@ -552,7 +580,9 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         Id: summary.MessageId,
         Sender: summary.From.Value,
         Subject: string.IsNullOrWhiteSpace(summary.Subject) ? "(ללא נושא)" : summary.Subject,
-        Preview: summary.HasAttachments ? "Gmail summary loaded. Full body and attachment metadata available on selection." : "Gmail summary loaded.",
+        Preview: summary.HasAttachments
+            ? "יש קבצים מצורפים — בחר לצפייה בפרטים"
+            : "בחר לצפייה בתוכן המלא",
         ReceivedOn: summary.ReceivedAt == DateTimeOffset.MinValue ? DateTime.MinValue : summary.ReceivedAt.LocalDateTime,
         GroupName: "מיילים לפרויקט",
         IsUnread: false,

@@ -52,7 +52,7 @@
 | Legacy window | Target surface (new) | Status |
 | --- | --- | --- |
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
-| EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (real read-only Gmail summaries) |
+| EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
 | ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/... (TBD) | Not started |
 | TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
@@ -108,7 +108,8 @@ The old `EmailManagementView` is the **visual reference / legacy source** only; 
 | --- | --- | --- |
 | EmailManagementView visual clone | Done | EmailWindowView(.xaml/.cs) + EmailWindowViewModel + EmailWindowDesignData created. Borderless RTL window mirroring the 3-row source: top status + project/Gmail filters strip, selected-project info strip, and the 3-pane content area (email list on the right, viewer in the center, context/calendar placeholder on the left), plus a bottom status bar. |
 | Real email data | Connected (read-only) | `EmailWindowViewModel` now loads real Gmail summaries, full plain-text body, and attachment metadata through `IEmailGateway` and `IConnectorAuthService`, using the selected project's canonical Gmail label leaf. No DB write path, no Outlook path, no ACC inbox coupling, and no file-system side effects. |
-| Actions | Mixed | `Connect`, `Refresh`, `Search`, and selected-email detail loading are real read-only actions. `LinkToProject`, `CreateTaskFromEmail`, `MarkHandled`, `Archive`, `Reply`, `Forward`, `OpenAttachment`, and `CompleteTask` remain explicitly deferred/stubbed. |
+| Actions | Mixed | `Connect`, `Refresh`, `Search`, `ClearSearch`, and selected-email detail loading are real read-only actions. Write/workflow UI hidden via `ShowDeferredWriteActions`. Visual placeholders (pagination, calendar, help, date pickers) hidden via `ShowDeferredVisualPlaceholders`. `LinkToProject`, `CreateTaskFromEmail`, `MarkHandled`, `Archive`, `Reply`, `Forward`, `OpenAttachment`, and `CompleteTask` remain explicitly deferred/stubbed. |
+| Production pilot polish | Done | Misleading placeholders hidden/disabled; production notice copy; Hebrew empty state; unread badge when count > 0. No pagination/date/calendar/help real integration. |
 | Workflow / Task integration | Pending | EmailWindowView.ApplyContext(WorkSurfaceContext?) placeholder exists so the window can later be opened from a task; no task opening, no task completion, and no workflow mutation implemented. |
 
 ### Email visual gaps deferred for later slices
