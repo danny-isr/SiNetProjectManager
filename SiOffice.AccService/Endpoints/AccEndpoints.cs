@@ -428,6 +428,101 @@ internal static class AccEndpoints
             return Results.File(stream, "application/octet-stream", result.DownloadedFileName);
         });
 
+        v1.MapGet("/projects/{projectId}/items/{itemId}/display-name", async (
+            string projectId,
+            string itemId,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var displayName = await bim360.GetItemDisplayNameAsync(NormalizeProjectId(projectId), itemId.Trim(), ct);
+            return Results.Ok(new { DisplayName = displayName });
+        });
+
+        v1.MapGet("/projects/{projectId}/items/{itemId}/version-count", async (
+            string projectId,
+            string itemId,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var versionCount = await bim360.GetItemVersionCountAsync(NormalizeProjectId(projectId), itemId.Trim(), ct);
+            return Results.Ok(new { VersionCount = versionCount });
+        });
+
+        v1.MapPost("/projects/{projectId}/items/{itemId}/hide", async (
+            string projectId,
+            string itemId,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var ok = await bim360.HideItemAsync(NormalizeProjectId(projectId), itemId.Trim(), ct);
+            return Results.Ok(new { Ok = ok });
+        });
+
+        v1.MapPost("/projects/{projectId}/folders/resolve-path", async (
+            string projectId,
+            AccFolderPathEndpointRequest body,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (body is null || string.IsNullOrWhiteSpace(body.RootFolderId))
+                return Results.BadRequest(new { error = "rootFolderId is required." });
+
+            var normalizedProjectId = NormalizeProjectId(projectId);
+            var bim360 = new Bim360Service(tokenProvider);
+            var folderId = await TryResolveFolderPathAsync(
+                bim360,
+                normalizedProjectId,
+                body.RootFolderId.Trim(),
+                body.PathSegments ?? [],
+                ct);
+
+            return string.IsNullOrWhiteSpace(folderId)
+                ? Results.NotFound()
+                : Results.Ok(new { FolderId = folderId });
+        });
+
+        v1.MapPost("/projects/{projectId}/folders/ensure-path", async (
+            string projectId,
+            AccFolderPathEndpointRequest body,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (body is null || string.IsNullOrWhiteSpace(body.RootFolderId))
+                return Results.BadRequest(new { error = "rootFolderId is required." });
+
+            var normalizedProjectId = NormalizeProjectId(projectId);
+            var bim360 = new Bim360Service(tokenProvider);
+            var folderId = await bim360.EnsureFolderPathAsync(
+                normalizedProjectId,
+                body.RootFolderId.Trim(),
+                NormalizePathSegments(body.PathSegments),
+                ct);
+
+            return Results.Ok(new { FolderId = folderId });
+        });
+
         // ── Read-only ACC folder browse ──────────────────────────────────────
         v1.MapGet("/projects/{projectId}/folders/browse", async (
             string projectId,
@@ -776,6 +871,32 @@ internal static class AccEndpoints
             : $"b.{trimmed}";
     }
 
+    private static IReadOnlyList<string> NormalizePathSegments(IReadOnlyList<string>? pathSegments) =>
+        (pathSegments ?? [])
+            .Where(static segment => !string.IsNullOrWhiteSpace(segment))
+            .Select(static segment => segment.Trim())
+            .ToArray();
+
+    private static async Task<string?> TryResolveFolderPathAsync(
+        Bim360Service bim360,
+        string projectId,
+        string rootFolderId,
+        IReadOnlyList<string>? pathSegments,
+        CancellationToken cancellationToken)
+    {
+        var currentFolderId = rootFolderId;
+        foreach (var segment in NormalizePathSegments(pathSegments))
+        {
+            currentFolderId = await bim360.GetFolderByNameAsync(projectId, currentFolderId, segment).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(currentFolderId))
+            {
+                return null;
+            }
+        }
+
+        return currentFolderId;
+    }
+
     private static string SanitizeUploadFileName(string fileName)
     {
         var safeFileName = string.IsNullOrWhiteSpace(fileName) ? "upload.bin" : fileName.Trim();
@@ -850,6 +971,10 @@ internal static class AccEndpoints
         string DisplayName,
         string SourceLabel,
         int Priority);
+
+    private sealed record AccFolderPathEndpointRequest(
+        string RootFolderId,
+        IReadOnlyList<string>? PathSegments);
 
     private sealed record AccFileUploadEndpointRequest(
         string? TargetFolderId,

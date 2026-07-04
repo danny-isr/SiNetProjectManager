@@ -108,6 +108,131 @@ public sealed class AccFileTransferTests : IDisposable
     }
 
     [Fact]
+    public async Task Local_folder_path_service_resolves_path_segment_chain()
+    {
+        var connector = new StubTransferConnector();
+        connector.FolderLookup[("ROOT-FOLDER", "Discipline")] = "DISCIPLINE-FOLDER";
+        connector.FolderLookup[("DISCIPLINE-FOLDER", "Plans")] = "PLANS-FOLDER";
+        var sut = new LocalAccFolderPathService(connector);
+
+        var result = await sut.TryResolvePathAsync("project-1", "ROOT-FOLDER", ["Discipline", "Plans"]);
+
+        Assert.Equal("PLANS-FOLDER", result);
+        Assert.Equal(2, connector.LookupRequests.Count);
+        Assert.Equal(("b.project-1", "ROOT-FOLDER", "Discipline"), connector.LookupRequests[0]);
+        Assert.Equal(("b.project-1", "DISCIPLINE-FOLDER", "Plans"), connector.LookupRequests[1]);
+    }
+
+    [Fact]
+    public async Task Remote_folder_path_service_uses_versioned_resolve_endpoint_api_key_and_json_payload()
+    {
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        string? body = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccFolderPathService(
+            new HttpClient(new StubHttpMessageHandler(async (request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+                body = await request.Content!.ReadAsStringAsync();
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        {
+                          "folderId": "resolved-folder"
+                        }
+                        """),
+                };
+            })),
+            vault,
+            new StubAccServiceModeProvider("https://acc.example.com/"));
+
+        var result = await sut.TryResolvePathAsync("b.project-1", "ROOT-FOLDER", ["Discipline", "Plans"]);
+
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-1/folders/resolve-path", requestedUri?.AbsoluteUri);
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.NotNull(body);
+        Assert.Contains("\"rootFolderId\":\"ROOT-FOLDER\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"pathSegments\":[\"Discipline\",\"Plans\"]", body, StringComparison.Ordinal);
+        Assert.Equal("resolved-folder", result);
+    }
+
+    [Fact]
+    public async Task Mode_switching_folder_path_service_prefers_remote_when_configured()
+    {
+        var connector = new StubTransferConnector();
+        Uri? requestedUri = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var local = new LocalAccFolderPathService(connector);
+        var remote = new RemoteAccFolderPathService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        {
+                          "folderId": "remote-folder"
+                        }
+                        """),
+                });
+            })),
+            vault,
+            new StubAccServiceModeProvider("https://acc.example.com/"));
+        var sut = new ModeSwitchingAccFolderPathService(
+            new StubAccServiceModeProvider("https://acc.example.com/"),
+            local,
+            remote);
+
+        var result = await sut.EnsurePathAsync("b.project-1", "ROOT-FOLDER", ["Inbox"]);
+
+        Assert.Equal("remote-folder", result);
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-1/folders/ensure-path", requestedUri?.AbsoluteUri);
+        Assert.Empty(connector.EnsureRequests);
+    }
+
+    [Fact]
+    public async Task Remote_item_service_uses_versioned_item_endpoints()
+    {
+        Uri? requestedUri = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccItemService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                var body = request.RequestUri!.AbsoluteUri.EndsWith("/hide", StringComparison.Ordinal)
+                    ? """{ "ok": true }"""
+                    : request.RequestUri.AbsoluteUri.EndsWith("/version-count", StringComparison.Ordinal)
+                        ? """{ "versionCount": 5 }"""
+                        : """{ "displayName": "Drawing.dwg" }""";
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new StubAccServiceModeProvider("https://acc.example.com/"));
+
+        var displayName = await sut.GetDisplayNameAsync("b.project-1", "item-1");
+        Assert.Equal("Drawing.dwg", displayName);
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-1/items/item-1/display-name", requestedUri?.AbsoluteUri);
+
+        var versionCount = await sut.GetVersionCountAsync("b.project-1", "item-1");
+        Assert.Equal(5, versionCount);
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-1/items/item-1/version-count", requestedUri?.AbsoluteUri);
+
+        var hidden = await sut.HideAsync("b.project-1", "item-1");
+        Assert.True(hidden);
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-1/items/item-1/hide", requestedUri?.AbsoluteUri);
+    }
+
+    [Fact]
     public async Task Remote_upload_service_uses_versioned_endpoint_api_key_and_multipart_payload()
     {
         Uri? requestedUri = null;
@@ -209,17 +334,35 @@ public sealed class AccFileTransferTests : IDisposable
     private sealed class StubTransferConnector : IAccTransferConnector
     {
         public List<AccFolderItem> FolderItems { get; } = new();
+        public Dictionary<(string ParentFolderId, string FolderName), string> FolderLookup { get; } = new();
         public Dictionary<string, IReadOnlyDictionary<string, string?>> CustomAttributes { get; } =
             new(StringComparer.Ordinal);
         public List<IReadOnlyDictionary<string, string?>> AttributeWrites { get; } = new();
+        public List<(string ProjectId, string RootFolderId, IReadOnlyList<string> PathSegments)> EnsureRequests { get; } = new();
+        public List<(string ProjectId, string ParentFolderId, string FolderName)> LookupRequests { get; } = new();
+        public Dictionary<string, string?> DisplayNames { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, int?> VersionCounts { get; } = new(StringComparer.Ordinal);
+        public List<(string ProjectId, string ItemId)> HideRequests { get; } = new();
         public int UploadFileFinalCalls { get; private set; }
         public int UploadNewVersionCalls { get; private set; }
 
-        public Task<string> EnsureFolderPathAsync(string projectId, string rootFolderId, IReadOnlyList<string> pathSegments, CancellationToken cancellationToken = default) =>
-            Task.FromResult(pathSegments.Count == 0 ? rootFolderId : "PATH-FOLDER");
+        public Task<string> EnsureFolderPathAsync(string projectId, string rootFolderId, IReadOnlyList<string> pathSegments, CancellationToken cancellationToken = default)
+        {
+            EnsureRequests.Add((projectId, rootFolderId, pathSegments.ToArray()));
+            return Task.FromResult(pathSegments.Count == 0 ? rootFolderId : "PATH-FOLDER");
+        }
 
         public Task<IReadOnlyList<AccFolderItem>> GetFolderItemsAsync(string projectId, string folderId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<AccFolderItem>>(FolderItems.ToList());
+
+        public Task<string?> GetFolderByNameAsync(string projectId, string parentFolderId, string folderName, CancellationToken cancellationToken = default)
+        {
+            LookupRequests.Add((projectId, parentFolderId, folderName));
+            return Task.FromResult(
+                FolderLookup.TryGetValue((parentFolderId, folderName), out var folderId)
+                    ? folderId
+                    : null);
+        }
 
         public Task<UploadResult> UploadFileFinalAsync(string projectId, string folderId, string localSourcePath, string? displayName, CancellationToken cancellationToken = default)
         {
@@ -237,6 +380,18 @@ public sealed class AccFileTransferTests : IDisposable
 
         public Task<(string TempFilePath, string FileName)?> DownloadFileToTempAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
             Task.FromResult<(string TempFilePath, string FileName)?>(null);
+
+        public Task<string?> GetItemDisplayNameAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(DisplayNames.TryGetValue(itemId, out var value) ? value : null);
+
+        public Task<int?> GetItemVersionCountAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(VersionCounts.TryGetValue(itemId, out var value) ? value : null);
+
+        public Task<bool> HideItemAsync(string projectId, string itemId, CancellationToken cancellationToken = default)
+        {
+            HideRequests.Add((projectId, itemId));
+            return Task.FromResult(true);
+        }
 
         public Task<AccMetadataResult<IReadOnlyDictionary<string, string?>>> GetItemCustomAttributesAsync(string projectId, string itemId, CancellationToken cancellationToken = default)
         {

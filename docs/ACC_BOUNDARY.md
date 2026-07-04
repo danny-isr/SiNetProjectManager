@@ -1,6 +1,6 @@
 # ACC Boundary
 
-> **Status:** Wave 1 in progress - control plane, read slices, transfer seam, and first consumer cutovers implemented (2026-07-04)  
+> **Status:** Wave 1 fast-finish implemented - clean ACC runtime boundary closed for inbox + file-tree privileged flows (2026-07-04)  
 > **Branch:** `SiWorkNet10`
 
 This document records the current ACC / Autodesk boundary across the clean stack and the still-live
@@ -14,19 +14,17 @@ legacy runtime. It exists to separate:
 ## 1. Executive Summary
 
 - The clean ACC seam is no longer read-only. `SiNet.Application` now exposes:
-  `IAccProjectService`, `IAccDocumentService`, `IAccFileUploadService`, `IAccFileDownloadService`,
+  `IAccProjectService`, `IAccDocumentService`, `IAccFolderPathService`, `IAccFolderBrowserService`,
+  `IAccItemService`, `IAccFileUploadService`, `IAccFileDownloadService`, `IAccInboxBootstrapService`,
   and the ACC control-plane ports.
 - `SiNet.Infrastructure.Autodesk` now owns:
   mode resolution, remote health/diag probes, local key diagnostics, read-side adapters,
   semantic upload/download adapters, and local/remote mode switching for all of those seams.
-- `SiOffice.AccService` now exposes not only read-side lookup endpoints, but also the first ACC
-  transfer endpoints:
-  `POST /v1/acc/projects/{projectId}/files/upload` and
-  `GET /v1/acc/projects/{projectId}/items/{itemId}/download`.
-- The first production-oriented consumer cutovers are now done:
-  `ProjectFileFilingService` uploads via `IAccFileUploadService`, and
-  `ProjectFileRefileService` plus `MoveToProjectProcessActionHandler` download via
-  `IAccFileDownloadService`.
+- `SiOffice.AccService` now exposes the full Wave 1 privileged endpoint set used by the clean
+  ACC runtime: upload/download, folder-path resolve/ensure, item display/version/hide, and inbox bootstrap.
+- The two remaining heavy legacy consumers have now been cut over in large slices:
+  `EmailIngestionService` and the `AccFileStore` file-tree stack no longer own direct ACC
+  folder ensure/probe/list logic in their active runtime paths.
 - This does **not** mean ACC is fully migrated. The business orchestration for filing/refile/inbox
   handling still lives largely in `SiNetSQL`, even though the privileged ACC transfer path is now
   routed through clean ports.
@@ -39,15 +37,19 @@ legacy runtime. It exists to separate:
 | --- | --- | --- |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccProjectService.cs` | Clean port for discovering ACC projects | Implemented via local/remote read-only adapters |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccDocumentService.cs` | Clean port for ACC item lookup by project/folder/file name | Implemented via local/remote read-only adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccFolderPathService.cs` | Clean port for resolving / ensuring ACC folder lineages under a known root | Implemented in Wave 1 fast-finish |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccFolderBrowserService.cs` | Clean port for routine ACC folder browsing | Implemented in Wave 1 |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccItemService.cs` | Clean port for ACC item display/version/hide operations | Implemented in Wave 1 fast-finish |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccFileUploadService.cs` | Clean semantic port for ACC upload / new-version / same-source / snapshot flow | Implemented in Wave 1 |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccFileDownloadService.cs` | Clean port for ACC item download-to-temp | Implemented in Wave 1 |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccInboxBootstrapService.cs` | Clean port for privileged inbox bootstrap recovery | Implemented in Wave 1 |
 | `src/SiNet.Application/Abstractions/Autodesk/AccItemRef.cs` | Value object for resolved ACC items | Flowing through the read-only document adapter |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceModeProvider.cs` | Clean port for resolving local vs remote ACC service mode | Implemented |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceHealthProbe.cs` | Clean port for probing remote ACC service health | Implemented |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceDiagnosticsProbe.cs` | Clean port for safe remote ACC diagnostics | Implemented |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccServiceKeyDiagnostics.cs` | Clean port for local ACC API-key diagnostics | Implemented |
 | `src/SiNet.Application/Abstractions/Autodesk/AccServiceControlPlaneDtos.cs` | Mode/health/diag/key-info value objects | Implemented |
-| `src/SiNet.Infrastructure.Autodesk/AutodeskServiceCollectionExtensions.cs` | DI entry point for ACC module | Registers control-plane, read-side, and transfer seams |
+| `src/SiNet.Infrastructure.Autodesk/AutodeskServiceCollectionExtensions.cs` | DI entry point for ACC module | Registers control-plane, folder/item, read-side, and transfer seams |
 | `src/SiNet.Infrastructure.Autodesk/AutodeskLocalFileTransferServiceCollectionExtensions.cs` | Local-only registration helper for privileged transfer execution | Implemented for `SiOffice.AccService` |
 | `src/SiNet.Infrastructure.Autodesk/ConfigurationAccServiceModeProvider.cs` | Resolves `AccService:BaseUrl` mode through the existing host configuration seam | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/HttpAccServiceHealthProbe.cs` | Remote `/v1/acc/health` adapter | Implemented |
@@ -59,6 +61,12 @@ legacy runtime. It exists to separate:
 | `src/SiNet.Infrastructure.Autodesk/LocalAccDocumentService.cs` | Local-mode read-only item lookup | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/RemoteAccDocumentService.cs` | Remote-mode read-only item lookup via `SiOffice.AccService` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccDocumentService.cs` | Delegates read-only item lookup by mode | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccFolderPathService.cs` | Local-mode ACC folder-path resolve/ensure | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/RemoteAccFolderPathService.cs` | Remote-mode ACC folder-path resolve/ensure via `SiOffice.AccService` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccFolderPathService.cs` | Delegates ACC folder-path work by mode | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccItemService.cs` | Local-mode ACC item display/version/hide adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/RemoteAccItemService.cs` | Remote-mode ACC item display/version/hide adapter via `SiOffice.AccService` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccItemService.cs` | Delegates ACC item operations by mode | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/LocalAccFileUploadService.cs` | Local semantic ACC upload adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/RemoteAccFileUploadService.cs` | Remote semantic ACC upload adapter via `SiOffice.AccService` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccFileUploadService.cs` | Delegates ACC upload by mode | Implemented |
@@ -109,7 +117,7 @@ Additional host note:
 | Internal ACC service diagnostics | `SiNetProjectManagerV2/Services/Health/InternalAccServiceHealthCheck.cs` |
 | AccService key diagnostics | `src/SiNet.Infrastructure.Secrets/AccServiceSecretDiagnostics.cs` |
 | ACC business orchestration around filing/refile/inbox | `SiNetSQL` services and handlers still own most orchestration logic |
-| Remaining direct ACC transfer callers | Wave 1 caller cutovers now cover the known active upload/download paths; some inbox/file-tree flows still keep legacy ACC listing/navigation/orchestration even though binary transfer itself is already cut over |
+| Remaining direct ACC transfer callers | Wave 1 caller cutovers now cover the known active inbox, filing, move-to-project, and file-tree privileged paths; remaining legacy ownership is mainly orchestration/provisioning, not binary transfer or routine folder/item runtime calls |
 | Admin settings / probes / service-mode UI | `SiNetProjectManagerV2/WPF Window/ManagementSettingsWindow.AccService.cs`, `SiNetProjectManagerV2/WPF Window/SecretSetupWindow.xaml.cs`, `SiNetProjectManagerV2/Dialogs/UserGroupManagementWindow.xaml.cs` |
 
 ### 3.3 Why `SiNetSQL` is still being touched
@@ -130,10 +138,10 @@ What has **not** moved yet is the higher-level workflow/business orchestration t
 So the current wave still requires bounded edits inside `SiNetSQL` to re-point those runtime
 consumers at the new clean ports. That is a **transitional migration step**, not the target state.
 
-The stop line for this wave is:
+The stop line for this wave is now:
 
 - legacy orchestration may still live in `SiNetSQL`,
-- but privileged ACC binary transfer must no longer call the connector directly in the cut-over paths,
+- but the active inbox/file-tree/move/filing privileged ACC runtime paths must not call the connector directly for transfer, folder-path resolution/creation, routine browsing, or item inspection/lifecycle,
 - and in service mode those flows must route through `SiOffice.AccService`.
 
 ## 4. Boundary Rules Already Established
@@ -191,32 +199,38 @@ all at once.
 
 ## 6. Wave 1 Status
 
-Wave 1 currently contains the following implemented pieces:
+Wave 1 now contains the following implemented pieces:
 
 1. **Control-plane seam**
    - Mode, health, diagnostics, and key-info ports/adapters.
 2. **Read slices**
    - Known ACC project discovery and item lookup.
-3. **Transfer seam**
+3. **Folder/item runtime seams**
+   - `IAccFolderPathService`, `IAccFolderBrowserService`, `IAccItemService`, and `IAccInboxBootstrapService` plus local/remote/mode-switching adapters.
+4. **Transfer seam**
    - `IAccFileUploadService` and `IAccFileDownloadService` plus local/remote/mode-switching adapters.
-4. **Service endpoints**
-   - Upload/download endpoints in `SiOffice.AccService`.
-5. **First consumer cutovers**
+5. **Service endpoints**
+   - Upload/download, folder-path, item, and inbox-bootstrap endpoints in `SiOffice.AccService`.
+6. **First consumer cutovers**
    - `ProjectFileFilingService` upload path.
    - `ProjectFileRefileService` inbox temp download path.
    - `MoveToProjectProcessActionHandler` inbox temp download path.
-6. **Direct file-tree/manual cutover**
-   - `AccFileStore` upload / replace / manual upload / manual download paths now use the clean transfer ports.
-7. **Inbox/background transfer cutovers**
+7. **Big inbox cutover**
+   - `EmailIngestionService` now routes folder ensure/probe through `IAccFolderPathService`, remaining folder reads/dedup through `IAccFolderBrowserService`, bootstrap recovery through `IAccInboxBootstrapService`, and uploads through `IAccFileUploadService` without a direct ACC upload fallback.
+8. **Big file-tree cutover**
+   - `AccFileStore` now routes path ensure/probe through `IAccFolderPathService`, routine folder listing through `IAccFolderBrowserService`, item hide/display/version through `IAccItemService`, metadata reads through `IAccItemMetadataService`, and uploads/downloads through the clean transfer ports.
+9. **Inbox/background transfer cutovers**
    - `AccFileSyncService` now downloads from Inbox and uploads to project folders through the clean transfer ports.
    - `AttachmentTaggingService` ZIP companion-metadata JSON reads/writes now use the clean transfer ports.
    - `AccInboxReconciliationService` ZIP companion-metadata JSON reads now use the clean download port.
-8. **Inbox ingestion transfer cutover**
-   - `EmailIngestionService` now routes its inbox attachment/PDF/manifest/external upload paths through `IAccFileUploadService` (with the factory injecting the clean port into the runtime service).
+10. **Inbox read/navigation cutover**
+   - `AttachmentTaggingService` and `AccInboxReconciliationService` now prefer `IAccFolderBrowserService` for inbox folder browsing / ZIP companion-metadata lookup, so those reads also route through `SiOffice.AccService` in remote mode.
+11. **Move-to-project inbox seam cutover (partial)**
+   - `MoveToProjectProcessActionHandler` now prefers `IAccFolderBrowserService` for ZIP inbox folder browsing and `IAccFileUploadService` for ZIP move-metadata JSON updates, while keeping the legacy client only as a compatibility fallback.
 
-Wave 1 is **not done** yet because several inbox/file-tree orchestration paths still depend on
-legacy listing/navigation behavior, and the higher-level business orchestration still lives in
-`SiNetSQL`.
+Wave 1 is considered **closed at the runtime boundary**. What remains is the next phase:
+extracting more orchestration/provisioning behavior out of `SiNetSQL` without reopening direct
+connector ownership in the cut-over runtime paths.
 
 ## 7. Guardrails
 
@@ -231,11 +245,9 @@ Until a separately approved slice says otherwise:
 
 ## 8. Immediate Next Step
 
-The next useful ACC work items are:
+The next ACC work is no longer "finish the Wave 1 seams" - that boundary is now in place.
+The next useful slices are:
 
-- decide whether to convert the remaining inbox/file-tree listing/navigation seams
-  (`IAccFileClient` / direct connector reads) into new clean read ports or keep them temporarily
-  bounded inside legacy orchestration now that the direct transfer cutovers are in place,
-- and only after those cutovers are stable, decide whether to:
-  - extract the remaining orchestration out of `SiNetSQL`, or
-  - keep bounded legacy orchestration temporarily while the clean screen/workflow backbone is completed.
+- extract remaining orchestration/provisioning responsibilities out of `SiNetSQL` where it now makes sense architecturally,
+- decide whether the move-to-project compatibility constructor/fallbacks should be retired in the next orchestration slice,
+- and keep the rule stable that service-mode privileged ACC work continues to route through `SiOffice.AccService`.

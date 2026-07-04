@@ -183,7 +183,7 @@ Avoid:
 | --- | --- | --- | --- | --- |
 | Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted module/harness foundation; production host not switched.** Native Gmail **read** and native Gmail **send capability** now exist in the clean module and are exercised by the standalone `SiNet.App.Wpf` path; `SiNetProjectManagerV2` still runs the legacy Google runtime path. Gmail modify plus all Google Sheets/Drive work remain deferred. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below and [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md). |
 | Workflow | Legacy Workflow windows, `WorkflowTaskOrchestrator`, `WorkflowEngine`, task provisioning | `SiNet.Application.Workflow` `IWorkflowQueryService` + `IWorkflowCommandService`; SQL implementation keeps engine/provisioning internal | 🟡 | **Workflow is the process backbone.** Both boundaries exist and are DTO-clean: `IWorkflowQueryService` (reads) and `IWorkflowCommandService` (start / advance / auto-advance / stalled recovery). Internal `WorkflowEngine` + provisioning stay entity-based inside SQL/infrastructure. Next work should **connect new screens to workflow/task control** rather than rebuilding screens as isolated modules. See _Refactor Strategy_ + the Workflow sections below. |
-| ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ optional bridge seam) | 🟡 | ACC remains source of truth; DB is cache/helper. Clean side now has the control-plane seam, read-only `IAccProjectService` / `IAccDocumentService`, and Wave 1 transfer ports `IAccFileUploadService` / `IAccFileDownloadService`, all with local/remote mode switching and matching `SiOffice.AccService` endpoints. Caller cutovers now cover the active upload/download paths including `ProjectFileFilingService`, `ProjectFileRefileService`, `MoveToProjectProcessActionHandler`, `AccFileStore`, background inbox transfer flows, and `EmailIngestionService`. Business orchestration, provisioning, inbox bootstrap, and legacy ACC listing/navigation still live in the legacy host/runtime split, so bounded `SiNetSQL` edits are still part of the migration. See [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md). |
+| ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ optional bridge seam) | 🟡 | ACC remains source of truth; DB is cache/helper. Clean side now has the control-plane seam, read-side `IAccProjectService` / `IAccDocumentService`, folder/item runtime seams (`IAccFolderPathService`, `IAccFolderBrowserService`, `IAccItemService`, `IAccInboxBootstrapService`), and Wave 1 transfer ports `IAccFileUploadService` / `IAccFileDownloadService`, all with local/remote mode switching and matching `SiOffice.AccService` endpoints. Caller cutovers now cover the active inbox, filing, move-to-project, and file-tree privileged paths including `ProjectFileFilingService`, `ProjectFileRefileService`, `MoveToProjectProcessActionHandler`, `AccFileStore`, background inbox transfer flows, and `EmailIngestionService`. Remaining legacy ownership is mainly orchestration/provisioning, so bounded `SiNetSQL` edits are still part of the migration. See [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md). |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and the Google host-switch / Sheets / Drive boundary. See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
@@ -212,42 +212,53 @@ Avoid:
 
 ---
 
-## ACC / Autodesk slice - Wave 1 transfer seam 🟡
+## ACC / Autodesk slice - Wave 1 fast-finish 🟡
 
-> ACC is now past seam-only/read-only status. The clean side owns the privileged transfer boundary,
+> ACC is now past seam-only/read-only status. The clean side owns the privileged runtime boundary
+> for transfer, folder-path, routine browse, and item lifecycle in the main inbox/file-tree flows,
 > but not yet the full filing/refile/inbox orchestration.
 
 Current state:
 
-- `SiNet.Application` now exposes `IAccFileUploadService` and `IAccFileDownloadService` in
-  addition to the earlier control-plane and read-side ACC ports.
+- `SiNet.Application` now exposes `IAccFolderPathService`, `IAccFolderBrowserService`,
+  `IAccItemService`, `IAccInboxBootstrapService`, `IAccFileUploadService`, and
+  `IAccFileDownloadService` in addition to the earlier control-plane and read-side ACC ports.
 - `SiNet.Infrastructure.Autodesk` now implements local, remote, and mode-switching adapters for
-  upload and download.
+  folder/item runtime work as well as upload and download.
 - `SiOffice.AccService` now exposes:
+  - `POST /v1/acc/projects/{projectId}/folders/resolve-path`
+  - `POST /v1/acc/projects/{projectId}/folders/ensure-path`
+  - `GET /v1/acc/projects/{projectId}/items/{itemId}/display-name`
+  - `GET /v1/acc/projects/{projectId}/items/{itemId}/version-count`
+  - `POST /v1/acc/projects/{projectId}/items/{itemId}/hide`
   - `POST /v1/acc/projects/{projectId}/files/upload`
   - `GET /v1/acc/projects/{projectId}/items/{itemId}/download`
-- Wave 1 caller cutovers now cover the active upload/download paths:
+- Wave 1 caller cutovers now cover the active privileged paths:
   - `ProjectFileFilingService` uploads via the clean upload port.
   - `ProjectFileRefileService` downloads via the clean download port.
-  - `MoveToProjectProcessActionHandler` downloads via the clean download port.
-  - `AccFileStore` upload/replace/manual download paths use the clean transfer ports.
+  - `MoveToProjectProcessActionHandler` downloads via the clean download port and now uses the clean upload/browser seams for the ZIP inbox flow.
+  - `AccFileStore` now uses the clean folder-path, folder-browser, item, metadata, upload, and download seams.
   - `AccFileSyncService` now downloads from Inbox and uploads to project folders through the clean transfer ports.
   - `AttachmentTaggingService` and `AccInboxReconciliationService` now use the clean download/upload ports for ZIP companion-metadata JSON transfer.
-  - `EmailIngestionService` now routes inbox attachment/PDF/manifest/external uploads through the clean upload port.
+  - `EmailIngestionService` now routes folder ensure/list/bootstrap and inbox attachment/PDF/manifest/external uploads through the clean ACC seams.
+- The inbox/move read-side cutovers now cover:
+  - `AttachmentTaggingService` and `AccInboxReconciliationService` now prefer `IAccFolderBrowserService` for inbox folder browsing / ZIP companion-metadata lookup.
+  - `MoveToProjectProcessActionHandler` now prefers `IAccFolderBrowserService` for ZIP inbox folder reads.
 
 Important clarification:
 
 - `SiNetSQL` still appears in this wave because those runtime consumers and their business
   orchestration still live there today.
-- The Wave 1 goal was to stop those flows from calling privileged ACC transfer methods directly,
+- The Wave 1 goal was to stop those flows from calling privileged ACC runtime methods directly,
   not to finish the entire application-service extraction in one step.
-- In other words: the **transport boundary is clean now in the cut-over paths**; the
+- In other words: the **runtime boundary is clean now in the cut-over paths**; the
   **orchestration boundary is still transitional**.
 
-Remaining Wave 1 work:
+Next ACC work after Wave 1:
 
-- decide whether the next step is further caller cutover of legacy ACC read/listing seams or full
-  orchestration extraction from `SiNetSQL`, now that the active transfer callers are cut over.
+- extract more orchestration/provisioning responsibilities out of `SiNetSQL`,
+- decide when to retire the remaining move-to-project compatibility constructor/fallbacks,
+- keep the service-mode rule stable: privileged ACC work routes through `SiOffice.AccService`.
 
 Verification completed so far:
 
@@ -255,15 +266,17 @@ Verification completed so far:
 | --- | --- |
 | ACC control-plane ports/adapters | ✅ |
 | ACC read-side project/document ports/adapters | ✅ |
+| ACC folder/item runtime seams + adapters | ✅ |
 | ACC upload/download ports + local/remote/mode-switching adapters | ✅ |
-| `SiOffice.AccService` upload/download endpoints | ✅ |
+| `SiOffice.AccService` upload/download/folder/item endpoints | ✅ |
 | `ProjectFileFilingService` upload cutover | ✅ |
 | `ProjectFileRefileService` download cutover | ✅ |
-| `MoveToProjectProcessActionHandler` download cutover | ✅ |
-| `AccFileStore` transfer cutover | ✅ |
+| `MoveToProjectProcessActionHandler` download/browser/upload ZIP cutover | ✅ |
+| `AccFileStore` file-tree/runtime cutover | ✅ |
 | `AccFileSyncService` transfer cutover | ✅ |
-| `EmailIngestionService` upload cutover | ✅ |
+| `EmailIngestionService` inbox runtime cutover | ✅ |
 | ZIP metadata JSON transfer cutover in tagging/reconciliation | ✅ |
+| Inbox folder browser cutover in tagging/reconciliation | ✅ |
 | Focused ACC/consumer tests updated and passing | ✅ |
 
 ---

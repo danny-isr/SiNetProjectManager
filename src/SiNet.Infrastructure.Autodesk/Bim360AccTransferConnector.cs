@@ -19,6 +19,13 @@ internal sealed class Bim360AccTransferConnector(ITokenProvider? tokenProvider) 
         CancellationToken cancellationToken = default) =>
         await CreateService().GetFolderItemsAsync(projectId, folderId, cancellationToken).ConfigureAwait(false);
 
+    public Task<string?> GetFolderByNameAsync(
+        string projectId,
+        string parentFolderId,
+        string folderName,
+        CancellationToken cancellationToken = default) =>
+        CreateService().GetFolderByNameAsync(projectId, parentFolderId, folderName);
+
     public Task<UploadResult> UploadFileFinalAsync(
         string projectId,
         string folderId,
@@ -40,6 +47,24 @@ internal sealed class Bim360AccTransferConnector(ITokenProvider? tokenProvider) 
         string itemId,
         CancellationToken cancellationToken = default) =>
         CreateService().DownloadFileToTempAsync(projectId, itemId, cancellationToken);
+
+    public Task<string?> GetItemDisplayNameAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        CreateService().GetItemDisplayNameAsync(projectId, itemId, cancellationToken);
+
+    public Task<int?> GetItemVersionCountAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        CreateService().GetItemVersionCountAsync(projectId, itemId, cancellationToken);
+
+    public Task<bool> HideItemAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        CreateService().HideItemAsync(projectId, itemId, cancellationToken);
 
     public Task<AccMetadataResult<IReadOnlyDictionary<string, string?>>> GetItemCustomAttributesAsync(
         string projectId,

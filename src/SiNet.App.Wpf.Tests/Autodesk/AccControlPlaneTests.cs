@@ -158,6 +158,8 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccLiveProjectDiscoveryService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderPathService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccItemService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFileUploadService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFileDownloadService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));

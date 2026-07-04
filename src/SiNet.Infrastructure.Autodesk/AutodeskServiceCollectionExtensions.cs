@@ -53,7 +53,9 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<LocalAccLiveProjectDiscoveryService>();
         services.AddTransient<LocalAccProjectService>();
         services.AddTransient<LocalAccDocumentService>();
+        services.AddTransient<LocalAccFolderPathService>();
         services.AddTransient<LocalAccFolderBrowserService>();
+        services.AddTransient<LocalAccItemService>();
         services.AddTransient<LocalAccProjectTreeSearchService>();
         services.AddTransient<IAccLookupSeedService, LocalAccLookupSeedService>();
         services.AddHttpClient<RemoteAccProjectCatalogService>()
@@ -68,7 +70,13 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<RemoteAccDocumentService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccFolderPathService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddHttpClient<RemoteAccFolderBrowserService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccItemService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddHttpClient<RemoteAccProjectTreeSearchService>()
@@ -87,9 +95,11 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<IAccProjectCatalogService, ModeSwitchingAccProjectCatalogService>();
         services.AddTransient<IAccProjectService, ModeSwitchingAccProjectService>();
         services.AddTransient<IAccDocumentService, ModeSwitchingAccDocumentService>();
+        services.AddTransient<IAccFolderPathService, ModeSwitchingAccFolderPathService>();
         services.AddTransient<IAccFileUploadService, ModeSwitchingAccFileUploadService>();
         services.AddTransient<IAccFileDownloadService, ModeSwitchingAccFileDownloadService>();
         services.AddTransient<IAccFolderBrowserService, ModeSwitchingAccFolderBrowserService>();
+        services.AddTransient<IAccItemService, ModeSwitchingAccItemService>();
         services.AddTransient<IAccProjectTreeSearchService, ModeSwitchingAccProjectTreeSearchService>();
         services.AddTransient<IAccInboxBootstrapService>(sp =>
             new ModeSwitchingAccInboxBootstrapService(

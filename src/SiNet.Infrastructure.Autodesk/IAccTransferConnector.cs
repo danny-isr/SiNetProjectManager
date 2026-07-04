@@ -15,6 +15,12 @@ internal interface IAccTransferConnector
         string folderId,
         CancellationToken cancellationToken = default);
 
+    Task<string?> GetFolderByNameAsync(
+        string projectId,
+        string parentFolderId,
+        string folderName,
+        CancellationToken cancellationToken = default);
+
     Task<UploadResult> UploadFileFinalAsync(
         string projectId,
         string folderId,
@@ -30,6 +36,21 @@ internal interface IAccTransferConnector
         CancellationToken cancellationToken = default);
 
     Task<(string TempFilePath, string FileName)?> DownloadFileToTempAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> GetItemDisplayNameAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default);
+
+    Task<int?> GetItemVersionCountAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> HideItemAsync(
         string projectId,
         string itemId,
         CancellationToken cancellationToken = default);
