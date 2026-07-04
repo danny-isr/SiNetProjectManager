@@ -39,6 +39,7 @@ public static class AutodeskServiceCollectionExtensions
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
 
+        services.AddSiNetAutodeskLocalFileTransfer();
         services.AddTransient<IAccFolderItemsReader>(sp =>
             new Bim360AccFolderItemsReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<IAccFolderContentsReader>(sp =>
@@ -76,10 +77,18 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<RemoteAccInboxBootstrapService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccFileUploadService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccFileDownloadService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddTransient<IAccLiveProjectDiscoveryService, ModeSwitchingAccLiveProjectDiscoveryService>();
         services.AddTransient<IAccProjectCatalogService, ModeSwitchingAccProjectCatalogService>();
         services.AddTransient<IAccProjectService, ModeSwitchingAccProjectService>();
         services.AddTransient<IAccDocumentService, ModeSwitchingAccDocumentService>();
+        services.AddTransient<IAccFileUploadService, ModeSwitchingAccFileUploadService>();
+        services.AddTransient<IAccFileDownloadService, ModeSwitchingAccFileDownloadService>();
         services.AddTransient<IAccFolderBrowserService, ModeSwitchingAccFolderBrowserService>();
         services.AddTransient<IAccProjectTreeSearchService, ModeSwitchingAccProjectTreeSearchService>();
         services.AddTransient<IAccInboxBootstrapService>(sp =>

@@ -158,6 +158,8 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccLiveProjectDiscoveryService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccFileUploadService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccFileDownloadService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectTreeSearchService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccInboxBootstrapService));
@@ -735,6 +737,8 @@ public sealed class AccControlPlaneTests
         Assert.Contains("/live/hubs/{hubId}/projects", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/browse", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/search", source, StringComparison.Ordinal);
+        Assert.Contains("/projects/{projectId}/files/upload", source, StringComparison.Ordinal);
+        Assert.Contains("/projects/{projectId}/items/{itemId}/download", source, StringComparison.Ordinal);
         Assert.Contains("/inbox/ensure", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
         Assert.Contains("ProjectAccMappings", source, StringComparison.Ordinal);

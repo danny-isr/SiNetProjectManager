@@ -27,6 +27,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\SiNetSQL\SiNetSQL\SiNetSQL.csproj" />
+    <ProjectReference Include="..\src\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />
     <ProjectReference Include="..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
   <ItemGroup>

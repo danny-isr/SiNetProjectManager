@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
+using System.Text.Json;
 
 namespace SiOffice.AccService.Endpoints;
 
@@ -307,6 +309,123 @@ internal static class AccEndpoints
                 VersionId = (string?)null,
                 ViewerUrl = (string?)null
             });
+        });
+
+        // ── ACC file transfer ────────────────────────────────────────────────
+        v1.MapPost("/projects/{projectId}/files/upload", async (
+            string projectId,
+            HttpRequest httpRequest,
+            IAccFileUploadService uploadService,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (!httpRequest.HasFormContentType)
+                return Results.BadRequest(new { error = "multipart/form-data is required." });
+
+            var form = await httpRequest.ReadFormAsync(ct);
+            var file = form.Files.GetFile("file");
+            if (file is null || file.Length <= 0)
+                return Results.BadRequest(new { error = "file is required." });
+
+            var requestJson = form["request"].ToString();
+            if (string.IsNullOrWhiteSpace(requestJson))
+                return Results.BadRequest(new { error = "request payload is required." });
+
+            AccFileUploadEndpointRequest? body;
+            try
+            {
+                body = JsonSerializer.Deserialize<AccFileUploadEndpointRequest>(requestJson, UploadRequestJsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                return Results.BadRequest(new { error = $"request payload is invalid JSON: {ex.Message}" });
+            }
+
+            if (body is null || string.IsNullOrWhiteSpace(body.DisplayName))
+                return Results.BadRequest(new { error = "displayName is required." });
+            if (string.IsNullOrWhiteSpace(body.TargetFolderId) && string.IsNullOrWhiteSpace(body.RootFolderId))
+                return Results.BadRequest(new { error = "targetFolderId or rootFolderId is required." });
+
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "SiOffice.AccService", "uploads", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDirectory);
+            var tempPath = Path.Combine(tempDirectory, SanitizeUploadFileName(file.FileName));
+
+            try
+            {
+                await using (var targetStream = new FileStream(
+                    tempPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    useAsync: true))
+                {
+                    await file.CopyToAsync(targetStream, ct);
+                }
+
+                var result = await uploadService.UploadAsync(
+                    new AccFileUploadRequest(projectId.Trim(), tempPath, body.DisplayName.Trim())
+                    {
+                        TargetFolderId = string.IsNullOrWhiteSpace(body.TargetFolderId) ? null : body.TargetFolderId.Trim(),
+                        RootFolderId = string.IsNullOrWhiteSpace(body.RootFolderId) ? null : body.RootFolderId.Trim(),
+                        PathSegments = body.PathSegments ?? Array.Empty<string>(),
+                        ExistingItemId = string.IsNullOrWhiteSpace(body.ExistingItemId) ? null : body.ExistingItemId.Trim(),
+                        SourceIdentity = body.SourceIdentity,
+                        Snapshot = body.Snapshot,
+                        CompanionDocument = body.CompanionDocument,
+                    },
+                    ct);
+
+                return Results.Ok(new
+                {
+                    result.FolderId,
+                    result.ItemId,
+                    result.VersionId,
+                    result.FileName,
+                    result.AlreadySameSource
+                });
+            }
+            finally
+            {
+                TryDeleteTempDirectory(tempDirectory);
+            }
+        });
+
+        v1.MapGet("/projects/{projectId}/items/{itemId}/download", async (
+            string projectId,
+            string itemId,
+            HttpContext httpContext,
+            IAccFileDownloadService downloadService,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+
+            var result = await downloadService.DownloadToTempAsync(projectId.Trim(), itemId.Trim(), ct);
+            if (result is null || !File.Exists(result.TempFilePath))
+            {
+                return Results.NotFound();
+            }
+
+            var stream = new FileStream(
+                result.TempFilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                81920,
+                useAsync: true);
+
+            httpContext.Response.Headers["X-Acc-Downloaded-FileName"] = result.DownloadedFileName;
+            httpContext.Response.OnCompleted(async () =>
+            {
+                await stream.DisposeAsync().ConfigureAwait(false);
+                TryDeleteTempFile(result.TempFilePath);
+            });
+
+            return Results.File(stream, "application/octet-stream", result.DownloadedFileName);
         });
 
         // ── Read-only ACC folder browse ──────────────────────────────────────
@@ -657,6 +776,40 @@ internal static class AccEndpoints
             : $"b.{trimmed}";
     }
 
+    private static string SanitizeUploadFileName(string fileName)
+    {
+        var safeFileName = string.IsNullOrWhiteSpace(fileName) ? "upload.bin" : fileName.Trim();
+        return string.Join("_", safeFileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static void TryDeleteTempFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static void TryDeleteTempDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private sealed record AccTreeSearchLocation(string FolderId, string FolderPath);
 
     private sealed record AccProjectTreeSearchResponse(
@@ -697,4 +850,19 @@ internal static class AccEndpoints
         string DisplayName,
         string SourceLabel,
         int Priority);
+
+    private sealed record AccFileUploadEndpointRequest(
+        string? TargetFolderId,
+        string? RootFolderId,
+        IReadOnlyList<string>? PathSegments,
+        string DisplayName,
+        string? ExistingItemId,
+        AccFileSourceIdentity? SourceIdentity,
+        AccFileUploadSnapshot? Snapshot,
+        AccFileUploadCompanionDocument? CompanionDocument);
+
+    private static readonly JsonSerializerOptions UploadRequestJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
 }

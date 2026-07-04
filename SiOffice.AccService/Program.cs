@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using SiNet.Infrastructure.Autodesk;
 using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
@@ -141,6 +142,7 @@ builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
     var clientSecret = SiNetSQL.Services.CredentialProvider.AutodeskClientSecret ?? string.Empty;
     return new MyOffice.AutodeskConnector.TokenProvider(clientId, clientSecret);
 });
+builder.Services.AddSiNetAutodeskLocalFileTransfer();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
 
 // NOTE: CredentialProvider.GetSecret was already set to CredentialVaultService.GetSecret
