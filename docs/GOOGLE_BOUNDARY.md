@@ -47,10 +47,11 @@ decision for any behavior change.
 | Host | Google runtime path | `AddSiNetGoogle()` | `AddSiNetSecrets()` | Result |
 | --- | --- | --- | --- | --- |
 | `SiNetProjectManagerV2` production host | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` | No | Yes, via `AddSiNetNewSystemGraph()` | Vault is available to New System services, but production Google behavior remains legacy |
-| `SiNet.App.Wpf` standalone harness | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` | Yes | No | Native Gmail is wired, but vault-first client-secrets resolution is **not** registered in this host |
+| `SiNet.App.Wpf` standalone harness | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` | Yes | Yes | Native Gmail is wired with vault-first client-secrets resolution when the secrets provider can resolve them; config fallback remains available only when the provider cannot supply a path |
 
 Implication: the clean Gmail module is real and testable, but it is **not** the production-host
-implementation today, and the standalone harness is not fully parity-wired for secrets.
+implementation today. The standalone harness is now secrets-aware, yet production Gmail/Drive/Sheets
+behavior still belongs to the legacy host.
 
 ## 3. Native Gmail Module Boundary
 
@@ -84,7 +85,7 @@ configurable. Scope selection remains a code-level decision inside `GmailClientP
 | Aspect | Native module / harness | Legacy host |
 | --- | --- | --- |
 | Client secrets source | **Vault-first only when `IGoogleClientSecretsPathProvider` is registered**; otherwise config fallback | Legacy `AppConfiguration` / reports config |
-| Config fallback | `src/SiNet.App.Wpf/appsettings.json` `Gmail:ClientSecretsPath` (used by the standalone harness because Vault is not registered there) | Legacy config paths |
+| Config fallback | `src/SiNet.App.Wpf/appsettings.json` `Gmail:ClientSecretsPath` (used only when vault-backed resolution cannot supply a path) | Legacy config paths |
 | Token store | `Gmail:TokenStorePath` (default host config: `%LOCALAPPDATA%\\SiNet\\google-token`) | `%APPDATA%\\SiNet\\GoogleTokens` |
 | App name | `SiNet` | Legacy-specific names (`OfficeConnector`, reports path, etc.) |
 
@@ -94,10 +95,11 @@ Verified wiring:
   `AddSiNetSecrets()`.
 - `src/SiNet.App.Wpf/App.xaml.cs` documents Vault as the source of truth for Gmail client secrets and
   binds only token-store override from `SINET_GOOGLE_TOKEN_STORE`.
-- The standalone `SiNet.App.Wpf` host calls `AddSiNet(...)` / `AddSiNetGoogle(...)` but does **not**
-  register `AddSiNetSecrets()`, so `IGoogleClientSecretsPathProvider` is absent there.
-- Therefore, in the standalone harness, native Gmail sign-in is `NotConfigured` unless a valid
-  `Gmail:ClientSecretsPath` fallback is provided.
+- The standalone `SiNet.App.Wpf` host now calls `AddSiNetSecrets()` as well, so
+  `IGoogleClientSecretsPathProvider` is available there.
+- Therefore, in the standalone harness, native Gmail sign-in is vault-first, with
+  `Gmail:ClientSecretsPath` acting only as fallback when a usable provider-backed path is not
+  available.
 
 ## 4. User-level vs System-level Split
 
@@ -143,10 +145,25 @@ Still deferred after the native Gmail slice:
 
 ## 7. Recommended Next Step
 
-Google should **not** be the next implementation-heavy slice. The safe follow-up after this boundary
-alignment is:
+Google should **not** be the next implementation-heavy slice after ACC. The safe follow-up is to
+keep Google work staged and policy-led:
 
-1. keep Google changes limited to **explicitly approved** gaps only, and
-2. finish Google with **docs/policy alignment first** (send approval, scope policy, token-store policy),
-   then prefer the next implementation slice in a different domain (for example ACC boundary) unless a
-   Google-specific parity decision is requested.
+1. **G1 — Policy alignment first**
+   - explicit Gmail send approval/non-approval,
+   - explicit scope policy,
+   - explicit token-store coexistence policy,
+   - explicit definition of what “Google health” means in product terms.
+2. **G2 — Auth/config clarification**
+   - vault-first secrets source,
+   - allowed config fallback,
+   - no forced token-store consolidation.
+3. **G3 — Gmail parity only if explicitly approved**
+   - full body / attachments / modify / labels / throttling,
+   - sender-context gaps only if required by real production-host adoption.
+4. **G4 — Drive only behind a ProjectFiles/storage slice**
+   - no ad-hoc Drive migration.
+5. **G5 — Sheets / Reports after a clear application boundary exists**
+   - no opportunistic Sheets/report rewrites before ownership and auth policy are explicit.
+
+Until G1 is settled, keep Google changes limited to **approved documentation/policy alignment** and
+do not attempt production-host consolidation.

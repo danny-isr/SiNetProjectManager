@@ -182,14 +182,14 @@ Avoid:
 | Domain | Legacy source (approx. size) | New home | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Email / Google | `SiOffice.GoogleConnector/GoogleService.cs` (~3,369), `EmailManagementViewModel.cs` (~6,909) | `SiNet.Application` `IEmail*` ports → `SiNet.Infrastructure.Google` (**native Gmail API**) | 🟢 | **Accepted module/harness foundation; production host not switched.** Native Gmail **read** and native Gmail **send capability** now exist in the clean module and are exercised by the standalone `SiNet.App.Wpf` path; `SiNetProjectManagerV2` still runs the legacy Google runtime path. Gmail modify plus all Google Sheets/Drive work remain deferred. **Google/Gmail consolidation: blocked until capability and token-store parity are explicitly designed** — legacy `GoogleService` (Gmail+Sheets+Drive, shared token store) and native `GmailClientProvider` (Gmail-only, separate token store) are **not** behavior-equivalent; do not consolidate inside `SiNetProjectManagerV2`. See sections below and [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md). |
-| Workflow | Legacy Workflow windows, `WorkflowTaskOrchestrator`, `WorkflowEngine`, task provisioning | `SiNet.Application.Workflow` `IWorkflowQueryService` + `IWorkflowCommandService`; SQL implementation keeps engine/provisioning internal | 🟡 | **Workflow is the process backbone.** Both boundaries exist and are DTO-clean: `IWorkflowQueryService` (reads) and `IWorkflowCommandService` (start / advance / auto-advance / stalled recovery). Internal `WorkflowEngine` + provisioning stay entity-based inside SQL/infrastructure. Next work should **connect new screens to workflow/task control** rather than rebuilding screens as isolated modules. See _Refactor Strategy_ + the Workflow sections below. |
-| ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ optional bridge seam) | 🟡 | ACC remains source of truth; DB is cache/helper. Clean side now has the control-plane seam, read-side `IAccProjectService` / `IAccDocumentService`, folder/item runtime seams (`IAccFolderPathService`, `IAccFolderBrowserService`, `IAccItemService`, `IAccInboxBootstrapService`), and Wave 1 transfer ports `IAccFileUploadService` / `IAccFileDownloadService`, all with local/remote mode switching and matching `SiOffice.AccService` endpoints. Caller cutovers now cover the active inbox, filing, move-to-project, and file-tree privileged paths including `ProjectFileFilingService`, `ProjectFileRefileService`, `MoveToProjectProcessActionHandler`, `AccFileStore`, background inbox transfer flows, and `EmailIngestionService`, and the post-Wave-1 cleanup has already removed the internal move-to-project / inbox compatibility fallbacks in the touched consumers. Remaining legacy ownership is mainly orchestration/provisioning, so bounded `SiNetSQL` edits are still part of the migration. See [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md). |
+| Workflow | Legacy Workflow windows, `WorkflowTaskOrchestrator`, `WorkflowEngine`, task provisioning | `SiNet.Application.Workflow` `IWorkflowQueryService` + `IWorkflowCommandService`; SQL implementation keeps engine/provisioning internal | 🟡 | **Workflow is the process backbone.** Both boundaries exist and are DTO-clean: `IWorkflowQueryService` (reads) and `IWorkflowCommandService` (start / advance / auto-advance / stalled recovery). Internal `WorkflowEngine` + provisioning stay entity-based inside SQL/infrastructure. Next work should **connect new screens to workflow/task control** rather than rebuilding screens as isolated modules. ACC control-plane/read slices do **not** need to wait for broad backbone work; only task-aware clean-host ACC/Google slices should require a small workflow/task prep slice first. See _Refactor Strategy_ + the Workflow sections below. |
+| ACC / Autodesk | `SiOffice.AutodeskConnector/Bim360Service.cs` (~3,231) | `SiNet.Application` `IAcc*` ports → `SiNet.Infrastructure.Autodesk` (+ optional bridge seam) | 🟡 | ACC remains source of truth; DB is cache/helper. Clean side now has the control-plane seam, read-side `IAccProjectService` / `IAccDocumentService`, folder/item runtime seams (`IAccFolderPathService`, `IAccFolderBrowserService`, `IAccItemService`, `IAccInboxBootstrapService`), and Wave 1 transfer ports `IAccFileUploadService` / `IAccFileDownloadService`, all with local/remote mode switching and matching `SiOffice.AccService` endpoints. Caller cutovers now cover the active inbox, filing, move-to-project, and file-tree privileged paths including `ProjectFileFilingService`, `ProjectFileRefileService`, `MoveToProjectProcessActionHandler`, `AccFileStore`, background inbox transfer flows, and `EmailIngestionService`, and the post-Wave-1 cleanup has already removed the internal move-to-project / inbox / refile compatibility fallbacks in the touched consumers. Remaining legacy ownership is mainly orchestration/provisioning, so bounded `SiNetSQL` edits are still part of the migration. See [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md). |
 | SQL / DbContext | `SiNetSQL` (`DbContext` ~1,948) | `SiNet.Infrastructure.Sql` via `IDbContextFactory<>` | 🟡 | **EF layer extracted** (models, configs, DbContext, factory, migrations) into clean `net10.0` module; legacy `SiNetSQL` references it. **Do not** edit migrations / `ModelSnapshot` / `*.Designer.cs`. See section below. |
 | App startup / DI | `App.xaml.cs` (~1,821), `ConfigureServices()` (~700) | `SiNet.App.Composition` + `SiNet.App.Wpf` | 🟡 | **Phases 1–2 + SQL gate done.** Host delegates the Workflow **read slice**, **command port**, and now the **SQL `DbContextFactory`** (via `AddSiNetSql` + `SiNetSqlOptions` DEBUG-diagnostics opt-in) to the modular stack. Remaining host-specific: FileSystem/Logging (no host consumer) and the Google host-switch / Sheets / Drive boundary. See D1/D2/D3 below. |
 | File system | `FileHelpers` / scattered IO | `SiNet.Application` `IFileStorage` → `SiNet.Infrastructure.FileSystem` | ⬜ | |
 | Logging | scattered Serilog usage | `SiNet.Application` `IAppLogger` → `SiNet.Infrastructure.Logging` (`SerilogAppLogger` / `AddSiNetSerilogLogging`) | 🟡 | Stage 4: New System consumption port wired; bootstrap still in host. See [`LOGGING.md`](./LOGGING.md). |
 | Settings (logging + theme) | `SettingsManager` / `SystemSettings` `Logging.*` | Full settings ports + native Settings UI + theme runtime | 🟢 | Stage 5 slice 2 + Stage 6 theme. See [`SETTINGS.md`](./SETTINGS.md) §9. |
-| Identity / Permissions | `CurrentUserContext`, `UserService`, `MainWindow` menu | `IUserManagementService` → `SqlUserManagementService` + native App.Wpf admin | 🟡 | Native list/add-user in New System; legacy admin on Legacy path; Action Permissions admin pending. |
+| Identity / Permissions | `CurrentUserContext`, `UserService`, `MainWindow` menu | `IUserManagementService` → `SqlUserManagementService` + native App.Wpf admin | 🟡 | Native list/add-user and native Action Permissions admin now exist in the New System; legacy admin windows still remain on the Legacy path, and runtime authority is still partly legacy-backed. |
 
 ---
 
@@ -258,8 +258,13 @@ Important clarification:
 
 Next ACC work after Wave 1:
 
+- Stage A1: stabilize and document the ACC control-plane / operator-read surface against current code truth.
+- Stage A2: keep ACC changes read-safe and expand real consumers of catalog/discovery/browse/search.
+- Stage A3: introduce an explicit reconciliation contract based on ACC truth, not DB-only inference.
+- Stage A4: isolate provisioning only after A1-A3 are closed.
+- Stage A5: defer filing / metadata-write / move-heavy write paths until the earlier slices are closed.
 - extract more orchestration/provisioning responsibilities out of `SiNetSQL`,
-- retire the last remaining privileged transfer compatibility pockets (for example `ProjectFileRefileService`),
+- keep retiring orchestration-era compatibility code only after each replacement seam is verified and documented,
 - keep the service-mode rule stable: privileged ACC work routes through `SiOffice.AccService`.
 
 Verification completed so far:
@@ -307,7 +312,7 @@ Active native flow: standalone `SiNet.App.Wpf` `InboxViewModel` → `IEmailGatew
 | `GmailOptions` config model (client secrets path, token store, app name, root label, interactive flag) | ✅ |
 | `AddSiNetGoogle()` / `AddSiNetGoogle(Action<GmailOptions>)` register `IEmailGateway` → native gateway | ✅ |
 | `SiNet.App.Composition` `AddSiNet(Action<GmailOptions>)` host configuration overload | ✅ |
-| `SiNet.App.Wpf` harness configures `GmailOptions` (env-var token store, config fallback for client secrets) | ✅ |
+| `SiNet.App.Wpf` harness configures `GmailOptions` (env-var token-store override; vault-first client-secrets path via `AddSiNetSecrets()`, with config fallback only when provider-backed resolution is unavailable) | ✅ |
 | `SiNet.App.Wpf` inbox consumer (VM + `DataGrid`, empty/not-signed-in handled) | ✅ |
 | `dotnet build SiNet.sln` green + legacy WPF host green (full MSBuild) | ✅ _0/0 both_ |
 
@@ -347,7 +352,7 @@ when D6 added native send; the remaining Gmail parity gaps stay deferred unless 
 | 3 | Native inbox gateway is summary/read-oriented only | ⬜ Deferred (full body / attachments / modify still out of scope) |
 | 4 | Send/modify Gmail capabilities | 🟡 Partial — native send closed in D6; modify remains deferred |
 | 5 | App-startup first-time auth / token acquisition | ✅ Closed — startup silent restore (`TrySignInSilentlyAsync`) + on-demand interactive sign-in |
-| 6 | Vault wiring in standalone `SiNet.App.Wpf` harness | ⬜ Deferred — production host registers `AddSiNetSecrets()`, standalone harness does not |
+| 6 | Vault wiring in standalone `SiNet.App.Wpf` harness | ✅ Closed — standalone harness now registers `AddSiNetSecrets()` and uses vault-first Gmail client-secrets resolution |
 
 ---
 
@@ -375,8 +380,9 @@ At startup the host attempts `TrySignInSilentlyAsync` (no browser) to restore a 
 
 > Still independent of legacy `AppConfiguration`. `SiNet.Infrastructure.Google` references only
 > `SiNet.Application`, `SiNet.Domain`, and Gmail NuGet packages — no `LegacyBridge`.
-> The standalone `SiNet.App.Wpf` host, however, does **not** register `AddSiNetSecrets()`, so the
-> vault-first path is unavailable there unless the module is hosted through `SiNetProjectManagerV2`.
+> The standalone `SiNet.App.Wpf` host now also registers `AddSiNetSecrets()`, so the native Gmail
+> path is vault-first there as well; config fallback remains only for cases where a provider-backed
+> path cannot be resolved.
 
 ---
 

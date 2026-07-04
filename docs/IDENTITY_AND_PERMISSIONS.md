@@ -41,7 +41,7 @@ Goals of this document:
 | **Current User port** | `src/SiNet.Application/Identity/ICurrentUserContext.cs` | Minimal: `int? UserId` only. Runtime-only; not persisted; **not** an authorization authority. |
 | **Host adapter** | `SiNetProjectManagerV2/Services/CurrentUserContextAdapter.cs` | Forwards `UserId` from legacy `CurrentUserContext.Instance.CurrentUserId`. Registered in V2 DI as singleton. |
 | **Shell display** | `NewShellFactory.DescribeUser` → `NewShellViewModel.CurrentUserDisplay` | Shows `משתמש #{id}` when `UserId` is present; otherwise `משתמש לא ידוע`. Shell does **not** check roles or permissions. |
-| **Authorization ports** | — | **None yet** in `SiNet.Application` for roles, action permissions, or user management. |
+| **Authorization ports** | `src/SiNet.Application/Identity/*` | `IAuthorizationQueryService`, `IActionPermissionQueryService`, `IActionPermissionAdminService`, `ICurrentUserProfileService`, and `IUserManagementService` are now implemented and consumed by native New System surfaces. |
 
 ### 2.2 Legacy host (production authority today)
 
@@ -455,7 +455,7 @@ Phased, documentation-driven slices:
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |
 | **P5 — user management port** | `IUserManagementService` + native New System UI | ✅ Native list + add-user (read-only list; `UpdateUsersAsync` deferred) |
-| **P6 — action permission admin UI** | Native App.Wpf admin surface | 🟡 Revoked legacy-window approach; rebuild pending |
+| **P6 — action permission admin UI** | Native App.Wpf admin surface | ✅ Implemented: native `ActionPermissionsView` / `ActionPermissionsWindow` backed by `IActionPermissionAdminService` |
 | **P7 — composition split** | Modular DI without legacy UI wiring | ⏸ Paused until boundary clean (see `NEW_SYSTEM_BOUNDARY.md`) |
 
 Each phase ends with: tests on service behavior, doc/code alignment check, explicit note in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md).

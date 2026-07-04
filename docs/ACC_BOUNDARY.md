@@ -14,8 +14,10 @@ legacy runtime. It exists to separate:
 ## 1. Executive Summary
 
 - The clean ACC seam is no longer read-only. `SiNet.Application` now exposes:
-  `IAccProjectService`, `IAccDocumentService`, `IAccFolderPathService`, `IAccFolderBrowserService`,
-  `IAccItemService`, `IAccFileUploadService`, `IAccFileDownloadService`, `IAccInboxBootstrapService`,
+  `IAccProjectService`, `IAccProjectCatalogService`, `IAccLiveProjectDiscoveryService`,
+  `IAccProjectTreeSearchService`, `IAccLookupSeedService`, `IAccDocumentService`,
+  `IAccFolderPathService`, `IAccFolderBrowserService`, `IAccItemService`,
+  `IAccFileUploadService`, `IAccFileDownloadService`, `IAccInboxBootstrapService`,
   and the ACC control-plane ports.
 - `SiNet.Infrastructure.Autodesk` now owns:
   mode resolution, remote health/diag probes, local key diagnostics, read-side adapters,
@@ -35,7 +37,11 @@ legacy runtime. It exists to separate:
 
 | Artifact | Role | Current status |
 | --- | --- | --- |
-| `src/SiNet.Application/Abstractions/Autodesk/IAccProjectService.cs` | Clean port for discovering ACC projects | Implemented via local/remote read-only adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccProjectService.cs` | Clean port for discovering known ACC project ids from system state | Implemented via local/remote read-only adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccProjectCatalogService.cs` | Clean port for display/search-friendly ACC project catalog access | Implemented via local/remote adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccLiveProjectDiscoveryService.cs` | Clean port for live Autodesk hub/project discovery | Implemented via local/remote adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccProjectTreeSearchService.cs` | Clean port for folder-tree search beneath a known ACC project root | Implemented via local/remote adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccLookupSeedService.cs` | Clean port for SQL-backed operator lookup seeds | Implemented locally |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccDocumentService.cs` | Clean port for ACC item lookup by project/folder/file name | Implemented via local/remote read-only adapters |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccFolderPathService.cs` | Clean port for resolving / ensuring ACC folder lineages under a known root | Implemented in Wave 1 fast-finish |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccFolderBrowserService.cs` | Clean port for routine ACC folder browsing | Implemented in Wave 1 |
@@ -55,9 +61,19 @@ legacy runtime. It exists to separate:
 | `src/SiNet.Infrastructure.Autodesk/HttpAccServiceHealthProbe.cs` | Remote `/v1/acc/health` adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/HttpAccServiceDiagnosticsProbe.cs` | Remote `/v1/acc/diag` adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/VaultAccServiceKeyDiagnostics.cs` | Local ACC API-key metadata adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccProjectCatalogService.cs` | Local-mode ACC project catalog adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/RemoteAccProjectCatalogService.cs` | Remote-mode ACC project catalog adapter via `SiOffice.AccService` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccProjectCatalogService.cs` | Delegates ACC project catalog access by mode | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccLiveProjectDiscoveryService.cs` | Local-mode live Autodesk hub/project discovery adapter | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/RemoteAccLiveProjectDiscoveryService.cs` | Remote-mode live Autodesk hub/project discovery adapter via `SiOffice.AccService` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccLiveProjectDiscoveryService.cs` | Delegates live Autodesk discovery by mode | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/LocalAccProjectService.cs` | Local-mode read-only project discovery from known SQL mappings/resources | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/RemoteAccProjectService.cs` | Remote-mode read-only project discovery via `SiOffice.AccService` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccProjectService.cs` | Delegates read-only project discovery by `IAccServiceModeProvider.Mode` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccProjectTreeSearchService.cs` | Local-mode folder tree search beneath a known ACC project root | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/RemoteAccProjectTreeSearchService.cs` | Remote-mode folder tree search via `SiOffice.AccService` | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccProjectTreeSearchService.cs` | Delegates ACC project tree search by mode | Implemented |
+| `src/SiNet.Infrastructure.Autodesk/LocalAccLookupSeedService.cs` | Local SQL-backed operator lookup seed adapter | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/LocalAccDocumentService.cs` | Local-mode read-only item lookup | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/RemoteAccDocumentService.cs` | Remote-mode read-only item lookup via `SiOffice.AccService` | Implemented |
 | `src/SiNet.Infrastructure.Autodesk/ModeSwitchingAccDocumentService.cs` | Delegates read-only item lookup by mode | Implemented |
@@ -77,7 +93,7 @@ legacy runtime. It exists to separate:
 | `SiOffice.AccService/Program.cs` | Service host registration for in-process transfer execution | Now registers local ACC file transfer services |
 | `src/SiNet.App.Wpf/Admin/Security/SecretSetupViewModel.cs` | Native UI consumer of the ACC control-plane seam | Implemented for runtime/diag display |
 | `src/SiNet.App.Wpf/Admin/Settings/SettingsViewModel.cs` | Native ACC settings consumer of the control-plane seam | Implemented for runtime display beside stored settings |
-| `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` | Native ACC runtime-status surface | Implemented for status display and manual item lookup |
+| `src/SiNet.App.Wpf/Autodesk/AccControlPlaneStatusWindow.cs` | Native ACC runtime-status/operator surface | Implemented for status display, browse/search, manual item lookup, and explicit inbox-bootstrap ensure |
 | `src/SiNet.LegacyBridge/LegacyBridgeServiceCollectionExtensions.cs` | Temporary bridge slot | No ACC bridge wired |
 
 Implication: the clean Autodesk module now owns the **ACC runtime boundary and transfer seam**,
@@ -117,7 +133,7 @@ Additional host note:
 | Internal ACC service diagnostics | `SiNetProjectManagerV2/Services/Health/InternalAccServiceHealthCheck.cs` |
 | AccService key diagnostics | `src/SiNet.Infrastructure.Secrets/AccServiceSecretDiagnostics.cs` |
 | ACC business orchestration around filing/refile/inbox | `SiNetSQL` services and handlers still own most orchestration logic |
-| Remaining direct ACC transfer callers | Wave 1 caller cutovers now cover the known active inbox, filing, move-to-project, and file-tree privileged paths; remaining legacy ownership is mainly orchestration/provisioning, not binary transfer or routine folder/item runtime calls |
+| Remaining direct ACC transfer callers | Wave 1 caller cutovers now cover the known active inbox, filing, move-to-project, and file-tree privileged paths; remaining legacy ownership is mainly orchestration/provisioning and write-path ordering, not direct privileged transfer fallbacks in the touched consumers |
 | Admin settings / probes / service-mode UI | `SiNetProjectManagerV2/WPF Window/ManagementSettingsWindow.AccService.cs`, `SiNetProjectManagerV2/WPF Window/SecretSetupWindow.xaml.cs`, `SiNetProjectManagerV2/Dialogs/UserGroupManagementWindow.xaml.cs` |
 
 ### 3.3 Why `SiNetSQL` is still being touched
@@ -228,6 +244,7 @@ Wave 1 now contains the following implemented pieces:
 11. **Post-Wave-1 cleanup**
    - `MoveToProjectProcessActionHandler` now requires the clean download/upload/browser seams directly; the internal compatibility constructor and legacy ACC transfer fallbacks have been retired.
    - `AttachmentTaggingService`, `AccInboxReconciliationService`, and the touched inbox metadata-repair paths now require DI-provided ACC metadata/transfer services instead of constructing ad-hoc legacy fallbacks at runtime.
+   - `ProjectFileRefileService` now uses `IAccFileDownloadService` and `IAccItemService` directly; the compatibility constructor and legacy ACC download fallback have been retired.
 
 Wave 1 is considered **closed at the runtime boundary**. What remains is the next phase:
 extracting more orchestration/provisioning behavior out of `SiNetSQL` without reopening direct
@@ -250,5 +267,5 @@ The next ACC work is no longer "finish the Wave 1 seams" - that boundary is now 
 The next useful slices are:
 
 - extract remaining orchestration/provisioning responsibilities out of `SiNetSQL` where it now makes sense architecturally,
-- retire the last remaining privileged transfer compatibility pockets (for example `ProjectFileRefileService`) while keeping runtime behavior unchanged,
+- keep retiring orchestration-era compatibility code only after each replacement seam is verified and documented,
 - and keep the rule stable that service-mode privileged ACC work continues to route through `SiOffice.AccService`.

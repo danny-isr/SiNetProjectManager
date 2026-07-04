@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
@@ -169,6 +170,22 @@ public sealed class AccControlPlaneTests
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.Files.IProjectFileFilingService");
+    }
+
+    [Fact]
+    public void AddSiNetAutodeskStatusWpf_registers_status_window_operator_services()
+    {
+        var services = new ServiceCollection();
+
+        services.AddSiNetAutodeskStatusWpf();
+
+        Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusPresenter));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccResolvedDocsUrlLauncher));
+        Assert.Contains(services, d => d.ServiceType == typeof(IClipboardTextWriter));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccInboxBootstrapLocalExecutor));
+        Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusWindowViewModel));
+        Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusWindowView));
+        Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusWindow));
     }
 
     [Fact]
