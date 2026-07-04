@@ -167,7 +167,7 @@ Key test classes:
 | **Date** | 2026-07-05 |
 | **Environment** | Local workspace `d:\repos2026\SiNetProjectManager_GitHub`; Debug + Release build |
 | **User profile** | Agent/automated (no authenticated DB/Gmail session in smoke run) |
-| **Git** | `git.exe` not on PATH; no `.git` folder in workspace — **commit/push not verified**; polish files present on disk |
+| **Git** | `git.exe` not on PATH; verified via VS bundled git + GitHub API — see §9.3 |
 | **Build** | ✅ Debug + Release — 0 errors (263–274 pre-existing warnings, unrelated to pilot) |
 | **Tests** | ✅ 955/955 `SiNet.App.Wpf.Tests`; ✅ 174/174 boundary filter |
 | **Process launch** | ✅ V2 exe starts (brief run); full New System path not exercised to shell (requires mode/vault/DB UI) |
@@ -189,10 +189,61 @@ Key test classes:
 
 **Known issues:**
 
-- Git state unknown locally — push Email polish to GitHub before pilot users.
-- Full Gmail/ACC/DB paths not validated in this automated run (no credentials/session in agent environment).
+- Interactive runtime smoke (New System path → Email/Gmail/ACC/admin) **not completed** in automated/agent run — requires operator with DB/vault/Gmail session (§9.3).
 
-**Decision:** **Needs manual interactive smoke** before limited users. After operator passes checklist above → **ready for 1–2 internal read-only pilot users**.
+**Decision:** **Needs manual interactive smoke** before limited users. After operator passes checklist in §9.3 → **ready for 1–2 internal read-only pilot users**.
+
+### 9.3 Interactive smoke gate (2026-07-05)
+
+| Field | Value |
+| --- | --- |
+| **Interactive smoke status** | **Blocked** — operator run required |
+| **Date** | 2026-07-05 |
+| **Environment** | `d:\repos2026\SiNetProjectManager_GitHub`; Windows; Debug + Release build |
+| **Branch / commit** | `SiWorkNet10` @ `9250586` (`docs(readiness): add 9.2 limited production smoke section`) — local clean, in sync with `origin/SiWorkNet10` |
+| **User profile** | Agent/automated — no interactive DB/Gmail/ACC session |
+| **DB/vault status** | Not exercised (requires operator UI) |
+| **Gmail status** | Not exercised (requires operator + valid token/project) |
+| **ACC status** | Not exercised (requires V2 host + AccService config) |
+| **Build** | ✅ Debug + Release — 0 errors (~259–263 pre-existing warnings) |
+| **Tests** | ✅ 955/955; ✅ 174/174 boundary filter |
+
+**GitHub / file audit (passed):**
+
+All required paths verified on [`SiWorkNet10`](https://github.com/danny-isr/SiNetProjectManager/tree/SiWorkNet10) via GitHub API + local disk:
+
+- `docs/NEW_SYSTEM_PRODUCTION_READINESS.md` ✅
+- `src/SiNet.App.Wpf.Tests/Boundary/ProductionPilotBoundaryTests.cs` ✅ (includes visual-placeholder guards)
+- `src/SiNet.App.Wpf/Shell/NewShellFactory.cs` ✅
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` ✅
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml` ✅ (`ShowDeferredVisualPlaceholders`, `ClearSearchCommand`, `ProductionPilotNotice`)
+- `docs/UI_WINDOW_MIGRATION_MAP.md` ✅
+- `docs/NEW_SYSTEM_BOUNDARY.md` ✅
+- `docs/ACC_CONTROL_PLANE.md` ✅
+
+**Automated re-check (passed):** build, tests, Release compilation (Inspection menu excluded), V2 process launch (brief).
+
+**Interactive checklist — operator must complete:**
+
+| Step | Check | Agent result |
+| --- | --- | --- |
+| Startup | Mode selection → New System → `RunNewSystemStartup` → NewShell (not MainWindow); no Legacy fallback | ⚠️ Not verified |
+| Startup | Vault + DB; clear error if missing; `StartNewSystemConnectorAuthRestore` silent (no auto login) | ⚠️ Not verified |
+| Shell/menu | `"דוא\"ל — קריאה בלבד"`; no Inspection in Release; admin items per `AppFeatureCodes` | ⚠️ Not verified (Release build OK statically) |
+| Email | Read-only UI; Connect/Refresh/Search/Clear; summaries/body/attachment metadata; no write buttons | ⚠️ **Blocked by missing Gmail/project data** in agent run |
+| ACC | Mode/health/diagnostics; read-only browse/reconciliation; no upload/provisioning | ⚠️ Not verified |
+| Admin | Native SecretSetup / Settings / Users / Permissions; no legacy admin windows | ⚠️ Not verified |
+
+**Known issues:**
+
+- Agent environment cannot drive WPF mode/vault/DB dialogs or authenticate Gmail/ACC.
+- No startup logs found under `%LOCALAPPDATA%\SiNet\SiNetProjectManagerV2\Logs` (startup path not fully exercised).
+
+**Decision:** **Blocked by environment/config** — **not ready** for pilot users until operator completes interactive checklist above and records Pass/Fail per step.
+
+When all steps pass → **Ready for 1–2 internal read-only pilot users only.**
+
+**Next doc slice (after interactive pass):** Email Composite Work Surface Contract — component breakdown before composite implementation; **no business logic in smoke gate task.**
 
 ### 9.1 SiWorkNet10 file checklist (audit)
 
