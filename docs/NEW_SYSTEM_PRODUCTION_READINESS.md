@@ -159,6 +159,41 @@ Key test classes:
 - `NewSystemBoundaryTests`
 - `WorkSurfaceWorkflowIntegrationBoundaryTests`
 
+### 9.2 Limited production smoke (2026-07-05)
+
+| Field | Value |
+| --- | --- |
+| **Smoke status** | **Partial** — automated passed; interactive UI smoke requires manual run |
+| **Date** | 2026-07-05 |
+| **Environment** | Local workspace `d:\repos2026\SiNetProjectManager_GitHub`; Debug + Release build |
+| **User profile** | Agent/automated (no authenticated DB/Gmail session in smoke run) |
+| **Git** | `git.exe` not on PATH; no `.git` folder in workspace — **commit/push not verified**; polish files present on disk |
+| **Build** | ✅ Debug + Release — 0 errors (263–274 pre-existing warnings, unrelated to pilot) |
+| **Tests** | ✅ 955/955 `SiNet.App.Wpf.Tests`; ✅ 174/174 boundary filter |
+| **Process launch** | ✅ V2 exe starts (brief run); full New System path not exercised to shell (requires mode/vault/DB UI) |
+
+**Automated / static verification (passed):**
+
+- `RunNewSystemStartup` → vault → DB → DI → `ServiceLocator.Initialize` → `StartNewSystemConnectorAuthRestore` → `LaunchNewSystemShell` (no Legacy fallback on failure).
+- G-Startup: `TryRestoreSessionAsync` only — no `LoginAsync` in restore path.
+- NewShell menu: Email `"דוא\"ל — קריאה בלבד"`; Inspection wrapped in `#if DEBUG`; no ProjectWork/Reports/Drive/Sheets/WorkflowDashboard.
+- Email pilot: `ShowDeferredWriteActions` / `ShowDeferredVisualPlaceholders` false; `ProductionPilotNotice`; `ClearSearchCommand`; no `OpenAttachmentCommand` in XAML.
+- Release build succeeds (Inspection menu excluded from Release compilation).
+
+**Manual smoke still required (operator checklist):**
+
+1. Select **New System** at startup; confirm **NewShellWindow** opens and **MainWindow** does not.
+2. Open Email — verify read-only UI, Connect/Refresh/Search/Clear, summaries/body/attachment metadata (with valid project + Gmail token).
+3. Open ACC status — mode/health/diagnostics; read-only browse/reconciliation if data exists; confirm no upload/provisioning.
+4. Open Secret Setup / Settings / User Admin / Permissions per role.
+
+**Known issues:**
+
+- Git state unknown locally — push Email polish to GitHub before pilot users.
+- Full Gmail/ACC/DB paths not validated in this automated run (no credentials/session in agent environment).
+
+**Decision:** **Needs manual interactive smoke** before limited users. After operator passes checklist above → **ready for 1–2 internal read-only pilot users**.
+
 ### 9.1 SiWorkNet10 file checklist (audit)
 
 These paths must exist on branch `SiWorkNet10` for the production pilot envelope to be considered
