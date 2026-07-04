@@ -197,53 +197,134 @@ Key test classes:
 
 | Field | Value |
 | --- | --- |
-| **Interactive smoke status** | **Blocked** — operator run required |
+| **Status** | **Blocked by environment/config** — until human operator completes checklist below |
 | **Date** | 2026-07-05 |
-| **Environment** | `d:\repos2026\SiNetProjectManager_GitHub`; Windows; Debug + Release build |
-| **Branch / commit** | `SiWorkNet10` @ `9250586` (`docs(readiness): add 9.2 limited production smoke section`) — local clean, in sync with `origin/SiWorkNet10` |
-| **User profile** | Agent/automated — no interactive DB/Gmail/ACC session |
-| **DB/vault status** | Not exercised (requires operator UI) |
-| **Gmail status** | Not exercised (requires operator + valid token/project) |
-| **ACC status** | Not exercised (requires V2 host + AccService config) |
-| **Build** | ✅ Debug + Release — 0 errors (~259–263 pre-existing warnings) |
-| **Tests** | ✅ 955/955; ✅ 174/174 boundary filter |
+| **Required operator** | Human with V2 access, DB connection, credential vault, Gmail token/credentials, and ACC host/config |
+| **Branch / commit** | `SiWorkNet10` (see latest commit on GitHub after push) |
+| **Build / tests** | Debug + Release build ✅; `SiNet.App.Wpf.Tests` ✅ (see §9.2 automated run) |
 
-**GitHub / file audit (passed):**
+**No automatic approval:** Agent/static tests and boundary guards **do not** authorize pilot users.
+Only a completed manual checklist with **Pass** on every required step may change status to ready.
 
-All required paths verified on [`SiWorkNet10`](https://github.com/danny-isr/SiNetProjectManager/tree/SiWorkNet10) via GitHub API + local disk:
+**Decision rules:**
 
-- `docs/NEW_SYSTEM_PRODUCTION_READINESS.md` ✅
-- `src/SiNet.App.Wpf.Tests/Boundary/ProductionPilotBoundaryTests.cs` ✅ (includes visual-placeholder guards)
-- `src/SiNet.App.Wpf/Shell/NewShellFactory.cs` ✅
-- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` ✅
-- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml` ✅ (`ShowDeferredVisualPlaceholders`, `ClearSearchCommand`, `ProductionPilotNotice`)
-- `docs/UI_WINDOW_MIGRATION_MAP.md` ✅
-- `docs/NEW_SYSTEM_BOUNDARY.md` ✅
-- `docs/ACC_CONTROL_PLANE.md` ✅
-
-**Automated re-check (passed):** build, tests, Release compilation (Inspection menu excluded), V2 process launch (brief).
-
-**Interactive checklist — operator must complete:**
-
-| Step | Check | Agent result |
+| Outcome | When | Pilot decision |
 | --- | --- | --- |
-| Startup | Mode selection → New System → `RunNewSystemStartup` → NewShell (not MainWindow); no Legacy fallback | ⚠️ Not verified |
-| Startup | Vault + DB; clear error if missing; `StartNewSystemConnectorAuthRestore` silent (no auto login) | ⚠️ Not verified |
-| Shell/menu | `"דוא\"ל — קריאה בלבד"`; no Inspection in Release; admin items per `AppFeatureCodes` | ⚠️ Not verified (Release build OK statically) |
-| Email | Read-only UI; Connect/Refresh/Search/Clear; summaries/body/attachment metadata; no write buttons | ⚠️ **Blocked by missing Gmail/project data** in agent run |
-| ACC | Mode/health/diagnostics; read-only browse/reconciliation; no upload/provisioning | ⚠️ Not verified |
-| Admin | Native SecretSetup / Settings / Users / Permissions; no legacy admin windows | ⚠️ Not verified |
+| **Ready for 1–2 internal read-only pilot users only** | Every checklist section **Pass** (or N/A where noted) | Approved for limited internal pilot |
+| **Needs fix before pilot** | Any section **Fail** | Not ready — fix and re-run |
+| **Blocked by environment/config** | Missing DB/vault/Gmail/ACC credentials or config | Not ready — resolve blockers first |
 
-**Known issues:**
+**GitHub / file audit (passed on `SiWorkNet10`):**
 
-- Agent environment cannot drive WPF mode/vault/DB dialogs or authenticate Gmail/ACC.
-- No startup logs found under `%LOCALAPPDATA%\SiNet\SiNetProjectManagerV2\Logs` (startup path not fully exercised).
+- `docs/NEW_SYSTEM_PRODUCTION_READINESS.md` (this doc, including §9.3)
+- `docs/UI_WINDOW_MIGRATION_MAP.md`
+- `docs/NEW_SYSTEM_BOUNDARY.md`
+- `docs/ACC_CONTROL_PLANE.md`
+- `src/SiNet.App.Wpf/Shell/NewShellFactory.cs`
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs`
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml`
+- `src/SiNet.App.Wpf.Tests/Boundary/ProductionPilotBoundaryTests.cs`
 
-**Decision:** **Blocked by environment/config** — **not ready** for pilot users until operator completes interactive checklist above and records Pass/Fail per step.
+#### 9.3.1 Operator checklist (manual — required)
 
-When all steps pass → **Ready for 1–2 internal read-only pilot users only.**
+**Startup / mode**
 
-**Next doc slice (after interactive pass):** Email Composite Work Surface Contract — component breakdown before composite implementation; **no business logic in smoke gate task.**
+- [ ] Launch V2 (`SiNetProjectManagerV2`).
+- [ ] Startup mode selection appears (if configured).
+- [ ] Select **New System**.
+- [ ] `RunNewSystemStartup` path runs (vault → DB → DI → auth → shell).
+- [ ] **NewShellWindow** opens.
+- [ ] **Legacy MainWindow** does **not** open.
+- [ ] No silent fallback to Legacy on failure.
+- [ ] Credential vault setup works or shows a clear setup screen.
+- [ ] DB connection works or shows a clear error (no silent continue).
+- [ ] `StartNewSystemConnectorAuthRestore` runs silently — **no** interactive Google login at startup.
+
+**Shell / menu**
+
+- [ ] Menu shows **"דוא\"ל — קריאה בלבד"**.
+- [ ] **InspectionShellView** menu item **absent** in **Release** build.
+- [ ] Inspection harness visible in **DEBUG** only (if feature gate allows).
+- [ ] No **ProjectWork**, **Reports**, **Drive**, **Sheets**, **WorkflowDashboard**, **WorkflowInstance** (unless explicitly approved elsewhere).
+- [ ] **Secret Setup**, **Settings**, **Users**, **Permissions** appear only per `AppFeatureCodes` / role.
+- [ ] No legacy admin windows open from NewShell.
+
+**Email read-only**
+
+- [ ] Open Email from NewShell.
+- [ ] Title: **"ניהול דואר — קריאה בלבד"**.
+- [ ] No visible **"שלד ויזואלי"** text.
+- [ ] Production pilot notice visible.
+- [ ] Project selector visible; select a real project → **ActiveProjectDisplay** updates.
+- [ ] **Connect Google** works only when user clicks (not auto at startup).
+- [ ] If valid token exists, session restores without extra login.
+- [ ] **Refresh** loads Gmail summaries for project label.
+- [ ] **Search** works; **ClearSearch** clears and reloads.
+- [ ] Select email → body/details load.
+- [ ] Attachments shown as **metadata only**.
+- [ ] **Absent / disabled:** OpenAttachment, Reply, Forward, Send, MoveToProject, LinkToProject, CreateTask, MarkHandled, Archive, CompleteTask.
+- [ ] Pagination / date / calendar / help placeholders not active.
+- [ ] No Gmail modify / labels / mark-read from this window.
+
+**ACC status**
+
+- [ ] Open **AccControlPlaneStatusWindow** (סטטוס ACC).
+- [ ] Mode displayed correctly.
+- [ ] Health and diagnostics displayed.
+- [ ] Key diagnostics show hash/prefix only — **no** raw secret.
+- [ ] Read-only browse/lookup works if data exists.
+- [ ] Read-only reconciliation works if sample exists.
+- [ ] **Absent:** upload, provisioning, folder ensure as normal UI, metadata write, direct `Bim360Service` from WPF.
+
+**Native admin / settings**
+
+- [ ] **SecretSetupWindow** (native) opens.
+- [ ] **SettingsWindow** (native) opens.
+- [ ] **UserListWindow** / **AddUserDialogWindow** open per permission.
+- [ ] **ActionPermissionsWindow** opens per permission.
+- [ ] No legacy `UserManagementWindow`, `AddUserWindow`, `ActionPermissionWindow`, or legacy `SecretSetupWindow` from NewShell.
+
+#### 9.3.2 Manual smoke result template
+
+Copy into §9.3 (or a team log) after the operator run:
+
+```text
+Date:
+Operator:
+Environment:
+Branch:
+Commit:
+DB status:        OK / Fail / Blocked
+Vault status:     OK / Fail / Blocked
+Gmail status:     OK / Fail / Blocked
+ACC status:       OK / Fail / Blocked
+
+Startup:          Pass / Fail / Blocked
+Notes:
+
+Shell/menu:       Pass / Fail / Blocked
+Notes:
+
+Email read-only:  Pass / Fail / Blocked
+Notes:
+
+ACC status:       Pass / Fail / Blocked
+Notes:
+
+Admin/settings:   Pass / Fail / Blocked
+Notes:
+
+Known issues:
+
+Final decision:
+  [ ] Ready for 1–2 internal read-only pilot users only
+  [ ] Needs fix before pilot
+  [ ] Blocked by environment/config
+```
+
+**After manual pass:** update §9.3 **Status** to **Passed**, fill template above, then open to 1–2 internal read-only users.
+
+**Next documentation slice (after manual smoke pass):** **Email Composite Work Surface Contract** — docs only; defines component breakdown (project selector, search/filter, list, viewer, attachments/status, calendar/context, action panel, task completion) **before** any composite business logic.
 
 ### 9.1 SiWorkNet10 file checklist (audit)
 
@@ -274,6 +355,8 @@ No write/send/workflow wiring.
 **Do not** start with Option B until G-Policy + filing slice are explicitly approved.
 
 **After polish:** run real smoke on V2 New System with limited users before expanding pilot audience.
+
+**After manual smoke pass (§9.3):** publish **Email Composite Work Surface Contract** (docs only — no business logic).
 
 ---
 

@@ -114,6 +114,20 @@ public sealed class ProductionPilotBoundaryTests
     }
 
     [Fact]
+    public void Production_readiness_doc_defines_interactive_smoke_gate_and_operator_handoff()
+    {
+        var doc = ReadRepoFile("docs/NEW_SYSTEM_PRODUCTION_READINESS.md");
+
+        Assert.Contains("9.3 Interactive smoke gate", doc, StringComparison.Ordinal);
+        Assert.Contains("Blocked by environment/config", doc, StringComparison.Ordinal);
+        Assert.Contains("No automatic approval", doc, StringComparison.Ordinal);
+        Assert.Contains("9.3.1 Operator checklist", doc, StringComparison.Ordinal);
+        Assert.Contains("9.3.2 Manual smoke result template", doc, StringComparison.Ordinal);
+        Assert.Contains("Ready for 1–2 internal read-only pilot users only", doc, StringComparison.Ordinal);
+        Assert.Contains("Email Composite Work Surface Contract", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Native_surfaces_do_not_use_forbidden_google_or_acc_runtime()
     {
         foreach (var relativePath in EnumerateNativeSurfaceFiles())
