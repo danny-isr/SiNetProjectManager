@@ -536,6 +536,7 @@ public sealed class ThemeStage6Tests
             Mock.Of<IAccProjectCatalogService>(),
             Mock.Of<IAccDocumentService>(),
             Mock.Of<IAccFolderBrowserService>(),
+            Mock.Of<IAccProjectTreeSearchService>(),
             Mock.Of<IAccLiveProjectDiscoveryService>(),
             Mock.Of<IAccResolvedDocsUrlLauncher>(),
             Mock.Of<IClipboardTextWriter>(),

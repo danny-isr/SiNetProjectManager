@@ -53,7 +53,9 @@ public sealed class NewShellAccStatusMenuTests
                 new StubAccProjectCatalogService(),
                 new StubAccDocumentService(),
                 new StubAccFolderBrowserService(),
+                new StubAccProjectTreeSearchService(),
                 new StubAccLiveProjectDiscoveryService(),
+                new StubAccInboxBootstrapService(),
                 new StubAccLookupSeedService(),
                 new StubAccResolvedDocsUrlLauncher(),
                 new StubClipboardTextWriter())));
@@ -143,6 +145,22 @@ public sealed class NewShellAccStatusMenuTests
     {
         public Task<AccFolderBrowseResult?> BrowseAsync(string projectId, string? folderId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<AccFolderBrowseResult?>(null);
+    }
+
+    private sealed class StubAccProjectTreeSearchService : IAccProjectTreeSearchService
+    {
+        public Task<AccProjectTreeSearchResult> SearchAsync(
+            string projectId,
+            string fileName,
+            string? folderId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new AccProjectTreeSearchResult([], 0, false, false));
+    }
+
+    private sealed class StubAccInboxBootstrapService : IAccInboxBootstrapService
+    {
+        public Task<AccInboxBootstrapResult> EnsureAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new AccInboxBootstrapResult("b.hub-1", "b.project-1", "root-folder", "folder-22"));
     }
 
     private sealed class StubAccLookupSeedService : IAccLookupSeedService

@@ -350,6 +350,54 @@ internal static class AccEndpoints
             });
         });
 
+        v1.MapGet("/projects/{projectId}/folders/search", async (
+            string projectId,
+            string fileName,
+            string? folderId,
+            IDbContextFactory<SiNetSQLDbContext> dbFactory,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Results.BadRequest(new { error = "fileName is required." });
+
+            var normalizedProjectId = NormalizeProjectId(projectId);
+
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var resolvedFolderId = string.IsNullOrWhiteSpace(folderId)
+                ? await ResolveProjectFilesRootFolderIdAsync(db, tokenProvider, normalizedProjectId, ct)
+                : folderId.Trim();
+            if (string.IsNullOrWhiteSpace(resolvedFolderId))
+            {
+                return Results.Ok(new
+                {
+                    Matches = Array.Empty<AccProjectTreeSearchMatchResponse>(),
+                    VisitedFolderCount = 0,
+                    HitFolderLimit = false,
+                    HitResultLimit = false
+                });
+            }
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var result = await SearchProjectTreeAsync(
+                bim360,
+                normalizedProjectId,
+                resolvedFolderId,
+                fileName.Trim(),
+                string.IsNullOrWhiteSpace(folderId) ? "Project Files" : resolvedFolderId,
+                ct);
+
+            return Results.Ok(new
+            {
+                result.Matches,
+                result.VisitedFolderCount,
+                result.HitFolderLimit,
+                result.HitResultLimit
+            });
+        });
+
         // ── Project mapping (find-or-create + provision + folder tree) ──────
         v1.MapPost("/projects/ensure-mapping", async (
             EnsureProjectMappingRequest body,
@@ -516,6 +564,86 @@ internal static class AccEndpoints
         return string.IsNullOrWhiteSpace(systemHubId) ? null : systemHubId.Trim();
     }
 
+    private static async Task<AccProjectTreeSearchResponse> SearchProjectTreeAsync(
+        Bim360Service bim360,
+        string projectId,
+        string rootFolderId,
+        string fileName,
+        string rootFolderPath,
+        CancellationToken ct)
+    {
+        const int maxTreeSearchFolders = 250;
+        const int maxTreeSearchResults = 50;
+
+        var pendingFolders = new Queue<AccTreeSearchLocation>();
+        var visitedFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var matches = new List<AccProjectTreeSearchMatchResponse>();
+        var visitedFolderCount = 0;
+        pendingFolders.Enqueue(new AccTreeSearchLocation(rootFolderId, rootFolderPath));
+
+        while (pendingFolders.Count > 0 && visitedFolderCount < maxTreeSearchFolders && matches.Count < maxTreeSearchResults)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var currentLocation = pendingFolders.Dequeue();
+            if (!visitedFolderIds.Add(currentLocation.FolderId))
+            {
+                continue;
+            }
+
+            visitedFolderCount++;
+            var entries = await bim360.GetFolderContentsAsync(projectId, currentLocation.FolderId, ct);
+
+            foreach (var entry in entries.Where(static entry => !entry.IsFolder))
+            {
+                if (!entry.DisplayName.Contains(fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                matches.Add(new AccProjectTreeSearchMatchResponse(
+                    projectId,
+                    currentLocation.FolderId,
+                    currentLocation.FolderPath,
+                    entry.DisplayName));
+
+                if (matches.Count >= maxTreeSearchResults)
+                {
+                    break;
+                }
+            }
+
+            if (matches.Count >= maxTreeSearchResults || visitedFolderCount >= maxTreeSearchFolders)
+            {
+                break;
+            }
+
+            foreach (var entry in entries.Where(static entry => entry.IsFolder))
+            {
+                if (!visitedFolderIds.Contains(entry.Id))
+                {
+                    pendingFolders.Enqueue(new AccTreeSearchLocation(
+                        entry.Id,
+                        BuildChildPath(currentLocation.FolderPath, entry.DisplayName)));
+                }
+            }
+        }
+
+        return new AccProjectTreeSearchResponse(
+            matches,
+            visitedFolderCount,
+            pendingFolders.Count > 0 && visitedFolderCount >= maxTreeSearchFolders,
+            pendingFolders.Count > 0 && matches.Count >= maxTreeSearchResults);
+    }
+
+    private static string BuildChildPath(string parentPath, string folderName)
+    {
+        var normalizedFolderName = folderName.Trim();
+        return string.IsNullOrWhiteSpace(parentPath)
+            ? normalizedFolderName
+            : $"{parentPath} / {normalizedFolderName}";
+    }
+
     private static string NormalizeProjectId(string projectId)
     {
         var trimmed = projectId.Trim();
@@ -528,6 +656,20 @@ internal static class AccEndpoints
             ? trimmed
             : $"b.{trimmed}";
     }
+
+    private sealed record AccTreeSearchLocation(string FolderId, string FolderPath);
+
+    private sealed record AccProjectTreeSearchResponse(
+        IReadOnlyList<AccProjectTreeSearchMatchResponse> Matches,
+        int VisitedFolderCount,
+        bool HitFolderLimit,
+        bool HitResultLimit);
+
+    private sealed record AccProjectTreeSearchMatchResponse(
+        string ProjectId,
+        string FolderId,
+        string FolderPath,
+        string FileName);
 
     private static ProjectCatalogRecord? NormalizeProjectCatalogRecord(
         string projectId,

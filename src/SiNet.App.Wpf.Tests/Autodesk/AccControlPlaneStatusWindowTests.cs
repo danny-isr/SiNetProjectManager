@@ -33,7 +33,9 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1", "b.project-2"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -57,6 +59,7 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("AccReadOnlyDocumentBrowserView", xaml, StringComparison.Ordinal);
         Assert.Contains("DataContext=\"{Binding Browser}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ComboBox ItemsSource=\"{Binding KnownProjectIds}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("EnsureInboxBootstrapCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LoadLookupSeedCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
     }
@@ -79,7 +82,9 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService(
             [
                 new AccDocumentLookupSeed("b.project-1", "folder-22", "drawing.pdf", "item-77", "EmailInboxAttachment 2026-07-03 23:00")
@@ -103,7 +108,9 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -135,7 +142,9 @@ public sealed class AccControlPlaneStatusWindowTests
                     new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
                     new AccFolderBrowseEntry("item-b", "B File.pdf", AccFolderEntryKind.Item, 123, null, null),
                 ])),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -182,7 +191,9 @@ public sealed class AccControlPlaneStatusWindowTests
                     _ => null,
                 };
             }),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter())
@@ -213,7 +224,9 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             launcher,
             clipboard);
@@ -243,7 +256,9 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(new AccItemRef("b.project-1", "item-77", "version-3", null)),
             new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -273,9 +288,11 @@ public sealed class AccControlPlaneStatusWindowTests
                 [
                     new AccFolderBrowseEntry("folder-a", "A Folder", AccFolderEntryKind.Folder, 0, null, null),
                 ])),
+            BuildProjectTreeSearchService(),
             new StubAccLiveProjectDiscoveryService(
                 [new AccHubCatalogEntry("b.hub-1", "Primary Hub", "EMEA")],
                 [new AccProjectCatalogEntry("b.live-2", "Live Tower", "LiveAcc")]),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -308,7 +325,9 @@ public sealed class AccControlPlaneStatusWindowTests
                     new AccFolderBrowseEntry("item-a", "Architectural Plan.pdf", AccFolderEntryKind.Item, 10, null, null),
                     new AccFolderBrowseEntry("item-b", "Electrical Notes.pdf", AccFolderEntryKind.Item, 20, null, null),
                 ])),
+            BuildProjectTreeSearchService(),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -332,40 +351,17 @@ public sealed class AccControlPlaneStatusWindowTests
             BuildPresenter(),
             BuildCatalogService("b.project-1"),
             new StubAccDocumentService(null),
-            new StubAccFolderBrowserService((projectId, folderId) =>
-            {
-                var normalizedFolderId = string.IsNullOrWhiteSpace(folderId) ? null : folderId;
-                return normalizedFolderId switch
-                {
-                    null => new AccFolderBrowseResult(
-                        projectId,
-                        "root-folder",
-                        [
-                            new AccFolderBrowseEntry("folder-a", "Discipline A", AccFolderEntryKind.Folder, 0, null, null),
-                            new AccFolderBrowseEntry("folder-b", "Discipline B", AccFolderEntryKind.Folder, 0, null, null),
-                        ]),
-                    "folder-a" => new AccFolderBrowseResult(
-                        projectId,
-                        "folder-a",
-                        [
-                            new AccFolderBrowseEntry("folder-a1", "Sheets", AccFolderEntryKind.Folder, 0, null, null),
-                        ]),
-                    "folder-a1" => new AccFolderBrowseResult(
-                        projectId,
-                        "folder-a1",
-                        [
-                            new AccFolderBrowseEntry("item-1", "Tower Plan.pdf", AccFolderEntryKind.Item, 10, null, null),
-                        ]),
-                    "folder-b" => new AccFolderBrowseResult(
-                        projectId,
-                        "folder-b",
-                        [
-                            new AccFolderBrowseEntry("item-2", "Other Notes.pdf", AccFolderEntryKind.Item, 10, null, null),
-                        ]),
-                    _ => null,
-                };
-            }),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            new StubAccProjectTreeSearchService(
+                new AccProjectTreeSearchResult(
+                    [
+                        new AccProjectTreeSearchMatch("b.project-1", "folder-a1", "Project Files / Discipline A / Sheets", "Tower Plan.pdf")
+                    ],
+                    3,
+                    false,
+                    false)),
             BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
             new StubAccLookupSeedService([]),
             new StubAccResolvedDocsUrlLauncher(),
             new StubClipboardTextWriter());
@@ -386,6 +382,34 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("Tower Plan.pdf", vm.Browser.LookupResultSummary, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Status_window_view_model_can_ensure_acc_inbox_and_prefill_lookup_fields()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            BuildCatalogService("b.project-1"),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
+            BuildLiveDiscoveryService(),
+            new StubAccInboxBootstrapService(new AccInboxBootstrapResult(
+                "b.hub-1",
+                "b.project-inbox",
+                "root-folder",
+                "inbox-folder")),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
+
+        await vm.EnsureInboxBootstrapAsync();
+
+        Assert.Equal("b.project-inbox", vm.Browser.LookupProjectId);
+        Assert.Equal("inbox-folder", vm.Browser.LookupFolderId);
+        Assert.Equal(string.Empty, vm.Browser.LookupFileName);
+        Assert.Contains("projectId=b.project-inbox", vm.InboxBootstrapSummary, StringComparison.Ordinal);
+        Assert.Contains("Ensure ACC Inbox", vm.SummaryMessage, StringComparison.Ordinal);
+    }
+
     private static AccControlPlaneStatusPresenter BuildPresenter() =>
         new(
             new StubAccModeProvider(AccServiceMode.Local, null),
@@ -401,6 +425,12 @@ public sealed class AccControlPlaneStatusWindowTests
 
     private static StubAccLiveProjectDiscoveryService BuildLiveDiscoveryService() =>
         new([], []);
+
+    private static StubAccProjectTreeSearchService BuildProjectTreeSearchService() =>
+        new(new AccProjectTreeSearchResult([], 0, false, false));
+
+    private static StubAccInboxBootstrapService BuildInboxBootstrapService() =>
+        new(new AccInboxBootstrapResult("b.hub-1", "b.project-1", "root-folder", "folder-22"));
 
     private static string ReadRepoFile(string relativePath)
     {
@@ -480,6 +510,22 @@ public sealed class AccControlPlaneStatusWindowTests
 
         public Task<AccFolderBrowseResult?> BrowseAsync(string projectId, string? folderId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(_handler(projectId, folderId));
+    }
+
+    private sealed class StubAccProjectTreeSearchService(AccProjectTreeSearchResult result) : IAccProjectTreeSearchService
+    {
+        public Task<AccProjectTreeSearchResult> SearchAsync(
+            string projectId,
+            string fileName,
+            string? folderId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
+    }
+
+    private sealed class StubAccInboxBootstrapService(AccInboxBootstrapResult result) : IAccInboxBootstrapService
+    {
+        public Task<AccInboxBootstrapResult> EnsureAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
     }
 
     private sealed class StubAccLookupSeedService(IReadOnlyList<AccDocumentLookupSeed> seeds) : IAccLookupSeedService

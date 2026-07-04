@@ -143,7 +143,7 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
-    public void AddSiNetAutodesk_registers_read_only_project_and_document_services_without_write_side_services()
+    public void AddSiNetAutodesk_registers_acc_runtime_services_without_legacy_write_side_services()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISecretSetupHostConfiguration>(new StubSecretSetupHostConfiguration("https://acc.example.com"));
@@ -159,6 +159,8 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccDocumentService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectTreeSearchService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IAccInboxBootstrapService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccLookupSeedService));
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
@@ -430,6 +432,156 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
+    public async Task Mode_switching_inbox_bootstrap_service_uses_local_executor_when_mode_is_local()
+    {
+        var sut = new ModeSwitchingAccInboxBootstrapService(
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration(null)),
+            new StubAccInboxBootstrapLocalExecutor(new AccInboxBootstrapResult(
+                "b.hub-1",
+                "b.project-inbox",
+                "root-folder",
+                "inbox-folder")),
+            new RemoteAccInboxBootstrapService(
+                new HttpClient(new StubHttpMessageHandler((_, _) => throw new InvalidOperationException("remote should not be used"))),
+                new InMemorySecretVaultStore(),
+                new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com"))));
+
+        var result = await sut.EnsureAsync();
+
+        Assert.Equal("b.project-inbox", result.AccProjectId);
+        Assert.Equal("inbox-folder", result.AccInboxFolderId);
+    }
+
+    [Fact]
+    public async Task Remote_inbox_bootstrap_service_uses_versioned_endpoint_and_maps_response()
+    {
+        const string body = """
+            {
+              "accHubDbId": 10,
+              "hubId": "b.hub-1",
+              "accProjectId": "b.project-inbox",
+              "accRootFolderId": "root-folder",
+              "accInboxFolderId": "inbox-folder"
+            }
+            """;
+
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        HttpMethod? requestedMethod = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccInboxBootstrapService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                requestedMethod = request.Method;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var result = await sut.EnsureAsync();
+
+        Assert.Equal(HttpMethod.Post, requestedMethod);
+        Assert.Equal("https://acc.example.com/v1/acc/inbox/ensure", requestedUri?.AbsoluteUri);
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.Equal("b.hub-1", result.HubId);
+        Assert.Equal("b.project-inbox", result.AccProjectId);
+        Assert.Equal("root-folder", result.AccRootFolderId);
+        Assert.Equal("inbox-folder", result.AccInboxFolderId);
+    }
+
+    [Fact]
+    public async Task Local_project_tree_search_service_scans_nested_folders_and_returns_matches()
+    {
+        var folderBrowser = new LocalAccFolderBrowserService(
+            new StubAccProjectRootFolderResolver("root-folder"),
+            new StubFolderContentsByFolderReader((_, folderId) => folderId switch
+            {
+                "root-folder" =>
+                [
+                    new AccFolderBrowseEntry("folder-a", "Discipline A", AccFolderEntryKind.Folder, 0, null, null),
+                    new AccFolderBrowseEntry("folder-b", "Discipline B", AccFolderEntryKind.Folder, 0, null, null),
+                ],
+                "folder-a" =>
+                [
+                    new AccFolderBrowseEntry("folder-a1", "Sheets", AccFolderEntryKind.Folder, 0, null, null),
+                ],
+                "folder-a1" =>
+                [
+                    new AccFolderBrowseEntry("item-1", "Tower Plan.pdf", AccFolderEntryKind.Item, 10, null, null),
+                ],
+                "folder-b" =>
+                [
+                    new AccFolderBrowseEntry("item-2", "Other Notes.pdf", AccFolderEntryKind.Item, 10, null, null),
+                ],
+                _ => [],
+            }));
+        var sut = new LocalAccProjectTreeSearchService(folderBrowser);
+
+        var result = await sut.SearchAsync("project-123", "plan");
+
+        Assert.Single(result.Matches);
+        Assert.Equal("b.project-123", result.Matches[0].ProjectId);
+        Assert.Equal("folder-a1", result.Matches[0].FolderId);
+        Assert.Equal("Project Files / Discipline A / Sheets", result.Matches[0].FolderPath);
+        Assert.Equal("Tower Plan.pdf", result.Matches[0].FileName);
+        Assert.Equal(4, result.VisitedFolderCount);
+        Assert.False(result.HitFolderLimit);
+        Assert.False(result.HitResultLimit);
+    }
+
+    [Fact]
+    public async Task Remote_project_tree_search_service_uses_versioned_search_endpoint_and_maps_response()
+    {
+        const string body = """
+            {
+              "matches": [
+                { "projectId": "b.project-123", "folderId": "folder-a1", "folderPath": "Project Files / Discipline A / Sheets", "fileName": "Tower Plan.pdf" }
+              ],
+              "visitedFolderCount": 4,
+              "hitFolderLimit": false,
+              "hitResultLimit": false
+            }
+            """;
+
+        Uri? requestedUri = null;
+        string? apiKeyHeader = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccProjectTreeSearchService(
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                requestedUri = request.RequestUri;
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            })),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var result = await sut.SearchAsync("b.project-123", "Tower Plan", "root-folder");
+
+        Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-123/folders/search?fileName=Tower%20Plan&folderId=root-folder", requestedUri?.AbsoluteUri);
+        Assert.Equal("native-api-key", apiKeyHeader);
+        Assert.Single(result.Matches);
+        Assert.Equal("folder-a1", result.Matches[0].FolderId);
+        Assert.Equal(4, result.VisitedFolderCount);
+    }
+
+    [Fact]
     public async Task Local_lookup_seed_service_returns_recent_db_backed_candidates()
     {
         var dbName = Guid.NewGuid().ToString("N");
@@ -582,6 +734,8 @@ public sealed class AccControlPlaneTests
         Assert.Contains("/live/hubs", source, StringComparison.Ordinal);
         Assert.Contains("/live/hubs/{hubId}/projects", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/browse", source, StringComparison.Ordinal);
+        Assert.Contains("/projects/{projectId}/folders/search", source, StringComparison.Ordinal);
+        Assert.Contains("/inbox/ensure", source, StringComparison.Ordinal);
         Assert.Contains("/projects/{projectId}/folders/{folderId}/items/resolve", source, StringComparison.Ordinal);
         Assert.Contains("ProjectAccMappings", source, StringComparison.Ordinal);
         Assert.Contains("AccSystemResources", source, StringComparison.Ordinal);
@@ -663,6 +817,18 @@ public sealed class AccControlPlaneTests
             Task.FromResult(_entries);
     }
 
+    private sealed class StubFolderContentsByFolderReader(
+        Func<string, string, IReadOnlyList<AccFolderBrowseEntry>> handler) : IAccFolderContentsReader
+    {
+        private readonly Func<string, string, IReadOnlyList<AccFolderBrowseEntry>> _handler = handler;
+
+        public Task<IReadOnlyList<AccFolderBrowseEntry>> GetFolderContentsAsync(
+            string projectId,
+            string folderId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(_handler(projectId, folderId));
+    }
+
     private sealed class StubAccProjectRootFolderResolver(string? folderId) : IAccProjectRootFolderResolver
     {
         public Task<string?> ResolveProjectFilesRootFolderIdAsync(
@@ -683,6 +849,12 @@ public sealed class AccControlPlaneTests
             string hubId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(projects);
+    }
+
+    private sealed class StubAccInboxBootstrapLocalExecutor(AccInboxBootstrapResult result) : IAccInboxBootstrapLocalExecutor
+    {
+        public Task<AccInboxBootstrapResult> EnsureAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
     }
 
     private sealed class StubDbContextFactory(DbContextOptions<SiNetSQLDbContext> options) : IDbContextFactory<SiNetSQLDbContext>

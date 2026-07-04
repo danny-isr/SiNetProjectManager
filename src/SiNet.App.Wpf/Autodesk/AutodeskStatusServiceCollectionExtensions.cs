@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Abstractions.Autodesk;
 
 namespace SiNet.App.Wpf.Autodesk;
 
@@ -11,6 +12,7 @@ public static class AutodeskStatusServiceCollectionExtensions
         services.AddSingleton<AccControlPlaneStatusPresenter>();
         services.AddSingleton<IAccResolvedDocsUrlLauncher, ShellExecuteAccResolvedDocsUrlLauncher>();
         services.AddSingleton<IClipboardTextWriter, WpfClipboardTextWriter>();
+        services.AddTransient<IAccInboxBootstrapLocalExecutor, WpfLocalAccInboxBootstrapExecutor>();
         services.AddTransient<AccControlPlaneStatusWindowViewModel>();
         services.AddTransient<AccControlPlaneStatusWindowView>();
         services.AddTransient<AccControlPlaneStatusWindow>();

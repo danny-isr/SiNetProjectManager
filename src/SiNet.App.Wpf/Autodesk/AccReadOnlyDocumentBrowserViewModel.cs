@@ -11,11 +11,10 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     private const string RootBrowseLabel = "Project Files";
     private const string LiveDiscoveryInitialSummary = "טרם בוצעה טעינת hubs/projects חיה מ-ACC.";
     private const string TreeSearchInitialSummary = "טרם בוצע חיפוש היררכי בעץ התיקיות של ACC.";
-    private const int MaxTreeSearchFolders = 250;
-    private const int MaxTreeSearchResults = 50;
 
     private readonly IAccDocumentService _accDocumentService;
     private readonly IAccFolderBrowserService _accFolderBrowserService;
+    private readonly IAccProjectTreeSearchService _accProjectTreeSearchService;
     private readonly IAccLiveProjectDiscoveryService _accLiveProjectDiscoveryService;
     private readonly IAccResolvedDocsUrlLauncher _resolvedDocsUrlLauncher;
     private readonly IClipboardTextWriter _clipboardTextWriter;
@@ -50,6 +49,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     public AccReadOnlyDocumentBrowserViewModel(
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
+        IAccProjectTreeSearchService accProjectTreeSearchService,
         IAccLiveProjectDiscoveryService accLiveProjectDiscoveryService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
@@ -59,6 +59,7 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     {
         _accDocumentService = accDocumentService ?? throw new ArgumentNullException(nameof(accDocumentService));
         _accFolderBrowserService = accFolderBrowserService ?? throw new ArgumentNullException(nameof(accFolderBrowserService));
+        _accProjectTreeSearchService = accProjectTreeSearchService ?? throw new ArgumentNullException(nameof(accProjectTreeSearchService));
         _accLiveProjectDiscoveryService = accLiveProjectDiscoveryService ?? throw new ArgumentNullException(nameof(accLiveProjectDiscoveryService));
         _resolvedDocsUrlLauncher = resolvedDocsUrlLauncher ?? throw new ArgumentNullException(nameof(resolvedDocsUrlLauncher));
         _clipboardTextWriter = clipboardTextWriter ?? throw new ArgumentNullException(nameof(clipboardTextWriter));
@@ -509,66 +510,23 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
             var query = LookupFileName.Trim();
             var projectId = LookupProjectId.Trim();
             var startFolderId = string.IsNullOrWhiteSpace(LookupFolderId) ? null : LookupFolderId.Trim();
-            var pendingFolders = new Queue<AccTreeSearchLocation>();
-            var visitedFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var matches = new List<AccDocumentSearchResult>();
-            var visitedFolderCount = 0;
+            var result = await _accProjectTreeSearchService
+                .SearchAsync(projectId, query, startFolderId)
+                .ConfigureAwait(true);
 
-            pendingFolders.Enqueue(new AccTreeSearchLocation(startFolderId, ResolveTreeSearchStartPath(startFolderId)));
-
-            while (pendingFolders.Count > 0 && visitedFolderCount < MaxTreeSearchFolders && matches.Count < MaxTreeSearchResults)
-            {
-                var currentLocation = pendingFolders.Dequeue();
-                var browseResult = await _accFolderBrowserService
-                    .BrowseAsync(projectId, currentLocation.FolderId)
-                    .ConfigureAwait(true);
-
-                if (browseResult is null || !visitedFolderIds.Add(browseResult.FolderId))
-                {
-                    continue;
-                }
-
-                visitedFolderCount++;
-
-                foreach (var entry in browseResult.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Item))
-                {
-                    if (!entry.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    matches.Add(new AccDocumentSearchResult(
-                        browseResult.ProjectId,
-                        browseResult.FolderId,
-                        currentLocation.FolderPath,
-                        entry.DisplayName));
-
-                    if (matches.Count >= MaxTreeSearchResults)
-                    {
-                        break;
-                    }
-                }
-
-                if (matches.Count >= MaxTreeSearchResults || visitedFolderCount >= MaxTreeSearchFolders)
-                {
-                    break;
-                }
-
-                foreach (var entry in browseResult.Entries.Where(static entry => entry.Kind == AccFolderEntryKind.Folder))
-                {
-                    if (!visitedFolderIds.Contains(entry.Id))
-                    {
-                        pendingFolders.Enqueue(new AccTreeSearchLocation(
-                            entry.Id,
-                            BuildChildTreeSearchPath(currentLocation.FolderPath, entry.DisplayName)));
-                    }
-                }
-            }
-
-            ReplaceSearchResults(matches);
-            var hitFolderLimit = pendingFolders.Count > 0 && visitedFolderCount >= MaxTreeSearchFolders;
-            var hitResultLimit = pendingFolders.Count > 0 && matches.Count >= MaxTreeSearchResults;
-            TreeSearchSummary = BuildTreeSearchSummary(query, visitedFolderCount, matches.Count, hitFolderLimit, hitResultLimit);
+            ReplaceSearchResults(result.Matches
+                .Select(static match => new AccDocumentSearchResult(
+                    match.ProjectId,
+                    match.FolderId,
+                    match.FolderPath,
+                    match.FileName))
+                .ToArray());
+            TreeSearchSummary = BuildTreeSearchSummary(
+                query,
+                result.VisitedFolderCount,
+                result.Matches.Count,
+                result.HitFolderLimit,
+                result.HitResultLimit);
             PublishSummary("חיפוש היררכי בעץ ACC הושלם.");
         }
         catch (Exception ex)
@@ -970,26 +928,6 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
         SelectedSearchResult = SearchResults.FirstOrDefault();
     }
 
-    private string ResolveTreeSearchStartPath(string? startFolderId)
-    {
-        if (string.IsNullOrWhiteSpace(startFolderId))
-        {
-            return RootBrowseLabel;
-        }
-
-        return _browseTrail.Count > 0
-            ? BrowseTrailText
-            : startFolderId.Trim();
-    }
-
-    private static string BuildChildTreeSearchPath(string parentPath, string folderName)
-    {
-        var normalizedFolderName = folderName.Trim();
-        return string.IsNullOrWhiteSpace(parentPath)
-            ? normalizedFolderName
-            : $"{parentPath} / {normalizedFolderName}";
-    }
-
     private static string BuildTreeSearchSummary(
         string query,
         int visitedFolderCount,
@@ -1084,8 +1022,6 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
     }
 
     private sealed record AccBrowseLocation(string FolderId, string DisplayName);
-
-    private sealed record AccTreeSearchLocation(string? FolderId, string FolderPath);
 
     private enum AccBrowseNavigationMode
     {

@@ -53,6 +53,7 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<LocalAccProjectService>();
         services.AddTransient<LocalAccDocumentService>();
         services.AddTransient<LocalAccFolderBrowserService>();
+        services.AddTransient<LocalAccProjectTreeSearchService>();
         services.AddTransient<IAccLookupSeedService, LocalAccLookupSeedService>();
         services.AddHttpClient<RemoteAccProjectCatalogService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
@@ -69,11 +70,23 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<RemoteAccFolderBrowserService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccProjectTreeSearchService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccInboxBootstrapService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddTransient<IAccLiveProjectDiscoveryService, ModeSwitchingAccLiveProjectDiscoveryService>();
         services.AddTransient<IAccProjectCatalogService, ModeSwitchingAccProjectCatalogService>();
         services.AddTransient<IAccProjectService, ModeSwitchingAccProjectService>();
         services.AddTransient<IAccDocumentService, ModeSwitchingAccDocumentService>();
         services.AddTransient<IAccFolderBrowserService, ModeSwitchingAccFolderBrowserService>();
+        services.AddTransient<IAccProjectTreeSearchService, ModeSwitchingAccProjectTreeSearchService>();
+        services.AddTransient<IAccInboxBootstrapService>(sp =>
+            new ModeSwitchingAccInboxBootstrapService(
+                sp.GetRequiredService<IAccServiceModeProvider>(),
+                sp.GetService<IAccInboxBootstrapLocalExecutor>(),
+                sp.GetRequiredService<RemoteAccInboxBootstrapService>()));
 
         return services;
     }

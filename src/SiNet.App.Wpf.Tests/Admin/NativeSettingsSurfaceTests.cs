@@ -517,6 +517,7 @@ public sealed class NativeSettingsSurfaceTests
         Mock<IAccProjectCatalogService>? accProjectCatalogService = null,
         Mock<IAccDocumentService>? accDocumentService = null,
         Mock<IAccFolderBrowserService>? accFolderBrowserService = null,
+        Mock<IAccProjectTreeSearchService>? accProjectTreeSearchService = null,
         Mock<IAccLiveProjectDiscoveryService>? accLiveProjectDiscoveryService = null,
         IAccResolvedDocsUrlLauncher? resolvedDocsUrlLauncher = null,
         IClipboardTextWriter? clipboardTextWriter = null)
@@ -534,6 +535,7 @@ public sealed class NativeSettingsSurfaceTests
         accProjectCatalogService ??= MockAccProjectCatalogService([]);
         accDocumentService ??= new Mock<IAccDocumentService>();
         accFolderBrowserService ??= new Mock<IAccFolderBrowserService>();
+        accProjectTreeSearchService ??= MockAccProjectTreeSearchService();
         accLiveProjectDiscoveryService ??= MockAccLiveProjectDiscoveryService();
         resolvedDocsUrlLauncher ??= new StubAccResolvedDocsUrlLauncher();
         clipboardTextWriter ??= new StubClipboardTextWriter();
@@ -568,6 +570,7 @@ public sealed class NativeSettingsSurfaceTests
             accProjectCatalogService.Object,
             accDocumentService.Object,
             accFolderBrowserService.Object,
+            accProjectTreeSearchService.Object,
             accLiveProjectDiscoveryService.Object,
             resolvedDocsUrlLauncher,
             clipboardTextWriter,
@@ -604,6 +607,14 @@ public sealed class NativeSettingsSurfaceTests
         var mock = new Mock<IAccLiveProjectDiscoveryService>();
         mock.Setup(x => x.GetHubsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
         mock.Setup(x => x.GetProjectsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        return mock;
+    }
+
+    private static Mock<IAccProjectTreeSearchService> MockAccProjectTreeSearchService()
+    {
+        var mock = new Mock<IAccProjectTreeSearchService>();
+        mock.Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AccProjectTreeSearchResult([], 0, false, false));
         return mock;
     }
 

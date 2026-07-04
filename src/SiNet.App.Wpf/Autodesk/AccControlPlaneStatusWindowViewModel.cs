@@ -9,6 +9,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
 {
     private readonly AccControlPlaneStatusPresenter _presenter;
     private readonly IAccProjectCatalogService _accProjectCatalogService;
+    private readonly IAccInboxBootstrapService _accInboxBootstrapService;
     private readonly IAccLookupSeedService _accLookupSeedService;
 
     private string? _hintText;
@@ -17,6 +18,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     private string _projectsSummary = "טוען...";
     private string _healthSummary = "טוען...";
     private string _diagnosticsSummary = "טוען...";
+    private string _inboxBootstrapSummary = "טרם בוצע ensure עבור ACC Inbox.";
     private string _summaryMessage = string.Empty;
     private bool _isBusy;
 
@@ -25,18 +27,22 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         IAccProjectCatalogService accProjectCatalogService,
         IAccDocumentService accDocumentService,
         IAccFolderBrowserService accFolderBrowserService,
+        IAccProjectTreeSearchService accProjectTreeSearchService,
         IAccLiveProjectDiscoveryService accLiveProjectDiscoveryService,
+        IAccInboxBootstrapService accInboxBootstrapService,
         IAccLookupSeedService accLookupSeedService,
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter)
     {
         _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
         _accProjectCatalogService = accProjectCatalogService ?? throw new ArgumentNullException(nameof(accProjectCatalogService));
+        _accInboxBootstrapService = accInboxBootstrapService ?? throw new ArgumentNullException(nameof(accInboxBootstrapService));
         _accLookupSeedService = accLookupSeedService ?? throw new ArgumentNullException(nameof(accLookupSeedService));
 
         Browser = new AccReadOnlyDocumentBrowserViewModel(
             accDocumentService,
             accFolderBrowserService,
+            accProjectTreeSearchService,
             accLiveProjectDiscoveryService,
             resolvedDocsUrlLauncher,
             clipboardTextWriter,
@@ -44,12 +50,14 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             summaryMessageSink: message => SummaryMessage = message);
         RefreshCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy && !Browser.IsBusy);
         LoadLookupSeedCommand = new AsyncRelayCommand(LoadLookupSeedAsync, () => !IsBusy && !Browser.IsBusy);
+        EnsureInboxBootstrapCommand = new AsyncRelayCommand(EnsureInboxBootstrapAsync, () => !IsBusy && !Browser.IsBusy);
         Browser.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(AccReadOnlyDocumentBrowserViewModel.IsBusy))
             {
                 RefreshCommand.RaiseCanExecuteChanged();
                 LoadLookupSeedCommand.RaiseCanExecuteChanged();
+                EnsureInboxBootstrapCommand.RaiseCanExecuteChanged();
             }
         };
     }
@@ -98,6 +106,12 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         private set => SetField(ref _summaryMessage, value);
     }
 
+    public string InboxBootstrapSummary
+    {
+        get => _inboxBootstrapSummary;
+        private set => SetField(ref _inboxBootstrapSummary, value);
+    }
+
     public bool IsBusy
     {
         get => _isBusy;
@@ -107,6 +121,7 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
             {
                 RefreshCommand.RaiseCanExecuteChanged();
                 LoadLookupSeedCommand.RaiseCanExecuteChanged();
+                EnsureInboxBootstrapCommand.RaiseCanExecuteChanged();
                 Browser.NotifyHostStateChanged();
             }
         }
@@ -115,6 +130,8 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
     public AsyncRelayCommand RefreshCommand { get; }
 
     public AsyncRelayCommand LoadLookupSeedCommand { get; }
+
+    public AsyncRelayCommand EnsureInboxBootstrapCommand { get; }
 
     public async Task LoadAsync()
     {
@@ -165,6 +182,30 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             SummaryMessage = $"שגיאה בטעינת דוגמת lookup מה-DB: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task EnsureInboxBootstrapAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var result = await _accInboxBootstrapService.EnsureAsync().ConfigureAwait(true);
+            Browser.LookupProjectId = result.AccProjectId;
+            Browser.LookupFolderId = result.AccInboxFolderId;
+            Browser.LookupFileName = string.Empty;
+            InboxBootstrapSummary =
+                $"בוצע ensure בהצלחה: hubId={result.HubId}; projectId={result.AccProjectId}; rootFolderId={result.AccRootFolderId}; inboxFolderId={result.AccInboxFolderId}";
+            SummaryMessage = "בוצע Ensure ACC Inbox. שדות projectId ו-folderId עודכנו לפי התוצאה.";
+        }
+        catch (Exception ex)
+        {
+            InboxBootstrapSummary = $"שגיאה ב-Ensure ACC Inbox: {ex.Message}";
+            SummaryMessage = InboxBootstrapSummary;
         }
         finally
         {
