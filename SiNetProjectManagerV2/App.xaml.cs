@@ -639,7 +639,7 @@ namespace SiNetProjectManagerV2
             // their ACC role / license can't read/write metadata).
             services.AddSingleton<SiNetSQL.FileIndex.IAccMetadataStatusReporter, SiNetSQL.FileIndex.AccMetadataStatusReporter>();
             services.AddSingleton<SiNetSQL.FileIndex.IAccItemMetadataService, SiNetSQL.FileIndex.AccItemMetadataService>();
-            services.AddSingleton<SiNetSQL.Services.EmailIngestion.IAccInboxReconciliationService, SiNetSQL.Services.EmailIngestion.AccInboxReconciliationService>();
+            services.AddSingleton<SiNet.Application.Abstractions.Autodesk.IAccInboxReconciliationService, SiNetSQL.Services.EmailIngestion.AccInboxReconciliationService>();
             services.AddSingleton<SiNetSQL.Services.EmailIngestion.IAccInboxRecoveryService, SiNetSQL.Services.EmailIngestion.AccInboxRecoveryService>();
 
             // System Health: lightweight in-memory aggregator + per-service safe checks.

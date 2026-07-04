@@ -5,9 +5,14 @@ using SiNet.Application.Settings;
 using SiNetSQL.Data;
 using SiNetSQL.Services.AccBootstrap;
 
-namespace SiNet.App.Wpf.Autodesk;
+namespace SiNetProjectManagerV2.Services;
 
-internal sealed class WpfLocalAccInboxBootstrapExecutor(
+/// <summary>
+/// Temporary host-side executor for local privileged ACC Inbox bootstrap.
+/// This stays in the legacy host on purpose so <c>SiNet.App.Wpf</c> does not
+/// reference legacy DB or connector runtime types.
+/// </summary>
+internal sealed class LegacyHostLocalAccInboxBootstrapExecutor(
     ITokenProvider tokenProvider,
     IDbContextFactory<SiNetSQLDbContext> dbContextFactory,
     ISystemSettingsQueryService systemSettingsQueryService) : IAccInboxBootstrapLocalExecutor

@@ -16,7 +16,7 @@ legacy runtime. It exists to separate:
 - The clean ACC seam is no longer read-only. `SiNet.Application` now exposes:
   `IAccProjectService`, `IAccProjectCatalogService`, `IAccLiveProjectDiscoveryService`,
   `IAccProjectTreeSearchService`, `IAccLookupSeedService`, `IAccDocumentService`,
-  `IAccFolderPathService`, `IAccFolderBrowserService`, `IAccItemService`,
+  `IAccFolderPathService`, `IAccFolderBrowserService`, `IAccInboxReconciliationService`, `IAccItemService`,
   `IAccFileUploadService`, `IAccFileDownloadService`, `IAccInboxBootstrapService`,
   and the ACC control-plane ports.
 - `SiNet.Infrastructure.Autodesk` now owns:
@@ -43,6 +43,7 @@ legacy runtime. It exists to separate:
 | `src/SiNet.Application/Abstractions/Autodesk/IAccProjectTreeSearchService.cs` | Clean port for folder-tree search beneath a known ACC project root | Implemented via local/remote adapters |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccLookupSeedService.cs` | Clean port for SQL-backed operator lookup seeds | Implemented locally |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccDocumentService.cs` | Clean port for ACC item lookup by project/folder/file name | Implemented via local/remote read-only adapters |
+| `src/SiNet.Application/Abstractions/Autodesk/IAccInboxReconciliationService.cs` | Clean read-only contract for truth-based ACC inbox reconciliation | Implemented by existing runtime service in `SiNetSQL` |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccFolderPathService.cs` | Clean port for resolving / ensuring ACC folder lineages under a known root | Implemented in Wave 1 fast-finish |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccFolderBrowserService.cs` | Clean port for routine ACC folder browsing | Implemented in Wave 1 |
 | `src/SiNet.Application/Abstractions/Autodesk/IAccItemService.cs` | Clean port for ACC item display/version/hide operations | Implemented in Wave 1 fast-finish |
@@ -245,6 +246,10 @@ Wave 1 now contains the following implemented pieces:
    - `MoveToProjectProcessActionHandler` now requires the clean download/upload/browser seams directly; the internal compatibility constructor and legacy ACC transfer fallbacks have been retired.
    - `AttachmentTaggingService`, `AccInboxReconciliationService`, and the touched inbox metadata-repair paths now require DI-provided ACC metadata/transfer services instead of constructing ad-hoc legacy fallbacks at runtime.
    - `ProjectFileRefileService` now uses `IAccFileDownloadService` and `IAccItemService` directly; the compatibility constructor and legacy ACC download fallback have been retired.
+12. **A3 reconciliation contract extraction**
+   - `IAccInboxReconciliationService` and its DTOs now live in `SiNet.Application.Abstractions.Autodesk`.
+   - `AccInboxReconciliationService` remains the runtime implementation for now, but it now implements the Application contract instead of owning a legacy-local interface.
+   - Active consumers in the host / VM / MoveToProject paths now resolve the Application seam.
 
 Wave 1 is considered **closed at the runtime boundary**. What remains is the next phase:
 extracting more orchestration/provisioning behavior out of `SiNetSQL` without reopening direct
@@ -267,5 +272,6 @@ The next ACC work is no longer "finish the Wave 1 seams" - that boundary is now 
 The next useful slices are:
 
 - extract remaining orchestration/provisioning responsibilities out of `SiNetSQL` where it now makes sense architecturally,
+- keep moving reconciliation-adjacent consumers off local DB/cache assumptions and onto the Application reconciliation seam,
 - keep retiring orchestration-era compatibility code only after each replacement seam is verified and documented,
 - and keep the rule stable that service-mode privileged ACC work continues to route through `SiOffice.AccService`.

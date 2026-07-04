@@ -18,6 +18,12 @@ public sealed class NewSystemBoundaryTests
         "Dialogs.UserManagementWindow",
         "Dialogs.AddUserWindow",
         "Dialogs.ActionPermissionWindow",
+        "EmailManagementViewModel",
+        "FloatingInspectionViewModel",
+        "ProjectWorkViewModel",
+        "ProjectFolderTreeViewModel",
+        "WorkflowTaskOrchestrator",
+        "WorkflowEngine",
     ];
 
     private static readonly string[] ForbiddenLegacyAdminInNewShellFactory =

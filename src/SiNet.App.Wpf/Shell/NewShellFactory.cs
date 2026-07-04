@@ -114,7 +114,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             items.Add(new NewShellMenuItem(
                 "סטטוס ACC",
                 OpenNativeAccControlPlaneStatus,
-                "מצב ריצה / health / diag של AccService"));
+                "מצב ריצה / browse / reconciliation של ACC"));
         }
 
         if (HasAuthenticatedUser())

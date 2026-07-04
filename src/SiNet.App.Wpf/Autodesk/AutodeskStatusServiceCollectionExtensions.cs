@@ -12,7 +12,6 @@ public static class AutodeskStatusServiceCollectionExtensions
         services.AddSingleton<AccControlPlaneStatusPresenter>();
         services.AddSingleton<IAccResolvedDocsUrlLauncher, ShellExecuteAccResolvedDocsUrlLauncher>();
         services.AddSingleton<IClipboardTextWriter, WpfClipboardTextWriter>();
-        services.AddTransient<IAccInboxBootstrapLocalExecutor, WpfLocalAccInboxBootstrapExecutor>();
         services.AddTransient<AccControlPlaneStatusWindowViewModel>();
         services.AddTransient<AccControlPlaneStatusWindowView>();
         services.AddTransient<AccControlPlaneStatusWindow>();

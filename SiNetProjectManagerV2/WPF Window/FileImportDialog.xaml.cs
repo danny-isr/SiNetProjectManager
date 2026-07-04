@@ -5,6 +5,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNetSQL.Data;
 using SiNetSQL.Domain.Actions;
 using SiNetSQL.Domain.Actions.Continuation;

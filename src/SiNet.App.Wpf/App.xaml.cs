@@ -37,14 +37,9 @@ public partial class App : System.Windows.Application
         services.AddSingleton(_configuration);
         services.AddSiNet(ConfigureGmail);
         services.AddSiNetSecrets();
-        services.AddSiNetAutodeskStatusWpf();
+        services.AddSiNetNewSystemWpf();
         services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainWindow>();
-
-        // Shared, application-wide Project Context: a single ICurrentProjectContext so every
-        // window/surface observes the same Current Project. The real read-only IProjectQueryService
-        // is supplied by AddSiNet() above (AddSiNetProjectQuerySql), so the selector loads real projects.
-        services.AddSiNetProjectContext();
 
         // New Inspection screen foundation (now surfaced as a safe Inbox/Inspection tab switch).
         services.AddSingleton<InspectionTreeViewModel>();
@@ -55,11 +50,6 @@ public partial class App : System.Windows.Application
         services.AddSingleton<InspectionShellViewModel>();
         services.AddSingleton<InspectionShellView>();
         services.AddSingleton<MainViewModel>();
-
-        // Clean New System shell factory (docs/APP_SHELL.md). Registered after the surfaces it opens
-        // (Project Context + Inspection shell) so its migrated-only menu can resolve them. Additive:
-        // it does not change this harness's default MainWindow startup.
-        services.AddSiNetShell();
 
         _services = services.BuildServiceProvider();
 

@@ -110,6 +110,34 @@ Does **not** open legacy settings windows.
 
 See [`SETTINGS.md`](./SETTINGS.md) §5 (authorization), §9 (theme). Tests: `SettingsStage5BoundaryTests.cs`, `NativeSettingsSurfaceTests.cs`, `ThemeStage6Tests.cs`.
 
+## Native ACC operator surface (2026-07-04)
+
+| Surface | Location |
+| --- | --- |
+| ACC control/status + inbox reconciliation | `AccControlPlaneStatusWindow` + `AccControlPlaneStatusWindowViewModel` + `AccReadOnlyDocumentBrowserViewModel` |
+| WPF registration bundle | `AddSiNetNewSystemWpf()` |
+| Host-only local bootstrap adapter | `SiNetProjectManagerV2/Services/LegacyHostLocalAccInboxBootstrapExecutor.cs` |
+
+`SiNet.App.Wpf` no longer references `SiNetSQL` or `SiOffice.AutodeskConnector` directly just to
+support ACC bootstrap. The temporary privileged local bootstrap executor lives in the legacy host as
+explicit startup/composition glue, while the native ACC surface stays in `src/SiNet.App.Wpf` and
+consumes clean Application ports such as `IAccInboxBootstrapService` and
+`IAccInboxReconciliationService`.
+
+This native surface may:
+
+- display ACC runtime mode / health / diagnostics,
+- browse and resolve ACC items through read-only ports,
+- run read-only inbox reconciliation and project a selected row into native lookup/browse state,
+- expose the explicit operator/admin inbox-bootstrap action through the clean port.
+
+It must **not**:
+
+- construct `Bim360Service`,
+- create `SiNetSQLDbContext`,
+- own privileged bootstrap implementation details,
+- become a wrapper over a legacy ACC window.
+
 ## Revoked pattern (do not extend)
 
 | Pattern | Status |
@@ -120,6 +148,7 @@ See [`SETTINGS.md`](./SETTINGS.md) §5 (authorization), §9 (theme). Tests: `Set
 | `IAddUserWindowFactory` → legacy `AddUserWindow` | **Removed** |
 | `UserManagementPortAdapter` / SiNetSQL adapter for New System | **Not used** |
 | Changes to `SiNetSQL.MVVM` for New System consumption | **Stopped** |
+| ACC bootstrap executor inside `src/SiNet.App.Wpf` | **Removed** — temporary host adapter only |
 
 ## Architecture tests
 
@@ -135,6 +164,10 @@ Enforced by `NewSystemBoundaryTests.cs`, `Admin/NewShellNativeUserAdminMenuTests
 
 | Capability | Target |
 | --- | --- |
+| Email operational surface | Keep rebuilding inside `SiNet.App.Wpf/Surfaces/Email` over Application/Infrastructure ports; do not re-expand `EmailManagementViewModel` |
+| Inspection operational surface | Keep rebuilding inside `SiNet.App.Wpf/Inspection`; do not route new behavior through floating legacy inspection windows |
+| Workflow / task work surfaces | Land in `src/SiNet.App.Wpf` + Application task/workflow ports; do not let screens talk to `WorkflowEngine` / `WorkflowTaskOrchestrator` directly |
+| ProjectFiles / ProjectWork surface | Build a native `src/SiNet.App.Wpf` work surface; do not grow `ProjectWorkViewModel` / `ProjectFolderTreeViewModel` as the New System home |
 | User inline edit / `UpdateUsersAsync` | Extend native user admin + `SqlUserManagementService` |
 | General system settings surface | Native settings UI (replaces disabled **הגדרות** placeholder in `NewShellFactory`) |
 

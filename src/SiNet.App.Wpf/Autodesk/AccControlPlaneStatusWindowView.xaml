@@ -43,6 +43,76 @@
                                    Opacity="0.85"
                                    TextWrapping="Wrap"/>
 
+                        <TextBlock Text="ACC Inbox reconciliation (קריאה בלבד)"
+                                   FontWeight="SemiBold"
+                                   Margin="0,12,0,0"/>
+                        <TextBlock Text="הזן EmailInboxMessage.Id או MessageUniqueId כדי לבדוק מה באמת קיים ב-ACC Inbox. התוצאה משתמשת ב-reconciliation read-only דרך ה-port החדש, בלי לבצע כתיבה."
+                                   Margin="0,6,0,0"
+                                   Opacity="0.75"
+                                   TextWrapping="Wrap"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBox Grid.Row="0"
+                                     Grid.Column="0"
+                                     Text="{Binding ReconcileMessageIdText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="EmailInboxMessage.Id"/>
+                            <TextBox Grid.Row="0"
+                                     Grid.Column="2"
+                                     Text="{Binding ReconcileMessageUniqueIdText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="MessageUniqueId"/>
+                            <StackPanel Grid.Row="2"
+                                        Grid.ColumnSpan="3"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Left">
+                                <Button Content="Reconcile Inbox"
+                                        Command="{Binding ReconcileInboxMessageCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="העבר ל-lookup"
+                                        Command="{Binding UseSelectedReconciliationItemCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding ReconciliationSummary}"
+                                   Margin="0,8,0,0"
+                                   Opacity="0.85"
+                                   TextWrapping="Wrap"/>
+                        <DataGrid ItemsSource="{Binding ReconciliationItems}"
+                                  SelectedItem="{Binding SelectedReconciliationItem}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  IsReadOnly="True"
+                                  MaxHeight="220"
+                                  Margin="0,8,0,0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Attachment"
+                                                    Binding="{Binding AttachmentLabel}"
+                                                    Width="130"/>
+                                <DataGridTextColumn Header="File"
+                                                    Binding="{Binding FileName}"
+                                                    Width="2*"/>
+                                <DataGridTextColumn Header="Status"
+                                                    Binding="{Binding StatusText}"
+                                                    Width="120"/>
+                                <DataGridTextColumn Header="ACC Item"
+                                                    Binding="{Binding AccItemId}"
+                                                    Width="140"/>
+                                <DataGridTextColumn Header="Folder"
+                                                    Binding="{Binding OpenAccFolderId}"
+                                                    Width="140"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
                         <TextBlock Text="בדיקת resolve של פריט ACC (קריאה בלבד)"
                                    FontWeight="SemiBold"
                                    Margin="0,12,0,0"/>

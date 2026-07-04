@@ -1,7 +1,7 @@
 # ACC Control Plane
 
-> **Status:** Stage A1 stabilized and reconciled to code (2026-07-04)  
-> **Scope:** mode + health + diagnostics + key metadata + catalog/discovery/search/browse/read-only lookup, with inbox bootstrap classified as an admin-adjacent operator action rather than general ACC runtime orchestration
+> **Status:** Stage A1 stabilized and reconciled to code, with the first native A3 consumer anchored in the status window (2026-07-04)  
+> **Scope:** mode + health + diagnostics + key metadata + catalog/discovery/search/browse/read-only lookup + read-only inbox reconciliation, with inbox bootstrap classified as an admin-adjacent operator action rather than general ACC runtime orchestration
 
 This document records the **current code truth** for the native ACC control-plane and adjacent
 read/discovery surface. It is intentionally **narrower than the full ACC runtime** and is the
@@ -78,8 +78,12 @@ orchestration.
 - `SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs` wires:
   - `AddSiNetSecrets()`
   - `AddSiNetAutodesk()`
-  - `AddSiNetAutodeskStatusWpf()`
+  - `AddSiNetNewSystemWpf()`
   into the legacy production host graph.
+- The host-local `IAccInboxBootstrapLocalExecutor` now lives in
+  `SiNetProjectManagerV2/Services/LegacyHostLocalAccInboxBootstrapExecutor.cs` on purpose, so
+  `src/SiNet.App.Wpf` no longer references `SiNetSQL` or `SiOffice.AutodeskConnector` just to
+  support a temporary privileged bootstrap path.
 - `src/SiNet.App.Wpf/App.xaml.cs` explicitly calls `AddSiNetSecrets()` after `AddSiNet()` so the
   WPF harness can resolve vault-backed ACC key diagnostics and any vault-backed host configuration
   used by the native ACC status surface.
@@ -97,6 +101,10 @@ orchestration.
   actions. The same window can now prefill the tester from recent SQL-backed
   `EmailInboxMessage + EmailInboxAttachment` candidates so operators do not need to invent ACC ids
   by hand.
+- The same status window now also hosts a **native read-only inbox reconciliation panel** backed by
+  `IAccInboxReconciliationService`, so operators can inspect ACC truth for a concrete inbox message
+  and push a selected attachment directly into the lookup/browse tester without opening a legacy
+  email surface.
 - The same status window also exposes `IAccInboxBootstrapService` as an **explicit operator/admin**
   ensure action. This is intentionally classified as adjacent to control-plane/operator tooling, not
   as a migrated filing/provisioning orchestration path.
@@ -188,6 +196,7 @@ Native consumers currently exist for:
 - the ACC system-settings tab,
 - the dedicated ACC status window,
 - operator lookup/prefill/search/browse flows,
+- operator read-only inbox reconciliation flows,
 - and the explicit inbox-bootstrap ensure action in the status window.
 
 They do **not** replace provisioning, filing, metadata-write, or remote privileged business-runtime
@@ -224,6 +233,7 @@ Current checks cover:
 - shell/menu wiring for the dedicated ACC status window
 - status-window read-only document lookup over `IAccDocumentService`
 - status-window DB-backed prefill for manual document lookup (`IAccLookupSeedService`)
+- status-window read-only inbox reconciliation over `IAccInboxReconciliationService`
 - status-window inbox bootstrap execution path
 - settings-tab runtime-only read-only document lookup over `IAccDocumentService`
 

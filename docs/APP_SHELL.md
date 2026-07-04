@@ -165,7 +165,7 @@ Initial menu (P3 + P6 + native admin):
 | Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |
 | Action permissions | `ActionPermissions.Manage` | Administrator | `ActionPermissionsWindow` → native `ActionPermissionsView` |
 | Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
-| ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native runtime-only ACC status window |
+| ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native ACC control/status + inbox reconciliation window |
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 
@@ -189,9 +189,10 @@ truth** for all secret values — not `appsettings.json`, not repo files, not le
 `System.Settings.Write` is authorized. Opens native `AccControlPlaneStatusWindow` in
 `SiNet.App.Wpf.Autodesk`, backed by the clean ACC control-plane seam. This window is **runtime-only**:
 it shows mode, key metadata, known ACC project IDs, health, and diagnostics for the current host
-process, and performs no settings writes or privileged ACC operations. It also includes a manual
-read-only `projectId + folderId + fileName` lookup tester through `IAccDocumentService`, plus a
-derived ACC Docs URL that is shown only after a live resolve succeeds.
+process, and performs no settings writes or privileged ACC business orchestration. It also includes
+a manual read-only `projectId + folderId + fileName` lookup tester through `IAccDocumentService`, a
+derived ACC Docs URL that is shown only after a live resolve succeeds, and a read-only
+`IAccInboxReconciliationService` panel for truth-based inbox inspection from the New System screen.
 
 Implemented capabilities in this surface:
 

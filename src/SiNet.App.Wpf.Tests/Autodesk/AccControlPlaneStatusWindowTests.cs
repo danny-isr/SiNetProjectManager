@@ -61,6 +61,9 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.DoesNotContain("ComboBox ItemsSource=\"{Binding KnownProjectIds}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("EnsureInboxBootstrapCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LoadLookupSeedCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ReconcileInboxMessageCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("UseSelectedReconciliationItemCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ReconciliationItems", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCommand", xaml, StringComparison.Ordinal);
     }
 
@@ -410,6 +413,61 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Contains("Ensure ACC Inbox", vm.SummaryMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Status_window_view_model_can_reconcile_inbox_and_project_selected_row_to_lookup()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            BuildCatalogService("b.project-1"),
+            new StubAccDocumentService(null),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
+            BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter(),
+            new StubAccInboxReconciliationService(
+                new AccInboxReconciliationResult(
+                    300,
+                    "b.project-1",
+                    "msg-folder",
+                    [
+                        new AccInboxAttachmentReconciliationItem(
+                            InboxAttachmentId: 410,
+                            AttachmentIndex: 0,
+                            FileName: "plan.pdf",
+                            AccItemId: "acc-item-1",
+                            AccVersionId: "acc-version-1",
+                            OpenAccProjectId: "b.project-1",
+                            OpenAccFolderId: "attach-folder",
+                            OpenAccItemId: "acc-item-1",
+                            ExistsInAcc: true,
+                            Status: AccInboxAttachmentPresenceStatus.ExistsInAcc,
+                            StatusText: "ב-ACC",
+                            ProjectFileId: null,
+                            ProjectAlternativeId: null,
+                            LockedForEditing: false,
+                            MovedToProject: false,
+                            MetadataReadFailed: false,
+                            Attributes: new Dictionary<string, string?>())
+                    ])));
+        vm.ReconcileMessageIdText = "300";
+
+        await vm.ReconcileInboxMessageAsync();
+
+        var row = Assert.Single(vm.ReconciliationItems);
+        Assert.Equal("plan.pdf", row.FileName);
+        Assert.Contains("attachments=1", vm.ReconciliationSummary, StringComparison.Ordinal);
+
+        vm.SelectedReconciliationItem = row;
+        vm.UseSelectedReconciliationItemCommand.Execute(null);
+
+        Assert.Equal("b.project-1", vm.Browser.LookupProjectId);
+        Assert.Equal("attach-folder", vm.Browser.LookupFolderId);
+        Assert.Equal("plan.pdf", vm.Browser.LookupFileName);
+    }
+
     private static AccControlPlaneStatusPresenter BuildPresenter() =>
         new(
             new StubAccModeProvider(AccServiceMode.Local, null),
@@ -532,6 +590,15 @@ public sealed class AccControlPlaneStatusWindowTests
     {
         public Task<IReadOnlyList<AccDocumentLookupSeed>> GetRecentSeedsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(seeds);
+    }
+
+    private sealed class StubAccInboxReconciliationService(AccInboxReconciliationResult? result) : IAccInboxReconciliationService
+    {
+        public Task<AccInboxReconciliationResult?> ReconcileByMessageIdAsync(int emailMessageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
+
+        public Task<AccInboxReconciliationResult?> ReconcileByMessageUniqueIdAsync(string messageUniqueId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
     }
 
     private sealed class StubAccResolvedDocsUrlLauncher : IAccResolvedDocsUrlLauncher

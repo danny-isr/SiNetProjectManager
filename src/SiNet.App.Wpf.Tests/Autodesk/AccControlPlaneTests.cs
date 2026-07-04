@@ -182,7 +182,7 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusPresenter));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccResolvedDocsUrlLauncher));
         Assert.Contains(services, d => d.ServiceType == typeof(IClipboardTextWriter));
-        Assert.Contains(services, d => d.ServiceType == typeof(IAccInboxBootstrapLocalExecutor));
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IAccInboxBootstrapLocalExecutor));
         Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusWindowViewModel));
         Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusWindowView));
         Assert.Contains(services, d => d.ServiceType == typeof(AccControlPlaneStatusWindow));
@@ -777,7 +777,8 @@ public sealed class AccControlPlaneTests
             "NewSystemServiceCollectionExtensions.cs"));
 
         Assert.Contains("services.AddSiNetAutodesk();", source, StringComparison.Ordinal);
-        Assert.Contains("services.AddSiNetAutodeskStatusWpf();", source, StringComparison.Ordinal);
+        Assert.Contains("services.AddSiNetNewSystemWpf();", source, StringComparison.Ordinal);
+        Assert.Contains("services.AddTransient<IAccInboxBootstrapLocalExecutor, LegacyHostLocalAccInboxBootstrapExecutor>();", source, StringComparison.Ordinal);
     }
 
     [Fact]

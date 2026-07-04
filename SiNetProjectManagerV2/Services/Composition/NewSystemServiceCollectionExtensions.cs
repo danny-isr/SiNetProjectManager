@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
-using SiNet.App.Wpf.Autodesk;
-using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
@@ -32,21 +32,16 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSiNetSerilogLogging();
         services.AddSiNetUserLoggingSettings();
         SiNet.Infrastructure.Sql.SystemSettingsServiceCollectionExtensions.AddSiNetSystemSettingsSql(services);
+        services.AddTransient<IAccInboxBootstrapLocalExecutor, LegacyHostLocalAccInboxBootstrapExecutor>();
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
         services.AddSiNetAutodesk();
-        services.AddSiNetAutodeskStatusWpf();
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
-        SiNet.App.Wpf.Shared.Projects.ProjectContextServiceCollectionExtensions.AddSiNetProjectContext(services);
-        SiNet.App.Wpf.Admin.Users.UserAdminServiceCollectionExtensions.AddSiNetUserAdminWpf(services);
-        SiNet.App.Wpf.Admin.Permissions.PermissionAdminServiceCollectionExtensions.AddSiNetPermissionAdminWpf(services);
-        SiNet.App.Wpf.Admin.Security.SecretAdminServiceCollectionExtensions.AddSiNetSecretAdminWpf(services);
-        SiNet.App.Wpf.Admin.Settings.SettingsAdminServiceCollectionExtensions.AddSiNetSettingsAdminWpf(services);
+        services.AddSiNetNewSystemWpf();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();
         services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
-        ShellServiceCollectionExtensions.AddSiNetShell(services);
 
         return services;
     }
