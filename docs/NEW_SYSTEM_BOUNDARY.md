@@ -103,6 +103,15 @@ New System Gmail rules:
 - Drive / Sheets / report/export work is **not** part of Gmail window migration and stays deferred
   until a `ProjectFiles` or `Reports` consumer slice is selected.
 
+## Workflow / Task / Work Surface integration (2026-07-04)
+
+Canonical contract for task-driven opens and completion:
+[`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
+
+- Task navigation: `ITaskNavigationService` → `TaskNavigationResolver` (via host seam) — **no new router**.
+- Completion: `ITaskCompletionCoordinator` → `IWorkflowCommandService` — **no direct UI mutation**.
+- Window readiness map: Email, Inspection, ProjectWork, Tasks, Workflow, ACC operator surfaces.
+
 ## Native logging (Stage 4, 2026-07-03)
 
 | Port | Adapter | Registration |

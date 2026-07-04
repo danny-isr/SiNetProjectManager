@@ -10,7 +10,9 @@
 > `ModelSnapshot` / EF mappings as part of this work.
 >
 > Related: `docs/MIGRATION_MAP.md` (workflow-first process model), `docs/ARCHITECTURE_TARGET.md`,
-> [`docs/PROJECTS.md`](./PROJECTS.md) (Project domain / Project Context target state).
+> [`docs/PROJECTS.md`](./PROJECTS.md) (Project domain / Project Context target state),
+> [`docs/WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md) (canonical
+> Task → WorkSurface → Completion contract; window readiness map).
 
 ## Status legend
 
@@ -135,3 +137,17 @@ The old `EmailManagementView` is the **visual reference / legacy source** only; 
 
 This work changes **UI only**. No migrations, no `ModelSnapshot`, no `*.Designer.cs`, no `DbContext` /
 `DbSet` changes, and no schema changes were made.
+
+## Workflow / Task / Action integration (readiness)
+
+Task-driven opens, completion, and ComponentKey routing are defined in
+[`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md). Summary:
+
+- **Do not** add a new task-window router — reuse `TaskNavigationResolver` /
+  `ITaskNavigationService`.
+- **Do not** complete tasks or mutate workflow from ViewModels — use
+  `ITaskCompletionCoordinator`.
+- Native surfaces expose `ApplyContext(WorkSurfaceContext?)` placeholders; only
+  `InspectionShellViewModel.OpenFromTaskAsync` implements the canonical navigation half today.
+- See the integration doc §5 for per-window readiness (Email, Inspection, ProjectWork, Tasks,
+  Workflow, ACC operator surfaces).

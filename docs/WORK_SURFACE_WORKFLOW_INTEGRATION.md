@@ -1,0 +1,194 @@
+# Work Surface / Workflow / Task / Action Integration Contract
+
+> **Status:** Readiness documentation (2026-07-04) — defines how New System and migrated windows
+> connect to the existing process backbone **without** adding a parallel router, fallback, or schema
+> changes.
+>
+> **Scope:** Integration contract + window readiness map only. **No** broad legacy window migration,
+> **no** new features, **no** GmailSend, **no** Drive/Sheets, **no** ACC write.
+>
+> Related:
+> [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) (workflow-first backbone),
+> [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md) (visual-clone inventory),
+> [`APP_SHELL.md`](./APP_SHELL.md) §10 (shell is not a workflow actor),
+> [`PROJECTS.md`](./PROJECTS.md) §7 (`WorkSurfaceContext` vs Current Project),
+> [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) (G-Startup closed; G-Policy pending),
+> [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md) (ACC read/operator only).
+
+---
+
+## 1. Role model (who owns what)
+
+| Concept | Owner | Responsibility |
+| --- | --- | --- |
+| **Workflow** | `IWorkflowCommandService` / `WorkflowTaskOrchestrator` | Process backbone: stages, instances, auto-advance. **Not** mutated from WPF ViewModels. |
+| **Task** | `ProjectAssignment` + `TaskType` + `TaskLink` (DB); orchestration via `WorkflowTaskOrchestrator` / `SmartTaskService` | Work item assigned to a user/group with typed interaction and work targets. |
+| **Action / handler** | `IProcessActionDispatcher` → `IProcessActionHandler` implementations | Executes a business action (e.g. MoveToProject, AddMaterial) when context permits. |
+| **Work Surface** | `src/SiNet.App.Wpf` window/view + ViewModel | UI where the user performs work. Receives **`WorkSurfaceContext`**; loads data from context only in task mode. |
+| **Completion bridge** | `ITaskCompletionCoordinator` (`TaskCompletionCoordinator`) | Single decision point for business completion: validates event/result, updates task, may close task, signals workflow auto-advance via `IWorkflowCommandService`. |
+
+**Hard rules:**
+
+- ViewModels **must not** change `WorkflowStage` directly.
+- ViewModels **must not** change `ProjectStatus` directly (coordinator may do so per policy).
+- ViewModels **must not** close a task directly for business completion — use `ITaskCompletionCoordinator` (or `ITaskCompletionService` in New System when the legacy seam is bound).
+- ViewModels **must not** call `IWorkflowCommandService.CheckAndAutoAdvanceAsync` directly — the coordinator owns that bridge.
+
+---
+
+## 2. Canonical open path (task-driven)
+
+Use **existing** mechanisms only. **Do not** add a new task-window router.
+
+```plaintext
+TaskPanel / FloatingProjectTasksView / Workflow UI
+  → user selects taskId
+  → host calls TaskNavigationResolver.ResolveAsync(taskId)   [legacy host today]
+     OR ITaskNavigationService.ResolveAsync(taskId)          [New System port]
+        → ILegacyTaskNavigationSource → TaskNavigationResolver [V2 host binding]
+        → LegacyTaskNavigationService → WorkSurfaceContext
+  → shell maps ComponentKey → concrete Work Surface
+  → WorkSurface.ApplyContext(context) OR OpenFromTaskAsync(taskId) [Inspection harness]
+  → Work Surface loads exact PrimaryWorkTargetEntityId (no first/last/default fallback)
+  → user performs business work via existing services / dispatcher / handlers
+  → ITaskCompletionCoordinator.CompleteAsync(...)
+  → coordinator → IWorkflowCommandService (auto-advance when policy requires)
+```
+
+### Existing code map
+
+| Step | Existing mechanism | Location |
+| --- | --- | --- |
+| Task → navigation request | `TaskNavigationResolver` | `SiNetSQL/Services/Tasks/TaskNavigationResolver.cs` |
+| TaskType → UI contract | `ReviewTaskInteractionRegistry` + `TaskInteractionDefinition` | `SiNetSQL/Services/Tasks/ReviewTaskInteractionRegistry.cs` |
+| Stable screen keys | `TaskComponentKeys` | `SiNetSQL/Services/Tasks/TaskInteractionDefinition.cs` |
+| Work targets | `TaskLink` rows on `ProjectAssignment` | DB (read by resolver) |
+| New System port | `ITaskNavigationService` | `src/SiNet.Application/Tasks/ITaskNavigationService.cs` |
+| Strangler adapter | `LegacyTaskNavigationService` | `src/SiNet.LegacyBridge/Tasks/LegacyTaskNavigationService.cs` |
+| Host binding (V2) | `TaskNavigationLegacySource` → `TaskNavigationResolver` | `SiNetProjectManagerV2/Services/TaskNavigationLegacySource.cs` |
+| Runtime context DTO | `WorkSurfaceContext` | `src/SiNet.Application/WorkSurfaces/WorkSurfaceContext.cs` |
+| Legacy shell routing | `FloatingProjectTasksView.OnOpenTaskNavigationRequested` | `SiNetProjectManagerV2/WPFUserControl/FloatingProjectTasksView.xaml.cs` |
+| Business actions | `IProcessActionDispatcher` | Registered in V2 `App.xaml.cs`; handlers in `SiNetSQL` |
+| Task creation (workflow) | `WorkflowTaskOrchestrator`, `TaskFactory` | `SiNetSQL/Services/Workflow/` |
+| Completion | `ITaskCompletionCoordinator` / `TaskCompletionCoordinator` | `SiNetSQL/Services/Tasks/TaskCompletionCoordinator.cs` |
+| Inspection pilot (New System) | `InspectionShellViewModel.OpenFromTaskAsync` | `src/SiNet.App.Wpf/Inspection/InspectionShellViewModel.cs` |
+
+**Resolver output fields** (via `TaskNavigationRequest` → `WorkSurfaceContext`):
+
+- `ComponentKey` (from `TaskInteractionDefinition`)
+- `ProjectId`
+- `TaskId`
+- `WorkflowInstanceId`
+- `PrimaryWorkTargetEntityId`
+- `AllowedResultCodes` / `AllowedTaskResultCodes`
+- `CompletionEventCode`, `ActingUserId`, `TaskTypeCode` (when host supplies them)
+
+---
+
+## 3. Two open modes
+
+### 3.1 Project-centric (normal)
+
+- Window opened from shell menu, factory, or user navigation.
+- **No** `TaskId` in context.
+- **No** automatic task completion.
+- Data driven by `ICurrentProjectContext` / user project selection where applicable.
+- If the surface is a **singleton**, clear any previous task context before reuse (`ApplyContext(null)` or equivalent).
+
+### 3.2 Task-driven
+
+- Window opened because the user activated a task.
+- **Must** receive `WorkSurfaceContext` (via resolver — never hand-built in UI).
+- **Must** have `ComponentKey` matching the surface.
+- **Must** have a concrete work target when the task type requires one (`PrimaryWorkTargetEntityId`, or validated `TaskLink`).
+- If resolver fails, interaction definition is missing, or work target is absent → **clear error + logging**. **No** first/last/default entity fallback.
+- Completion (when implemented) goes through `ITaskCompletionCoordinator` with a result from `AllowedResultCodes`.
+
+---
+
+## 4. Completion path (back to Workflow)
+
+```plaintext
+Work Surface (user confirms business outcome)
+  → ITaskCompletionCoordinator.CompleteAsync(
+        taskId,
+        completionEventCode,
+        taskResultCode,          // must ∈ AllowedResultCodes when required
+        completedTaskLinkIds,
+        payload,
+        userId)
+  → TaskCompletionCoordinator validates against ReviewTaskInteractionRegistry + ReviewCompletionEventBehavior
+  → records ProjectAssignmentEvent, updates LastTaskResultId, may close task
+  → IWorkflowCommandService.CheckAndAutoAdvanceAsync (when coordinator policy requires)
+```
+
+New System port (when seam bound): `ITaskCompletionService` → `LegacyTaskCompletionService` → host `ILegacyTaskCompletionSource`.
+
+Until the completion seam is bound in a given host, surfaces report **Unavailable** — they must not invent a local completion path.
+
+---
+
+## 5. Window readiness map
+
+Legend: **Connect now** = safe to wire task context using existing ports (read-only or pilot). **Deferred** = do not connect until named policy/slice closes.
+
+| Surface | Opens today | ApplyContext / OpenForTask | Expected ComponentKey(s) | Work target | Can complete task? | Completion event/result | Read/Write | Gmail / ACC deps | Connect now? |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **EmailWindowView** | New Shell menu (factory); legacy `MainWindow.NavigateToEmail` for filing | `ApplyContext` placeholder | `Component.EmailFiling`, `Component.EmailComposeToPlanner`, `Component.ProjectCreationFromEmail`, `Component.ReviewProjectSetupFromEmail` | `EmailInboxMessage` / `EmailThread` id | Legacy: yes via coordinator after MoveToProject; New: **no** | e.g. `ReviewMaterialFiled` + filing results | Read native; write deferred | Gmail read native; send/modify legacy | **Deferred** — needs task filing slice + G-Policy for send paths |
+| **InspectionWindowView** (visual clone) | Not production entry; design data | `ApplyContext` placeholder | `Component.InspectionReport`, `Component.ManagerReviewApproval` | `InspectionReport` id | Stub only | Per registry (e.g. report received / approved) | Read stubs; write deferred | None in clone | **Deferred** — use `InspectionShellViewModel` harness for task pilot first |
+| **InspectionShellView** (harness) | V2 admin preview `OpenInspectionFromTask_Click` | `OpenFromTaskAsync(taskId)` | Expects `"Inspection"` today; resolver emits `Component.InspectionReport` — **alignment gap** | `InspectionReport` id | Partial (`ITaskCompletionService` when bound) | From context / metadata port | Read-only harness | None | **Pilot only** — navigation half; ComponentKey alignment pending |
+| **ProjectWork** (future) | Legacy `MainWindow.ShowProjectWork` | Not in New System yet | `Component.ProjectWork`, `Component.MaterialChecklist`, `Component.PoliceSubmission` | Project / checklist / email source | Legacy yes (result picker) | Workflow result codes per registry | Write-heavy | ACC/files legacy | **Deferred** — needs ProjectWork surface + ACC-Write-Policy |
+| **TaskPanelView** | Legacy embedded panel | N/A (orchestrator UI) | N/A (lists tasks) | N/A | Opens tasks via resolver | N/A | Mixed | None direct | **Deferred** — native Tasks surface TBD |
+| **FloatingProjectTasksView** | Legacy floating per-project list | `OnOpenTaskNavigationRequested` | All `TaskComponentKeys.*` | Per resolver | Dispatches to hosts; completion in target surface | Per target surface | Mixed | Email/Inspection/ProjectWork | **Legacy reference** — New System must reuse resolver, not duplicate switch |
+| **WorkflowDashboard / WorkflowInstance** | Legacy dialogs | N/A | N/A | N/A | Admin/operator views | N/A | Mixed | None direct | **Deferred** — admin surfaces not migrated |
+| **AccControlPlaneStatusWindow** | New Shell + Settings ACC tab | No task integration | None (operator) | Optional item ref for browse | No | N/A | **Read-only** | ACC read/control-plane | **Connect now** (operator read) — not task-driven |
+| **AccReadOnlyDocumentBrowser** (embedded) | ACC status window | No task integration | None | `AccItemRef` | No | N/A | Read-only | ACC read | **Connect now** (read browse) |
+
+### Notes on legacy vs New System routing
+
+- **Legacy production** task open: `FloatingProjectTasksView` → `TaskNavigationResolver` → `switch (ComponentKey)` → legacy windows (`EmailManagementView`, `FloatingInspectionView`, `WorkflowCreateProjectWindow`, etc.).
+- **New System** must converge on: `ITaskNavigationService` → `WorkSurfaceContext` → `ApplyContext` / `OpenFromTaskAsync` on native surfaces — **same resolver contract**, different hosts.
+- **No new router.** Extend `TaskNavigationResolver` / `ReviewTaskInteractionRegistry` when new task types appear; map `ComponentKey` in shell/factory only.
+
+---
+
+## 6. Gmail / ACC integration guardrails (for window wiring)
+
+| Area | Rule |
+| --- | --- |
+| Gmail read | Native: `IEmailGateway` + `IConnectorAuthService`. G-Startup silent restore in V2 New System startup. |
+| Gmail send/modify | **Deferred** — requires G-Policy. No `IEmailSender` in WPF until approved. |
+| Drive / Sheets | **Legacy/deferred** — not part of Work Surface integration yet. |
+| ACC read | Native ports (`IAccDocumentService`, browse, reconciliation). |
+| ACC write/upload/provisioning | **Deferred** — server-only / ACC-Write-Policy. No upload/provisioning ports from New System WPF. |
+
+---
+
+## 7. Pilot recommendation (next slice, not this task)
+
+1. Align `InspectionShellViewModel.InspectionComponentKey` with `TaskComponentKeys.InspectionReport` (or map in adapter).
+2. Bind `ILegacyTaskCompletionSource` in V2 for one completion path from Inspection harness.
+3. Add New Shell entry: task list → `ITaskNavigationService` → single read-only surface (Inspection or ACC status) — **one** task-aware pilot before Email/ProjectWork.
+
+---
+
+## 8. Deferred / out of scope (this document)
+
+| Item | Status |
+| --- | --- |
+| Broad legacy window migration | **Suspended** — needs this contract + one pilot |
+| New task-window router | **Rejected** — use `TaskNavigationResolver` / `ITaskNavigationService` |
+| Direct completion from ViewModel | **Rejected** — use `ITaskCompletionCoordinator` |
+| Direct WorkflowStage / ProjectStatus mutation from UI | **Rejected** |
+| GmailSend / Reply / Forward | **Suspended** — G-Policy |
+| Drive / Sheets / Reports | **Suspended** — legacy/deferred |
+| ACC write / provisioning / upload | **Suspended** — ACC-Write-Policy |
+| Deleting old tasking model (`ProjectTypeTaskType`, etc.) | **Not approved** — still active; document only |
+
+---
+
+## 9. G-Startup cross-check (unchanged by this doc)
+
+V2 New System startup performs silent Gmail restore via `StartNewSystemConnectorAuthRestore()` →
+`IConnectorAuthService.TryRestoreSessionAsync()` off the UI thread. No interactive login, no fallback,
+no scope changes. See [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) §3.5.

@@ -1613,6 +1613,9 @@ through the official services, and both solutions still build.
 
 ## Email Management — Workflow/Task Integration Plan (planned)
 
+> **Canonical contract:** [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md)
+> §2–§5 (navigation path, open modes, window map, completion bridge).
+
 **Clarification:** the **native Gmail read infrastructure** (`SiNet.Infrastructure.Google`,
 `GmailClientProvider`) is **not** the same thing as the full **Email Management screen**. Read
 infrastructure is plumbing; the Email Management screen is a **Work Surface** that turns email
