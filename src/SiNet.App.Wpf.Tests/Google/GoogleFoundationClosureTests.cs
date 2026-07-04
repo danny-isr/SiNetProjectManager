@@ -118,9 +118,10 @@ public sealed class GoogleFoundationClosureTests
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
-        Assert.Contains("Reply/Send נשארים מחוץ לסלייס", source, StringComparison.Ordinal);
-        Assert.Contains("Move-to-project / mark-handled עדיין מחוץ לסלייס", source, StringComparison.Ordinal);
-        Assert.Contains("פתיחת או הורדת attachment עדיין לא חלק מהסלייס הזה", source, StringComparison.Ordinal);
+        Assert.Contains("ShowDeferredWriteActions => false", source, StringComparison.Ordinal);
+        Assert.Contains("DeferredProductionPilotAction", source, StringComparison.Ordinal);
+        Assert.Contains("G-Policy", source, StringComparison.Ordinal);
+        Assert.Contains("ITaskCompletionCoordinator", source, StringComparison.Ordinal);
         Assert.Contains("GetDetailsAsync", source, StringComparison.Ordinal);
     }
 

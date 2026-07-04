@@ -122,18 +122,26 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         SearchCommand = new AsyncRelayCommand(SearchAsync, CanLoadEmails);
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         OpenEmailCommand = new AsyncRelayCommand(OpenSelectedEmailAsync, () => !IsBusy && SelectedEmail is not null);
-        LinkToProjectCommand = DeferredAction("שיוך בפועל לפרויקט עדיין לא אושר בחלון החדש.");
-        CreateTaskFromEmailCommand = DeferredAction("יצירת משימה מהמייל תגיע רק אחרי חיבור ה-Workflow/Tasks.");
-        MarkHandledCommand = DeferredAction("Move-to-project / mark-handled עדיין מחוץ לסלייס הקריאה בלבד.");
-        ArchiveCommand = DeferredAction("ארכוב וטיפול בסטטוסים עדיין לא חלק מהסלייס הזה.");
-        ReplyCommand = DeferredAction("Reply/Send נשארים מחוץ לסלייס עד לאישור policy מפורש.");
-        ForwardCommand = DeferredAction("Forward/Send נשארים מחוץ לסלייס עד לאישור policy מפורש.");
-        OpenAttachmentCommand = DeferredAction("פתיחת או הורדת attachment עדיין לא חלק מהסלייס הזה.");
-        CompleteTaskCommand = DeferredAction("סיום משימה עדיין לא מחובר בחלון הדוא\"ל החדש.");
+        LinkToProjectCommand = DeferredProductionPilotAction("שיוך בפועל לפרויקט — מושהה (production pilot read-only).");
+        CreateTaskFromEmailCommand = DeferredProductionPilotAction("יצירת משימה מהמייל — מושהה (דורש slice Workflow/Tasks).");
+        MarkHandledCommand = DeferredProductionPilotAction("Move-to-project / mark-handled — מושהה (production pilot read-only).");
+        ArchiveCommand = DeferredProductionPilotAction("ארכוב — מושהה (production pilot read-only).");
+        ReplyCommand = DeferredProductionPilotAction("Reply/Send — מושהה (דורש G-Policy).");
+        ForwardCommand = DeferredProductionPilotAction("Forward/Send — מושהה (דורש G-Policy).");
+        OpenAttachmentCommand = DeferredProductionPilotAction("פתיחת attachment — מושהה (metadata-only pilot).");
+        CompleteTaskCommand = DeferredProductionPilotAction("סיום משימה — מושהה (דורש ITaskCompletionCoordinator slice).");
     }
 
-    /// <summary>Window title for the first real read-only email slice.</summary>
+    /// <summary>Window title for the limited production pilot (read-only Gmail).</summary>
     public string Title => "ניהול דואר — קריאה בלבד";
+
+    /// <summary>
+    /// Production pilot envelope: deferred write/workflow/attachment-open actions stay in code but are
+    /// hidden from the UI and cannot execute until an approved slice enables them.
+    /// </summary>
+    public bool ShowDeferredWriteActions => false;
+
+    public int UnreadEmailCount => Emails.Count(static row => row.IsUnread);
 
     public ProjectSelectorViewModel ProjectSelector { get; }
 
@@ -329,11 +337,16 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     private bool CanLoadEmails() =>
         !IsBusy && _currentProject.CurrentProject is not null && !string.IsNullOrWhiteSpace(ResolveCurrentProjectLabelName());
 
-    private AsyncRelayCommand DeferredAction(string message) => new(() =>
-    {
-        StatusMessage = message;
-        return Task.CompletedTask;
-    });
+    /// <summary>
+    /// Deferred action kept for future slices. Disabled and hidden during the limited production pilot.
+    /// </summary>
+    private AsyncRelayCommand DeferredProductionPilotAction(string message) => new(
+        () =>
+        {
+            StatusMessage = message;
+            return Task.CompletedTask;
+        },
+        () => false);
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
@@ -418,6 +431,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         SelectedEmail = Emails.FirstOrDefault();
         UpdateFolderSummaries(rows);
+        OnPropertyChanged(nameof(UnreadEmailCount));
     }
 
     private void PrepareSelectedEmailDetailsLoading()
@@ -542,7 +556,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         ReceivedOn: summary.ReceivedAt == DateTimeOffset.MinValue ? DateTime.MinValue : summary.ReceivedAt.LocalDateTime,
         GroupName: "מיילים לפרויקט",
         IsUnread: false,
-        IsAssigned: true,
+        IsAssigned: false,
         AssignedProjectName: null,
         AttachmentCount: summary.HasAttachments ? 1 : 0);
 

@@ -238,7 +238,7 @@
                                         Margin="10,0,0,0">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#x1F4E9; \u05DC\u05D0 \u05E0\u05E7\u05E8\u05D0\u05D5 " Foreground="#1565C0" FontSize="{DynamicResource SiTextSmallFontSize}" />
-                                        <TextBlock Text="2" Foreground="#1565C0" FontWeight="Bold" FontSize="{DynamicResource SiTextSmallFontSize}" />
+                                        <TextBlock Text="{Binding UnreadEmailCount}" Foreground="#1565C0" FontWeight="Bold" FontSize="{DynamicResource SiTextSmallFontSize}" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -354,7 +354,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Row 1: Attachments chips. -->
+                            <!-- Row 1: Attachment metadata (read-only in production pilot — open/download deferred). -->
                             <Border Grid.Row="1" Padding="12,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
                                 <StackPanel>
                                     <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="{DynamicResource SiTextSmallFontSize}" Foreground="#666" />
@@ -366,15 +366,9 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Button Command="{Binding DataContext.OpenAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="{Binding DisplayLabel}"
-                                                        Padding="8,3"
-                                                        Margin="0,0,6,6"
-                                                        Cursor="Hand"
-                                                        Background="#EEF2FF"
-                                                        BorderBrush="#C5CAE9"
-                                                        ToolTip="\u05E4\u05EA\u05D7 \u05E7\u05D5\u05D1\u05E5 \u05DE\u05E6\u05D5\u05E8\u05E3" />
+                                                <Border Padding="8,3" Margin="0,0,6,6" Background="#EEF2FF" BorderBrush="#C5CAE9" BorderThickness="1" CornerRadius="3">
+                                                    <TextBlock Text="{Binding DisplayLabel}" FontSize="{DynamicResource SiTextSmallFontSize}" />
+                                                </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
@@ -386,8 +380,9 @@
                                 <TextBlock Text="{Binding SelectedEmailBody}" TextWrapping="Wrap" Foreground="#333" />
                             </ScrollViewer>
 
-                            <!-- Row 3: Action bar (File / Move to Project etc.). -->
-                            <Border Grid.Row="3" Background="#E8F5E9" Padding="8,6" BorderBrush="#EEE" BorderThickness="0,1,0,0">
+                            <!-- Row 3: Action bar — hidden in production pilot (write/workflow deferred). -->
+                            <Border Grid.Row="3" Background="#E8F5E9" Padding="8,6" BorderBrush="#EEE" BorderThickness="0,1,0,0"
+                                    Visibility="{Binding ShowDeferredWriteActions, Converter={StaticResource BoolToVis}}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -437,28 +432,30 @@
                               Background="Transparent"
                               Cursor="SizeWE" />
 
-                <!-- LEFT (in RTL): Context / calendar placeholder (workflow + suggested actions). -->
+                <!-- LEFT (in RTL): Context / calendar placeholder — write/workflow actions hidden in production pilot. -->
                 <Border Grid.Column="4" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="White">
                     <StackPanel Margin="10">
                         <TextBlock Text="\u05D4\u05E7\u05E9\u05E8 / \u05EA\u05D6\u05DE\u05D5\u05DF" FontWeight="Bold" Margin="0,0,0,8" />
-                        <TextBlock Text="\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DE\u05D5\u05E6\u05E2\u05D5\u05EA"
-                                   FontWeight="SemiBold"
-                                   Foreground="#666"
-                                   Margin="0,0,0,6" />
-                        <Button Content="&#x2713; \u05E1\u05DE\u05DF \u05DB\u05D8\u05D5\u05E4\u05DC"
-                                Command="{Binding MarkHandledCommand}"
-                                Style="{StaticResource ActionButton}"
-                                Margin="0,0,0,6"
-                                HorizontalAlignment="Right" />
-                        <Button Content="\u05D0\u05E8\u05DB\u05D9\u05D5\u05DF"
-                                Command="{Binding ArchiveCommand}"
-                                Style="{StaticResource ActionButton}"
-                                Margin="0,0,0,6"
-                                HorizontalAlignment="Right" />
-                        <Button Content="\u05E1\u05D9\u05D9\u05DD \u05DE\u05E9\u05D9\u05DE\u05D4"
-                                Command="{Binding CompleteTaskCommand}"
-                                Style="{StaticResource ActionButton}"
-                                HorizontalAlignment="Right" />
+                        <StackPanel Visibility="{Binding ShowDeferredWriteActions, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DE\u05D5\u05E6\u05E2\u05D5\u05EA"
+                                       FontWeight="SemiBold"
+                                       Foreground="#666"
+                                       Margin="0,0,0,6" />
+                            <Button Content="&#x2713; \u05E1\u05DE\u05DF \u05DB\u05D8\u05D5\u05E4\u05DC"
+                                    Command="{Binding MarkHandledCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    Margin="0,0,0,6"
+                                    HorizontalAlignment="Right" />
+                            <Button Content="\u05D0\u05E8\u05DB\u05D9\u05D5\u05DF"
+                                    Command="{Binding ArchiveCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    Margin="0,0,0,6"
+                                    HorizontalAlignment="Right" />
+                            <Button Content="\u05E1\u05D9\u05D9\u05DD \u05DE\u05E9\u05D9\u05DE\u05D4"
+                                    Command="{Binding CompleteTaskCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    HorizontalAlignment="Right" />
+                        </StackPanel>
                         <Border Background="#FFF8E1"
                                 BorderBrush="#FFE082"
                                 BorderThickness="1"

@@ -151,3 +151,4 @@ Task-driven opens, completion, and ComponentKey routing are defined in
   `InspectionShellViewModel.OpenFromTaskAsync` implements the canonical navigation half today.
 - See the integration doc §5 for per-window readiness (Email, Inspection, ProjectWork, Tasks,
   Workflow, ACC operator surfaces).
+- Production pilot envelope: [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).

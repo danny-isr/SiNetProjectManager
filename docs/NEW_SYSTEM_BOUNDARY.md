@@ -112,6 +112,14 @@ Canonical contract for task-driven opens and completion:
 - Completion: `ITaskCompletionCoordinator` → `IWorkflowCommandService` — **no direct UI mutation**.
 - Window readiness map: Email, Inspection, ProjectWork, Tasks, Workflow, ACC operator surfaces.
 
+## Limited production pilot (2026-07-05)
+
+Production envelope for V2 New System mode:
+[`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
+
+- Allowed: Email read-only, ACC status/operator read-only, native admin/settings.
+- Not allowed in release shell menu: InspectionShell harness, stub write actions, GmailSend, ACC write.
+
 ## Native logging (Stage 4, 2026-07-03)
 
 | Port | Adapter | Registration |

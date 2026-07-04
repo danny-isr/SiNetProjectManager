@@ -62,25 +62,28 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     {
         var items = new List<NewShellMenuItem>();
 
-        // Email visual clone — opened via the shared factory so it binds the app-wide current project.
+        // Email — limited production pilot (read-only). Opened via the shared factory + app-wide project context.
         if (_services.GetService<IEmailWindowFactory>() is { } emailFactory
             && CanAccessFeature(AppFeatureCodes.ShellOpenEmailSurface))
         {
             items.Add(new NewShellMenuItem(
-                "דוא\"ל (שכפול חזותי)",
+                "דוא\"ל — קריאה בלבד",
                 () => ShowWindow(emailFactory.Create()),
-                "פתיחת מסך הדוא\"ל החדש (שכפול חזותי)"));
+                "פתיחת מסך דוא\"ל (Gmail read-only — production pilot)"));
         }
 
-        // Inspection shell — the InspectionShellView is a UserControl; host it in a plain window
-        // exactly like the legacy host's preview entry point (no task navigation here).
+#if DEBUG
+        // InspectionShellView is a developer harness only — NOT part of the limited production pilot.
+        // Release builds must not expose it in the shell menu. Dev entry points remain in V2 legacy
+        // MainWindow admin preview (OpenInspectionFromTask_Click) and standalone harness.
         if (CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
         {
             items.Add(new NewShellMenuItem(
-                "ביקורת (מעטפת)",
+                "ביקורת (מעטפת — DEBUG)",
                 OpenInspectionShell,
-                "פתיחת מעטפת הביקורת החדשה"));
+                "Developer harness — not for production users"));
         }
+#endif
 
         // Native user admin — App.Wpf surfaces + Infrastructure.Sql (see docs/NEW_SYSTEM_BOUNDARY.md).
         if (CanAccessFeature(AppFeatureCodes.UsersManage))

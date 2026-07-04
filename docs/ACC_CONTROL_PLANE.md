@@ -312,6 +312,20 @@ Current checks cover:
 - status-window inbox bootstrap execution path
 - settings-tab runtime-only read-only document lookup over `IAccDocumentService`
 
+## 5.1 Production host checklist (limited pilot)
+
+For V2 New System production pilot, ACC read/operator surfaces require the host registrations
+documented in [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) §8:
+
+| Requirement | Notes |
+| --- | --- |
+| `AddSiNetAutodesk()` in New System graph | Via `NewSystemServiceCollectionExtensions` |
+| `AccService:BaseUrl` / mode | `IAccServiceModeProvider` + DB setting |
+| Vault API key / secrets | Secret Setup + `VaultAccServiceKeyDiagnostics` |
+| Local mode `ITokenProvider` | V2 host glue only — not in standalone harness |
+| Reconciliation impl | Legacy `SiNetSQL` bound at host |
+| ACC write/upload/provisioning in New System WPF | **Blocked** until ACC-Write-Policy |
+
 ## 6. Next Slice
 
 The next ACC steps after this control-plane stabilization and A4 mapping closure should be:
