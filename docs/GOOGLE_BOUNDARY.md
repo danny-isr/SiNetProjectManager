@@ -46,7 +46,7 @@ decision for any behavior change.
 
 | Host | Google runtime path | `AddSiNetGoogle()` | `AddSiNetSecrets()` | Result |
 | --- | --- | --- | --- | --- |
-| `SiNetProjectManagerV2` production host | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` | No | Yes, via `AddSiNetNewSystemGraph()` | Vault is available to New System services, but production Google behavior remains legacy |
+| `SiNetProjectManagerV2` production host | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` for active legacy flows; native Gmail module is registered only for future New System consumers | Yes, via `AddSiNetNewSystemGraph()` | Yes, via `AddSiNetNewSystemGraph()` | Vault and native Gmail auth/session services are available to the New System graph, but production Google behavior remains legacy until a window/runtime slice explicitly adopts them |
 | `SiNet.App.Wpf` standalone harness | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` | Yes | Yes | Native Gmail is wired with vault-first client-secrets resolution when the secrets provider can resolve them; config fallback remains available only when the provider cannot supply a path |
 
 Implication: the clean Gmail module is real and testable, but it is **not** the production-host
@@ -93,13 +93,38 @@ Verified wiring:
 
 - `SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs` registers
   `AddSiNetSecrets()`.
-- `src/SiNet.App.Wpf/App.xaml.cs` documents Vault as the source of truth for Gmail client secrets and
-  binds only token-store override from `SINET_GOOGLE_TOKEN_STORE`.
+- `src/SiNet.App.Wpf/App.xaml.cs` documents Vault as the source of truth for Gmail client secrets,
+  binds only token-store override from `SINET_GOOGLE_TOKEN_STORE`, and restores connector sessions
+  through `IConnectorAuthService` instead of resolving `GmailClientProvider` directly.
 - The standalone `SiNet.App.Wpf` host now calls `AddSiNetSecrets()` as well, so
   `IGoogleClientSecretsPathProvider` is available there.
+- `src/SiNet.App.Wpf/Inbox/InboxViewModel.cs` now consumes `IConnectorAuthService` for connect/state
+  behavior instead of depending on `GmailClientProvider` directly.
+- `SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs` registers
+  `AddSiNetGoogle(ConfigureNewSystemGmail)` additively inside the New System graph, with token store
+  and app name mapped from the legacy host configuration, without switching legacy Google behavior.
 - Therefore, in the standalone harness, native Gmail sign-in is vault-first, with
   `Gmail:ClientSecretsPath` acting only as fallback when a usable provider-backed path is not
   available.
+
+### 3.4 Auth/session ownership
+
+Closed foundation shape for New System Gmail:
+
+- **Concrete session owner:** `GmailClientProvider`
+- **App/WPF-facing auth seam:** `IConnectorAuthService` via `GmailConnectorAuthService`
+- **Secrets materialization seam:** `IGoogleClientSecretsPathProvider`
+- **Silent restore path:** startup resolves `IConnectorAuthService` and calls `TryRestoreSessionAsync()`
+- **Interactive connect path:** explicit user action calls `IConnectorAuthService.LoginAsync()`
+
+Rules:
+
+- No WPF window should resolve `GmailClientProvider` directly for connect/state behavior.
+- No gateway should orchestrate OAuth on its own; gateways consume the shared provider/session.
+- The standalone harness keeps `SINET_GOOGLE_TOKEN_STORE` as a token-store override only.
+- The legacy production host now also registers the native Gmail module inside the New System graph,
+  but that registration is **additive foundation wiring only**. It does not switch active legacy
+  Google flows away from `GoogleService`.
 
 ## 4. User-level vs System-level Split
 
@@ -115,6 +140,20 @@ Rule of thumb:
 - **Mailbox behavior** stays user OAuth unless a later approved design says otherwise.
 - **Org-owned Sheets/Drive automation** must not be moved piecemeal; it needs an explicit ownership and
   permission strategy first.
+
+### 4.1 Capability policy map
+
+| Capability | Auth model | Scope status | Current policy |
+| --- | --- | --- | --- |
+| Gmail inbox read | User OAuth | Approved (`GmailReadonly`) | Native and allowed |
+| Gmail silent restore / explicit connect | User OAuth | Approved | Native and allowed |
+| Gmail send | User OAuth | Code present (`GmailSend`) | **Policy gap**: not broadly approved for window migration by default |
+| Gmail modify / labels / mark-read | User OAuth | Not added | Deferred |
+| Gmail full body / attachments | User OAuth | Read-side parity gap | Add only if the first real email window explicitly needs them |
+| Drive read/list/open | TBD (likely user OAuth or service account by domain) | Not defined | Deferred until a ProjectFiles consumer is selected |
+| Drive upload/write | TBD | Not defined | Deferred; do not implement ad hoc |
+| Sheets read/write/export | Candidate service account only after explicit design | Not defined | Deferred; keep under Reports ownership |
+| Reports generation / screenshot upload | Mixed legacy consumers today | Not defined | Deferred until a Reports boundary is selected |
 
 ## 5. Guardrails
 
@@ -139,9 +178,15 @@ Still deferred after the native Gmail slice:
 - Google Sheets ports and implementation
 - Legacy-host switch from `GoogleService` to the native module
 - Token-store strategy / one-time re-consent strategy across hosts
-- Vault wiring for the standalone `SiNet.App.Wpf` harness host
-- UI dependency cleanup: `InboxViewModel` still depends on concrete `GmailClientProvider` instead of auth abstraction
 - Any service-account move for Sheets/Drive
+
+Minimum parity decision before migrating the first real email window:
+
+- Required foundation: auth/session ownership, vault-first secrets path resolution, token-store
+  policy, read summaries, and explicit connect/restore behavior.
+- Optional read expansion: full body and attachments, but only if the chosen window genuinely
+  requires them.
+- Explicitly out for now: send-by-default adoption, modify/labels, Drive, Sheets, and reports.
 
 ## 7. Recommended Next Step
 

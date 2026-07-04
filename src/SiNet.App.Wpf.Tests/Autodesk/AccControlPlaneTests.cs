@@ -474,6 +474,42 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
+    public async Task Mode_switching_inbox_bootstrap_service_does_not_touch_local_executor_when_mode_is_remote()
+    {
+        const string body = """
+            {
+              "accHubDbId": 10,
+              "hubId": "b.hub-9",
+              "accProjectId": "b.remote-inbox",
+              "accRootFolderId": "remote-root",
+              "accInboxFolderId": "remote-inbox"
+            }
+            """;
+
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new ModeSwitchingAccInboxBootstrapService(
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com")),
+            new ThrowingAccInboxBootstrapLocalExecutor(),
+            new RemoteAccInboxBootstrapService(
+                new HttpClient(new StubHttpMessageHandler((request, _) =>
+                {
+                    Assert.Equal("https://acc.example.com/v1/acc/inbox/ensure", request.RequestUri?.AbsoluteUri);
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(body),
+                    });
+                })),
+                vault,
+                new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com"))));
+
+        var result = await sut.EnsureAsync();
+
+        Assert.Equal("b.remote-inbox", result.AccProjectId);
+        Assert.Equal("remote-inbox", result.AccInboxFolderId);
+    }
+
+    [Fact]
     public async Task Remote_inbox_bootstrap_service_uses_versioned_endpoint_and_maps_response()
     {
         const string body = """
@@ -879,6 +915,12 @@ public sealed class AccControlPlaneTests
     {
         public Task<AccInboxBootstrapResult> EnsureAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(result);
+    }
+
+    private sealed class ThrowingAccInboxBootstrapLocalExecutor : IAccInboxBootstrapLocalExecutor
+    {
+        public Task<AccInboxBootstrapResult> EnsureAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("local executor should not be used in remote mode");
     }
 
     private sealed class StubDbContextFactory(DbContextOptions<SiNetSQLDbContext> options) : IDbContextFactory<SiNetSQLDbContext>

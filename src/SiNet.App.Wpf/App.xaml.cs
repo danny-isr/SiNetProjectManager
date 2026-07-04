@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Common;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Secrets;
 
@@ -53,11 +54,18 @@ public partial class App : System.Windows.Application
 
         _services = services.BuildServiceProvider();
 
-        // Attempt a silent (no-browser) restore of a previously authorized Gmail session so a
-        // returning user is connected automatically. Runs off the UI thread and never blocks
-        // startup; the provider is non-throwing for the "not signed in" case.
-        var provider = _services.GetRequiredService<GmailClientProvider>();
-        _ = Task.Run(() => provider.TrySignInSilentlyAsync());
+        // Attempt a silent (no-browser) restore for any connector auth services registered in the
+        // New System graph. This keeps startup independent of concrete providers such as
+        // GmailClientProvider and scales to future connector-auth consumers without adding more
+        // WPF-side service knowledge.
+        var connectorAuthServices = _services.GetServices<IConnectorAuthService>().ToArray();
+        _ = Task.Run(async () =>
+        {
+            foreach (var authService in connectorAuthServices)
+            {
+                await authService.TryRestoreSessionAsync().ConfigureAwait(false);
+            }
+        });
 
         var window = _services.GetRequiredService<MainWindow>();
         window.Show();

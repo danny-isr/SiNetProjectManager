@@ -117,6 +117,9 @@ orchestration.
   `Mode = Local`, `BaseUrl = null`.
 - If `AccServiceBaseUrl` is present:
   `Mode = Remote`, and `BaseUrl` is trimmed plus normalized without a trailing slash.
+- If `Mode = Remote`, privileged/operator flows that have both local and remote implementations
+  must go through the remote `SiOffice.AccService` path; host-local bootstrap executors are
+  temporary glue for local mode only and must not be touched.
 
 ### Remote probes
 
@@ -162,6 +165,23 @@ The HTTP handler accepts self-signed certificates only for approved internal hos
 
 This list lives in `AccServiceControlPlaneOptions` and can be overridden by host code later if
 needed.
+
+### Capability map
+
+| Capability | Auth / execution model | Allowed in New System client now? | Required path / rule |
+| --- | --- | --- | --- |
+| ACC mode resolution (`AccService:BaseUrl`) | Host configuration | Yes | `IAccServiceModeProvider` is the single runtime source |
+| Health / diagnostics / API-key diagnostics | Service-level probe | Yes | Remote probes go through `SiOffice.AccService`; key material stays behind vault/secret seams |
+| Known-project discovery | Read-only | Yes | Local SQL-backed or remote service-backed through clean ports |
+| Live hub/project discovery | User-context read | Yes | Clean read ports only; no write side effects |
+| Folder browse / tree search | Read-only | Yes | Clean read ports only |
+| Item resolve / viewer-open info | Read-only | Yes | Never prove ACC truth from DB-only cached identifiers |
+| Read-only file existence / reconciliation | Read-only | Yes | `IAccInboxReconciliationService` / read adapters only; no automatic repair |
+| Inbox bootstrap ensure | Privileged | Operator/admin only | Remote mode must call `SiOffice.AccService`; local host glue exists only as temporary fallback for local mode |
+| Ensure project / ensure folders / ensure custom attributes | Privileged service-level | No | Deferred; server-required capability |
+| Upload / move / refile / metadata write | Privileged write path | No | Deferred; do not introduce before dedicated write slices |
+| Repair stale/missing reference | Mixed and side-effecting | No | Deferred until reconciliation ownership and write rules are explicit |
+| Admin probes beyond current remote surface | Privileged service-level | Partial | Add only through explicit service-boundary expansion |
 
 ## 3. Contract Note
 
@@ -245,7 +265,8 @@ The next ACC steps after this control-plane stabilization should be:
    - keep expanding native/admin consumers of catalog, discovery, browse, and lookup seams,
    - but do not introduce privileged write behavior.
 2. **Stage A3 — Reconciliation**
-   - introduce an explicit ACC-truth reconciliation contract and DTOs,
+   - stabilize the existing `IAccInboxReconciliationService` as an official read-only ACC-truth
+     capability,
    - keep it read-only in behavior,
    - and do not let DB-only identifiers become proof of ACC state.
 3. **Only after A2/A3:** approach provisioning, filing, and metadata-write slices separately.

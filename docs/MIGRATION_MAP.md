@@ -300,8 +300,9 @@ The Email/Google slice has a **native Gmail implementation** in the clean stack.
 `GoogleService` or on `SiNet.LegacyBridge` **inside the native module path**. This does **not** mean
 the production host has switched: `SiNetProjectManagerV2` still runs the legacy Google path.
 
-Active native flow: standalone `SiNet.App.Wpf` `InboxViewModel` → `IEmailGateway` →
-`GmailEmailGateway` → `GmailClientProvider` (OAuth / silent token restore) → Gmail API.
+Active native flow: standalone `SiNet.App.Wpf` `InboxViewModel` → `IEmailGateway` for reads and
+`IConnectorAuthService` for connect/restore state → `GmailEmailGateway` / `GmailConnectorAuthService`
+→ shared `GmailClientProvider` (OAuth / silent token restore) → Gmail API.
 
 | Deliverable | Status |
 | --- | --- |
@@ -310,7 +311,7 @@ Active native flow: standalone `SiNet.App.Wpf` `InboxViewModel` → `IEmailGatew
 | Native `GmailEmailGateway` (Gmail API → `EmailSummary`, label-scoped per project) | ✅ |
 | `GmailClientProvider` (silent token restore; returns `null` when not signed in, never throws) | ✅ |
 | `GmailOptions` config model (client secrets path, token store, app name, root label, interactive flag) | ✅ |
-| `AddSiNetGoogle()` / `AddSiNetGoogle(Action<GmailOptions>)` register `IEmailGateway` → native gateway | ✅ |
+| `AddSiNetGoogle()` / `AddSiNetGoogle(Action<GmailOptions>)` register native `IEmailGateway`, `IConnectorAuthService`, and `IEmailSender` over the shared Gmail provider | ✅ |
 | `SiNet.App.Composition` `AddSiNet(Action<GmailOptions>)` host configuration overload | ✅ |
 | `SiNet.App.Wpf` harness configures `GmailOptions` (env-var token-store override; vault-first client-secrets path via `AddSiNetSecrets()`, with config fallback only when provider-backed resolution is unavailable) | ✅ |
 | `SiNet.App.Wpf` inbox consumer (VM + `DataGrid`, empty/not-signed-in handled) | ✅ |
@@ -363,8 +364,10 @@ sign-in. The **current** module scope set is now `GmailReadonly` + `GmailSend` b
 native send; Gmail modify remains deferred.
 
 Active flow (sign-in): `SiNet.App.Wpf` "Connect Google" → `InboxViewModel.ConnectCommand`
-→ `GmailClientProvider.SignInInteractiveAsync` → Gmail OAuth consent → token store.
-At startup the host attempts `TrySignInSilentlyAsync` (no browser) to restore a prior session.
+→ `IConnectorAuthService.LoginAsync` → `GmailConnectorAuthService` → `GmailClientProvider.SignInInteractiveAsync`
+→ Gmail OAuth consent → token store.
+At startup the host attempts silent restore through all registered `IConnectorAuthService`
+instances, which currently means the Gmail adapter calling `TrySignInSilentlyAsync` (no browser).
 
 | Deliverable | Status |
 | --- | --- |
@@ -1055,10 +1058,11 @@ paths are **not behavior-equivalent**.
 | OAuth scopes | `GmailModify` **+ Sheets.Spreadsheets + Drive.DriveReadonly** | `GmailReadonly` + `GmailSend` (Gmail only) |
 | Token store | `%APPDATA%\SiNet\GoogleTokens` (shared) | **Independent** token store (separate from legacy) |
 | Capabilities | Gmail + **Sheets** + **Drive** | Gmail read/send only |
-| Sign-in | `LoginAsync` / `TryRestoreSessionAsync` (broad consent) | silent restore; interactive only if `AllowInteractiveSignIn`; **send needs re-consent** |
+| Sign-in | `LoginAsync` / `TryRestoreSessionAsync` (broad consent) | silent restore by default; explicit `IConnectorAuthService.LoginAsync` can force browser consent, while implicit prompts still honor `AllowInteractiveSignIn`; **send needs re-consent** |
 
-- `SiNetProjectManagerV2` (legacy host) does **not** call `AddSiNet`/`AddSiNetGoogle`; the native
-  Gmail stack is not registered there.
+- `SiNetProjectManagerV2` (legacy host) now registers `AddSiNetGoogle` inside
+  `AddSiNetNewSystemGraph()` so future New System consumers can use the native Gmail foundation,
+  but active legacy Google behavior still runs through the old host/runtime path.
 - `SiNet.App.Wpf` (modular host) calls `services.AddSiNet(ConfigureGmail)` → `AddSiNetGoogle`; no
   legacy `GoogleService`.
 - Switching the legacy host onto the native registration would change runtime sign-in behavior,

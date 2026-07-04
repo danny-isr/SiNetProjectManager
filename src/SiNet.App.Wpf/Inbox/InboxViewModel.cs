@@ -3,31 +3,32 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using SiNet.Application.Abstractions.Email;
-using SiNet.Infrastructure.Google;
+using SiNet.Application.Common;
 
 namespace SiNet.App.Wpf.Inbox;
 
 /// <summary>
 /// Minimal vertical-slice ViewModel that proves the new stack end-to-end: it resolves the native
 /// <see cref="IEmailGateway"/> port (served by <c>GmailEmailGateway</c> over the Gmail API) and
-/// lists a real per-project inbox. It also exposes an explicit "Connect Google" action that drives
-/// the native <see cref="GmailClientProvider"/> interactive sign-in. UI concerns (status text,
-/// busy flag) live here in the WPF layer, never in the connector.
+/// lists a real per-project inbox. It also exposes an explicit "Connect Google" action through the
+/// shared connector-auth port so WPF stays independent of the concrete Gmail session provider. UI
+/// concerns (status text, busy flag) live here in the WPF layer, never in the connector.
 /// </summary>
-public sealed class InboxViewModel : INotifyPropertyChanged
+public sealed class InboxViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IEmailGateway _emailGateway;
-    private readonly GmailClientProvider _gmail;
+    private readonly IConnectorAuthService _googleAuthService;
 
     private string _location = string.Empty;
     private string _projectName = string.Empty;
     private string _status = "Enter a location and project, then Load.";
     private bool _isBusy;
 
-    public InboxViewModel(IEmailGateway emailGateway, GmailClientProvider gmail)
+    public InboxViewModel(IEmailGateway emailGateway, IConnectorAuthService googleAuthService)
     {
         _emailGateway = emailGateway;
-        _gmail = gmail;
+        _googleAuthService = googleAuthService;
+        _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
     }
@@ -39,7 +40,7 @@ public sealed class InboxViewModel : INotifyPropertyChanged
     public ICommand ConnectCommand { get; }
 
     /// <summary>Reflects whether a Gmail session is currently established.</summary>
-    public bool IsConnected => _gmail.IsSignedIn;
+    public bool IsConnected => _googleAuthService.IsAuthenticated;
 
     public string Location
     {
@@ -79,14 +80,10 @@ public sealed class InboxViewModel : INotifyPropertyChanged
 
         try
         {
-            var result = await _gmail.SignInInteractiveAsync().ConfigureAwait(true);
-            Status = result switch
-            {
-                GmailSignInResult.Success => "Connected to Google. You can now load a project inbox.",
-                GmailSignInResult.NotConfigured =>
-                    "Google client secrets are not configured. Set the 'Gmail:ClientSecretsPath' setting.",
-                _ => "Google sign-in did not complete. Please try again.",
-            };
+            var connected = await _googleAuthService.LoginAsync().ConfigureAwait(true);
+            Status = connected
+                ? "Connected to Google. You can now load a project inbox."
+                : "Google sign-in did not complete. Verify the vault/config foundation and try again.";
         }
         catch (Exception ex)
         {
@@ -137,6 +134,20 @@ public sealed class InboxViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void Dispose()
+    {
+        _googleAuthService.AuthStateChanged -= OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged(bool isAuthenticated)
+    {
+        OnPropertyChanged(nameof(IsConnected));
+        if (!isAuthenticated && !IsBusy)
+        {
+            Status = "Google session is not connected.";
+        }
+    }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

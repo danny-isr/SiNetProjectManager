@@ -5,6 +5,7 @@ using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Autodesk;
+using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using SiNetProjectManagerV2.Services;
@@ -37,6 +38,7 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
         services.AddSiNetAutodesk();
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
+        services.AddSiNetGoogle(ConfigureNewSystemGmail);
         services.AddSiNetNewSystemWpf();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
@@ -44,5 +46,13 @@ public static class NewSystemServiceCollectionExtensions
         services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
 
         return services;
+    }
+
+    private static void ConfigureNewSystemGmail(GmailOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        options.TokenStorePath = AppConfiguration.GoogleTokenStorePath;
+        options.ApplicationName = AppConfiguration.GoogleApplicationName;
     }
 }
