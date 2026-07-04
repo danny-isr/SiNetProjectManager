@@ -191,6 +191,30 @@ Minimum parity decision before migrating the first real email window:
   parity decision is approved; it must not start consuming `GmailClientProvider`, `IConnectorAuthService`,
   or `IEmailSender` ad hoc.
 
+## 6.1 Drive / Sheets / Reports defer decision
+
+This foundation round makes the defer policy explicit:
+
+| Area | Current decision | Ownership gate before any runtime move |
+| --- | --- | --- |
+| Google Drive read/list/open | Deferred | Requires an approved `ProjectFiles` / storage-destination slice |
+| Google Drive upload/write | Deferred | Requires explicit storage ownership + auth model decision |
+| Google Sheets read/write/export | Deferred | Requires an approved `Reports` boundary and ownership model |
+| Report generation / screenshot upload | Deferred | Requires the report/export consumer to be selected first |
+
+Auth policy before any later move:
+
+- Gmail mailbox behavior stays **user OAuth**.
+- Drive/Sheets/report automation is a separate ownership problem and is a **candidate** for service
+  account or other org-owned auth only after explicit design.
+- Do **not** choose that auth model opportunistically inside Gmail migration work.
+
+Guardrails:
+
+- No runtime movement of Drive, Sheets, or report/export code until a real consumer slice is named.
+- No ad-hoc ports or infra adapters for Drive/Sheets just because the native Gmail module exists.
+- The first real email window must not become the accidental migration home for Drive or Sheets.
+
 ## 7. Recommended Next Step
 
 Google should **not** be the next implementation-heavy slice after ACC. The safe follow-up is to

@@ -845,6 +845,17 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
+    public void Acc_control_plane_doc_records_server_only_map_and_contract_extraction_decision()
+    {
+        var doc = File.ReadAllText(Path.Combine(Boundary.RepoPaths.RepoRoot, "docs", "ACC_CONTROL_PLANE.md"));
+
+        Assert.Contains("Authoritative server-only map", doc, StringComparison.Ordinal);
+        Assert.Contains("ensure project", doc, StringComparison.Ordinal);
+        Assert.Contains("upload file", doc, StringComparison.Ordinal);
+        Assert.Contains("perform a thin contract extraction yet", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Legacy_new_system_graph_registers_autodesk_core_before_status_window()
     {
         var source = File.ReadAllText(Path.Combine(

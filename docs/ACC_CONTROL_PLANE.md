@@ -1,6 +1,6 @@
 # ACC Control Plane
 
-> **Status:** Stage A1 stabilized and reconciled to code, with the first native A3 consumer anchored in the status window (2026-07-04)  
+> **Status:** Stages A1-A4 mapped and reconciled to code, with the first native A3 consumer anchored in the status window (2026-07-04)  
 > **Scope:** mode + health + diagnostics + key metadata + catalog/discovery/search/browse/read-only lookup + read-only inbox reconciliation, with inbox bootstrap classified as an admin-adjacent operator action rather than general ACC runtime orchestration
 
 This document records the **current code truth** for the native ACC control-plane and adjacent
@@ -188,6 +188,29 @@ needed.
 | Repair stale/missing reference | Mixed and side-effecting | No | Deferred until reconciliation ownership and write rules are explicit |
 | Admin probes beyond current remote surface | Privileged service-level | Partial | Add only through explicit service-boundary expansion |
 
+### Authoritative server-only map
+
+These capabilities are **not approved** for direct New System client migration yet and must remain
+server-required, deferred, or explicitly operator-only until a later slice says otherwise:
+
+| Capability | Classification now | Why it is not a normal client capability yet |
+| --- | --- | --- |
+| `ensure project` | Server-only | Org/tenant-wide provisioning side effects |
+| `ensure folders` | Server-only | Privileged bootstrap/provisioning, not read-only navigation |
+| `ensure custom attributes / attribute definitions` | Server-only | Shared schema/metadata ownership across projects |
+| inbox bootstrap ensure | Operator/admin only | Allowed only as explicit operator tooling; remote in service mode, host glue only in local mode |
+| upload file | Deferred privileged write | Must not advance DB/cache/workflow before ACC write ordering is explicitly designed |
+| move / refile file | Deferred privileged write | Couples ACC state, DB/cache, and orchestration semantics |
+| metadata/custom attribute write | Deferred privileged write | Shared write semantics still belong to later slices |
+| stale/missing reference repair | Deferred side-effecting recovery | Requires explicit repair ordering and ownership rules |
+
+Rules:
+
+- When `AccService:BaseUrl` is configured, privileged execution belongs to `SiOffice.AccService`.
+- `SiNet.App.Wpf` may consume read-only seams and explicit operator/admin actions only.
+- Write-heavy ACC migration does **not** begin from window parity; it begins from an approved
+  service/write slice with ordering and rollback rules.
+
 ### Reconciliation truth buckets
 
 For future New System windows, treat detailed reconciliation statuses as an implementation detail and
@@ -221,6 +244,14 @@ Why this is mirrored instead of referenced directly:
 
 Until the contract is extracted to a neutral assembly, keep the mirrored constant aligned with the
 legacy source of truth.
+
+Decision for the current foundation round:
+
+- **Do not** perform a thin contract extraction yet just to satisfy planning symmetry.
+- The current mirrored constants are acceptable temporary glue because they are small, isolated, and
+  already covered by tests/docs.
+- Revisit extraction only when a later write-heavy or broader service-consumer slice needs more than
+  the current API-version/header constants.
 
 ## 4. What Is Still Deferred
 
@@ -283,14 +314,11 @@ Current checks cover:
 
 ## 6. Next Slice
 
-The next ACC steps after this control-plane stabilization should be:
+The next ACC steps after this control-plane stabilization and A4 mapping closure should be:
 
-1. **Stage A2 — Read / Discovery**
-   - keep expanding native/admin consumers of catalog, discovery, browse, and lookup seams,
-   - but do not introduce privileged write behavior.
-2. **Stage A3 — Reconciliation**
-   - stabilize the existing `IAccInboxReconciliationService` as an official read-only ACC-truth
-     capability,
-   - keep it read-only in behavior,
-   - and do not let DB-only identifiers become proof of ACC state.
-3. **Only after A2/A3:** approach provisioning, filing, and metadata-write slices separately.
+1. **Approach provisioning only through a dedicated server-side slice**
+   - do not smuggle provisioning into window migration.
+2. **Approach filing / move / metadata-write as a separate write-ordering slice**
+   - define ACC-write-before-cache semantics explicitly.
+3. **Keep future native windows on the read/reconciliation/operator substrate**
+   - until those write rules are approved.

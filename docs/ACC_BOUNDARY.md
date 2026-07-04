@@ -250,6 +250,12 @@ Wave 1 now contains the following implemented pieces:
    - `IAccInboxReconciliationService` and its DTOs now live in `SiNet.Application.Abstractions.Autodesk`.
    - `AccInboxReconciliationService` remains the runtime implementation for now, but it now implements the Application contract instead of owning a legacy-local interface.
    - Active consumers in the host / VM / MoveToProject paths now resolve the Application seam.
+13. **A4 server-only map closure**
+   - `docs/ACC_CONTROL_PLANE.md` is now the authoritative classification for what remains
+     read-only/operator-safe versus server-only/deferred.
+   - No additional contract extraction is required before future read-only window work; mirrored
+     ACC service constants remain acceptable temporary glue until a write-heavy or broader service
+     consumer slice needs more.
 
 Wave 1 is considered **closed at the runtime boundary**. What remains is the next phase:
 extracting more orchestration/provisioning behavior out of `SiNetSQL` without reopening direct

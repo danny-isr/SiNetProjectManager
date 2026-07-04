@@ -82,6 +82,16 @@ public sealed class GoogleFoundationClosureTests
         Assert.Contains("ArchiveCommand = Stub();", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Google_boundary_doc_records_drive_sheets_reports_defer_policy()
+    {
+        var source = ReadRepoFile("docs/GOOGLE_BOUNDARY.md");
+
+        Assert.Contains("Drive / Sheets / Reports defer decision", source, StringComparison.Ordinal);
+        Assert.Contains("Requires an approved `ProjectFiles` / storage-destination slice", source, StringComparison.Ordinal);
+        Assert.Contains("No runtime movement of Drive, Sheets, or report/export code until a real consumer slice is named.", source, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
