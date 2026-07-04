@@ -17,13 +17,12 @@
         d:DataContext="{d:DesignInstance Type=local:EmailWindowViewModel, IsDesignTimeCreatable=True}">
 
     <!--
-        VISUAL CLONE of the legacy SiNetProjectManagerV2/WPFUserControl/EmailManagementView.xaml.
+        FIRST REAL READ-ONLY SLICE over the legacy SiNetProjectManagerV2/WPFUserControl/EmailManagementView.xaml.
         Structure (top status + project/Gmail filters strip, selected-project info strip, and the 3-pane
         content area: email list on the right, email viewer in the center, context/calendar placeholder
-        on the left) is reproduced for visual parity. Commands are stubbed in EmailWindowViewModel
-        ("not wired yet"); data is fake/design-time only (EmailWindowDesignData). No DB / Gmail / Outlook
-        / file-system / project-linking / task-creation / workflow logic lives behind this window.
-        The old EmailManagementView remains the visual reference / legacy source; this is the clone target.
+        on the left) is kept for visual parity. The window now loads real Gmail summaries through the
+        clean Application/Infrastructure path, while body details, attachments-open, send/modify, and
+        workflow actions remain deferred. The old EmailManagementView stays the visual reference.
     -->
 
     <Window.Resources>
@@ -134,6 +133,10 @@
 
                         <!-- Refresh + calendar toggle + help. -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="חבר Google"
+                                    Command="{Binding ConnectCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    ToolTip="התחברות ל-Gmail" />
                             <Button Content="&#x1F504;"
                                     Command="{Binding RefreshCommand}"
                                     Style="{StaticResource ActionButton}"
@@ -485,7 +488,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Foreground="#555" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1"
-                               Text="\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D3\u05D5\u05D2\u05DE\u05D4 \u05D1\u05DC\u05D1\u05D3"
+                               Text="{Binding RuntimeSummary}"
                                Foreground="#999"
                                FontSize="{DynamicResource SiTextSmallFontSize}"
                                VerticalAlignment="Center" />

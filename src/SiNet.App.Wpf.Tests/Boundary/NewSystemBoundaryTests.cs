@@ -98,6 +98,26 @@ public sealed class NewSystemBoundaryTests
     }
 
     [Fact]
+    public void New_system_boundary_doc_records_gmail_foundation_rules()
+    {
+        var doc = File.ReadAllText(Path.Combine(RepoRoot, "docs", "NEW_SYSTEM_BOUNDARY.md"));
+
+        Assert.Contains("Native Gmail foundation", doc, StringComparison.Ordinal);
+        Assert.Contains("IConnectorAuthService", doc, StringComparison.Ordinal);
+        Assert.Contains("Drive / Sheets / report/export work is **not** part of Gmail window migration", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void New_system_boundary_doc_records_acc_read_first_and_write_defer_rules()
+    {
+        var doc = File.ReadAllText(Path.Combine(RepoRoot, "docs", "NEW_SYSTEM_BOUNDARY.md"));
+
+        Assert.Contains("ACC write-side rule", doc, StringComparison.Ordinal);
+        Assert.Contains("server-only or deferred", doc, StringComparison.Ordinal);
+        Assert.Contains("provisioning / upload / move / metadata-write behavior", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NewShellFactory_native_user_admin_uses_App_Wpf_host_windows()
     {
         var source = File.ReadAllText(NewShellFactoryPath);

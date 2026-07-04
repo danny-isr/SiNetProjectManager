@@ -21,6 +21,7 @@ namespace SiNet.Application.Projects;
 /// <param name="IsActive"><see langword="true"/> for active projects; <see langword="false"/> for closed ones (drives include-closed filtering).</param>
 /// <param name="StatusId">Project status id for id-based filtering; <see langword="null"/> when unknown.</param>
 /// <param name="JobTypeIds">Linked job / project type ids for id-based filtering; empty when none.</param>
+/// <param name="ProjectLabelName">Canonical project label leaf (legacy <c>NameAndNumber</c>) used by Gmail project-label lookups; <see langword="null"/> when unavailable.</param>
 public sealed record ProjectSummaryDto(
     int ProjectId,
     string ProjectNumber,
@@ -32,4 +33,5 @@ public sealed record ProjectSummaryDto(
     string? AssignedUserName,
     bool IsActive,
     int? StatusId = null,
-    IReadOnlyList<int>? JobTypeIds = null);
+    IReadOnlyList<int>? JobTypeIds = null,
+    string? ProjectLabelName = null);

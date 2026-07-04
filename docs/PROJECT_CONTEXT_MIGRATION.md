@@ -194,7 +194,7 @@ Confirmed consumers of project selection / current project (legacy):
 | **WorkflowDashboardView** / `WorkflowManagementWindow` | Project combo (`SelectedProject` / `_dashboardSelectedProject`) scopes dashboard/policy queries. |
 | **MainWindow (title/header)** | Subscribes to `ActiveProjectContext.ActiveProjectChanged` (see §5). |
 | **Move-to-project / continuation flows** | `ProjectSelectorDialog` → `SelectedProject` (e.g. `WpfActionContinuationUiHost`, `EmailManagementView` file dialog). |
-| **New Email visual clone** (`Surfaces/Email/EmailWindowView`) | Embeds shared `ProjectSelectorView`; `EmailWindowViewModel` observes `ICurrentProjectContext` (implemented). Gmail/triage remains visual-clone scope. |
+| **New Email window** (`Surfaces/Email/EmailWindowView`) | Embeds shared `ProjectSelectorView`; `EmailWindowViewModel` observes `ICurrentProjectContext` (implemented). Real Gmail summary loading is now connected through `IEmailGateway`, while write/triage/workflow actions remain deferred. |
 
 ---
 

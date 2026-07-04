@@ -3,22 +3,23 @@ using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Common;
 using SiNet.Application.Projects;
 using SiNet.Application.WorkSurfaces;
+using SiNet.Domain.ValueObjects;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
 
 /// <summary>
-/// View model for <see cref="EmailWindowView"/> — the visual clone of the legacy
-/// <c>EmailManagementView</c> (email management window).
+/// View model for <see cref="EmailWindowView"/> — the first real read-only New System slice of the
+/// legacy <c>EmailManagementView</c> (email management window).
 /// <para>
-/// <b>Visual-clone slice only.</b> This view model is intentionally thin and UI-facing: it exposes the
-/// same general bindable surface (title, search text, selected folder/status, email list, selected
-/// email + body, attachments, status bar) and the same command names as the old screen so the window
-/// looks and feels familiar, but it carries <b>no</b> heavy legacy logic. It does NOT touch the
-/// database, load real email, call Gmail/Outlook, access the file system, link projects, create tasks,
-/// or mutate workflow. Every command is stubbed: it simply reports "not wired yet" via
-/// <see cref="StatusMessage"/>. Data is fake/design-time only (<see cref="EmailWindowDesignData"/>).
+/// <b>Read-only summary slice.</b> This view model keeps the visual-clone layout but now loads real
+/// Gmail-backed email summaries for the selected project through <see cref="IEmailGateway"/> and
+/// drives auth/session through <see cref="IConnectorAuthService"/>. It remains intentionally narrow:
+/// no send/reply/forward/mark-handled workflow, no project-linking side effects, no task creation,
+/// no file opens, and no workflow mutation.
 /// </para>
 /// <para>
 /// Workflow-first direction is preserved structurally: the window can later be opened from a
@@ -30,86 +31,108 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// Project selection is <b>not owned here</b>: the window hosts the shared
 /// <see cref="ProjectSelectorViewModel"/> (bound in XAML via <see cref="ProjectSelector"/>) and only
 /// <i>observes</i> the shared <see cref="ICurrentProjectContext"/> so <see cref="ActiveProjectDisplay"/>
-/// reflects the Current Project (see <c>docs/PROJECTS.md</c> §5/§9). Both the selector and this view
-/// model share one in-memory context in this slice; no real project source or email filtering is wired.
+/// reflects the Current Project (see <c>docs/PROJECTS.md</c> §5/§9).
 /// </para>
 /// <para>
-/// This is the visual-clone target. The old <c>EmailManagementView</c> remains the visual reference /
-/// legacy source and is not modified.
+/// The old <c>EmailManagementView</c> remains the visual reference / legacy source and is not modified.
+/// Body and attachment-detail parity are intentionally deferred; the viewer therefore renders explicit
+/// placeholder text once a summary is selected.
 /// </para>
 /// </summary>
 public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 {
-    private const string NotWiredYet =
-        "\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05D8\u05E8\u05DD \u05D7\u05D5\u05D1\u05E8\u05D4 (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u05D1\u05DC\u05D1\u05D3)"; // "This action is not wired yet (visual shell only)"
-
     private readonly ICurrentProjectContext _currentProject;
+    private readonly IEmailGateway _emailGateway;
+    private readonly IConnectorAuthService _googleAuthService;
+    private IReadOnlyList<EmailSummary> _loadedEmails = [];
 
     private string _searchText = string.Empty;
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
     private EmailListRow? _selectedEmail;
     private bool _isBusy;
-    private string _activeProjectDisplay =
-        "\u05DC\u05D0 \u05E0\u05D1\u05D7\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8"; // "No project selected"
-    private string _statusMessage =
-        "\u05DE\u05D5\u05DB\u05DF (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u2014 \u05DC\u05DC\u05D0 \u05D7\u05D9\u05D1\u05D5\u05E8 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD)"; // "Ready (visual shell — no data connected)"
+    private string _activeProjectDisplay = "לא נבחר פרויקט";
+    private string _statusMessage = "בחר פרויקט וחבר Gmail כדי לטעון מיילים.";
 
     public EmailWindowViewModel()
-        : this(new FakeProjectQueryService(), new FakeProjectFilterOptionsService(), new InMemoryCurrentProjectContext())
+        : this(
+            new FakeProjectQueryService(),
+            new FakeProjectFilterOptionsService(),
+            new InMemoryCurrentProjectContext(),
+            new DesignEmailGateway(),
+            new DesignConnectorAuthService())
+    {
+    }
+
+    /// <summary>
+    /// Convenience constructor used by project-context tests. Real runtime resolution should use the
+    /// full constructor so Gmail auth/read seams come from DI.
+    /// </summary>
+    public EmailWindowViewModel(
+        IProjectQueryService projectQuery,
+        IProjectFilterOptionsService filterOptions,
+        ICurrentProjectContext currentProject)
+        : this(
+            projectQuery,
+            filterOptions,
+            currentProject,
+            new DesignEmailGateway(),
+            new DesignConnectorAuthService())
     {
     }
 
     /// <summary>
     /// Primary constructor: hosts the shared <see cref="ProjectSelectorViewModel"/> over the supplied
     /// read ports and shared current-project context, and observes that context for display updates.
+    /// Gmail auth/session remains behind <see cref="IConnectorAuthService"/> and read access behind
+    /// <see cref="IEmailGateway"/>.
     /// </summary>
     public EmailWindowViewModel(
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService filterOptions,
-        ICurrentProjectContext currentProject)
+        ICurrentProjectContext currentProject,
+        IEmailGateway emailGateway,
+        IConnectorAuthService googleAuthService)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
+        _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
+        _googleAuthService = googleAuthService ?? throw new ArgumentNullException(nameof(googleAuthService));
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
-        Emails = new ObservableCollection<EmailListRow>(EmailWindowDesignData.SampleEmails);
-        Attachments = new ObservableCollection<EmailAttachmentRow>(EmailWindowDesignData.SampleAttachments);
+        Emails = [];
+        Attachments = [];
 
         _selectedFolder = Folders.FirstOrDefault();
         _selectedStatus = StatusOptions.FirstOrDefault();
-        _selectedEmail = Emails.FirstOrDefault();
 
         ProjectSelector = new ProjectSelectorViewModel(projectQuery, filterOptions, _currentProject);
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
+        _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
         _ = ProjectSelector.InitializeAsync();
 
-        RefreshCommand = Stub();
-        SearchCommand = Stub();
-        OpenEmailCommand = Stub();
-        LinkToProjectCommand = Stub();
-        CreateTaskFromEmailCommand = Stub();
-        MarkHandledCommand = Stub();
-        ArchiveCommand = Stub();
-        ReplyCommand = Stub();
-        ForwardCommand = Stub();
-        OpenAttachmentCommand = Stub();
-        CompleteTaskCommand = Stub();
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, CanLoadEmails);
+        SearchCommand = new AsyncRelayCommand(SearchAsync, CanLoadEmails);
+        ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
+        OpenEmailCommand = new AsyncRelayCommand(OpenSelectedEmailAsync, () => !IsBusy && SelectedEmail is not null);
+        LinkToProjectCommand = DeferredAction("שיוך בפועל לפרויקט עדיין לא אושר בחלון החדש.");
+        CreateTaskFromEmailCommand = DeferredAction("יצירת משימה מהמייל תגיע רק אחרי חיבור ה-Workflow/Tasks.");
+        MarkHandledCommand = DeferredAction("Move-to-project / mark-handled עדיין מחוץ לסלייס הקריאה בלבד.");
+        ArchiveCommand = DeferredAction("ארכוב וטיפול בסטטוסים עדיין לא חלק מהסלייס הזה.");
+        ReplyCommand = DeferredAction("Reply/Send נשארים מחוץ לסלייס עד לאישור policy מפורש.");
+        ForwardCommand = DeferredAction("Forward/Send נשארים מחוץ לסלייס עד לאישור policy מפורש.");
+        OpenAttachmentCommand = DeferredAction("קריאת attachment details תגיע רק אם parity מלא יאושר.");
+        CompleteTaskCommand = DeferredAction("סיום משימה עדיין לא מחובר בחלון הדוא\"ל החדש.");
     }
 
-    /// <summary>Window title, mirrors the legacy email management window.</summary>
-    public string Title => "\u05E0\u05D9\u05D4\u05D5\u05DC \u05D3\u05D5\u05D0\u05E8 \u2014 \u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9"; // "Email management — visual shell"
+    /// <summary>Window title for the first real read-only email slice.</summary>
+    public string Title => "ניהול דואר — קריאה בלבד";
 
-    /// <summary>
-    /// Shared, reusable Project Selector hosted by this window. Email does not own project selection;
-    /// selecting a project here publishes it to the shared <see cref="ICurrentProjectContext"/>.
-    /// </summary>
     public ProjectSelectorViewModel ProjectSelector { get; }
 
-    /// <summary>Project/context label shown in the selected-project info strip; follows the Current Project.</summary>
     public string ActiveProjectDisplay
     {
         get => _activeProjectDisplay;
@@ -124,7 +147,13 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<EmailAttachmentRow> Attachments { get; }
 
-    /// <summary>Free-text search box value (bound, but no search is performed in this slice).</summary>
+    public bool IsConnected => _googleAuthService.IsAuthenticated;
+
+    public string RuntimeSummary =>
+        IsConnected
+            ? "Gmail מחובר — טעינת summaries בלבד"
+            : "Gmail לא מחובר";
+
     public string SearchText
     {
         get => _searchText;
@@ -150,23 +179,34 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _selectedEmail, value))
             {
+                ReplaceAttachmentsForSelectedEmail();
                 OnPropertyChanged(nameof(HasSelectedEmail));
                 OnPropertyChanged(nameof(SelectedEmailBody));
+                (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
 
-    /// <summary>True when an email is selected; drives the viewer/empty-state visibility.</summary>
     public bool HasSelectedEmail => _selectedEmail is not null;
 
-    /// <summary>Fake plain-text body preview for the selected email (design-time only).</summary>
     public string SelectedEmailBody =>
-        _selectedEmail is null ? string.Empty : EmailWindowDesignData.SampleBody;
+        _selectedEmail is null
+            ? string.Empty
+            : $"נבחר מייל אמיתי מ-Gmail.\n\nשולח: {_selectedEmail.Sender}\nנושא: {_selectedEmail.Subject}\nהתקבל: {_selectedEmail.ReceivedDisplay}\n\nתוכן מלא וקריאת attachments עדיין מחוץ לסלייס הקריאה בלבד.";
 
     public bool IsBusy
     {
         get => _isBusy;
-        set => SetField(ref _isBusy, value);
+        private set
+        {
+            if (SetField(ref _isBusy, value))
+            {
+                (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public string StatusMessage
@@ -177,6 +217,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public ICommand RefreshCommand { get; }
     public ICommand SearchCommand { get; }
+    public ICommand ConnectCommand { get; }
     public ICommand OpenEmailCommand { get; }
     public ICommand LinkToProjectCommand { get; }
     public ICommand CreateTaskFromEmailCommand { get; }
@@ -187,11 +228,6 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     public ICommand OpenAttachmentCommand { get; }
     public ICommand CompleteTaskCommand { get; }
 
-    /// <summary>
-    /// Placeholder hook for the workflow-first open path. A later slice will project the task's
-    /// project/email into the header and (read-only) data; for the visual-clone slice it only records
-    /// that a context was supplied. No workflow is started, advanced, or mutated here.
-    /// </summary>
     public void ApplyContext(WorkSurfaceContext? context)
     {
         if (context is null)
@@ -199,30 +235,278 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        StatusMessage =
-            "\u05E0\u05E4\u05EA\u05D7 \u05DE\u05EA\u05D5\u05DA \u05DE\u05E9\u05D9\u05DE\u05D4 (\u05D7\u05D9\u05D1\u05D5\u05E8 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D9\u05D5\u05E9\u05DC\u05DD \u05D1\u05D4\u05DE\u05E9\u05DA)"; // "Opened from a task (data wiring to follow)"
+        StatusMessage = "נפתח מתוך משימה. ניתן לטעון summaries לפרויקט הנבחר; workflow actions עדיין לא חוברו.";
     }
 
-    private AsyncRelayCommand Stub() => new(() =>
+    public async Task ConnectAsync()
     {
-        StatusMessage = NotWiredYet;
+        IsBusy = true;
+        StatusMessage = "מתחבר ל-Google… ייתכן שייפתח דפדפן.";
+
+        try
+        {
+            var connected = await _googleAuthService.LoginAsync().ConfigureAwait(true);
+            StatusMessage = connected
+                ? "החיבור ל-Google הושלם. ניתן לרענן כדי לטעון מיילים."
+                : "ההתחברות ל-Google לא הושלמה. בדוק את תשתית ה-auth ונסה שוב.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"התחברות ל-Google נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            OnPropertyChanged(nameof(IsConnected));
+            OnPropertyChanged(nameof(RuntimeSummary));
+        }
+    }
+
+    public async Task RefreshAsync()
+    {
+        var projectLabelName = ResolveCurrentProjectLabelName();
+        if (projectLabelName is null)
+        {
+            StatusMessage = "יש לבחור פרויקט עם Project label תקין לפני טעינת מיילים.";
+            ReplaceEmailRows([]);
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = $"טוען מיילים עבור {projectLabelName}…";
+        try
+        {
+            _loadedEmails = await _emailGateway
+                .GetProjectEmailsByProjectLabelAsync(projectLabelName)
+                .ConfigureAwait(true);
+
+            ApplySearchFilter();
+
+            StatusMessage = Emails.Count == 0
+                ? "לא נמצאו מיילים לפרויקט הנבחר (או ש-Gmail אינו מחובר)."
+                : $"נטענו {Emails.Count} מיילים עבור {projectLabelName}.";
+        }
+        catch (Exception ex)
+        {
+            _loadedEmails = [];
+            ReplaceEmailRows([]);
+            StatusMessage = $"טעינת המיילים נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public Task SearchAsync() => RefreshAsync();
+
+    public Task OpenSelectedEmailAsync()
+    {
+        if (SelectedEmail is null)
+        {
+            StatusMessage = "לא נבחר מייל.";
+            return Task.CompletedTask;
+        }
+
+        StatusMessage = "Summary email נטען. body מלא ו-attachments עדיין deferred.";
+        return Task.CompletedTask;
+    }
+
+    private bool CanLoadEmails() =>
+        !IsBusy && _currentProject.CurrentProject is not null && !string.IsNullOrWhiteSpace(ResolveCurrentProjectLabelName());
+
+    private AsyncRelayCommand DeferredAction(string message) => new(() =>
+    {
+        StatusMessage = message;
         return Task.CompletedTask;
     });
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
-        => UpdateActiveProjectDisplay(e.Project);
+    {
+        UpdateActiveProjectDisplay(e.Project);
+        ReplaceEmailRows([]);
+        _loadedEmails = [];
+        StatusMessage = e.Project is null
+            ? "לא נבחר פרויקט."
+            : IsConnected
+                ? "הפרויקט הוחלף. לחץ רענן כדי לטעון את המיילים שלו."
+                : "הפרויקט הוחלף. התחבר ל-Google ואז לחץ רענן.";
+        (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    private void OnAuthStateChanged(bool isAuthenticated)
+    {
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(RuntimeSummary));
+        if (!IsBusy)
+        {
+            StatusMessage = isAuthenticated
+                ? "החיבור ל-Google זמין. ניתן לרענן כדי לטעון מיילים."
+                : "החיבור ל-Google נותק.";
+        }
+
+        (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    private string? ResolveCurrentProjectLabelName()
+    {
+        var project = _currentProject.CurrentProject;
+        if (project is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(project.ProjectLabelName))
+        {
+            return project.ProjectLabelName.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(project.ProjectNumber) && !string.IsNullOrWhiteSpace(project.ProjectName))
+        {
+            return $"{project.ProjectNumber} — {project.ProjectName}";
+        }
+
+        return null;
+    }
+
+    private void ApplySearchFilter()
+    {
+        IEnumerable<EmailSummary> filtered = _loadedEmails;
+        var query = SearchText.Trim();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            filtered = filtered.Where(email =>
+                email.Subject.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || email.From.Value.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+
+        ReplaceEmailRows(filtered
+            .OrderByDescending(static email => email.ReceivedAt)
+            .Select(ToEmailListRow)
+            .ToList());
+    }
+
+    private void ReplaceEmailRows(IReadOnlyList<EmailListRow> rows)
+    {
+        Emails.Clear();
+        foreach (var row in rows)
+        {
+            Emails.Add(row);
+        }
+
+        SelectedEmail = Emails.FirstOrDefault();
+        UpdateFolderSummaries(rows);
+    }
+
+    private void ReplaceAttachmentsForSelectedEmail()
+    {
+        Attachments.Clear();
+        if (SelectedEmail is null)
+        {
+            return;
+        }
+
+        if (SelectedEmail.HasAttachments)
+        {
+            Attachments.Add(new EmailAttachmentRow(
+                "Attachment details pending parity slice",
+                "Deferred",
+                "Summary only"));
+        }
+    }
+
+    private void UpdateFolderSummaries(IReadOnlyList<EmailListRow> rows)
+    {
+        var total = rows.Count;
+        var withAttachments = rows.Count(static row => row.HasAttachments);
+        var unread = rows.Count(static row => row.IsUnread);
+        var assigned = rows.Count(static row => row.IsAssigned);
+
+        Folders.Clear();
+        Folders.Add(new EmailFolderRow("מיילים לפרויקט", total));
+        Folders.Add(new EmailFolderRow("עם קבצים מצורפים", withAttachments));
+        Folders.Add(new EmailFolderRow("לא נקראו", unread));
+        Folders.Add(new EmailFolderRow("משויכים לפרויקט", assigned));
+
+        _selectedFolder = Folders.FirstOrDefault();
+        OnPropertyChanged(nameof(SelectedFolder));
+    }
 
     private void UpdateActiveProjectDisplay(ProjectSummaryDto? project)
     {
         ActiveProjectDisplay = project is null
-            ? "\u05DC\u05D0 \u05E0\u05D1\u05D7\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" // "No project selected"
-            : $"{project.ProjectNumber} \u2014 {project.ProjectName}";
+            ? "לא נבחר פרויקט"
+            : $"{project.ProjectNumber} — {project.ProjectName}";
     }
 
-    /// <summary>Unsubscribes from the shared context and disposes the hosted selector to avoid leaks.</summary>
+    private static EmailListRow ToEmailListRow(EmailSummary summary) => new(
+        Id: summary.MessageId,
+        Sender: summary.From.Value,
+        Subject: string.IsNullOrWhiteSpace(summary.Subject) ? "(ללא נושא)" : summary.Subject,
+        Preview: summary.HasAttachments ? "Gmail summary loaded. Attachment/body details are deferred." : "Gmail summary loaded.",
+        ReceivedOn: summary.ReceivedAt == DateTimeOffset.MinValue ? DateTime.MinValue : summary.ReceivedAt.LocalDateTime,
+        GroupName: "מיילים לפרויקט",
+        IsUnread: false,
+        IsAssigned: true,
+        AssignedProjectName: null,
+        AttachmentCount: summary.HasAttachments ? 1 : 0);
+
     public void Dispose()
     {
         _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
+        _googleAuthService.AuthStateChanged -= OnAuthStateChanged;
         ProjectSelector.Dispose();
+    }
+
+    private sealed class DesignEmailGateway : IEmailGateway
+    {
+        private static readonly IReadOnlyList<EmailSummary> SampleEmails = EmailWindowDesignData.SampleEmails
+            .Select(static row => new EmailSummary(
+                row.Id,
+                $"thread-{row.Id}",
+                EmailAddress.CreateOrFallback(row.Sender),
+                row.Subject,
+                row.ReceivedOn == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(row.ReceivedOn),
+                row.HasAttachments))
+            .ToList();
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(SampleEmails);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(SampleEmails);
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(SampleEmails.FirstOrDefault(email => string.Equals(email.MessageId, messageId, StringComparison.Ordinal)));
+    }
+
+    private sealed class DesignConnectorAuthService : IConnectorAuthService
+    {
+        public bool IsAuthenticated { get; private set; }
+
+        public event Action<bool>? AuthStateChanged;
+
+        public Task<bool> LoginAsync(CancellationToken cancellationToken = default)
+        {
+            IsAuthenticated = true;
+            AuthStateChanged?.Invoke(true);
+            return Task.FromResult(true);
+        }
+
+        public void Logout()
+        {
+            IsAuthenticated = false;
+            AuthStateChanged?.Invoke(false);
+        }
+
+        public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(IsAuthenticated);
     }
 }

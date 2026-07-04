@@ -51,48 +51,106 @@ public sealed class GmailEmailGateway : IEmailGateway
             return Array.Empty<EmailSummary>();
         }
 
-        var summaries = new List<EmailSummary>();
-        string? pageToken = null;
+        return await GetSummariesForLabelIdsAsync(gmail, [labelId], labelPath, cancellationToken).ConfigureAwait(false);
+    }
 
-        do
+    public async Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+        string projectLabelName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(projectLabelName))
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            return Array.Empty<EmailSummary>();
+        }
 
-            var listRequest = gmail.Users.Messages.List("me");
-            listRequest.LabelIds = new[] { labelId };
-            listRequest.MaxResults = PageSize;
-            listRequest.PageToken = pageToken;
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail == null)
+        {
+            return Array.Empty<EmailSummary>();
+        }
 
-            ListMessagesResponse listResponse;
-            try
+        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var rootPrefix = _provider.RootLabel + "/";
+        var labelIds = labels.Labels?
+            .Where(static l => !string.IsNullOrWhiteSpace(l.Name) && !string.IsNullOrWhiteSpace(l.Id))
+            .Where(l => l.Name!.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            .Where(l =>
             {
-                listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"[Gmail] Messages.List failed for label '{labelPath}': {ex.Message}", ex);
-                break;
-            }
+                var parts = l.Name!.Split('/');
+                return parts.Length >= 2
+                    && string.Equals(parts[^1], projectLabelName.Trim(), StringComparison.OrdinalIgnoreCase);
+            })
+            .Select(l => l.Id!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
-            if (listResponse.Messages == null || listResponse.Messages.Count == 0)
-            {
-                break;
-            }
+        if (labelIds is null || labelIds.Length == 0)
+        {
+            _logger.Warn($"[Gmail] No project labels found for '{projectLabelName}'.");
+            return Array.Empty<EmailSummary>();
+        }
 
-            foreach (var item in listResponse.Messages)
+        return await GetSummariesForLabelIdsAsync(gmail, labelIds, projectLabelName.Trim(), cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<EmailSummary>> GetSummariesForLabelIdsAsync(
+        GmailService gmail,
+        IReadOnlyCollection<string> labelIds,
+        string logLabel,
+        CancellationToken cancellationToken)
+    {
+        var summaries = new List<EmailSummary>();
+        var seenMessageIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var labelId in labelIds)
+        {
+            string? pageToken = null;
+
+            do
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var summary = await TryGetSummaryAsync(gmail, item.Id, cancellationToken).ConfigureAwait(false);
-                if (summary != null)
-                {
-                    summaries.Add(summary);
-                }
-            }
+                var listRequest = gmail.Users.Messages.List("me");
+                listRequest.LabelIds = new[] { labelId };
+                listRequest.MaxResults = PageSize;
+                listRequest.PageToken = pageToken;
 
-            pageToken = listResponse.NextPageToken;
+                ListMessagesResponse listResponse;
+                try
+                {
+                    listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"[Gmail] Messages.List failed for label '{logLabel}': {ex.Message}", ex);
+                    break;
+                }
+
+                if (listResponse.Messages == null || listResponse.Messages.Count == 0)
+                {
+                    break;
+                }
+
+                foreach (var item in listResponse.Messages)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (string.IsNullOrWhiteSpace(item.Id) || !seenMessageIds.Add(item.Id))
+                    {
+                        continue;
+                    }
+
+                    var summary = await TryGetSummaryAsync(gmail, item.Id, cancellationToken).ConfigureAwait(false);
+                    if (summary != null)
+                    {
+                        summaries.Add(summary);
+                    }
+                }
+
+                pageToken = listResponse.NextPageToken;
+            }
+            while (!string.IsNullOrEmpty(pageToken));
         }
-        while (!string.IsNullOrEmpty(pageToken));
 
         return summaries
             .OrderByDescending(e => e.ReceivedAt)

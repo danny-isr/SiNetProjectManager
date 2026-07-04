@@ -80,6 +80,28 @@ no legacy window, no `SiNetSQL.MVVM`).
 The general **הגדרות** menu item remains a disabled placeholder until a native system-settings surface
 exists (distinct from keys/secrets).
 
+## Native Gmail foundation (2026-07-04)
+
+| Surface / seam | Location |
+| --- | --- |
+| Shared auth/session seam | `IConnectorAuthService` -> `GmailConnectorAuthService` |
+| Concrete session owner | `GmailClientProvider` inside `SiNet.Infrastructure.Google` |
+| Read gateway | `IEmailGateway` -> `GmailEmailGateway` |
+| Host startup restore | `App.xaml.cs` resolves `IConnectorAuthService` and calls `TryRestoreSessionAsync()` |
+
+New System Gmail rules:
+
+- WPF/startup consumes `IConnectorAuthService`, not `GmailClientProvider`, for connect/restore/state.
+- Vault-backed Google secrets remain the source of truth; config path is fallback only when vault
+  materialization cannot supply a path.
+- The native Gmail module may be registered additively in the host graph without switching active
+  legacy Google runtime behavior.
+- `EmailWindowViewModel` now hosts the first real read-only Gmail window over `IEmailGateway` +
+  `IConnectorAuthService`, but it must stay summary-only: no send/modify, no workflow mutation, and
+  no Drive / Sheets / report-export behavior in this slice.
+- Drive / Sheets / report/export work is **not** part of Gmail window migration and stays deferred
+  until a `ProjectFiles` or `Reports` consumer slice is selected.
+
 ## Native logging (Stage 4, 2026-07-03)
 
 | Port | Adapter | Registration |
@@ -136,7 +158,14 @@ It must **not**:
 - construct `Bim360Service`,
 - create `SiNetSQLDbContext`,
 - own privileged bootstrap implementation details,
-- become a wrapper over a legacy ACC window.
+- become a wrapper over a legacy ACC window,
+- absorb provisioning / upload / move / metadata-write behavior ahead of a dedicated write slice.
+
+ACC write-side rule:
+
+- The New System ACC window substrate is read-only/operator-first.
+- Provisioning, folder/custom-attribute ensure, upload, refile/move, metadata writes, and repair
+  flows remain server-only or deferred until a dedicated ACC write slice is approved.
 
 ## Revoked pattern (do not extend)
 
@@ -164,7 +193,7 @@ Enforced by `NewSystemBoundaryTests.cs`, `Admin/NewShellNativeUserAdminMenuTests
 
 | Capability | Target |
 | --- | --- |
-| Email operational surface | Keep rebuilding inside `SiNet.App.Wpf/Surfaces/Email` over Application/Infrastructure ports; do not re-expand `EmailManagementViewModel` |
+| Email operational surface | Keep rebuilding inside `SiNet.App.Wpf/Surfaces/Email` over Application/Infrastructure ports; do not re-expand `EmailManagementViewModel`, and do not pull send/modify/Drive/Sheets into the first real window without explicit parity approval |
 | Inspection operational surface | Keep rebuilding inside `SiNet.App.Wpf/Inspection`; do not route new behavior through floating legacy inspection windows |
 | Workflow / task work surfaces | Land in `src/SiNet.App.Wpf` + Application task/workflow ports; do not let screens talk to `WorkflowEngine` / `WorkflowTaskOrchestrator` directly |
 | ProjectFiles / ProjectWork surface | Build a native `src/SiNet.App.Wpf` work surface; do not grow `ProjectWorkViewModel` / `ProjectFolderTreeViewModel` as the New System home |

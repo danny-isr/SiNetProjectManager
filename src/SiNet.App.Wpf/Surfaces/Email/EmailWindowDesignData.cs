@@ -36,7 +36,7 @@ internal static class EmailWindowDesignData
     public static IReadOnlyList<EmailListRow> SampleEmails { get; } =
     [
         new(
-            Id: 5001,
+            Id: "5001",
             Sender: "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC <danny@example.com>",
             Subject: "\u05D4\u05D9\u05EA\u05E8 \u05D1\u05E0\u05D9\u05D4 \u2014 \u05E2\u05D3\u05DB\u05D5\u05DF \u05EA\u05D5\u05DB\u05E0\u05D9\u05D5\u05EA",
             Preview: "\u05E9\u05DC\u05D5\u05DD, \u05DE\u05E6\u05D5\u05E8\u05E4\u05D5\u05EA \u05D4\u05EA\u05D5\u05DB\u05E0\u05D9\u05D5\u05EA \u05D4\u05DE\u05E2\u05D5\u05D3\u05DB\u05E0\u05D5\u05EA \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8...",
@@ -47,7 +47,7 @@ internal static class EmailWindowDesignData
             AssignedProjectName: null,
             AttachmentCount: 2),
         new(
-            Id: 5002,
+            Id: "5002",
             Sender: "\u05E8\u05D5\u05EA \u05DB\u05D4\u05DF <ruth@example.com>",
             Subject: "\u05E9\u05D0\u05DC\u05D4 \u05DC\u05D2\u05D1\u05D9 \u05D2\u05D1\u05D5\u05DC\u05D5\u05EA \u05D4\u05DE\u05D2\u05E8\u05E9",
             Preview: "\u05D4\u05D0\u05DD \u05E7\u05D5 \u05D4\u05D1\u05E0\u05D9\u05DF \u05D4\u05E7\u05D3\u05DE\u05D9 \u05EA\u05D5\u05D0\u05DD \u05D0\u05EA \u05D4\u05EA\u05D1\u05E2?",
@@ -58,7 +58,7 @@ internal static class EmailWindowDesignData
             AssignedProjectName: null,
             AttachmentCount: 0),
         new(
-            Id: 5003,
+            Id: "5003",
             Sender: "\u05DE\u05E2\u05D5\u05D3\u05DB\u05DF \u05EA\u05DB\u05E0\u05D5\u05DF <planner@example.com>",
             Subject: "\u05EA\u05D2\u05D5\u05D1\u05EA \u05DE\u05EA\u05DB\u05E0\u05DF \u2014 \u05E1\u05D9\u05DE\u05D5\u05DF \u05DE\u05D9\u05D3\u05D5\u05EA",
             Preview: "\u05DE\u05E6\u05D5\u05E8\u05E3 \u05E7\u05D5\u05D1\u05E5 \u05DE\u05EA\u05D5\u05E7\u05DF. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7...",
@@ -69,7 +69,7 @@ internal static class EmailWindowDesignData
             AssignedProjectName: "1042 \u2014 \u05DE\u05D2\u05D3\u05DC\u05D9 \u05D4\u05E6\u05E4\u05D5\u05DF",
             AttachmentCount: 1),
         new(
-            Id: 5004,
+            Id: "5004",
             Sender: "\u05E2\u05D9\u05E8\u05D9\u05D9\u05EA \u05EA\u05DC \u05D0\u05D1\u05D9\u05D1 <city@example.com>",
             Subject: "\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E8\u05E9\u05D5\u05EA \u2014 \u05EA\u05D9\u05E7 \u05D4\u05D9\u05EA\u05E8",
             Preview: "\u05D4\u05D1\u05E7\u05E9\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4. \u05DE\u05E1\u05DE\u05DB\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD.",
@@ -106,7 +106,7 @@ public sealed record EmailFolderRow(string Name, int Count);
 /// Presentation-only; not a Gmail/Outlook message and not an EF entity.
 /// </summary>
 public sealed record EmailListRow(
-    int Id,
+    string Id,
     string Sender,
     string Subject,
     string Preview,

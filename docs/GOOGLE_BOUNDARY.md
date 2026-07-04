@@ -32,6 +32,7 @@ decision for any behavior change.
 | Capability | Active implementation | Stack | Current status |
 | --- | --- | --- | --- |
 | Gmail inbox read (project label scoped) | `InboxViewModel` -> `IEmailGateway` -> `GmailEmailGateway` -> `GmailClientProvider` | Native | Active |
+| First real email window (read-only summaries) | `EmailWindowViewModel` -> `IEmailGateway` + `IConnectorAuthService` | Native | Active, summary-only |
 | Gmail auth/health bridge | `IConnectorAuthService` -> `GmailConnectorAuthService` | Native | Active |
 | Gmail send capability | `IEmailSender` -> `GmailEmailSender` | Native module | Implemented in code; host adoption is still separate |
 | Gmail outbound send used by legacy flows | `GmailOutboundMailService` / `GoogleService` | Legacy host | Active |
@@ -60,7 +61,7 @@ behavior still belongs to the legacy host.
 | File / type | Responsibility |
 | --- | --- |
 | `src/SiNet.Infrastructure.Google/GmailClientProvider.cs` | OAuth session, silent restore, interactive sign-in, cached Gmail client |
-| `src/SiNet.Infrastructure.Google/GmailEmailGateway.cs` | Native Gmail read path (`IEmailGateway`) |
+| `src/SiNet.Infrastructure.Google/GmailEmailGateway.cs` | Native Gmail read path (`IEmailGateway`), including project-label lookup across Gmail location buckets |
 | `src/SiNet.Infrastructure.Google/GmailEmailSender.cs` | Native Gmail send path (`IEmailSender`) |
 | `src/SiNet.Infrastructure.Google/GmailConnectorAuthService.cs` | Auth-state / health bridge (`IConnectorAuthService`) |
 | `src/SiNet.Infrastructure.Google/GoogleServiceCollectionExtensions.cs` | Registers read + auth-state + send over the shared provider |
@@ -100,6 +101,9 @@ Verified wiring:
   `IGoogleClientSecretsPathProvider` is available there.
 - `src/SiNet.App.Wpf/Inbox/InboxViewModel.cs` now consumes `IConnectorAuthService` for connect/state
   behavior instead of depending on `GmailClientProvider` directly.
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` now consumes the same shared
+  `IConnectorAuthService` plus `IEmailGateway`, loading real project-scoped Gmail summaries by the
+  project's canonical label leaf instead of hard-coding Gmail label traversal in WPF.
 - `SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs` registers
   `AddSiNetGoogle(ConfigureNewSystemGmail)` additively inside the New System graph, with token store
   and app name mapped from the legacy host configuration, without switching legacy Google behavior.
@@ -187,9 +191,10 @@ Minimum parity decision before migrating the first real email window:
 - Optional read expansion: full body and attachments, but only if the chosen window genuinely
   requires them.
 - Explicitly out for now: send-by-default adoption, modify/labels, Drive, Sheets, and reports.
-- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` must remain a visual shell until that
-  parity decision is approved; it must not start consuming `GmailClientProvider`, `IConnectorAuthService`,
-  or `IEmailSender` ad hoc.
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` is now allowed to consume
+  `IConnectorAuthService` and `IEmailGateway` for the first real read-only window slice, but it must
+  not consume `GmailClientProvider` or `IEmailSender` directly and must not grow send/modify behavior
+  ad hoc.
 
 ## 6.1 Drive / Sheets / Reports defer decision
 

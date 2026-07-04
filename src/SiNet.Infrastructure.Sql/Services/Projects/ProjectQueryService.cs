@@ -75,6 +75,7 @@ public sealed class ProjectQueryService : IProjectQueryService
                 Id = p.Id,
                 Number = p.Number,
                 Title = p.Title,
+                NameAndNumber = p.NameAndNumber,
                 PlaceName = p.Place != null ? p.Place.Title : null,
                 CompanyName = p.Company != null ? p.Company.Title : null,
                 StatusId = p.ProjectStatusId,
@@ -118,6 +119,7 @@ public sealed class ProjectQueryService : IProjectQueryService
                 Id = p.Id,
                 Number = p.Number,
                 Title = p.Title,
+                NameAndNumber = p.NameAndNumber,
                 PlaceName = p.Place != null ? p.Place.Title : null,
                 CompanyName = p.Company != null ? p.Company.Title : null,
                 StatusId = p.ProjectStatusId,
@@ -150,7 +152,8 @@ public sealed class ProjectQueryService : IProjectQueryService
         AssignedUserName: NullIfBlank(row.AssignedUserName),
         IsActive: row.IsActive,
         StatusId: row.StatusId,
-        JobTypeIds: row.JobTypeIds);
+        JobTypeIds: row.JobTypeIds,
+        ProjectLabelName: NullIfBlank(row.NameAndNumber));
 
     /// <summary>
     /// Formats the legacy <c>float?</c> project number as the selector's display string: an integer when
@@ -182,6 +185,7 @@ public sealed class ProjectQueryService : IProjectQueryService
         public int Id { get; init; }
         public float? Number { get; init; }
         public string? Title { get; init; }
+        public string? NameAndNumber { get; init; }
         public string? PlaceName { get; init; }
         public string? CompanyName { get; init; }
         public int? StatusId { get; init; }

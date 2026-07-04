@@ -5,28 +5,27 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNet.App.Wpf.Surfaces.Email;
 
 /// <summary>
-/// Window code-behind for the visual clone of the legacy <c>EmailManagementView</c>.
+/// Window code-behind for the first read-only New System slice of the legacy <c>EmailManagementView</c>.
 /// <para>
-/// <b>Visual-clone slice only.</b> The code-behind contains <i>view-level chrome only</i> — header
-/// drag-to-move and close — matching the borderless window shell used by the other new surfaces. It
-/// deliberately carries no business logic: no DB, no email loading, no Gmail/Outlook, no file-system
-/// access, no project linking, no task creation, and no workflow mutation. All behavior is exposed
-/// through the thin <see cref="EmailWindowViewModel"/> whose commands are stubbed.
+/// The code-behind still contains <i>view-level chrome only</i> — header drag-to-move and close —
+/// matching the borderless window shell used by the other new surfaces. It deliberately carries no
+/// business logic: no DB, no Gmail SDK calls, no file-system access, no project linking, no task
+/// creation, and no workflow mutation. All behavior is exposed through <see cref="EmailWindowViewModel"/>.
 /// </para>
 /// <para>
-/// The parameterless constructor exists so the window can be shown with fake design-time data during
-/// this slice; the typed constructor is the path a DI host / work-surface launcher will use later.
+/// The parameterless constructor exists so the window can still be shown with fake design-time data;
+/// the typed constructor is the path a DI host / work-surface launcher uses for the real slice.
 /// </para>
 /// </summary>
 public partial class EmailWindowView : Window
 {
-    /// <summary>Design/standalone constructor: shows the clone with fake in-memory data.</summary>
+    /// <summary>Design/standalone constructor: shows the window with fake in-memory data.</summary>
     public EmailWindowView()
         : this(new EmailWindowViewModel())
     {
     }
 
-    /// <summary>Primary constructor: binds to the supplied thin view model.</summary>
+    /// <summary>Primary constructor: binds to the supplied New System view model.</summary>
     public EmailWindowView(EmailWindowViewModel viewModel)
     {
         InitializeComponent();
@@ -34,7 +33,7 @@ public partial class EmailWindowView : Window
         DataContext = viewModel;
     }
 
-    /// <summary>The bound view model (thin, stubbed; visual-clone only).</summary>
+    /// <summary>The bound view model for the read-only Gmail slice.</summary>
     public EmailWindowViewModel ViewModel { get; }
 
     /// <summary>
