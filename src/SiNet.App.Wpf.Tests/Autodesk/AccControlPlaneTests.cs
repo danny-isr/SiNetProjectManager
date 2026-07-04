@@ -739,6 +739,19 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
+    public async Task Local_document_service_does_not_return_partial_identity_for_matched_item()
+    {
+        var sut = new LocalAccDocumentService(new StubFolderItemsReader(
+        [
+            new AccDocumentLookupResult("project-123", " ", "Drawing.pdf", "version-9", "https://viewer.example/item-b"),
+        ]));
+
+        var result = await sut.FindItemAsync("project-123", "folder-456", "Drawing.pdf");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task Remote_document_service_uses_versioned_lookup_endpoint_and_maps_response()
     {
         const string body = """
@@ -779,6 +792,35 @@ public sealed class AccControlPlaneTests
         Assert.Equal("item-789", result.ItemId);
         Assert.Equal("version-5", result.VersionId);
         Assert.Equal("https://viewer.example/item-789", result.ViewerUrl);
+    }
+
+    [Fact]
+    public async Task Remote_document_service_rejects_incomplete_lookup_identity()
+    {
+        const string body = """
+            {
+              "projectId": "project-123",
+              "itemId": " ",
+              "versionId": "version-5",
+              "viewerUrl": "https://viewer.example/item-789"
+            }
+            """;
+
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccDocumentService(
+            new HttpClient(new StubHttpMessageHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                }))),
+            vault,
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.FindItemAsync("project-123", "folder-456", "Drawing Set.pdf"));
+
+        Assert.Contains("incomplete document lookup identity", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

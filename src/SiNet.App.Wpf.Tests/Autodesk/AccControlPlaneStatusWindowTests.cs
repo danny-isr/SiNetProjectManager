@@ -279,6 +279,31 @@ public sealed class AccControlPlaneStatusWindowTests
     }
 
     [Fact]
+    public async Task Status_window_view_model_does_not_build_docs_url_for_incomplete_lookup_identity()
+    {
+        var vm = new AccControlPlaneStatusWindowViewModel(
+            BuildPresenter(),
+            BuildCatalogService("b.project-1"),
+            new StubAccDocumentService(new AccItemRef("b.project-1", " ", "version-3", null)),
+            new StubAccFolderBrowserService((AccFolderBrowseResult?)null),
+            BuildProjectTreeSearchService(),
+            BuildLiveDiscoveryService(),
+            BuildInboxBootstrapService(),
+            new StubAccLookupSeedService([]),
+            new StubAccResolvedDocsUrlLauncher(),
+            new StubClipboardTextWriter());
+        vm.Browser.LookupProjectId = "b.project-1";
+        vm.Browser.LookupFolderId = "folder-22";
+        vm.Browser.LookupFileName = "drawing.pdf";
+
+        await vm.Browser.ResolveDocumentAsync();
+
+        Assert.Contains("חסרה זהות פריט מלאה", vm.Browser.LookupResultSummary, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, vm.Browser.LookupResolvedDocsUrl);
+        Assert.False(vm.Browser.CopyResolvedDocsUrlCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task Status_window_view_model_can_load_live_hubs_projects_and_use_selected_project()
     {
         var vm = new AccControlPlaneStatusWindowViewModel(
@@ -458,7 +483,12 @@ public sealed class AccControlPlaneStatusWindowTests
 
         var row = Assert.Single(vm.ReconciliationItems);
         Assert.Equal("plan.pdf", row.FileName);
+        Assert.Equal(AccInboxAttachmentTruthStatus.Exists, row.TruthStatus);
         Assert.Contains("attachments=1", vm.ReconciliationSummary, StringComparison.Ordinal);
+        Assert.Contains("exists=1", vm.ReconciliationSummary, StringComparison.Ordinal);
+        Assert.Contains("missing=0", vm.ReconciliationSummary, StringComparison.Ordinal);
+        Assert.Contains("stale=0", vm.ReconciliationSummary, StringComparison.Ordinal);
+        Assert.Contains("unknown=0", vm.ReconciliationSummary, StringComparison.Ordinal);
 
         vm.SelectedReconciliationItem = row;
         vm.UseSelectedReconciliationItemCommand.Execute(null);
@@ -466,6 +496,40 @@ public sealed class AccControlPlaneStatusWindowTests
         Assert.Equal("b.project-1", vm.Browser.LookupProjectId);
         Assert.Equal("attach-folder", vm.Browser.LookupFolderId);
         Assert.Equal("plan.pdf", vm.Browser.LookupFileName);
+    }
+
+    [Theory]
+    [InlineData(AccInboxAttachmentPresenceStatus.ExistsInAcc, AccInboxAttachmentTruthStatus.Exists)]
+    [InlineData(AccInboxAttachmentPresenceStatus.Locked, AccInboxAttachmentTruthStatus.Exists)]
+    [InlineData(AccInboxAttachmentPresenceStatus.MissingInAcc, AccInboxAttachmentTruthStatus.Missing)]
+    [InlineData(AccInboxAttachmentPresenceStatus.AlreadyMovedToProject, AccInboxAttachmentTruthStatus.Stale)]
+    [InlineData(AccInboxAttachmentPresenceStatus.FiledButMoveMetadataFailed, AccInboxAttachmentTruthStatus.Stale)]
+    [InlineData(AccInboxAttachmentPresenceStatus.UnknownAccInboxFile, AccInboxAttachmentTruthStatus.Unknown)]
+    [InlineData(AccInboxAttachmentPresenceStatus.MetadataReadFailed, AccInboxAttachmentTruthStatus.Unknown)]
+    public void Reconciliation_presence_status_exposes_stable_truth_status(
+        AccInboxAttachmentPresenceStatus status,
+        AccInboxAttachmentTruthStatus expected)
+    {
+        var item = new AccInboxAttachmentReconciliationItem(
+            InboxAttachmentId: 1,
+            AttachmentIndex: 0,
+            FileName: "plan.pdf",
+            AccItemId: "acc-item-1",
+            AccVersionId: "acc-version-1",
+            OpenAccProjectId: "b.project-1",
+            OpenAccFolderId: "attach-folder",
+            OpenAccItemId: "acc-item-1",
+            ExistsInAcc: status is not AccInboxAttachmentPresenceStatus.MissingInAcc and not AccInboxAttachmentPresenceStatus.UnknownAccInboxFile,
+            Status: status,
+            StatusText: "status",
+            ProjectFileId: null,
+            ProjectAlternativeId: null,
+            LockedForEditing: status == AccInboxAttachmentPresenceStatus.Locked,
+            MovedToProject: status == AccInboxAttachmentPresenceStatus.AlreadyMovedToProject,
+            MetadataReadFailed: status == AccInboxAttachmentPresenceStatus.MetadataReadFailed,
+            Attributes: new Dictionary<string, string?>());
+
+        Assert.Equal(expected, item.TruthStatus);
     }
 
     private static AccControlPlaneStatusPresenter BuildPresenter() =>

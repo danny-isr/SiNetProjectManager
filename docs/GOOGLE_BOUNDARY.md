@@ -187,6 +187,9 @@ Minimum parity decision before migrating the first real email window:
 - Optional read expansion: full body and attachments, but only if the chosen window genuinely
   requires them.
 - Explicitly out for now: send-by-default adoption, modify/labels, Drive, Sheets, and reports.
+- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` must remain a visual shell until that
+  parity decision is approved; it must not start consuming `GmailClientProvider`, `IConnectorAuthService`,
+  or `IEmailSender` ad hoc.
 
 ## 7. Recommended Next Step
 

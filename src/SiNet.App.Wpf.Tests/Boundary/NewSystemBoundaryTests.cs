@@ -24,6 +24,8 @@ public sealed class NewSystemBoundaryTests
         "ProjectFolderTreeViewModel",
         "WorkflowTaskOrchestrator",
         "WorkflowEngine",
+        "MyOffice.AutodeskConnector",
+        "Bim360Service",
     ];
 
     private static readonly string[] ForbiddenLegacyAdminInNewShellFactory =

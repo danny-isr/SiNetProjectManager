@@ -61,6 +61,27 @@ public sealed class GoogleFoundationClosureTests
         Assert.Contains(nameof(InboxViewModel.IsConnected), changed);
     }
 
+    [Fact]
+    public void Email_window_shell_does_not_consume_native_gmail_runtime_directly()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+
+        Assert.DoesNotContain("GmailClientProvider", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IConnectorAuthService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IEmailSender", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_window_shell_keeps_send_and_modify_commands_stub_only_pending_policy_decision()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+
+        Assert.Contains("ReplyCommand = Stub();", source, StringComparison.Ordinal);
+        Assert.Contains("ForwardCommand = Stub();", source, StringComparison.Ordinal);
+        Assert.Contains("MarkHandledCommand = Stub();", source, StringComparison.Ordinal);
+        Assert.Contains("ArchiveCommand = Stub();", source, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

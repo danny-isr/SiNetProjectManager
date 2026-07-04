@@ -59,7 +59,12 @@ internal sealed class RemoteAccDocumentService(
             throw new InvalidOperationException("ACC service returned an empty document lookup response.");
         }
 
-        return new AccItemRef(payload.ProjectId, payload.ItemId, payload.VersionId, payload.ViewerUrl);
+        if (string.IsNullOrWhiteSpace(payload.ProjectId) || string.IsNullOrWhiteSpace(payload.ItemId))
+        {
+            throw new InvalidOperationException("ACC service returned an incomplete document lookup identity.");
+        }
+
+        return new AccItemRef(payload.ProjectId.Trim(), payload.ItemId.Trim(), payload.VersionId, payload.ViewerUrl);
     }
 
     private static string BuildRequestUri(string baseUrl, string projectId, string folderId, string fileName)

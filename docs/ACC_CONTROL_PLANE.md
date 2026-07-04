@@ -105,6 +105,11 @@ orchestration.
   `IAccInboxReconciliationService`, so operators can inspect ACC truth for a concrete inbox message
   and push a selected attachment directly into the lookup/browse tester without opening a legacy
   email surface.
+- The reconciliation contract is part of the New System application surface, but the current
+  production implementation remains legacy-backed (`SiNetSQL.Services.EmailIngestion.AccInboxReconciliationService`)
+  behind that contract. This is acceptable temporarily because the behavior is read-only and the
+  ownership is explicit; future windows must treat it as a clean port, not as permission to reach
+  into legacy email UI/runtime directly.
 - The same status window also exposes `IAccInboxBootstrapService` as an **explicit operator/admin**
   ensure action. This is intentionally classified as adjacent to control-plane/operator tooling, not
   as a migrated filing/provisioning orchestration path.
@@ -182,6 +187,25 @@ needed.
 | Upload / move / refile / metadata write | Privileged write path | No | Deferred; do not introduce before dedicated write slices |
 | Repair stale/missing reference | Mixed and side-effecting | No | Deferred until reconciliation ownership and write rules are explicit |
 | Admin probes beyond current remote surface | Privileged service-level | Partial | Add only through explicit service-boundary expansion |
+
+### Reconciliation truth buckets
+
+For future New System windows, treat detailed reconciliation statuses as an implementation detail and
+build UI logic first around these stable buckets:
+
+| Stable bucket | Detailed statuses currently mapped into it |
+| --- | --- |
+| `Exists` | `ExistsInAcc`, `Locked` |
+| `Missing` | `MissingInAcc` |
+| `Stale` | `AlreadyMovedToProject`, `FiledButMoveMetadataFailed` |
+| `Unknown` | `UnknownAccInboxFile`, `MetadataReadFailed` |
+
+Rules:
+
+- `Exists / Missing / Stale / Unknown` are the stable read-only substrate for future windows.
+- Detailed statuses remain useful for operator text and diagnostics, but should not force each new
+  window to understand legacy reconciliation nuances.
+- No automatic repair is part of this slice.
 
 ## 3. Contract Note
 

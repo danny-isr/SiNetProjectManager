@@ -476,11 +476,21 @@ public sealed class AccReadOnlyDocumentBrowserViewModel : ObservableObject
             }
             else
             {
+                var resolvedProjectId = result.ProjectId.Trim();
+                var resolvedItemId = result.ItemId.Trim();
+                if (string.IsNullOrWhiteSpace(resolvedProjectId) || string.IsNullOrWhiteSpace(resolvedItemId))
+                {
+                    LookupResultSummary = "תוצאת lookup של ACC חסרה זהות פריט מלאה ולכן לא ניתן לפתוח Docs URL.";
+                    LookupResolvedDocsUrl = string.Empty;
+                    PublishSummary("ACC lookup returned incomplete identity.");
+                    return;
+                }
+
                 var versionText = string.IsNullOrWhiteSpace(result.VersionId) ? "(none)" : result.VersionId;
                 var viewerText = string.IsNullOrWhiteSpace(result.ViewerUrl) ? "(none)" : result.ViewerUrl;
-                LookupResolvedDocsUrl = AccResolvedDocsUrlBuilder.Build(result.ProjectId, LookupFolderId.Trim(), result.ItemId);
+                LookupResolvedDocsUrl = AccResolvedDocsUrlBuilder.Build(resolvedProjectId, LookupFolderId.Trim(), resolvedItemId);
                 LookupResultSummary =
-                    $"נמצא פריט ACC: projectId={result.ProjectId}; itemId={result.ItemId}; versionId={versionText}; viewerUrl={viewerText}";
+                    $"נמצא פריט ACC: projectId={resolvedProjectId}; itemId={resolvedItemId}; versionId={versionText}; viewerUrl={viewerText}";
             }
 
             PublishSummary("בדיקת lookup של פריט ACC הושלמה.");

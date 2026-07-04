@@ -26,6 +26,33 @@ public enum AccInboxAttachmentPresenceStatus
     FiledButMoveMetadataFailed
 }
 
+/// <summary>
+/// Stable read-only reconciliation classification that future New System windows can depend on
+/// without knowing every legacy operational nuance.
+/// </summary>
+public enum AccInboxAttachmentTruthStatus
+{
+    Exists,
+    Missing,
+    Stale,
+    Unknown,
+}
+
+public static class AccInboxAttachmentPresenceStatusExtensions
+{
+    public static AccInboxAttachmentTruthStatus ToTruthStatus(this AccInboxAttachmentPresenceStatus status) => status switch
+    {
+        AccInboxAttachmentPresenceStatus.ExistsInAcc => AccInboxAttachmentTruthStatus.Exists,
+        AccInboxAttachmentPresenceStatus.Locked => AccInboxAttachmentTruthStatus.Exists,
+        AccInboxAttachmentPresenceStatus.MissingInAcc => AccInboxAttachmentTruthStatus.Missing,
+        AccInboxAttachmentPresenceStatus.AlreadyMovedToProject => AccInboxAttachmentTruthStatus.Stale,
+        AccInboxAttachmentPresenceStatus.FiledButMoveMetadataFailed => AccInboxAttachmentTruthStatus.Stale,
+        AccInboxAttachmentPresenceStatus.UnknownAccInboxFile => AccInboxAttachmentTruthStatus.Unknown,
+        AccInboxAttachmentPresenceStatus.MetadataReadFailed => AccInboxAttachmentTruthStatus.Unknown,
+        _ => AccInboxAttachmentTruthStatus.Unknown,
+    };
+}
+
 public sealed record AccInboxAttachmentReconciliationItem(
     int? InboxAttachmentId,
     int AttachmentIndex,
@@ -43,7 +70,10 @@ public sealed record AccInboxAttachmentReconciliationItem(
     bool LockedForEditing,
     bool MovedToProject,
     bool MetadataReadFailed,
-    IReadOnlyDictionary<string, string?> Attributes);
+    IReadOnlyDictionary<string, string?> Attributes)
+{
+    public AccInboxAttachmentTruthStatus TruthStatus => Status.ToTruthStatus();
+}
 
 public sealed record AccInboxReconciliationResult(
     int EmailMessageId,

@@ -344,11 +344,12 @@ public sealed class AccControlPlaneStatusWindowViewModel : ObservableObject
                 Browser.LookupProjectId = result.InboxAccProjectId;
             }
 
-            var existing = result.Attachments.Count(static item => item.ExistsInAcc);
-            var missing = result.Attachments.Count(static item =>
-                item.Status is AccInboxAttachmentPresenceStatus.MissingInAcc or AccInboxAttachmentPresenceStatus.UnknownAccInboxFile);
+            var existing = result.Attachments.Count(static item => item.TruthStatus == AccInboxAttachmentTruthStatus.Exists);
+            var missing = result.Attachments.Count(static item => item.TruthStatus == AccInboxAttachmentTruthStatus.Missing);
+            var stale = result.Attachments.Count(static item => item.TruthStatus == AccInboxAttachmentTruthStatus.Stale);
+            var unknown = result.Attachments.Count(static item => item.TruthStatus == AccInboxAttachmentTruthStatus.Unknown);
             ReconciliationSummary =
-                $"בוצע reconciliation: messageId={result.EmailMessageId}; attachments={result.Attachments.Count}; exists={existing}; missing-or-unknown={missing}.";
+                $"בוצע reconciliation: messageId={result.EmailMessageId}; attachments={result.Attachments.Count}; exists={existing}; missing={missing}; stale={stale}; unknown={unknown}.";
             SummaryMessage = "ACC reconciliation הושלם. ניתן לבחור שורה ולהשליך אותה ל-lookup/browse.";
         }
         catch (Exception ex)

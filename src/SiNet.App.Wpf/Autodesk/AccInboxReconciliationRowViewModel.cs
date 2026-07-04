@@ -23,4 +23,6 @@ public sealed record AccInboxReconciliationRowViewModel(
     public bool HasLookupTarget =>
         !string.IsNullOrWhiteSpace(OpenAccProjectId)
         && (!string.IsNullOrWhiteSpace(OpenAccFolderId) || !string.IsNullOrWhiteSpace(FileName));
+
+    public AccInboxAttachmentTruthStatus TruthStatus => Status.ToTruthStatus();
 }

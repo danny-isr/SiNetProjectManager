@@ -19,18 +19,28 @@ internal static class AccDocumentLookupMatcher
             return null;
         }
 
-        var exact = candidates.FirstOrDefault(candidate =>
-            string.Equals(candidate.DisplayName, fileName, StringComparison.Ordinal));
+        var exact = candidates
+            .Where(candidate => string.Equals(candidate.DisplayName, fileName, StringComparison.Ordinal))
+            .Select(candidate => ToRef(projectId, candidate))
+            .FirstOrDefault(candidate => candidate is not null);
         if (exact is not null)
         {
-            return ToRef(projectId, exact);
+            return exact;
         }
 
-        var ignoreCase = candidates.FirstOrDefault(candidate =>
-            string.Equals(candidate.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
-        return ignoreCase is null ? null : ToRef(projectId, ignoreCase);
+        return candidates
+            .Where(candidate => string.Equals(candidate.DisplayName, fileName, StringComparison.OrdinalIgnoreCase))
+            .Select(candidate => ToRef(projectId, candidate))
+            .FirstOrDefault(candidate => candidate is not null);
     }
 
-    private static AccItemRef ToRef(string projectId, AccDocumentLookupResult result) =>
-        new(projectId, result.ItemId, result.VersionId, result.ViewerUrl);
+    private static AccItemRef? ToRef(string projectId, AccDocumentLookupResult result)
+    {
+        if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(result.ItemId))
+        {
+            return null;
+        }
+
+        return new(projectId.Trim(), result.ItemId.Trim(), result.VersionId, result.ViewerUrl);
+    }
 }
