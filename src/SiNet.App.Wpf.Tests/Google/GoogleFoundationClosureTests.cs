@@ -34,6 +34,44 @@ public sealed class GoogleFoundationClosureTests
     }
 
     [Fact]
+    public void V2_new_system_startup_restores_connector_auth_via_shared_port()
+    {
+        var source = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
+
+        Assert.Contains("StartNewSystemConnectorAuthRestore", source, StringComparison.Ordinal);
+        Assert.Contains("GetServices<IConnectorAuthService>()", source, StringComparison.Ordinal);
+        Assert.Contains("TryRestoreSessionAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetRequiredService<GmailClientProvider>()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoginAsync", source.Substring(source.IndexOf("StartNewSystemConnectorAuthRestore", StringComparison.Ordinal)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void V2_run_new_system_startup_triggers_connector_auth_silent_restore()
+    {
+        var source = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
+
+        var runNewSystemStart = source.IndexOf("private void RunNewSystemStartup", StringComparison.Ordinal);
+        var runNewSystemEnd = source.IndexOf("private static void LaunchNewSystemShell", StringComparison.Ordinal);
+        Assert.True(runNewSystemStart >= 0);
+        Assert.True(runNewSystemEnd > runNewSystemStart);
+
+        var runNewSystemBody = source.Substring(runNewSystemStart, runNewSystemEnd - runNewSystemStart);
+        Assert.Contains("StartNewSystemConnectorAuthRestore()", runNewSystemBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Google_boundary_doc_records_g_startup_closure_without_broad_migration_approval()
+    {
+        var source = ReadRepoFile("docs/GOOGLE_BOUNDARY.md");
+
+        Assert.Contains("G-Startup closure", source, StringComparison.Ordinal);
+        Assert.Contains("StartNewSystemConnectorAuthRestore", source, StringComparison.Ordinal);
+        Assert.Contains("GmailSend** still requires a separate **G-Policy** decision", source, StringComparison.Ordinal);
+        Assert.Contains("Drive / Sheets / Reports** remain legacy/deferred", source, StringComparison.Ordinal);
+        Assert.Contains("Broad legacy window migration** remains blocked", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NewSystem_graph_registers_native_google_module_with_legacy_host_settings()
     {
         var source = ReadRepoFile("SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs");

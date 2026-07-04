@@ -1,10 +1,13 @@
+using SiNet.Application.Common;
 using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.Services.Composition;
 using SiNetProjectManagerV2.WPF;
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -1051,6 +1054,7 @@ namespace SiNetProjectManagerV2
             ServiceProvider = ConfigureServices();
             WireLegacyLocators();
             SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+            StartNewSystemConnectorAuthRestore();
 
 #if DEBUG
             Log.Information("[STARTUP][NewSystem] Debug Authorization Role Selector (when enabled)...");
@@ -1372,6 +1376,48 @@ namespace SiNetProjectManagerV2
                 // Non-fatal: PDF generation is optional
                 Log.Warning(pdfEx, "PDF renderer initialization failed. Email body PDFs will not be generated.");
             }
+        }
+
+        /// <summary>
+        /// Attempts silent restore of connector auth sessions (native Gmail/Google) for New System startup.
+        /// Uses the same <see cref="IConnectorAuthService"/> port and off-UI-thread pattern as the
+        /// standalone harness (<c>src/SiNet.App.Wpf/App.xaml.cs</c>). Failures are logged only; no
+        /// interactive login, no retry loop, and no new fallback path.
+        /// </summary>
+        private static void StartNewSystemConnectorAuthRestore()
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var connectorAuthServices = ServiceProvider.GetServices<IConnectorAuthService>().ToArray();
+                    if (connectorAuthServices.Length == 0)
+                    {
+                        Log.Debug("[STARTUP][NewSystem] No IConnectorAuthService registered; skipping silent restore.");
+                        return;
+                    }
+
+                    Log.Information(
+                        "[STARTUP][NewSystem] Attempting silent connector auth restore ({Count} service(s))...",
+                        connectorAuthServices.Length);
+
+                    foreach (var authService in connectorAuthServices)
+                    {
+                        var restored = await authService
+                            .TryRestoreSessionAsync(_appShutdownCts.Token)
+                            .ConfigureAwait(false);
+                        Log.Information("[STARTUP][NewSystem] Connector auth silent restore result: {Restored}", restored);
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Log.Warning(ex, "[STARTUP][NewSystem] Silent connector auth restore failed; continuing without session.");
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected on shutdown — don't log as error
+                }
+            }, _appShutdownCts.Token);
         }
 
         /// <summary>

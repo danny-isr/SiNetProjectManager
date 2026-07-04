@@ -87,7 +87,7 @@ exists (distinct from keys/secrets).
 | Shared auth/session seam | `IConnectorAuthService` -> `GmailConnectorAuthService` |
 | Concrete session owner | `GmailClientProvider` inside `SiNet.Infrastructure.Google` |
 | Read gateway | `IEmailGateway` -> `GmailEmailGateway` |
-| Host startup restore | `App.xaml.cs` resolves `IConnectorAuthService` and calls `TryRestoreSessionAsync()` |
+| Host startup restore | Standalone: `src/SiNet.App.Wpf/App.xaml.cs`; V2 New System: `StartNewSystemConnectorAuthRestore()` in `SiNetProjectManagerV2/App.xaml.cs` — both resolve `IConnectorAuthService` and call `TryRestoreSessionAsync()` |
 
 New System Gmail rules:
 

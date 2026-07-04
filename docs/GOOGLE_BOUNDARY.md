@@ -122,6 +122,28 @@ Closed foundation shape for New System Gmail:
 - **Silent restore path:** startup resolves `IConnectorAuthService` and calls `TryRestoreSessionAsync()`
 - **Interactive connect path:** explicit user action calls `IConnectorAuthService.LoginAsync()`
 
+### 3.5 G-Startup closure (2026-07-04)
+
+The **G-Startup** slice closes one specific gap only: V2 New System startup now performs the same
+silent connector-auth restore as the standalone harness.
+
+| Host | Silent restore at startup | Mechanism |
+| --- | --- | --- |
+| Standalone `src/SiNet.App.Wpf` | Yes | `GetServices<IConnectorAuthService>()` + `TryRestoreSessionAsync()` off UI thread |
+| V2 New System (`RunNewSystemStartup`) | **Yes (G-Startup closed)** | `StartNewSystemConnectorAuthRestore()` — same port, same off-UI-thread pattern |
+| V2 Legacy production startup | Unchanged | Legacy `GoogleService` / `GoogleAuthService` path only; no native restore added there |
+
+Rules for this slice:
+
+- Restore is **silent only** — no automatic interactive login, no retry loop, no new fallback.
+- Token store policy is **unchanged** — V2 continues to map native Gmail to
+  `AppConfiguration.GoogleTokenStorePath` via `ConfigureNewSystemGmail`.
+- Legacy `GoogleService` production flows are **not replaced** by this change.
+- **GmailSend** still requires a separate **G-Policy** decision before any window adoption.
+- **Drive / Sheets / Reports** remain legacy/deferred.
+- **Broad legacy window migration** remains blocked until G-Policy, ACC-Host contract, and other
+  foundation gaps are closed.
+
 Rules:
 
 - No WPF window should resolve `GmailClientProvider` directly for connect/state behavior.
