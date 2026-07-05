@@ -676,11 +676,13 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Mode: {LoadMode}");
+        sb.AppendLine($"SelectedScope: {SelectedScope}");
         sb.AppendLine($"CurrentUserId: {CurrentUserIdDisplay}");
         sb.AppendLine($"SelectedUserId: {SelectedUserId?.ToString() ?? "(none)"}");
         sb.AppendLine($"CanSelectTaskScope: {CanSelectTaskScope}");
         sb.AppendLine($"ProjectId: {CurrentProjectIdDisplay}");
-        sb.AppendLine($"ActiveProject: {ActiveProjectDisplay}");
+        sb.AppendLine($"ProjectTitle: {ActiveProjectDisplay}");
+        sb.AppendLine($"ProjectFilterActive: {HasSelectedProject}");
         sb.AppendLine($"QueryService: {QueryServiceName}");
         sb.AppendLine($"QueueService: {QueueServiceName}");
         sb.AppendLine($"Counts: Quick={counts.Quick}, Medium={counts.Medium}, Long={counts.Long}");

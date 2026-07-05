@@ -19,18 +19,49 @@ namespace SiNet.App.Wpf.Tests.Boundary;
 public sealed class TaskWorkbenchProjectSelectorTests
 {
     [Fact]
-    public void Task_workbench_uses_existing_project_selector()
+    public void Task_workbench_project_selector_is_not_in_action_toolbar()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
+        var actionsSection = ExtractSection(xaml, "<!-- Actions toolbar:", "<!-- Context / filter area:");
+        var titleSection = ExtractSection(xaml, "<!-- Title -->", "<!-- Actions toolbar:");
 
-        Assert.Contains("ProjectSelectorView", xaml, StringComparison.Ordinal);
-        Assert.Contains("ProjectSelectorViewModel", vmSource, StringComparison.Ordinal);
-        Assert.Contains("ICurrentProjectContext", vmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProjectSelectorView", actionsSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProjectSelectorView", titleSection, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding RefreshCommand}\"", actionsSection, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding MoveDownCommand}\"", actionsSection, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void No_new_project_selector_created()
+    public void Task_workbench_project_selector_is_in_context_filter_area()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
+        var filterSection = ExtractSection(xaml, "<!-- Context / filter area:", "<Border Grid.Row=\"3\"");
+
+        Assert.Contains("ProjectSelectorView", filterSection, StringComparison.Ordinal);
+        Assert.Contains("מציג משימות:", filterSection, StringComparison.Ordinal);
+        Assert.Contains("SelectedScope", filterSection, StringComparison.Ordinal);
+        Assert.Contains("ActiveProjectDisplay", filterSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Task_workbench_actions_toolbar_contains_only_actions()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
+        var actionsSection = ExtractSection(xaml, "<!-- Actions toolbar:", "<!-- Context / filter area:");
+
+        Assert.Contains("RefreshCommand", actionsSection, StringComparison.Ordinal);
+        Assert.Contains("ShowAddPanelCommand", actionsSection, StringComparison.Ordinal);
+        Assert.Contains("DeleteTaskCommand", actionsSection, StringComparison.Ordinal);
+        Assert.Contains("RepairQueueCommand", actionsSection, StringComparison.Ordinal);
+        Assert.Contains("MoveUpCommand", actionsSection, StringComparison.Ordinal);
+        Assert.Contains("MoveDownCommand", actionsSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("AvailableScopes", actionsSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedUserId", actionsSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProjectSelector", actionsSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void No_duplicate_project_combobox_created()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
         Assert.DoesNotContain("ItemsSource=\"{Binding Projects}\"", xaml, StringComparison.Ordinal);
@@ -38,23 +69,25 @@ public sealed class TaskWorkbenchProjectSelectorTests
     }
 
     [Fact]
-    public async Task Selecting_project_updates_current_project_context()
+    public async Task Create_task_without_selected_project_shows_clear_message()
     {
         var context = new InMemoryCurrentProjectContext();
-        var selector = new ProjectSelectorViewModel(
-            new FakeProjectQueryService(),
-            new FakeProjectFilterOptionsService(),
-            context);
+        var workbench = new RecordingWorkbench();
+        var vm = CreateViewModel(context, workbench, userId: 12);
+        await vm.InitializeAsync();
 
-        await selector.InitializeAsync();
-        var project = selector.Projects.First();
-        selector.SelectProjectCommand.Execute(project);
+        vm.NewTitle = "Orphan task";
+        vm.SelectedAssignee = vm.Users.First();
+        vm.SelectedTaskType = vm.TaskTypes.First();
+        vm.SelectedStatus = vm.Statuses.First();
+        vm.SelectedBucket = vm.Buckets.First();
 
-        Assert.Equal(project.ProjectId, context.CurrentProject?.ProjectId);
+        Assert.False(vm.CreateTaskCommand.CanExecute(null));
+        Assert.Equal("לא נבחר פרויקט", vm.ActiveProjectDisplay);
     }
 
     [Fact]
-    public async Task Create_task_uses_selected_project_from_project_selector()
+    public async Task Create_task_uses_current_project_context_from_project_selector()
     {
         var context = new InMemoryCurrentProjectContext();
         await context.SetCurrentProjectAsync(new ProjectSummaryDto(42, "1042", "Demo Project", null, null, null, null, null, true));
@@ -73,24 +106,60 @@ public sealed class TaskWorkbenchProjectSelectorTests
         await System.Threading.Tasks.Task.Delay(300);
 
         Assert.Equal(42, workbench.LastCreateRequest?.ProjectId);
+        Assert.Equal(42, vm.SelectedProjectId);
     }
 
     [Fact]
-    public async Task Create_task_fails_with_clear_message_when_no_project_selected()
+    public async Task Selecting_project_updates_diagnostics_project_id()
     {
         var context = new InMemoryCurrentProjectContext();
-        var workbench = new RecordingWorkbench();
-        var vm = CreateViewModel(context, workbench, userId: 12);
+        var vm = CreateViewModel(context, new RecordingWorkbench(), userId: 12);
         await vm.InitializeAsync();
 
-        vm.NewTitle = "Orphan task";
-        vm.SelectedAssignee = vm.Users.First();
-        vm.SelectedTaskType = vm.TaskTypes.First();
-        vm.SelectedStatus = vm.Statuses.First();
-        vm.SelectedBucket = vm.Buckets.First();
+        Assert.Contains("ProjectId: (none)", vm.DiagnosticsText, StringComparison.Ordinal);
 
-        Assert.False(vm.CreateTaskCommand.CanExecute(null));
-        Assert.Equal("לא נבחר פרויקט", vm.ActiveProjectDisplay);
+        await context.SetCurrentProjectAsync(new ProjectSummaryDto(77, "1077", "Diagnostics Project", null, null, null, null, null, true));
+        await vm.LoadAsync();
+
+        Assert.Contains("ProjectId: 77", vm.DiagnosticsText, StringComparison.Ordinal);
+        Assert.Contains("ProjectTitle: 1077 — Diagnostics Project", vm.DiagnosticsText, StringComparison.Ordinal);
+        Assert.Contains("ProjectFilterActive: True", vm.DiagnosticsText, StringComparison.Ordinal);
+    }
+
+    private static string ExtractSection(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Missing marker: {startMarker}");
+        var end = source.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(end > start, $"Missing end marker: {endMarker}");
+        return source[start..end];
+    }
+
+    [Fact]
+    public void Task_workbench_uses_existing_project_selector()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
+
+        Assert.Contains("ProjectSelectorView", xaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectSelectorViewModel", vmSource, StringComparison.Ordinal);
+        Assert.Contains("ICurrentProjectContext", vmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Selecting_project_updates_current_project_context()
+    {
+        var context = new InMemoryCurrentProjectContext();
+        var selector = new ProjectSelectorViewModel(
+            new FakeProjectQueryService(),
+            new FakeProjectFilterOptionsService(),
+            context);
+
+        await selector.InitializeAsync();
+        var project = selector.Projects.First();
+        selector.SelectProjectCommand.Execute(project);
+
+        Assert.Equal(project.ProjectId, context.CurrentProject?.ProjectId);
     }
 
     [Fact]

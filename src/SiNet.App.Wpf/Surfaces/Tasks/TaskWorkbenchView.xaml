@@ -50,9 +50,15 @@
             <RowDefinition Height="160" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Text="{Binding Title}" Style="{DynamicResource SiTextLargeStyle}" VerticalAlignment="Center" />
-            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="16,0,0,0" />
+        <!-- Title -->
+        <TextBlock Grid.Row="0"
+                   Text="{Binding Title}"
+                   Style="{DynamicResource SiTextLargeStyle}"
+                   Margin="0,0,0,8" />
+
+        <!-- Actions toolbar: operations only (no project selector / filters). -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" />
             <Button Content="הוסף משימה" Command="{Binding ShowAddPanelCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
@@ -67,43 +73,60 @@
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
 
-        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center"
-                   Visibility="{Binding HasProjectSelector, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
-                                          CompactMode="True"
-                                          SearchBoxWidth="220"
-                                          ShowUserFilter="False"
-                                          VerticalAlignment="Center" />
-            <TextBlock Text="{Binding ActiveProjectDisplay}"
-                       Style="{DynamicResource SiTextSmallStyle}"
-                       VerticalAlignment="Center"
-                       Margin="12,0,0,0" />
-        </WrapPanel>
-
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
-            <TextBlock Text="מציג משימות:" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <ComboBox ItemsSource="{Binding AvailableScopes}"
-                      SelectedValuePath="Scope"
-                      DisplayMemberPath="DisplayName"
-                      SelectedValue="{Binding SelectedScope}"
-                      IsEnabled="{Binding CanSelectTaskScope}"
-                      Style="{DynamicResource SiComboBoxStyle}"
-                      MinWidth="160"
-                      VerticalAlignment="Center" />
-            <ComboBox ItemsSource="{Binding AvailableUsers}"
-                      SelectedValuePath="UserId"
-                      DisplayMemberPath="DisplayName"
-                      SelectedValue="{Binding SelectedUserId}"
-                      Style="{DynamicResource SiComboBoxStyle}"
-                      MinWidth="180"
-                      Margin="12,0,0,0"
-                      VerticalAlignment="Center"
-                      Visibility="{Binding IsSpecificUserScope, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <ComboBox.ToolTip>
-                    <TextBlock Text="בחר משתמש" Style="{DynamicResource SiTextSmallStyle}" />
-                </ComboBox.ToolTip>
-            </ComboBox>
-        </StackPanel>
+        <!-- Context / filter area: task scope, user, and shared project selector. -->
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource SiSecondaryBrush}"
+                BorderThickness="1"
+                Padding="8"
+                Margin="0,0,0,8"
+                CornerRadius="4"
+                Background="{DynamicResource SiBackgroundBrush}">
+            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="מציג משימות:"
+                           Style="{DynamicResource SiTextNormalStyle}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding AvailableScopes}"
+                          SelectedValuePath="Scope"
+                          DisplayMemberPath="DisplayName"
+                          SelectedValue="{Binding SelectedScope}"
+                          IsEnabled="{Binding CanSelectTaskScope}"
+                          Style="{DynamicResource SiComboBoxStyle}"
+                          MinWidth="160"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,0" />
+                <ComboBox ItemsSource="{Binding AvailableUsers}"
+                          SelectedValuePath="UserId"
+                          DisplayMemberPath="DisplayName"
+                          SelectedValue="{Binding SelectedUserId}"
+                          Style="{DynamicResource SiComboBoxStyle}"
+                          MinWidth="180"
+                          Margin="0,0,12,0"
+                          VerticalAlignment="Center"
+                          Visibility="{Binding IsSpecificUserScope, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ComboBox.ToolTip>
+                        <TextBlock Text="בחר משתמש" Style="{DynamicResource SiTextSmallStyle}" />
+                    </ComboBox.ToolTip>
+                </ComboBox>
+                <TextBlock Text="פרויקט:"
+                           Style="{DynamicResource SiTextNormalStyle}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"
+                           Visibility="{Binding HasProjectSelector, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                                              CompactMode="True"
+                                              SearchBoxWidth="220"
+                                              ShowUserFilter="False"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,12,0"
+                                              Visibility="{Binding HasProjectSelector, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock Text="{Binding ActiveProjectDisplay}"
+                           Style="{DynamicResource SiTextSmallStyle}"
+                           VerticalAlignment="Center" />
+            </WrapPanel>
+        </Border>
 
         <Border Grid.Row="3"
                 BorderBrush="{DynamicResource SiSecondaryBrush}"
@@ -187,8 +210,10 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,8">
-                    <TextBlock Text="Project" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding ActiveProjectDisplay}" Style="{DynamicResource SiTextNormalStyle}" Margin="0,4,0,0" />
+                    <TextBlock Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold">
+                        <Run Text="Project: " />
+                        <Run Text="{Binding ActiveProjectDisplay, Mode=OneWay}" />
+                    </TextBlock>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
                     <TextBlock Text="Title" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
