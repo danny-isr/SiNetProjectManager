@@ -337,6 +337,10 @@ public sealed class TaskPanelReadOnlyTests
             };
             return ValueTask.FromResult(result);
         }
+
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForAllUsersByBucketAsync(
+            int workQueueBucket, CancellationToken ct)
+            => ValueTask.FromResult<IReadOnlyList<TaskSummaryDto>>([]);
     }
 
     private sealed class StubTaskNavigationService : ITaskNavigationService

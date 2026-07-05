@@ -29,10 +29,10 @@ public sealed class TaskWorkbenchTests
 
         await vm.LoadAsync();
 
-        Assert.Equal("User", vm.LoadMode);
+        Assert.Equal("MyTasks", vm.LoadMode);
         Assert.Equal("12", vm.CurrentUserIdDisplay);
-        Assert.Contains("Mode: User", vm.DiagnosticsText, StringComparison.Ordinal);
-        Assert.Contains("UserId: 12", vm.DiagnosticsText, StringComparison.Ordinal);
+        Assert.Contains("Mode: MyTasks", vm.DiagnosticsText, StringComparison.Ordinal);
+        Assert.Contains("CurrentUserId: 12", vm.DiagnosticsText, StringComparison.Ordinal);
         Assert.Contains("Quick=0", vm.DiagnosticsText, StringComparison.Ordinal);
     }
 
@@ -57,7 +57,7 @@ public sealed class TaskWorkbenchTests
 
         await vm.LoadAsync();
 
-        Assert.Equal("User", vm.LoadMode);
+        Assert.Equal("MyTasks", vm.LoadMode);
         Assert.Equal("12", vm.CurrentUserIdDisplay);
         Assert.Contains("SqlTaskQueryService", vm.QueryServiceName, StringComparison.Ordinal);
         Assert.True(vm.QuickTasks.Count + vm.MediumTasks.Count + vm.LongTasks.Count > 0);
@@ -181,6 +181,35 @@ public sealed class TaskWorkbenchTests
     }
 
     [Fact]
+    public async Task SqlTaskQueryService_returns_all_users_open_tasks_by_bucket()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            db.Siusers.AddRange(
+                new Siuser { Id = 12, Name = "U12", IsActive = true },
+                new Siuser { Id = 99, Name = "U99", IsActive = true });
+            db.Projects.Add(new Project { Id = 1, Title = "P1", Created = DateTime.UtcNow });
+            AddOpenStatuses(db);
+            var tt = new TaskType { Code = "T1", Name = "T1", IsActive = true, SortOrder = 1 };
+            db.TaskTypes.Add(tt);
+            await db.SaveChangesAsync();
+            var openId = db.ProjectAssignmentStatuses.First(s => s.Code == TaskStatusCodes.Open).Id;
+            db.ProjectAssignments.AddRange(
+                new ProjectAssignment { Title = "Q12", ProjectId = 1, AssignedToId = 12, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, Created = DateTime.UtcNow },
+                new ProjectAssignment { Title = "Q99", ProjectId = 1, AssignedToId = 99, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, Created = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        var svc = new SqlTaskQueryService(new StubDbContextFactory(options));
+        var quick = await svc.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Quick, CancellationToken.None);
+
+        Assert.Equal(2, quick.Count);
+        Assert.Contains(quick, t => t.AssignedToUserId == 12);
+        Assert.Contains(quick, t => t.AssignedToUserId == 99);
+    }
+
+    [Fact]
     public void SqlTaskQueryService_sorts_in_memory_not_in_sql()
     {
         var source = File.ReadAllText(Path.Combine(
@@ -281,6 +310,7 @@ public sealed class TaskWorkbenchTests
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(int projectId, bool includeClosed = false, int? workQueueBucket = null, CancellationToken ct = default) => ValueTask.FromResult(items);
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(int userId, int? workQueueBucket = null, CancellationToken ct = default) => ValueTask.FromResult(items);
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserByBucketAsync(int userId, int workQueueBucket, CancellationToken ct) => ValueTask.FromResult(items);
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForAllUsersByBucketAsync(int workQueueBucket, CancellationToken ct) => ValueTask.FromResult(items);
     }
 
     private sealed class StubNav : ITaskNavigationService

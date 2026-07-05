@@ -22,6 +22,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.SystemSettingsWrite,
             AppFeatureCodes.UsersManage,
             AppFeatureCodes.ActionPermissionsManage,
+            AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks,
         }.Select(c => new object[] { c });
 
     [Theory]
@@ -40,6 +41,8 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Management, AppFeatureCodes.UsersManage, false)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.UsersManage, true)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.ActionPermissionsManage, true)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks, true)]
+    [InlineData(AppRole.Management, AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks, false)]
     public void Feature_role_matrix(AppRole role, string featureCode, bool expected)
     {
         Assert.Equal(expected, AppFeatureAuthorization.CanAccessFeature(role, featureCode));

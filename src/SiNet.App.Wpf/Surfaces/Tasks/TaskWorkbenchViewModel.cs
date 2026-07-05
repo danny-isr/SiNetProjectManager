@@ -24,6 +24,8 @@ public class TaskWorkbenchViewModel : ObservableObject
     private readonly ITaskWorkbenchService? _workbench;
     private readonly ICurrentUserContext? _currentUser;
     private readonly ICurrentProjectContext? _currentProject;
+    private readonly IAuthorizationQueryService? _authorization;
+    private readonly IUserLookupService? _userLookup;
 
     private TaskSummaryDto? _selectedTask;
     private string _statusMessage = "טוען משימות...";
@@ -38,9 +40,14 @@ public class TaskWorkbenchViewModel : ObservableObject
     private TaskLookupItemDto? _selectedStatus;
     private TaskLookupItemDto? _selectedBucket;
     private DateTime? _newDueDate;
+    private TaskWorkbenchScope _selectedScope = TaskWorkbenchScope.MyTasks;
+    private int? _selectedUserId;
+    private bool _canSelectTaskScope;
+    private bool _scopeOptionsInitialized;
+    private bool _suppressScopeReload;
 
     public TaskWorkbenchViewModel()
-        : this(new DesignTaskQueryService(), new DesignTaskNavigationService(), null, null, null)
+        : this(new DesignTaskQueryService(), new DesignTaskNavigationService(), null, null, null, null, null)
     {
     }
 
@@ -49,13 +56,17 @@ public class TaskWorkbenchViewModel : ObservableObject
         ITaskNavigationService taskNavigation,
         ITaskWorkbenchService? workbench = null,
         ICurrentUserContext? currentUser = null,
-        ICurrentProjectContext? currentProject = null)
+        ICurrentProjectContext? currentProject = null,
+        IAuthorizationQueryService? authorization = null,
+        IUserLookupService? userLookup = null)
     {
         _taskQuery = taskQuery ?? throw new ArgumentNullException(nameof(taskQuery));
         _taskNavigation = taskNavigation ?? throw new ArgumentNullException(nameof(taskNavigation));
         _workbench = workbench;
         _currentUser = currentUser;
         _currentProject = currentProject;
+        _authorization = authorization;
+        _userLookup = userLookup;
 
         QuickTasks = [];
         MediumTasks = [];
@@ -65,10 +76,16 @@ public class TaskWorkbenchViewModel : ObservableObject
         TaskTypes = [];
         Statuses = [];
         Buckets = [];
+        AvailableScopes = [];
+        AvailableUsers = [];
 
         RefreshCommand = new AsyncRelayCommand(() => LoadAsync(), () => !IsBusy);
         ResolveCommand = new AsyncRelayCommand(() => ResolveSelectedAsync(), () => !IsBusy && SelectedTask is not null);
-        ShowAddPanelCommand = new RelayCommand(_ => IsAddPanelVisible = true, _ => !IsBusy && _workbench is not null);
+        ShowAddPanelCommand = new RelayCommand(_ =>
+        {
+            IsAddPanelVisible = true;
+            ApplyCreationDefaults();
+        }, _ => !IsBusy && _workbench is not null);
         HideAddPanelCommand = new RelayCommand(_ => IsAddPanelVisible = false);
         CreateTaskCommand = new AsyncRelayCommand(CreateTaskAsync, CanCreateTask);
         DeleteTaskCommand = new AsyncRelayCommand(DeleteSelectedAsync, () => !IsBusy && SelectedTask is not null && _workbench is not null);
@@ -93,6 +110,65 @@ public class TaskWorkbenchViewModel : ObservableObject
     public ObservableCollection<TaskLookupItemDto> TaskTypes { get; }
     public ObservableCollection<TaskLookupItemDto> Statuses { get; }
     public ObservableCollection<TaskLookupItemDto> Buckets { get; }
+
+    public ObservableCollection<TaskWorkbenchScopeOption> AvailableScopes { get; }
+    public ObservableCollection<UserLookupDto> AvailableUsers { get; }
+
+    public bool CanSelectTaskScope
+    {
+        get => _canSelectTaskScope;
+        private set => SetField(ref _canSelectTaskScope, value);
+    }
+
+    public TaskWorkbenchScope SelectedScope
+    {
+        get => _selectedScope;
+        set
+        {
+            if (_scopeOptionsInitialized && !CanSelectTaskScope && value != TaskWorkbenchScope.MyTasks)
+            {
+                StatusMessage = "אין הרשאה להצגת משימות של משתמשים אחרים.";
+                NotifyScopeDerivedProperties();
+                return;
+            }
+
+            if (!SetField(ref _selectedScope, value))
+                return;
+
+            NotifyScopeDerivedProperties();
+            if (IsAddPanelVisible)
+                ApplyCreationDefaults();
+
+            if (!_suppressScopeReload && _scopeOptionsInitialized)
+                _ = LoadAsync();
+        }
+    }
+
+    public int? SelectedUserId
+    {
+        get => _selectedUserId;
+        set
+        {
+            if (!SetField(ref _selectedUserId, value))
+                return;
+
+            OnPropertyChanged(nameof(ScopeDisplayText));
+            if (IsAddPanelVisible)
+                ApplyCreationDefaults();
+
+            if (!_suppressScopeReload && _scopeOptionsInitialized && SelectedScope == TaskWorkbenchScope.SpecificUser)
+                _ = LoadAsync();
+        }
+    }
+
+    public bool IsSpecificUserScope => SelectedScope == TaskWorkbenchScope.SpecificUser;
+
+    public string ScopeDisplayText =>
+        CanSelectTaskScope
+            ? TaskWorkbenchScopeLabels.GetDisplayName(SelectedScope)
+            : $"מציג: {TaskWorkbenchScopeLabels.MyTasks}";
+
+    public bool CanEditAssigneeOnCreate => CanSelectTaskScope;
 
     public TaskSummaryDto? SelectedTask
     {
@@ -218,12 +294,62 @@ public class TaskWorkbenchViewModel : ObservableObject
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
+        await InitializeScopeOptionsAsync(ct).ConfigureAwait(true);
         await LoadCreationOptionsAsync(ct).ConfigureAwait(true);
         await LoadAsync(ct).ConfigureAwait(true);
     }
 
+    private async Task InitializeScopeOptionsAsync(CancellationToken ct)
+    {
+        CanSelectTaskScope = _authorization is not null
+            && await _authorization.CanCurrentUserAccessFeatureAsync(
+                AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks, ct).ConfigureAwait(true);
+
+        _suppressScopeReload = true;
+        try
+        {
+            AvailableScopes.Clear();
+            AvailableScopes.Add(new TaskWorkbenchScopeOption(
+                TaskWorkbenchScope.MyTasks, TaskWorkbenchScopeLabels.MyTasks));
+
+            if (CanSelectTaskScope)
+            {
+                AvailableScopes.Add(new TaskWorkbenchScopeOption(
+                    TaskWorkbenchScope.SpecificUser, TaskWorkbenchScopeLabels.SpecificUser));
+                AvailableScopes.Add(new TaskWorkbenchScopeOption(
+                    TaskWorkbenchScope.AllUsers, TaskWorkbenchScopeLabels.AllUsers));
+
+                if (_userLookup is not null)
+                {
+                    AvailableUsers.Clear();
+                    var users = await _userLookup.GetActiveUsersAsync(ct).ConfigureAwait(true);
+                    foreach (var user in users)
+                        AvailableUsers.Add(user);
+                }
+            }
+
+            SelectedScope = TaskWorkbenchScope.MyTasks;
+            SelectedUserId = null;
+        }
+        finally
+        {
+            _suppressScopeReload = false;
+            _scopeOptionsInitialized = true;
+            NotifyScopeDerivedProperties();
+        }
+    }
+
+    private void NotifyScopeDerivedProperties()
+    {
+        OnPropertyChanged(nameof(IsSpecificUserScope));
+        OnPropertyChanged(nameof(ScopeDisplayText));
+    }
+
     internal async Task LoadAsync(CancellationToken ct = default)
     {
+        if (!_scopeOptionsInitialized)
+            await InitializeScopeOptionsAsync(ct).ConfigureAwait(true);
+
         IsBusy = true;
         BucketCounts counts = default;
         try
@@ -243,9 +369,60 @@ public class TaskWorkbenchViewModel : ObservableObject
 
             if (userId is int uid)
             {
-                LoadMode = "User";
-                counts = await LoadUserBucketsAsync(uid, ct).ConfigureAwait(true);
-                StatusMessage = await BuildUserStatusMessageAsync(uid, counts, ct).ConfigureAwait(true);
+                if (!CanSelectTaskScope && SelectedScope != TaskWorkbenchScope.MyTasks)
+                {
+                    _suppressScopeReload = true;
+                    try
+                    {
+                        SelectedScope = TaskWorkbenchScope.MyTasks;
+                        SelectedUserId = null;
+                    }
+                    finally
+                    {
+                        _suppressScopeReload = false;
+                    }
+
+                    StatusMessage = "אין הרשאה להצגת משימות של משתמשים אחרים.";
+                    LoadMode = TaskWorkbenchScope.MyTasks.ToString();
+                    UpdateDiagnostics(counts);
+                    return;
+                }
+
+                switch (SelectedScope)
+                {
+                    case TaskWorkbenchScope.MyTasks:
+                        LoadMode = TaskWorkbenchScope.MyTasks.ToString();
+                        counts = await LoadUserBucketsAsync(uid, ct).ConfigureAwait(true);
+                        StatusMessage = await BuildUserStatusMessageAsync(uid, counts, ct).ConfigureAwait(true);
+                        break;
+
+                    case TaskWorkbenchScope.SpecificUser:
+                        if (SelectedUserId is not int targetUserId)
+                        {
+                            LoadMode = TaskWorkbenchScope.SpecificUser.ToString();
+                            StatusMessage = "בחר משתמש כדי להציג את המשימות שלו.";
+                            break;
+                        }
+
+                        LoadMode = TaskWorkbenchScope.SpecificUser.ToString();
+                        counts = await LoadUserBucketsAsync(targetUserId, ct).ConfigureAwait(true);
+                        StatusMessage = await BuildUserStatusMessageAsync(targetUserId, counts, ct).ConfigureAwait(true);
+                        break;
+
+                    case TaskWorkbenchScope.AllUsers:
+                        LoadMode = TaskWorkbenchScope.AllUsers.ToString();
+                        counts = await LoadAllUsersBucketsAsync(ct).ConfigureAwait(true);
+                        StatusMessage = counts.Total == 0
+                            ? "לא נמצאו משימות פתוחות לכל המשתמשים."
+                            : $"מציג משימות של כל המשתמשים. נטענו {counts.Total}: קצר={counts.Quick}, בינוני={counts.Medium}, ארוך={counts.Long}";
+                        break;
+
+                    default:
+                        LoadMode = TaskWorkbenchScope.MyTasks.ToString();
+                        counts = await LoadUserBucketsAsync(uid, ct).ConfigureAwait(true);
+                        StatusMessage = await BuildUserStatusMessageAsync(uid, counts, ct).ConfigureAwait(true);
+                        break;
+                }
             }
             else if (projectId is int pid and > 0)
             {
@@ -290,7 +467,13 @@ public class TaskWorkbenchViewModel : ObservableObject
 
     private void ApplyCreationDefaults()
     {
-        if (_currentUser?.UserId is int uid)
+        if (!CanSelectTaskScope && _currentUser?.UserId is int lockedUid)
+            SelectedAssignee = Users.FirstOrDefault(u => u.Id == lockedUid);
+        else if (SelectedScope == TaskWorkbenchScope.SpecificUser && SelectedUserId is int scopeUserId)
+            SelectedAssignee = Users.FirstOrDefault(u => u.Id == scopeUserId);
+        else if (SelectedScope == TaskWorkbenchScope.AllUsers)
+            SelectedAssignee = null;
+        else if (_currentUser?.UserId is int uid)
             SelectedAssignee = Users.FirstOrDefault(u => u.Id == uid) ?? SelectedAssignee;
 
         if (_currentProject?.CurrentProject?.ProjectId is int pid)
@@ -299,6 +482,8 @@ public class TaskWorkbenchViewModel : ObservableObject
         SelectedBucket ??= Buckets.FirstOrDefault(b => b.Id == WorkQueueBucketCodes.Medium);
         SelectedStatus ??= Statuses.FirstOrDefault();
         SelectedTaskType ??= TaskTypes.FirstOrDefault();
+
+        (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private async Task<BucketCounts> LoadUserBucketsAsync(int userId, CancellationToken ct)
@@ -306,6 +491,15 @@ public class TaskWorkbenchViewModel : ObservableObject
         var quick = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Quick, ct).ConfigureAwait(true);
         var medium = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Medium, ct).ConfigureAwait(true);
         var longBucket = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Long, ct).ConfigureAwait(true);
+        ReplaceAll(quick, medium, longBucket);
+        return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
+    }
+
+    private async Task<BucketCounts> LoadAllUsersBucketsAsync(CancellationToken ct)
+    {
+        var quick = await _taskQuery.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Quick, ct).ConfigureAwait(true);
+        var medium = await _taskQuery.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Medium, ct).ConfigureAwait(true);
+        var longBucket = await _taskQuery.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Long, ct).ConfigureAwait(true);
         ReplaceAll(quick, medium, longBucket);
         return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
     }
@@ -359,7 +553,9 @@ public class TaskWorkbenchViewModel : ObservableObject
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Mode: {LoadMode}");
-        sb.AppendLine($"UserId: {CurrentUserIdDisplay}");
+        sb.AppendLine($"CurrentUserId: {CurrentUserIdDisplay}");
+        sb.AppendLine($"SelectedUserId: {SelectedUserId?.ToString() ?? "(none)"}");
+        sb.AppendLine($"CanSelectTaskScope: {CanSelectTaskScope}");
         sb.AppendLine($"ProjectId: {CurrentProjectIdDisplay}");
         sb.AppendLine($"QueryService: {QueryServiceName}");
         sb.AppendLine($"Counts: Quick={counts.Quick}, Medium={counts.Medium}, Long={counts.Long}");
@@ -371,12 +567,34 @@ public class TaskWorkbenchViewModel : ObservableObject
     private bool CanCreateTask() =>
         !IsBusy && _workbench is not null && !string.IsNullOrWhiteSpace(NewTitle)
         && SelectedProject is not null && SelectedAssignee is not null && SelectedTaskType is not null
-        && SelectedStatus is not null && SelectedBucket is not null && _currentUser?.UserId is int;
+        && SelectedStatus is not null && SelectedBucket is not null && _currentUser?.UserId is int actorId
+        && ValidateAssigneeForCreate(actorId);
+
+    private bool ValidateAssigneeForCreate(int actorId)
+    {
+        if (SelectedAssignee is null)
+            return false;
+
+        if (!CanSelectTaskScope)
+            return SelectedAssignee.Id == actorId;
+
+        return true;
+    }
 
     private async Task CreateTaskAsync()
     {
         if (_workbench is null || _currentUser?.UserId is not int actorId)
             return;
+
+        if (!ValidateAssigneeForCreate(actorId))
+        {
+            MessageBox.Show(
+                "אין הרשאה ליצור משימה למשתמש אחר.",
+                "יצירת משימה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
 
         IsBusy = true;
         try
@@ -507,6 +725,7 @@ public class TaskWorkbenchViewModel : ObservableObject
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(int projectId, bool includeClosed = false, int? workQueueBucket = null, CancellationToken ct = default) => ValueTask.FromResult<IReadOnlyList<TaskSummaryDto>>([]);
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(int userId, int? workQueueBucket = null, CancellationToken ct = default) => ValueTask.FromResult<IReadOnlyList<TaskSummaryDto>>([]);
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserByBucketAsync(int userId, int workQueueBucket, CancellationToken ct) => ValueTask.FromResult<IReadOnlyList<TaskSummaryDto>>([]);
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForAllUsersByBucketAsync(int workQueueBucket, CancellationToken ct) => ValueTask.FromResult<IReadOnlyList<TaskSummaryDto>>([]);
     }
 
     private sealed class DesignTaskNavigationService : ITaskNavigationService
@@ -527,7 +746,7 @@ public sealed class TaskPanelReadOnlyViewModel : TaskWorkbenchViewModel
         ITaskNavigationService taskNavigation,
         ICurrentUserContext? currentUser = null,
         ICurrentProjectContext? currentProject = null)
-        : base(taskQuery, taskNavigation, null, currentUser, currentProject)
+        : base(taskQuery, taskNavigation, null, currentUser, currentProject, null, null)
     {
     }
 

@@ -18,6 +18,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="160" />
@@ -30,11 +31,33 @@
             <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Margin="8,0,0,0" Padding="12,4"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
-        <Border Grid.Row="1" Background="#F5F5F5" Padding="8" Margin="0,0,0,8" CornerRadius="4">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+            <TextBlock Text="מציג משימות:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox ItemsSource="{Binding AvailableScopes}"
+                      SelectedValuePath="Scope"
+                      DisplayMemberPath="DisplayName"
+                      SelectedValue="{Binding SelectedScope}"
+                      IsEnabled="{Binding CanSelectTaskScope}"
+                      MinWidth="160"
+                      VerticalAlignment="Center" />
+            <ComboBox ItemsSource="{Binding AvailableUsers}"
+                      SelectedValuePath="UserId"
+                      DisplayMemberPath="DisplayName"
+                      SelectedValue="{Binding SelectedUserId}"
+                      MinWidth="180"
+                      Margin="12,0,0,0"
+                      VerticalAlignment="Center"
+                      Visibility="{Binding IsSpecificUserScope, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ComboBox.ToolTip>
+                    <TextBlock Text="בחר משתמש" />
+                </ComboBox.ToolTip>
+            </ComboBox>
+        </StackPanel>
+        <Border Grid.Row="2" Background="#F5F5F5" Padding="8" Margin="0,0,0,8" CornerRadius="4">
             <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
         </Border>
-        <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Margin="0,0,0,8" Foreground="#333" TextWrapping="Wrap" />
-        <TabControl Grid.Row="3">
+        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Margin="0,0,0,8" Foreground="#333" TextWrapping="Wrap" />
+        <TabControl Grid.Row="4">
             <TabItem Header="קצר">
                 <DataGrid ItemsSource="{Binding QuickTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
                     <DataGrid.Columns>
@@ -75,7 +98,7 @@
                 </DataGrid>
             </TabItem>
         </TabControl>
-        <GroupBox Grid.Row="4" Header="הוספת משימה" Margin="0,8,0,8"
+        <GroupBox Grid.Row="5" Header="הוספת משימה" Margin="0,8,0,8"
                   Visibility="{Binding IsAddPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid Margin="8">
                 <Grid.ColumnDefinitions>
@@ -102,7 +125,8 @@
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8">
                     <TextBlock Text="Assigned to" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding Users}" SelectedItem="{Binding SelectedAssignee}" DisplayMemberPath="DisplayName" />
+                    <ComboBox ItemsSource="{Binding Users}" SelectedItem="{Binding SelectedAssignee}" DisplayMemberPath="DisplayName"
+                              IsEnabled="{Binding CanEditAssigneeOnCreate}" />
                 </StackPanel>
                 <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,8">
                     <TextBlock Text="Task type" FontWeight="SemiBold" />
@@ -122,7 +146,7 @@
                 </StackPanel>
             </Grid>
         </GroupBox>
-        <GroupBox Grid.Row="5" Header="Resolve preview (WorkSurfaceContext)" Margin="0,0,0,8">
+        <GroupBox Grid.Row="6" Header="Resolve preview (WorkSurfaceContext)" Margin="0,0,0,8">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

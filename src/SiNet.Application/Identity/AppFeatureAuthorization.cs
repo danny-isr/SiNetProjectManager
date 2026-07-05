@@ -19,6 +19,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.SystemSettingsWrite] = AppRole.Administrator,
             [AppFeatureCodes.UsersManage] = AppRole.Administrator,
             [AppFeatureCodes.ActionPermissionsManage] = AppRole.Administrator,
+            [AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks] = AppRole.Administrator,
         };
 
     /// <summary>

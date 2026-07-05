@@ -26,4 +26,9 @@ public interface ITaskQueryService
         int userId,
         int workQueueBucket,
         CancellationToken ct);
+
+    /// <summary>Returns open tasks for all users in one bucket queue.</summary>
+    ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForAllUsersByBucketAsync(
+        int workQueueBucket,
+        CancellationToken ct);
 }

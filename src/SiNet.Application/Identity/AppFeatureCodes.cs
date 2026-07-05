@@ -16,4 +16,5 @@ public static class AppFeatureCodes
     public const string SystemSettingsWrite = "System.Settings.Write";
     public const string UsersManage = "Users.Manage";
     public const string ActionPermissionsManage = "ActionPermissions.Manage";
+    public const string TaskWorkbenchViewOtherUsersTasks = "TaskWorkbench.ViewOtherUsersTasks";
 }

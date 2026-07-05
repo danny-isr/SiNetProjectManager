@@ -78,6 +78,28 @@ public sealed class SqlTaskQueryService : ITaskQueryService
         return await QueryOpenTasksForUserAsync(userId, workQueueBucket, ct).ConfigureAwait(false);
     }
 
+    public async ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForAllUsersByBucketAsync(
+        int workQueueBucket,
+        CancellationToken ct)
+    {
+        if (!WorkQueueBucketCodes.IsValid(workQueueBucket))
+            throw new ArgumentOutOfRangeException(nameof(workQueueBucket));
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+
+        var query = db.ProjectAssignments
+            .AsNoTracking()
+            .Include(t => t.TaskType)
+            .Include(t => t.AssignmentStatus)
+            .Include(t => t.AssignedTo)
+            .Include(t => t.LastTaskResult)
+            .Where(t => t.WorkQueueBucket == workQueueBucket
+                        && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
+
+        var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortAllUsersInBucket(tasks).Select(MapTask).ToList();
+    }
+
     private async ValueTask<IReadOnlyList<TaskSummaryDto>> QueryOpenTasksForUserAsync(
         int userId,
         int? workQueueBucket,

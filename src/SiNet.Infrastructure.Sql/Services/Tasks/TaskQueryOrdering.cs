@@ -22,4 +22,13 @@ internal static class TaskQueryOrdering
             .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
             .ThenBy(t => t.Created ?? DateTime.MinValue)
             .ToList();
+
+    public static List<ProjectAssignment> SortAllUsersInBucket(IEnumerable<ProjectAssignment> tasks) =>
+        tasks
+            .OrderBy(t => t.AssignedTo?.Name ?? string.Empty)
+            .ThenBy(t => t.AssignedToId ?? int.MaxValue)
+            .ThenBy(t => t.WorkPriority ?? int.MaxValue)
+            .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
+            .ThenBy(t => t.Created ?? DateTime.MinValue)
+            .ToList();
 }
