@@ -265,26 +265,11 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNet.LegacyBridge.Inspection.ILegacyInspectionSource,
                 Services.ReportServiceLegacyInspectionSource>();
 
-            // Strangler seam: lets the new Work Surface navigation resolve a real workflow-created
-            // task into a WorkSurfaceContext through the legacy read-only TaskNavigationResolver
-            // (registered below). Transient to match the resolver lifetime; the LegacyBridge
-            // LegacyTaskNavigationService degrades to a null context when this seam is absent (new
-            // app host), so the surface shows a clear "cannot open from task yet" message instead of
-            // guessing a target. This is the host-side fulfilment for
-            // ITaskNavigationService -> ILegacyTaskNavigationSource -> TaskNavigationResolver.
-            services.AddTransient<SiNet.LegacyBridge.Tasks.ILegacyTaskNavigationSource,
-                Services.TaskNavigationLegacySource>();
-
-            // Strangler seam: lets the new Work Surface COMPLETE a task through the official path
-            // (ITaskCompletionService -> ILegacyTaskCompletionSource -> TaskCompletionCoordinator).
-            // The coordinator (registered below) is the single decision point that records the
-            // result, closes the task per policy, and routes workflow auto-advance through
-            // IWorkflowCommandService.CheckAndAutoAdvanceAsync. The UI/ViewModel never touch
-            // WorkflowEngine/WorkflowTaskOrchestrator directly. Transient to match the coordinator
-            // lifetime; the LegacyBridge LegacyTaskCompletionService degrades to an Unavailable
-            // result when this seam is absent (new app host).
-            services.AddTransient<SiNet.LegacyBridge.Tasks.ILegacyTaskCompletionSource,
-                Services.TaskCompletionLegacySource>();
+            // Process backbone (Workflow reads + native Task/Action ports in Infrastructure.Sql).
+            // Replaces the temporary ILegacyTaskNavigationSource / ILegacyTaskCompletionSource seams
+            // for New System Work Surfaces. Legacy TaskNavigationResolver / TaskCompletionCoordinator
+            // remain registered below for legacy UI only.
+            SiNet.Infrastructure.Sql.ProcessBackboneServiceCollectionExtensions.AddSiNetProcessBackbone(services);
 
             // Current-user port: binds the new clean ICurrentUserContext to the legacy authenticated
             // CurrentUserContext singleton so feature screens (e.g. the Inspection Work Surface) can
@@ -294,16 +279,8 @@ namespace SiNetProjectManagerV2
             // it exposes only the user id and makes no authorization decisions.
             services.AddSiNetIdentityLegacyAdapters();
 
-            // Completion-metadata port: binds the new clean ITaskCompletionMetadataResolver to the
-            // legacy declarative ReviewCompletionEventBehavior mapping so feature screens can resolve
-            // the completion event code for a BRANCHING task (where the chosen result selects between
-            // several events, e.g. RecheckPlan) without owning a mapping table and without guessing.
-            // Singleton because the mapping is static/stateless. Read-only: it only translates the
-            // (task type, result) pair into the event code the TaskCompletionCoordinator validates;
-            // it never advances workflow. The SiNet.App.Wpf preview harness leaves this unbound, in
-            // which case the shell falls back to an explicit dev input.
-            services.AddSingleton<SiNet.Application.Tasks.ITaskCompletionMetadataResolver,
-                Services.TaskCompletionMetadataResolver>();
+            // ITaskCompletionMetadataResolver is registered by AddSiNetProcessBackbone()
+            // (SqlTaskCompletionMetadataResolver in Infrastructure.Sql).
 
             // Inspection migration (Phase 5): register the clean Application port adapter and the new
             // Inspection shell graph so the additive "Inspection (Preview)" developer entry point can

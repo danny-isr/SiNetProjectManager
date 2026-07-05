@@ -4,6 +4,8 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNet.LegacyBridge.Tasks;
 
 /// <summary>
+/// <b>Temporary migration bridge — not target architecture.</b> Candidate for future removal once all
+/// hosts consume native SqlTaskNavigationService. Do not use for new Work Surfaces unless explicitly approved.
 /// Strangler adapter that implements the new <see cref="ITaskNavigationService"/> Application port by
 /// delegating to the legacy-host <see cref="ILegacyTaskNavigationSource"/> seam. It maps the
 /// bridge-local <see cref="LegacyTaskNavigationRequestDto"/> onto the Application

@@ -1692,6 +1692,31 @@ MoveToProject belongs outside the screen, in ProjectFileFilingService or equival
 
 ---
 
+## Process backbone foundation migration (2026-07-05)
+
+**Goal:** Native Application + Infrastructure.Sql implementations for Workflow reads, Task navigation/completion, and Action dispatcher foundation — without LegacyBridge task seams in `AddSiNet()`.
+
+| Area | Application contracts | Infrastructure.Sql | Still in SiNetSQL | Temporary bridge |
+| --- | --- | --- | --- | --- |
+| Workflow reads | `IWorkflowQueryService`, `IProjectWorkflowPolicyService` | `WorkflowQueryService` | — | — |
+| Workflow writes | `IWorkflowCommandService` | — (blocked: orchestrator) | `WorkflowCommandServiceAdapter`, engine/orchestrator | — |
+| Task navigation | `ITaskNavigationService` | `SqlTaskNavigationService` | `TaskNavigationResolver` (legacy UI) | `LegacyTaskNavigationService` (not registered) |
+| Task completion | `ITaskCompletionService` | `SqlTaskCompletionService` | `TaskCompletionCoordinator` (legacy UI) | `LegacyTaskCompletionService` (not registered) |
+| Task query | `ITaskQueryService`, `TaskSummaryDto` | `SqlTaskQueryService` | `TaskService` (legacy UI) | — |
+| Completion metadata | `ITaskCompletionMetadataResolver` | `SqlTaskCompletionMetadataResolver` | `ReviewCompletionEventBehavior` (duplicate table in Infra) | V2 `TaskCompletionMetadataResolver` (removed from DI) |
+| Actions | `IProcessActionService`, `ProcessActionCatalog` | `ProcessActionService` + foundation handlers (5) | Full handler set + `ProcessActionDispatcher` | — |
+| Task interaction registry | — (internal to Infra) | `ReviewTaskInteractionRegistry` (copied) | Original copy | — |
+
+**DI:** `AddSiNetProcessBackbone()` in `SiNet.App.Composition.AddSiNet()` registers the native backbone. `AddSiNetLegacyBridge()` registers **Inspection only** — not task ports.
+
+**New Work Surface readiness:** Task navigation and completion are available without `ILegacyTaskNavigationSource` / `ILegacyTaskCompletionSource`. Workflow command writes and heavy action handlers (MoveToProject, etc.) remain blocked until migrated.
+
+**Tests:** `ProcessBackboneBoundaryTests` in `SiNet.App.Wpf.Tests/Boundary/`.
+
+**Authoritative readiness doc:** [`docs/PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md)
+
+---
+
 ## Recovery points
 
 - **Frozen reference:** `Before_refactoring` 🔒 — never modify; restore any old file from here.

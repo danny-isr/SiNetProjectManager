@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Inspection;
-using SiNet.Application.Tasks;
 using SiNet.LegacyBridge.Inspection;
-using SiNet.LegacyBridge.Tasks;
 
 namespace SiNet.LegacyBridge;
 
@@ -10,6 +8,11 @@ namespace SiNet.LegacyBridge;
 /// Registers strangler adapters that implement new Application ports by delegating to legacy
 /// code. Adapters are added here per domain and removed once the real
 /// <c>SiNet.Infrastructure.*</c> implementation replaces them.
+/// <para>
+/// <b>Temporary / migration bridge — not target architecture.</b> New Work Surfaces must register
+/// and consume native ports via <c>AddSiNetProcessBackbone()</c> instead of relying on this module.
+/// Candidate for future removal once remaining inspection/email slices migrate.
+/// </para>
 /// </summary>
 public static class LegacyBridgeServiceCollectionExtensions
 {
@@ -21,18 +24,17 @@ public static class LegacyBridgeServiceCollectionExtensions
     /// Inspection screen: that adapter delegates to the optional <c>ILegacyInspectionSource</c> seam
     /// (bound only by the legacy WPF host, which knows both worlds) and degrades to an empty series
     /// list when the seam is unbound, so the new app stays free of any <c>SiNetSQL</c> dependency.
+    /// <para>
+    /// Task navigation/completion ports migrated to <c>SiNet.Infrastructure.Sql</c>
+    /// (<c>AddSiNetTaskServices</c> via <c>AddSiNetProcessBackbone</c>). Legacy task adapters remain
+    /// in this assembly for reference and legacy-host override scenarios only — they are NOT
+    /// registered here. Do not use LegacyTaskNavigationService / LegacyTaskCompletionService for new
+    /// Work Surfaces unless explicitly approved.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddSiNetLegacyBridge(this IServiceCollection services)
     {
         services.AddTransient<IInspectionWorkspace, LegacyInspectionWorkspace>();
-
-        // Workflow-first task ports. Both adapters degrade gracefully when their optional legacy
-        // seam (ILegacyTaskNavigationSource / ILegacyTaskCompletionSource) is unbound: navigation
-        // returns null (no guessed target) and completion reports Unavailable. The legacy WPF host
-        // binds the seams to TaskNavigationResolver / TaskCompletionCoordinator; the new app stays
-        // free of any SiNetSQL dependency.
-        services.AddTransient<ITaskNavigationService, LegacyTaskNavigationService>();
-        services.AddTransient<ITaskCompletionService, LegacyTaskCompletionService>();
         return services;
     }
 }

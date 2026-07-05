@@ -38,6 +38,8 @@ public sealed class WorkSurfaceWorkflowIntegrationBoundaryTests
 
         Assert.Contains("TaskNavigationResolver", doc, StringComparison.Ordinal);
         Assert.Contains("ITaskNavigationService", doc, StringComparison.Ordinal);
+        Assert.Contains("AddSiNetProcessBackbone", doc, StringComparison.Ordinal);
+        Assert.Contains("SqlTaskNavigationService", doc, StringComparison.Ordinal);
         Assert.Contains("WorkSurfaceContext", doc, StringComparison.Ordinal);
         Assert.Contains("ITaskCompletionCoordinator", doc, StringComparison.Ordinal);
         Assert.Contains("IWorkflowCommandService", doc, StringComparison.Ordinal);

@@ -9,6 +9,7 @@
 >
 > Related:
 > [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) (workflow-first backbone),
+> [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md) (readiness levels + matrix),
 > [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md) (visual-clone inventory),
 > [`APP_SHELL.md`](./APP_SHELL.md) §10 (shell is not a workflow actor),
 > [`PROJECTS.md`](./PROJECTS.md) §7 (`WorkSurfaceContext` vs Current Project),
@@ -23,15 +24,15 @@
 | --- | --- | --- |
 | **Workflow** | `IWorkflowCommandService` / `WorkflowTaskOrchestrator` | Process backbone: stages, instances, auto-advance. **Not** mutated from WPF ViewModels. |
 | **Task** | `ProjectAssignment` + `TaskType` + `TaskLink` (DB); orchestration via `WorkflowTaskOrchestrator` / `SmartTaskService` | Work item assigned to a user/group with typed interaction and work targets. |
-| **Action / handler** | `IProcessActionDispatcher` → `IProcessActionHandler` implementations | Executes a business action (e.g. MoveToProject, AddMaterial) when context permits. |
+| **Action / handler** | `IProcessActionService` (New System) / legacy `IProcessActionDispatcher` | Executes a business action when context permits. New surfaces use the Application port. |
 | **Work Surface** | `src/SiNet.App.Wpf` window/view + ViewModel | UI where the user performs work. Receives **`WorkSurfaceContext`**; loads data from context only in task mode. |
-| **Completion bridge** | `ITaskCompletionCoordinator` (`TaskCompletionCoordinator`) | Single decision point for business completion: validates event/result, updates task, may close task, signals workflow auto-advance via `IWorkflowCommandService`. |
+| **Completion bridge** | `ITaskCompletionService` (`SqlTaskCompletionService` in New System) | Single decision point for business completion: validates event/result, updates task, may close task, routes workflow auto-advance via `IWorkflowCommandService`. Legacy `TaskCompletionCoordinator` remains in SiNetSQL for legacy UI only. |
 
 **Hard rules:**
 
 - ViewModels **must not** change `WorkflowStage` directly.
 - ViewModels **must not** change `ProjectStatus` directly (coordinator may do so per policy).
-- ViewModels **must not** close a task directly for business completion — use `ITaskCompletionCoordinator` (or `ITaskCompletionService` in New System when the legacy seam is bound).
+- ViewModels **must not** close a task directly for business completion — use `ITaskCompletionService` (native in New System via `AddSiNetProcessBackbone()`).
 - ViewModels **must not** call `IWorkflowCommandService.CheckAndAutoAdvanceAsync` directly — the coordinator owns that bridge.
 
 ---
@@ -43,34 +44,44 @@ Use **existing** mechanisms only. **Do not** add a new task-window router.
 ```plaintext
 TaskPanel / FloatingProjectTasksView / Workflow UI
   → user selects taskId
-  → host calls TaskNavigationResolver.ResolveAsync(taskId)   [legacy host today]
-     OR ITaskNavigationService.ResolveAsync(taskId)          [New System port]
-        → ILegacyTaskNavigationSource → TaskNavigationResolver [V2 host binding]
-        → LegacyTaskNavigationService → WorkSurfaceContext
+  → ITaskNavigationService.ResolveAsync(taskId)          [New System — target path]
+        → SqlTaskNavigationService (Infrastructure.Sql)
+        → WorkSurfaceContext
   → shell maps ComponentKey → concrete Work Surface
   → WorkSurface.ApplyContext(context) OR OpenFromTaskAsync(taskId) [Inspection harness]
   → Work Surface loads exact PrimaryWorkTargetEntityId (no first/last/default fallback)
-  → user performs business work via existing services / dispatcher / handlers
-  → ITaskCompletionCoordinator.CompleteAsync(...)
-  → coordinator → IWorkflowCommandService (auto-advance when policy requires)
+  → user performs business work via IProcessActionService / existing handlers (migration in progress)
+  → ITaskCompletionService.CompleteAsync(...)
+  → SqlTaskCompletionService → IWorkflowCommandService (auto-advance when policy requires)
+```
+
+**Legacy path (reference only — do not build new Work Surfaces on this):**
+
+```plaintext
+  → TaskNavigationResolver.ResolveAsync(taskId)            [legacy UI today]
+  → ILegacyTaskNavigationSource → LegacyTaskNavigationService   [temporary bridge — candidate for removal]
+  → TaskCompletionCoordinator via ILegacyTaskCompletionSource   [temporary bridge — candidate for removal]
 ```
 
 ### Existing code map
 
 | Step | Existing mechanism | Location |
 | --- | --- | --- |
-| Task → navigation request | `TaskNavigationResolver` | `SiNetSQL/Services/Tasks/TaskNavigationResolver.cs` |
-| TaskType → UI contract | `ReviewTaskInteractionRegistry` + `TaskInteractionDefinition` | `SiNetSQL/Services/Tasks/ReviewTaskInteractionRegistry.cs` |
-| Stable screen keys | `TaskComponentKeys` | `SiNetSQL/Services/Tasks/TaskInteractionDefinition.cs` |
-| Work targets | `TaskLink` rows on `ProjectAssignment` | DB (read by resolver) |
+| Task → navigation request | `SqlTaskNavigationService` | `src/SiNet.Infrastructure.Sql/Services/Tasks/SqlTaskNavigationService.cs` |
+| TaskType → UI contract | `ReviewTaskInteractionRegistry` + `TaskInteractionDefinition` | `src/SiNet.Infrastructure.Sql/Services/Tasks/` (migrated from SiNetSQL) |
+| Stable screen keys | `TaskComponentKeys` | `src/SiNet.Infrastructure.Sql/Services/Tasks/TaskInteractionDefinition.cs` |
+| Work targets | `TaskLink` rows on `ProjectAssignment` | DB (read by navigation service) |
 | New System port | `ITaskNavigationService` | `src/SiNet.Application/Tasks/ITaskNavigationService.cs` |
-| Strangler adapter | `LegacyTaskNavigationService` | `src/SiNet.LegacyBridge/Tasks/LegacyTaskNavigationService.cs` |
-| Host binding (V2) | `TaskNavigationLegacySource` → `TaskNavigationResolver` | `SiNetProjectManagerV2/Services/TaskNavigationLegacySource.cs` |
+| DI registration | `AddSiNetProcessBackbone()` | `src/SiNet.Infrastructure.Sql/ProcessBackboneServiceCollectionExtensions.cs` |
+| Temporary bridge (not target) | `LegacyTaskNavigationService` | `src/SiNet.LegacyBridge/Tasks/` — **not registered** in `AddSiNet()` |
+| Legacy resolver (legacy UI only) | `TaskNavigationResolver` | `SiNetSQL/Services/Tasks/TaskNavigationResolver.cs` |
 | Runtime context DTO | `WorkSurfaceContext` | `src/SiNet.Application/WorkSurfaces/WorkSurfaceContext.cs` |
 | Legacy shell routing | `FloatingProjectTasksView.OnOpenTaskNavigationRequested` | `SiNetProjectManagerV2/WPFUserControl/FloatingProjectTasksView.xaml.cs` |
-| Business actions | `IProcessActionDispatcher` | Registered in V2 `App.xaml.cs`; handlers in `SiNetSQL` |
-| Task creation (workflow) | `WorkflowTaskOrchestrator`, `TaskFactory` | `SiNetSQL/Services/Workflow/` |
-| Completion | `ITaskCompletionCoordinator` / `TaskCompletionCoordinator` | `SiNetSQL/Services/Tasks/TaskCompletionCoordinator.cs` |
+| New System actions port | `IProcessActionService` | `src/SiNet.Application/Actions/IProcessActionService.cs` |
+| Legacy business actions | `IProcessActionDispatcher` | SiNetSQL — handlers migrate one-by-one |
+| Task creation (workflow) | `WorkflowTaskOrchestrator`, `TaskFactory` | `SiNetSQL/Services/Workflow/` (still legacy) |
+| Completion (New System) | `ITaskCompletionService` / `SqlTaskCompletionService` | `src/SiNet.Infrastructure.Sql/Services/Tasks/SqlTaskCompletionService.cs` |
+| Completion (legacy UI) | `TaskCompletionCoordinator` | `SiNetSQL/Services/Tasks/TaskCompletionCoordinator.cs` |
 | Inspection pilot (New System) | `InspectionShellViewModel.OpenFromTaskAsync` | `src/SiNet.App.Wpf/Inspection/InspectionShellViewModel.cs` |
 
 **Resolver output fields** (via `TaskNavigationRequest` → `WorkSurfaceContext`):

@@ -1,14 +1,19 @@
 namespace SiNet.Application.Tasks;
 
 /// <summary>
-/// Read port for task queues, project task lists, and task detail.
-/// <para>
-/// Declared now as part of the Workflow-first backbone (see <c>docs/ARCHITECTURE_TARGET.md</c> §4)
-/// so consumers can depend on the port shape while the concrete read implementation is migrated in a
-/// later slice. Intentionally empty until the first read use-case is connected — kept as a named
-/// seam so DI/registration and call sites are stable.
-/// </para>
+/// Read port for task queues, project task lists, and task detail for Work Surface shells.
 /// </summary>
 public interface ITaskQueryService
 {
+    /// <summary>Returns a single task summary, or <see langword="null"/> when not found.</summary>
+    ValueTask<TaskSummaryDto?> GetByIdAsync(int taskId, CancellationToken ct);
+
+    /// <summary>Returns tasks for a project ordered by work priority then created date.</summary>
+    ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(
+        int projectId,
+        bool includeClosed = false,
+        CancellationToken ct = default);
+
+    /// <summary>Returns open tasks assigned to a user, ordered by work priority.</summary>
+    ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(int userId, CancellationToken ct);
 }

@@ -3,6 +3,8 @@ using SiNet.Application.Tasks;
 namespace SiNet.LegacyBridge.Tasks;
 
 /// <summary>
+/// <b>Temporary migration bridge — not target architecture.</b> Candidate for future removal once all
+/// hosts consume native SqlTaskCompletionService. Do not use for new Work Surfaces unless explicitly approved.
 /// Strangler adapter that implements the new <see cref="ITaskCompletionService"/> Application port by
 /// delegating to the legacy-host <see cref="ILegacyTaskCompletionSource"/> seam. It maps the
 /// Application <see cref="CompleteTaskCommand"/> onto the bridge-local

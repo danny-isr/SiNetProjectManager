@@ -29,7 +29,7 @@ public static class SiNetCompositionExtensions
         services.AddSiNetLogging();
         services.AddSiNetFileSystem();
         services.AddSiNetSql();
-        services.AddSiNetWorkflowReads();
+        services.AddSiNetProcessBackbone();
         services.AddSiNetProjectQuerySql();
         services.AddSiNetUserManagementSql();
         services.AddSiNetGoogle(configureGmail);
