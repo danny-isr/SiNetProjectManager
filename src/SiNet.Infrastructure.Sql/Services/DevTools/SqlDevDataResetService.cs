@@ -206,7 +206,8 @@ public sealed class SqlDevDataResetService : IDevDataResetService
 
         if (options.IncludeDemoTasks)
         {
-            var demo = await _seedService.SeedDemoTasksAsync(ct).ConfigureAwait(false);
+            var demoOptions = options.DemoTaskSeed ?? new DemoTaskSeedOptions();
+            var demo = await _seedService.SeedDemoTasksAsync(demoOptions, ct).ConfigureAwait(false);
             demoTasksSeedApplied = demo.Succeeded;
             if (!demo.Succeeded)
             {

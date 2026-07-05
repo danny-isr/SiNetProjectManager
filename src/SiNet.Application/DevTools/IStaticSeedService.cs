@@ -11,7 +11,7 @@ public interface IStaticSeedService
     ValueTask<SeedResult> SeedTaskStaticLookupsAsync(CancellationToken ct = default);
     ValueTask<SeedResult> SeedTaskMappingsAsync(CancellationToken ct = default);
     ValueTask<SeedResult> SeedWorkflowDefinitionsAsync(CancellationToken ct = default);
-    ValueTask<SeedResult> SeedDemoTasksAsync(CancellationToken ct = default);
+    ValueTask<SeedResult> SeedDemoTasksAsync(DemoTaskSeedOptions? options = null, CancellationToken ct = default);
 
     /// <summary>Runs static lookups, mappings, and workflow seed in canonical order.</summary>
     ValueTask<SeedResult> SeedAllCoreAsync(CancellationToken ct = default);

@@ -95,7 +95,8 @@ public sealed class DevToolsBoundaryTests
     {
         var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/DevTools/SqlTaskDemoSeedService.cs");
         Assert.Contains("TitlePrefix", source, StringComparison.Ordinal);
-        Assert.Contains("existingSet", source, StringComparison.Ordinal);
+        Assert.Contains("AssignedToId", source, StringComparison.Ordinal);
+        Assert.Contains("TargetUserId", source, StringComparison.Ordinal);
         Assert.Contains("DemoTaskTypeCodePrefix", source, StringComparison.Ordinal);
     }
 

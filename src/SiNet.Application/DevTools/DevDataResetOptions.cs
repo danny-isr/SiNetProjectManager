@@ -22,4 +22,7 @@ public sealed class DevDataResetOptions
 
     /// <summary>Seed demo tasks for Task Panel after reset/seed.</summary>
     public bool IncludeDemoTasks { get; init; } = false;
+
+    /// <summary>When set with <see cref="IncludeDemoTasks"/>, demo tasks target this user/project.</summary>
+    public DemoTaskSeedOptions? DemoTaskSeed { get; init; }
 }

@@ -219,6 +219,32 @@ public sealed class TaskPanelReadOnlyTests
         Assert.Equal("בחר פרויקט או התחבר כמשתמש כדי לראות משימות.", sut.StatusMessage);
     }
 
+    [Fact]
+    public async Task Task_panel_empty_user_queue_shows_clear_message()
+    {
+        var sut = new TaskPanelReadOnlyViewModel(
+            new RecordingTaskQueryService(),
+            new StubTaskNavigationService(),
+            new StubCurrentUserContext(99),
+            null);
+
+        await sut.LoadAsync();
+
+        Assert.Equal(
+            "לא נמצאו משימות למשתמש 99. ייתכן שמשימות הדמו נוצרו למשתמש אחר.",
+            sut.StatusMessage);
+    }
+
+    [Fact]
+    public void Task_panel_user_status_message_includes_bucket_counts()
+    {
+        var message = TaskPanelReadOnlyViewModel.FormatUserStatusMessage(
+            42,
+            new TaskPanelReadOnlyViewModel.BucketCounts(3, 2, 1));
+
+        Assert.Equal("נטענו 6 משימות למשתמש 42: קצר=3, בינוני=2, ארוך=1", message);
+    }
+
     private static TaskSummaryDto SampleTask(int bucket, int taskId = 100, int? workPriority = 5) =>
         new(
             TaskId: taskId,

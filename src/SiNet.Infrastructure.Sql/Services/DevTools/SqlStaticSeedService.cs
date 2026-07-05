@@ -77,10 +77,10 @@ public sealed class SqlStaticSeedService : IStaticSeedService
         }
     }
 
-    public async ValueTask<SeedResult> SeedDemoTasksAsync(CancellationToken ct = default)
+    public async ValueTask<SeedResult> SeedDemoTasksAsync(DemoTaskSeedOptions? options = null, CancellationToken ct = default)
     {
         EnsureSeedAuthorized();
-        return await _demoSeed.SeedAsync(ct).ConfigureAwait(false);
+        return await _demoSeed.SeedAsync(options, ct).ConfigureAwait(false);
     }
 
     public async ValueTask<SeedResult> SeedAllCoreAsync(CancellationToken ct = default)

@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.DevTools;
+using SiNet.Application.Identity;
+using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.DevTools;
 
@@ -42,6 +44,8 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
 
         try
         {
+            var demoSeedOptions = BuildDemoTaskSeedOptions();
+
             var options = new DevDataResetOptions
             {
                 PreserveSystemSettings = !dialog.WipeSystemSettings,
@@ -50,6 +54,7 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
                 IncludeMappingsSeed = true,
                 IncludeWorkflowSeed = true,
                 IncludeDemoTasks = dialog.IncludeDemoTasks,
+                DemoTaskSeed = dialog.IncludeDemoTasks ? demoSeedOptions : null,
             };
 
             var report = await reset.ResetAsync(options).ConfigureAwait(true);
@@ -84,9 +89,17 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
     public async Task RunDemoTaskSeedAsync(Window? owner)
     {
         var seed = _services.GetRequiredService<IStaticSeedService>();
+        var options = BuildDemoTaskSeedOptions();
+        if (options.TargetUserId is null)
+        {
+            ShowError(owner,
+                "לא נמצא משתמש מחובר. התחבר כמשתמש או בחר פרויקט לפני טעינת משימות דמו.");
+            return;
+        }
+
         try
         {
-            var result = await seed.SeedDemoTasksAsync().ConfigureAwait(true);
+            var result = await seed.SeedDemoTasksAsync(options).ConfigureAwait(true);
             if (!result.Succeeded)
             {
                 var message = result.Errors.Count > 0
@@ -128,4 +141,21 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
 
     private static void ShowError(Window? owner, string message) =>
         MessageBox.Show(owner, message, "כלי פיתוח", MessageBoxButton.OK, MessageBoxImage.Error);
+
+    internal static DemoTaskSeedOptions BuildDemoTaskSeedOptions(IServiceProvider services)
+    {
+        var currentUser = services.GetService<ICurrentUserContext>();
+        var currentProject = services.GetService<ICurrentProjectContext>();
+
+        return new DemoTaskSeedOptions
+        {
+            TargetUserId = currentUser?.UserId,
+            TargetProjectId = currentProject?.CurrentProject?.ProjectId,
+            RequireCurrentUser = true,
+            UseCurrentProject = true,
+        };
+    }
+
+    private DemoTaskSeedOptions BuildDemoTaskSeedOptions() =>
+        BuildDemoTaskSeedOptions(_services);
 }

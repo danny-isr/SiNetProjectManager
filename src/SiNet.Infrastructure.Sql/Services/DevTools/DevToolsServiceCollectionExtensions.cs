@@ -36,7 +36,7 @@ internal sealed class SqlStaticSeedServiceReleaseStub : IStaticSeedService
     public ValueTask<SeedResult> SeedTaskStaticLookupsAsync(CancellationToken ct = default) => Throw();
     public ValueTask<SeedResult> SeedTaskMappingsAsync(CancellationToken ct = default) => Throw();
     public ValueTask<SeedResult> SeedWorkflowDefinitionsAsync(CancellationToken ct = default) => Throw();
-    public ValueTask<SeedResult> SeedDemoTasksAsync(CancellationToken ct = default) => Throw();
+    public ValueTask<SeedResult> SeedDemoTasksAsync(DemoTaskSeedOptions? options = null, CancellationToken ct = default) => Throw();
     public ValueTask<SeedResult> SeedAllCoreAsync(CancellationToken ct = default) => Throw();
 
     private static ValueTask<SeedResult> Throw()

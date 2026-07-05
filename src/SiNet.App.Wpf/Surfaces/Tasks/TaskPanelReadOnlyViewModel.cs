@@ -120,15 +120,15 @@ public sealed class TaskPanelReadOnlyViewModel : ObservableObject
 
             if (userId is int uid)
             {
-                await LoadUserBucketsAsync(uid, ct).ConfigureAwait(true);
-                StatusMessage = $"נטענו משימות פתוחות למשתמש {uid} (שלושה תורים אישיים).";
+                var counts = await LoadUserBucketsAsync(uid, ct).ConfigureAwait(true);
+                StatusMessage = FormatUserStatusMessage(uid, counts);
                 return;
             }
 
             if (projectId is int pid and > 0)
             {
-                await LoadProjectBucketsAsync(pid, ct).ConfigureAwait(true);
-                StatusMessage = $"נטענו משימות פתוחות לפרויקט {pid} (לפי bucket).";
+                var counts = await LoadProjectBucketsAsync(pid, ct).ConfigureAwait(true);
+                StatusMessage = FormatProjectStatusMessage(pid, counts);
                 return;
             }
 
@@ -144,7 +144,7 @@ public sealed class TaskPanelReadOnlyViewModel : ObservableObject
         }
     }
 
-    private async Task LoadUserBucketsAsync(int userId, CancellationToken ct)
+    private async Task<BucketCounts> LoadUserBucketsAsync(int userId, CancellationToken ct)
     {
         var quick = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Quick, ct)
             .ConfigureAwait(true);
@@ -154,9 +154,10 @@ public sealed class TaskPanelReadOnlyViewModel : ObservableObject
             .ConfigureAwait(true);
 
         ReplaceAll(quick, medium, longBucket);
+        return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
     }
 
-    private async Task LoadProjectBucketsAsync(int projectId, CancellationToken ct)
+    private async Task<BucketCounts> LoadProjectBucketsAsync(int projectId, CancellationToken ct)
     {
         var quick = await _taskQuery.GetTasksForProjectAsync(projectId, includeClosed: false, WorkQueueBucketCodes.Quick, ct)
             .ConfigureAwait(true);
@@ -166,6 +167,34 @@ public sealed class TaskPanelReadOnlyViewModel : ObservableObject
             .ConfigureAwait(true);
 
         ReplaceAll(quick, medium, longBucket);
+        return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
+    }
+
+    internal static string FormatUserStatusMessage(int userId, BucketCounts counts)
+    {
+        var total = counts.Total;
+        if (total == 0)
+        {
+            return $"לא נמצאו משימות למשתמש {userId}. ייתכן שמשימות הדמו נוצרו למשתמש אחר.";
+        }
+
+        return $"נטענו {total} משימות למשתמש {userId}: קצר={counts.Quick}, בינוני={counts.Medium}, ארוך={counts.Long}";
+    }
+
+    internal static string FormatProjectStatusMessage(int projectId, BucketCounts counts)
+    {
+        var total = counts.Total;
+        if (total == 0)
+        {
+            return $"לא נמצאו משימות לפרויקט {projectId}.";
+        }
+
+        return $"נטענו {total} משימות לפרויקט {projectId}: קצר={counts.Quick}, בינוני={counts.Medium}, ארוך={counts.Long}";
+    }
+
+    internal readonly record struct BucketCounts(int Quick, int Medium, int Long)
+    {
+        public int Total => Quick + Medium + Long;
     }
 
     private void ReplaceAll(
