@@ -7,6 +7,7 @@ using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
@@ -70,6 +71,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "דוא\"ל — קריאה בלבד",
                 () => ShowWindow(emailFactory.Create()),
                 "פתיחת מסך דוא\"ל (Gmail read-only — production pilot)"));
+        }
+
+        // Task Panel — read-only pilot (three personal bucket queues via ITaskQueryService).
+        if (_services.GetService<ITaskPanelReadOnlyWindowFactory>() is { } taskPanelFactory
+            && CanAccessFeature(AppFeatureCodes.ShellOpenTaskPanelReadOnly))
+        {
+            items.Add(new NewShellMenuItem(
+                "משימות — קריאה בלבד",
+                () => ShowWindow(taskPanelFactory.Create()),
+                "תורים אישיים Quick / Medium / Long — קריאה בלבד"));
         }
 
 #if DEBUG

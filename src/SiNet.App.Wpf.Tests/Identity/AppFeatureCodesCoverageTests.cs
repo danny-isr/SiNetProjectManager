@@ -14,6 +14,7 @@ public sealed class AppFeatureCodesCoverageTests
         {
             AppFeatureCodes.ShellOpenEmailSurface,
             AppFeatureCodes.ShellOpenInspectionSurface,
+            AppFeatureCodes.ShellOpenTaskPanelReadOnly,
             AppFeatureCodes.ProjectCreate,
             AppFeatureCodes.ReportsManagement,
             AppFeatureCodes.SystemSettingsWrite,

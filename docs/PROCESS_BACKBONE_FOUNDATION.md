@@ -84,14 +84,19 @@ Implementation:
 | --- | --- |
 | Model | `ProjectAssignment.WorkQueueBucket` (default Medium=2); `TaskType.DefaultWorkQueueBucket` |
 | Constants | `WorkQueueBucketCodes` in `src/SiNet.Application/Tasks/` |
-| Migration | **Pending** — user runs `Add-Migration AddTaskWorkQueueBuckets` via EF tooling |
+| Migration | **Applied** — user-managed `AddTaskWorkQueueBuckets` (20260705083841) |
 | Priority engine | `TaskQueuePriorityEngine` in `src/SiNet.Infrastructure.Sql/Services/Tasks/` |
 | Legacy shim | `SiNetSQL/Services/TaskPriorityEngine.cs` delegates to shared engine |
 | Read | `ITaskQueryService` returns bucket; optional bucket filter |
 | Write | `ITaskQueueService` — `GetUserQueueAsync`, `MoveWithinBucketAsync`, `ChangeBucketAsync`, `ValidateAndRepairQueueAsync` |
 | Legacy task ops | `TaskService.ChangeTaskBucket`, bucket-aware `ReassignTask` / `ChangeTaskStatus` / `ReorderTask` |
 
-**Task Panel read-only** must consume `ITaskQueryService` + `ITaskQueueService` (or query-only for first slice) — **not** a single flat list.
+**Task Panel read-only pilot started (2026-07-05).** Write queue operations (`ChangeBucket`,
+`MoveWithinBucket`, close/complete) remain deferred — see
+[`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md) § Task Panel read-only.
+
+**Task Panel read-only** must consume `ITaskQueryService` (+ optional `ITaskQueueService` later for
+reorder) — **not** a single flat list.
 
 **Not created:** `Queue` table, `QueueItem` table, new router, AI bucket classification.
 
@@ -129,8 +134,8 @@ Implementation:
 | 2 — Minimal actions | ✅ Done | Foundation handlers + catalog + tests |
 | 3 — WorkflowCommand | ⚠️ Documented | Temporary adapter in SiNetSQL; host binds `AddSiNetWorkflowCommands()` |
 | 4 — Readiness signoff | ✅ Done | This document + matrix + tests |
-| 4b — Task Queue Buckets | ✅ Done (model/config) | Bucket-aware queue engine + ports; **migration pending manual EF run** |
-| 5 — First Work Surface | Next (human gate) | Email read-only / Inspection / Task Panel read-only |
+| 4b — Task Queue Buckets | ✅ Done | Bucket-aware queue engine + ports; user-managed migration applied |
+| 5 — First Work Surface | **In progress** | Email read-only ✅; **Task Panel read-only pilot started**; Inspection optional |
 
 See full component tables in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) § Process backbone foundation migration.
 
@@ -156,3 +161,5 @@ See full component tables in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) § Process
 `src/SiNet.App.Wpf.Tests/Boundary/ProcessBackboneBoundaryTests.cs` — DI, navigation, completion, query, actions, doc guards, WPF boundary.
 
 `src/SiNet.App.Wpf.Tests/Boundary/TaskQueueBucketsFoundationTests.cs` — bucket scenarios from design doc §13.
+
+`src/SiNet.App.Wpf.Tests/Boundary/TaskPanelReadOnlyTests.cs` — read-only Task Panel pilot guards.

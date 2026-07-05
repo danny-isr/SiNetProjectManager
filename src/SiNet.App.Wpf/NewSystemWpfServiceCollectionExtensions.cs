@@ -6,6 +6,7 @@ using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.Surfaces.Tasks;
 
 namespace SiNet.App.Wpf;
 
@@ -26,6 +27,7 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetSecretAdminWpf();
         services.AddSiNetSettingsAdminWpf();
         services.AddSiNetShell();
+        services.AddSiNetTaskPanelReadOnly();
 
         return services;
     }

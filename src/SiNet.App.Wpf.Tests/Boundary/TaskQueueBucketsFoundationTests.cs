@@ -25,7 +25,7 @@ public sealed class TaskQueueBucketsFoundationTests
     }
 
     [Fact]
-    public void Model_and_DbContext_define_bucket_fields_without_generated_migration()
+    public void Model_and_DbContext_define_bucket_fields()
     {
         var projectAssignment = File.ReadAllText(
             Path.Combine(RepoRoot, "src", "SiNet.Infrastructure.Sql", "Models", "ProjectAssignment.cs"));
@@ -42,13 +42,26 @@ public sealed class TaskQueueBucketsFoundationTests
         Assert.Contains("HasDefaultValue(2)", dbContext, StringComparison.Ordinal);
         Assert.Contains("DefaultWorkQueueBucket", dbContext, StringComparison.Ordinal);
 
-        // Generated migration files are not committed — user runs Add-Migration manually.
-        Assert.False(File.Exists(MigrationPath), "AddTaskWorkQueueBuckets migration file must not be in repo");
-
         var snapshot = File.ReadAllText(SnapshotPath);
-        Assert.DoesNotContain("WorkQueueBucket", snapshot, StringComparison.Ordinal);
+        Assert.Contains("WorkQueueBucket", snapshot, StringComparison.Ordinal);
+        Assert.Contains("DefaultWorkQueueBucket", snapshot, StringComparison.Ordinal);
         var indexBlock = snapshot.Split("IX_ProjectAssignment_UniqueOpenTask")[1];
         Assert.DoesNotContain("WorkQueueBucket", indexBlock.Split("HasFilter")[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void User_managed_AddTaskWorkQueueBuckets_migration_exists_when_applied()
+    {
+        var migrationsDir = Path.Combine(RepoRoot, "src", "SiNet.Infrastructure.Sql", "Migrations");
+        var migrationFiles = Directory.Exists(migrationsDir)
+            ? Directory.GetFiles(migrationsDir, "*AddTaskWorkQueueBuckets.cs", SearchOption.TopDirectoryOnly)
+            : [];
+
+        Assert.NotEmpty(migrationFiles);
+
+        var migration = File.ReadAllText(migrationFiles[0]);
+        Assert.Contains("WorkQueueBucket", migration, StringComparison.Ordinal);
+        Assert.Contains("DefaultWorkQueueBucket", migration, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -365,13 +378,6 @@ public sealed class TaskQueueBucketsFoundationTests
     }
 
     private static string RepoRoot => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static string MigrationPath => Path.Combine(
-        RepoRoot,
-        "src",
-        "SiNet.Infrastructure.Sql",
-        "Migrations",
-        "20260705080356_AddTaskWorkQueueBuckets.cs");
 
     private static string SnapshotPath => Path.Combine(
         RepoRoot,

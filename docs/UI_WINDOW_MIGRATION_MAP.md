@@ -54,7 +54,7 @@
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
 | EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
 | ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/... (TBD) | Not started |
-| TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | **Blocked until buckets** → **Ready for read-only slice** (Task Queue Buckets foundation complete 2026-07-05) |
+| TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyView | **Started / Pilot** — read-only Task Queue Panel (2026-07-05) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started |
 
@@ -150,7 +150,24 @@ Task-driven opens, completion, and ComponentKey routing are defined in
   `ITaskCompletionCoordinator`.
 - Native surfaces expose `ApplyContext(WorkSurfaceContext?)` placeholders; only
   `InspectionShellViewModel.OpenFromTaskAsync` implements the canonical navigation half today.
-- Task Panel read-only: **unblocked** after Task Queue Buckets foundation — see
-  [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md) § Task Queue Buckets and design doc
-  [`PersonalWorkQueuesByTaskSize-2026-06-23.md`](../SiNetProjectManagerV2/Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md).
+- Task Panel read-only: **Started / Pilot** — see § Task Panel read-only below and
+  [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md) § Task Queue Buckets.
 - Production pilot envelope: [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
+
+## Task Panel read-only — Started / Pilot (2026-07-05)
+
+Target surface: `src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyView` +
+`TaskPanelReadOnlyViewModel`.
+
+| Aspect | Status | Notes |
+| --- | --- | --- |
+| Three bucket tabs (Quick / Medium / Long) | Done | Loads via `ITaskQueryService.GetOpenTasksForUserByBucketAsync` (user) or `GetTasksForProjectAsync` with bucket filter (project). |
+| Resolve preview | Done | `ITaskNavigationService.ResolveAsync` — displays `WorkSurfaceContext` text; no target window opened yet. |
+| NewShell entry | Done | `"משימות — קריאה בלבד"` gated by `Shell.OpenTaskPanelReadOnly` (Employee+). |
+| Write queue ops | Deferred | No `CompleteTask`, `ChangeBucket`, `MoveWithinBucket`, `ProcessAction`, etc. |
+
+**Uses:** `ITaskQueryService`, `ITaskNavigationService`, `ICurrentUserContext`,
+`ICurrentProjectContext`, `WorkQueueBucket`.
+
+**Does not use:** LegacyBridge, legacy `TaskPanelView`, `TaskCompletion`, `ProcessAction`,
+`MoveToProject`, `AddMaterial`, direct SiNetSQL from WPF, new router, fallback.
