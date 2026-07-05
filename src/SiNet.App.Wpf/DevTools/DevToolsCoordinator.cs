@@ -1,5 +1,6 @@
 using System.Text;
 using System.Windows;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.DevTools;
@@ -86,11 +87,26 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
         try
         {
             var result = await seed.SeedDemoTasksAsync().ConfigureAwait(true);
-            MessageBox.Show(owner, result.Summary, "משימות דמו", MessageBoxButton.OK,
-                result.Succeeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            if (!result.Succeeded)
+            {
+                var message = result.Errors.Count > 0
+                    ? string.Join(Environment.NewLine, result.Errors.Prepend(result.Summary))
+                    : result.Summary;
+                ShowError(owner, message);
+                return;
+            }
+
+            MessageBox.Show(owner, result.Summary, "משימות דמו", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (DbUpdateException ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            ShowError(owner,
+                "טעינת משימות דמו נכשלה. ייתכן שקיימת כפילות לפי IX_ProjectAssignment_UniqueOpenTask.");
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine(ex);
             ShowError(owner, ex.Message);
         }
     }

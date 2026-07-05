@@ -91,21 +91,20 @@ public sealed class DevToolsBoundaryTests
     }
 
     [Fact]
-    public void Task_demo_seed_is_idempotent()
+    public void Task_demo_seed_is_idempotent_by_source()
     {
         var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/DevTools/SqlTaskDemoSeedService.cs");
         Assert.Contains("TitlePrefix", source, StringComparison.Ordinal);
         Assert.Contains("existingSet", source, StringComparison.Ordinal);
+        Assert.Contains("DemoTaskTypeCodePrefix", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Task_demo_seed_creates_quick_medium_long_priorities()
+    public void Task_demo_seed_uses_unique_demo_task_types_by_source()
     {
         var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/DevTools/SqlTaskDemoSeedService.cs");
-        Assert.Contains("Quick 1", source, StringComparison.Ordinal);
-        Assert.Contains("Medium 1", source, StringComparison.Ordinal);
-        Assert.Contains("Long 1", source, StringComparison.Ordinal);
-        Assert.Contains("WorkPriority", source, StringComparison.Ordinal);
+        Assert.Contains("DEBUG_TASK_SEED_QUICK_1", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("generalType.Id", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
