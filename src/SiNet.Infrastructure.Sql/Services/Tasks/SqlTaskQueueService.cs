@@ -27,7 +27,7 @@ public sealed class SqlTaskQueueService : ITaskQueueService
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
 
-        var tasks = await db.ProjectAssignments
+        var query = db.ProjectAssignments
             .AsNoTracking()
             .Include(t => t.TaskType)
             .Include(t => t.AssignmentStatus)
@@ -37,14 +37,10 @@ public sealed class SqlTaskQueueService : ITaskQueueService
                         && t.WorkQueueBucket == workQueueBucket
                         && t.AssignmentStatus != null
                         && t.AssignmentStatus.IsActionable
-                        && t.WorkPriority != null)
-            .OrderBy(t => t.WorkPriority)
-            .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
-            .ThenBy(t => t.Created ?? DateTime.MinValue)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+                        && t.WorkPriority != null);
 
-        return tasks.Select(SqlTaskQueryService.MapTask).ToList();
+        var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortByPriorityWithinBucket(tasks).Select(SqlTaskQueryService.MapTask).ToList();
     }
 
     public async ValueTask MoveWithinBucketAsync(

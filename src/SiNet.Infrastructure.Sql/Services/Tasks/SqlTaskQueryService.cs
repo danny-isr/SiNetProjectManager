@@ -57,15 +57,8 @@ public sealed class SqlTaskQueryService : ITaskQueryService
         if (workQueueBucket.HasValue)
             query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
-        var tasks = await query
-            .OrderBy(t => t.WorkQueueBucket)
-            .ThenBy(t => t.WorkPriority ?? int.MaxValue)
-            .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
-            .ThenBy(t => t.Created ?? DateTime.MinValue)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        return tasks.Select(MapTask).ToList();
+        var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortByQueueOrder(tasks).Select(MapTask).ToList();
     }
 
     public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(
@@ -98,22 +91,15 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.AssignmentStatus)
             .Include(t => t.AssignedTo)
             .Include(t => t.LastTaskResult)
-            .Include(t => t.Project)
             .Where(t => t.AssignedToId == userId
                         && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
 
         if (workQueueBucket.HasValue)
             query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
-        var tasks = await query
-            .OrderBy(t => t.WorkQueueBucket)
-            .ThenBy(t => t.WorkPriority ?? int.MaxValue)
-            .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
-            .ThenBy(t => t.Created ?? DateTime.MinValue)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        return tasks.Select(MapTask).ToList();
+        // Sort in memory — legacy DB rows may have varchar/datetime values that break SQL ORDER BY.
+        var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortByQueueOrder(tasks).Select(MapTask).ToList();
     }
 
     internal static TaskSummaryDto MapTask(ProjectAssignment task)

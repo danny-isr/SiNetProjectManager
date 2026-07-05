@@ -181,6 +181,15 @@ public sealed class TaskWorkbenchTests
     }
 
     [Fact]
+    public void SqlTaskQueryService_sorts_in_memory_not_in_sql()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepoRoot, "src", "SiNet.Infrastructure.Sql", "Services", "Tasks", "SqlTaskQueryService.cs"));
+        Assert.Contains("TaskQueryOrdering.SortByQueueOrder", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ThenBy(t => t.DueDate", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Task_workbench_has_no_LegacyBridge()
     {
         var csproj = File.ReadAllText(Path.Combine(RepoRoot, "src", "SiNet.App.Wpf", "SiNet.App.Wpf.csproj"));
