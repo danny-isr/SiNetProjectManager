@@ -137,8 +137,19 @@
                                               SearchBoxWidth="220"
                                               ShowUserFilter="False"
                                               VerticalAlignment="Center"
-                                              Margin="0,0,12,0"
+                                              Margin="0,0,8,0"
                                               Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Button Content="נקה"
+                        Command="{Binding ClearSelectedProjectCommand}"
+                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                        VerticalAlignment="Center"
+                        Margin="0,0,12,0"
+                        IsEnabled="{Binding CanClearSelectedProject}"
+                        Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Button.ToolTip>
+                        <TextBlock Text="בטל סינון לפי פרויקט והצג את כל הפרויקטים" Style="{DynamicResource SiTextSmallStyle}" />
+                    </Button.ToolTip>
+                </Button>
                 <TextBlock Text="{Binding ProjectFilterDisplayText}"
                            Style="{DynamicResource SiTextSmallStyle}"
                            VerticalAlignment="Center"

@@ -100,6 +100,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         RepairQueueCommand = new AsyncRelayCommand(RepairQueueAsync, () => !IsBusy && CanManageQueue);
         MoveUpCommand = new AsyncRelayCommand(MoveSelectedUpAsync, CanMoveSelectedUp);
         MoveDownCommand = new AsyncRelayCommand(MoveSelectedDownAsync, CanMoveSelectedDown);
+        ClearSelectedProjectCommand = new RelayCommand(_ => ClearSelectedProject(), _ => CanClearSelectedProject && !IsBusy);
     }
 
     /// <summary>Local-only project selector for optional list filtering (does not touch app project context).</summary>
@@ -109,6 +110,10 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
     /// <summary>True when a project is selected in the local filter selector (not the app-wide context).</summary>
     public bool FilterTasksByProjectEnabled => GetActiveProjectFilterId() is int;
+
+    public int? SelectedProjectId => GetActiveProjectFilterId();
+
+    public bool CanClearSelectedProject => FilterTasksByProjectEnabled && LocalProjectFilterSelector is not null;
 
     public string ProjectFilterDisplayText =>
         _localProjectFilterContext.CurrentProject is { } project
@@ -257,6 +262,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     public ICommand RepairQueueCommand { get; }
     public ICommand MoveUpCommand { get; }
     public ICommand MoveDownCommand { get; }
+    public ICommand ClearSelectedProjectCommand { get; }
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
@@ -280,9 +286,17 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private void OnLocalProjectFilterChanged(object? sender, ProjectChangedEventArgs e)
     {
         OnPropertyChanged(nameof(FilterTasksByProjectEnabled));
+        OnPropertyChanged(nameof(SelectedProjectId));
+        OnPropertyChanged(nameof(CanClearSelectedProject));
         OnPropertyChanged(nameof(ProjectFilterDisplayText));
+        (ClearSelectedProjectCommand as RelayCommand)?.RaiseCanExecuteChanged();
         if (_scopeOptionsInitialized)
             _ = LoadAsync();
+    }
+
+    private void ClearSelectedProject()
+    {
+        LocalProjectFilterSelector?.ClearSelection();
     }
 
     private int? GetActiveProjectFilterId() =>
@@ -826,6 +840,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         (ResolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (AddTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DeleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ClearSelectedProjectCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (RepairQueueCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (MoveUpCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (MoveDownCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

@@ -98,6 +98,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
                     SelectProject(project);
                 }
             });
+        ClearSelectionCommand = new RelayCommand(_ => ClearSelection(), _ => CanClearSelection);
 
         _selectedProject = _currentProject.CurrentProject;
         if (_selectedProject is not null)
@@ -237,6 +238,29 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     public ICommand ToggleResultsCommand { get; }
 
     public ICommand SelectProjectCommand { get; }
+
+    /// <summary>Clears the selected project and updates <see cref="ICurrentProjectContext"/> to null.</summary>
+    public ICommand ClearSelectionCommand { get; }
+
+    public bool CanClearSelection =>
+        _selectedProject is not null || _currentProject.CurrentProject is not null;
+
+    /// <summary>Clears project selection without auto-selecting another project.</summary>
+    public void ClearSelection()
+    {
+        if (!CanClearSelection)
+            return;
+
+        SelectedProject = null;
+
+        if (!_isSyncingFromContext)
+            _ = _currentProject.SetCurrentProjectAsync(null);
+
+        ApplySelectedProjectDisplay(null);
+        IsResultsOpen = false;
+        _suppressOpenResultsOnNextFocus = false;
+        NotifyClearSelectionStateChanged();
+    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -439,6 +463,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         ApplySelectedProjectDisplay(project);
         IsResultsOpen = false;
         _suppressOpenResultsOnNextFocus = true;
+        NotifyClearSelectionStateChanged();
     }
 
     private void ApplySelectedProjectDisplay(ProjectSummaryDto? project)
@@ -512,6 +537,14 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         {
             _isSyncingFromContext = false;
         }
+
+        NotifyClearSelectionStateChanged();
+    }
+
+    private void NotifyClearSelectionStateChanged()
+    {
+        OnPropertyChanged(nameof(CanClearSelection));
+        (ClearSelectionCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private static string FormatStatusMessage(IReadOnlyList<ProjectSummaryDto> results, ProjectSearchQuery query)
