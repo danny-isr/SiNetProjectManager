@@ -11,7 +11,7 @@ public sealed class TaskWorkbenchProjectSelectorTests
     public void Task_workbench_project_selector_is_not_in_action_toolbar()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        var actionsSection = ExtractSection(xaml, "<!-- Actions toolbar -->", "<!-- Context / filter area:");
+        var actionsSection = ExtractSection(xaml, "<!-- Actions toolbar -->", "<!-- Context / filter area -->");
         var titleSection = ExtractSection(xaml, "<!-- Title -->", "<!-- Actions toolbar -->");
 
         Assert.DoesNotContain("ProjectSelectorView", actionsSection, StringComparison.Ordinal);
@@ -24,11 +24,10 @@ public sealed class TaskWorkbenchProjectSelectorTests
     public void Task_workbench_does_not_host_global_project_selector_in_filter_area()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        var filterSection = ExtractSection(xaml, "<!-- Context / filter area:", "<Border Grid.Row=\"3\"");
+        var filterSection = ExtractSection(xaml, "<!-- Context / filter area -->", "<Border Grid.Row=\"3\"");
 
         Assert.DoesNotContain("DataContext=\"{Binding ProjectSelector}\"", filterSection, StringComparison.Ordinal);
         Assert.Contains("LocalProjectFilterSelector", filterSection, StringComparison.Ordinal);
-        Assert.Contains("FilterTasksByProjectEnabled", filterSection, StringComparison.Ordinal);
         Assert.Contains("ProjectFilterDisplayText", filterSection, StringComparison.Ordinal);
     }
 
@@ -36,7 +35,7 @@ public sealed class TaskWorkbenchProjectSelectorTests
     public void Task_workbench_actions_toolbar_contains_only_actions()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        var actionsSection = ExtractSection(xaml, "<!-- Actions toolbar -->", "<!-- Context / filter area:");
+        var actionsSection = ExtractSection(xaml, "<!-- Actions toolbar -->", "<!-- Context / filter area -->");
 
         Assert.Contains("RefreshCommand", actionsSection, StringComparison.Ordinal);
         Assert.Contains("AddTaskCommand", actionsSection, StringComparison.Ordinal);

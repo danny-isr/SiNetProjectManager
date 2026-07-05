@@ -36,7 +36,6 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private string _diagnosticsText = string.Empty;
     private string _resolvePreview = string.Empty;
     private bool _isBusy;
-    private bool _filterTasksByProjectEnabled;
     private TaskWorkbenchScope _selectedScope = TaskWorkbenchScope.MyTasks;
     private int? _selectedUserId;
     private bool _canSelectTaskScope;
@@ -108,22 +107,16 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
     public bool HasLocalProjectFilter { get; }
 
-    public bool FilterTasksByProjectEnabled
-    {
-        get => _filterTasksByProjectEnabled;
-        set
-        {
-            if (!SetField(ref _filterTasksByProjectEnabled, value))
-                return;
-
-            OnPropertyChanged(nameof(ProjectFilterDisplayText));
-            if (_scopeOptionsInitialized)
-                _ = LoadAsync();
-        }
-    }
+    /// <summary>True when a project is selected in the local filter selector (not the app-wide context).</summary>
+    public bool FilterTasksByProjectEnabled => GetActiveProjectFilterId() is int;
 
     public string ProjectFilterDisplayText =>
-        FilterTasksByProjectEnabled ? "מסנן לפי פרויקט: כן" : "מסנן לפי פרויקט: לא";
+        _localProjectFilterContext.CurrentProject is { } project
+            ? $"סינון לפי פרויקט: כן — {project.ProjectNumber} — {project.ProjectName} (Id={project.ProjectId})"
+            : "סינון לפי פרויקט: לא — כל הפרויקטים";
+
+    internal const string EmptyProjectFilterStatusMessage =
+        "לא נמצאו משימות עבור הסינון הנוכחי. נסה לבטל סינון לפי פרויקט או לבחור פרויקט אחר.";
 
     public virtual string Title => "משימות — Task Workbench";
 
@@ -286,14 +279,14 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
     private void OnLocalProjectFilterChanged(object? sender, ProjectChangedEventArgs e)
     {
-        if (FilterTasksByProjectEnabled && _scopeOptionsInitialized)
+        OnPropertyChanged(nameof(FilterTasksByProjectEnabled));
+        OnPropertyChanged(nameof(ProjectFilterDisplayText));
+        if (_scopeOptionsInitialized)
             _ = LoadAsync();
     }
 
     private int? GetActiveProjectFilterId() =>
-        FilterTasksByProjectEnabled && _localProjectFilterContext.CurrentProject?.ProjectId is int id
-            ? id
-            : null;
+        _localProjectFilterContext.CurrentProject?.ProjectId is int id ? id : null;
 
     private async Task InitializeScopeOptionsAsync(CancellationToken ct)
     {
@@ -475,8 +468,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     {
         if (counts.Total == 0)
         {
-            if (FilterTasksByProjectEnabled && GetActiveProjectFilterId() is int filterProjectId)
-                return $"לא נמצאו משימות לפרויקט {filterProjectId} (סינון פרויקט מופעל).";
+            if (FilterTasksByProjectEnabled)
+                return EmptyProjectFilterStatusMessage;
 
             var hint = string.Empty;
             if (_workbench is not null)
@@ -494,8 +487,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
     private string FormatEmptyScopeMessage(string scopeLabel, BucketCounts counts)
     {
-        if (counts.Total == 0 && FilterTasksByProjectEnabled && GetActiveProjectFilterId() is int filterProjectId)
-            return $"לא נמצאו משימות לפרויקט {filterProjectId} (סינון פרויקט מופעל).";
+        if (counts.Total == 0 && FilterTasksByProjectEnabled)
+            return EmptyProjectFilterStatusMessage;
 
         return scopeLabel switch
         {

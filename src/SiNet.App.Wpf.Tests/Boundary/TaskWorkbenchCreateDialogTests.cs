@@ -37,7 +37,6 @@ public sealed class TaskWorkbenchCreateDialogTests
     {
         var query = new RecordingProjectFilterQuery();
         var vm = CreateViewModel(query, userId: 10);
-        vm.FilterTasksByProjectEnabled = false;
         await vm.LoadAsync();
 
         Assert.Equal(2, vm.QuickTasks.Count);
@@ -51,9 +50,9 @@ public sealed class TaskWorkbenchCreateDialogTests
         await vm.LocalProjectFilterSelector!.InitializeAsync();
         var project = vm.LocalProjectFilterSelector.Projects.First(p => p.ProjectId == 1041);
         vm.LocalProjectFilterSelector.SelectProjectCommand.Execute(project);
-        vm.FilterTasksByProjectEnabled = true;
         await vm.LoadAsync();
 
+        Assert.True(vm.FilterTasksByProjectEnabled);
         Assert.Single(vm.QuickTasks);
         Assert.Equal(1041, vm.QuickTasks[0].ProjectId);
     }
@@ -66,12 +65,10 @@ public sealed class TaskWorkbenchCreateDialogTests
         await vm.LocalProjectFilterSelector!.InitializeAsync();
         var project = vm.LocalProjectFilterSelector.Projects.First(p => p.ProjectId == 1040);
         vm.LocalProjectFilterSelector.SelectProjectCommand.Execute(project);
-        vm.FilterTasksByProjectEnabled = true;
         await vm.LoadAsync();
 
         Assert.Empty(vm.QuickTasks);
-        Assert.Contains("סינון פרויקט מופעל", vm.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("1040", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(TaskWorkbenchViewModel.EmptyProjectFilterStatusMessage, vm.StatusMessage);
     }
 
     [Fact]
