@@ -8,5 +8,6 @@ public sealed record CreateTaskRequest(
     int StatusId,
     string Title,
     int WorkQueueBucket,
+    int? ParentAssignmentId = null,
     DateTime? DueDate = null,
     string? Body = null);

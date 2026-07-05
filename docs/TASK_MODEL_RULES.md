@@ -111,6 +111,22 @@ Implementation: `TaskQueuePriorityEngine`, `SqlTaskQueueService`.
 - Column **“מיקום בתור”** binds to `WorkPriority`.
 - Legacy `Priority` is not shown as queue position (if shown elsewhere, label as “חשיבות”).
 - Move up/down and repair use `ITaskQueueService` only.
+- **Project selection** uses the shared `ProjectSelectorView` → `ICurrentProjectContext` (no duplicate project ComboBox).
+
+## Task creation flow (Task Workbench)
+
+| Field | Source |
+|-------|--------|
+| `ProjectId` | Shared **Project Selector** → `ICurrentProjectContext.CurrentProject` |
+| `AssignedToId` | Current user, or admin scope selection |
+| `TaskTypeId` | Active task types dropdown |
+| `StatusId` | First open **actionable** status (auto-selected) |
+| `WorkQueueBucket` | User bucket choice; defaults from `TaskType.DefaultWorkQueueBucket` |
+| `WorkPriority` | **Not set in ViewModel** — `TaskQueuePriorityEngine.InsertWithAutoPriorityAsync` via `ITaskWorkbenchService` |
+| `ParentAssignmentId` | Optional; `null` for top-level tasks |
+| `Title` / `Body` | User input |
+
+**Rules:** no project → **"לא נבחר פרויקט"**; no silent first-project fallback; duplicate identity rejected; `WorkQueueBucket` not part of identity.
 
 ## Related code
 

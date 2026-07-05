@@ -17,8 +17,9 @@ namespace SiNet.App.Wpf.Surfaces.Tasks;
 
 /// <summary>
 /// Task Workbench: three personal work-queue buckets, diagnostics, basic create/delete.
+/// Hosts the shared <see cref="ProjectSelectorViewModel"/> for project selection (see <c>docs/PROJECTS.md</c>).
 /// </summary>
-public class TaskWorkbenchViewModel : ObservableObject
+public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 {
     private readonly ITaskQueryService _taskQuery;
     private readonly ITaskNavigationService _taskNavigation;
@@ -34,9 +35,10 @@ public class TaskWorkbenchViewModel : ObservableObject
     private string _diagnosticsText = string.Empty;
     private string _resolvePreview = string.Empty;
     private string _newTitle = string.Empty;
+    private string _newBody = string.Empty;
+    private string _activeProjectDisplay = "לא נבחר פרויקט";
     private bool _isBusy;
     private bool _isAddPanelVisible;
-    private TaskLookupItemDto? _selectedProject;
     private TaskLookupItemDto? _selectedAssignee;
     private TaskLookupItemDto? _selectedTaskType;
     private TaskLookupItemDto? _selectedStatus;
@@ -47,9 +49,20 @@ public class TaskWorkbenchViewModel : ObservableObject
     private bool _canSelectTaskScope;
     private bool _scopeOptionsInitialized;
     private bool _suppressScopeReload;
+    private bool _disposed;
 
     public TaskWorkbenchViewModel()
-        : this(new DesignTaskQueryService(), new DesignTaskNavigationService(), null, null, null, null, null, null)
+        : this(
+            new DesignTaskQueryService(),
+            new DesignTaskNavigationService(),
+            null,
+            null,
+            new InMemoryCurrentProjectContext(),
+            null,
+            null,
+            null,
+            new FakeProjectQueryService(),
+            new FakeProjectFilterOptionsService())
     {
     }
 
@@ -61,7 +74,9 @@ public class TaskWorkbenchViewModel : ObservableObject
         ICurrentProjectContext? currentProject = null,
         IAuthorizationQueryService? authorization = null,
         IUserLookupService? userLookup = null,
-        ITaskQueueService? taskQueue = null)
+        ITaskQueueService? taskQueue = null,
+        IProjectQueryService? projectQuery = null,
+        IProjectFilterOptionsService? projectFilterOptions = null)
     {
         _taskQuery = taskQuery ?? throw new ArgumentNullException(nameof(taskQuery));
         _taskNavigation = taskNavigation ?? throw new ArgumentNullException(nameof(taskNavigation));
@@ -75,7 +90,6 @@ public class TaskWorkbenchViewModel : ObservableObject
         QuickTasks = [];
         MediumTasks = [];
         LongTasks = [];
-        Projects = [];
         Users = [];
         TaskTypes = [];
         Statuses = [];
@@ -83,10 +97,28 @@ public class TaskWorkbenchViewModel : ObservableObject
         AvailableScopes = [];
         AvailableUsers = [];
 
+        if (projectQuery is not null && projectFilterOptions is not null && _currentProject is not null)
+        {
+            ProjectSelector = new ProjectSelectorViewModel(projectQuery, projectFilterOptions, _currentProject);
+            HasProjectSelector = true;
+        }
+
+        if (_currentProject is not null)
+        {
+            _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
+            UpdateActiveProjectDisplay(_currentProject.CurrentProject);
+        }
+
         RefreshCommand = new AsyncRelayCommand(() => LoadAsync(), () => !IsBusy);
         ResolveCommand = new AsyncRelayCommand(() => ResolveSelectedAsync(), () => !IsBusy && SelectedTask is not null);
         ShowAddPanelCommand = new RelayCommand(_ =>
         {
+            if (!HasSelectedProject)
+            {
+                StatusMessage = "לא נבחר פרויקט";
+                return;
+            }
+
             IsAddPanelVisible = true;
             ApplyCreationDefaults();
         }, _ => !IsBusy && _workbench is not null);
@@ -97,6 +129,19 @@ public class TaskWorkbenchViewModel : ObservableObject
         MoveUpCommand = new AsyncRelayCommand(MoveSelectedUpAsync, CanMoveSelectedUp);
         MoveDownCommand = new AsyncRelayCommand(MoveSelectedDownAsync, CanMoveSelectedDown);
     }
+
+    /// <summary>Shared project selector hosted in the workbench header.</summary>
+    public ProjectSelectorViewModel? ProjectSelector { get; }
+
+    public bool HasProjectSelector { get; }
+
+    public string ActiveProjectDisplay
+    {
+        get => _activeProjectDisplay;
+        private set => SetField(ref _activeProjectDisplay, value);
+    }
+
+    public bool HasSelectedProject => SelectedProjectId is int;
 
     public virtual string Title => "משימות — Task Workbench";
 
@@ -116,7 +161,6 @@ public class TaskWorkbenchViewModel : ObservableObject
     public ObservableCollection<TaskSummaryDto> MediumTasks { get; }
     public ObservableCollection<TaskSummaryDto> LongTasks { get; }
 
-    public ObservableCollection<TaskLookupItemDto> Projects { get; }
     public ObservableCollection<TaskLookupItemDto> Users { get; }
     public ObservableCollection<TaskLookupItemDto> TaskTypes { get; }
     public ObservableCollection<TaskLookupItemDto> Statuses { get; }
@@ -260,15 +304,13 @@ public class TaskWorkbenchViewModel : ObservableObject
         }
     }
 
-    public TaskLookupItemDto? SelectedProject
+    public string NewBody
     {
-        get => _selectedProject;
-        set
-        {
-            if (SetField(ref _selectedProject, value))
-                (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        }
+        get => _newBody;
+        set => SetField(ref _newBody, value);
     }
+
+    public int? SelectedProjectId => _currentProject?.CurrentProject?.ProjectId;
 
     public TaskLookupItemDto? SelectedAssignee
     {
@@ -285,8 +327,16 @@ public class TaskWorkbenchViewModel : ObservableObject
         get => _selectedTaskType;
         set
         {
-            if (SetField(ref _selectedTaskType, value))
-                (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            if (!SetField(ref _selectedTaskType, value))
+                return;
+
+            if (value?.DefaultWorkQueueBucket is int bucket
+                && WorkQueueBucketCodes.IsValid(bucket))
+            {
+                SelectedBucket = Buckets.FirstOrDefault(b => b.Id == bucket) ?? SelectedBucket;
+            }
+
+            (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
@@ -330,9 +380,42 @@ public class TaskWorkbenchViewModel : ObservableObject
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
+        if (ProjectSelector is not null)
+            await ProjectSelector.InitializeAsync(ct).ConfigureAwait(true);
+
         await InitializeScopeOptionsAsync(ct).ConfigureAwait(true);
         await LoadCreationOptionsAsync(ct).ConfigureAwait(true);
         await LoadAsync(ct).ConfigureAwait(true);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        if (_currentProject is not null)
+            _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
+
+        ProjectSelector?.Dispose();
+    }
+
+    private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
+    {
+        UpdateActiveProjectDisplay(e.Project);
+        ApplyCreationDefaults();
+        _ = LoadAsync();
+    }
+
+    private void UpdateActiveProjectDisplay(ProjectSummaryDto? project)
+    {
+        ActiveProjectDisplay = project is null
+            ? "לא נבחר פרויקט"
+            : $"{project.ProjectNumber} — {project.ProjectName}";
+        OnPropertyChanged(nameof(SelectedProjectId));
+        OnPropertyChanged(nameof(HasSelectedProject));
+        (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private async Task InitializeScopeOptionsAsync(CancellationToken ct)
@@ -469,7 +552,7 @@ public class TaskWorkbenchViewModel : ObservableObject
             else
             {
                 LoadMode = "None";
-                StatusMessage = "בחר פרויקט או התחבר כמשתמש כדי לראות משימות.";
+                StatusMessage = "לא נבחר פרויקט";
             }
 
             OnPropertyChanged(nameof(LoadMode));
@@ -493,7 +576,6 @@ public class TaskWorkbenchViewModel : ObservableObject
             return;
 
         var options = await _workbench.GetTaskCreationOptionsAsync(ct).ConfigureAwait(true);
-        ReplaceLookup(Projects, options.Projects);
         ReplaceLookup(Users, options.Users);
         ReplaceLookup(TaskTypes, options.TaskTypes);
         ReplaceLookup(Statuses, options.Statuses);
@@ -512,12 +594,17 @@ public class TaskWorkbenchViewModel : ObservableObject
         else if (_currentUser?.UserId is int uid)
             SelectedAssignee = Users.FirstOrDefault(u => u.Id == uid) ?? SelectedAssignee;
 
-        if (_currentProject?.CurrentProject?.ProjectId is int pid)
-            SelectedProject = Projects.FirstOrDefault(p => p.Id == pid) ?? SelectedProject;
-
-        SelectedBucket ??= Buckets.FirstOrDefault(b => b.Id == WorkQueueBucketCodes.Medium);
         SelectedStatus ??= Statuses.FirstOrDefault();
         SelectedTaskType ??= TaskTypes.FirstOrDefault();
+        if (SelectedTaskType?.DefaultWorkQueueBucket is int defaultBucket
+            && WorkQueueBucketCodes.IsValid(defaultBucket))
+        {
+            SelectedBucket = Buckets.FirstOrDefault(b => b.Id == defaultBucket);
+        }
+        else
+        {
+            SelectedBucket ??= Buckets.FirstOrDefault(b => b.Id == WorkQueueBucketCodes.Medium);
+        }
 
         (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
@@ -527,8 +614,8 @@ public class TaskWorkbenchViewModel : ObservableObject
         var quick = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Quick, ct).ConfigureAwait(true);
         var medium = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Medium, ct).ConfigureAwait(true);
         var longBucket = await _taskQuery.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Long, ct).ConfigureAwait(true);
-        ReplaceAll(quick, medium, longBucket);
-        return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
+        ReplaceAll(quick, medium, longBucket, SelectedProjectId);
+        return new BucketCounts(QuickTasks.Count, MediumTasks.Count, LongTasks.Count);
     }
 
     private async Task<BucketCounts> LoadAllUsersBucketsAsync(CancellationToken ct)
@@ -536,8 +623,8 @@ public class TaskWorkbenchViewModel : ObservableObject
         var quick = await _taskQuery.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Quick, ct).ConfigureAwait(true);
         var medium = await _taskQuery.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Medium, ct).ConfigureAwait(true);
         var longBucket = await _taskQuery.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Long, ct).ConfigureAwait(true);
-        ReplaceAll(quick, medium, longBucket);
-        return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
+        ReplaceAll(quick, medium, longBucket, SelectedProjectId);
+        return new BucketCounts(QuickTasks.Count, MediumTasks.Count, LongTasks.Count);
     }
 
     private async Task<BucketCounts> LoadProjectBucketsAsync(int projectId, CancellationToken ct)
@@ -545,7 +632,7 @@ public class TaskWorkbenchViewModel : ObservableObject
         var quick = await _taskQuery.GetTasksForProjectAsync(projectId, includeClosed: false, WorkQueueBucketCodes.Quick, ct).ConfigureAwait(true);
         var medium = await _taskQuery.GetTasksForProjectAsync(projectId, includeClosed: false, WorkQueueBucketCodes.Medium, ct).ConfigureAwait(true);
         var longBucket = await _taskQuery.GetTasksForProjectAsync(projectId, includeClosed: false, WorkQueueBucketCodes.Long, ct).ConfigureAwait(true);
-        ReplaceAll(quick, medium, longBucket);
+        ReplaceAll(quick, medium, longBucket, null);
         return new BucketCounts(quick.Count, medium.Count, longBucket.Count);
     }
 
@@ -593,6 +680,7 @@ public class TaskWorkbenchViewModel : ObservableObject
         sb.AppendLine($"SelectedUserId: {SelectedUserId?.ToString() ?? "(none)"}");
         sb.AppendLine($"CanSelectTaskScope: {CanSelectTaskScope}");
         sb.AppendLine($"ProjectId: {CurrentProjectIdDisplay}");
+        sb.AppendLine($"ActiveProject: {ActiveProjectDisplay}");
         sb.AppendLine($"QueryService: {QueryServiceName}");
         sb.AppendLine($"QueueService: {QueueServiceName}");
         sb.AppendLine($"Counts: Quick={counts.Quick}, Medium={counts.Medium}, Long={counts.Long}");
@@ -602,8 +690,8 @@ public class TaskWorkbenchViewModel : ObservableObject
     }
 
     private bool CanCreateTask() =>
-        !IsBusy && _workbench is not null && !string.IsNullOrWhiteSpace(NewTitle)
-        && SelectedProject is not null && SelectedAssignee is not null && SelectedTaskType is not null
+        !IsBusy && _workbench is not null && HasSelectedProject && !string.IsNullOrWhiteSpace(NewTitle)
+        && SelectedAssignee is not null && SelectedTaskType is not null
         && SelectedStatus is not null && SelectedBucket is not null && _currentUser?.UserId is int actorId
         && ValidateAssigneeForCreate(actorId);
 
@@ -623,6 +711,17 @@ public class TaskWorkbenchViewModel : ObservableObject
         if (_workbench is null || _currentUser?.UserId is not int actorId)
             return;
 
+        if (_currentProject?.CurrentProject?.ProjectId is not int projectId)
+        {
+            StatusMessage = "לא נבחר פרויקט";
+            MessageBox.Show(
+                "לא נבחר פרויקט. בחר פרויקט ב-Project Selector לפני יצירת משימה.",
+                "יצירת משימה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         if (!ValidateAssigneeForCreate(actorId))
         {
             MessageBox.Show(
@@ -637,18 +736,27 @@ public class TaskWorkbenchViewModel : ObservableObject
         try
         {
             var request = new CreateTaskRequest(
-                SelectedProject!.Id, SelectedAssignee!.Id, SelectedTaskType!.Id, SelectedStatus!.Id,
-                NewTitle.Trim(), SelectedBucket!.Id, NewDueDate);
+                projectId,
+                SelectedAssignee!.Id,
+                SelectedTaskType!.Id,
+                SelectedStatus!.Id,
+                NewTitle.Trim(),
+                SelectedBucket!.Id,
+                Body: string.IsNullOrWhiteSpace(NewBody) ? null : NewBody.Trim(),
+                DueDate: NewDueDate);
 
             var result = await _workbench.CreateTaskAsync(request, actorId).ConfigureAwait(true);
             if (!result.Succeeded)
             {
+                StatusMessage = result.Message;
                 MessageBox.Show(result.Message, "יצירת משימה", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             NewTitle = string.Empty;
+            NewBody = string.Empty;
             IsAddPanelVisible = false;
+            StatusMessage = $"נוצרה משימה בפרויקט {ActiveProjectDisplay}.";
             await LoadAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -896,15 +1004,26 @@ public class TaskWorkbenchViewModel : ObservableObject
             _ => null,
         };
 
-    private void ReplaceAll(IReadOnlyList<TaskSummaryDto> quick, IReadOnlyList<TaskSummaryDto> medium, IReadOnlyList<TaskSummaryDto> longBucket)
+    private void ReplaceAll(
+        IReadOnlyList<TaskSummaryDto> quick,
+        IReadOnlyList<TaskSummaryDto> medium,
+        IReadOnlyList<TaskSummaryDto> longBucket,
+        int? projectFilterId)
     {
         QuickTasks.Clear();
         MediumTasks.Clear();
         LongTasks.Clear();
-        foreach (var task in quick) QuickTasks.Add(task);
-        foreach (var task in medium) MediumTasks.Add(task);
-        foreach (var task in longBucket) LongTasks.Add(task);
+        foreach (var task in FilterByProject(quick, projectFilterId)) QuickTasks.Add(task);
+        foreach (var task in FilterByProject(medium, projectFilterId)) MediumTasks.Add(task);
+        foreach (var task in FilterByProject(longBucket, projectFilterId)) LongTasks.Add(task);
     }
+
+    private static IReadOnlyList<TaskSummaryDto> FilterByProject(
+        IReadOnlyList<TaskSummaryDto> tasks,
+        int? projectFilterId) =>
+        projectFilterId is int projectId
+            ? tasks.Where(t => t.ProjectId == projectId).ToList()
+            : tasks;
 
     private static void ReplaceLookup(ObservableCollection<TaskLookupItemDto> target, IReadOnlyList<TaskLookupItemDto> items)
     {
@@ -1007,8 +1126,10 @@ public sealed class TaskPanelReadOnlyViewModel : TaskWorkbenchViewModel
         ITaskQueryService taskQuery,
         ITaskNavigationService taskNavigation,
         ICurrentUserContext? currentUser = null,
-        ICurrentProjectContext? currentProject = null)
-        : base(taskQuery, taskNavigation, null, currentUser, currentProject, null, null, null)
+        ICurrentProjectContext? currentProject = null,
+        IProjectQueryService? projectQuery = null,
+        IProjectFilterOptionsService? projectFilterOptions = null)
+        : base(taskQuery, taskNavigation, null, currentUser, currentProject, null, null, null, projectQuery, projectFilterOptions)
     {
     }
 

@@ -42,13 +42,13 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
             .Where(t => t.IsActive)
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.Name)
-            .Select(t => new TaskLookupItemDto(t.Id, $"{t.Name} ({t.Code})"))
+            .Select(t => new TaskLookupItemDto(t.Id, $"{t.Name} ({t.Code})", t.DefaultWorkQueueBucket))
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
         var statuses = await db.ProjectAssignmentStatuses
             .AsNoTracking()
-            .Where(s => s.IsOpen)
+            .Where(s => s.IsOpen && s.IsActionable)
             .OrderBy(s => s.SortOrder)
             .Select(s => new TaskLookupItemDto(s.Id, s.Name ?? s.Code ?? $"Status {s.Id}"))
             .ToListAsync(ct)
@@ -88,10 +88,10 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
             return Fail($"Status {request.StatusId} not found.");
 
         if (status.IsActionable && await HasDuplicateOpenTaskIdentityAsync(
-                db, request.ProjectId, request.AssignedToUserId, request.TaskTypeId, null, ct)
+                db, request.ProjectId, request.AssignedToUserId, request.TaskTypeId, request.ParentAssignmentId, ct)
             .ConfigureAwait(false))
         {
-            return Fail("כבר קיימת משימה פתוחה מסוג זה לפרויקט ולמשתמש.");
+            return Fail(DuplicateOpenTaskMessage(request.ParentAssignmentId));
         }
 
         var now = DateTime.UtcNow;
@@ -102,6 +102,7 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
             AssignedToId = request.AssignedToUserId,
             StatusId = request.StatusId,
             TaskTypeId = request.TaskTypeId,
+            ParentAssignmentId = request.ParentAssignmentId,
             WorkQueueBucket = request.WorkQueueBucket,
             DueDate = request.DueDate,
             Body = request.Body,
@@ -128,7 +129,7 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
         }
         catch (DbUpdateException ex) when (IsUniqueOpenTaskViolation(ex))
         {
-            return Fail("כבר קיימת משימה פתוחה מסוג זה לפרויקט ולמשתמש.");
+            return Fail(DuplicateOpenTaskMessage(request.ParentAssignmentId));
         }
     }
 
@@ -210,6 +211,11 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
         var message = ex.InnerException?.Message ?? ex.Message;
         return message.Contains("IX_ProjectAssignment_UniqueOpenTask", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string DuplicateOpenTaskMessage(int? parentAssignmentId) =>
+        parentAssignmentId.HasValue
+            ? "כבר קיימת תת-משימה פתוחה מאותו סוג תחת משימת האב."
+            : "כבר קיימת משימה פתוחה מסוג זה לפרויקט ולמשתמש.";
 
     private static TaskCommandResult Fail(string message) =>
         new(false, message);

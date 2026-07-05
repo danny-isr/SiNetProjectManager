@@ -1,5 +1,7 @@
 using System.IO;
+using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Identity;
+using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using Xunit;
@@ -202,12 +204,15 @@ public sealed class TaskWorkbenchScopeTests
     public async Task Create_task_defaults_assignee_to_selected_user_in_specific_user_scope()
     {
         var workbench = new StubWorkbench();
+        var projectContext = new InMemoryCurrentProjectContext();
+        await projectContext.SetCurrentProjectAsync(new ProjectSummaryDto(1, "1001", "Project 1", null, null, null, null, null, true));
+
         var vm = new TaskWorkbenchViewModel(
             new RecordingScopeQueryService(),
             new StubNav(),
             workbench,
             new StubUser(10),
-            null,
+            projectContext,
             new StubAuthorization(admin: true),
             new StubUserLookup([new UserLookupDto(12, "User 12", true)]));
 
@@ -224,19 +229,21 @@ public sealed class TaskWorkbenchScopeTests
     public async Task Non_admin_create_task_assignee_locked_to_current_user()
     {
         var workbench = new StubWorkbench();
+        var projectContext = new InMemoryCurrentProjectContext();
+        await projectContext.SetCurrentProjectAsync(new ProjectSummaryDto(1, "1001", "Project 1", null, null, null, null, null, true));
+
         var vm = new TaskWorkbenchViewModel(
             new RecordingScopeQueryService(),
             new StubNav(),
             workbench,
             new StubUser(10),
-            null,
+            projectContext,
             new StubAuthorization(admin: false),
             new StubUserLookup([new UserLookupDto(12, "User 12", true)]));
 
         await vm.InitializeAsync();
         vm.SelectedAssignee = workbench.OptionsUsers.FirstOrDefault(u => u.Id == 12);
         vm.NewTitle = "Test";
-        vm.SelectedProject = workbench.OptionsProjects[0];
         vm.SelectedTaskType = workbench.OptionsTaskTypes[0];
         vm.SelectedStatus = workbench.OptionsStatuses[0];
         vm.SelectedBucket = workbench.OptionsBuckets[0];

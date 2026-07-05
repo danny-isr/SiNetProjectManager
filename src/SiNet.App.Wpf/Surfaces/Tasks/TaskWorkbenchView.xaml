@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Tasks"
+        xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         mc:Ignorable="d"
         Title="{Binding Title}"
         Width="1200" Height="780"
@@ -43,6 +44,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="160" />
@@ -65,7 +67,20 @@
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center"
+                   Visibility="{Binding HasProjectSelector, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                                          CompactMode="True"
+                                          SearchBoxWidth="220"
+                                          ShowUserFilter="False"
+                                          VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ActiveProjectDisplay}"
+                       Style="{DynamicResource SiTextSmallStyle}"
+                       VerticalAlignment="Center"
+                       Margin="12,0,0,0" />
+        </WrapPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
             <TextBlock Text="מציג משימות:" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
             <ComboBox ItemsSource="{Binding AvailableScopes}"
                       SelectedValuePath="Scope"
@@ -90,7 +105,7 @@
             </ComboBox>
         </StackPanel>
 
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 BorderBrush="{DynamicResource SiSecondaryBrush}"
                 BorderThickness="1"
                 Padding="8"
@@ -100,13 +115,13 @@
             <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" Style="{DynamicResource SiTextSmallStyle}" TextWrapping="Wrap" />
         </Border>
 
-        <TextBlock Grid.Row="3"
+        <TextBlock Grid.Row="4"
                    Text="{Binding StatusMessage}"
                    Style="{DynamicResource SiTextSmallStyle}"
                    Margin="0,0,0,8"
                    TextWrapping="Wrap" />
 
-        <TabControl Grid.Row="4" Background="{DynamicResource SiBackgroundBrush}">
+        <TabControl Grid.Row="5" Background="{DynamicResource SiBackgroundBrush}">
             <TabItem Header="קצר">
                 <DataGrid ItemsSource="{Binding QuickTasks}"
                           SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
@@ -157,7 +172,7 @@
             </TabItem>
         </TabControl>
 
-        <GroupBox Grid.Row="5" Header="הוספת משימה" Margin="0,8,0,8"
+        <GroupBox Grid.Row="6" Header="הוספת משימה" Margin="0,8,0,8"
                   Visibility="{Binding IsAddPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid Margin="8">
                 <Grid.ColumnDefinitions>
@@ -169,49 +184,49 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
+                <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,8">
+                    <TextBlock Text="Project" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ActiveProjectDisplay}" Style="{DynamicResource SiTextNormalStyle}" Margin="0,4,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
                     <TextBlock Text="Title" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <TextBox Text="{Binding NewTitle, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource SiTextBoxStyle}" />
                 </StackPanel>
-                <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,8">
+                <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8">
                     <TextBlock Text="Due date" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <DatePicker SelectedDate="{Binding NewDueDate}" />
                 </StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
-                    <TextBlock Text="Project" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" DisplayMemberPath="DisplayName"
-                              Style="{DynamicResource SiComboBoxStyle}" />
-                </StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8">
+                <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,8">
                     <TextBlock Text="Assigned to" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <ComboBox ItemsSource="{Binding Users}" SelectedItem="{Binding SelectedAssignee}" DisplayMemberPath="DisplayName"
                               Style="{DynamicResource SiComboBoxStyle}"
                               IsEnabled="{Binding CanEditAssigneeOnCreate}" />
                 </StackPanel>
-                <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,8">
+                <StackPanel Grid.Row="2" Grid.Column="1" Margin="8,0,0,8">
                     <TextBlock Text="Task type" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <ComboBox ItemsSource="{Binding TaskTypes}" SelectedItem="{Binding SelectedTaskType}" DisplayMemberPath="DisplayName"
                               Style="{DynamicResource SiComboBoxStyle}" />
                 </StackPanel>
-                <StackPanel Grid.Row="2" Grid.Column="1" Margin="8,0,0,8">
-                    <TextBlock Text="Status" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding Statuses}" SelectedItem="{Binding SelectedStatus}" DisplayMemberPath="DisplayName"
-                              Style="{DynamicResource SiComboBoxStyle}" />
-                </StackPanel>
-                <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,8,0">
+                <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,8,8">
                     <TextBlock Text="Bucket" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <ComboBox ItemsSource="{Binding Buckets}" SelectedItem="{Binding SelectedBucket}" DisplayMemberPath="DisplayName"
                               Style="{DynamicResource SiComboBoxStyle}" />
                 </StackPanel>
-                <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <StackPanel Grid.Row="3" Grid.Column="1" Margin="8,0,0,8">
+                    <TextBlock Text="Body" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <TextBox Text="{Binding NewBody, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource SiTextBoxStyle}"
+                             AcceptsReturn="True" MinHeight="48" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
                     <Button Content="הוסף" Command="{Binding CreateTaskCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,8,0" />
                     <Button Content="ביטול" Command="{Binding HideAddPanelCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" />
                 </StackPanel>
             </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="6" Header="Resolve preview (WorkSurfaceContext)" Margin="0,0,0,8">
+        <GroupBox Grid.Row="7" Header="Resolve preview (WorkSurfaceContext)" Margin="0,0,0,8">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

@@ -216,7 +216,7 @@ public sealed class TaskPanelReadOnlyTests
 
         await sut.LoadAsync();
 
-        Assert.Equal("בחר פרויקט או התחבר כמשתמש כדי לראות משימות.", sut.StatusMessage);
+        Assert.Equal("לא נבחר פרויקט", sut.StatusMessage);
     }
 
     [Fact]
