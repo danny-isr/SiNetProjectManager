@@ -1069,6 +1069,7 @@ public partial class SiNetSQLDbContext : DbContext
             entity.Property(e => e.TaskTypeId).HasColumnName("TaskTypeID");
             entity.Property(e => e.StatusId).HasColumnName("StatusID");
             entity.Property(e => e.WorkPriority);
+            entity.Property(e => e.WorkQueueBucket).HasDefaultValue(2);
 
             // === Smart Tasks P1: Hierarchy ===
             entity.Property(e => e.ParentAssignmentId).HasColumnName("ParentAssignmentID");
@@ -1753,6 +1754,7 @@ public partial class SiNetSQLDbContext : DbContext
                 .HasDefaultValue(true);
             entity.Property(e => e.SortOrder)
                 .HasDefaultValue(0);
+            entity.Property(e => e.DefaultWorkQueueBucket);
 
             entity.HasIndex(e => e.Code, "IX_TaskType_Code").IsUnique();
             entity.HasIndex(e => e.Name, "IX_TaskType_Name").IsUnique();

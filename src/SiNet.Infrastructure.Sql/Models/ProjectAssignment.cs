@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using SiNet.Application.Tasks;
 
 namespace SiNetSQL.Models;
 
@@ -68,9 +69,15 @@ public partial  class ProjectAssignment
     public int? LastTaskResultId { get; set; }
 
     /// <summary>
-    /// Priority in the employee's work queue (1 = highest).
-    /// Only set for open tasks. NULL for closed tasks.
-    /// Unique per employee across all their open tasks.
+    /// Personal work-queue bucket (Quick / Medium / Long). Operational classification only —
+    /// not part of open-task identity. Default <see cref="WorkQueueBucketCodes.Medium"/>.
+    /// </summary>
+    public int WorkQueueBucket { get; set; } = WorkQueueBucketCodes.Medium;
+
+    /// <summary>
+    /// Priority within the assignee's bucket queue (1 = highest).
+    /// Only set for actionable tasks. NULL for closed / non-actionable tasks.
+    /// Unique per <c>AssignedToId + WorkQueueBucket</c>.
     /// </summary>
     public int? WorkPriority { get; set; }
 

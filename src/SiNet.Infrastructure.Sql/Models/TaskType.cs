@@ -22,6 +22,12 @@ public partial class TaskType
 
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// Default personal work-queue bucket for newly created tasks of this type.
+    /// When null, the system uses <see cref="WorkQueueBucketCodes.Medium"/>.
+    /// </summary>
+    public int? DefaultWorkQueueBucket { get; set; }
+
     // Navigation properties
     public virtual ICollection<ProjectAssignment> ProjectAssignments { get; set; } = new List<ProjectAssignment>();
 

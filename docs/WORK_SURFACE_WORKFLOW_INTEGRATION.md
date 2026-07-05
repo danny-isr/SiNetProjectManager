@@ -149,7 +149,7 @@ Legend: **Connect now** = safe to wire task context using existing ports (read-o
 | **InspectionWindowView** (visual clone) | Not production entry; design data | `ApplyContext` placeholder | `Component.InspectionReport`, `Component.ManagerReviewApproval` | `InspectionReport` id | Stub only | Per registry (e.g. report received / approved) | Read stubs; write deferred | None in clone | **Deferred** — use `InspectionShellViewModel` harness for task pilot first |
 | **InspectionShellView** (harness) | V2 admin preview `OpenInspectionFromTask_Click` | `OpenFromTaskAsync(taskId)` | Expects `"Inspection"` today; resolver emits `Component.InspectionReport` — **alignment gap** | `InspectionReport` id | Partial (`ITaskCompletionService` when bound) | From context / metadata port | Read-only harness | None | **Pilot only** — navigation half; ComponentKey alignment pending |
 | **ProjectWork** (future) | Legacy `MainWindow.ShowProjectWork` | Not in New System yet | `Component.ProjectWork`, `Component.MaterialChecklist`, `Component.PoliceSubmission` | Project / checklist / email source | Legacy yes (result picker) | Workflow result codes per registry | Write-heavy | ACC/files legacy | **Deferred** — needs ProjectWork surface + ACC-Write-Policy |
-| **TaskPanelView** | Legacy embedded panel | N/A (orchestrator UI) | N/A (lists tasks) | N/A | Opens tasks via resolver | N/A | Mixed | None direct | **Deferred** — native Tasks surface TBD |
+| **TaskPanelView** | Legacy embedded panel | N/A (orchestrator UI) | N/A (lists tasks) | N/A | Opens tasks via resolver | N/A | Mixed | None direct | **Next** — read-only native surface; consume bucket-aware `ITaskQueryService` / `ITaskQueueService` |
 | **FloatingProjectTasksView** | Legacy floating per-project list | `OnOpenTaskNavigationRequested` | All `TaskComponentKeys.*` | Per resolver | Dispatches to hosts; completion in target surface | Per target surface | Mixed | Email/Inspection/ProjectWork | **Legacy reference** — New System must reuse resolver, not duplicate switch |
 | **WorkflowDashboard / WorkflowInstance** | Legacy dialogs | N/A | N/A | N/A | Admin/operator views | N/A | Mixed | None direct | **Deferred** — admin surfaces not migrated |
 | **AccControlPlaneStatusWindow** | New Shell + Settings ACC tab | No task integration | None (operator) | Optional item ref for browse | No | N/A | **Read-only** | ACC read/control-plane | **Connect now** (operator read) — not task-driven |
@@ -160,6 +160,9 @@ Legend: **Connect now** = safe to wire task context using existing ports (read-o
 - **Legacy production** task open: `FloatingProjectTasksView` → `TaskNavigationResolver` → `switch (ComponentKey)` → legacy windows (`EmailManagementView`, `FloatingInspectionView`, `WorkflowCreateProjectWindow`, etc.).
 - **New System** must converge on: `ITaskNavigationService` → `WorkSurfaceContext` → `ApplyContext` / `OpenFromTaskAsync` on native surfaces — **same resolver contract**, different hosts.
 - **No new router.** Extend `TaskNavigationResolver` / `ReviewTaskInteractionRegistry` when new task types appear; map `ComponentKey` in shell/factory only.
+
+- **Task Panel read-only** must list **three personal bucket queues** (Quick / Medium / Long) via `ITaskQueryService.GetOpenTasksForUserByBucketAsync` — not one flat employee list. Queue mutations use `ITaskQueueService`. Design:
+  [`PersonalWorkQueuesByTaskSize-2026-06-23.md`](../SiNetProjectManagerV2/Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md); implementation in `TaskQueuePriorityEngine` + `SqlTaskQueueService`.
 
 ---
 

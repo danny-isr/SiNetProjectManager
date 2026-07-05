@@ -32,12 +32,13 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .FirstOrDefaultAsync(t => t.Id == taskId, ct)
             .ConfigureAwait(false);
 
-        return task is null ? null : Map(task);
+        return task is null ? null : MapTask(task);
     }
 
     public async ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(
         int projectId,
         bool includeClosed = false,
+        int? workQueueBucket = null,
         CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -51,24 +52,47 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Where(t => t.ProjectId == projectId);
 
         if (!includeClosed)
-        {
             query = query.Where(t => t.AssignmentStatus == null || t.AssignmentStatus.IsOpen);
-        }
+
+        if (workQueueBucket.HasValue)
+            query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
         var tasks = await query
-            .OrderBy(t => t.WorkPriority ?? int.MaxValue)
-            .ThenBy(t => t.Created)
+            .OrderBy(t => t.WorkQueueBucket)
+            .ThenBy(t => t.WorkPriority ?? int.MaxValue)
+            .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
+            .ThenBy(t => t.Created ?? DateTime.MinValue)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        return tasks.Select(Map).ToList();
+        return tasks.Select(MapTask).ToList();
     }
 
-    public async ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(int userId, CancellationToken ct)
+    public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(
+        int userId,
+        int? workQueueBucket = null,
+        CancellationToken ct = default)
+        => QueryOpenTasksForUserAsync(userId, workQueueBucket, ct);
+
+    public async ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserByBucketAsync(
+        int userId,
+        int workQueueBucket,
+        CancellationToken ct)
+    {
+        if (!WorkQueueBucketCodes.IsValid(workQueueBucket))
+            throw new ArgumentOutOfRangeException(nameof(workQueueBucket));
+
+        return await QueryOpenTasksForUserAsync(userId, workQueueBucket, ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask<IReadOnlyList<TaskSummaryDto>> QueryOpenTasksForUserAsync(
+        int userId,
+        int? workQueueBucket,
+        CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
 
-        var tasks = await db.ProjectAssignments
+        var query = db.ProjectAssignments
             .AsNoTracking()
             .Include(t => t.TaskType)
             .Include(t => t.AssignmentStatus)
@@ -76,19 +100,25 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.LastTaskResult)
             .Include(t => t.Project)
             .Where(t => t.AssignedToId == userId
-                        && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen))
+                        && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
+
+        if (workQueueBucket.HasValue)
+            query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
+
+        var tasks = await query
+            .OrderBy(t => t.WorkQueueBucket)
+            .ThenBy(t => t.WorkPriority ?? int.MaxValue)
+            .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
+            .ThenBy(t => t.Created ?? DateTime.MinValue)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        return tasks
-            .OrderBy(t => t.WorkPriority ?? int.MaxValue)
-            .ThenBy(t => t.Created ?? DateTime.MinValue)
-            .Select(Map)
-            .ToList();
+        return tasks.Select(MapTask).ToList();
     }
 
-    private static TaskSummaryDto Map(ProjectAssignment task)
+    internal static TaskSummaryDto MapTask(ProjectAssignment task)
     {
+        var bucket = WorkQueueBucketResolver.Resolve(task);
         var taskTypeCode = task.TaskType?.Code;
         var interaction = taskTypeCode is not null
             ? ReviewTaskInteractionRegistry.TryGet(taskTypeCode)
@@ -104,6 +134,9 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             IsOpen: task.AssignmentStatus?.IsOpen ?? true,
             AssignedToUserId: task.AssignedToId,
             AssignedToUserName: task.AssignedTo?.Name,
+            WorkQueueBucket: bucket,
+            WorkQueueBucketCode: WorkQueueBucketCodes.ToCode(bucket),
+            WorkQueueBucketDisplayName: WorkQueueBucketCodes.ToDisplayName(bucket),
             WorkPriority: task.WorkPriority,
             DueDate: task.DueDate,
             LastTaskResultCode: task.LastTaskResult?.Code,

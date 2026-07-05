@@ -23,6 +23,9 @@ public static class TasksServiceCollectionExtensions
         services.AddTransient<SqlTaskQueryService>();
         services.AddTransient<ITaskQueryService>(sp => sp.GetRequiredService<SqlTaskQueryService>());
 
+        services.AddTransient<SqlTaskQueueService>();
+        services.AddTransient<ITaskQueueService>(sp => sp.GetRequiredService<SqlTaskQueueService>());
+
         services.AddSingleton<SqlTaskCompletionMetadataResolver>();
         services.AddSingleton<ITaskCompletionMetadataResolver>(sp => sp.GetRequiredService<SqlTaskCompletionMetadataResolver>());
 

@@ -44,7 +44,8 @@ services.AddSiNetProcessBackbone(); // Workflow reads + Task nav/completion/quer
 | --- | --- | --- |
 | Task navigation | **1** ✅ | Native `SqlTaskNavigationService` |
 | Task completion | **2** ✅ | Native `SqlTaskCompletionService`; needs host-bound `IWorkflowCommandService` for auto-advance |
-| Task query | **5** ✅ | Native `SqlTaskQueryService` (minimal list/detail) |
+| Task query | **5** ✅ | Native `SqlTaskQueryService` + bucket fields |
+| Task queue (buckets) | **5** ✅ | `ITaskQueueService` / `SqlTaskQueueService`; legacy `TaskPriorityEngine` delegates to `TaskQueuePriorityEngine` |
 | Workflow reads | **3** ✅ | `WorkflowQueryService` in Infra.Sql |
 | Workflow writes | **3** ⚠️ partial | `IWorkflowCommandService` via **temporary** `WorkflowCommandServiceAdapter` in SiNetSQL |
 | Actions (foundation) | **4** ⚠️ partial | SendNotification, SetProjectStatus, RecordTaskResult, CreateStageTasks (marker), SetBillingPending |
@@ -66,15 +67,39 @@ services.AddSiNetProcessBackbone(); // Workflow reads + Task nav/completion/quer
 | **ProjectWork** | ✓ | ✓ | ✓ | adapter | heavy + file | — | write | Blocked | **No** |
 | **Reports** | — | — | — | — | — | — | — | Not in foundation scope | **No** (deferred) |
 | **WorkflowDashboard** | — | — | — | read native; write adapter | transition | — | — | Read native; admin write legacy | **Partial** — read-only dashboard slice only |
-| **TaskPanel / FloatingTasks replacement** | ✓ | ✓ | — | — | — | — | — | Query native; admin writes legacy | **Partial** — list/open tasks |
+| **TaskPanel / FloatingTasks replacement** | ✓ | ✓ bucket-aware | — | — | — | — | — | Query + queue native | **Partial** — read-only Task Panel **unblocked**; admin writes still legacy |
 | **ACC operator (read)** | — | — | — | — | — | — | read | ACC read foundation closed | **Yes** |
 | **ACC write / file surface** | — | — | — | — | file | — | write | ACC-Write-Policy | **No** |
+
+---
+
+## Task Queue Buckets foundation (2026-07-05)
+
+Design source:
+[`SiNetProjectManagerV2/Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md`](../SiNetProjectManagerV2/Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md).
+
+Implementation:
+
+| Layer | Location |
+| --- | --- |
+| Model | `ProjectAssignment.WorkQueueBucket` (default Medium=2); `TaskType.DefaultWorkQueueBucket` |
+| Constants | `WorkQueueBucketCodes` in `src/SiNet.Application/Tasks/` |
+| Migration | **Pending** — user runs `Add-Migration AddTaskWorkQueueBuckets` via EF tooling |
+| Priority engine | `TaskQueuePriorityEngine` in `src/SiNet.Infrastructure.Sql/Services/Tasks/` |
+| Legacy shim | `SiNetSQL/Services/TaskPriorityEngine.cs` delegates to shared engine |
+| Read | `ITaskQueryService` returns bucket; optional bucket filter |
+| Write | `ITaskQueueService` — `GetUserQueueAsync`, `MoveWithinBucketAsync`, `ChangeBucketAsync`, `ValidateAndRepairQueueAsync` |
+| Legacy task ops | `TaskService.ChangeTaskBucket`, bucket-aware `ReassignTask` / `ChangeTaskStatus` / `ReorderTask` |
+
+**Task Panel read-only** must consume `ITaskQueryService` + `ITaskQueueService` (or query-only for first slice) — **not** a single flat list.
+
+**Not created:** `Queue` table, `QueueItem` table, new router, AI bucket classification.
 
 ### First recommended Work Surface (after this closure)
 
 1. **Email read-only** — already on native Gmail port; no task/action foundation required  
 2. **Inspection task-driven** — needs V2 host with `AddSiNetProcessBackbone()` + `AddSiNetWorkflowCommands()`  
-3. **Task list panel (read-only)** — needs `ITaskQueryService` only  
+3. **Task list panel (read-only)** — needs bucket-aware `ITaskQueryService` (+ optional `ITaskQueueService` for reorder later)  
 
 **Do not start first:** Email filing, ProjectWork, ACC write surfaces.
 
@@ -88,7 +113,7 @@ services.AddSiNetProcessBackbone(); // Workflow reads + Task nav/completion/quer
 | --- | --- |
 | Email read-only (`EmailWindowView` read slice) | Email filing |
 | Inspection task open + complete (V2 New System host) | ProjectWork |
-| Read-only task list for a project/user | Reports |
+| Read-only task list for a project/user (**three personal bucket queues**) | Reports |
 | ACC operator read surfaces | ACC write / upload |
 | Workflow dashboard **read** slices | Any surface needing MoveToProject / AddMaterial |
 
@@ -104,7 +129,8 @@ services.AddSiNetProcessBackbone(); // Workflow reads + Task nav/completion/quer
 | 2 — Minimal actions | ✅ Done | Foundation handlers + catalog + tests |
 | 3 — WorkflowCommand | ⚠️ Documented | Temporary adapter in SiNetSQL; host binds `AddSiNetWorkflowCommands()` |
 | 4 — Readiness signoff | ✅ Done | This document + matrix + tests |
-| 5 — First Work Surface | Next (human gate) | Email read-only / Inspection / task panel only |
+| 4b — Task Queue Buckets | ✅ Done (model/config) | Bucket-aware queue engine + ports; **migration pending manual EF run** |
+| 5 — First Work Surface | Next (human gate) | Email read-only / Inspection / Task Panel read-only |
 
 See full component tables in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) § Process backbone foundation migration.
 
@@ -128,3 +154,5 @@ See full component tables in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) § Process
 ## Tests
 
 `src/SiNet.App.Wpf.Tests/Boundary/ProcessBackboneBoundaryTests.cs` — DI, navigation, completion, query, actions, doc guards, WPF boundary.
+
+`src/SiNet.App.Wpf.Tests/Boundary/TaskQueueBucketsFoundationTests.cs` — bucket scenarios from design doc §13.

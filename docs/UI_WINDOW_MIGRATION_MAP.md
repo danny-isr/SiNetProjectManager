@@ -54,7 +54,7 @@
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
 | EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
 | ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/... (TBD) | Not started |
-| TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
+| TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | **Blocked until buckets** → **Ready for read-only slice** (Task Queue Buckets foundation complete 2026-07-05) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started |
 
@@ -150,6 +150,7 @@ Task-driven opens, completion, and ComponentKey routing are defined in
   `ITaskCompletionCoordinator`.
 - Native surfaces expose `ApplyContext(WorkSurfaceContext?)` placeholders; only
   `InspectionShellViewModel.OpenFromTaskAsync` implements the canonical navigation half today.
-- See the integration doc §5 for per-window readiness (Email, Inspection, ProjectWork, Tasks,
-  Workflow, ACC operator surfaces).
+- Task Panel read-only: **unblocked** after Task Queue Buckets foundation — see
+  [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md) § Task Queue Buckets and design doc
+  [`PersonalWorkQueuesByTaskSize-2026-06-23.md`](../SiNetProjectManagerV2/Docs/Domains/ProjectWork/PersonalWorkQueuesByTaskSize-2026-06-23.md).
 - Production pilot envelope: [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).

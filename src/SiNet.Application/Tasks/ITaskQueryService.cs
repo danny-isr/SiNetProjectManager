@@ -8,12 +8,22 @@ public interface ITaskQueryService
     /// <summary>Returns a single task summary, or <see langword="null"/> when not found.</summary>
     ValueTask<TaskSummaryDto?> GetByIdAsync(int taskId, CancellationToken ct);
 
-    /// <summary>Returns tasks for a project ordered by work priority then created date.</summary>
+    /// <summary>Returns tasks for a project ordered by bucket, work priority, due date, created.</summary>
     ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(
         int projectId,
         bool includeClosed = false,
+        int? workQueueBucket = null,
         CancellationToken ct = default);
 
-    /// <summary>Returns open tasks assigned to a user, ordered by work priority.</summary>
-    ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(int userId, CancellationToken ct);
+    /// <summary>Returns open tasks assigned to a user, optionally filtered by bucket.</summary>
+    ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(
+        int userId,
+        int? workQueueBucket = null,
+        CancellationToken ct = default);
+
+    /// <summary>Returns open tasks for one user bucket queue.</summary>
+    ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserByBucketAsync(
+        int userId,
+        int workQueueBucket,
+        CancellationToken ct);
 }

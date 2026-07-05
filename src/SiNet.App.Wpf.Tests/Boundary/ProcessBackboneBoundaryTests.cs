@@ -257,7 +257,7 @@ public sealed class ProcessBackboneBoundaryTests
         Assert.Equal(TaskTypeCodes.PerformProfessionalReview, byId!.TaskTypeCode);
         Assert.Equal(TaskComponentKeys.InspectionReport, byId.ComponentKey);
 
-        var forProject = await query.GetTasksForProjectAsync(5, includeClosed: false, CancellationToken.None);
+        var forProject = await query.GetTasksForProjectAsync(5, includeClosed: false, ct: CancellationToken.None);
         Assert.Single(forProject);
         Assert.Equal(taskId, forProject[0].TaskId);
     }
