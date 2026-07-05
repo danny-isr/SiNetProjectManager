@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
@@ -188,8 +189,30 @@ public class TaskWorkbenchViewModel : ObservableObject
             if (SetField(ref _selectedTask, value))
             {
                 ResolvePreview = string.Empty;
+                OnPropertyChanged(nameof(QueueMoveStatusHint));
                 RaiseCommandStates();
             }
+        }
+    }
+
+    /// <summary>Tooltip / status hint when queue move commands are disabled.</summary>
+    public string QueueMoveStatusHint
+    {
+        get
+        {
+            if (_taskQueue is null || _currentUser?.UserId is not int)
+                return string.Empty;
+
+            if (SelectedTask is null)
+                return "בחר משימה כדי לשנות את מיקומה בתור.";
+
+            if (!CanMutateSelectedTaskQueue())
+                return "אין הרשאה לשנות את תור המשימה הנבחרת.";
+
+            if (SelectedTask.WorkPriority is not int priority || priority <= 0)
+                return "המשימה אינה נמצאת בתור פעיל.";
+
+            return string.Empty;
         }
     }
 
@@ -719,25 +742,32 @@ public class TaskWorkbenchViewModel : ObservableObject
     }
 
     private bool CanMoveSelectedUp() =>
-        !IsBusy && CanMoveSelectedInQueue(out var priority) && priority > 1;
+        !IsBusy && TryGetSelectedQueuePosition(out var position, out _) && position > 1;
 
-    private bool CanMoveSelectedDown()
+    private bool CanMoveSelectedDown() =>
+        !IsBusy && TryGetSelectedQueuePosition(out var position, out var queueSize) && position < queueSize;
+
+    private bool TryGetSelectedQueuePosition(out int position, out int queueSize)
     {
-        if (!CanMoveSelectedInQueue(out var priority))
+        position = 0;
+        queueSize = 0;
+
+        if (_taskQueue is null || _currentUser?.UserId is not int)
             return false;
 
-        var bucketTasks = GetBucketCollectionForSelected();
-        return bucketTasks is not null && priority < bucketTasks.Count;
-    }
+        if (SelectedTask?.WorkPriority is not int priority || priority <= 0)
+            return false;
 
-    private bool CanMoveSelectedInQueue(out int priority)
-    {
-        priority = 0;
-        return _taskQueue is not null
-               && _currentUser?.UserId is int
-               && SelectedTask?.WorkPriority is int p
-               && p > 0
-               && CanMutateSelectedTaskQueue();
+        if (!CanMutateSelectedTaskQueue())
+            return false;
+
+        var queueTasks = GetActiveQueueTasksForSelected();
+        queueSize = queueTasks.Count;
+        if (queueSize == 0)
+            return false;
+
+        position = priority;
+        return true;
     }
 
     private bool CanMutateSelectedTaskQueue()
@@ -745,13 +775,19 @@ public class TaskWorkbenchViewModel : ObservableObject
         if (SelectedTask is null || _currentUser?.UserId is not int actorId)
             return false;
 
+        if (SelectedTask.AssignedToUserId is not int assigneeId)
+            return false;
+
+        if (LoadMode == "Project")
+            return CanSelectTaskScope || assigneeId == actorId;
+
         if (!CanSelectTaskScope)
-            return SelectedTask.AssignedToUserId == actorId;
+            return assigneeId == actorId;
 
         return SelectedScope switch
         {
-            TaskWorkbenchScope.MyTasks => SelectedTask.AssignedToUserId == actorId,
-            TaskWorkbenchScope.SpecificUser => SelectedUserId is int uid && SelectedTask.AssignedToUserId == uid,
+            TaskWorkbenchScope.MyTasks => assigneeId == actorId,
+            TaskWorkbenchScope.SpecificUser => SelectedUserId is int uid && assigneeId == uid,
             TaskWorkbenchScope.AllUsers => true,
             _ => false,
         };
@@ -762,22 +798,25 @@ public class TaskWorkbenchViewModel : ObservableObject
         if (_taskQueue is null || SelectedTask is null || _currentUser?.UserId is not int actorId)
             return;
 
+        var taskId = SelectedTask.TaskId;
         IsBusy = true;
         try
         {
-            var result = await _taskQueue.MoveUpAsync(SelectedTask.TaskId, actorId).ConfigureAwait(true);
+            var result = await _taskQueue.MoveUpAsync(taskId, actorId).ConfigureAwait(true);
             if (!result.Succeeded)
             {
-                MessageBox.Show(result.Message, "העבר למעלה", MessageBoxButton.OK, MessageBoxImage.Information);
+                StatusMessage = result.Message;
                 return;
             }
 
+            StatusMessage = $"הועבר למעלה: {FormatQueueMoveResult(result)}";
             await LoadAsync().ConfigureAwait(true);
+            RestoreSelection(taskId);
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
-            MessageBox.Show(ex.Message, "העבר למעלה", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = $"שגיאה בהעברה למעלה: {ex.Message}";
         }
         finally
         {
@@ -790,27 +829,62 @@ public class TaskWorkbenchViewModel : ObservableObject
         if (_taskQueue is null || SelectedTask is null || _currentUser?.UserId is not int actorId)
             return;
 
+        var taskId = SelectedTask.TaskId;
         IsBusy = true;
         try
         {
-            var result = await _taskQueue.MoveDownAsync(SelectedTask.TaskId, actorId).ConfigureAwait(true);
+            var result = await _taskQueue.MoveDownAsync(taskId, actorId).ConfigureAwait(true);
             if (!result.Succeeded)
             {
-                MessageBox.Show(result.Message, "העבר למטה", MessageBoxButton.OK, MessageBoxImage.Information);
+                StatusMessage = result.Message;
                 return;
             }
 
+            StatusMessage = $"הועבר למטה: {FormatQueueMoveResult(result)}";
             await LoadAsync().ConfigureAwait(true);
+            RestoreSelection(taskId);
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
-            MessageBox.Show(ex.Message, "העבר למטה", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = $"שגיאה בהעברה למטה: {ex.Message}";
         }
         finally
         {
             IsBusy = false;
         }
+    }
+
+    private static string FormatQueueMoveResult(TaskQueueOperationResult result)
+    {
+        if (result.OldPriority is int oldPriority && result.NewPriority is int newPriority)
+            return $"מיקום {oldPriority} → {newPriority}";
+
+        return result.Message;
+    }
+
+    private void RestoreSelection(int taskId)
+    {
+        var match = FindTaskById(taskId);
+        if (match is not null)
+            SelectedTask = match;
+    }
+
+    private TaskSummaryDto? FindTaskById(int taskId) =>
+        QuickTasks.FirstOrDefault(t => t.TaskId == taskId)
+        ?? MediumTasks.FirstOrDefault(t => t.TaskId == taskId)
+        ?? LongTasks.FirstOrDefault(t => t.TaskId == taskId);
+
+    private IReadOnlyList<TaskSummaryDto> GetActiveQueueTasksForSelected()
+    {
+        var bucket = GetBucketCollectionForSelected();
+        if (bucket is null || SelectedTask?.AssignedToUserId is not int assigneeId)
+            return [];
+
+        return bucket
+            .Where(t => t.AssignedToUserId == assigneeId && t.WorkPriority is > 0)
+            .OrderBy(t => t.WorkPriority)
+            .ToList();
     }
 
     private ObservableCollection<TaskSummaryDto>? GetBucketCollectionForSelected() =>

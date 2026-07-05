@@ -9,11 +9,35 @@
         Width="1200" Height="780"
         MinWidth="900" MinHeight="600"
         FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}"
         d:DataContext="{d:DesignInstance Type=local:TaskWorkbenchViewModel, IsDesignTimeCreatable=True}">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <Style x:Key="TaskWorkbenchDataGridStyle" TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="CanUserDeleteRows" Value="False" />
+            <Setter Property="GridLinesVisibility" Value="None" />
+            <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
+            <Setter Property="AlternatingRowBackground" Value="{x:Null}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="TaskWorkbenchDataGridCellStyle" TargetType="DataGridCell">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
-    <Grid Margin="12">
+
+    <Grid Margin="12" Background="{DynamicResource SiBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -23,49 +47,71 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="160" />
         </Grid.RowDefinitions>
+
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Content="רענון" Command="{Binding RefreshCommand}" Margin="16,0,0,0" Padding="12,4" />
-            <Button Content="הוסף משימה" Command="{Binding ShowAddPanelCommand}" Margin="8,0,0,0" Padding="12,4"
+            <TextBlock Text="{Binding Title}" Style="{DynamicResource SiTextLargeStyle}" VerticalAlignment="Center" />
+            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="16,0,0,0" />
+            <Button Content="הוסף משימה" Command="{Binding ShowAddPanelCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Margin="8,0,0,0" Padding="12,4"
+            <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Margin="8,0,0,0" Padding="12,4"
+            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Margin="8,0,0,0" Padding="12,4"
+            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+                    ToolTip="{Binding QueueMoveStatusHint}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Margin="8,0,0,0" Padding="12,4"
+            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+                    ToolTip="{Binding QueueMoveStatusHint}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
+
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
-            <TextBlock Text="מציג משימות:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="מציג משימות:" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
             <ComboBox ItemsSource="{Binding AvailableScopes}"
                       SelectedValuePath="Scope"
                       DisplayMemberPath="DisplayName"
                       SelectedValue="{Binding SelectedScope}"
                       IsEnabled="{Binding CanSelectTaskScope}"
+                      Style="{DynamicResource SiComboBoxStyle}"
                       MinWidth="160"
                       VerticalAlignment="Center" />
             <ComboBox ItemsSource="{Binding AvailableUsers}"
                       SelectedValuePath="UserId"
                       DisplayMemberPath="DisplayName"
                       SelectedValue="{Binding SelectedUserId}"
+                      Style="{DynamicResource SiComboBoxStyle}"
                       MinWidth="180"
                       Margin="12,0,0,0"
                       VerticalAlignment="Center"
                       Visibility="{Binding IsSpecificUserScope, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <ComboBox.ToolTip>
-                    <TextBlock Text="בחר משתמש" />
+                    <TextBlock Text="בחר משתמש" Style="{DynamicResource SiTextSmallStyle}" />
                 </ComboBox.ToolTip>
             </ComboBox>
         </StackPanel>
-        <Border Grid.Row="2" Background="#F5F5F5" Padding="8" Margin="0,0,0,8" CornerRadius="4">
-            <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource SiSecondaryBrush}"
+                BorderThickness="1"
+                Padding="8"
+                Margin="0,0,0,8"
+                CornerRadius="4"
+                Background="{DynamicResource SiBackgroundBrush}">
+            <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" Style="{DynamicResource SiTextSmallStyle}" TextWrapping="Wrap" />
         </Border>
-        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Margin="0,0,0,8" Foreground="#333" TextWrapping="Wrap" />
-        <TabControl Grid.Row="4">
+
+        <TextBlock Grid.Row="3"
+                   Text="{Binding StatusMessage}"
+                   Style="{DynamicResource SiTextSmallStyle}"
+                   Margin="0,0,0,8"
+                   TextWrapping="Wrap" />
+
+        <TabControl Grid.Row="4" Background="{DynamicResource SiBackgroundBrush}">
             <TabItem Header="קצר">
-                <DataGrid ItemsSource="{Binding QuickTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
+                <DataGrid ItemsSource="{Binding QuickTasks}"
+                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                          Style="{StaticResource TaskWorkbenchDataGridStyle}"
+                          CellStyle="{StaticResource TaskWorkbenchDataGridCellStyle}">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
@@ -78,7 +124,10 @@
                 </DataGrid>
             </TabItem>
             <TabItem Header="בינוני">
-                <DataGrid ItemsSource="{Binding MediumTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
+                <DataGrid ItemsSource="{Binding MediumTasks}"
+                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                          Style="{StaticResource TaskWorkbenchDataGridStyle}"
+                          CellStyle="{StaticResource TaskWorkbenchDataGridCellStyle}">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
@@ -91,7 +140,10 @@
                 </DataGrid>
             </TabItem>
             <TabItem Header="ארוך">
-                <DataGrid ItemsSource="{Binding LongTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
+                <DataGrid ItemsSource="{Binding LongTasks}"
+                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                          Style="{StaticResource TaskWorkbenchDataGridStyle}"
+                          CellStyle="{StaticResource TaskWorkbenchDataGridCellStyle}">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
@@ -104,6 +156,7 @@
                 </DataGrid>
             </TabItem>
         </TabControl>
+
         <GroupBox Grid.Row="5" Header="הוספת משימה" Margin="0,8,0,8"
                   Visibility="{Binding IsAddPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid Margin="8">
@@ -118,48 +171,56 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
-                    <TextBlock Text="Title" FontWeight="SemiBold" />
-                    <TextBox Text="{Binding NewTitle, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Text="Title" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <TextBox Text="{Binding NewTitle, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource SiTextBoxStyle}" />
                 </StackPanel>
                 <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,8">
-                    <TextBlock Text="Due date" FontWeight="SemiBold" />
+                    <TextBlock Text="Due date" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <DatePicker SelectedDate="{Binding NewDueDate}" />
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
-                    <TextBlock Text="Project" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" DisplayMemberPath="DisplayName" />
+                    <TextBlock Text="Project" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" DisplayMemberPath="DisplayName"
+                              Style="{DynamicResource SiComboBoxStyle}" />
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8">
-                    <TextBlock Text="Assigned to" FontWeight="SemiBold" />
+                    <TextBlock Text="Assigned to" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
                     <ComboBox ItemsSource="{Binding Users}" SelectedItem="{Binding SelectedAssignee}" DisplayMemberPath="DisplayName"
+                              Style="{DynamicResource SiComboBoxStyle}"
                               IsEnabled="{Binding CanEditAssigneeOnCreate}" />
                 </StackPanel>
                 <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,8">
-                    <TextBlock Text="Task type" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding TaskTypes}" SelectedItem="{Binding SelectedTaskType}" DisplayMemberPath="DisplayName" />
+                    <TextBlock Text="Task type" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding TaskTypes}" SelectedItem="{Binding SelectedTaskType}" DisplayMemberPath="DisplayName"
+                              Style="{DynamicResource SiComboBoxStyle}" />
                 </StackPanel>
                 <StackPanel Grid.Row="2" Grid.Column="1" Margin="8,0,0,8">
-                    <TextBlock Text="Status" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding Statuses}" SelectedItem="{Binding SelectedStatus}" DisplayMemberPath="DisplayName" />
+                    <TextBlock Text="Status" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding Statuses}" SelectedItem="{Binding SelectedStatus}" DisplayMemberPath="DisplayName"
+                              Style="{DynamicResource SiComboBoxStyle}" />
                 </StackPanel>
                 <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,8,0">
-                    <TextBlock Text="Bucket" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding Buckets}" SelectedItem="{Binding SelectedBucket}" DisplayMemberPath="DisplayName" />
+                    <TextBlock Text="Bucket" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding Buckets}" SelectedItem="{Binding SelectedBucket}" DisplayMemberPath="DisplayName"
+                              Style="{DynamicResource SiComboBoxStyle}" />
                 </StackPanel>
                 <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                    <Button Content="הוסף" Command="{Binding CreateTaskCommand}" Padding="16,4" Margin="0,0,8,0" />
-                    <Button Content="ביטול" Command="{Binding HideAddPanelCommand}" Padding="16,4" />
+                    <Button Content="הוסף" Command="{Binding CreateTaskCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,8,0" />
+                    <Button Content="ביטול" Command="{Binding HideAddPanelCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" />
                 </StackPanel>
             </Grid>
         </GroupBox>
+
         <GroupBox Grid.Row="6" Header="Resolve preview (WorkSurfaceContext)" Margin="0,0,0,8">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <Button Grid.Row="0" Content="בדוק פתיחה / Resolve" Command="{Binding ResolveCommand}" HorizontalAlignment="Right" Margin="0,0,0,8" Padding="12,4" />
-                <TextBox Grid.Row="1" Text="{Binding ResolvePreview, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+                <Button Grid.Row="0" Content="בדוק פתיחה / Resolve" Command="{Binding ResolveCommand}"
+                        Style="{DynamicResource SiSecondaryButtonStyle}" HorizontalAlignment="Right" Margin="0,0,0,8" />
+                <TextBox Grid.Row="1" Text="{Binding ResolvePreview, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Style="{DynamicResource SiTextBoxStyle}" />
             </Grid>
         </GroupBox>
     </Grid>
