@@ -5,11 +5,13 @@ using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.Users;
+using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
+using SiNet.Application.DevTools;
 using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shell;
@@ -94,6 +96,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 OpenInspectionShell,
                 "Developer harness — not for production users"));
         }
+#endif
+
+#if DEBUG
+        AppendDevToolsMenuItems(items);
 #endif
 
         // Native user admin — App.Wpf surfaces + Infrastructure.Sql (see docs/NEW_SYSTEM_BOUNDARY.md).
@@ -354,6 +360,36 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         var selectorViewModel = new ProjectSelectorViewModel(projectQuery, filterOptions, currentProject);
         return new ProjectSelectorView { DataContext = selectorViewModel };
+    }
+
+    private void AppendDevToolsMenuItems(List<NewShellMenuItem> items)
+    {
+        if (_services.GetService<IDevDataResetService>() is null
+            && _services.GetService<IStaticSeedService>() is null)
+        {
+            return;
+        }
+
+        if (!CanAccessFeature(AppFeatureCodes.DevToolsReset))
+            return;
+
+        var coordinator = new DevToolsCoordinator(_services);
+        Window? Owner() => System.Windows.Application.Current?.MainWindow;
+
+        items.Add(new NewShellMenuItem(
+            "כלי פיתוח — איפוס נתוני פיתוח",
+            () => _ = coordinator.RunResetWithDialogAsync(Owner()),
+            "מוחק נתוני migration ומריץ seed (New System — לא legacy DevDataResetService)"));
+
+        items.Add(new NewShellMenuItem(
+            "כלי פיתוח — טעינת Seed בסיסי",
+            () => _ = coordinator.RunCoreSeedAsync(Owner()),
+            "Task static + mappings + workflow seed"));
+
+        items.Add(new NewShellMenuItem(
+            "כלי פיתוח — טעינת משימות דמו",
+            () => _ = coordinator.RunDemoTaskSeedAsync(Owner()),
+            "משימות DEBUG בשלושה buckets ל-Task Panel read-only"));
     }
 
     private static void ShowWindow(Window window)

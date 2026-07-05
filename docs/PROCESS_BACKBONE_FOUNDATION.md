@@ -152,9 +152,24 @@ See full component tables in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) § Process
 | `WorkflowActionExecutor` | **Wrap temporarily** | Legacy transition runtime only |
 | `WorkflowStageTaskProvisioningService` | **Defer** | Same as orchestrator |
 | `WorkflowTransitionEvaluator` | **Defer with blocker** — pure rules but coupled to engine | Native workflow command impl |
-| `WorkflowSeedService` | **Defer** | Dev/seed tooling only |
+| `WorkflowSeedService` | **Migrated (DEBUG)** — New System `SqlWorkflowSeedService`; legacy SiNetSQL copy retained | Dev/seed tooling |
 
 ---
+
+## Dev Tools seed/reset migrated to New System (2026-07-05)
+
+See [`DEV_TOOLS.md`](./DEV_TOOLS.md).
+
+| Layer | Location |
+| --- | --- |
+| Ports | `IDevDataResetService`, `IStaticSeedService` in `SiNet.Application.DevTools` |
+| Reset | `SqlDevDataResetService` |
+| Task seed | `SqlTaskManagementSeedService` |
+| Workflow seed | `SqlWorkflowSeedService` |
+| Demo tasks | `SqlTaskDemoSeedService` |
+| UI | NewShell DEBUG menu via `DevToolsCoordinator` |
+
+Legacy `SiNetSQL.Services.DevDataResetService` / `MainWindow.DevResetData_Click` remain — not target architecture.
 
 ## Tests
 
@@ -162,4 +177,6 @@ See full component tables in [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) § Process
 
 `src/SiNet.App.Wpf.Tests/Boundary/TaskQueueBucketsFoundationTests.cs` — bucket scenarios from design doc §13.
 
-`src/SiNet.App.Wpf.Tests/Boundary/TaskPanelReadOnlyTests.cs` — read-only Task Panel pilot guards.
+`src/SiNet.App.Wpf.Tests/Boundary/DevToolsBoundaryTests.cs` — dev reset/seed migration guards.
+
+---

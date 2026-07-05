@@ -8,6 +8,7 @@ using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
+using SiNet.Infrastructure.Sql.Services.DevTools;
 using SiNetProjectManagerV2.Services;
 
 namespace SiNetProjectManagerV2.Services.Composition;
@@ -40,6 +41,7 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         services.AddSiNetGoogle(ConfigureNewSystemGmail);
         services.AddSiNetNewSystemWpf();
+        services.AddSiNetDevTools();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();

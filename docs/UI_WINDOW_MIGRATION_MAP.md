@@ -171,3 +171,12 @@ Target surface: `src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyView` +
 
 **Does not use:** LegacyBridge, legacy `TaskPanelView`, `TaskCompletion`, `ProcessAction`,
 `MoveToProject`, `AddMaterial`, direct SiNetSQL from WPF, new router, fallback.
+
+## Dev reset / seed tools
+
+| Entry | Status |
+| --- | --- |
+| Legacy `MainWindow.DevResetData_Click` + `SiNetSQL.Services.DevDataResetService` | Retained (legacy/debug-only) |
+| New System NewShell DEBUG menu + `IDevDataResetService` / `IStaticSeedService` | **Added** (2026-07-05) |
+
+See [`DEV_TOOLS.md`](./DEV_TOOLS.md). Legacy implementation **not deleted**.

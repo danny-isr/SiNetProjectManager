@@ -4,6 +4,7 @@ using SiNet.Infrastructure.FileSystem;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Sql;
+using SiNet.Infrastructure.Sql.Services.DevTools;
 using SiNet.LegacyBridge;
 
 namespace SiNet.App.Composition;
@@ -35,6 +36,7 @@ public static class SiNetCompositionExtensions
         services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();
         services.AddSiNetLegacyBridge();
+        services.AddSiNetDevTools();
         return services;
     }
 }
