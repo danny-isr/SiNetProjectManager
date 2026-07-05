@@ -30,6 +30,12 @@
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Margin="8,0,0,0" Padding="12,4"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Margin="8,0,0,0" Padding="12,4"
+                    Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Margin="8,0,0,0" Padding="12,4"
+                    Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Margin="8,0,0,0" Padding="12,4"
+                    Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
             <TextBlock Text="מציג משימות:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -61,7 +67,7 @@
             <TabItem Header="קצר">
                 <DataGrid ItemsSource="{Binding QuickTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Priority" Binding="{Binding WorkPriority}" Width="70" />
+                        <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
                         <DataGridTextColumn Header="Project" Binding="{Binding ProjectId}" Width="70" />
                         <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
@@ -74,7 +80,7 @@
             <TabItem Header="בינוני">
                 <DataGrid ItemsSource="{Binding MediumTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Priority" Binding="{Binding WorkPriority}" Width="70" />
+                        <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
                         <DataGridTextColumn Header="Project" Binding="{Binding ProjectId}" Width="70" />
                         <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
@@ -87,7 +93,7 @@
             <TabItem Header="ארוך">
                 <DataGrid ItemsSource="{Binding LongTasks}" SelectedItem="{Binding SelectedTask}" AutoGenerateColumns="False" IsReadOnly="True">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Priority" Binding="{Binding WorkPriority}" Width="70" />
+                        <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
                         <DataGridTextColumn Header="Project" Binding="{Binding ProjectId}" Width="70" />
                         <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />

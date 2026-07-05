@@ -269,6 +269,141 @@ public static class TaskQueuePriorityEngine
         return corrected;
     }
 
+    /// <summary>
+    /// Analyses queue defects, reindexes actionable tasks to 1..N, clears stale priorities on closed tasks.
+    /// </summary>
+    public static async Task<TaskQueueRepairDetail> ValidateAndReindexDetailedAsync(
+        SiNetSQLDbContext context,
+        int employeeId,
+        int bucket,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateBucket(bucket);
+
+        var openTasks = await context.ProjectAssignments
+            .Where(t => t.AssignedToId == employeeId
+                     && t.WorkQueueBucket == bucket
+                     && t.AssignmentStatus != null
+                     && t.AssignmentStatus.IsActionable)
+            .OrderBy(t => t.WorkPriority.HasValue ? 0 : 1)
+            .ThenBy(t => t.WorkPriority)
+            .ThenBy(t => t.Created)
+            .ThenBy(t => t.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var staleClosed = await context.ProjectAssignments
+            .Where(t => t.AssignedToId == employeeId
+                     && t.WorkQueueBucket == bucket
+                     && t.WorkPriority != null
+                     && t.AssignmentStatus != null
+                     && !t.AssignmentStatus.IsActionable)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var nullPriorities = openTasks.Count(t => !t.WorkPriority.HasValue);
+        var duplicatePriorities = openTasks
+            .Where(t => t.WorkPriority.HasValue)
+            .GroupBy(t => t.WorkPriority!.Value)
+            .Where(g => g.Count() > 1)
+            .Sum(g => g.Count() - 1);
+
+        var gapsClosed = CountPriorityGaps(openTasks);
+
+        var staleClosedCleared = 0;
+        foreach (var stale in staleClosed)
+        {
+            stale.WorkPriority = null;
+            staleClosedCleared++;
+        }
+
+        var assignedFromNull = 0;
+        var renumbered = 0;
+        for (var i = 0; i < openTasks.Count; i++)
+        {
+            var expected = i + 1;
+            var task = openTasks[i];
+            if (!task.WorkPriority.HasValue)
+                assignedFromNull++;
+
+            if (task.WorkPriority != expected)
+            {
+                task.WorkPriority = expected;
+                renumbered++;
+            }
+        }
+
+        if (staleClosedCleared > 0 || renumbered > 0)
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return new TaskQueueRepairDetail(
+            NullPrioritiesFixed: nullPriorities,
+            DuplicatePrioritiesFixed: duplicatePriorities,
+            GapsClosed: gapsClosed,
+            StaleClosedCleared: staleClosedCleared,
+            TotalCorrected: staleClosedCleared + renumbered);
+    }
+
+    public static async Task<TaskQueueRepairDetail> ValidateAndReindexAllDetailedAsync(
+        SiNetSQLDbContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var pairs = await context.ProjectAssignments
+            .Where(t => t.AssignedToId != null
+                     && t.AssignmentStatus != null
+                     && t.AssignmentStatus.IsActionable)
+            .Select(t => new { EmployeeId = t.AssignedToId!.Value, t.WorkQueueBucket })
+            .Distinct()
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var aggregate = new TaskQueueRepairDetail(0, 0, 0, 0, 0);
+        foreach (var pair in pairs)
+        {
+            var detail = await ValidateAndReindexDetailedAsync(
+                    context, pair.EmployeeId, pair.WorkQueueBucket, cancellationToken)
+                .ConfigureAwait(false);
+            aggregate = MergeDetails(aggregate, detail);
+        }
+
+        return aggregate;
+    }
+
+    private static TaskQueueRepairDetail MergeDetails(TaskQueueRepairDetail left, TaskQueueRepairDetail right) =>
+        new(
+            left.NullPrioritiesFixed + right.NullPrioritiesFixed,
+            left.DuplicatePrioritiesFixed + right.DuplicatePrioritiesFixed,
+            left.GapsClosed + right.GapsClosed,
+            left.StaleClosedCleared + right.StaleClosedCleared,
+            left.TotalCorrected + right.TotalCorrected);
+
+    private static int CountPriorityGaps(IReadOnlyList<ProjectAssignment> openTasks)
+    {
+        var priorities = openTasks
+            .Where(t => t.WorkPriority.HasValue)
+            .Select(t => t.WorkPriority!.Value)
+            .OrderBy(p => p)
+            .ToList();
+
+        if (priorities.Count == 0)
+            return openTasks.Count > 0 ? openTasks.Count : 0;
+
+        var gaps = 0;
+        if (priorities[0] != 1)
+            gaps++;
+
+        for (var i = 1; i < priorities.Count; i++)
+        {
+            if (priorities[i] != priorities[i - 1] + 1)
+                gaps++;
+        }
+
+        if (priorities.Count != priorities[^1])
+            gaps++;
+
+        return gaps;
+    }
+
     public static int ValidateAndReindexAll(SiNetSQLDbContext context)
     {
         var pairs = context.ProjectAssignments

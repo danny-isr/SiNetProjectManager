@@ -22,6 +22,7 @@ public class TaskWorkbenchViewModel : ObservableObject
     private readonly ITaskQueryService _taskQuery;
     private readonly ITaskNavigationService _taskNavigation;
     private readonly ITaskWorkbenchService? _workbench;
+    private readonly ITaskQueueService? _taskQueue;
     private readonly ICurrentUserContext? _currentUser;
     private readonly ICurrentProjectContext? _currentProject;
     private readonly IAuthorizationQueryService? _authorization;
@@ -47,7 +48,7 @@ public class TaskWorkbenchViewModel : ObservableObject
     private bool _suppressScopeReload;
 
     public TaskWorkbenchViewModel()
-        : this(new DesignTaskQueryService(), new DesignTaskNavigationService(), null, null, null, null, null)
+        : this(new DesignTaskQueryService(), new DesignTaskNavigationService(), null, null, null, null, null, null)
     {
     }
 
@@ -58,11 +59,13 @@ public class TaskWorkbenchViewModel : ObservableObject
         ICurrentUserContext? currentUser = null,
         ICurrentProjectContext? currentProject = null,
         IAuthorizationQueryService? authorization = null,
-        IUserLookupService? userLookup = null)
+        IUserLookupService? userLookup = null,
+        ITaskQueueService? taskQueue = null)
     {
         _taskQuery = taskQuery ?? throw new ArgumentNullException(nameof(taskQuery));
         _taskNavigation = taskNavigation ?? throw new ArgumentNullException(nameof(taskNavigation));
         _workbench = workbench;
+        _taskQueue = taskQueue;
         _currentUser = currentUser;
         _currentProject = currentProject;
         _authorization = authorization;
@@ -89,11 +92,18 @@ public class TaskWorkbenchViewModel : ObservableObject
         HideAddPanelCommand = new RelayCommand(_ => IsAddPanelVisible = false);
         CreateTaskCommand = new AsyncRelayCommand(CreateTaskAsync, CanCreateTask);
         DeleteTaskCommand = new AsyncRelayCommand(DeleteSelectedAsync, () => !IsBusy && SelectedTask is not null && _workbench is not null);
+        RepairQueueCommand = new AsyncRelayCommand(RepairQueueAsync, () => !IsBusy && CanManageQueue);
+        MoveUpCommand = new AsyncRelayCommand(MoveSelectedUpAsync, CanMoveSelectedUp);
+        MoveDownCommand = new AsyncRelayCommand(MoveSelectedDownAsync, CanMoveSelectedDown);
     }
 
     public virtual string Title => "משימות — Task Workbench";
 
     public string QueryServiceName => _taskQuery.GetType().Name;
+
+    public string QueueServiceName => _taskQueue?.GetType().Name ?? "(none)";
+
+    public bool CanManageQueue => _taskQueue is not null && _currentUser?.UserId is int;
 
     public string LoadMode { get; private set; } = "None";
 
@@ -291,6 +301,9 @@ public class TaskWorkbenchViewModel : ObservableObject
     public ICommand HideAddPanelCommand { get; }
     public ICommand CreateTaskCommand { get; }
     public ICommand DeleteTaskCommand { get; }
+    public ICommand RepairQueueCommand { get; }
+    public ICommand MoveUpCommand { get; }
+    public ICommand MoveDownCommand { get; }
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
@@ -558,6 +571,7 @@ public class TaskWorkbenchViewModel : ObservableObject
         sb.AppendLine($"CanSelectTaskScope: {CanSelectTaskScope}");
         sb.AppendLine($"ProjectId: {CurrentProjectIdDisplay}");
         sb.AppendLine($"QueryService: {QueryServiceName}");
+        sb.AppendLine($"QueueService: {QueueServiceName}");
         sb.AppendLine($"Counts: Quick={counts.Quick}, Medium={counts.Medium}, Long={counts.Long}");
         if (!string.IsNullOrEmpty(error))
             sb.AppendLine($"Error: {error}");
@@ -656,6 +670,158 @@ public class TaskWorkbenchViewModel : ObservableObject
         }
     }
 
+    private async Task RepairQueueAsync()
+    {
+        if (_taskQueue is null || _currentUser?.UserId is not int actorId)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            TaskQueueRepairResult result = SelectedScope switch
+            {
+                TaskWorkbenchScope.SpecificUser when SelectedUserId is int uid =>
+                    await RepairUserBucketsAsync(uid).ConfigureAwait(true),
+                TaskWorkbenchScope.AllUsers when CanSelectTaskScope =>
+                    await _taskQueue.RepairAllQueuesAsync().ConfigureAwait(true),
+                _ => await RepairUserBucketsAsync(actorId).ConfigureAwait(true),
+            };
+
+            StatusMessage =
+                $"תיקון תור: {result.BucketsProcessed} תורים, {result.TasksAssignedPriority} null, " +
+                $"{result.DuplicatePrioritiesFixed} כפילויות, {result.GapsClosed} חורים.";
+            await LoadAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            StatusMessage = $"שגיאה בתיקון תור: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task<TaskQueueRepairResult> RepairUserBucketsAsync(int userId)
+    {
+        if (_taskQueue is null)
+            return TaskQueueRepairResult.Empty;
+
+        var aggregate = TaskQueueRepairResult.Empty;
+        foreach (var bucket in new[] { WorkQueueBucketCodes.Quick, WorkQueueBucketCodes.Medium, WorkQueueBucketCodes.Long })
+        {
+            var result = await _taskQueue.RepairQueueAsync(userId, bucket).ConfigureAwait(true);
+            aggregate = aggregate.Merge(result);
+        }
+
+        return aggregate with { UsersProcessed = 1 };
+    }
+
+    private bool CanMoveSelectedUp() =>
+        !IsBusy && CanMoveSelectedInQueue(out var priority) && priority > 1;
+
+    private bool CanMoveSelectedDown()
+    {
+        if (!CanMoveSelectedInQueue(out var priority))
+            return false;
+
+        var bucketTasks = GetBucketCollectionForSelected();
+        return bucketTasks is not null && priority < bucketTasks.Count;
+    }
+
+    private bool CanMoveSelectedInQueue(out int priority)
+    {
+        priority = 0;
+        return _taskQueue is not null
+               && _currentUser?.UserId is int
+               && SelectedTask?.WorkPriority is int p
+               && p > 0
+               && CanMutateSelectedTaskQueue();
+    }
+
+    private bool CanMutateSelectedTaskQueue()
+    {
+        if (SelectedTask is null || _currentUser?.UserId is not int actorId)
+            return false;
+
+        if (!CanSelectTaskScope)
+            return SelectedTask.AssignedToUserId == actorId;
+
+        return SelectedScope switch
+        {
+            TaskWorkbenchScope.MyTasks => SelectedTask.AssignedToUserId == actorId,
+            TaskWorkbenchScope.SpecificUser => SelectedUserId is int uid && SelectedTask.AssignedToUserId == uid,
+            TaskWorkbenchScope.AllUsers => true,
+            _ => false,
+        };
+    }
+
+    private async Task MoveSelectedUpAsync()
+    {
+        if (_taskQueue is null || SelectedTask is null || _currentUser?.UserId is not int actorId)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _taskQueue.MoveUpAsync(SelectedTask.TaskId, actorId).ConfigureAwait(true);
+            if (!result.Succeeded)
+            {
+                MessageBox.Show(result.Message, "העבר למעלה", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            await LoadAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            MessageBox.Show(ex.Message, "העבר למעלה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task MoveSelectedDownAsync()
+    {
+        if (_taskQueue is null || SelectedTask is null || _currentUser?.UserId is not int actorId)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _taskQueue.MoveDownAsync(SelectedTask.TaskId, actorId).ConfigureAwait(true);
+            if (!result.Succeeded)
+            {
+                MessageBox.Show(result.Message, "העבר למטה", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            await LoadAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            MessageBox.Show(ex.Message, "העבר למטה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private ObservableCollection<TaskSummaryDto>? GetBucketCollectionForSelected() =>
+        SelectedTask?.WorkQueueBucket switch
+        {
+            WorkQueueBucketCodes.Quick => QuickTasks,
+            WorkQueueBucketCodes.Medium => MediumTasks,
+            WorkQueueBucketCodes.Long => LongTasks,
+            _ => null,
+        };
+
     private void ReplaceAll(IReadOnlyList<TaskSummaryDto> quick, IReadOnlyList<TaskSummaryDto> medium, IReadOnlyList<TaskSummaryDto> longBucket)
     {
         QuickTasks.Clear();
@@ -717,6 +883,28 @@ public class TaskWorkbenchViewModel : ObservableObject
         (ResolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (CreateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DeleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (RepairQueueCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (MoveUpCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (MoveDownCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    private sealed class DesignTaskQueueService : ITaskQueueService
+    {
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetUserQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) =>
+            ValueTask.FromResult<IReadOnlyList<TaskSummaryDto>>([]);
+        public ValueTask MoveWithinBucketAsync(int taskId, int newPosition, int changedByUserId, CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask ChangeBucketAsync(int taskId, int newBucket, int changedByUserId, CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask<int> ValidateAndRepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => ValueTask.FromResult(0);
+        public ValueTask<TaskQueueRepairResult> RepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) =>
+            ValueTask.FromResult(TaskQueueRepairResult.Empty);
+        public ValueTask<TaskQueueRepairResult> RepairAllQueuesAsync(CancellationToken ct = default) =>
+            ValueTask.FromResult(TaskQueueRepairResult.Empty);
+        public ValueTask<TaskQueueOperationResult> MoveUpAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskQueueOperationResult(true, "ok", taskId));
+        public ValueTask<TaskQueueOperationResult> MoveDownAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskQueueOperationResult(true, "ok", taskId));
+        public ValueTask<TaskQueueOperationResult> ReassignAsync(int taskId, int newUserId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskQueueOperationResult(true, "ok", taskId));
     }
 
     private sealed class DesignTaskQueryService : ITaskQueryService
@@ -746,7 +934,7 @@ public sealed class TaskPanelReadOnlyViewModel : TaskWorkbenchViewModel
         ITaskNavigationService taskNavigation,
         ICurrentUserContext? currentUser = null,
         ICurrentProjectContext? currentProject = null)
-        : base(taskQuery, taskNavigation, null, currentUser, currentProject, null, null)
+        : base(taskQuery, taskNavigation, null, currentUser, currentProject, null, null, null)
     {
     }
 

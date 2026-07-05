@@ -30,4 +30,32 @@ public interface ITaskQueueService
         int userId,
         int workQueueBucket,
         CancellationToken ct = default);
+
+    /// <summary>Repairs one assignee + bucket queue with detailed result.</summary>
+    ValueTask<TaskQueueRepairResult> RepairQueueAsync(
+        int userId,
+        int workQueueBucket,
+        CancellationToken ct = default);
+
+    /// <summary>Repairs all actionable assignee + bucket queues in the database.</summary>
+    ValueTask<TaskQueueRepairResult> RepairAllQueuesAsync(CancellationToken ct = default);
+
+    /// <summary>Moves a task one position up within its assignee + bucket queue.</summary>
+    ValueTask<TaskQueueOperationResult> MoveUpAsync(
+        int taskId,
+        int changedByUserId,
+        CancellationToken ct = default);
+
+    /// <summary>Moves a task one position down within its assignee + bucket queue.</summary>
+    ValueTask<TaskQueueOperationResult> MoveDownAsync(
+        int taskId,
+        int changedByUserId,
+        CancellationToken ct = default);
+
+    /// <summary>Reassigns a task to another user — compacts old queue, appends to new user's bucket queue.</summary>
+    ValueTask<TaskQueueOperationResult> ReassignAsync(
+        int taskId,
+        int newUserId,
+        int changedByUserId,
+        CancellationToken ct = default);
 }

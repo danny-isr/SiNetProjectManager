@@ -217,7 +217,7 @@ public sealed class TaskDemoSeedTests
         var longBucket = await query.GetOpenTasksForUserByBucketAsync(userId, WorkQueueBucketCodes.Long, CancellationToken.None);
 
         var bucketDemoTitles = SqlTaskDemoSeedService.DemoTaskCatalog
-            .Where(d => d.WorkPriority != null)
+            .Where(d => d.RequiresOpenStatus)
             .Select(d => d.Title)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -248,11 +248,11 @@ public sealed class TaskDemoSeedTests
         await sut.LoadAsync();
 
         Assert.Equal(4, sut.QuickTasks.Count); // 3 demo + resolve candidate
-        Assert.Equal(4, sut.MediumTasks.Count); // 3 demo + no-priority
+        Assert.Equal(3, sut.MediumTasks.Count); // 3 demo open (no-priority demo is closed)
         Assert.Equal(3, sut.LongTasks.Count);
         Assert.Contains($"משתמש {userId}", sut.StatusMessage, StringComparison.Ordinal);
         Assert.Contains("קצר=4", sut.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("בינוני=4", sut.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("בינוני=3", sut.StatusMessage, StringComparison.Ordinal);
         Assert.Contains("ארוך=3", sut.StatusMessage, StringComparison.Ordinal);
     }
 
