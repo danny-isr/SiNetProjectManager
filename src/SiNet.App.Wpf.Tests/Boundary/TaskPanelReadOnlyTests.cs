@@ -149,11 +149,13 @@ public sealed class TaskPanelReadOnlyTests
     [Fact]
     public void Task_workbench_uses_ITaskWorkbenchService_for_writes()
     {
-        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
-        Assert.Contains("ITaskWorkbenchService", source, StringComparison.Ordinal);
-        Assert.Contains("CreateTaskAsync", source, StringComparison.Ordinal);
-        Assert.Contains("DeleteTaskAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SiNetSQLDbContext", source, StringComparison.Ordinal);
+        var workbenchSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
+        var dialogSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskCreateDialogViewModel.cs");
+        Assert.Contains("ITaskWorkbenchService", dialogSource, StringComparison.Ordinal);
+        Assert.Contains("CreateTaskAsync", dialogSource, StringComparison.Ordinal);
+        Assert.Contains("DeleteTaskAsync", workbenchSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQLDbContext", workbenchSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQLDbContext", dialogSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -211,12 +213,11 @@ public sealed class TaskPanelReadOnlyTests
             new RecordingTaskQueryService(),
             new StubTaskNavigationService(),
             null,
-            null,
-            new InMemoryCurrentProjectContext());
+            null);
 
         await sut.LoadAsync();
 
-        Assert.Equal("לא נבחר פרויקט", sut.StatusMessage);
+        Assert.Equal("התחבר כמשתמש כדי לראות משימות.", sut.StatusMessage);
     }
 
     [Fact]

@@ -68,7 +68,6 @@ public sealed class TaskWorkbenchScopeTests
             new StubNav(),
             new StubWorkbench(),
             new StubUser(10),
-            null,
             new StubAuthorization(admin: true),
             new StubUserLookup([new UserLookupDto(12, "User 12", true), new UserLookupDto(99, "User 99", true)]));
 
@@ -96,7 +95,6 @@ public sealed class TaskWorkbenchScopeTests
             new StubNav(),
             null,
             new StubUser(10),
-            null,
             new StubAuthorization(admin: true),
             new StubUserLookup([new UserLookupDto(12, "U12", true)]));
 
@@ -201,54 +199,20 @@ public sealed class TaskWorkbenchScopeTests
     }
 
     [Fact]
-    public async Task Create_task_defaults_assignee_to_selected_user_in_specific_user_scope()
+    public async Task Create_dialog_defaults_assignee_for_non_admin()
     {
-        var workbench = new StubWorkbench();
-        var projectContext = new InMemoryCurrentProjectContext();
-        await projectContext.SetCurrentProjectAsync(new ProjectSummaryDto(1, "1001", "Project 1", null, null, null, null, null, true));
-
-        var vm = new TaskWorkbenchViewModel(
-            new RecordingScopeQueryService(),
-            new StubNav(),
-            workbench,
+        var dialogVm = new TaskCreateDialogViewModel(
+            new StubWorkbench(),
             new StubUser(10),
-            projectContext,
-            new StubAuthorization(admin: true),
-            new StubUserLookup([new UserLookupDto(12, "User 12", true)]));
+            new FakeProjectQueryService(),
+            new FakeProjectFilterOptionsService(),
+            new StubAuthorization(admin: false));
 
-        await vm.InitializeAsync();
-        vm.SelectedScope = TaskWorkbenchScope.SpecificUser;
-        vm.SelectedUserId = 12;
-        vm.ShowAddPanelCommand.Execute(null);
+        await dialogVm.InitializeAsync();
 
-        Assert.NotNull(vm.SelectedAssignee);
-        Assert.Equal(12, vm.SelectedAssignee!.Id);
-    }
-
-    [Fact]
-    public async Task Non_admin_create_task_assignee_locked_to_current_user()
-    {
-        var workbench = new StubWorkbench();
-        var projectContext = new InMemoryCurrentProjectContext();
-        await projectContext.SetCurrentProjectAsync(new ProjectSummaryDto(1, "1001", "Project 1", null, null, null, null, null, true));
-
-        var vm = new TaskWorkbenchViewModel(
-            new RecordingScopeQueryService(),
-            new StubNav(),
-            workbench,
-            new StubUser(10),
-            projectContext,
-            new StubAuthorization(admin: false),
-            new StubUserLookup([new UserLookupDto(12, "User 12", true)]));
-
-        await vm.InitializeAsync();
-        vm.SelectedAssignee = workbench.OptionsUsers.FirstOrDefault(u => u.Id == 12);
-        vm.NewTitle = "Test";
-        vm.SelectedTaskType = workbench.OptionsTaskTypes[0];
-        vm.SelectedStatus = workbench.OptionsStatuses[0];
-        vm.SelectedBucket = workbench.OptionsBuckets[0];
-
-        Assert.False(vm.CreateTaskCommand.CanExecute(null));
+        Assert.NotNull(dialogVm.SelectedAssignee);
+        Assert.Equal(10, dialogVm.SelectedAssignee!.Id);
+        Assert.False(dialogVm.CanEditAssignee);
     }
 
     [Fact]
@@ -283,7 +247,6 @@ public sealed class TaskWorkbenchScopeTests
             new StubNav(),
             null,
             new StubUser(userId),
-            null,
             new StubAuthorization(admin),
             new StubUserLookup([new UserLookupDto(12, "User 12", true), new UserLookupDto(99, "User 99", true)]));
     }

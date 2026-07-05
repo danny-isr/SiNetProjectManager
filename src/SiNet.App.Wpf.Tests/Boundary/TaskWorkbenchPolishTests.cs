@@ -18,14 +18,14 @@ public sealed class TaskWorkbenchPolishTests
     public void Task_workbench_uses_app_theme_resources()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
+        var dialogXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskCreateDialogView.xaml");
 
         Assert.Contains("SiBackgroundBrush", xaml, StringComparison.Ordinal);
-        Assert.Contains("SiPrimaryButtonStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiSecondaryButtonStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("SiPrimaryButtonStyle", dialogXaml, StringComparison.Ordinal);
         Assert.Contains("SiTextSmallStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiTextLargeStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiComboBoxStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("SiTextBoxStyle", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("#F5F5F5", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Foreground=\"#333\"", xaml, StringComparison.OrdinalIgnoreCase);
     }
@@ -150,7 +150,6 @@ public sealed class TaskWorkbenchPolishTests
             new StubUser(12),
             null,
             null,
-            null,
             queue);
 
         vm.RepairQueueCommand.Execute(null);
@@ -235,7 +234,6 @@ public sealed class TaskWorkbenchPolishTests
             new StubNav(),
             null,
             new StubUser(12),
-            null,
             null,
             null,
             queue);
