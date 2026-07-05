@@ -238,9 +238,10 @@ public sealed class TaskDemoSeedTests
         services.AddSiNetProcessBackbone();
         await using var provider = services.BuildServiceProvider();
 
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             provider.GetRequiredService<ITaskQueryService>(),
             new StubTaskNavigationService(),
+            provider.GetRequiredService<ITaskWorkbenchService>(),
             new StubCurrentUserContext(userId),
             null);
 

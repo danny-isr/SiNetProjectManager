@@ -40,7 +40,7 @@ public sealed class TaskPanelReadOnlyTests
     [Fact]
     public void Task_panel_read_only_viewmodel_uses_ITaskQueryService()
     {
-        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyViewModel.cs");
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
 
         Assert.Contains("ITaskQueryService", source, StringComparison.Ordinal);
         Assert.Contains("GetOpenTasksForUserByBucketAsync", source, StringComparison.Ordinal);
@@ -51,9 +51,10 @@ public sealed class TaskPanelReadOnlyTests
     public async Task Task_panel_loads_three_bucket_queues()
     {
         var query = new RecordingTaskQueryService();
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             query,
             new StubTaskNavigationService(),
+            null,
             new StubCurrentUserContext(42),
             null);
 
@@ -75,9 +76,10 @@ public sealed class TaskPanelReadOnlyTests
             QuickResult = [task],
         };
 
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             query,
             new StubTaskNavigationService(),
+            null,
             new StubCurrentUserContext(7),
             null);
 
@@ -107,9 +109,10 @@ public sealed class TaskPanelReadOnlyTests
 
         var navigation = new StubTaskNavigationService { ResolveResult = context };
         var query = new RecordingTaskQueryService { QuickResult = [SampleTask(WorkQueueBucketCodes.Quick, taskId: 99)] };
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             query,
             navigation,
+            null,
             new StubCurrentUserContext(3),
             null);
 
@@ -127,9 +130,10 @@ public sealed class TaskPanelReadOnlyTests
     {
         var navigation = new StubTaskNavigationService { ResolveResult = null };
         var query = new RecordingTaskQueryService { QuickResult = [SampleTask(WorkQueueBucketCodes.Quick, taskId: 1)] };
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             query,
             navigation,
+            null,
             new StubCurrentUserContext(1),
             null);
 
@@ -143,18 +147,13 @@ public sealed class TaskPanelReadOnlyTests
     }
 
     [Fact]
-    public void Task_panel_has_no_write_commands()
+    public void Task_workbench_uses_ITaskWorkbenchService_for_writes()
     {
-        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyViewModel.cs");
-        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyView.xaml");
-
-        foreach (var forbidden in ForbiddenWriteIdentifiers)
-        {
-            Assert.False(source.Contains(forbidden, StringComparison.Ordinal),
-                $"TaskPanelReadOnlyViewModel must not reference write operation '{forbidden}'");
-            Assert.False(xaml.Contains(forbidden, StringComparison.Ordinal),
-                $"TaskPanelReadOnlyView must not reference write operation '{forbidden}'");
-        }
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
+        Assert.Contains("ITaskWorkbenchService", source, StringComparison.Ordinal);
+        Assert.Contains("CreateTaskAsync", source, StringComparison.Ordinal);
+        Assert.Contains("DeleteTaskAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQLDbContext", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -180,7 +179,7 @@ public sealed class TaskPanelReadOnlyTests
         var source = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
 
         Assert.Contains("ITaskPanelReadOnlyWindowFactory", source, StringComparison.Ordinal);
-        Assert.Contains("משימות — קריאה בלבד", source, StringComparison.Ordinal);
+        Assert.Contains("Task Workbench", source, StringComparison.Ordinal);
         Assert.Contains("AppFeatureCodes.ShellOpenTaskPanelReadOnly", source, StringComparison.Ordinal);
         Assert.Contains("taskPanelFactory.Create()", source, StringComparison.Ordinal);
     }
@@ -189,7 +188,7 @@ public sealed class TaskPanelReadOnlyTests
     public void Task_panel_does_not_open_legacy_TaskPanel()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyViewModel.cs");
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchViewModel.cs");
         var factorySource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyWindowFactory.cs");
 
         Assert.DoesNotContain("TaskPanelViewModel", source, StringComparison.Ordinal);
@@ -208,9 +207,10 @@ public sealed class TaskPanelReadOnlyTests
     [Fact]
     public async Task Task_panel_without_user_or_project_shows_guidance_message()
     {
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             new RecordingTaskQueryService(),
             new StubTaskNavigationService(),
+            null,
             null,
             new InMemoryCurrentProjectContext());
 
@@ -222,25 +222,26 @@ public sealed class TaskPanelReadOnlyTests
     [Fact]
     public async Task Task_panel_empty_user_queue_shows_clear_message()
     {
-        var sut = new TaskPanelReadOnlyViewModel(
+        var sut = new TaskWorkbenchViewModel(
             new RecordingTaskQueryService(),
             new StubTaskNavigationService(),
+            null,
             new StubCurrentUserContext(99),
             null);
 
         await sut.LoadAsync();
 
         Assert.Equal(
-            "לא נמצאו משימות למשתמש 99. ייתכן שמשימות הדמו נוצרו למשתמש אחר.",
+            "לא נמצאו משימות עבור UserId=99. ייתכן שמשימות הדemo נוצרו למשתמש אחר.",
             sut.StatusMessage);
     }
 
     [Fact]
     public void Task_panel_user_status_message_includes_bucket_counts()
     {
-        var message = TaskPanelReadOnlyViewModel.FormatUserStatusMessage(
+        var message = TaskWorkbenchViewModel.FormatUserStatusMessage(
             42,
-            new TaskPanelReadOnlyViewModel.BucketCounts(3, 2, 1));
+            new TaskWorkbenchViewModel.BucketCounts(3, 2, 1));
 
         Assert.Equal("נטענו 6 משימות למשתמש 42: קצר=3, בינוני=2, ארוך=1", message);
     }

@@ -80,9 +80,9 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             && CanAccessFeature(AppFeatureCodes.ShellOpenTaskPanelReadOnly))
         {
             items.Add(new NewShellMenuItem(
-                "משימות — קריאה בלבד",
+                "משימות — Task Workbench",
                 () => ShowWindow(taskPanelFactory.Create()),
-                "תורים אישיים Quick / Medium / Long — קריאה בלבד"));
+                "תורים אישיים Quick / Medium / Long — צפייה, הוספה ומחיקה בסיסית"));
         }
 
 #if DEBUG

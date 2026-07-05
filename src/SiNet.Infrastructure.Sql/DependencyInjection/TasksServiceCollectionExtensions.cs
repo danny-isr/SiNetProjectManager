@@ -29,6 +29,9 @@ public static class TasksServiceCollectionExtensions
         services.AddSingleton<SqlTaskCompletionMetadataResolver>();
         services.AddSingleton<ITaskCompletionMetadataResolver>(sp => sp.GetRequiredService<SqlTaskCompletionMetadataResolver>());
 
+        services.AddTransient<SqlTaskWorkbenchService>();
+        services.AddTransient<ITaskWorkbenchService>(sp => sp.GetRequiredService<SqlTaskWorkbenchService>());
+
         return services;
     }
 }
