@@ -378,6 +378,10 @@ public sealed class GmailEmailGateway : IEmailGateway
     private static string QuoteGmailTerm(string value)
         => value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;
 
+    internal static bool ResolveIsUnread(IList<string>? labelIds) =>
+        labelIds is { Count: > 0 }
+        && labelIds.Contains("UNREAD", StringComparer.OrdinalIgnoreCase);
+
     private async Task<IReadOnlyDictionary<string, Label>> LoadLabelMapAsync(
         GmailService gmail,
         CancellationToken cancellationToken)
@@ -438,7 +442,7 @@ public sealed class GmailEmailGateway : IEmailGateway
         var hasAttachments = HasAttachments(message.Payload);
         var labelNames = ResolveLabelNames(message, labelMap);
         var primaryLabel = ResolvePrimaryLabel(labelNames);
-        var isUnread = message.LabelIds?.Contains("UNREAD", StringComparer.OrdinalIgnoreCase) == true;
+        var isUnread = GmailEmailGateway.ResolveIsUnread(message.LabelIds);
 
         return new EmailSummary(
             message.Id ?? string.Empty,

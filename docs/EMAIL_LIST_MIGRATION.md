@@ -11,7 +11,9 @@ Self-contained **Email List component** for the Email Workbench: Outlook-style c
 
 | Component | Path | Role |
 | --- | --- | --- |
-| `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | Standalone UI: account bar, paging, filters, card list |
+| `EmailWindowView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml` | Workbench shell: project bar (row 1), filter bar (row 2), list + preview + sidebar (row 3) |
+| `EmailListFilterBar` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml` | Full-width account bar, paging, filters, project-group chrome |
+| `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | List panel only: load banners + scrollable virtualized card list |
 | `EmailListItemCard` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml` | Compact Outlook-style row |
 | `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, auth, load states, link enrichment |
 | `EmailWindowViewModel` | parent shell | Detail pane, `ApplyContext`, optional project context |
@@ -26,16 +28,17 @@ Configured in `GmailOptions.DefaultMailboxQuery`. Optional project filter pushes
 
 | Feature | Implementation |
 | --- | --- |
-| Standalone component | Account bar + filters + paging + cards inside `EmailListView` |
+| Workbench layout | Row 1: project context bar (full width). Row 2: `EmailListFilterBar` (account, filters, paging). Row 3: list column = `EmailListView` only |
+| List scroll | Internal `ListBox` scroll within current page (`VirtualizingStackPanel`, row `Height="*"`) — separate from Gmail 50-item paging |
 | Default load | `IEmailGateway.GetMailboxPageAsync` — INBOX; no project required |
-| Paging | 50 items; token stack; prev/next in component |
-| Account status | `IConnectorAuthService.ConnectedAccountEmail` + Connect/Disconnect |
+| Paging | 50 items; token stack; prev/next in filter bar |
+| Account status | `IConnectorAuthService.ConnectedAccountEmail` + Connect/Disconnect in filter bar |
 | Cards | `ListBox` + `EmailListItemCard` (not GridView) |
 | Load states | `EmailListLoadState`: Loading, Loaded, PartialFailure, Error, NoResults |
 | Partial enrichment | Gmail rows shown + warning if DB link query fails |
 | Labels | Chips on card; filter + group-by `PrimaryLabel` |
 | Link state | `IEmailThreadLinkQueryService` + client filter All/Linked/Unlinked |
-| Unread | From Gmail `UNREAD` label id on `EmailSummary.IsUnread` |
+| Unread | `GmailEmailGateway.ResolveIsUnread`: `true` only when Gmail `LabelIds` contains `UNREAD`; card shows blue side bar (unread) or gray side bar (read) — no badge |
 
 ## Grouping rule
 
@@ -49,7 +52,17 @@ Multi-label messages appear once under **PrimaryLabel** (first user label under 
 
 ## Workbench integration
 
-`EmailWindowView` hosts a **project context bar** (shared `ProjectSelectorView` via `ICurrentProjectContext`) above `<EmailListView />`. The list component receives `EmailListProjectContext` through `ApplyProjectContextAsync` — it does not own project selection.
+`EmailWindowView` uses a **5-row grid**:
+
+| Row | Content |
+| --- | --- |
+| 0 | Header chrome |
+| 1 | Project context bar — shared `ProjectSelectorView` via `ICurrentProjectContext` (full width) |
+| 2 | `EmailListFilterBar` — account, filters, paging, project-group chrome (`DataContext="{Binding EmailList}"`) |
+| 3 | Main split: `EmailListView` (list only) \| preview \| context sidebar |
+| 4 | Status bar |
+
+The list component receives `EmailListProjectContext` through `ApplyProjectContextAsync` — it does not own project selection.
 
 | Mode | Behavior |
 | --- | --- |

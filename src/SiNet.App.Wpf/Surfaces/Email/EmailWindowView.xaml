@@ -70,6 +70,8 @@
         <Grid Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
@@ -100,8 +102,42 @@
                         ToolTip="&#x05E1;&#x05D2;&#x05D5;&#x05E8;" />
             </Grid>
 
-            <!-- ROW: Main content area (RTL: Column 0 = visual Right). -->
-            <Grid Grid.Row="1" FlowDirection="RightToLeft">
+            <!-- Row 1: Project context bar (full width) -->
+            <Border Grid.Row="1"
+                    Background="#FAFAFA"
+                    BorderBrush="#E0E0E0"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="8,6"
+                    Margin="0,0,0,6">
+                <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="פרויקט:"
+                               FontWeight="SemiBold"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
+                               Foreground="#555"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
+                                                  CompactMode="True"
+                                                  SearchBoxWidth="280"
+                                                  ShowUserFilter="False"
+                                                  VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ActiveProjectDisplay}"
+                               Margin="16,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="#2E7D32"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
+                               TextWrapping="Wrap" />
+                </WrapPanel>
+            </Border>
+
+            <!-- Row 2: Filter / paging toolbar (full width) -->
+            <local:EmailListFilterBar Grid.Row="2"
+                                      DataContext="{Binding EmailList}"
+                                      Margin="0,0,0,6" />
+
+            <!-- Row 3: Main content area (RTL: Column 0 = visual Right). -->
+            <Grid Grid.Row="3" FlowDirection="RightToLeft">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="420" MinWidth="250" />
                     <ColumnDefinition Width="Auto" />
@@ -110,39 +146,10 @@
                     <ColumnDefinition Width="260" MinWidth="180" />
                 </Grid.ColumnDefinitions>
 
-                <!-- EMAIL LIST column: workbench context bar + standalone list component -->
-                <StackPanel Grid.Column="0">
-                    <Border Background="#FAFAFA"
-                            BorderBrush="#E0E0E0"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="8,6"
-                            Margin="0,0,0,6">
-                        <StackPanel>
-                            <TextBlock Text="הקשר פרויקט (Email Workbench)"
-                                       FontWeight="SemiBold"
-                                       FontSize="{DynamicResource SiTextSmallFontSize}"
-                                       Foreground="#555"
-                                       Margin="0,0,0,6" />
-                            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
-                                                              CompactMode="True"
-                                                              SearchBoxWidth="220"
-                                                              ShowUserFilter="False"
-                                                              VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding ActiveProjectDisplay}"
-                                           Margin="12,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Foreground="#2E7D32"
-                                           FontSize="{DynamicResource SiTextSmallFontSize}"
-                                           TextWrapping="Wrap"
-                                           MaxWidth="180" />
-                            </WrapPanel>
-                        </StackPanel>
-                    </Border>
-
-                    <local:EmailListView DataContext="{Binding EmailList}" />
-                </StackPanel>
+                <!-- EMAIL LIST column: list only -->
+                <local:EmailListView Grid.Column="0"
+                                     DataContext="{Binding EmailList}"
+                                     VerticalAlignment="Stretch" />
 
                 <!-- SPLITTER: Email list | viewer. -->
                 <GridSplitter Grid.Column="1"
@@ -321,7 +328,7 @@
             </Grid>
 
             <!-- STATUS BAR (bottom). -->
-            <Border Grid.Row="2"
+            <Border Grid.Row="4"
                     Background="#ECEFF1"
                     BorderBrush="#E0E0E0"
                     BorderThickness="0,1,0,0"

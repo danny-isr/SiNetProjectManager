@@ -39,9 +39,26 @@ public sealed class EmailListSliceBoundaryTests
     {
         var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
 
-        Assert.Contains("לא נקרא", cardXaml, StringComparison.Ordinal);
         Assert.Contains("SiPrimaryBrush", cardXaml, StringComparison.Ordinal);
         Assert.Contains("IsUnread", cardXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("לא נקרא", cardXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unread_email_has_blue_side_bar()
+    {
+        var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
+
+        Assert.Contains("SiPrimaryBrush", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("Value=\"True\"", cardXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Read_email_has_gray_side_bar()
+    {
+        var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
+
+        Assert.Contains("SiSecondaryBrush", cardXaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -58,8 +75,9 @@ public sealed class EmailListSliceBoundaryTests
     {
         var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
 
-        Assert.Contains("לא נקרא", cardXaml, StringComparison.Ordinal);
-        Assert.Contains("FontWeight" , cardXaml, StringComparison.Ordinal);
+        Assert.Contains("SiPrimaryBrush", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("SiSecondaryBrush", cardXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("לא נקרא", cardXaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -161,11 +179,11 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Selected_project_shows_project_email_group()
     {
-        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
 
-        Assert.Contains("ShowProjectGroupChrome", listXaml, StringComparison.Ordinal);
-        Assert.Contains("ProjectGroupHeader", listXaml, StringComparison.Ordinal);
+        Assert.Contains("ShowProjectGroupChrome", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectGroupHeader", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("EmailListDisplayMode.ProjectEmails", listVmSource, StringComparison.Ordinal);
     }
 
@@ -182,10 +200,10 @@ public sealed class EmailListSliceBoundaryTests
     public void Selected_project_group_show_more_loads_next_10()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
-        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("ShowMoreProjectEmails", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("ShowMoreProjectEmailsCommand", listXaml, StringComparison.Ordinal);
+        Assert.Contains("ShowMoreProjectEmailsCommand", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("ProjectEmailChunkSize", listVmSource, StringComparison.Ordinal);
     }
 
@@ -193,11 +211,11 @@ public sealed class EmailListSliceBoundaryTests
     public void All_emails_mode_keeps_50_item_paging()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
-        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("EmailMailboxQuery.DefaultPageSize", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("LoadNextPageCommand", listXaml, StringComparison.Ordinal);
-        Assert.Contains("ShowAllEmailsPaging", listXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadNextPageCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ShowAllEmailsPaging", filterBarXaml, StringComparison.Ordinal);
     }
 
     [Fact]

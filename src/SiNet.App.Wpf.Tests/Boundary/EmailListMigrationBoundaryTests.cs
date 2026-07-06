@@ -117,24 +117,24 @@ public sealed class EmailListMigrationBoundaryTests
     public void Email_list_search_filters_by_subject_and_address()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
-        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("SubjectFilter", listVmSource, StringComparison.Ordinal);
         Assert.Contains("AddressFilter", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("SubjectFilter", listXaml, StringComparison.Ordinal);
-        Assert.Contains("AddressFilter", listXaml, StringComparison.Ordinal);
+        Assert.Contains("SubjectFilter", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("AddressFilter", filterBarXaml, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Email_list_paging_uses_page_size_50_with_next_and_previous()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
-        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("EmailMailboxQuery.DefaultPageSize", listVmSource, StringComparison.Ordinal);
         Assert.Contains("_pageTokenStack", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("LoadNextPageCommand", listXaml, StringComparison.Ordinal);
-        Assert.Contains("LoadPreviousPageCommand", listXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadNextPageCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadPreviousPageCommand", filterBarXaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -178,23 +178,25 @@ public sealed class EmailListMigrationBoundaryTests
     {
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.DoesNotContain("ProjectSelectorView", listXaml, StringComparison.Ordinal);
-        Assert.Contains("AccountStatusDisplay", listXaml, StringComparison.Ordinal);
-        Assert.Contains("ConnectCommand", listXaml, StringComparison.Ordinal);
-        Assert.Contains("DisconnectCommand", listXaml, StringComparison.Ordinal);
-        Assert.Contains("ApplyFiltersCommand", listXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("LoadNextPageCommand", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListFilterBar", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("AccountStatusDisplay", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ConnectCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("DisconnectCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ApplyFiltersCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadNextPageCommand", filterBarXaml, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Email_list_displays_connected_gmail_account()
     {
         var authSource = ReadRepoFile("src/SiNet.Application/Common/IConnectorAuthService.cs");
-        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("ConnectedAccountEmail", authSource, StringComparison.Ordinal);
-        Assert.Contains("AccountStatusDisplay", listXaml, StringComparison.Ordinal);
+        Assert.Contains("AccountStatusDisplay", filterBarXaml, StringComparison.Ordinal);
     }
 
     [Fact]
