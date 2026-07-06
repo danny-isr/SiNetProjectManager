@@ -115,7 +115,8 @@ public sealed record EmailListRow(
     bool IsUnread,
     bool IsAssigned,
     string? AssignedProjectName,
-    int AttachmentCount)
+    int AttachmentCount,
+    string? InternetMessageId = null)
 {
     /// <summary>Short received-date text shown on the list row.</summary>
     public string ReceivedDisplay => ReceivedOn.ToString("dd/MM/yyyy HH:mm");

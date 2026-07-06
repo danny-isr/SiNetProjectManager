@@ -6,6 +6,7 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
+using SiNet.Application.Email;
 using SiNet.Application.Projects;
 using SiNet.Application.WorkSurfaces;
 using SiNet.Domain.ValueObjects;
@@ -43,15 +44,17 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// </summary>
 public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 {
+    private readonly IProjectQueryService _projectQuery;
     private readonly ICurrentProjectContext _currentProject;
     private readonly IEmailGateway _emailGateway;
     private readonly IConnectorAuthService _googleAuthService;
+    private readonly IEmailInboxQueryService? _emailInboxQuery;
     private IReadOnlyList<EmailSummary> _loadedEmails = [];
+    private WorkSurfaceContext? _workSurfaceContext;
 
     private string _searchText = string.Empty;
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
-    private EmailListRow? _selectedEmail;
     private string _selectedEmailBody = string.Empty;
     private bool _isBusy;
     private int _selectedEmailLoadVersion;
@@ -85,6 +88,16 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     {
     }
 
+    public EmailWindowViewModel(
+        IProjectQueryService projectQuery,
+        IProjectFilterOptionsService filterOptions,
+        ICurrentProjectContext currentProject,
+        IEmailGateway emailGateway,
+        IConnectorAuthService googleAuthService)
+        : this(projectQuery, filterOptions, currentProject, emailGateway, googleAuthService, emailInboxQuery: null)
+    {
+    }
+
     /// <summary>
     /// Primary constructor: hosts the shared <see cref="ProjectSelectorViewModel"/> over the supplied
     /// read ports and shared current-project context, and observes that context for display updates.
@@ -96,18 +109,23 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         IProjectFilterOptionsService filterOptions,
         ICurrentProjectContext currentProject,
         IEmailGateway emailGateway,
-        IConnectorAuthService googleAuthService)
+        IConnectorAuthService googleAuthService,
+        IEmailInboxQueryService? emailInboxQuery)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
+        _projectQuery = projectQuery;
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _googleAuthService = googleAuthService ?? throw new ArgumentNullException(nameof(googleAuthService));
+        _emailInboxQuery = emailInboxQuery;
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
-        Emails = [];
         Attachments = [];
+
+        EmailList = new EmailListViewModel();
+        EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
 
         _selectedFolder = Folders.FirstOrDefault();
         _selectedStatus = StatusOptions.FirstOrDefault();
@@ -152,9 +170,14 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     public string ProductionPilotNotice { get; } =
         "מצב פרודקשן ראשוני: צפייה במיילים ובפרטי קבצים מצורפים בלבד. פעולות תיוק ושליחה יחוברו בסלייס נפרד.";
 
-    public int UnreadEmailCount => Emails.Count(static row => row.IsUnread);
+    public int UnreadEmailCount => EmailList.UnreadEmailCount;
 
-    public bool ShowUnreadCount => UnreadEmailCount > 0;
+    public bool ShowUnreadCount => EmailList.ShowUnreadCount;
+
+    public EmailListViewModel EmailList { get; }
+
+    /// <summary>Backward-compatible alias for list rows.</summary>
+    public ObservableCollection<EmailListRow> Emails => EmailList.Emails;
 
     public ProjectSelectorViewModel ProjectSelector { get; }
 
@@ -168,9 +191,9 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<string> StatusOptions { get; }
 
-    public ObservableCollection<EmailListRow> Emails { get; }
-
     public ObservableCollection<EmailAttachmentRow> Attachments { get; }
+
+    public WorkSurfaceContext? WorkSurfaceContext => _workSurfaceContext;
 
     public bool IsConnected => _googleAuthService.IsAuthenticated;
 
@@ -205,28 +228,11 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public EmailListRow? SelectedEmail
     {
-        get => _selectedEmail;
-        set
-        {
-            if (SetField(ref _selectedEmail, value))
-            {
-                OnPropertyChanged(nameof(HasSelectedEmail));
-                (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-
-                if (value is null)
-                {
-                    ClearSelectedEmailDetails();
-                    return;
-                }
-
-                var loadVersion = ++_selectedEmailLoadVersion;
-                PrepareSelectedEmailDetailsLoading();
-                _ = LoadSelectedEmailDetailsAsync(value.Id, loadVersion);
-            }
-        }
+        get => EmailList.SelectedEmail;
+        set => EmailList.SelectedEmail = value;
     }
 
-    public bool HasSelectedEmail => _selectedEmail is not null;
+    public bool HasSelectedEmail => EmailList.SelectedEmail is not null;
 
     public string SelectedEmailBody
     {
@@ -274,10 +280,101 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     {
         if (context is null)
         {
+            _workSurfaceContext = null;
             return;
         }
 
-        StatusMessage = "נפתח מתוך משימה. ניתן לטעון summaries לפרויקט הנבחר; workflow actions עדיין לא חוברו.";
+        if (!WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
+        {
+            StatusMessage = $"ההקשר אינו מתאים למסך דואר ({context.ComponentKey}).";
+            return;
+        }
+
+        _workSurfaceContext = context;
+        _ = ApplyTaskContextAsync(context);
+    }
+
+    private async Task ApplyTaskContextAsync(WorkSurfaceContext context)
+    {
+        if (context.ProjectId > 0)
+        {
+            var project = await _projectQuery
+                .GetProjectAsync(context.ProjectId)
+                .ConfigureAwait(true);
+
+            if (project is not null)
+            {
+                await _currentProject.SetCurrentProjectAsync(project).ConfigureAwait(true);
+            }
+            else
+            {
+                StatusMessage = $"פרויקט #{context.ProjectId} לא נמצא.";
+                return;
+            }
+        }
+
+        if (!IsConnected)
+        {
+            StatusMessage = $"נפתח מתוך משימה #{context.TaskId}. התחבר ל-Google ורענן כדי לטעון מיילים.";
+            return;
+        }
+
+        await RefreshAsync().ConfigureAwait(true);
+
+        if (context.PrimaryWorkTargetEntityId is not int inboxMessageId)
+        {
+            StatusMessage = context.TaskId is int taskId
+                ? $"נפתח מתוך משימה #{taskId}. לא הוגדר יעד מייל — בחר מהרשימה."
+                : "נפתח מתוך משימה. לא הוגדר יעד מייל — בחר מהרשימה.";
+            return;
+        }
+
+        if (_emailInboxQuery is null)
+        {
+            StatusMessage = $"לא ניתן לבחור מייל #{inboxMessageId} מתוך משימה — שירות קריאת תיבת דואר לא זמין.";
+            return;
+        }
+
+        var inboxMessage = await _emailInboxQuery
+            .GetByIdAsync(inboxMessageId)
+            .ConfigureAwait(true);
+
+        if (inboxMessage is null)
+        {
+            StatusMessage = $"מייל #{inboxMessageId} לא נמצא במערכת.";
+            return;
+        }
+
+        if (EmailList.TrySelectByInboxCorrelation(
+                inboxMessage.MessageUniqueId,
+                inboxMessage.InternetMessageId,
+                inboxMessage.Subject,
+                inboxMessage.FromAddress))
+        {
+            StatusMessage = context.TaskId is int openedTaskId
+                ? $"נפתח מתוך משימה #{openedTaskId} — נבחר מייל \"{inboxMessage.Subject}\"."
+                : $"נבחר מייל \"{inboxMessage.Subject}\".";
+            return;
+        }
+
+        StatusMessage = $"מייל \"{inboxMessage.Subject}\" לא נמצא ברשימת Gmail של הפרויקט הנבחר.";
+    }
+
+    private void OnEmailListSelectionChanged(object? sender, EmailListRow? value)
+    {
+        OnPropertyChanged(nameof(SelectedEmail));
+        OnPropertyChanged(nameof(HasSelectedEmail));
+        (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+
+        if (value is null)
+        {
+            ClearSelectedEmailDetails();
+            return;
+        }
+
+        var loadVersion = ++_selectedEmailLoadVersion;
+        PrepareSelectedEmailDetailsLoading();
+        _ = LoadSelectedEmailDetailsAsync(value.Id, loadVersion);
     }
 
     public async Task ConnectAsync()
@@ -450,16 +547,10 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     private void ReplaceEmailRows(IReadOnlyList<EmailListRow> rows)
     {
-        Emails.Clear();
-        foreach (var row in rows)
-        {
-            Emails.Add(row);
-        }
-
-        SelectedEmail = Emails.FirstOrDefault();
-        UpdateFolderSummaries(rows);
+        EmailList.ReplaceRows(rows);
         OnPropertyChanged(nameof(UnreadEmailCount));
         OnPropertyChanged(nameof(ShowUnreadCount));
+        UpdateFolderSummaries(rows);
     }
 
     private void PrepareSelectedEmailDetailsLoading()
@@ -588,7 +679,8 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         IsUnread: false,
         IsAssigned: false,
         AssignedProjectName: null,
-        AttachmentCount: summary.HasAttachments ? 1 : 0);
+        AttachmentCount: summary.HasAttachments ? 1 : 0,
+        InternetMessageId: summary.InternetMessageId);
 
     private static string FormatAttachmentKind(EmailMessageAttachmentDetails attachment)
     {
@@ -625,6 +717,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        EmailList.SelectedEmailChanged -= OnEmailListSelectionChanged;
         _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged -= OnAuthStateChanged;
         ProjectSelector.Dispose();

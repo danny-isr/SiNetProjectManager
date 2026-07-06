@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shared.Projects;
@@ -89,5 +90,7 @@ public static class ProjectContextServiceCollectionExtensions
 
         // Small factory so hosts open the window through DI instead of constructing an isolated context.
         services.AddSingleton<IEmailWindowFactory, EmailWindowFactory>();
+
+        services.AddSiNetWorkSurfaces();
     }
 }

@@ -32,7 +32,7 @@ namespace SiNet.App.Wpf.Inspection;
 public sealed class InspectionShellViewModel : ObservableObject
 {
     /// <summary>Component key this surface honours when opened from a task.</summary>
-    public const string InspectionComponentKey = "Inspection";
+    public const string InspectionComponentKey = WorkSurfaceComponentKeys.InspectionReport;
 
     private readonly ITaskNavigationService _taskNavigation;
     private readonly ITaskCompletionService _taskCompletion;

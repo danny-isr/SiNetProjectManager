@@ -257,7 +257,8 @@ public sealed class GmailEmailGateway : IEmailGateway
             from,
             subject,
             receivedAt,
-            hasAttachments);
+            hasAttachments,
+            GetHeader(headers, "Message-ID"));
     }
 
     private EmailMessageDetails MapDetails(Message message)

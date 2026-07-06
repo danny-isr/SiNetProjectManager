@@ -12,4 +12,5 @@ public sealed record EmailSummary(
     EmailAddress From,
     string Subject,
     DateTimeOffset ReceivedAt,
-    bool HasAttachments);
+    bool HasAttachments,
+    string? InternetMessageId = null);

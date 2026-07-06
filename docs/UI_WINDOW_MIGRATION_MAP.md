@@ -54,7 +54,7 @@
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
 | EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
 | ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/... (TBD) | Not started |
-| TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyView | **Started / Pilot** — read-only Task Queue Panel (2026-07-05) |
+| TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView | **Started / Pilot** — Task Workbench (queue + CRUD, 2026-07-06) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started |
 
@@ -150,27 +150,52 @@ Task-driven opens, completion, and ComponentKey routing are defined in
   `ITaskCompletionCoordinator`.
 - Native surfaces expose `ApplyContext(WorkSurfaceContext?)` placeholders; only
   `InspectionShellViewModel.OpenFromTaskAsync` implements the canonical navigation half today.
-- Task Panel read-only: **Started / Pilot** — see § Task Panel read-only below and
+- Task Workbench: **Started / Pilot** — see § Task Workbench below and
   [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md) § Task Queue Buckets.
+  Workbench is a **queue manager**, not a workflow work surface (no open-task / complete).
 - Production pilot envelope: [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
 
-## Task Panel read-only — Started / Pilot (2026-07-05)
+## Task Workbench — Started / Pilot (2026-07-06)
 
-Target surface: `src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyView` +
-`TaskPanelReadOnlyViewModel`.
+Target surface: `src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView` +
+`TaskWorkbenchViewModel` (alias `TaskPanelReadOnlyViewModel` retained for compatibility).
+
+**Role:** queue manager + basic CRUD + resolve preview. **Not** a workflow work surface —
+opening a task into Email/Inspection/ProjectWork and completing tasks stay on dedicated work
+surfaces (see [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md)).
 
 | Aspect | Status | Notes |
 | --- | --- | --- |
-| Three bucket tabs (Quick / Medium / Long) | Done | Loads via `ITaskQueryService.GetOpenTasksForUserByBucketAsync` (user) or `GetTasksForProjectAsync` with bucket filter (project). |
-| Resolve preview | Done | `ITaskNavigationService.ResolveAsync` — displays `WorkSurfaceContext` text; no target window opened yet. |
-| NewShell entry | Done | `"משימות — קריאה בלבד"` gated by `Shell.OpenTaskPanelReadOnly` (Employee+). |
-| Write queue ops | Deferred | No `CompleteTask`, `ChangeBucket`, `MoveWithinBucket`, `ProcessAction`, etc. |
+| Three bucket tabs (Quick / Medium / Long) | Done | `ITaskQueryService.GetOpenTasksForUserByBucketAsync` / admin `GetOpenTasksForAllUsersByBucketAsync`. |
+| Scope filters | Done | MyTasks / SpecificUser / AllUsers (admin-gated via `TaskWorkbenchViewOtherUsersTasks`). |
+| Project filter | Done | Local `InMemoryCurrentProjectContext` + embedded `ProjectSelectorView` — **does not** change global `ICurrentProjectContext`. No project selected = all projects. |
+| Clear project selection | Done | `"נקה"` → `ClearSelectedProjectCommand` / `ProjectSelectorViewModel.ClearSelection()`. |
+| Add Task | Done | `TaskCreateDialogWindow` + `ITaskWorkbenchService.CreateTaskAsync` (no manual `WorkPriority`). |
+| Delete task | Done | `ITaskWorkbenchService.DeleteTaskAsync`. |
+| Queue ops | Done | `ITaskQueueService` MoveUp / MoveDown / RepairQueue. |
+| Resolve preview | Done | `ITaskNavigationService.ResolveAsync` — collapsed expander with `WorkSurfaceContext` text only; **no** shell open yet. |
+| NewShell entry | Done | `"משימות — Task Workbench"` gated by `Shell.OpenTaskPanelReadOnly` (Employee+). |
+| Open task → work surface | Deferred | Requires `IWorkSurfaceLauncher` + `ApplyContext` on target surfaces (Email slice started). |
+| Complete / Close / ChangeBucket / Reassign UI | Deferred | By design — completion only from work surfaces via `ITaskCompletionService`. |
 
-**Uses:** `ITaskQueryService`, `ITaskNavigationService`, `ICurrentUserContext`,
-`ICurrentProjectContext`, `WorkQueueBucket`.
+**Uses:** `ITaskQueryService`, `ITaskQueueService`, `ITaskWorkbenchService`,
+`ITaskNavigationService`, `ICurrentUserContext`, `IAuthorizationQueryService`, local project filter.
 
-**Does not use:** LegacyBridge, legacy `TaskPanelView`, `TaskCompletion`, `ProcessAction`,
-`MoveToProject`, `AddMaterial`, direct SiNetSQL from WPF, new router, fallback.
+**Does not use:** LegacyBridge, legacy `TaskPanelView`, direct task-status writes, `ProcessAction`,
+`MoveToProject`, `AddMaterial`, direct SiNetSQL from WPF, fallback when resolver fails.
+
+## Email List V1 — Started / Pilot (2026-07-06)
+
+Target: extract `EmailListView` + `EmailListViewModel` from `EmailWindowView` (read-only).
+See [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md).
+
+| Aspect | Status | Notes |
+| --- | --- | --- |
+| List component | Done | `EmailListView` bound to `EmailListViewModel` (rows + selection + unread badge). |
+| Gmail read | Done | Parent `EmailWindowViewModel` loads via `IEmailGateway` only. |
+| Project scope | Done | Global `ICurrentProjectContext` via shared `ProjectSelectorView` (differs from Task Workbench local filter). |
+| Link/unlink / send | Deferred | Requires `IEmailFilingService` + write policy (`GOOGLE_BOUNDARY`). |
+| Task open (`ApplyContext`) | Started | `EmailWindowViewModel.ApplyContext` + `IWorkSurfaceLauncher` for `Component.EmailFiling`. |
 
 ## Dev reset / seed tools
 
