@@ -126,7 +126,31 @@ public sealed class GoogleFoundationClosureTests
     }
 
     [Fact]
-    public async Task Email_window_view_model_loads_mailbox_page_by_default()
+    public async Task Email_window_view_model_loads_mailbox_page_when_no_project_selected()
+    {
+        var auth = new StubConnectorAuthService(isAuthenticated: true);
+        var gateway = new RecordingEmailGateway();
+        var context = new InMemoryCurrentProjectContext();
+
+        using var sut = new EmailWindowViewModel(
+            new FakeProjectQueryService(),
+            new FakeProjectFilterOptionsService(),
+            context,
+            gateway,
+            auth);
+
+        await sut.RefreshAsync();
+
+        Assert.True(gateway.LastMailboxPageRequested);
+        Assert.Equal(EmailMailboxQuery.DefaultPageSize, gateway.LastPageSize);
+        Assert.False(gateway.LastProjectLabelFilterUsed);
+        Assert.True(sut.EmailList.IsAllEmailsMode);
+        Assert.Single(sut.Emails);
+        Assert.Equal("msg-42", sut.Emails[0].Id);
+    }
+
+    [Fact]
+    public async Task Email_window_view_model_loads_project_group_when_project_selected()
     {
         var auth = new StubConnectorAuthService(isAuthenticated: true);
         var gateway = new RecordingEmailGateway();
@@ -152,9 +176,9 @@ public sealed class GoogleFoundationClosureTests
 
         await sut.RefreshAsync();
 
-        Assert.True(gateway.LastMailboxPageRequested);
-        Assert.Equal(EmailMailboxQuery.DefaultPageSize, gateway.LastPageSize);
-        Assert.False(gateway.LastProjectLabelFilterUsed);
+        Assert.False(gateway.LastMailboxPageRequested);
+        Assert.Equal("(1042) North Towers", gateway.LastProjectLabelName);
+        Assert.True(sut.EmailList.IsProjectMode);
         Assert.Single(sut.Emails);
         Assert.Equal("msg-42", sut.Emails[0].Id);
     }

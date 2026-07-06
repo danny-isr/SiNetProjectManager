@@ -49,7 +49,12 @@ Multi-label messages appear once under **PrimaryLabel** (first user label under 
 
 ## Workbench integration
 
-`EmailWindowView` hosts `<EmailListView DataContext="{Binding EmailList}" />` beside the detail pane. Parent sets `EmailList.ProjectSelector` and handles `SelectedEmailChanged` for body load.
+`EmailWindowView` hosts a **project context bar** (shared `ProjectSelectorView` via `ICurrentProjectContext`) above `<EmailListView />`. The list component receives `EmailListProjectContext` through `ApplyProjectContextAsync` — it does not own project selection.
+
+| Mode | Behavior |
+| --- | --- |
+| No project selected | Gmail INBOX paging (50), filters, label grouping |
+| Project selected | Gmail project-label query; first 10 emails + "הצג עוד" (+10); separate from 50-page paging |
 
 ## Workflow gaps (deferred)
 

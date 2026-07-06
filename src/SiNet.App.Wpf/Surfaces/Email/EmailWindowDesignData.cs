@@ -123,10 +123,24 @@ public sealed record EmailListRow(
     string? PrimaryLabel = null,
     EmailProjectLinkState ProjectLinkState = EmailProjectLinkState.Unlinked,
     int? ProjectId = null,
+    string? ProjectNumber = null,
+    string? ProjectName = null,
     string ProjectDisplay = "לא משויך",
     IReadOnlyList<string>? LabelChipNames = null)
 {
+    public const int MaxVisibleLabelChips = 3;
+
     public IReadOnlyList<string> DisplayLabelChips => LabelChipNames ?? [];
+
+    public bool HasAnyLabels => DisplayLabelChips.Count > 0;
+
+    public IReadOnlyList<string> VisibleLabelChips =>
+        DisplayLabelChips.Take(MaxVisibleLabelChips).ToList();
+
+    public int ExtraLabelCount => Math.Max(0, DisplayLabelChips.Count - MaxVisibleLabelChips);
+
+    public bool HasExtraLabels => ExtraLabelCount > 0;
+
     /// <summary>Short received-date text shown on the list row.</summary>
     public string ReceivedDisplay => ReceivedOn.ToString("dd/MM/yyyy HH:mm");
 
@@ -141,6 +155,28 @@ public sealed record EmailListRow(
         : "לא משויך";
 
     public bool IsLinked => ProjectLinkState == EmailProjectLinkState.Linked;
+
+    public string LinkedProjectBadge
+    {
+        get
+        {
+            if (!IsLinked)
+            {
+                return ProjectLinkDisplay;
+            }
+
+            if (!string.IsNullOrWhiteSpace(ProjectNumber) && !string.IsNullOrWhiteSpace(ProjectName))
+            {
+                return $"{ProjectNumber} — {ProjectName}";
+            }
+
+            return ProjectDisplay;
+        }
+    }
+
+    public string? ProjectDiagnosticsTooltip => ProjectId is int id
+        ? $"ProjectId: {id}"
+        : null;
 }
 
 /// <summary>Fake attachment row for the selected-email viewer (name + type + size). Presentation-only.</summary>

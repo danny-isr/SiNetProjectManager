@@ -4,7 +4,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
-             xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=local:EmailListViewModel, IsDesignTimeCreatable=True}">
 
@@ -115,8 +114,9 @@
                 </Grid>
             </Border>
 
-            <!-- Paging bar -->
-            <Border Grid.Row="1" Padding="8,4" BorderBrush="#EEE" BorderThickness="0,0,0,1">
+            <!-- Paging bar (all-emails mode only) -->
+            <Border Grid.Row="1" Padding="8,4" BorderBrush="#EEE" BorderThickness="0,0,0,1"
+                    Visibility="{Binding ShowAllEmailsPaging, Converter={StaticResource BoolToVis}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -143,21 +143,47 @@
                 </Grid>
             </Border>
 
-            <!-- Filter bar -->
-            <Border Grid.Row="2" Padding="8,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
+            <!-- Project group chrome (selected project mode) -->
+            <Border Grid.Row="1"
+                    Padding="8,6"
+                    BorderBrush="#EEE"
+                    BorderThickness="0,0,0,1"
+                    Background="#F5F8FF"
+                    Visibility="{Binding ShowProjectGroupChrome, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding DisplayModeSummary}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource SiPrimaryBrush}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}" />
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock Text="מיילים של הפרויקט:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}" />
+                        <TextBlock Text="{Binding ProjectGroupHeader}"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="240"
+                                   ToolTip="{Binding ProjectGroupHeader}" />
+                        <Button Content="הצג עוד"
+                                Command="{Binding ShowMoreProjectEmailsCommand}"
+                                Style="{StaticResource ActionButton}"
+                                Margin="12,0,0,0"
+                                Visibility="{Binding HasMoreProjectEmails, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Filter bar (all-emails mode) -->
+            <Border Grid.Row="2" Padding="8,6" BorderBrush="#EEE" BorderThickness="0,0,0,1"
+                    Visibility="{Binding IsAllEmailsMode, Converter={StaticResource BoolToVis}}">
                 <WrapPanel Orientation="Horizontal">
-                    <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
-                                                  CompactMode="True"
-                                                  SearchBoxWidth="180"
-                                                  VerticalAlignment="Center"
-                                                  Visibility="{Binding ShowProjectSelector, Converter={StaticResource BoolToVis}}" />
-
-                    <CheckBox Content="סנן פרויקט"
-                              IsChecked="{Binding FilterByCurrentProject}"
-                              VerticalAlignment="Center"
-                              Margin="8,0,4,0"
-                              ToolTip="סינון אופציונלי — ברירת מחדל: כל המיילים" />
-
                     <TextBox Width="120" Height="24" VerticalContentAlignment="Center"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,4,0" ToolTip="חיפוש חופשי" />

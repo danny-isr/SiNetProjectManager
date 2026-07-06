@@ -60,15 +60,50 @@ public sealed class EmailListViewModelTests
             AddressFilter = "bar@x.com",
             SubjectFilter = "subject",
             SelectedProjectLinkFilter = EmailProjectLinkFilter.Linked,
-            FilterByCurrentProject = true,
         };
 
         await sut.ClearFiltersAndReloadAsync();
 
         Assert.Equal(string.Empty, sut.SearchText);
         Assert.Equal(EmailProjectLinkFilter.All, sut.SelectedProjectLinkFilter);
-        Assert.False(sut.FilterByCurrentProject);
         Assert.Null(gateway.LastQuery?.FreeText);
+    }
+
+    [Fact]
+    public async Task Project_context_loads_first_ten_emails_via_project_label_gateway()
+    {
+        var gateway = new ProjectEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(
+            2466,
+            "2466",
+            "תכנית דוגמה",
+            "2466 — תכנית דוגמה",
+            "תל אביב"));
+
+        Assert.True(sut.IsProjectMode);
+        Assert.Equal(10, sut.Emails.Count);
+        Assert.True(sut.HasMoreProjectEmails);
+        Assert.Equal("2466 — תכנית דוגמה", sut.ProjectGroupHeader);
+
+        sut.ShowMoreProjectEmailsCommand.Execute(null);
+
+        Assert.Equal(15, sut.Emails.Count);
+        Assert.False(sut.HasMoreProjectEmails);
+    }
+
+    [Fact]
+    public async Task Clearing_project_context_returns_to_all_emails_mode()
+    {
+        var gateway = new ProjectEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+        await sut.ApplyProjectContextAsync(null);
+
+        Assert.True(sut.IsAllEmailsMode);
+        Assert.Equal(1, gateway.MailboxPageCalls);
     }
 
     [Fact]
@@ -147,6 +182,55 @@ public sealed class EmailListViewModelTests
 
         public Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed class ProjectEmailGateway : IEmailGateway
+    {
+        public int MailboxPageCalls { get; private set; }
+
+        public string? LastProjectLabel { get; private set; }
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default)
+        {
+            LastProjectLabel = projectLabelName;
+            var items = Enumerable.Range(1, 15)
+                .Select(i => new EmailSummary(
+                    $"proj-{i}",
+                    $"thread-{i}",
+                    EmailAddress.CreateOrFallback($"user{i}@example.com"),
+                    $"Subject {i}",
+                    DateTimeOffset.UtcNow.AddHours(-i),
+                    false))
+                .ToList();
+
+            return Task.FromResult<IReadOnlyList<EmailSummary>>(items);
+        }
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(null);
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            MailboxPageCalls++;
+            return Task.FromResult(new EmailMailboxPage([], query.PageSize, null, false));
+        }
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
     }
 
     private sealed class PagingEmailGateway : IEmailGateway

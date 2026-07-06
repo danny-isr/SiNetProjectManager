@@ -132,11 +132,10 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         _selectedStatus = StatusOptions.FirstOrDefault();
 
         ProjectSelector = new ProjectSelectorViewModel(projectQuery, filterOptions, _currentProject);
-        EmailList.ProjectSelector = ProjectSelector;
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
-        UpdateOptionalProjectFilter();
+        _ = ApplyProjectContextFromWorkbenchAsync();
         _ = ProjectSelector.InitializeAsync();
         _ = EmailList.InitializeAsync();
 
@@ -313,8 +312,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (context.ProjectId > 0)
         {
-            EmailList.FilterByCurrentProject = true;
-            UpdateOptionalProjectFilter();
+            await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
         }
 
         await RefreshAsync().ConfigureAwait(true);
@@ -377,7 +375,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     public async Task RefreshAsync()
     {
-        UpdateOptionalProjectFilter();
+        await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
         await EmailList.InitializeAsync().ConfigureAwait(true);
         await EmailList.RefreshPageAsync().ConfigureAwait(true);
     }
@@ -413,28 +411,51 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
         UpdateActiveProjectDisplay(e.Project);
-        UpdateOptionalProjectFilter();
         ClearSelectedEmailDetails();
+        _ = ApplyProjectContextFromWorkbenchAsync();
 
-        if (EmailList.FilterByCurrentProject)
+        if (!IsConnected)
         {
-            _ = RefreshAsync();
-            return;
+            StatusMessage = e.Project is null
+                ? "לא נבחר פרויקט — מציג כל המיילים לאחר רענון."
+                : "הפרויקט הוחלף. התחבר ל-Google.";
+        }
+        else
+        {
+            StatusMessage = e.Project is null
+                ? "לא נבחר פרויקט — מצב כל המיילים."
+                : $"פרויקט נבחר: {e.Project.ProjectNumber} — {e.Project.ProjectName}";
         }
 
-        StatusMessage = e.Project is null
-            ? "לא נבחר פרויקט (סינון פרויקט אופציונלי)."
-            : IsConnected
-                ? "הפרויקט הוחלף. סמן 'סנן לפי פרויקט' או רענן."
-                : "הפרויקט הוחלף. התחבר ל-Google.";
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
-    private void UpdateOptionalProjectFilter()
+    private async Task ApplyProjectContextFromWorkbenchAsync()
     {
-        var project = _currentProject.CurrentProject;
-        EmailList.SetOptionalProjectFilter(project?.ProjectId, ResolveCurrentProjectLabelName());
+        await EmailList.ApplyProjectContextAsync(BuildEmailListProjectContext(_currentProject.CurrentProject))
+            .ConfigureAwait(true);
+    }
+
+    private static EmailListProjectContext? BuildEmailListProjectContext(ProjectSummaryDto? project)
+    {
+        if (project is null)
+        {
+            return null;
+        }
+
+        var labelName = !string.IsNullOrWhiteSpace(project.ProjectLabelName)
+            ? project.ProjectLabelName.Trim()
+            : !string.IsNullOrWhiteSpace(project.ProjectNumber) && !string.IsNullOrWhiteSpace(project.ProjectName)
+                ? $"{project.ProjectNumber} — {project.ProjectName}"
+                : null;
+
+        return new EmailListProjectContext(
+            project.ProjectId,
+            project.ProjectNumber,
+            project.ProjectName,
+            labelName,
+            project.PlaceName);
     }
 
     private void OnAuthStateChanged(bool isAuthenticated)
@@ -455,27 +476,6 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-    }
-
-    private string? ResolveCurrentProjectLabelName()
-    {
-        var project = _currentProject.CurrentProject;
-        if (project is null)
-        {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(project.ProjectLabelName))
-        {
-            return project.ProjectLabelName.Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(project.ProjectNumber) && !string.IsNullOrWhiteSpace(project.ProjectName))
-        {
-            return $"{project.ProjectNumber} — {project.ProjectName}";
-        }
-
-        return null;
     }
 
     private void PrepareSelectedEmailDetailsLoading()

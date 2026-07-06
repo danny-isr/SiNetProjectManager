@@ -86,9 +86,9 @@ public sealed class EmailListMigrationBoundaryTests
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
-        Assert.Contains("FilterByCurrentProject", listVmSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("CanLoadEmails() =>\n        !IsBusy && _currentProject", vmSource, StringComparison.Ordinal);
-        Assert.Contains("OptionalProjectLabel = FilterByCurrentProject", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("ApplyProjectContextAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("BuildEmailListProjectContext", vmSource, StringComparison.Ordinal);
+        Assert.Contains("EmailListDisplayMode.AllEmails", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -107,7 +107,8 @@ public sealed class EmailListMigrationBoundaryTests
         var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
 
-        Assert.Contains("DisplayLabelChips", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("VisibleLabelChips", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("HasAnyLabels", cardXaml, StringComparison.Ordinal);
         Assert.Contains("PrimaryLabel", listVmSource, StringComparison.Ordinal);
         Assert.Contains("PropertyGroupDescription(nameof(EmailListRow.PrimaryLabel))", listVmSource, StringComparison.Ordinal);
     }
@@ -143,7 +144,6 @@ public sealed class EmailListMigrationBoundaryTests
 
         Assert.Contains("ClearFiltersAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("SelectedProjectLinkFilter = EmailProjectLinkFilter.All", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("FilterByCurrentProject = false", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -179,6 +179,7 @@ public sealed class EmailListMigrationBoundaryTests
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
 
+        Assert.DoesNotContain("ProjectSelectorView", listXaml, StringComparison.Ordinal);
         Assert.Contains("AccountStatusDisplay", listXaml, StringComparison.Ordinal);
         Assert.Contains("ConnectCommand", listXaml, StringComparison.Ordinal);
         Assert.Contains("DisconnectCommand", listXaml, StringComparison.Ordinal);
