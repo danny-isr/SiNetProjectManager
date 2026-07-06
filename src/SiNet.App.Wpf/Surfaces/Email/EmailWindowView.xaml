@@ -70,8 +70,6 @@
         <Grid Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
@@ -102,170 +100,8 @@
                         ToolTip="&#x05E1;&#x05D2;&#x05D5;&#x05E8;" />
             </Grid>
 
-            <!-- ROW 0 (of source): Status bar + project/Gmail filters (combined). -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource SiBackgroundBrush}"
-                    Padding="10,5"
-                    Margin="0,0,0,8"
-                    BorderBrush="#E0E0E0"
-                    BorderThickness="1"
-                    CornerRadius="4">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Status text + error/message area. -->
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="&#x2139;" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#1976D2" />
-                            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Foreground="#555" />
-                        </StackPanel>
-
-                        <!-- Paging: 50-item Gmail blocks -->
-                        <StackPanel Grid.Column="1"
-                                    Orientation="Horizontal"
-                                    Margin="0,0,20,0"
-                                    VerticalAlignment="Center">
-                            <Button Content="&#x25B6;"
-                                    Command="{Binding LoadPreviousPageCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    ToolTip="50 הקודמים"
-                                    IsEnabled="{Binding HasPreviousPage}" />
-                            <TextBlock Text="{Binding PageInfo}"
-                                       VerticalAlignment="Center"
-                                       Margin="4,0"
-                                       Foreground="#666"
-                                       FontSize="{DynamicResource SiTextSmallFontSize}" />
-                            <Button Content="&#x25C0;"
-                                    Command="{Binding LoadNextPageCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    ToolTip="50 הבאים"
-                                    IsEnabled="{Binding HasNextPage}" />
-                            <Button Content="קבץ לפי label"
-                                    Command="{Binding ToggleGroupByLabelCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    Margin="8,0,0,0"
-                                    ToolTip="קבץ לפי PrimaryLabel" />
-                        </StackPanel>
-
-                        <!-- Refresh + calendar toggle + help. -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="חבר Google"
-                                    Command="{Binding ConnectCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    ToolTip="התחברות ל-Gmail" />
-                            <Button Content="&#x1F504;"
-                                    Command="{Binding RefreshCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    ToolTip="\u05E8\u05E2\u05E0\u05DF" />
-                            <Button Content="&#x1F4C5;"
-                                    Style="{StaticResource ActionButton}"
-                                    ToolTip="\u05D9\u05D5\u05DE\u05DF"
-                                    IsEnabled="False"
-                                    Visibility="{Binding ShowDeferredVisualPlaceholders, Converter={StaticResource BoolToVis}}" />
-                            <Button Content="?"
-                                    Style="{StaticResource ActionButton}"
-                                    ToolTip="\u05E2\u05D6\u05E8\u05D4"
-                                    IsEnabled="False"
-                                    Visibility="{Binding ShowDeferredVisualPlaceholders, Converter={StaticResource BoolToVis}}" />
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Filters: search, address, subject, label, link state, optional project -->
-                    <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
-                                                      CompactMode="True"
-                                                      SearchBoxWidth="220"
-                                                      VerticalAlignment="Center" />
-
-                        <CheckBox Content="סנן לפי פרויקט"
-                                  IsChecked="{Binding EmailList.FilterByCurrentProject}"
-                                  VerticalAlignment="Center"
-                                  Margin="12,0,6,0"
-                                  ToolTip="סינון אופציונלי — ברירת מחדל: כל המיילים" />
-
-                        <TextBlock Text="&#x1F50E;"
-                                   VerticalAlignment="Center"
-                                   Margin="12,0,6,0"
-                                   FontWeight="SemiBold" />
-
-                        <TextBox Width="140"
-                                 Height="24"
-                                 VerticalContentAlignment="Center"
-                                 Text="{Binding EmailList.SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 Margin="0,0,6,0"
-                                 ToolTip="חיפוש חופשי (Gmail q)" />
-
-                        <TextBox Width="120"
-                                 Height="24"
-                                 VerticalContentAlignment="Center"
-                                 Text="{Binding EmailList.AddressFilter, UpdateSourceTrigger=PropertyChanged}"
-                                 Margin="0,0,6,0"
-                                 ToolTip="from:/to:" />
-
-                        <TextBox Width="120"
-                                 Height="24"
-                                 VerticalContentAlignment="Center"
-                                 Text="{Binding EmailList.SubjectFilter, UpdateSourceTrigger=PropertyChanged}"
-                                 Margin="0,0,6,0"
-                                 ToolTip="subject:" />
-
-                        <ComboBox Width="160"
-                                  Height="24"
-                                  ItemsSource="{Binding EmailList.AvailableLabels}"
-                                  SelectedValue="{Binding EmailList.SelectedLabel}"
-                                  SelectedValuePath="Name"
-                                  DisplayMemberPath="Name"
-                                  Margin="0,0,6,0"
-                                  ToolTip="label:" />
-
-                        <ComboBox Width="100"
-                                  Height="24"
-                                  ItemsSource="{Binding EmailList.ProjectLinkFilterOptions}"
-                                  SelectedValue="{Binding EmailList.SelectedProjectLinkFilter}"
-                                  SelectedValuePath="Value"
-                                  DisplayMemberPath="DisplayName"
-                                  Margin="0,0,6,0"
-                                  ToolTip="שיוך לפרויקט" />
-
-                        <Button Content="חפש"
-                                Command="{Binding SearchCommand}"
-                                Style="{StaticResource ActionButton}"
-                                MinWidth="46"
-                                ToolTip="טען מיילים לפי הסינון" />
-
-                        <Button Content="נקה"
-                                Command="{Binding ClearSearchCommand}"
-                                Style="{StaticResource ActionButton}"
-                                MinWidth="46"
-                                ToolTip="נקה סינון וטען הכל" />
-                    </WrapPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- ROW 1 (of source): Selected project info strip. -->
-            <Border Grid.Row="2"
-                    Background="#E3F2FD"
-                    BorderBrush="#90CAF9"
-                    BorderThickness="1"
-                    CornerRadius="4"
-                    Padding="10,6"
-                    Margin="0,0,0,10">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4C1;" Margin="0,0,6,0" VerticalAlignment="Center" />
-                    <TextBlock Text="\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 \u05E0\u05D1\u05D7\u05E8: " FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding ActiveProjectDisplay}"
-                               Foreground="#1565C0"
-                               FontWeight="Bold"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-            </Border>
-
-            <!-- ROW 2 (of source): Main content area (RTL: Column 0 = visual Right). -->
-            <Grid Grid.Row="3" FlowDirection="RightToLeft">
+            <!-- ROW: Main content area (RTL: Column 0 = visual Right). -->
+            <Grid Grid.Row="1" FlowDirection="RightToLeft">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="420" MinWidth="250" />
                     <ColumnDefinition Width="Auto" />
@@ -455,7 +291,7 @@
             </Grid>
 
             <!-- STATUS BAR (bottom). -->
-            <Border Grid.Row="4"
+            <Border Grid.Row="2"
                     Background="#ECEFF1"
                     BorderBrush="#E0E0E0"
                     BorderThickness="0,1,0,0"

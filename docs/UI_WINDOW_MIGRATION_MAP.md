@@ -184,21 +184,23 @@ surfaces (see [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_I
 **Does not use:** LegacyBridge, legacy `TaskPanelView`, direct task-status writes, `ProcessAction`,
 `MoveToProject`, `AddMaterial`, direct SiNetSQL from WPF, fallback when resolver fails.
 
-## Email List V2 — General inbox (2026-07-06)
+## Email List V3 — Standalone Outlook cards (2026-07-06)
 
-Target: expand from project-only to general inbox workbench (paged Gmail + DB link enrichment).
+Target: self-contained component with account bar, filters, paging, and Outlook-style cards.
 See [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md).
 
 | Aspect | Status | Notes |
 | --- | --- | --- |
-| List component | Done | `EmailListView` — multi-column + optional label grouping via `EmailsView`. |
-| Gmail read | Done | `EmailListViewModel` → `GetMailboxPageAsync` (50/page, `label:INBOX` default). |
-| Paging | Done | Previous/Next 50 in toolbar; token stack in VM. |
-| Labels | Done | Column + group-by `PrimaryLabel`. |
-| Link state | Done | `IEmailThreadLinkQueryService` + filter All/Linked/Unlinked. |
-| Project scope | Optional filter | `FilterByCurrentProject` checkbox — **not** a load gate. |
-| Link/unlink / send | Deferred | Requires `IEmailFilingService` + write policy. |
-| Task open (`ApplyContext`) | Done | Sets optional project filter + inbox correlation on current page. |
+| Standalone shell | Done | Account bar, filters, paging inside `EmailListView` (not parent window). |
+| Outlook cards | Done | `EmailListItemCard` + `ListBox` (GridView removed). |
+| Account email | Done | `IConnectorAuthService.ConnectedAccountEmail` + Disconnect → `Logout()`. |
+| Load states | Done | PartialFailure when DB enrichment fails; Gmail rows retained. |
+| Unread | Done | `EmailSummary.IsUnread` from Gmail UNREAD label. |
+| Workbench | Done | `EmailWindowView` hosts component + detail pane only. |
+
+## Email List V2 — General inbox (2026-07-06)
+
+Superseded by V3 for UI packaging; V2 established paged Gmail + DB enrichment.
 
 ## Email List V1 — Started / Pilot (2026-07-06)
 

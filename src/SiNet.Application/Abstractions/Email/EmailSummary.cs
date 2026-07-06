@@ -17,4 +17,5 @@ public sealed record EmailSummary(
     EmailAddress? To = null,
     string Snippet = "",
     IReadOnlyList<string>? LabelNames = null,
-    string? PrimaryLabel = null);
+    string? PrimaryLabel = null,
+    bool IsUnread = false);

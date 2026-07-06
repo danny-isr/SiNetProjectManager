@@ -1,0 +1,143 @@
+<UserControl x:Class="SiNet.App.Wpf.Surfaces.Email.EmailListItemCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=local:EmailListRow, IsDesignTimeCreatable=False}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <Grid Margin="0,2">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Unread indicator -->
+        <Border Grid.Column="0"
+                Width="4"
+                Margin="0,4,8,4"
+                CornerRadius="2"
+                Background="#2196F3"
+                Visibility="{Binding IsUnread, Converter={StaticResource BoolToVis}}" />
+
+        <StackPanel Grid.Column="1">
+            <!-- Row 1: sender + date -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="{Binding Sender}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Sender}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="FontWeight" Value="Normal" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                    <Setter Property="FontWeight" Value="Bold" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding ReceivedDisplay}"
+                           Foreground="#999"
+                           FontSize="{DynamicResource SiTextTinyFontSize}"
+                           Margin="8,0,0,0" />
+            </Grid>
+
+            <!-- Row 2: subject -->
+            <TextBlock Text="{Binding Subject}"
+                       FontWeight="SemiBold"
+                       Margin="0,2,0,0"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Subject}" />
+
+            <!-- Row 3: snippet -->
+            <TextBlock Text="{Binding Snippet}"
+                       Margin="0,2,0,0"
+                       Foreground="#888"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       TextTrimming="CharacterEllipsis"
+                       MaxHeight="18"
+                       ToolTip="{Binding Snippet}" />
+
+            <!-- Row 4: labels + link state -->
+            <WrapPanel Margin="0,4,0,0">
+                <ItemsControl ItemsSource="{Binding DisplayLabelChips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#F0F4FF"
+                                    BorderBrush="#C5CAE9"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="4,1"
+                                    Margin="0,0,4,2">
+                                <TextBlock Text="{Binding}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}"
+                                           Foreground="#5C6BC0" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Background="#E8F5E9"
+                        BorderBrush="#A5D6A7"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        Padding="4,1"
+                        Margin="0,0,4,2"
+                        Visibility="{Binding IsLinked, Converter={StaticResource BoolToVis}}">
+                    <TextBlock FontSize="{DynamicResource SiTextTinyFontSize}" Foreground="#2E7D32">
+                        <Run Text="{Binding ProjectLinkDisplay, Mode=OneWay}" />
+                        <Run Text=" · " />
+                        <Run Text="{Binding ProjectDisplay, Mode=OneWay}" FontWeight="SemiBold" />
+                    </TextBlock>
+                </Border>
+
+                <Border Background="#FFF3E0"
+                        BorderBrush="#FFCC80"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        Padding="4,1"
+                        Margin="0,0,4,2">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLinked}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding ProjectLinkDisplay}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"
+                               Foreground="#E65100" />
+                </Border>
+            </WrapPanel>
+        </StackPanel>
+
+        <!-- Attachment icon -->
+        <TextBlock Grid.Column="2"
+                   Text="&#x1F4CE;"
+                   VerticalAlignment="Top"
+                   Margin="8,0,0,0"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                   Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+    </Grid>
+</UserControl>

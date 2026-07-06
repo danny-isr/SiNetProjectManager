@@ -29,6 +29,9 @@ public sealed class GmailConnectorAuthService : IConnectorAuthService
     public bool IsAuthenticated => _provider.IsSignedIn;
 
     /// <inheritdoc />
+    public string? ConnectedAccountEmail { get; private set; }
+
+    /// <inheritdoc />
     public event Action<bool>? AuthStateChanged
     {
         add => _provider.AuthStateChanged += value;
@@ -42,16 +45,63 @@ public sealed class GmailConnectorAuthService : IConnectorAuthService
     public async Task<bool> LoginAsync(CancellationToken cancellationToken = default)
     {
         var result = await _provider.SignInInteractiveAsync(cancellationToken).ConfigureAwait(false);
-        return result == GmailSignInResult.Success;
+        if (result == GmailSignInResult.Success)
+        {
+            await RefreshAccountProfileAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        return false;
     }
 
     /// <inheritdoc />
-    public void Logout() => _provider.Logout();
+    public void Logout()
+    {
+        ConnectedAccountEmail = null;
+        _provider.Logout();
+    }
 
     /// <summary>
     /// Attempts a silent (no-browser) restore of a previously authorized session from the token
     /// store. Returns <c>true</c> when a usable session was restored.
     /// </summary>
-    public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default)
-        => _provider.TrySignInSilentlyAsync(cancellationToken);
+    public async Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default)
+    {
+        var restored = await _provider.TrySignInSilentlyAsync(cancellationToken).ConfigureAwait(false);
+        if (restored)
+        {
+            await RefreshAccountProfileAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return restored;
+    }
+
+    /// <inheritdoc />
+    public async Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_provider.IsSignedIn)
+        {
+            ConnectedAccountEmail = null;
+            return;
+        }
+
+        try
+        {
+            var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+            if (gmail is null)
+            {
+                ConnectedAccountEmail = null;
+                return;
+            }
+
+            var profile = await gmail.Users.GetProfile("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            ConnectedAccountEmail = string.IsNullOrWhiteSpace(profile.EmailAddress)
+                ? null
+                : profile.EmailAddress.Trim();
+        }
+        catch
+        {
+            ConnectedAccountEmail = null;
+        }
+    }
 }

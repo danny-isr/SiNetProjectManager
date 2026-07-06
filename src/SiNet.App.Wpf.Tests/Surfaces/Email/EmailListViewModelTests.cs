@@ -1,5 +1,6 @@
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Common;
 using SiNet.Application.Email;
 using SiNet.Domain.ValueObjects;
 using Xunit;
@@ -12,7 +13,7 @@ public sealed class EmailListViewModelTests
     public async Task Load_first_page_uses_page_size_50()
     {
         var gateway = new PagingEmailGateway();
-        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, () => true);
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
 
         await sut.RefreshPageAsync();
 
@@ -24,7 +25,7 @@ public sealed class EmailListViewModelTests
     public async Task Next_page_passes_next_token_and_increments_page_number()
     {
         var gateway = new PagingEmailGateway();
-        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, () => true);
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
 
         await sut.RefreshPageAsync();
         Assert.Equal("page-2", gateway.LastNextToken);
@@ -39,7 +40,7 @@ public sealed class EmailListViewModelTests
     public async Task Previous_page_restores_prior_token()
     {
         var gateway = new PagingEmailGateway();
-        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, () => true);
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
 
         await sut.RefreshPageAsync();
         await sut.LoadNextPageAsync();
@@ -53,7 +54,7 @@ public sealed class EmailListViewModelTests
     public async Task Clear_filters_resets_to_all_emails()
     {
         var gateway = new PagingEmailGateway();
-        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, () => true)
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService())
         {
             SearchText = "foo",
             AddressFilter = "bar@x.com",
@@ -75,7 +76,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new PagingEmailGateway();
         var linkQuery = new StubThreadLinkQuery();
-        var sut = new EmailListViewModel(gateway, linkQuery, () => true);
+        var sut = new EmailListViewModel(gateway, linkQuery, new StubAuthService());
 
         await sut.RefreshPageAsync();
 
@@ -83,10 +84,79 @@ public sealed class EmailListViewModelTests
         Assert.Equal(EmailProjectLinkState.Linked, sut.Emails[0].ProjectLinkState);
     }
 
+    [Fact]
+    public async Task Partial_enrichment_failure_still_shows_gmail_rows()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, new FailingThreadLinkQuery(), new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.Single(sut.Emails);
+        Assert.Equal(EmailListLoadState.PartialFailure, sut.LoadState);
+        Assert.Contains("שיוך", sut.LoadWarning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Gmail_page_failure_keeps_previous_rows_when_navigating()
+    {
+        var gateway = new PagingEmailGateway { FailOnSecondPage = true };
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+        Assert.Single(sut.Emails);
+
+        await sut.LoadNextPageAsync();
+
+        Assert.Single(sut.Emails);
+        Assert.Equal(EmailListLoadState.Error, sut.LoadState);
+    }
+
+    [Fact]
+    public void Disconnect_clears_connected_account_email()
+    {
+        var auth = new StubAuthService { IsAuthenticated = true, ConnectedAccountEmail = "user@example.com" };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        sut.DisconnectCommand.Execute(null);
+
+        Assert.False(sut.IsConnected);
+        Assert.Null(auth.ConnectedAccountEmail);
+    }
+
+    private sealed class StubAuthService : IConnectorAuthService
+    {
+        public bool IsAuthenticated { get; set; } = true;
+
+        public string? ConnectedAccountEmail { get; set; } = "test@example.com";
+
+        public event Action<bool>? AuthStateChanged;
+
+        public Task<bool> LoginAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(IsAuthenticated);
+
+        public void Logout()
+        {
+            IsAuthenticated = false;
+            ConnectedAccountEmail = null;
+            AuthStateChanged?.Invoke(false);
+        }
+
+        public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(IsAuthenticated);
+
+        public Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
     private sealed class PagingEmailGateway : IEmailGateway
     {
+        public bool FailOnSecondPage { get; set; }
+
         public EmailMailboxQuery? LastQuery { get; private set; }
+
         public string? LastPageToken { get; private set; }
+
         public string? LastNextToken { get; private set; }
 
         public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
@@ -111,6 +181,11 @@ public sealed class EmailListViewModelTests
             string? pageToken = null,
             CancellationToken cancellationToken = default)
         {
+            if (FailOnSecondPage && pageToken is not null)
+            {
+                throw new InvalidOperationException("Gmail page failed");
+            }
+
             LastQuery = query;
             LastPageToken = pageToken;
             return Task.FromResult(new EmailMailboxPage(
@@ -151,5 +226,13 @@ public sealed class EmailListViewModelTests
 
             return Task.FromResult<IReadOnlyDictionary<string, EmailProjectLinkInfo>>(map);
         }
+    }
+
+    private sealed class FailingThreadLinkQuery : IEmailThreadLinkQueryService
+    {
+        public Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByInternetMessageIdsAsync(
+            IReadOnlyList<string> internetMessageIds,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("DB enrichment failed");
     }
 }

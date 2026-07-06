@@ -123,8 +123,10 @@ public sealed record EmailListRow(
     string? PrimaryLabel = null,
     EmailProjectLinkState ProjectLinkState = EmailProjectLinkState.Unlinked,
     int? ProjectId = null,
-    string ProjectDisplay = "לא משויך")
+    string ProjectDisplay = "לא משויך",
+    IReadOnlyList<string>? LabelChipNames = null)
 {
+    public IReadOnlyList<string> DisplayLabelChips => LabelChipNames ?? [];
     /// <summary>Short received-date text shown on the list row.</summary>
     public string ReceivedDisplay => ReceivedOn.ToString("dd/MM/yyyy HH:mm");
 

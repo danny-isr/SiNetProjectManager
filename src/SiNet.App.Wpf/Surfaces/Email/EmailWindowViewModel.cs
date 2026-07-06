@@ -124,7 +124,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
         Attachments = [];
 
-        EmailList = new EmailListViewModel(_emailGateway, _threadLinkQuery, () => IsConnected);
+        EmailList = new EmailListViewModel(_emailGateway, _threadLinkQuery, _googleAuthService);
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
 
@@ -132,6 +132,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         _selectedStatus = StatusOptions.FirstOrDefault();
 
         ProjectSelector = new ProjectSelectorViewModel(projectQuery, filterOptions, _currentProject);
+        EmailList.ProjectSelector = ProjectSelector;
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
@@ -142,7 +143,6 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         RefreshCommand = EmailList.RefreshPageCommand;
         SearchCommand = EmailList.ApplyFiltersCommand;
         ClearSearchCommand = EmailList.ClearFiltersCommand;
-        ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         OpenEmailCommand = new AsyncRelayCommand(OpenSelectedEmailAsync, () => !IsBusy && SelectedEmail is not null);
         LinkToProjectCommand = DeferredProductionPilotAction("שיוך בפועל לפרויקט — מושהה (production pilot read-only).");
         CreateTaskFromEmailCommand = DeferredProductionPilotAction("יצירת משימה מהמייל — מושהה (דורש slice Workflow/Tasks).");
@@ -244,7 +244,6 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _isBusy, value))
             {
-                (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
@@ -259,14 +258,6 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     public ICommand RefreshCommand { get; }
     public ICommand SearchCommand { get; }
     public ICommand ClearSearchCommand { get; }
-    public ICommand LoadNextPageCommand => EmailList.LoadNextPageCommand;
-    public ICommand LoadPreviousPageCommand => EmailList.LoadPreviousPageCommand;
-    public ICommand ToggleGroupByLabelCommand => EmailList.ToggleGroupByLabelCommand;
-
-    public string PageInfo => EmailList.PageInfo;
-    public bool HasNextPage => EmailList.HasNextPage;
-    public bool HasPreviousPage => EmailList.HasPreviousPage;
-    public ICommand ConnectCommand { get; }
     public ICommand OpenEmailCommand { get; }
     public ICommand LinkToProjectCommand { get; }
     public ICommand CreateTaskFromEmailCommand { get; }
@@ -382,30 +373,6 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         var loadVersion = ++_selectedEmailLoadVersion;
         PrepareSelectedEmailDetailsLoading();
         _ = LoadSelectedEmailDetailsAsync(value.Id, loadVersion);
-    }
-
-    public async Task ConnectAsync()
-    {
-        IsBusy = true;
-        StatusMessage = "מתחבר ל-Google… ייתכן שייפתח דפדפן.";
-
-        try
-        {
-            var connected = await _googleAuthService.LoginAsync().ConfigureAwait(true);
-            StatusMessage = connected
-                ? "החיבור ל-Google הושלם. ניתן לרענן כדי לטעון מיילים."
-                : "ההתחברות ל-Google לא הושלמה. בדוק את תשתית ה-auth ונסה שוב.";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"התחברות ל-Google נכשלה: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-            OnPropertyChanged(nameof(IsConnected));
-            OnPropertyChanged(nameof(RuntimeSummary));
-        }
     }
 
     public async Task RefreshAsync()
@@ -749,11 +716,14 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     {
         public bool IsAuthenticated { get; private set; }
 
+        public string? ConnectedAccountEmail { get; private set; }
+
         public event Action<bool>? AuthStateChanged;
 
         public Task<bool> LoginAsync(CancellationToken cancellationToken = default)
         {
             IsAuthenticated = true;
+            ConnectedAccountEmail = "design@example.com";
             AuthStateChanged?.Invoke(true);
             return Task.FromResult(true);
         }
@@ -761,10 +731,14 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         public void Logout()
         {
             IsAuthenticated = false;
+            ConnectedAccountEmail = null;
             AuthStateChanged?.Invoke(false);
         }
 
         public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(IsAuthenticated);
+
+        public Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

@@ -170,7 +170,22 @@ Legend: **Connect now** = safe to wire task context using existing ports (read-o
 
 | Area | Rule |
 | --- | --- |
-| Gmail read | Native: `IEmailGateway` + `IConnectorAuthService`. G-Startup silent restore in V2 New System startup. |
+| Gmail read | Native: `IEmailGateway` + `IConnectorAuthService`. G-Startup silent restore in V2 New System startup. Email List V3 (`EmailListView`) is a **standalone read-only component** — account bar, paging, filters, Outlook cards; **no** task completion or link/unlink wiring. |
+
+### Email List V3 — workflow gaps (read-only component)
+
+The standalone `EmailListView` / `EmailListViewModel` is hosted by `EmailWindowView` for inbox browsing. It does **not** participate in workflow completion or task routing beyond optional `ApplyContext` correlation on the current page.
+
+| Action | Status |
+| --- | --- |
+| Task open → pre-filter inbox | Partial — `EmailWindowViewModel.ApplyContext` sets optional project filter + selects matching row on **current page only** |
+| Unlinked mail → triage task | **Not wired** |
+| Linked mail → ProjectWork | **Not wired** |
+| File / unlink mail | **Deferred** — `IEmailFilingService` design only |
+| Cross-page task mail selection | **Not supported** — current Gmail page only |
+| Gmail send / modify / delete | **Deferred** — G-Policy |
+
+See [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) for component scope and deferred items.
 | Gmail send/modify | **Deferred** — requires G-Policy. No `IEmailSender` in WPF until approved. |
 | Drive / Sheets | **Legacy/deferred** — not part of Work Surface integration yet. |
 | ACC read | Native ports (`IAccDocumentService`, browse, reconciliation). |

@@ -5,15 +5,18 @@ using System.Windows.Input;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Common;
 using SiNet.Application.Email;
 using SiNet.Domain.ValueObjects;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
 
 /// <summary>
-/// General mailbox list: paged Gmail read, filters, label grouping, and read-only project-link display.
+/// Standalone email list component: paged Gmail read, account bar, filters, Outlook-style cards,
+/// and read-only project-link display.
 /// </summary>
 public sealed class EmailListViewModel : ObservableObject
 {
@@ -21,7 +24,7 @@ public sealed class EmailListViewModel : ObservableObject
 
     private readonly IEmailGateway _emailGateway;
     private readonly IEmailThreadLinkQueryService? _threadLinkQuery;
-    private readonly Func<bool> _isConnected;
+    private readonly IConnectorAuthService _authService;
     private readonly Stack<string?> _pageTokenStack = new();
 
     private EmailListRow? _selectedEmail;
@@ -32,6 +35,9 @@ public sealed class EmailListViewModel : ObservableObject
     private int _displayedCount;
     private bool _hasNextPage;
     private bool _groupByLabel;
+    private EmailListLoadState _loadState = EmailListLoadState.Idle;
+    private string? _loadWarning;
+    private string? _loadError;
     private string _statusMessage = "חבר Gmail ולחץ רענן כדי לטעון מיילים.";
     private string _searchText = string.Empty;
     private string _addressFilter = string.Empty;
@@ -42,20 +48,21 @@ public sealed class EmailListViewModel : ObservableObject
     private string? _optionalProjectLabel;
     private int? _optionalProjectId;
     private ICollectionView? _emailsView;
+    private ProjectSelectorViewModel? _projectSelector;
 
     public EmailListViewModel()
-        : this(new DesignEmailListGateway(), threadLinkQuery: null, () => true)
+        : this(new DesignEmailListGateway(), threadLinkQuery: null, new DesignAuthService())
     {
     }
 
     public EmailListViewModel(
         IEmailGateway emailGateway,
         IEmailThreadLinkQueryService? threadLinkQuery,
-        Func<bool> isConnected)
+        IConnectorAuthService authService)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
-        _isConnected = isConnected ?? throw new ArgumentNullException(nameof(isConnected));
+        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
 
         Emails = [];
         AvailableLabels = [];
@@ -76,7 +83,28 @@ public sealed class EmailListViewModel : ObservableObject
         ApplyFiltersCommand = new AsyncRelayCommand(() => LoadPageAsync(resetStack: true), CanLoadEmails);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync, () => !IsBusy);
         ToggleGroupByLabelCommand = new RelayCommand(_ => ToggleGroupByLabel());
+        ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
+        DisconnectCommand = new RelayCommand(_ => Disconnect(), _ => IsConnected && !IsBusy);
+
+        _authService.AuthStateChanged += OnAuthStateChanged;
     }
+
+    /// <summary>Optional project selector hosted in the filter bar by the parent workbench.</summary>
+    public ProjectSelectorViewModel? ProjectSelector
+    {
+        get => _projectSelector;
+        set
+        {
+            if (SetField(ref _projectSelector, value))
+            {
+                OnPropertyChanged(nameof(ShowProjectSelector));
+            }
+        }
+    }
+
+    public bool ShowProjectSelector => ProjectSelector is not null;
+
+    public bool ShowConnectButton => !IsConnected;
 
     public ObservableCollection<EmailListRow> Emails { get; }
 
@@ -105,6 +133,53 @@ public sealed class EmailListViewModel : ObservableObject
     public int UnreadEmailCount => Emails.Count(static row => row.IsUnread);
 
     public bool ShowUnreadCount => UnreadEmailCount > 0;
+
+    public bool IsConnected => _authService.IsAuthenticated;
+
+    public string? ConnectedAccountEmail => _authService.ConnectedAccountEmail;
+
+    public string AccountStatusDisplay => IsConnected
+        ? string.IsNullOrWhiteSpace(ConnectedAccountEmail)
+            ? "מחובר (אימייל לא זמין)"
+            : $"מחובר כ: {ConnectedAccountEmail}"
+        : "לא מחובר ל-Gmail";
+
+    public EmailListLoadState LoadState
+    {
+        get => _loadState;
+        private set => SetField(ref _loadState, value);
+    }
+
+    public string? LoadWarning
+    {
+        get => _loadWarning;
+        private set
+        {
+            if (SetField(ref _loadWarning, value))
+            {
+                OnPropertyChanged(nameof(ShowLoadWarning));
+            }
+        }
+    }
+
+    public string? LoadError
+    {
+        get => _loadError;
+        private set
+        {
+            if (SetField(ref _loadError, value))
+            {
+                OnPropertyChanged(nameof(ShowLoadError));
+            }
+        }
+    }
+
+    public bool ShowLoadWarning => !string.IsNullOrWhiteSpace(LoadWarning);
+
+    public bool ShowLoadError => !string.IsNullOrWhiteSpace(LoadError);
+
+    public bool ShowSparsePageWarning =>
+        SelectedProjectLinkFilter != EmailProjectLinkFilter.All && DisplayedCount < PageSize && DisplayedCount > 0;
 
     public bool IsBusy
     {
@@ -157,7 +232,13 @@ public sealed class EmailListViewModel : ObservableObject
     public EmailProjectLinkFilter SelectedProjectLinkFilter
     {
         get => _projectLinkFilter;
-        set => SetField(ref _projectLinkFilter, value);
+        set
+        {
+            if (SetField(ref _projectLinkFilter, value))
+            {
+                OnPropertyChanged(nameof(ShowSparsePageWarning));
+            }
+        }
     }
 
     public bool FilterByCurrentProject
@@ -175,13 +256,26 @@ public sealed class EmailListViewModel : ObservableObject
     public int DisplayedCount
     {
         get => _displayedCount;
-        private set => SetField(ref _displayedCount, value);
+        private set
+        {
+            if (SetField(ref _displayedCount, value))
+            {
+                OnPropertyChanged(nameof(PageInfo));
+                OnPropertyChanged(nameof(ShowSparsePageWarning));
+            }
+        }
     }
 
     public int CurrentPageNumber
     {
         get => _currentPageNumber;
-        private set => SetField(ref _currentPageNumber, value);
+        private set
+        {
+            if (SetField(ref _currentPageNumber, value))
+            {
+                OnPropertyChanged(nameof(PageInfo));
+            }
+        }
     }
 
     public bool HasNextPage
@@ -198,7 +292,20 @@ public sealed class EmailListViewModel : ObservableObject
 
     public bool HasPreviousPage => _pageTokenStack.Count > 0;
 
-    public string PageInfo => $"עמוד {CurrentPageNumber} · {DisplayedCount} מיילים";
+    public string PageInfo
+    {
+        get
+        {
+            if (DisplayedCount == 0)
+            {
+                return $"עמוד {CurrentPageNumber}";
+            }
+
+            var start = (CurrentPageNumber - 1) * PageSize + 1;
+            var end = start + DisplayedCount - 1;
+            return $"מציג {start}–{end} · עמוד {CurrentPageNumber}";
+        }
+    }
 
     public ICommand LoadFirstPageCommand { get; }
     public ICommand LoadNextPageCommand { get; }
@@ -207,6 +314,8 @@ public sealed class EmailListViewModel : ObservableObject
     public ICommand ApplyFiltersCommand { get; }
     public ICommand ClearFiltersCommand { get; }
     public ICommand ToggleGroupByLabelCommand { get; }
+    public ICommand ConnectCommand { get; }
+    public ICommand DisconnectCommand { get; }
 
     public void SetOptionalProjectFilter(int? projectId, string? projectLabel)
     {
@@ -226,24 +335,17 @@ public sealed class EmailListViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        if (!_isConnected())
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(ConnectedAccountEmail));
+        OnPropertyChanged(nameof(AccountStatusDisplay));
+
+        if (!IsConnected)
         {
             return;
         }
 
-        try
-        {
-            var labels = await _emailGateway.GetMailboxLabelsAsync().ConfigureAwait(true);
-            AvailableLabels.Clear();
-            foreach (var label in labels)
-            {
-                AvailableLabels.Add(label);
-            }
-        }
-        catch
-        {
-            // Labels are optional for first load.
-        }
+        await RefreshAccountProfileAsync().ConfigureAwait(true);
+        await LoadLabelsAsync().ConfigureAwait(true);
     }
 
     public bool TrySelectByInboxCorrelation(
@@ -278,7 +380,90 @@ public sealed class EmailListViewModel : ObservableObject
         return true;
     }
 
-    private bool CanLoadEmails() => !IsBusy && _isConnected();
+    private bool CanLoadEmails() => !IsBusy && IsConnected;
+
+    private async Task ConnectAsync()
+    {
+        IsBusy = true;
+        StatusMessage = "מתחבר ל-Google…";
+        try
+        {
+            var connected = await _authService.LoginAsync().ConfigureAwait(true);
+            if (connected)
+            {
+                await RefreshAccountProfileAsync().ConfigureAwait(true);
+                await LoadLabelsAsync().ConfigureAwait(true);
+                StatusMessage = "החיבור ל-Google הושלם. ניתן לרענן כדי לטעון מיילים.";
+            }
+            else
+            {
+                StatusMessage = "ההתחברות ל-Google לא הושלמה.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"התחברות ל-Google נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyAuthProperties();
+        }
+    }
+
+    private void Disconnect()
+    {
+        _authService.Logout();
+        LoadWarning = null;
+        LoadError = null;
+        LoadState = EmailListLoadState.Idle;
+        ReplaceRows([]);
+        StatusMessage = "התנתקת מ-Gmail.";
+        NotifyAuthProperties();
+    }
+
+    private void OnAuthStateChanged(bool isAuthenticated)
+    {
+        NotifyAuthProperties();
+        if (!isAuthenticated)
+        {
+            ReplaceRows([]);
+            LoadState = EmailListLoadState.Idle;
+            StatusMessage = "Gmail לא מחובר.";
+        }
+    }
+
+    private void NotifyAuthProperties()
+    {
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(ConnectedAccountEmail));
+        OnPropertyChanged(nameof(AccountStatusDisplay));
+        OnPropertyChanged(nameof(ShowConnectButton));
+        RaiseCommandStates();
+    }
+
+    private async Task RefreshAccountProfileAsync()
+    {
+        await _authService.RefreshAccountProfileAsync().ConfigureAwait(true);
+        NotifyAuthProperties();
+    }
+
+    private async Task LoadLabelsAsync()
+    {
+        try
+        {
+            var labels = await _emailGateway.GetMailboxLabelsAsync().ConfigureAwait(true);
+            AvailableLabels.Clear();
+            foreach (var label in labels)
+            {
+                AvailableLabels.Add(label);
+            }
+        }
+        catch
+        {
+            LoadWarning = "רשימת labels לא נטענה.";
+        }
+    }
 
     private async Task ClearFiltersAsync()
     {
@@ -330,21 +515,38 @@ public sealed class EmailListViewModel : ObservableObject
         bool useNextToken = false,
         string? explicitToken = null)
     {
-        if (!_isConnected())
+        LoadError = null;
+        LoadWarning = null;
+
+        if (!IsConnected)
         {
-            StatusMessage = "Gmail לא מחובר. התחבר ונסה שוב.";
-            ReplaceRows([]);
+            LoadState = EmailListLoadState.Error;
+            LoadError = "Gmail לא מחובר. התחבר ונסה שוב.";
+            StatusMessage = LoadError;
+            if (resetStack)
+            {
+                ReplaceRows([]);
+            }
+
             return;
         }
 
         if (FilterByCurrentProject && string.IsNullOrWhiteSpace(_optionalProjectLabel))
         {
-            StatusMessage = "סינון פרויקט פעיל — בחר פרויקט עם Project label תקין.";
-            ReplaceRows([]);
+            LoadState = EmailListLoadState.Error;
+            LoadError = "סינון פרויקט פעיל — בחר פרויקט עם Project label תקין.";
+            StatusMessage = LoadError;
+            if (resetStack)
+            {
+                ReplaceRows([]);
+            }
+
             return;
         }
 
+        var previousSelectionId = SelectedEmail?.Id;
         IsBusy = true;
+        LoadState = EmailListLoadState.Loading;
         StatusMessage = resetStack ? "טוען מיילים…" : "טוען עמוד…";
 
         try
@@ -377,23 +579,46 @@ public sealed class EmailListViewModel : ObservableObject
             _nextPageToken = page.NextPageToken;
             HasNextPage = page.HasNextPage;
 
-            var rows = await MapSummariesAsync(page.Items).ConfigureAwait(true);
+            var (rows, enrichmentWarning) = await MapSummariesAsync(page.Items).ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(enrichmentWarning))
+            {
+                LoadWarning = enrichmentWarning;
+            }
+
             rows = ApplyClientLinkFilter(rows);
 
-            ReplaceRows(rows);
+            ReplaceRows(rows, previousSelectionId);
             DisplayedCount = rows.Count;
             OnPropertyChanged(nameof(PageInfo));
             OnPropertyChanged(nameof(HasPreviousPage));
             (LoadPreviousPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 
-            StatusMessage = rows.Count == 0
-                ? "לא נמצאו מיילים לפי הסינון הנוכחי."
-                : $"נטענו {rows.Count} מיילים (עמוד {CurrentPageNumber}).";
+            if (rows.Count == 0)
+            {
+                LoadState = EmailListLoadState.NoResults;
+                StatusMessage = "לא נמצאו מיילים לפי הסינון הנוכחי.";
+            }
+            else
+            {
+                LoadState = string.IsNullOrWhiteSpace(LoadWarning)
+                    ? EmailListLoadState.Loaded
+                    : EmailListLoadState.PartialFailure;
+                StatusMessage = $"נטענו {rows.Count} מיילים (עמוד {CurrentPageNumber}).";
+                if (ShowSparsePageWarning)
+                {
+                    StatusMessage += " סינון שיוך פעיל — ייתכן פחות מ-50 תוצאות בדף.";
+                }
+            }
         }
         catch (Exception ex)
         {
-            ReplaceRows([]);
-            StatusMessage = $"טעינת המיילים נכשלה: {ex.Message}";
+            LoadState = EmailListLoadState.Error;
+            LoadError = $"טעינת המיילים נכשלה: {ex.Message}";
+            StatusMessage = LoadError;
+            if (resetStack && Emails.Count == 0)
+            {
+                ReplaceRows([]);
+            }
         }
         finally
         {
@@ -413,14 +638,18 @@ public sealed class EmailListViewModel : ObservableObject
         PageSize = PageSize,
     };
 
-    private async Task<IReadOnlyList<EmailListRow>> MapSummariesAsync(IReadOnlyList<EmailSummary> summaries)
+    private async Task<(IReadOnlyList<EmailListRow> Rows, string? EnrichmentWarning)> MapSummariesAsync(
+        IReadOnlyList<EmailSummary> summaries)
     {
         if (summaries.Count == 0)
         {
-            return [];
+            return ([], null);
         }
 
-        IReadOnlyDictionary<string, EmailProjectLinkInfo> linkStates = new Dictionary<string, EmailProjectLinkInfo>(StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, EmailProjectLinkInfo> linkStates =
+            new Dictionary<string, EmailProjectLinkInfo>(StringComparer.OrdinalIgnoreCase);
+        string? enrichmentWarning = null;
+
         if (_threadLinkQuery is not null)
         {
             var ids = summaries
@@ -431,9 +660,16 @@ public sealed class EmailListViewModel : ObservableObject
 
             if (ids.Count > 0)
             {
-                linkStates = await _threadLinkQuery
-                    .GetLinkStatesByInternetMessageIdsAsync(ids)
-                    .ConfigureAwait(true);
+                try
+                {
+                    linkStates = await _threadLinkQuery
+                        .GetLinkStatesByInternetMessageIdsAsync(ids)
+                        .ConfigureAwait(true);
+                }
+                catch
+                {
+                    enrichmentWarning = "הודעות נטענו, אך מצב שיוך לפרויקט לא נטען.";
+                }
             }
         }
 
@@ -443,7 +679,7 @@ public sealed class EmailListViewModel : ObservableObject
             rows.Add(ToEmailListRow(summary, linkStates));
         }
 
-        return rows;
+        return (rows, enrichmentWarning);
     }
 
     private static EmailListRow ToEmailListRow(
@@ -467,8 +703,9 @@ public sealed class EmailListViewModel : ObservableObject
             ? link?.DisplayName ?? summary.PrimaryLabel ?? "משויך"
             : "לא משויך";
 
-        var labelsDisplay = summary.LabelNames is { Count: > 0 }
-            ? string.Join(", ", summary.LabelNames)
+        var labelChipNames = FilterDisplayLabels(summary.LabelNames);
+        var labelsDisplay = labelChipNames.Count > 0
+            ? string.Join(", ", labelChipNames)
             : string.Empty;
 
         return new EmailListRow(
@@ -480,7 +717,7 @@ public sealed class EmailListViewModel : ObservableObject
                 : summary.Snippet,
             ReceivedOn: summary.ReceivedAt == DateTimeOffset.MinValue ? DateTime.MinValue : summary.ReceivedAt.LocalDateTime,
             GroupName: summary.PrimaryLabel ?? "ללא label",
-            IsUnread: false,
+            IsUnread: summary.IsUnread,
             IsAssigned: isLinked,
             AssignedProjectName: isLinked ? projectDisplay : null,
             AttachmentCount: summary.HasAttachments ? 1 : 0,
@@ -491,8 +728,33 @@ public sealed class EmailListViewModel : ObservableObject
             PrimaryLabel: summary.PrimaryLabel ?? "ללא label",
             ProjectLinkState: isLinked ? EmailProjectLinkState.Linked : EmailProjectLinkState.Unlinked,
             ProjectId: link?.ProjectId,
-            ProjectDisplay: projectDisplay);
+            ProjectDisplay: projectDisplay,
+            LabelChipNames: labelChipNames);
     }
+
+    private static IReadOnlyList<string> FilterDisplayLabels(IReadOnlyList<string>? labelNames)
+    {
+        if (labelNames is null || labelNames.Count == 0)
+        {
+            return [];
+        }
+
+        return labelNames
+            .Where(static label => !IsSystemGmailLabel(label))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsSystemGmailLabel(string label) =>
+        label.Equals("INBOX", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("UNREAD", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("SENT", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("DRAFT", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("SPAM", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("TRASH", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("STARRED", StringComparison.OrdinalIgnoreCase)
+        || label.Equals("IMPORTANT", StringComparison.OrdinalIgnoreCase)
+        || label.StartsWith("CATEGORY_", StringComparison.OrdinalIgnoreCase);
 
     private static bool InferLinkedFromLabels(IReadOnlyList<string>? labelNames)
     {
@@ -516,7 +778,7 @@ public sealed class EmailListViewModel : ObservableObject
         };
     }
 
-    private void ReplaceRows(IReadOnlyList<EmailListRow> rows)
+    private void ReplaceRows(IReadOnlyList<EmailListRow> rows, string? preserveSelectionId = null)
     {
         Emails.Clear();
         foreach (var row in rows)
@@ -525,7 +787,10 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         ApplyGrouping();
-        SelectedEmail = Emails.FirstOrDefault();
+        SelectedEmail = preserveSelectionId is null
+            ? Emails.FirstOrDefault()
+            : Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
+              ?? Emails.FirstOrDefault();
         OnPropertyChanged(nameof(UnreadEmailCount));
         OnPropertyChanged(nameof(ShowUnreadCount));
     }
@@ -538,6 +803,8 @@ public sealed class EmailListViewModel : ObservableObject
         (RefreshPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ApplyFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ClearFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (DisconnectCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private sealed class DesignEmailListGateway : IEmailGateway
@@ -568,7 +835,8 @@ public sealed class EmailListViewModel : ObservableObject
                     To: null,
                     Snippet: row.Preview,
                     LabelNames: [row.GroupName],
-                    PrimaryLabel: row.GroupName))
+                    PrimaryLabel: row.GroupName,
+                    IsUnread: row.IsUnread))
                 .ToList();
 
             return Task.FromResult(new EmailMailboxPage(items, query.PageSize, null, false));
@@ -579,6 +847,36 @@ public sealed class EmailListViewModel : ObservableObject
                 new GmailLabelInfo("INBOX", "INBOX"),
                 new GmailLabelInfo("lbl1", "פרויקטים_משרד/תל אביב/1042 — דוגמה"),
             ]);
+    }
+
+    private sealed class DesignAuthService : IConnectorAuthService
+    {
+        public bool IsAuthenticated { get; private set; } = true;
+
+        public string? ConnectedAccountEmail { get; private set; } = "design@example.com";
+
+        public event Action<bool>? AuthStateChanged;
+
+        public Task<bool> LoginAsync(CancellationToken cancellationToken = default)
+        {
+            IsAuthenticated = true;
+            ConnectedAccountEmail = "design@example.com";
+            AuthStateChanged?.Invoke(true);
+            return Task.FromResult(true);
+        }
+
+        public void Logout()
+        {
+            IsAuthenticated = false;
+            ConnectedAccountEmail = null;
+            AuthStateChanged?.Invoke(false);
+        }
+
+        public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(IsAuthenticated);
+
+        public Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }
 

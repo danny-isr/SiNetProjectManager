@@ -362,6 +362,8 @@ public sealed class GoogleFoundationClosureTests
     {
         public bool IsAuthenticated { get; private set; } = isAuthenticated;
 
+        public string? ConnectedAccountEmail { get; private set; }
+
         public event Action<bool>? AuthStateChanged;
 
         public Task<bool> LoginAsync(CancellationToken cancellationToken = default) =>
@@ -371,6 +373,9 @@ public sealed class GoogleFoundationClosureTests
 
         public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(IsAuthenticated);
+
+        public Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
 
         public void SetAuthenticated(bool isAuthenticated)
         {

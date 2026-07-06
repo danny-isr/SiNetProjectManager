@@ -69,28 +69,13 @@ public sealed class ProductionPilotBoundaryTests
 
         Assert.Contains("ShowDeferredVisualPlaceholders => false", vmSource, StringComparison.Ordinal);
 
-        Assert.Contains("ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
-        Assert.Contains("LoadNextPageCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("LoadPreviousPageCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("1 / 3", xaml, StringComparison.Ordinal);
-
-        Assert.Contains("ClearSearchCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("Command=\"{Binding ClearSearchCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"&#x1F4C5;\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"?\"", xaml, StringComparison.Ordinal);
 
         Assert.Contains("ProductionPilotNotice", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding ProductionPilotNotice}\"", xaml, StringComparison.Ordinal);
-
-        var calendarButtonIdx = xaml.IndexOf("Content=\"&#x1F4C5;\"", StringComparison.Ordinal);
-        Assert.True(calendarButtonIdx >= 0);
-        var calendarRegion = xaml.Substring(calendarButtonIdx, Math.Min(400, xaml.Length - calendarButtonIdx));
-        Assert.Contains("ShowDeferredVisualPlaceholders", calendarRegion, StringComparison.Ordinal);
-        Assert.Contains("IsEnabled=\"False\"", calendarRegion, StringComparison.Ordinal);
-
-        var helpButtonIdx = xaml.IndexOf("Content=\"?\"", StringComparison.Ordinal);
-        Assert.True(helpButtonIdx >= 0);
-        var helpRegion = xaml.Substring(helpButtonIdx, Math.Min(400, xaml.Length - helpButtonIdx));
-        Assert.Contains("ShowDeferredVisualPlaceholders", helpRegion, StringComparison.Ordinal);
-        Assert.Contains("IsEnabled=\"False\"", helpRegion, StringComparison.Ordinal);
 
         Assert.DoesNotContain("<DatePicker", xaml, StringComparison.Ordinal);
     }

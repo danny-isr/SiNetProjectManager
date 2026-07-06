@@ -438,6 +438,7 @@ public sealed class GmailEmailGateway : IEmailGateway
         var hasAttachments = HasAttachments(message.Payload);
         var labelNames = ResolveLabelNames(message, labelMap);
         var primaryLabel = ResolvePrimaryLabel(labelNames);
+        var isUnread = message.LabelIds?.Contains("UNREAD", StringComparer.OrdinalIgnoreCase) == true;
 
         return new EmailSummary(
             message.Id ?? string.Empty,
@@ -450,7 +451,8 @@ public sealed class GmailEmailGateway : IEmailGateway
             to,
             message.Snippet ?? string.Empty,
             labelNames,
-            primaryLabel);
+            primaryLabel,
+            isUnread);
     }
 
     private static IReadOnlyList<string> ResolveLabelNames(

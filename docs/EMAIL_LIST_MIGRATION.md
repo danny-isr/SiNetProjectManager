@@ -1,70 +1,64 @@
 # Email List Migration
 
-> **Status:** V2 general inbox workbench (2026-07-06)  
+> **Status:** V3 standalone component (2026-07-06)  
 > Related: [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md), [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md), [`EMAIL_FILING_SERVICE_DESIGN.md`](./EMAIL_FILING_SERVICE_DESIGN.md)
 
 ## Goal
 
-General inbox workbench: paged Gmail read (50 per block), optional filters, label display/grouping, read-only project-link state from DB — without Gmail writes or LegacyBridge.
+Self-contained **Email List component** for the Email Workbench: Outlook-style cards, Gmail paging (50), account bar, filters, labels, and read-only project-link state — without Gmail writes or LegacyBridge.
 
-## New components
+## Components
 
 | Component | Path | Role |
 | --- | --- | --- |
-| `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | Multi-column list + optional label grouping |
-| `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, link enrichment, grouping |
-| `EmailWindowViewModel` | parent shell | Gmail auth, detail pane, `ApplyContext`, optional project filter |
+| `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | Standalone UI: account bar, paging, filters, card list |
+| `EmailListItemCard` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml` | Compact Outlook-style row |
+| `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, auth, load states, link enrichment |
+| `EmailWindowViewModel` | parent shell | Detail pane, `ApplyContext`, optional project context |
 
 ## Default Gmail query (legacy port)
 
-Legacy `GoogleService.GetUnassignedEmailsPagedAsync` (SiNetSQL) uses:
+Legacy `GoogleService.GetUnassignedEmailsPagedAsync` uses `label:INBOX`, page size 50, Gmail `pageToken` stack.
 
-- **Query:** `label:INBOX`
-- **Page size:** `50` (`maxResults`)
-- **Paging:** Gmail `pageToken` stack (one API page per UI page)
+Configured in `GmailOptions.DefaultMailboxQuery`. Optional project filter pushes `label:` when enabled.
 
-Configured in `GmailOptions.DefaultMailboxQuery` (`"label:INBOX"`). Project-scoped loads remain available when **Filter by project** is enabled (`OptionalProjectLabel` pushed to Gmail `label:`).
-
-## V2 scope (read-only)
+## V3 scope (read-only)
 
 | Feature | Implementation |
 | --- | --- |
-| Default load | `IEmailGateway.GetMailboxPageAsync` — all INBOX emails; **no project required** |
-| Paging | 50 items; Previous/Next via token stack in `EmailListViewModel` |
-| Labels | `EmailSummary.LabelNames`, `PrimaryLabel`; column + optional group-by |
-| Link state | `IEmailThreadLinkQueryService` → `ThreadStatusMapping` + `EmailInboxMessage` + `Projects` |
-| Filters | Free text, from/to, subject, label, link state (All/Linked/Unlinked), optional project |
-| Grouping | `CollectionViewSource` grouped by `PrimaryLabel` — multi-label rows appear once under first user label under `{RootLabel}/…`; else `"ללא label"` |
+| Standalone component | Account bar + filters + paging + cards inside `EmailListView` |
+| Default load | `IEmailGateway.GetMailboxPageAsync` — INBOX; no project required |
+| Paging | 50 items; token stack; prev/next in component |
+| Account status | `IConnectorAuthService.ConnectedAccountEmail` + Connect/Disconnect |
+| Cards | `ListBox` + `EmailListItemCard` (not GridView) |
+| Load states | `EmailListLoadState`: Loading, Loaded, PartialFailure, Error, NoResults |
+| Partial enrichment | Gmail rows shown + warning if DB link query fails |
+| Labels | Chips on card; filter + group-by `PrimaryLabel` |
+| Link state | `IEmailThreadLinkQueryService` + client filter All/Linked/Unlinked |
+| Unread | From Gmail `UNREAD` label id on `EmailSummary.IsUnread` |
 
-## Project context
+## Grouping rule
 
-| Surface | Project selector |
-| --- | --- |
-| Task Workbench | Local filter only |
-| Email window | **Global** `ICurrentProjectContext` — **optional filter** (`FilterByCurrentProject`), not a load gate |
+Multi-label messages appear once under **PrimaryLabel** (first user label under `{RootLabel}/…`; else `"ללא label"`).
 
-## Application ports
+## Application ports (reuse — no parallel IEmailListService)
 
-- `IEmailGateway.GetMailboxPageAsync(EmailMailboxQuery, pageToken?)`
-- `IEmailGateway.GetMailboxLabelsAsync()`
+- `IEmailGateway.GetMailboxPageAsync` / `GetMailboxLabelsAsync`
 - `IEmailThreadLinkQueryService.GetLinkStatesByInternetMessageIdsAsync`
+- `IConnectorAuthService` (+ `ConnectedAccountEmail`, `RefreshAccountProfileAsync`, `Logout`)
 
-## Task-driven open
+## Workbench integration
 
-- `WorkSurfaceContext.PrimaryWorkTargetEntityId` = `EmailInboxMessage.Id`
-- `IEmailInboxQueryService` → correlate with current Gmail page
-- Opening from task with `ProjectId` enables optional project filter automatically
+`EmailWindowView` hosts `<EmailListView DataContext="{Binding EmailList}" />` beside the detail pane. Parent sets `EmailList.ProjectSelector` and handles `SelectedEmailChanged` for body load.
 
-## Workflow gaps (V2)
+## Workflow gaps (deferred)
 
 | Action | Status |
 | --- | --- |
-| Unlinked → triage task | Not implemented — no `CreateTaskFromEmail` |
+| Unlinked → triage task | Not implemented |
 | Linked → ProjectWork | Not implemented |
-| File/unlink → `ProjectAssignmentEvent` | Blocked — `IEmailFilingService` design only |
-| Completion from email | Blocked |
-
-See [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
+| File/unlink | `IEmailFilingService` design only |
+| Cross-page task mail select | Current page only |
 
 ## Explicitly deferred
 
