@@ -116,7 +116,14 @@ public sealed record EmailListRow(
     bool IsAssigned,
     string? AssignedProjectName,
     int AttachmentCount,
-    string? InternetMessageId = null)
+    string? InternetMessageId = null,
+    string To = "",
+    string Snippet = "",
+    string LabelsDisplay = "",
+    string? PrimaryLabel = null,
+    EmailProjectLinkState ProjectLinkState = EmailProjectLinkState.Unlinked,
+    int? ProjectId = null,
+    string ProjectDisplay = "לא משויך")
 {
     /// <summary>Short received-date text shown on the list row.</summary>
     public string ReceivedDisplay => ReceivedOn.ToString("dd/MM/yyyy HH:mm");
@@ -126,6 +133,12 @@ public sealed record EmailListRow(
 
     /// <summary>True when this email carries at least one attachment (drives the badge visibility).</summary>
     public bool HasAttachments => AttachmentCount > 0;
+
+    public string ProjectLinkDisplay => ProjectLinkState == EmailProjectLinkState.Linked
+        ? "משויך"
+        : "לא משויך";
+
+    public bool IsLinked => ProjectLinkState == EmailProjectLinkState.Linked;
 }
 
 /// <summary>Fake attachment row for the selected-email viewer (name + type + size). Presentation-only.</summary>

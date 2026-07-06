@@ -126,7 +126,7 @@ public sealed class GoogleFoundationClosureTests
     }
 
     [Fact]
-    public async Task Email_window_view_model_loads_project_emails_by_project_label()
+    public async Task Email_window_view_model_loads_mailbox_page_by_default()
     {
         var auth = new StubConnectorAuthService(isAuthenticated: true);
         var gateway = new RecordingEmailGateway();
@@ -152,7 +152,9 @@ public sealed class GoogleFoundationClosureTests
 
         await sut.RefreshAsync();
 
-        Assert.Equal("(1042) North Towers", gateway.LastProjectLabelName);
+        Assert.True(gateway.LastMailboxPageRequested);
+        Assert.Equal(EmailMailboxQuery.DefaultPageSize, gateway.LastPageSize);
+        Assert.False(gateway.LastProjectLabelFilterUsed);
         Assert.Single(sut.Emails);
         Assert.Equal("msg-42", sut.Emails[0].Id);
     }
@@ -263,12 +265,25 @@ public sealed class GoogleFoundationClosureTests
                 DateTimeOffset.UtcNow,
                 "Body",
                 []));
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxPage([], query.PageSize, null, false));
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
     }
 
     private sealed class RecordingEmailGateway : IEmailGateway
     {
         public string? LastProjectLabelName { get; private set; }
         public string? LastDetailsMessageId { get; private set; }
+        public bool LastMailboxPageRequested { get; private set; }
+        public int LastPageSize { get; private set; }
+        public bool LastProjectLabelFilterUsed { get; private set; }
+        public string? LastPageToken { get; private set; }
 
         public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
             string location,
@@ -310,6 +325,37 @@ public sealed class GoogleFoundationClosureTests
                     new EmailMessageAttachmentDetails("att-1", "quote.pdf", "application/pdf", 2048),
                 ]));
         }
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            LastMailboxPageRequested = true;
+            LastPageSize = query.PageSize;
+            LastProjectLabelFilterUsed = !string.IsNullOrWhiteSpace(query.OptionalProjectLabel);
+            LastPageToken = pageToken;
+            LastProjectLabelName = query.OptionalProjectLabel;
+
+            return Task.FromResult(new EmailMailboxPage(
+            [
+                new EmailSummary(
+                    "msg-42",
+                    "thread-42",
+                    EmailAddress.CreateOrFallback("north@example.com"),
+                    "North update",
+                    DateTimeOffset.UtcNow,
+                    true),
+            ],
+            query.PageSize,
+            "next-token",
+            true));
+        }
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GmailLabelInfo>>([
+                new GmailLabelInfo("INBOX", "INBOX"),
+            ]);
     }
 
     private sealed class StubConnectorAuthService(bool isAuthenticated) : IConnectorAuthService

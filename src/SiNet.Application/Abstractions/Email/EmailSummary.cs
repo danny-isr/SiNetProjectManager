@@ -13,4 +13,8 @@ public sealed record EmailSummary(
     string Subject,
     DateTimeOffset ReceivedAt,
     bool HasAttachments,
-    string? InternetMessageId = null);
+    string? InternetMessageId = null,
+    EmailAddress? To = null,
+    string Snippet = "",
+    IReadOnlyList<string>? LabelNames = null,
+    string? PrimaryLabel = null);

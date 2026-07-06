@@ -12,6 +12,7 @@ public static class EmailReadServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IEmailInboxQueryService, SqlEmailInboxQueryService>();
+        services.AddSingleton<IEmailThreadLinkQueryService, SqlEmailThreadLinkQueryService>();
 
         return services;
     }

@@ -70,12 +70,9 @@ public sealed class ProductionPilotBoundaryTests
         Assert.Contains("ShowDeferredVisualPlaceholders => false", vmSource, StringComparison.Ordinal);
 
         Assert.Contains("ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
-        Assert.Contains("1 / 3", xaml, StringComparison.Ordinal);
-        Assert.Contains("Visibility=\"{Binding ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
-
-        var paginationIdx = xaml.IndexOf("1 / 3", StringComparison.Ordinal);
-        var placeholderBindingIdx = xaml.LastIndexOf("ShowDeferredVisualPlaceholders", paginationIdx, StringComparison.Ordinal);
-        Assert.True(placeholderBindingIdx >= 0, "Pagination placeholder must be inside a ShowDeferredVisualPlaceholders region.");
+        Assert.Contains("LoadNextPageCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("LoadPreviousPageCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("1 / 3", xaml, StringComparison.Ordinal);
 
         Assert.Contains("ClearSearchCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{Binding ClearSearchCommand}\"", xaml, StringComparison.Ordinal);
@@ -95,11 +92,7 @@ public sealed class ProductionPilotBoundaryTests
         Assert.Contains("ShowDeferredVisualPlaceholders", helpRegion, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"False\"", helpRegion, StringComparison.Ordinal);
 
-        var datePickerIdx = xaml.IndexOf("<DatePicker", StringComparison.Ordinal);
-        Assert.True(datePickerIdx >= 0);
-        var datePickerRegion = xaml.Substring(datePickerIdx, Math.Min(500, xaml.Length - datePickerIdx));
-        Assert.Contains("ShowDeferredVisualPlaceholders", datePickerRegion, StringComparison.Ordinal);
-        Assert.Contains("IsEnabled=\"False\"", datePickerRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain("<DatePicker", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

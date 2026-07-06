@@ -184,18 +184,25 @@ surfaces (see [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_I
 **Does not use:** LegacyBridge, legacy `TaskPanelView`, direct task-status writes, `ProcessAction`,
 `MoveToProject`, `AddMaterial`, direct SiNetSQL from WPF, fallback when resolver fails.
 
-## Email List V1 — Started / Pilot (2026-07-06)
+## Email List V2 — General inbox (2026-07-06)
 
-Target: extract `EmailListView` + `EmailListViewModel` from `EmailWindowView` (read-only).
+Target: expand from project-only to general inbox workbench (paged Gmail + DB link enrichment).
 See [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md).
 
 | Aspect | Status | Notes |
 | --- | --- | --- |
-| List component | Done | `EmailListView` bound to `EmailListViewModel` (rows + selection + unread badge). |
-| Gmail read | Done | Parent `EmailWindowViewModel` loads via `IEmailGateway` only. |
-| Project scope | Done | Global `ICurrentProjectContext` via shared `ProjectSelectorView` (differs from Task Workbench local filter). |
-| Link/unlink / send | Deferred | Requires `IEmailFilingService` + write policy (`GOOGLE_BOUNDARY`). |
-| Task open (`ApplyContext`) | Started | `EmailWindowViewModel.ApplyContext` + `IWorkSurfaceLauncher` for `Component.EmailFiling`. |
+| List component | Done | `EmailListView` — multi-column + optional label grouping via `EmailsView`. |
+| Gmail read | Done | `EmailListViewModel` → `GetMailboxPageAsync` (50/page, `label:INBOX` default). |
+| Paging | Done | Previous/Next 50 in toolbar; token stack in VM. |
+| Labels | Done | Column + group-by `PrimaryLabel`. |
+| Link state | Done | `IEmailThreadLinkQueryService` + filter All/Linked/Unlinked. |
+| Project scope | Optional filter | `FilterByCurrentProject` checkbox — **not** a load gate. |
+| Link/unlink / send | Deferred | Requires `IEmailFilingService` + write policy. |
+| Task open (`ApplyContext`) | Done | Sets optional project filter + inbox correlation on current page. |
+
+## Email List V1 — Started / Pilot (2026-07-06)
+
+Superseded by V2 above for scope; V1 extracted the list component and read-only shell.
 
 ## Dev reset / seed tools
 

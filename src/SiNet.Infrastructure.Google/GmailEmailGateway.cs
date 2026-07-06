@@ -22,8 +22,9 @@ namespace SiNet.Infrastructure.Google;
 /// </summary>
 public sealed class GmailEmailGateway : IEmailGateway
 {
-    private const int PageSize = 100;
-    private static readonly string[] MetadataHeaders = { "Subject", "From", "Date", "Message-ID" };
+    private const int InternalDrainPageSize = 100;
+    public const int MailboxPageSizeCap = 50;
+    private static readonly string[] MetadataHeaders = { "Subject", "From", "To", "Date", "Message-ID" };
 
     private readonly GmailClientProvider _provider;
     private readonly IAppLogger _logger;
@@ -96,6 +97,111 @@ public sealed class GmailEmailGateway : IEmailGateway
         return await GetSummariesForLabelIdsAsync(gmail, labelIds, projectLabelName.Trim(), cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<EmailMailboxPage> GetMailboxPageAsync(
+        EmailMailboxQuery query,
+        string? pageToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = query.PageSize <= 0
+            ? EmailMailboxQuery.DefaultPageSize
+            : Math.Min(query.PageSize, MailboxPageSizeCap);
+
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail == null)
+        {
+            return new EmailMailboxPage(Array.Empty<EmailSummary>(), pageSize, null, false);
+        }
+
+        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+
+        string? listQuery = null;
+        IReadOnlyList<string>? labelIds = null;
+
+        if (!string.IsNullOrWhiteSpace(query.OptionalProjectLabel))
+        {
+            labelIds = ResolveProjectLabelIds(labelMap, query.OptionalProjectLabel.Trim());
+            if (labelIds.Count == 0)
+            {
+                _logger.Warn($"[Gmail] Optional project label not found: '{query.OptionalProjectLabel}'.");
+                return new EmailMailboxPage(Array.Empty<EmailSummary>(), pageSize, null, false);
+            }
+        }
+        else
+        {
+            listQuery = BuildMailboxQuery(query, _provider.DefaultMailboxQuery);
+        }
+
+        var listRequest = gmail.Users.Messages.List("me");
+        listRequest.MaxResults = pageSize;
+        listRequest.PageToken = pageToken;
+        if (labelIds is { Count: > 0 })
+        {
+            listRequest.LabelIds = labelIds.ToArray();
+        }
+        else if (!string.IsNullOrWhiteSpace(listQuery))
+        {
+            listRequest.Q = listQuery;
+        }
+
+        ListMessagesResponse listResponse;
+        try
+        {
+            listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[Gmail] Messages.List(mailbox page) failed: {ex.Message}", ex);
+            return new EmailMailboxPage(Array.Empty<EmailSummary>(), pageSize, null, false);
+        }
+
+        if (listResponse.Messages is null || listResponse.Messages.Count == 0)
+        {
+            return new EmailMailboxPage(Array.Empty<EmailSummary>(), pageSize, listResponse.NextPageToken, false);
+        }
+
+        var summaries = new List<EmailSummary>(listResponse.Messages.Count);
+        foreach (var item in listResponse.Messages)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(item.Id))
+            {
+                continue;
+            }
+
+            var summary = await TryGetSummaryAsync(gmail, item.Id, labelMap, cancellationToken).ConfigureAwait(false);
+            if (summary is not null)
+            {
+                summaries.Add(summary);
+            }
+        }
+
+        var hasNext = !string.IsNullOrEmpty(listResponse.NextPageToken);
+        return new EmailMailboxPage(summaries, pageSize, listResponse.NextPageToken, hasNext);
+    }
+
+    public async Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default)
+    {
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail == null)
+        {
+            return Array.Empty<GmailLabelInfo>();
+        }
+
+        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+        var rootPrefix = _provider.RootLabel + "/";
+
+        return labelMap.Values
+            .Where(label => !string.IsNullOrWhiteSpace(label.Name))
+            .Where(label =>
+                string.Equals(label.Name, "INBOX", StringComparison.OrdinalIgnoreCase)
+                || label.Name!.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static label => label.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(static label => new GmailLabelInfo(label.Id ?? string.Empty, label.Name ?? string.Empty))
+            .ToList();
+    }
+
     private async Task<IReadOnlyList<EmailSummary>> GetSummariesForLabelIdsAsync(
         GmailService gmail,
         IReadOnlyCollection<string> labelIds,
@@ -115,7 +221,7 @@ public sealed class GmailEmailGateway : IEmailGateway
 
                 var listRequest = gmail.Users.Messages.List("me");
                 listRequest.LabelIds = new[] { labelId };
-                listRequest.MaxResults = PageSize;
+                listRequest.MaxResults = InternalDrainPageSize;
                 listRequest.PageToken = pageToken;
 
                 ListMessagesResponse listResponse;
@@ -143,7 +249,7 @@ public sealed class GmailEmailGateway : IEmailGateway
                         continue;
                     }
 
-                    var summary = await TryGetSummaryAsync(gmail, item.Id, cancellationToken).ConfigureAwait(false);
+                    var summary = await TryGetSummaryAsync(gmail, item.Id, labelMap: null, cancellationToken).ConfigureAwait(false);
                     if (summary != null)
                     {
                         summaries.Add(summary);
@@ -173,7 +279,7 @@ public sealed class GmailEmailGateway : IEmailGateway
             return null;
         }
 
-        return await TryGetSummaryAsync(gmail, messageId, cancellationToken).ConfigureAwait(false);
+        return await TryGetSummaryAsync(gmail, messageId, labelMap: null, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default)
@@ -218,6 +324,7 @@ public sealed class GmailEmailGateway : IEmailGateway
     private async Task<EmailSummary?> TryGetSummaryAsync(
         GmailService gmail,
         string messageId,
+        IReadOnlyDictionary<string, Label>? labelMap,
         CancellationToken cancellationToken)
     {
         try
@@ -227,7 +334,7 @@ public sealed class GmailEmailGateway : IEmailGateway
             getRequest.MetadataHeaders = MetadataHeaders;
 
             var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
-            return Map(message);
+            return Map(message, labelMap);
         }
         catch (Exception ex)
         {
@@ -236,7 +343,72 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
     }
 
-    private EmailSummary Map(Message message)
+    private static string BuildMailboxQuery(EmailMailboxQuery query, string defaultMailboxQuery)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(query.LabelName))
+        {
+            parts.Add($"label:{QuoteGmailTerm(query.LabelName.Trim())}");
+        }
+        else
+        {
+            parts.Add(defaultMailboxQuery.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Subject))
+        {
+            parts.Add($"subject:{QuoteGmailTerm(query.Subject.Trim())}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.FromOrTo))
+        {
+            var address = query.FromOrTo.Trim();
+            parts.Add($"from:{QuoteGmailTerm(address)} OR to:{QuoteGmailTerm(address)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.FreeText))
+        {
+            parts.Add(query.FreeText.Trim());
+        }
+
+        return string.Join(' ', parts);
+    }
+
+    private static string QuoteGmailTerm(string value)
+        => value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;
+
+    private async Task<IReadOnlyDictionary<string, Label>> LoadLabelMapAsync(
+        GmailService gmail,
+        CancellationToken cancellationToken)
+    {
+        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        return labels.Labels?
+                   .Where(static label => !string.IsNullOrWhiteSpace(label.Id))
+                   .ToDictionary(static label => label.Id!, static label => label, StringComparer.Ordinal)
+               ?? new Dictionary<string, Label>(StringComparer.Ordinal);
+    }
+
+    private IReadOnlyList<string> ResolveProjectLabelIds(
+        IReadOnlyDictionary<string, Label> labelMap,
+        string projectLabelName)
+    {
+        var rootPrefix = _provider.RootLabel + "/";
+        return labelMap.Values
+            .Where(static label => !string.IsNullOrWhiteSpace(label.Name) && !string.IsNullOrWhiteSpace(label.Id))
+            .Where(label => label.Name!.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            .Where(label =>
+            {
+                var parts = label.Name!.Split('/');
+                return parts.Length >= 2
+                    && string.Equals(parts[^1], projectLabelName, StringComparison.OrdinalIgnoreCase);
+            })
+            .Select(static label => label.Id!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private EmailSummary Map(Message message, IReadOnlyDictionary<string, Label>? labelMap)
     {
         var headers = message.Payload?.Headers;
 
@@ -247,9 +419,25 @@ public sealed class GmailEmailGateway : IEmailGateway
             from = EmailAddress.CreateOrFallback(fromRaw);
         }
 
+        var toRaw = GetHeader(headers, "To");
+        EmailAddress? to = null;
+        if (!string.IsNullOrWhiteSpace(toRaw))
+        {
+            if (!EmailAddress.TryParse(toRaw, out var parsedTo))
+            {
+                to = EmailAddress.CreateOrFallback(toRaw);
+            }
+            else
+            {
+                to = parsedTo;
+            }
+        }
+
         var subject = GetHeader(headers, "Subject") ?? string.Empty;
         var receivedAt = ResolveReceivedAt(message, GetHeader(headers, "Date"));
         var hasAttachments = HasAttachments(message.Payload);
+        var labelNames = ResolveLabelNames(message, labelMap);
+        var primaryLabel = ResolvePrimaryLabel(labelNames);
 
         return new EmailSummary(
             message.Id ?? string.Empty,
@@ -258,8 +446,71 @@ public sealed class GmailEmailGateway : IEmailGateway
             subject,
             receivedAt,
             hasAttachments,
-            GetHeader(headers, "Message-ID"));
+            GetHeader(headers, "Message-ID"),
+            to,
+            message.Snippet ?? string.Empty,
+            labelNames,
+            primaryLabel);
     }
+
+    private static IReadOnlyList<string> ResolveLabelNames(
+        Message message,
+        IReadOnlyDictionary<string, Label>? labelMap)
+    {
+        if (message.LabelIds is null || message.LabelIds.Count == 0 || labelMap is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        var names = new List<string>();
+        foreach (var labelId in message.LabelIds)
+        {
+            if (labelMap.TryGetValue(labelId, out var label) && !string.IsNullOrWhiteSpace(label.Name))
+            {
+                names.Add(label.Name);
+            }
+        }
+
+        return names
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private string? ResolvePrimaryLabel(IReadOnlyList<string> labelNames)
+    {
+        if (labelNames.Count == 0)
+        {
+            return null;
+        }
+
+        var rootPrefix = _provider.RootLabel + "/";
+        var projectLabel = labelNames.FirstOrDefault(
+            label => label.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(projectLabel))
+        {
+            return projectLabel;
+        }
+
+        return labelNames.FirstOrDefault(
+            static label => !string.Equals(label, "INBOX", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "UNREAD", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "CATEGORY_PERSONAL", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "CATEGORY_UPDATES", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "CATEGORY_PROMOTIONS", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "CATEGORY_SOCIAL", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "CATEGORY_FORUMS", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "SENT", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "DRAFT", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "SPAM", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "TRASH", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "STARRED", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(label, "IMPORTANT", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private EmailSummary Map(Message message)
+        => Map(message, labelMap: null);
 
     private EmailMessageDetails MapDetails(Message message)
     {

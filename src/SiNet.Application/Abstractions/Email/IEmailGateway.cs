@@ -38,4 +38,16 @@ public interface IEmailGateway
     /// body, and attachment metadata. Returns <c>null</c> when the message cannot be loaded.
     /// </summary>
     Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets one page of mailbox messages (default INBOX scope, legacy <c>label:INBOX</c>).
+    /// Returns a single Gmail page — does not drain all results.
+    /// </summary>
+    Task<EmailMailboxPage> GetMailboxPageAsync(
+        EmailMailboxQuery query,
+        string? pageToken = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Lists SiNet-relevant Gmail labels for filter dropdowns (read-only).</summary>
+    Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default);
 }

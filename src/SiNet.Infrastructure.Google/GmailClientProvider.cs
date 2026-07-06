@@ -52,6 +52,9 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// <summary>The root Gmail label under which projects are filed.</summary>
     public string RootLabel => _options.RootLabel;
 
+    /// <summary>Default Gmail query for general mailbox paging (legacy: label:INBOX).</summary>
+    public string DefaultMailboxQuery => _options.DefaultMailboxQuery;
+
     /// <summary>
     /// <c>true</c> once a usable Gmail session has been established (via silent restore or an
     /// explicit interactive sign-in) and cached. Reflects the last known state for the UI; it does

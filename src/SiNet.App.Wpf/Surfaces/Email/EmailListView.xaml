@@ -19,83 +19,88 @@
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0" Background="{DynamicResource SiBackgroundBrush}" Padding="10">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="מיילים לתיוק"
-                               FontWeight="Bold"
-                               VerticalAlignment="Center" />
-                    <Border Background="#E3F2FD"
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="תיבת דואר"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding PageInfo}"
+                                   Margin="10,0,0,0"
+                                   Foreground="#666"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Border Grid.Column="1"
+                            Background="#E3F2FD"
                             BorderBrush="#64B5F6"
                             BorderThickness="1"
                             CornerRadius="3"
                             Padding="8,2"
-                            Margin="10,0,0,0"
                             Visibility="{Binding ShowUnreadCount, Converter={StaticResource BoolToVis}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#x1F4E9; לא נקראו " Foreground="#1565C0" FontSize="{DynamicResource SiTextSmallFontSize}" />
                             <TextBlock Text="{Binding UnreadEmailCount}" Foreground="#1565C0" FontWeight="Bold" FontSize="{DynamicResource SiTextSmallFontSize}" />
                         </StackPanel>
                     </Border>
-                </StackPanel>
+                </Grid>
             </Border>
 
-            <ListBox Grid.Row="1"
-                     ItemsSource="{Binding Emails}"
-                     SelectedItem="{Binding SelectedEmail}"
-                     HorizontalContentAlignment="Stretch"
-                     BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Padding="4,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
+            <ListView Grid.Row="1"
+                      ItemsSource="{Binding EmailsView}"
+                      SelectedItem="{Binding SelectedEmail}"
+                      BorderThickness="0"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <ListView.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <Border Background="#F5F5F5" Padding="6,4" Margin="0,4,0,2">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#555" />
+                                </Border>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </ListView.GroupStyle>
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="נושא" Width="140">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse Width="8" Height="8"
                                                  Fill="#2196F3"
-                                                 Margin="0,0,6,0"
+                                                 Margin="0,0,4,0"
                                                  VerticalAlignment="Center"
                                                  Visibility="{Binding IsUnread, Converter={StaticResource BoolToVis}}" />
-                                        <TextBlock Text="{Binding Sender}"
-                                                   FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Subject}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Subject}" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding Subject}"
-                                               Margin="14,2,0,0"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Preview}"
-                                               Margin="14,2,0,0"
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="מאת" Width="100" DisplayMemberBinding="{Binding Sender}" />
+                        <GridViewColumn Header="אל" Width="90" DisplayMemberBinding="{Binding To}" />
+                        <GridViewColumn Header="תאריך" Width="110" DisplayMemberBinding="{Binding ReceivedDisplay}" />
+                        <GridViewColumn Header="Labels" Width="120" DisplayMemberBinding="{Binding LabelsDisplay}" />
+                        <GridViewColumn Header="שיוך" Width="60" DisplayMemberBinding="{Binding ProjectLinkDisplay}" />
+                        <GridViewColumn Header="פרויקט" Width="100" DisplayMemberBinding="{Binding ProjectDisplay}" />
+                        <GridViewColumn Header="תקציר" Width="140">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Snippet}"
+                                               TextTrimming="CharacterEllipsis"
                                                Foreground="#888"
                                                FontSize="{DynamicResource SiTextSmallFontSize}"
-                                               TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding ReceivedDisplay}"
-                                               Foreground="#999"
-                                               FontSize="{DynamicResource SiTextTinyFontSize}"
-                                               HorizontalAlignment="Left" />
-                                    <TextBlock Text="{Binding AttachmentBadge}"
-                                               Foreground="#666"
-                                               FontSize="{DynamicResource SiTextSmallFontSize}"
-                                               HorizontalAlignment="Left"
-                                               Margin="0,2,0,0"
-                                               Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
-                                    <TextBlock Text="&#x2713; משויך"
-                                               Foreground="#2E7D32"
-                                               FontSize="{DynamicResource SiTextTinyFontSize}"
-                                               FontWeight="SemiBold"
-                                               HorizontalAlignment="Left"
-                                               Margin="0,2,0,0"
-                                               Visibility="{Binding IsAssigned, Converter={StaticResource BoolToVis}}" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                                               ToolTip="{Binding Snippet}" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
         </Grid>
     </Border>
 </UserControl>

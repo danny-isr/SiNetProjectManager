@@ -1,43 +1,74 @@
 # Email List Migration
 
-> **Status:** V1 read-only slice (2026-07-06)  
+> **Status:** V2 general inbox workbench (2026-07-06)  
 > Related: [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md), [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md), [`EMAIL_FILING_SERVICE_DESIGN.md`](./EMAIL_FILING_SERVICE_DESIGN.md)
 
 ## Goal
 
-Extract the email list from `EmailWindowView` into a reusable read-only component while keeping the legacy `EmailManagementView` unchanged.
+General inbox workbench: paged Gmail read (50 per block), optional filters, label display/grouping, read-only project-link state from DB — without Gmail writes or LegacyBridge.
 
 ## New components
 
 | Component | Path | Role |
 | --- | --- | --- |
-| `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | Visual list panel (RTL) |
-| `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Rows, selection, unread badge |
-| `EmailWindowViewModel` | parent shell | Filters, Gmail load, detail pane, `ApplyContext` |
+| `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | Multi-column list + optional label grouping |
+| `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, link enrichment, grouping |
+| `EmailWindowViewModel` | parent shell | Gmail auth, detail pane, `ApplyContext`, optional project filter |
 
-## V1 scope (read-only)
+## Default Gmail query (legacy port)
 
-- List rows loaded via `IEmailGateway` (parent VM)
-- Subject/from search (parent)
-- Project scope via **global** `ICurrentProjectContext` + `ProjectSelectorView`
-- Link-state display deferred to stage 2 (label-based filter)
-- **No** Gmail write, link/unlink, send, task completion
+Legacy `GoogleService.GetUnassignedEmailsPagedAsync` (SiNetSQL) uses:
 
-## Project context difference
+- **Query:** `label:INBOX`
+- **Page size:** `50` (`maxResults`)
+- **Paging:** Gmail `pageToken` stack (one API page per UI page)
 
-| Surface | Project selector scope |
+Configured in `GmailOptions.DefaultMailboxQuery` (`"label:INBOX"`). Project-scoped loads remain available when **Filter by project** is enabled (`OptionalProjectLabel` pushed to Gmail `label:`).
+
+## V2 scope (read-only)
+
+| Feature | Implementation |
 | --- | --- |
-| Task Workbench | **Local** `InMemoryCurrentProjectContext` — filter only |
-| Email window | **Global** `ICurrentProjectContext` — shared across shell |
+| Default load | `IEmailGateway.GetMailboxPageAsync` — all INBOX emails; **no project required** |
+| Paging | 50 items; Previous/Next via token stack in `EmailListViewModel` |
+| Labels | `EmailSummary.LabelNames`, `PrimaryLabel`; column + optional group-by |
+| Link state | `IEmailThreadLinkQueryService` → `ThreadStatusMapping` + `EmailInboxMessage` + `Projects` |
+| Filters | Free text, from/to, subject, label, link state (All/Linked/Unlinked), optional project |
+| Grouping | `CollectionViewSource` grouped by `PrimaryLabel` — multi-label rows appear once under first user label under `{RootLabel}/…`; else `"ללא label"` |
 
-## Task-driven open (stage 4)
+## Project context
+
+| Surface | Project selector |
+| --- | --- |
+| Task Workbench | Local filter only |
+| Email window | **Global** `ICurrentProjectContext` — **optional filter** (`FilterByCurrentProject`), not a load gate |
+
+## Application ports
+
+- `IEmailGateway.GetMailboxPageAsync(EmailMailboxQuery, pageToken?)`
+- `IEmailGateway.GetMailboxLabelsAsync()`
+- `IEmailThreadLinkQueryService.GetLinkStatesByInternetMessageIdsAsync`
+
+## Task-driven open
 
 - `WorkSurfaceContext.PrimaryWorkTargetEntityId` = `EmailInboxMessage.Id`
-- `IEmailInboxQueryService` resolves inbox row → correlate with Gmail list (`InternetMessageId` / subject)
-- `IWorkSurfaceLauncher` maps `Component.EmailFiling` → `IEmailWindowFactory` + `ApplyContext`
+- `IEmailInboxQueryService` → correlate with current Gmail page
+- Opening from task with `ProjectId` enables optional project filter automatically
 
-## Deferred
+## Workflow gaps (V2)
 
-- `IEmailFilingService` implementation (stage 3 — write policy)
-- Unassigned inbox view without project
-- `ThreadStatusMapping` read port for link-state badges
+| Action | Status |
+| --- | --- |
+| Unlinked → triage task | Not implemented — no `CreateTaskFromEmail` |
+| Linked → ProjectWork | Not implemented |
+| File/unlink → `ProjectAssignmentEvent` | Blocked — `IEmailFilingService` design only |
+| Completion from email | Blocked |
+
+See [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
+
+## Explicitly deferred
+
+- Gmail write / label modify / send / delete
+- `IEmailFilingService` implementation
+- LegacyBridge / `EmailManagementView` hosting
+- Schema changes

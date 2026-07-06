@@ -124,15 +124,31 @@
                             <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Foreground="#555" />
                         </StackPanel>
 
-                        <!-- Pagination placeholder — hidden in production pilot (real pagination deferred). -->
+                        <!-- Paging: 50-item Gmail blocks -->
                         <StackPanel Grid.Column="1"
                                     Orientation="Horizontal"
                                     Margin="0,0,20,0"
-                                    VerticalAlignment="Center"
-                                    Visibility="{Binding ShowDeferredVisualPlaceholders, Converter={StaticResource BoolToVis}}">
-                            <Button Content="&#x25B6;" Style="{StaticResource ActionButton}" ToolTip="\u05D4\u05E7\u05D5\u05D3\u05DD" IsEnabled="False" />
-                            <TextBlock Text="1 / 3" VerticalAlignment="Center" Margin="4,0" Foreground="#666" />
-                            <Button Content="&#x25C0;" Style="{StaticResource ActionButton}" ToolTip="\u05D4\u05D1\u05D0" IsEnabled="False" />
+                                    VerticalAlignment="Center">
+                            <Button Content="&#x25B6;"
+                                    Command="{Binding LoadPreviousPageCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    ToolTip="50 הקודמים"
+                                    IsEnabled="{Binding HasPreviousPage}" />
+                            <TextBlock Text="{Binding PageInfo}"
+                                       VerticalAlignment="Center"
+                                       Margin="4,0"
+                                       Foreground="#666"
+                                       FontSize="{DynamicResource SiTextSmallFontSize}" />
+                            <Button Content="&#x25C0;"
+                                    Command="{Binding LoadNextPageCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    ToolTip="50 הבאים"
+                                    IsEnabled="{Binding HasNextPage}" />
+                            <Button Content="קבץ לפי label"
+                                    Command="{Binding ToggleGroupByLabelCommand}"
+                                    Style="{StaticResource ActionButton}"
+                                    Margin="8,0,0,0"
+                                    ToolTip="קבץ לפי PrimaryLabel" />
                         </StackPanel>
 
                         <!-- Refresh + calendar toggle + help. -->
@@ -158,55 +174,74 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Project selector + Job Type / Status / User filters + Gmail search + dates. -->
+                    <!-- Filters: search, address, subject, label, link state, optional project -->
                     <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <!--
-                            Shared, cross-application Project Selector (docs/PROJECTS.md §5/§9).
-                            Email HOSTS it rather than owning project selection; selecting a project
-                            publishes it to the shared ICurrentProjectContext, which the Email view
-                            model observes. Gmail search / dates / pagination below stay Email-specific.
-                        -->
                         <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
                                                       CompactMode="True"
                                                       SearchBoxWidth="220"
                                                       VerticalAlignment="Center" />
 
-                        <TextBlock Text="&#x1F50E; Gmail"
+                        <CheckBox Content="סנן לפי פרויקט"
+                                  IsChecked="{Binding EmailList.FilterByCurrentProject}"
+                                  VerticalAlignment="Center"
+                                  Margin="12,0,6,0"
+                                  ToolTip="סינון אופציונלי — ברירת מחדל: כל המיילים" />
+
+                        <TextBlock Text="&#x1F50E;"
                                    VerticalAlignment="Center"
                                    Margin="12,0,6,0"
                                    FontWeight="SemiBold" />
 
-                        <TextBox Width="200"
+                        <TextBox Width="140"
                                  Height="24"
                                  VerticalContentAlignment="Center"
-                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Text="{Binding EmailList.SearchText, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,0,6,0"
-                                 ToolTip="\u05D7\u05D9\u05E4\u05D5\u05E9 \u05D7\u05D5\u05E4\u05E9\u05D9" />
+                                 ToolTip="חיפוש חופשי (Gmail q)" />
 
-                        <DatePicker Width="110"
-                                    Height="24"
-                                    Margin="0,0,6,0"
-                                    ToolTip="\u05DE\u05EA\u05D0\u05E8\u05D9\u05DA"
-                                    IsEnabled="False"
-                                    Visibility="{Binding ShowDeferredVisualPlaceholders, Converter={StaticResource BoolToVis}}" />
-                        <DatePicker Width="110"
-                                    Height="24"
-                                    Margin="0,0,6,0"
-                                    ToolTip="\u05E2\u05D3 \u05EA\u05D0\u05E8\u05D9\u05DA"
-                                    IsEnabled="False"
-                                    Visibility="{Binding ShowDeferredVisualPlaceholders, Converter={StaticResource BoolToVis}}" />
+                        <TextBox Width="120"
+                                 Height="24"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding EmailList.AddressFilter, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,6,0"
+                                 ToolTip="from:/to:" />
 
-                        <Button Content="\u05D7\u05E4\u05E9"
+                        <TextBox Width="120"
+                                 Height="24"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding EmailList.SubjectFilter, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,6,0"
+                                 ToolTip="subject:" />
+
+                        <ComboBox Width="160"
+                                  Height="24"
+                                  ItemsSource="{Binding EmailList.AvailableLabels}"
+                                  SelectedValue="{Binding EmailList.SelectedLabel}"
+                                  SelectedValuePath="Name"
+                                  DisplayMemberPath="Name"
+                                  Margin="0,0,6,0"
+                                  ToolTip="label:" />
+
+                        <ComboBox Width="100"
+                                  Height="24"
+                                  ItemsSource="{Binding EmailList.ProjectLinkFilterOptions}"
+                                  SelectedValue="{Binding EmailList.SelectedProjectLinkFilter}"
+                                  SelectedValuePath="Value"
+                                  DisplayMemberPath="DisplayName"
+                                  Margin="0,0,6,0"
+                                  ToolTip="שיוך לפרויקט" />
+
+                        <Button Content="חפש"
                                 Command="{Binding SearchCommand}"
                                 Style="{StaticResource ActionButton}"
                                 MinWidth="46"
-                                ToolTip="\u05D8\u05E2\u05DF \u05DE\u05D9\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05D4\u05D7\u05D9\u05E4\u05D5\u05E9" />
+                                ToolTip="טען מיילים לפי הסינון" />
 
-                        <Button Content="\u05E0\u05E7\u05D4"
+                        <Button Content="נקה"
                                 Command="{Binding ClearSearchCommand}"
                                 Style="{StaticResource ActionButton}"
                                 MinWidth="46"
-                                ToolTip="\u05E0\u05E7\u05D4 \u05D7\u05D9\u05E4\u05D5\u05E9" />
+                                ToolTip="נקה סינון וטען הכל" />
                     </WrapPanel>
                 </StackPanel>
             </Border>

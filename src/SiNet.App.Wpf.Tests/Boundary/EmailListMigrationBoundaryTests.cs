@@ -24,7 +24,7 @@ public sealed class EmailListMigrationBoundaryTests
 
         Assert.Contains("EmailListView", xaml, StringComparison.Ordinal);
         Assert.Contains("Binding EmailList", xaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding Emails}\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding EmailsView}\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("IEmailGateway", vmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("new EmailManagementView", vmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("LegacyBridge", vmSource, StringComparison.Ordinal);
@@ -65,6 +65,109 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("IEmailInboxQueryService", vmSource, StringComparison.Ordinal);
         Assert.Contains("WorkSurfaceComponentKeys.IsEmailSurface", launcherSource, StringComparison.Ordinal);
         Assert.Contains("IEmailWindowFactory", launcherSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_default_loads_all_emails()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var gatewaySource = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
+
+        Assert.Contains("GetMailboxPageAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("CanLoadEmails() => !IsBusy && _isConnected()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("DefaultMailboxQuery", gatewaySource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_does_not_filter_by_project_by_default()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+
+        Assert.Contains("FilterByCurrentProject", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CanLoadEmails() =>\n        !IsBusy && _currentProject", vmSource, StringComparison.Ordinal);
+        Assert.Contains("OptionalProjectLabel = FilterByCurrentProject", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_can_filter_linked_and_unlinked_emails()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.Contains("EmailProjectLinkFilter.Linked", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("EmailProjectLinkFilter.Unlinked", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("ApplyClientLinkFilter", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_displays_labels_and_groups_by_primary_label()
+    {
+        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.Contains("LabelsDisplay", listXaml, StringComparison.Ordinal);
+        Assert.Contains("PrimaryLabel", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("PropertyGroupDescription(nameof(EmailListRow.PrimaryLabel))", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_search_filters_by_subject_and_address()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+
+        Assert.Contains("SubjectFilter", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("AddressFilter", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("EmailList.SubjectFilter", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailList.AddressFilter", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_paging_uses_page_size_50_with_next_and_previous()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+
+        Assert.Contains("DefaultPageSize", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("_pageTokenStack", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadNextPageCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("LoadPreviousPageCommand", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_filters_reset_to_all_emails()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.Contains("ClearFiltersAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("SelectedProjectLinkFilter = EmailProjectLinkFilter.All", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("FilterByCurrentProject = false", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_does_not_use_legacy_email_window()
+    {
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        Assert.DoesNotContain("new EmailManagementView", vmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("LegacyBridge", vmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_workflow_gaps_documented()
+    {
+        var doc = ReadRepoFile("docs/WORK_SURFACE_WORKFLOW_INTEGRATION.md");
+        Assert.Contains("IEmailFilingService", doc, StringComparison.Ordinal);
+        Assert.Contains("filing write", doc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Email_list_uses_thread_link_query_service()
+    {
+        var sqlSource = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/SqlEmailThreadLinkQueryService.cs");
+        var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailReadServiceCollectionExtensions.cs");
+
+        Assert.Contains("IEmailThreadLinkQueryService", extensions, StringComparison.Ordinal);
+        Assert.Contains("ThreadStatusMapping", sqlSource, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)
