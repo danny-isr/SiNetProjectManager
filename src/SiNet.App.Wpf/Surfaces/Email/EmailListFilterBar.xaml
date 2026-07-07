@@ -41,6 +41,42 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style TargetType="ToggleButton" x:Key="ToggleActionButton">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#CCC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E8F5E9" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#81C784" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
@@ -127,7 +163,7 @@
                         <ToggleButton Content="קבץ label"
                                       IsChecked="{Binding GroupByLabel, Mode=OneWay}"
                                       Command="{Binding ToggleGroupByLabelCommand}"
-                                      Style="{StaticResource ActionButton}" />
+                                      Style="{StaticResource ToggleActionButton}" />
                     </StackPanel>
                 </Grid>
             </Border>
