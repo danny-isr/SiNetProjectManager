@@ -116,7 +116,8 @@ public sealed class GoogleFoundationClosureTests
     [Fact]
     public void Email_window_view_model_keeps_send_and_modify_deferred_pending_policy_decision()
     {
-        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs")
+            + ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowSelectionHandler.cs");
 
         Assert.Contains("ShowDeferredWriteActions => false", source, StringComparison.Ordinal);
         Assert.Contains("DeferredProductionPilotAction", source, StringComparison.Ordinal);

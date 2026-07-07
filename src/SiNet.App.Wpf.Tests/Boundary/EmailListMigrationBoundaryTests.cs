@@ -1,5 +1,6 @@
 using System.IO;
 using Xunit;
+using SiNet.App.Wpf.Tests.Surfaces.Email;
 
 namespace SiNet.App.Wpf.Tests.Boundary;
 
@@ -20,7 +21,7 @@ public sealed class EmailListMigrationBoundaryTests
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("EmailListView", xaml, StringComparison.Ordinal);
         Assert.Contains("Binding EmailList", xaml, StringComparison.Ordinal);
@@ -37,7 +38,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_context_menu_wires_filing_and_status_commands()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var composition = ReadRepoFile("src/SiNet.App.Composition/SiNetCompositionExtensions.cs");
         var v2Graph = ReadRepoFile("SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs");
@@ -59,7 +60,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_view_model_has_no_direct_db_write()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.DoesNotContain("SiNetDbContext", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("SqlEmailFilingService", listVmSource, StringComparison.Ordinal);
@@ -94,7 +95,7 @@ public sealed class EmailListMigrationBoundaryTests
     {
         var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var composerSource = ReadRepoFile("src/SiNet.Application/Abstractions/Email/EmailMailboxQueryComposer.cs");
 
         Assert.Contains("AttachmentCount", cardXaml, StringComparison.Ordinal);
@@ -120,7 +121,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_default_scope_is_inbox_not_all_mail()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var composerSource = ReadRepoFile("src/SiNet.Application/Abstractions/Email/EmailMailboxQueryComposer.cs");
 
         Assert.Contains("EmailMailboxScope.Inbox", listVmSource, StringComparison.Ordinal);
@@ -141,7 +142,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void No_schema_change_or_migration_for_inbox_scope()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var gatewaySource = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
 
         Assert.DoesNotContain("Migration", listVmSource, StringComparison.Ordinal);
@@ -152,7 +153,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_does_not_filter_by_project_by_default()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
         Assert.Contains("ApplyProjectContextAsync", listVmSource, StringComparison.Ordinal);
@@ -163,7 +164,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_can_filter_linked_and_unlinked_emails()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("EmailProjectLinkFilter.Linked", listVmSource, StringComparison.Ordinal);
         Assert.Contains("EmailProjectLinkFilter.Unlinked", listVmSource, StringComparison.Ordinal);
@@ -174,7 +175,7 @@ public sealed class EmailListMigrationBoundaryTests
     public void Email_list_displays_labels_and_collapsible_label_groups()
     {
         var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         Assert.Contains("VisibleLabelChips", cardXaml, StringComparison.Ordinal);
@@ -215,7 +216,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_search_filters_by_subject_and_address()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("SubjectFilter", listVmSource, StringComparison.Ordinal);
@@ -227,11 +228,11 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_paging_uses_page_size_50_with_next_and_previous()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("EmailMailboxQuery.DefaultPageSize", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("_pageTokenStack", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("PageTokenStack", listVmSource, StringComparison.Ordinal);
         Assert.Contains("LoadNextPageCommand", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("LoadPreviousPageCommand", filterBarXaml, StringComparison.Ordinal);
     }
@@ -239,7 +240,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_filters_reset_to_all_emails()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ClearFiltersAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("SelectedProjectLinkFilter = EmailProjectLinkFilter.All", listVmSource, StringComparison.Ordinal);
@@ -301,10 +302,10 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_disconnect_uses_logout_on_auth_service()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("DisconnectCommand", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("_authService.Logout()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("AuthService.Logout()", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -320,7 +321,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_shows_partial_enrichment_warning()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         Assert.Contains("PartialFailure", listVmSource, StringComparison.Ordinal);
@@ -331,7 +332,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_does_not_hide_gmail_results_when_db_enrichment_fails()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("enrichmentWarning", listVmSource, StringComparison.Ordinal);
         Assert.Contains("EmailListLoadState.PartialFailure", listVmSource, StringComparison.Ordinal);
@@ -340,7 +341,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_viewmodel_does_not_write_to_db_directly()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.DoesNotContain("SiNetSQLDbContext", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecuteUpdateAsync", listVmSource, StringComparison.Ordinal);
@@ -350,7 +351,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_viewmodel_does_not_use_legacy_bridge()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.DoesNotContain("LegacyBridge", listVmSource, StringComparison.Ordinal);
     }
@@ -358,7 +359,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_row_actions_use_row_busy_guard_without_parallel_gmail_writes()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ExecuteRowActionAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("_busyRowIds", listVmSource, StringComparison.Ordinal);
@@ -369,7 +370,7 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_row_actions_use_apply_local_email_mutation()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ApplyLocalEmailMutation", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplyClientFilterAfterRowUpdate", listVmSource, StringComparison.Ordinal);

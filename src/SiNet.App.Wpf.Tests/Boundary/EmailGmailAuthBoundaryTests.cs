@@ -1,5 +1,6 @@
 using System.IO;
 using Xunit;
+using SiNet.App.Wpf.Tests.Surfaces.Email;
 
 namespace SiNet.App.Wpf.Tests.Boundary;
 
@@ -9,10 +10,10 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Gmail_disconnect_clears_connected_account_status()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var authSource = ReadRepoFile("src/SiNet.Application/Common/IConnectorAuthService.cs");
 
-        Assert.Contains("_authService.Logout()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("AuthService.Logout()", listVmSource, StringComparison.Ordinal);
         Assert.Contains("void Logout()", authSource, StringComparison.Ordinal);
         Assert.Contains("AccountStatusDisplay", listVmSource, StringComparison.Ordinal);
         Assert.Contains("לא מחובר ל-Gmail", listVmSource, StringComparison.Ordinal);
@@ -21,7 +22,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Gmail_disconnect_clears_email_list()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ClearEmailState", listVmSource, StringComparison.Ordinal);
         Assert.Contains("ReplaceRows([])", listVmSource, StringComparison.Ordinal);
@@ -30,7 +31,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Gmail_disconnect_clears_selected_email_and_preview()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var windowVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
         Assert.Contains("SelectedEmail = null", listVmSource, StringComparison.Ordinal);
@@ -40,11 +41,11 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Gmail_disconnect_clears_paging_tokens()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
-        Assert.Contains("_pageTokenStack.Clear()", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("_nextPageToken = null", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("CurrentPageNumber = 1", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("PageTokenStack.Clear()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("SetNextPageToken(null)", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("SetCurrentPageNumber(1)", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Gmail_reconnect_loads_first_page_from_new_account()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ConnectorLoginOptions", listVmSource, StringComparison.Ordinal);
         Assert.Contains("SkipSilentRestore: true", listVmSource, StringComparison.Ordinal);
@@ -69,7 +70,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Gmail_account_status_displays_connected_email()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("מחובר כ:", listVmSource, StringComparison.Ordinal);
@@ -98,7 +99,7 @@ public sealed class EmailGmailAuthBoundaryTests
     public void Refresh_disabled_when_not_connected()
     {
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("CanRefreshEmails", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("CanRefreshEmails", listVmSource, StringComparison.Ordinal);
@@ -107,7 +108,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Disconnect_does_not_use_legacy_window()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.DoesNotContain("EmailManagementView", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("LegacyBridge", listVmSource, StringComparison.Ordinal);
@@ -116,7 +117,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void No_Gmail_write_operations_added()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.DoesNotContain("SendAsync", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ModifyLabels", listVmSource, StringComparison.Ordinal);
@@ -125,7 +126,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void Connect_gmail_refreshes_account_status_after_success()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("RefreshGmailAccountStatusAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("NotifyAuthProperties", listVmSource, StringComparison.Ordinal);
@@ -145,7 +146,7 @@ public sealed class EmailGmailAuthBoundaryTests
     [Fact]
     public void No_stale_connected_email_after_account_switch()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var windowVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
         Assert.Contains("TryRestoreSessionAsync", listVmSource, StringComparison.Ordinal);

@@ -82,4 +82,24 @@ internal sealed class EmailAccInboxQueryService(IDbContextFactory<SiNetSQLDbCont
             .AnyAsync(cancellationToken)
             .ConfigureAwait(false);
     }
+
+    public async Task<int> CountAttachmentsAsync(
+        string messageUniqueId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(messageUniqueId))
+        {
+            return 0;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        return await (
+                from attachment in db.EmailInboxAttachments.AsNoTracking()
+                join message in db.EmailInboxMessages.AsNoTracking() on attachment.MessageId equals message.Id
+                where message.MessageUniqueId == messageUniqueId
+                select attachment.Id)
+            .CountAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
 }

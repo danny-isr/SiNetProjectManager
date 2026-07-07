@@ -209,6 +209,7 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.Services.EmailIngestion.IEmailPdfRenderer>(sp =>
                 sp.GetRequiredService<WebView2PdfRenderer>());
             services.AddTransient<SiNet.Application.Email.Acc.IEmailAccIngestionExecutor, LegacyEmailAccIngestionExecutor>();
+            services.AddTransient<SiNet.Application.Email.Acc.IEmailAccRecoveryExecutor, LegacyEmailAccRecoveryExecutor>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailMoveToProjectExecutor, LegacyEmailMoveToProjectExecutor>();
             services.AddTransient<IEmailRelevanceService, EmailRelevanceService>();
 

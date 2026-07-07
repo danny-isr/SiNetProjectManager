@@ -15,17 +15,7 @@ public static class EmailAccStatusMapper
     {
         if (cache is null)
         {
-            return new EmailAccInboxStatus(
-                messageUniqueId,
-                null,
-                EmailAccProcessingStatus.NotInDatabase,
-                null,
-                "לא נמצא ב-DB",
-                null,
-                0,
-                0,
-                0,
-                []);
+            return MapWithoutCache(messageUniqueId, reconciliation);
         }
 
         var lockStatus = BuildLockStatus(cache, currentUserLogin);
@@ -194,4 +184,51 @@ public static class EmailAccStatusMapper
 
     public static string ResolveMessageUniqueId(string? internetMessageId, string gmailMessageId) =>
         EmailMessageIdentity.GetMessageUniqueId(internetMessageId, gmailMessageId);
+
+    private static EmailAccInboxStatus MapWithoutCache(
+        string messageUniqueId,
+        AccInboxReconciliationResult? reconciliation)
+    {
+        var attachments = MapAttachments(reconciliation);
+        var existing = attachments.Count(a => a.Presence == EmailAccAttachmentPresence.ExistsInAcc);
+        var missing = attachments.Count(a => a.Presence == EmailAccAttachmentPresence.MissingInAcc);
+        var total = attachments.Count;
+
+        if (reconciliation is null || total == 0)
+        {
+            return new EmailAccInboxStatus(
+                messageUniqueId,
+                null,
+                EmailAccProcessingStatus.NotInDatabase,
+                null,
+                BuildDisplay(EmailAccProcessingStatus.NotInDatabase, new EmailAccLockStatus(false, false, null, null, false), 0, 0, 0),
+                null,
+                0,
+                0,
+                0,
+                attachments);
+        }
+
+        var processingStatus = missing > 0 && existing > 0
+            ? EmailAccProcessingStatus.PartiallyUploaded
+            : missing > 0
+                ? EmailAccProcessingStatus.MissingInAcc
+                : existing > 0
+                    ? EmailAccProcessingStatus.UploadedToAcc
+                    : EmailAccProcessingStatus.PendingUpload;
+
+        var display = BuildDisplay(processingStatus, new EmailAccLockStatus(false, false, null, null, false), existing, missing, total);
+
+        return new EmailAccInboxStatus(
+            messageUniqueId,
+            reconciliation.EmailMessageId > 0 ? reconciliation.EmailMessageId : null,
+            processingStatus,
+            null,
+            display,
+            reconciliation.InboxAccFolderId,
+            total,
+            existing,
+            missing,
+            attachments);
+    }
 }

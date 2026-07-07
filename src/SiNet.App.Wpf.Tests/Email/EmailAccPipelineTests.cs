@@ -153,14 +153,52 @@ public sealed class EmailAccPipelineTests
     }
 
     [Fact]
-    public void Email_list_selection_loads_status_without_uploading_unless_action_requested()
+    public void Reconciliation_without_db_row_maps_acc_truth_not_not_in_db()
+    {
+        var reconciliation = new AccInboxReconciliationResult(
+            5,
+            "proj",
+            "folder",
+            [
+                new AccInboxAttachmentReconciliationItem(
+                    1, 0, "a.pdf", "id1", null, null, null, null, true,
+                    AccInboxAttachmentPresenceStatus.ExistsInAcc, "OK", null, null, false, false, false, new Dictionary<string, string?>()),
+            ]);
+
+        var status = EmailAccStatusMapper.Map("msg@test.com", cache: null, reconciliation, currentUserLogin: null);
+
+        Assert.Equal(EmailAccProcessingStatus.UploadedToAcc, status.ProcessingStatus);
+        Assert.Equal("הועלה ל-ACC Inbox", status.StatusDisplay);
+        Assert.DoesNotContain("לא נמצא ב-DB", status.StatusDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_selection_triggers_passive_acc_ingest_after_details_load()
     {
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var handlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailAccSelectionHandler.cs");
 
-        Assert.Contains("LoadSelectedEmailAccStatusAsync", vmSource, StringComparison.Ordinal);
-        Assert.Contains("LoadAccStatusForRowAsync", listVmSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("TryIngestEmailToAccAsync", vmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", vmSource, StringComparison.Ordinal);
+        Assert.Contains("TryPassiveAccIngestOnSelectionAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("TryPassiveIngestAsync", handlerSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("read-only, no upload", listVmSource, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SyncStatusWithRecovery_declared_on_acc_status_service()
+    {
+        var source = ReadRepoFile("src/SiNet.Application/Email/Acc/IEmailAccStatusService.cs");
+        Assert.Contains("SyncStatusWithRecoveryAsync", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailAccSelectionHandler_extracted_from_list_view_model()
+    {
+        Assert.True(File.Exists(Path.Combine(FindRepoRoot(), "src/SiNet.App.Wpf/Surfaces/Email/EmailAccSelectionHandler.cs")));
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        Assert.Contains("EmailAccSelectionHandler", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteAccRowActionAsync", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

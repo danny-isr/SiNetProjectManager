@@ -15,4 +15,13 @@ public interface IEmailAccStatusService
         int inboxMessageId,
         string? currentUserLogin = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads ACC status and invokes recovery when reconciliation reports missing attachments.
+    /// </summary>
+    Task<EmailAccInboxStatus?> SyncStatusWithRecoveryAsync(
+        string? internetMessageId,
+        string gmailMessageId,
+        string? currentUserLogin = null,
+        CancellationToken cancellationToken = default);
 }

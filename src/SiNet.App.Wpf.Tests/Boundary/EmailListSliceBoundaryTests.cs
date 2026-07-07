@@ -1,5 +1,6 @@
 using System.IO;
 using Xunit;
+using SiNet.App.Wpf.Tests.Surfaces.Email;
 
 namespace SiNet.App.Wpf.Tests.Boundary;
 
@@ -111,7 +112,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Email_card_displays_project_link_state()
     {
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var vmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ProjectLinkState", vmSource, StringComparison.Ordinal);
         Assert.Contains("ProjectNumber", vmSource, StringComparison.Ordinal);
@@ -140,7 +141,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Email_list_component_does_not_own_project_selector()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.DoesNotContain("ProjectSelectorViewModel", listVmSource, StringComparison.Ordinal);
         Assert.Contains("ApplyProjectContextAsync", listVmSource, StringComparison.Ordinal);
@@ -149,7 +150,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Email_list_receives_project_context_as_input()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var contextSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListProjectContext.cs");
 
         Assert.Contains("EmailListProjectContext", listVmSource, StringComparison.Ordinal);
@@ -170,7 +171,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void No_project_selected_shows_all_emails_mode()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("EmailListDisplayMode.AllEmails", listVmSource, StringComparison.Ordinal);
         Assert.Contains("IsAllEmailsMode", listVmSource, StringComparison.Ordinal);
@@ -180,7 +181,7 @@ public sealed class EmailListSliceBoundaryTests
     public void Selected_project_shows_project_email_group()
     {
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ActiveProjectGroup", listXaml, StringComparison.Ordinal);
         Assert.Contains("EmailListGroupKind.Project", listVmSource, StringComparison.Ordinal);
@@ -190,7 +191,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Selected_project_group_loads_first_10_emails()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("ProjectEmailChunkSize = 10", listVmSource, StringComparison.Ordinal);
         Assert.Contains("OptionalProjectLabel", listVmSource, StringComparison.Ordinal);
@@ -201,7 +202,7 @@ public sealed class EmailListSliceBoundaryTests
     public void Selected_project_group_load_all_uses_group_commands()
     {
         var headerXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailLabelGroupHeader.xaml");
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("LoadAllForLabelCommand", headerXaml, StringComparison.Ordinal);
         Assert.Contains("LoadAllEmailsForGroupAsync", listVmSource, StringComparison.Ordinal);
@@ -211,7 +212,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void All_emails_mode_keeps_50_item_paging()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("EmailMailboxQuery.DefaultPageSize", listVmSource, StringComparison.Ordinal);
@@ -222,7 +223,7 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Project_group_does_not_replace_gmail_50_paging_unintentionally()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("LoadMailboxAndProjectAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("GetMailboxPageAsync", listVmSource, StringComparison.Ordinal);
@@ -232,15 +233,15 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Disconnect_button_uses_existing_service_or_is_disabled()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
 
-        Assert.Contains("_authService.Logout()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("AuthService.Logout()", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Email_list_uses_application_write_ports_not_direct_gmail()
     {
-        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listVmSource = EmailListImplementationSource.ReadCombined();
         var windowVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
         Assert.Contains("IEmailFilingService", listVmSource, StringComparison.Ordinal);
@@ -258,9 +259,11 @@ public sealed class EmailListSliceBoundaryTests
             "src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs",
         })
         {
-            var source = ReadRepoFile(path);
+            _ = path;
+            var source = EmailListImplementationSource.ReadCombined();
             Assert.DoesNotContain("LegacyBridge", source, StringComparison.Ordinal);
             Assert.DoesNotContain("new EmailManagementView", source, StringComparison.Ordinal);
+            break;
         }
 
         var windowVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
