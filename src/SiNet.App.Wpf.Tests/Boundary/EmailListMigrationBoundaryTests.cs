@@ -337,6 +337,44 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("EmailListLoadState.PartialFailure", listVmSource, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Email_list_viewmodel_does_not_write_to_db_directly()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.DoesNotContain("SiNetSQLDbContext", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteUpdateAsync", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveChangesAsync", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_viewmodel_does_not_use_legacy_bridge()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.DoesNotContain("LegacyBridge", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_row_actions_use_row_busy_guard_without_parallel_gmail_writes()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.Contains("ExecuteRowActionAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("_busyRowIds", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("_filingService", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("_statusService", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_row_actions_use_apply_local_email_mutation()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.Contains("ApplyLocalEmailMutation", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyClientFilterAfterRowUpdate", listVmSource, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var root = FindRepoRoot();

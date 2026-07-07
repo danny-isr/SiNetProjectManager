@@ -14,6 +14,16 @@
     </UserControl.Resources>
 
     <Grid Margin="0,2">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Setter Property="Opacity" Value="1" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsActionBusy}" Value="True">
+                        <Setter Property="Opacity" Value="0.65" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
@@ -90,6 +100,18 @@
                        TextTrimming="CharacterEllipsis"
                        MaxHeight="18"
                        ToolTip="{Binding Snippet}" />
+
+            <ProgressBar Height="2"
+                         Margin="0,2,0,0"
+                         IsIndeterminate="True"
+                         Visibility="{Binding IsActionBusy, Converter={StaticResource BoolToVis}}" />
+
+            <TextBlock Text="{Binding ActionStatusText, TargetNullValue=מבצע פעולה...}"
+                       Margin="0,2,0,0"
+                       Foreground="#1565C0"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"
+                       FontStyle="Italic"
+                       Visibility="{Binding IsActionBusy, Converter={StaticResource BoolToVis}}" />
 
             <WrapPanel Margin="0,4,0,0">
                 <ItemsControl ItemsSource="{Binding VisibleLabelChips}"

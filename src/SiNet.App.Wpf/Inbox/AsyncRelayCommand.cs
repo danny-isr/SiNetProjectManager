@@ -57,16 +57,28 @@ public sealed class AsyncRelayCommand<T> : ICommand
 {
     private readonly Func<T?, Task> _execute;
     private readonly Func<T?, bool>? _canExecute;
+    private readonly bool _allowConcurrentParameters;
     private bool _isExecuting;
 
-    public AsyncRelayCommand(Func<T?, Task> execute, Func<T?, bool>? canExecute = null)
+    public AsyncRelayCommand(
+        Func<T?, Task> execute,
+        Func<T?, bool>? canExecute = null,
+        bool allowConcurrentParameters = false)
     {
         _execute = execute;
         _canExecute = canExecute;
+        _allowConcurrentParameters = allowConcurrentParameters;
     }
 
-    public bool CanExecute(object? parameter) =>
-        !_isExecuting && (_canExecute?.Invoke(parameter is T t ? t : default) ?? true);
+    public bool CanExecute(object? parameter)
+    {
+        if (!_allowConcurrentParameters && _isExecuting)
+        {
+            return false;
+        }
+
+        return _canExecute?.Invoke(parameter is T t ? t : default) ?? true;
+    }
 
     public async void Execute(object? parameter)
     {
@@ -79,8 +91,12 @@ public sealed class AsyncRelayCommand<T> : ICommand
 
         try
         {
-            _isExecuting = true;
-            RaiseCanExecuteChanged();
+            if (!_allowConcurrentParameters)
+            {
+                _isExecuting = true;
+                RaiseCanExecuteChanged();
+            }
+
             await _execute(typed).ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -89,8 +105,11 @@ public sealed class AsyncRelayCommand<T> : ICommand
         }
         finally
         {
-            _isExecuting = false;
-            RaiseCanExecuteChanged();
+            if (!_allowConcurrentParameters)
+            {
+                _isExecuting = false;
+                RaiseCanExecuteChanged();
+            }
         }
     }
 

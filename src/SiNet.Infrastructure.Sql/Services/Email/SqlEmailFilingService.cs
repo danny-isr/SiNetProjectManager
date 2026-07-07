@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
@@ -59,6 +60,7 @@ public sealed class SqlEmailFilingService(
 
         try
         {
+            var gmailSw = Stopwatch.StartNew();
             var existingProjectLabelIds = await _gmailModify
                 .GetProjectLabelIdsOnMessageAsync(command.GmailMessageId, cancellationToken)
                 .ConfigureAwait(false);
@@ -79,12 +81,17 @@ public sealed class SqlEmailFilingService(
             await _gmailModify
                 .AttachProjectLabelAsync(command.GmailMessageId, labelId, cancellationToken)
                 .ConfigureAwait(false);
+            var gmailMs = gmailSw.ElapsedMilliseconds;
 
+            var dbSw = Stopwatch.StartNew();
             await TrySyncSqlAfterFileAsync(
                 db,
                 command,
                 project.Id,
                 cancellationToken).ConfigureAwait(false);
+            var dbMs = dbSw.ElapsedMilliseconds;
+
+            Debug.WriteLine($"[PERF] EmailFiling FileToProject gmail={gmailMs}ms db={dbMs}ms");
 
             return new EmailFilingResult(true, AssignedProjectId: command.TargetProjectId);
         }
@@ -107,6 +114,7 @@ public sealed class SqlEmailFilingService(
 
         try
         {
+            var gmailSw = Stopwatch.StartNew();
             var labelId = await ResolveProjectLabelIdForUnfileAsync(command, cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(labelId))
             {
@@ -115,7 +123,14 @@ public sealed class SqlEmailFilingService(
                     .ConfigureAwait(false);
             }
 
+            var gmailMs = gmailSw.ElapsedMilliseconds;
+
+            var dbSw = Stopwatch.StartNew();
             await TrySyncSqlAfterUnfileAsync(db, command, cancellationToken).ConfigureAwait(false);
+            var dbMs = dbSw.ElapsedMilliseconds;
+
+            Debug.WriteLine($"[PERF] EmailFiling UnfileFromProject gmail={gmailMs}ms db={dbMs}ms");
+
             return new EmailFilingResult(true);
         }
         catch (Exception ex)

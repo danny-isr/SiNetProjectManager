@@ -136,7 +136,10 @@ public sealed record EmailListRow(
     bool IsFiledToProject = false,
     bool IsFiledToSameProject = false,
     string? FiledProjectLabelPath = null,
-    string? RowBackgroundColor = null)
+    string? RowBackgroundColor = null,
+    bool IsActionBusy = false,
+    string? ActionStatusText = null,
+    string? ActionErrorText = null)
 {
     public const int MaxVisibleLabelChips = 3;
 

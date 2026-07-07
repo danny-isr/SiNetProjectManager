@@ -1049,6 +1049,485 @@ public sealed class EmailListViewModelTests
         Assert.Equal(EmailTriageStatus.Personal, status.LastStatus);
     }
 
+    [Fact]
+    public async Task Email_action_sets_status_message_immediately()
+    {
+        var filing = new DelayingFilingService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+        var actionTask = sut.FileEmailToProjectForTestsAsync(row);
+
+        await WaitUntilAsync(() => sut.StatusMessage.Contains("משייך", StringComparison.Ordinal));
+
+        filing.Release();
+        await actionTask;
+
+        Assert.Contains("הצלחה", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task File_email_sets_row_busy_while_running()
+    {
+        var filing = new DelayingFilingService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+        var actionTask = sut.FileEmailToProjectForTestsAsync(row);
+
+        await WaitUntilAsync(() => sut.FindRowForTests(row.Id)?.IsActionBusy == true);
+
+        filing.Release();
+        await actionTask;
+
+        Assert.False(sut.FindRowForTests(row.Id)?.IsActionBusy);
+    }
+
+    [Fact]
+    public async Task Unfile_email_sets_row_busy_while_running()
+    {
+        var filing = new DelayingFilingService();
+        var gateway = new ActionTestEmailGateway();
+        var sut = CreateWriteCapableSut(gateway, filing);
+        await sut.RefreshPageAsync();
+        var row = sut.Emails.Single() with { IsFiledToProject = true };
+        sut.Emails[0] = row;
+
+        var actionTask = sut.UnfileEmailForTestsAsync(row);
+
+        await WaitUntilAsync(() => sut.FindRowForTests(row.Id)?.IsActionBusy == true);
+
+        filing.ReleaseUnfile();
+        await actionTask;
+
+        Assert.False(sut.FindRowForTests(row.Id)?.IsActionBusy);
+    }
+
+    [Fact]
+    public async Task Mark_personal_sets_row_busy_while_running()
+    {
+        var status = new DelayingStatusService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(status: status);
+        var actionTask = sut.MarkAsPersonalForTestsAsync(row);
+
+        await WaitUntilAsync(() => sut.FindRowForTests(row.Id)?.IsActionBusy == true);
+
+        status.Release();
+        await actionTask;
+    }
+
+    [Fact]
+    public async Task Email_action_disables_duplicate_execution_for_same_row()
+    {
+        var filing = new DelayingFilingService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+        var first = sut.FileEmailToProjectForTestsAsync(row);
+
+        await WaitUntilAsync(() => sut.IsRowActionBusy(row.Id));
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.Equal(1, filing.FileCallCount);
+
+        filing.Release();
+        await first;
+    }
+
+    [Fact]
+    public async Task File_email_success_updates_row_project_state_without_full_reload_when_possible()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new ActionTestEmailGateway();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(gateway, filing);
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+        var updated = sut.FindRowForTests(row.Id);
+        Assert.NotNull(updated);
+        Assert.True(updated.IsFiledToProject);
+        Assert.Equal(EmailProjectLinkState.Linked, updated.ProjectLinkState);
+    }
+
+    [Fact]
+    public async Task Unfile_email_success_updates_row_project_state_without_full_reload_when_possible()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new ActionTestEmailGateway();
+        var sut = CreateWriteCapableSut(gateway, filing);
+        await sut.RefreshPageAsync();
+        var row = sut.Emails.Single() with { IsFiledToProject = true, FiledProjectLabelPath = "פרויקטים_משרד/Tel Aviv/1042 — North" };
+        sut.Emails[0] = row;
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+        var updated = sut.FindRowForTests(row.Id);
+        Assert.NotNull(updated);
+        Assert.False(updated.IsFiledToProject);
+        Assert.Equal(EmailProjectLinkState.Unlinked, updated.ProjectLinkState);
+    }
+
+    [Fact]
+    public async Task Mark_personal_removes_or_updates_only_target_row_when_possible()
+    {
+        var status = new RecordingStatusService();
+        var gateway = new ActionTestEmailGateway();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(gateway, status: status);
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        await sut.MarkAsPersonalForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+        Assert.DoesNotContain(sut.Emails, email => email.Id == row.Id);
+    }
+
+    [Fact]
+    public async Task Email_action_failure_clears_row_busy_and_shows_warning()
+    {
+        var filing = new FailingFilingService("שגיאת בדיקה");
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.False(sut.IsRowActionBusy(row.Id));
+        Assert.NotNull(sut.LoadWarning);
+        Assert.Contains("שגיאת בדיקה", sut.LoadWarning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Email_action_does_not_block_ui_thread()
+    {
+        var filing = new RecordingFilingService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.True(filing.FileCalled);
+    }
+
+    [Fact]
+    public async Task Email_action_does_not_run_duplicate_gmail_operations_for_same_row()
+    {
+        var filing = new DelayingFilingService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+        var first = sut.FileEmailToProjectForTestsAsync(row);
+
+        await WaitUntilAsync(() => filing.FileCallCount == 1);
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.Equal(1, filing.FileCallCount);
+
+        filing.Release();
+        await first;
+    }
+
+    [Fact]
+    public async Task Email_action_logs_or_reports_duration_for_diagnostics()
+    {
+        var filing = new RecordingFilingService();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(filing: filing);
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.NotNull(sut.LastActionDiagnostics);
+        Assert.Contains("service=", sut.LastActionDiagnostics, StringComparison.Ordinal);
+        Assert.Contains("localUpdate=", sut.LastActionDiagnostics, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unfile_email_updates_row_to_unlinked_without_manual_refresh()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+        var updated = sut.FindRowForTests(row.Id);
+        Assert.NotNull(updated);
+        Assert.False(updated.IsFiledToProject);
+        Assert.Equal(EmailProjectLinkState.Unlinked, updated.ProjectLinkState);
+    }
+
+    [Fact]
+    public async Task Unfile_email_removes_project_label_from_local_row()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        var updated = sut.FindRowForTests(row.Id);
+        Assert.NotNull(updated);
+        Assert.DoesNotContain(updated.LabelChipNames ?? [], label => EmailGmailLabelNames.IsProjectLabel(label));
+    }
+
+    [Fact]
+    public async Task Unfile_email_removes_row_from_project_group_when_grouped_by_label()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+
+        Assert.Contains(
+            sut.DisplayGroups,
+            group => group.Emails.Any(email => email.Id == row.Id)
+                && group.LabelDisplayName.Contains("1042", StringComparison.Ordinal));
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.DoesNotContain(
+            sut.DisplayGroups,
+            group => group.Emails.Any(email => email.Id == row.Id)
+                && group.LabelDisplayName.Contains("1042", StringComparison.Ordinal));
+        Assert.Contains(
+            sut.DisplayGroups,
+            group => group.Emails.Any(email => email.Id == row.Id));
+    }
+
+    [Fact]
+    public async Task Unfile_email_removes_row_when_linked_filter_is_active()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        sut.SelectedProjectLinkFilter = EmailProjectLinkFilter.Linked;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.DoesNotContain(sut.Emails, email => email.Id == row.Id);
+    }
+
+    [Fact]
+    public async Task Unfile_email_keeps_row_when_all_filter_is_active_and_marks_unlinked()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        sut.SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        var updated = sut.FindRowForTests(row.Id);
+        Assert.NotNull(updated);
+        Assert.False(updated.IsLinked);
+    }
+
+    [Fact]
+    public async Task File_email_updates_row_to_linked_without_manual_refresh()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new ActionTestEmailGateway();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(gateway, filing);
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+        var updated = sut.FindRowForTests(row.Id);
+        Assert.NotNull(updated);
+        Assert.True(updated.IsFiledToProject);
+        Assert.Equal(EmailProjectLinkState.Linked, updated.ProjectLinkState);
+    }
+
+    [Fact]
+    public async Task File_email_moves_row_to_project_group_when_grouped_by_label()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway(loadFiledInitially: false);
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+
+        Assert.DoesNotContain(
+            sut.DisplayGroups,
+            group => group.Emails.Any(email => email.Id == row.Id)
+                && group.LabelDisplayName.Contains("1042", StringComparison.Ordinal));
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.Contains(
+            sut.DisplayGroups,
+            group => group.Emails.Any(email => email.Id == row.Id)
+                && group.LabelDisplayName.Contains("1042", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task File_email_removes_row_when_unlinked_filter_is_active()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway(loadFiledInitially: false);
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        sut.SelectedProjectLinkFilter = EmailProjectLinkFilter.Unlinked;
+
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.DoesNotContain(sut.Emails, email => email.Id == row.Id);
+    }
+
+    [Fact]
+    public async Task Mark_personal_removes_or_moves_row_without_manual_refresh()
+    {
+        var status = new RecordingStatusService();
+        var gateway = new ActionTestEmailGateway();
+        var (sut, row, _) = await CreateLoadedWriteSutAsync(gateway, status: status);
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        await sut.MarkAsPersonalForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+        Assert.DoesNotContain(sut.Emails, email => email.Id == row.Id);
+    }
+
+    [Fact]
+    public async Task Mark_pending_moves_row_to_pending_group_without_manual_refresh_if_grouped()
+    {
+        var status = new RecordingStatusService();
+        var gateway = new RegroupingActionEmailGateway(loadFiledInitially: false);
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, status: status);
+
+        gateway.ConfigurePendingSummary(row.Id);
+        await sut.MarkAsPendingForTestsAsync(row);
+
+        Assert.Contains(
+            sut.DisplayGroups,
+            group => group.Emails.Any(email => email.Id == row.Id)
+                && string.Equals(group.LabelDisplayName, EmailGmailLabelNames.Pending, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Local_email_mutation_rebuilds_display_groups()
+    {
+        var gateway = new RegroupingActionEmailGateway();
+        var sut = CreateWriteCapableSut(gateway);
+        await sut.RefreshPageAsync();
+        var row = sut.Emails.Single();
+        var groupsBefore = sut.DisplayGroups
+            .Where(group => group.Emails.Any(email => email.Id == row.Id))
+            .Select(group => group.LabelDisplayName)
+            .ToList();
+
+        var unfiled = row with
+        {
+            IsFiledToProject = false,
+            IsFiledToSameProject = false,
+            IsAssigned = false,
+            ProjectLinkState = EmailProjectLinkState.Unlinked,
+            LabelChipNames = [],
+            PrimaryLabel = "ללא label",
+            GroupName = "ללא label",
+        };
+        sut.ApplyLocalEmailMutationForTests(unfiled);
+
+        var groupsAfter = sut.DisplayGroups
+            .Where(group => group.Emails.Any(email => email.Id == row.Id))
+            .Select(group => group.LabelDisplayName)
+            .ToList();
+        Assert.NotEqual(groupsBefore, groupsAfter);
+    }
+
+    [Fact]
+    public async Task Local_email_mutation_preserves_selection_when_row_still_visible()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        sut.SelectedEmail = row;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.NotNull(sut.SelectedEmail);
+        Assert.Equal(row.Id, sut.SelectedEmail.Id);
+        Assert.False(sut.SelectedEmail.IsLinked);
+    }
+
+    [Fact]
+    public async Task Local_email_mutation_clears_selection_when_row_removed()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        sut.SelectedEmail = row;
+        sut.SelectedProjectLinkFilter = EmailProjectLinkFilter.Linked;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.Null(sut.SelectedEmail);
+    }
+
+    [Fact]
+    public async Task No_full_refresh_required_for_basic_ui_state_update()
+    {
+        var filing = new RecordingFilingService();
+        var gateway = new RegroupingActionEmailGateway();
+        var (sut, row, _) = await CreateRegroupingWriteSutAsync(gateway, filing);
+        var pageCallsAfterLoad = gateway.MailboxPageCalls;
+
+        gateway.ConfigureUnfiledSummary(row.Id);
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 3000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+            {
+                throw new TimeoutException("Condition was not met within the timeout.");
+            }
+
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<(EmailListViewModel Sut, EmailListRow Row, RegroupingActionEmailGateway Gateway)> CreateRegroupingWriteSutAsync(
+        RegroupingActionEmailGateway gateway,
+        IEmailFilingService? filing = null,
+        IEmailStatusService? status = null)
+    {
+        var sut = CreateWriteCapableSut(gateway, filing, status);
+        await sut.RefreshPageAsync();
+        return (sut, sut.Emails.Single(), gateway);
+    }
+
+    private static async Task<(EmailListViewModel Sut, EmailListRow Row, ActionTestEmailGateway Gateway)> CreateLoadedWriteSutAsync(
+        ActionTestEmailGateway? gateway = null,
+        IEmailFilingService? filing = null,
+        IEmailStatusService? status = null)
+    {
+        gateway ??= new ActionTestEmailGateway();
+        var sut = CreateWriteCapableSut(gateway, filing, status);
+        await sut.RefreshPageAsync();
+        return (sut, sut.Emails.Single(), gateway);
+    }
+
+    private static EmailListViewModel CreateWriteCapableSut(
+        IEmailGateway gateway,
+        IEmailFilingService? filing = null,
+        IEmailStatusService? status = null,
+        ICurrentProjectContext? project = null,
+        ICurrentUserContext? user = null,
+        IConnectorAuthService? auth = null) =>
+        new(
+            gateway,
+            threadLinkQuery: null,
+            auth ?? new StubAuthService(),
+            filing,
+            status,
+            project ?? new StubCurrentProjectContext(CreateProject()),
+            user ?? new StubCurrentUser(7));
+
     private static EmailListViewModel CreateWriteCapableSut(
         IEmailFilingService? filing = null,
         IEmailStatusService? status = null,
@@ -1536,11 +2015,11 @@ public sealed class EmailListViewModelTests
             Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
     }
 
-    private sealed class PagingEmailGateway : IEmailGateway
+    private class PagingEmailGateway : IEmailGateway
     {
         public bool FailOnSecondPage { get; set; }
 
-        public int MailboxPageCalls { get; private set; }
+        public int MailboxPageCalls { get; protected set; }
 
         public int UnreadCountCalls { get; private set; }
 
@@ -1565,13 +2044,13 @@ public sealed class EmailListViewModelTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<EmailSummary>>([]);
 
-        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+        public virtual Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
             Task.FromResult<EmailSummary?>(null);
 
-        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+        public virtual Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
             Task.FromResult<EmailMessageDetails?>(null);
 
-        public Task<EmailMailboxPage> GetMailboxPageAsync(
+        public virtual Task<EmailMailboxPage> GetMailboxPageAsync(
             EmailMailboxQuery query,
             string? pageToken = null,
             CancellationToken cancellationToken = default)
@@ -1600,7 +2079,7 @@ public sealed class EmailListViewModelTests
             true));
         }
 
-        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+        public virtual Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
 
         public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
@@ -1613,7 +2092,7 @@ public sealed class EmailListViewModelTests
         }
     }
 
-    private sealed class UnreadPagingEmailGateway : IEmailGateway
+    private class UnreadPagingEmailGateway : IEmailGateway
     {
         public bool ReturnUnreadRows { get; set; } = true;
 
@@ -1727,6 +2206,8 @@ public sealed class EmailListViewModelTests
 
         public bool UnfileCalled { get; private set; }
 
+        public int FileCallCount { get; private set; }
+
         public FileEmailToProjectCommand? LastFileCommand { get; private set; }
 
         public UnfileEmailCommand? LastUnfileCommand { get; private set; }
@@ -1736,6 +2217,7 @@ public sealed class EmailListViewModelTests
             CancellationToken cancellationToken = default)
         {
             FileCalled = true;
+            FileCallCount++;
             LastFileCommand = command;
             return Task.FromResult(new EmailFilingResult(true, AssignedProjectId: command.TargetProjectId));
         }
@@ -1747,6 +2229,179 @@ public sealed class EmailListViewModelTests
             UnfileCalled = true;
             LastUnfileCommand = command;
             return Task.FromResult(new EmailFilingResult(true));
+        }
+    }
+
+    private sealed class DelayingFilingService : IEmailFilingService
+    {
+        private readonly TaskCompletionSource _fileGate = new();
+        private readonly TaskCompletionSource _unfileGate = new();
+
+        public int FileCallCount { get; private set; }
+
+        public int UnfileCallCount { get; private set; }
+
+        public void Release() => _fileGate.TrySetResult();
+
+        public void ReleaseUnfile() => _unfileGate.TrySetResult();
+
+        public async Task<EmailFilingResult> FileToProjectAsync(
+            FileEmailToProjectCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            FileCallCount++;
+            await _fileGate.Task.ConfigureAwait(true);
+            return new EmailFilingResult(true, AssignedProjectId: command.TargetProjectId);
+        }
+
+        public async Task<EmailFilingResult> UnfileFromProjectAsync(
+            UnfileEmailCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            UnfileCallCount++;
+            await _unfileGate.Task.ConfigureAwait(true);
+            return new EmailFilingResult(true);
+        }
+    }
+
+    private sealed class FailingFilingService(string errorMessage) : IEmailFilingService
+    {
+        public Task<EmailFilingResult> FileToProjectAsync(
+            FileEmailToProjectCommand command,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailFilingResult(false, errorMessage));
+
+        public Task<EmailFilingResult> UnfileFromProjectAsync(
+            UnfileEmailCommand command,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailFilingResult(false, errorMessage));
+    }
+
+    private sealed class DelayingStatusService : IEmailStatusService
+    {
+        private readonly TaskCompletionSource _gate = new();
+
+        public void Release() => _gate.TrySetResult();
+
+        public async Task<EmailStatusResult> SetStatusAsync(
+            SetEmailStatusCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            await _gate.Task.ConfigureAwait(true);
+            return new EmailStatusResult(true);
+        }
+    }
+
+    private class ActionTestEmailGateway : PagingEmailGateway
+    {
+        private readonly Dictionary<string, EmailSummary> _summariesById = new(StringComparer.Ordinal);
+
+        public ActionTestEmailGateway()
+        {
+            ConfigureFiledSummary("msg-1");
+        }
+
+        public void ConfigureFiledSummary(string messageId)
+        {
+            _summariesById[messageId] = new EmailSummary(
+                messageId,
+                "thread-1",
+                EmailAddress.CreateOrFallback("a@example.com"),
+                "Hello",
+                DateTimeOffset.UtcNow,
+                0,
+                InternetMessageId: "<abc@mail.com>",
+                LabelNames: ["INBOX", "פרויקטים_משרד/Tel Aviv/1042 — North"]);
+        }
+
+        public void ConfigureUnfiledSummary(string messageId)
+        {
+            _summariesById[messageId] = new EmailSummary(
+                messageId,
+                "thread-1",
+                EmailAddress.CreateOrFallback("a@example.com"),
+                "Hello",
+                DateTimeOffset.UtcNow,
+                0,
+                InternetMessageId: "<abc@mail.com>",
+                LabelNames: ["INBOX"]);
+        }
+
+        public void ConfigurePendingSummary(string messageId)
+        {
+            _summariesById[messageId] = new EmailSummary(
+                messageId,
+                "thread-1",
+                EmailAddress.CreateOrFallback("a@example.com"),
+                "Hello",
+                DateTimeOffset.UtcNow,
+                0,
+                InternetMessageId: "<abc@mail.com>",
+                LabelNames: ["INBOX", EmailGmailLabelNames.Pending],
+                PrimaryLabel: EmailGmailLabelNames.Pending);
+        }
+
+        public override Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_summariesById.TryGetValue(messageId, out var summary) ? summary : null);
+    }
+
+    private sealed class RegroupingActionEmailGateway : ActionTestEmailGateway
+    {
+        public RegroupingActionEmailGateway(bool loadFiledInitially = true)
+        {
+            LoadFiledInitially = loadFiledInitially;
+            if (loadFiledInitially)
+            {
+                ConfigureFiledSummary("msg-1");
+            }
+            else
+            {
+                ConfigureUnfiledSummary("msg-1");
+            }
+        }
+
+        public bool LoadFiledInitially { get; }
+
+        public override Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<GmailLabelInfo> labels =
+            [
+                new GmailLabelInfo("INBOX", "INBOX"),
+                new GmailLabelInfo("Label_Project", "פרויקטים_משרד/Tel Aviv/1042 — North"),
+                new GmailLabelInfo("Label_Pending", EmailGmailLabelNames.Pending),
+            ];
+            return Task.FromResult(labels);
+        }
+
+        public override Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            MailboxPageCalls++;
+            var labelNames = LoadFiledInitially
+                ? new[] { "INBOX", "פרויקטים_משרד/Tel Aviv/1042 — North" }
+                : new[] { "INBOX" };
+            var primaryLabel = LoadFiledInitially
+                ? "פרויקטים_משרד/Tel Aviv/1042 — North"
+                : "INBOX";
+
+            return Task.FromResult(new EmailMailboxPage(
+            [
+                new EmailSummary(
+                    "msg-1",
+                    "thread-1",
+                    EmailAddress.CreateOrFallback("a@example.com"),
+                    "Hello",
+                    DateTimeOffset.UtcNow,
+                    0,
+                    InternetMessageId: "<abc@mail.com>",
+                    LabelNames: labelNames,
+                    PrimaryLabel: primaryLabel),
+            ],
+            query.PageSize,
+            null,
+            false));
         }
     }
 

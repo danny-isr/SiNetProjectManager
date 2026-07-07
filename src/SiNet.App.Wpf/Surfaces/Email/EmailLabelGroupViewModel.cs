@@ -178,6 +178,36 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         return true;
     }
 
+    internal bool RemoveEmailById(string messageId)
+    {
+        if (string.IsNullOrWhiteSpace(messageId))
+        {
+            return false;
+        }
+
+        var removed = false;
+        for (var index = Emails.Count - 1; index >= 0; index--)
+        {
+            if (string.Equals(Emails[index].Id, messageId, StringComparison.Ordinal))
+            {
+                Emails.RemoveAt(index);
+                removed = true;
+            }
+        }
+
+        if (_seenMessageIds.Remove(messageId))
+        {
+            removed = true;
+        }
+
+        if (removed)
+        {
+            NotifyHeaderChanged();
+        }
+
+        return removed;
+    }
+
     internal void ResetPagingState()
     {
         if (IsProjectGroup)

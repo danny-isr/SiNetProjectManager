@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -62,6 +63,8 @@ public sealed class EmailListViewModel : ObservableObject
     private EmailLabelGroupViewModel? _projectGroup;
     private bool _hasLabelGroups;
     private ICollectionView? _emailsView;
+    private readonly HashSet<string> _busyRowIds = new(StringComparer.Ordinal);
+    private string? _lastActionDiagnostics;
 
     public EmailListViewModel()
         : this(new DesignEmailListGateway(), threadLinkQuery: null, new DesignAuthService())
@@ -113,11 +116,11 @@ public sealed class EmailListViewModel : ObservableObject
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync, () => !IsBusy);
         ToggleGroupByLabelCommand = new RelayCommand(_ => ToggleGroupByLabel());
         ToggleAttachmentsOnlyCommand = new AsyncRelayCommand(ToggleAttachmentsOnlyAsync, CanLoadEmails);
-        FileEmailToProjectCommand = new AsyncRelayCommand<EmailListRow>(FileEmailToProjectAsync, CanFileEmailToProject);
-        UnfileEmailCommand = new AsyncRelayCommand<EmailListRow>(UnfileEmailAsync, CanUnfileEmail);
-        MarkAsPendingCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Pending), CanSetEmailStatus);
-        MarkAsPersonalCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Personal), CanSetEmailStatus);
-        MarkAsIrrelevantCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Irrelevant), CanSetEmailStatus);
+        FileEmailToProjectCommand = new AsyncRelayCommand<EmailListRow>(FileEmailToProjectAsync, CanFileEmailToProject, allowConcurrentParameters: true);
+        UnfileEmailCommand = new AsyncRelayCommand<EmailListRow>(UnfileEmailAsync, CanUnfileEmail, allowConcurrentParameters: true);
+        MarkAsPendingCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Pending), CanSetEmailStatus, allowConcurrentParameters: true);
+        MarkAsPersonalCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Personal), CanSetEmailStatus, allowConcurrentParameters: true);
+        MarkAsIrrelevantCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Irrelevant), CanSetEmailStatus, allowConcurrentParameters: true);
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         DisconnectCommand = new AsyncRelayCommand(DisconnectGmailAsync, () => IsConnected && !IsBusy);
 
@@ -309,6 +312,12 @@ public sealed class EmailListViewModel : ObservableObject
             }
         }
     }
+
+    internal string? LastActionDiagnostics => _lastActionDiagnostics;
+
+    internal bool IsRowActionBusy(string rowId) => _busyRowIds.Contains(rowId);
+
+    internal EmailListRow? FindRowForTests(string rowId) => FindRowById(rowId);
 
     public string SearchText
     {
@@ -592,7 +601,7 @@ public sealed class EmailListViewModel : ObservableObject
         && (_currentUser?.UserId ?? 0) > 0;
 
     private bool CanExecuteWriteAction(EmailListRow? row) =>
-        row is not null && IsConnected && !IsBusy;
+        row is not null && IsConnected && !_busyRowIds.Contains(row.Id);
 
     /// <summary>Hebrew tooltip when a context menu action is disabled; null when enabled.</summary>
     public string? GetContextMenuDisabledReason(EmailListRow? row, EmailContextMenuAction action)
@@ -632,6 +641,11 @@ public sealed class EmailListViewModel : ObservableObject
         if (!IsConnected)
         {
             return "חבר Gmail לפני ביצוע פעולה.";
+        }
+
+        if (row is not null && _busyRowIds.Contains(row.Id))
+        {
+            return "פעולה כבר רצה על מייל זה.";
         }
 
         if (IsBusy)
@@ -753,35 +767,24 @@ public sealed class EmailListViewModel : ObservableObject
             return;
         }
 
-        IsBusy = true;
-        try
-        {
-            var result = await _filingService.FileToProjectAsync(new FileEmailToProjectCommand(
-                project.ProjectId,
-                actingUserId.Value,
-                row.Id,
-                row.InboxMessageId,
-                row.ThreadId,
-                row.InternetMessageId)).ConfigureAwait(true);
-
-            if (!result.Succeeded)
+        await ExecuteRowActionAsync(
+            row,
+            startingStatusMessage: "משייך מייל לפרויקט...",
+            rowStatusText: "משייך לפרויקט...",
+            successStatusMessage: "המייל שויך לפרויקט בהצלחה.",
+            serviceCall: async () =>
             {
-                LoadWarning = result.ErrorMessage ?? "שיוך לפרויקט נכשל.";
-                return;
-            }
-
-            LoadWarning = null;
-            StatusMessage = "המייל שויך לפרויקט בהצלחה.";
-            await RefreshPageAsync().ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            LoadWarning = $"שיוך לפרויקט נכשל: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+                var result = await _filingService!.FileToProjectAsync(new FileEmailToProjectCommand(
+                    project.ProjectId,
+                    actingUserId.Value,
+                    row.Id,
+                    row.InboxMessageId,
+                    row.ThreadId,
+                    row.InternetMessageId)).ConfigureAwait(true);
+                return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט נכשל.");
+            },
+            onSuccessLocalUpdate: currentRow => RefreshRowAfterFileAsync(currentRow, project),
+            failureMessagePrefix: "שיוך לפרויקט נכשל").ConfigureAwait(true);
     }
 
     private async Task UnfileEmailAsync(EmailListRow? row)
@@ -811,35 +814,24 @@ public sealed class EmailListViewModel : ObservableObject
             return;
         }
 
-        IsBusy = true;
-        try
-        {
-            var result = await _filingService.UnfileFromProjectAsync(new UnfileEmailCommand(
-                actingUserId.Value,
-                row.Id,
-                row.InboxMessageId,
-                row.ThreadId,
-                row.InternetMessageId,
-                row.FiledProjectLabelPath)).ConfigureAwait(true);
-
-            if (!result.Succeeded)
+        await ExecuteRowActionAsync(
+            row,
+            startingStatusMessage: "מבטל שיוך מייל...",
+            rowStatusText: "מבטל שיוך...",
+            successStatusMessage: "שיוך המייל לפרויקט בוטל.",
+            serviceCall: async () =>
             {
-                LoadWarning = result.ErrorMessage ?? "ביטול שיוך נכשל.";
-                return;
-            }
-
-            LoadWarning = null;
-            StatusMessage = "שיוך המייל לפרויקט בוטל.";
-            await RefreshPageAsync().ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            LoadWarning = $"ביטול שיוך נכשל: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+                var result = await _filingService!.UnfileFromProjectAsync(new UnfileEmailCommand(
+                    actingUserId.Value,
+                    row.Id,
+                    row.InboxMessageId,
+                    row.ThreadId,
+                    row.InternetMessageId,
+                    row.FiledProjectLabelPath)).ConfigureAwait(true);
+                return (result.Succeeded, result.ErrorMessage ?? "ביטול שיוך נכשל.");
+            },
+            onSuccessLocalUpdate: RefreshRowAfterUnfileAsync,
+            failureMessagePrefix: "ביטול שיוך נכשל").ConfigureAwait(true);
     }
 
     private async Task SetEmailStatusAsync(EmailListRow? row, EmailTriageStatus status)
@@ -863,59 +855,565 @@ public sealed class EmailListViewModel : ObservableObject
             return;
         }
 
-        IsBusy = true;
+        var (startingMessage, rowStatusText, successMessage) = status switch
+        {
+            EmailTriageStatus.Pending => ("מסמן מייל כממתין לטיפול...", "מסמן כממתין...", "המייל סומן כממתין לטיפול."),
+            EmailTriageStatus.Personal => ("מסמן מייל כאישי...", "מסמן כאישי...", "המייל סומן כאישי."),
+            EmailTriageStatus.Irrelevant => ("מסמן מייל כלא רלוונטי...", "מסמן כלא רלוונטי...", "המייל סומן כלא רלוונטי."),
+            _ => ("מעדכן סטטוס מייל...", "מעדכן סטטוס...", "סטטוס המייל עודכן."),
+        };
+
+        var removeOnSuccess = status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant;
+
+        await ExecuteRowActionAsync(
+            row,
+            startingStatusMessage: startingMessage,
+            rowStatusText: rowStatusText,
+            successStatusMessage: successMessage,
+            serviceCall: async () =>
+            {
+                var result = await _statusService!.SetStatusAsync(new SetEmailStatusCommand(
+                    row.Id,
+                    row.ThreadId,
+                    status,
+                    actingUserId.Value,
+                    row.InboxMessageId,
+                    row.ThreadUniqueId)).ConfigureAwait(true);
+                return (result.Succeeded, result.ErrorMessage ?? "עדכון סטטוס נכשל.");
+            },
+            onSuccessLocalUpdate: currentRow => RefreshRowAfterStatusAsync(currentRow, status),
+            failureMessagePrefix: "עדכון סטטוס נכשל",
+            removeRowOnSuccess: removeOnSuccess).ConfigureAwait(true);
+    }
+
+    private async Task ExecuteRowActionAsync(
+        EmailListRow row,
+        string startingStatusMessage,
+        string rowStatusText,
+        string successStatusMessage,
+        Func<Task<(bool Succeeded, string? ErrorMessage)>> serviceCall,
+        Func<EmailListRow, Task<EmailListRow?>> onSuccessLocalUpdate,
+        string failureMessagePrefix,
+        bool removeRowOnSuccess = false)
+    {
+        if (_busyRowIds.Contains(row.Id))
+        {
+            return;
+        }
+
+        _busyRowIds.Add(row.Id);
+        var totalSw = Stopwatch.StartNew();
+        long serviceMs = 0;
+        long localUpdateMs = 0;
+        long refreshMs = 0;
+
         try
         {
-            var result = await _statusService.SetStatusAsync(new SetEmailStatusCommand(
-                row.Id,
-                row.ThreadId,
-                status,
-                actingUserId.Value,
-                row.InboxMessageId,
-                row.ThreadUniqueId)).ConfigureAwait(true);
+            StatusMessage = startingStatusMessage;
+            SetRowActionState(FindRowById(row.Id) ?? row, busy: true, statusText: rowStatusText);
+            RaiseCommandStates();
 
-            if (!result.Succeeded)
+            var serviceSw = Stopwatch.StartNew();
+            var (succeeded, errorMessage) = await serviceCall().ConfigureAwait(true);
+            serviceMs = serviceSw.ElapsedMilliseconds;
+
+            if (!succeeded)
             {
-                LoadWarning = result.ErrorMessage ?? "עדכון סטטוס נכשל.";
+                LoadWarning = errorMessage ?? $"{failureMessagePrefix}.";
+                var current = FindRowById(row.Id) ?? row;
+                SetRowActionState(current, busy: false, statusText: null, errorText: LoadWarning);
                 return;
             }
 
             LoadWarning = null;
-            StatusMessage = status switch
-            {
-                EmailTriageStatus.Pending => "המייל סומן כממתין לטיפול.",
-                EmailTriageStatus.Personal => "המייל סומן כאישי.",
-                EmailTriageStatus.Irrelevant => "המייל סומן כלא רלוונטי.",
-                _ => "סטטוס המייל עודכן.",
-            };
 
-            if (status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant)
+            var localSw = Stopwatch.StartNew();
+            var updatedRow = await onSuccessLocalUpdate(row).ConfigureAwait(true);
+            localUpdateMs = localSw.ElapsedMilliseconds;
+
+            if (updatedRow is null)
             {
-                RemoveRowFromDisplay(row);
+                StatusMessage = "מרענן רשימה...";
+                var refreshSw = Stopwatch.StartNew();
+                await RefreshPageAsync().ConfigureAwait(true);
+                refreshMs = refreshSw.ElapsedMilliseconds;
+                StatusMessage = successStatusMessage;
+                return;
             }
 
-            await RefreshPageAsync().ConfigureAwait(true);
+            var clearedRow = updatedRow with
+            {
+                IsActionBusy = false,
+                ActionStatusText = null,
+                ActionErrorText = null,
+            };
+
+            if (removeRowOnSuccess)
+            {
+                RemoveRowFromDisplay(clearedRow);
+            }
+            else
+            {
+                ApplyLocalEmailMutation(clearedRow);
+            }
+
+            StatusMessage = successStatusMessage;
         }
         catch (Exception ex)
         {
-            LoadWarning = $"עדכון סטטוס נכשל: {ex.Message}";
+            LoadWarning = $"{failureMessagePrefix}: {ex.Message}";
+            var current = FindRowById(row.Id) ?? row;
+            SetRowActionState(current, busy: false, statusText: null, errorText: LoadWarning);
         }
         finally
         {
-            IsBusy = false;
+            _busyRowIds.Remove(row.Id);
+            _lastActionDiagnostics =
+                $"total={totalSw.ElapsedMilliseconds}ms service={serviceMs}ms localUpdate={localUpdateMs}ms refresh={refreshMs}ms";
+            Debug.WriteLine($"[PERF] EmailAction row={row.Id} {_lastActionDiagnostics}");
+            RaiseCommandStates();
         }
+    }
+
+    private void SetRowActionState(
+        EmailListRow row,
+        bool busy,
+        string? statusText,
+        string? errorText = null)
+    {
+        var updated = row with
+        {
+            IsActionBusy = busy,
+            ActionStatusText = busy ? statusText : null,
+            ActionErrorText = busy ? errorText : null,
+        };
+        ReplaceRowInDisplay(updated);
+    }
+
+    private EmailListRow? FindRowById(string rowId)
+    {
+        foreach (var email in Emails)
+        {
+            if (string.Equals(email.Id, rowId, StringComparison.Ordinal))
+            {
+                return email;
+            }
+        }
+
+        foreach (var flatRow in FlatDisplayEmails)
+        {
+            if (string.Equals(flatRow.Id, rowId, StringComparison.Ordinal))
+            {
+                return flatRow;
+            }
+        }
+
+        if (_projectGroup is not null)
+        {
+            foreach (var email in _projectGroup.Emails)
+            {
+                if (string.Equals(email.Id, rowId, StringComparison.Ordinal))
+                {
+                    return email;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void ReplaceRowInDisplay(EmailListRow updated)
+    {
+        RunOnUiThread(() => ReplaceRowInDisplayCore(updated));
+    }
+
+    private void ReplaceRowInDisplayCore(EmailListRow updated)
+    {
+        var id = updated.Id;
+        var replaced = false;
+
+        for (var index = 0; index < Emails.Count; index++)
+        {
+            if (string.Equals(Emails[index].Id, id, StringComparison.Ordinal))
+            {
+                Emails[index] = updated;
+                replaced = true;
+            }
+        }
+
+        for (var index = 0; index < FlatDisplayEmails.Count; index++)
+        {
+            if (string.Equals(FlatDisplayEmails[index].Id, id, StringComparison.Ordinal))
+            {
+                FlatDisplayEmails[index] = updated;
+                replaced = true;
+            }
+        }
+
+        foreach (var group in DisplayGroups)
+        {
+            for (var index = 0; index < group.Emails.Count; index++)
+            {
+                if (string.Equals(group.Emails[index].Id, id, StringComparison.Ordinal))
+                {
+                    group.Emails[index] = updated;
+                    replaced = true;
+                }
+            }
+        }
+
+        if (_projectGroup is not null)
+        {
+            for (var index = 0; index < _projectGroup.Emails.Count; index++)
+            {
+                if (string.Equals(_projectGroup.Emails[index].Id, id, StringComparison.Ordinal))
+                {
+                    _projectGroup.Emails[index] = updated;
+                    replaced = true;
+                }
+            }
+        }
+
+        if (string.Equals(SelectedEmail?.Id, id, StringComparison.Ordinal))
+        {
+            SelectedEmail = updated;
+        }
+
+        if (replaced)
+        {
+            RaiseCommandStates();
+        }
+    }
+
+    private void ApplyLocalEmailMutation(EmailListRow updated)
+    {
+        RunOnUiThread(() => ApplyLocalEmailMutationCore(updated));
+    }
+
+    private void ApplyLocalEmailMutationCore(EmailListRow updated)
+    {
+        var shouldRemove = SelectedProjectLinkFilter switch
+        {
+            EmailProjectLinkFilter.Linked => !updated.IsLinked,
+            EmailProjectLinkFilter.Unlinked => updated.IsLinked,
+            _ => false,
+        };
+
+        if (shouldRemove)
+        {
+            RemoveRowFromDisplayCore(updated);
+            RebindSelectionAfterRemoval(updated.Id);
+            RaiseCommandStates();
+            return;
+        }
+
+        UpdateEmailInSourceCollection(updated);
+        SyncProjectGroupMembership(updated);
+        RebuildDisplayGroups();
+        RebindSelectionAfterMutation(updated.Id);
+        RaiseCommandStates();
+    }
+
+    private void UpdateEmailInSourceCollection(EmailListRow updated)
+    {
+        for (var index = 0; index < Emails.Count; index++)
+        {
+            if (string.Equals(Emails[index].Id, updated.Id, StringComparison.Ordinal))
+            {
+                Emails[index] = updated;
+                return;
+            }
+        }
+    }
+
+    private void SyncProjectGroupMembership(EmailListRow updated)
+    {
+        if (_projectGroup is null)
+        {
+            return;
+        }
+
+        if (updated.IsFiledToSameProject)
+        {
+            _projectGroup.TryAddEmail(updated);
+            return;
+        }
+
+        _projectGroup.RemoveEmailById(updated.Id);
+    }
+
+    private void RebindSelectionAfterMutation(string rowId)
+    {
+        if (!string.Equals(SelectedEmail?.Id, rowId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SelectedEmail = FindVisibleRowById(rowId);
+    }
+
+    private void RebindSelectionAfterRemoval(string rowId)
+    {
+        if (!string.Equals(SelectedEmail?.Id, rowId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SelectedEmail = FlatDisplayEmails.FirstOrDefault()
+            ?? _projectGroup?.Emails.FirstOrDefault()
+            ?? Emails.FirstOrDefault();
+    }
+
+    private EmailListRow? FindVisibleRowById(string rowId)
+    {
+        var fromFlat = FlatDisplayEmails.FirstOrDefault(row =>
+            string.Equals(row.Id, rowId, StringComparison.Ordinal));
+        if (fromFlat is not null)
+        {
+            return fromFlat;
+        }
+
+        foreach (var group in DisplayGroups)
+        {
+            var fromGroup = group.Emails.FirstOrDefault(row =>
+                string.Equals(row.Id, rowId, StringComparison.Ordinal));
+            if (fromGroup is not null)
+            {
+                return fromGroup;
+            }
+        }
+
+        return Emails.FirstOrDefault(row => string.Equals(row.Id, rowId, StringComparison.Ordinal));
+    }
+
+    private async Task<EmailListRow?> RefreshRowAfterFileAsync(EmailListRow row, ProjectSummaryDto project)
+    {
+        var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
+        if (refreshed is null || !refreshed.IsFiledToProject)
+        {
+            return BuildOptimisticFiledRow(row, project);
+        }
+
+        return refreshed with
+        {
+            ProjectId = project.ProjectId,
+            ProjectNumber = project.ProjectNumber,
+            ProjectName = project.ProjectName,
+            ProjectDisplay = $"{project.ProjectNumber} — {project.ProjectName}",
+            AssignedProjectName = $"{project.ProjectNumber} — {project.ProjectName}",
+            IsFiledToProject = true,
+            IsFiledToSameProject = true,
+            IsAssigned = true,
+            ProjectLinkState = EmailProjectLinkState.Linked,
+            FiledProjectLabelPath = refreshed.FiledProjectLabelPath
+                ?? $"{EmailGmailLabelNames.RootLabel}/{project.PlaceName ?? string.Empty}/{project.ProjectNumber} — {project.ProjectName}",
+        };
+    }
+
+    private async Task<EmailListRow?> RefreshRowAfterUnfileAsync(EmailListRow row)
+    {
+        var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
+        return refreshed ?? BuildOptimisticUnfiledRow(row);
+    }
+
+    private async Task<EmailListRow?> RefreshRowAfterStatusAsync(EmailListRow row, EmailTriageStatus status)
+    {
+        if (status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant)
+        {
+            return row;
+        }
+
+        var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
+        return refreshed ?? BuildOptimisticStatusRow(row, status);
+    }
+
+    private async Task<EmailListRow?> RefreshRowFromGmailAsync(EmailListRow row)
+    {
+        var summary = await _emailGateway.GetByIdAsync(row.Id).ConfigureAwait(true);
+        if (summary is null)
+        {
+            return null;
+        }
+
+        var (rows, _) = await MapSummariesAsync([summary]).ConfigureAwait(true);
+        return rows.Count > 0 ? rows[0] : null;
+    }
+
+    private static EmailListRow BuildOptimisticFiledRow(EmailListRow row, ProjectSummaryDto project)
+    {
+        var location = project.PlaceName ?? string.Empty;
+        var projectLabelPath = $"{EmailGmailLabelNames.RootLabel}/{location}/{project.ProjectNumber} — {project.ProjectName}";
+        var labelChipNames = row.LabelChipNames?.ToList() ?? [];
+        if (!labelChipNames.Contains(projectLabelPath, StringComparer.OrdinalIgnoreCase))
+        {
+            labelChipNames.Add(projectLabelPath);
+        }
+
+        var filed = row with
+        {
+            IsFiledToProject = true,
+            IsFiledToSameProject = true,
+            IsAssigned = true,
+            ProjectLinkState = EmailProjectLinkState.Linked,
+            ProjectId = project.ProjectId,
+            ProjectNumber = project.ProjectNumber,
+            ProjectName = project.ProjectName,
+            ProjectDisplay = $"{project.ProjectNumber} — {project.ProjectName}",
+            AssignedProjectName = $"{project.ProjectNumber} — {project.ProjectName}",
+            FiledProjectLabelPath = projectLabelPath,
+            RowBackgroundColor = "#C8E6C9",
+        };
+
+        return ApplyLabelDisplayFields(filed, labelChipNames);
+    }
+
+    private static EmailListRow BuildOptimisticUnfiledRow(EmailListRow row)
+    {
+        var labelChipNames = row.LabelChipNames?
+            .Where(static label => !EmailGmailLabelNames.IsProjectLabel(label))
+            .ToList() ?? [];
+
+        var unfiled = row with
+        {
+            IsFiledToProject = false,
+            IsFiledToSameProject = false,
+            IsAssigned = false,
+            ProjectLinkState = EmailProjectLinkState.Unlinked,
+            ProjectId = null,
+            ProjectNumber = null,
+            ProjectName = null,
+            ProjectDisplay = "לא משויך",
+            AssignedProjectName = null,
+            FiledProjectLabelPath = null,
+            RowBackgroundColor = ResolveOptimisticRowBackground(labelChipNames, isFiledToProject: false, linkedProjectId: null),
+        };
+
+        return ApplyLabelDisplayFields(unfiled, labelChipNames);
+    }
+
+    private static EmailListRow BuildOptimisticStatusRow(EmailListRow row, EmailTriageStatus status)
+    {
+        var statusLabel = status switch
+        {
+            EmailTriageStatus.Pending => EmailGmailLabelNames.Pending,
+            EmailTriageStatus.Personal => EmailGmailLabelNames.Personal,
+            EmailTriageStatus.Irrelevant => EmailGmailLabelNames.Irrelevant,
+            _ => null,
+        };
+
+        var labelChipNames = row.LabelChipNames?.ToList() ?? [];
+        if (statusLabel is not null && !labelChipNames.Contains(statusLabel, StringComparer.OrdinalIgnoreCase))
+        {
+            labelChipNames.Add(statusLabel);
+        }
+
+        var background = status switch
+        {
+            EmailTriageStatus.Pending => "#F3E5F5",
+            EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant => "#E3F2FD",
+            _ => row.RowBackgroundColor,
+        };
+
+        var updated = row with { RowBackgroundColor = background };
+        return ApplyLabelDisplayFields(updated, labelChipNames);
+    }
+
+    private static EmailListRow ApplyLabelDisplayFields(
+        EmailListRow row,
+        IReadOnlyList<string> labelChipNames)
+    {
+        var displayLabelNames = FilterDisplayLabels(labelChipNames);
+        var labelChips = FilterDisplayLabelChips(null, labelChipNames);
+        var labelsDisplay = displayLabelNames.Count > 0
+            ? string.Join(", ", displayLabelNames)
+            : string.Empty;
+        var primaryLabel = displayLabelNames.FirstOrDefault() ?? "ללא label";
+
+        return row with
+        {
+            LabelChipNames = labelChipNames,
+            LabelChips = labelChips,
+            LabelsDisplay = labelsDisplay,
+            PrimaryLabel = primaryLabel,
+            GroupName = primaryLabel,
+        };
+    }
+
+    private static string? ResolveOptimisticRowBackground(
+        IReadOnlyList<string> labelChipNames,
+        bool isFiledToProject,
+        int? linkedProjectId)
+    {
+        if (labelChipNames.Any(static label =>
+                label.Equals(EmailGmailLabelNames.Pending, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "#F3E5F5";
+        }
+
+        if (labelChipNames.Any(static label =>
+                label.Equals(EmailGmailLabelNames.Personal, StringComparison.OrdinalIgnoreCase)
+                || label.Equals(EmailGmailLabelNames.Irrelevant, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "#E3F2FD";
+        }
+
+        if (!isFiledToProject)
+        {
+            return null;
+        }
+
+        return linkedProjectId.HasValue ? "#C8E6C9" : "#E0E0E0";
     }
 
     private void RemoveRowFromDisplay(EmailListRow row)
     {
-        Emails.Remove(row);
+        RunOnUiThread(() => RemoveRowFromDisplayCore(row));
+    }
+
+    private void RemoveRowFromDisplayCore(EmailListRow row)
+    {
+        RemoveRowById(Emails, row.Id);
         foreach (var group in DisplayGroups)
         {
-            group.Emails.Remove(row);
+            RemoveRowById(group.Emails, row.Id);
         }
 
-        _projectGroup?.Emails.Remove(row);
+        if (_projectGroup is not null)
+        {
+            _projectGroup.RemoveEmailById(row.Id);
+        }
+
+        RemoveRowById(FlatDisplayEmails, row.Id);
+
+        if (string.Equals(SelectedEmail?.Id, row.Id, StringComparison.Ordinal))
+        {
+            SelectedEmail = null;
+        }
+
         RebuildDisplayGroups();
+    }
+
+    private static void RemoveRowById(ObservableCollection<EmailListRow> rows, string rowId)
+    {
+        for (var index = rows.Count - 1; index >= 0; index--)
+        {
+            if (string.Equals(rows[index].Id, rowId, StringComparison.Ordinal))
+            {
+                rows.RemoveAt(index);
+            }
+        }
+    }
+
+    private void RunOnUiThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        dispatcher.Invoke(action);
     }
 
     private bool CanLoadEmails() => !IsBusy && IsConnected;
@@ -1025,6 +1523,12 @@ public sealed class EmailListViewModel : ObservableObject
 
     internal Task MarkAsPersonalForTestsAsync(EmailListRow? row) =>
         SetEmailStatusAsync(row, EmailTriageStatus.Personal);
+
+    internal Task MarkAsPendingForTestsAsync(EmailListRow? row) =>
+        SetEmailStatusAsync(row, EmailTriageStatus.Pending);
+
+    internal void ApplyLocalEmailMutationForTests(EmailListRow row) =>
+        ApplyLocalEmailMutation(row);
 
     internal void ClearEmailStateForTests() => ClearEmailState();
 
