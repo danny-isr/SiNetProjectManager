@@ -125,7 +125,11 @@ public sealed class GmailEmailGateway : IEmailGateway
         string? listQuery = null;
         IReadOnlyList<string>? labelIds = null;
 
-        if (!string.IsNullOrWhiteSpace(query.OptionalProjectLabel))
+        if (!string.IsNullOrWhiteSpace(query.LabelId))
+        {
+            labelIds = [query.LabelId.Trim()];
+        }
+        else if (!string.IsNullOrWhiteSpace(query.OptionalProjectLabel))
         {
             labelIds = ResolveProjectLabelIds(labelMap, query.OptionalProjectLabel.Trim());
             if (labelIds.Count == 0)

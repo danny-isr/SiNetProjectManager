@@ -68,7 +68,8 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         Assert.Contains("ScrollViewer.CanContentScroll=\"False\"", listXaml, StringComparison.Ordinal);
-        Assert.Contains("GroupStyle", listXaml, StringComparison.Ordinal);
+        Assert.Contains("LabelGroups", listXaml, StringComparison.Ordinal);
+        Assert.Contains("Expander", listXaml, StringComparison.Ordinal);
     }
 
     [Fact]

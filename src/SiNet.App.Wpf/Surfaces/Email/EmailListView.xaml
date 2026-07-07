@@ -73,21 +73,42 @@
                      BorderThickness="0"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.CanContentScroll="False">
-                <ListBox.GroupStyle>
-                    <GroupStyle>
-                        <GroupStyle.HeaderTemplate>
-                            <DataTemplate>
-                                <Border Background="#F5F5F5" Padding="6,4" Margin="0,4,0,2">
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#555" />
-                                </Border>
-                            </DataTemplate>
-                        </GroupStyle.HeaderTemplate>
-                    </GroupStyle>
-                </ListBox.GroupStyle>
+                     ScrollViewer.CanContentScroll="False"
+                     Visibility="{Binding ShowFlatEmailList, Converter={StaticResource BoolToVis}}">
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type local:EmailListRow}">
                         <local:EmailListItemCard />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <ListBox Grid.Row="2"
+                     ItemsSource="{Binding LabelGroups}"
+                     BorderThickness="0"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="False"
+                     Visibility="{Binding ShowLabelGroups, Converter={StaticResource BoolToVis}}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:EmailLabelGroupViewModel}">
+                        <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                  BorderThickness="0"
+                                  Margin="0,0,0,4">
+                            <Expander.Header>
+                                <local:EmailLabelGroupHeader DataContext="{Binding}" />
+                            </Expander.Header>
+                            <ListBox ItemsSource="{Binding Emails}"
+                                     SelectedItem="{Binding DataContext.SelectedEmail, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                     ItemContainerStyle="{StaticResource EmailCardItemStyle}"
+                                     BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:EmailListRow}">
+                                        <local:EmailListItemCard />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Expander>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

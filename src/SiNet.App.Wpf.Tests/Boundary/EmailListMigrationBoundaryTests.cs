@@ -123,15 +123,38 @@ public sealed class EmailListMigrationBoundaryTests
     }
 
     [Fact]
-    public void Email_list_displays_labels_and_groups_by_primary_label()
+    public void Email_list_displays_labels_and_collapsible_label_groups()
     {
         var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         Assert.Contains("VisibleLabelChips", cardXaml, StringComparison.Ordinal);
         Assert.Contains("HasAnyLabels", cardXaml, StringComparison.Ordinal);
         Assert.Contains("PrimaryLabel", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("PropertyGroupDescription(nameof(EmailListRow.PrimaryLabel))", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("EmailLabelGroupViewModel", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("LabelGroups", listXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailLabelGroupHeader", listXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_label_group_context_menu_contains_load_all()
+    {
+        var headerXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailLabelGroupHeader.xaml");
+
+        Assert.Contains("LoadAllForLabelCommand", headerXaml, StringComparison.Ordinal);
+        Assert.Contains("טען את כל המיילים מהלייבל הזה", headerXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadMoreForLabelCommand", headerXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Multi_label_email_can_appear_in_multiple_label_groups_documented()
+    {
+        var doc = ReadRepoFile("docs/EMAIL_LIST_MIGRATION.md");
+
+        Assert.Contains("more than one group", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("LabelId", doc, StringComparison.Ordinal);
+        Assert.Contains("1000", doc, StringComparison.Ordinal);
     }
 
     [Fact]

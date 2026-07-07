@@ -63,13 +63,31 @@ Query composition lives in `EmailMailboxQueryComposer` (Application) and is used
 | Cards | `ListBox` + `EmailListItemCard` (not GridView) |
 | Load states | `EmailListLoadState`: Loading, Loaded, PartialFailure, Error, NoResults |
 | Partial enrichment | Gmail rows shown + warning if DB link query fails |
-| Labels | Chips on card; filter + group-by `PrimaryLabel` |
+| Labels | Chips on card; collapsible group-by label; per-label load more/all |
 | Link state | `IEmailThreadLinkQueryService` + client filter All/Linked/Unlinked |
 | Unread | Per-message: `UNREAD` in Gmail `labelIds`. Total: `GetMailboxUnreadCountAsync` (scope-accurate). Page: `UnreadInCurrentPage`. Display: `UnreadCountDisplay` shows total + page separately |
 
 ## Grouping rule
 
-Multi-label messages appear once under **PrimaryLabel** (first user label under `{RootLabel}/…`; else `"ללא label"`).
+### Flat list (default)
+
+Multi-label messages appear once in the flat list. `PrimaryLabel` is used for display chips and legacy grouping.
+
+### Collapsible label groups (`GroupByLabel = true`)
+
+| Aspect | Behavior |
+| --- | --- |
+| UI | `EmailLabelGroupViewModel` per label — `Expander` header + inner email list |
+| Multi-label | A message with several labels may appear in **more than one group** |
+| In-group dedupe | Same `GmailMessageId` never duplicated within one group |
+| Seed | Groups built from the current global page (50 items) |
+| Per-label paging | `Load more` / `Load all` via `GetMailboxPageAsync` with `EmailMailboxQuery.LabelId` |
+| Tokens | Each group has its own `NextPageToken` — separate from global `_pageTokenStack` |
+| Safety cap | Load-all stops after 20 pages (1000 messages); shows "יש עוד — לחץ טען עוד" if capped |
+| Filter change | `ClearLabelGroups()` on filter/scope/clear/disconnect — extended loads reset |
+| Query | Uses Gmail `LabelIds` API path when `LabelId` is set — not display name alone |
+
+Context menu on group header: load all, load more 50, expand, collapse.
 
 ## Application ports (reuse — no parallel IEmailListService)
 

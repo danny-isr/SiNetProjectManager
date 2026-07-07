@@ -536,6 +536,312 @@ public sealed class EmailListViewModelTests
         Assert.All(sut.Emails, static row => Assert.False(row.IsUnread));
     }
 
+    [Fact]
+    public async Task Email_group_by_label_creates_collapsible_groups()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        Assert.NotEmpty(sut.LabelGroups);
+        Assert.Contains(sut.LabelGroups, static g => g.LabelId == "Label_Work");
+        Assert.Contains(sut.LabelGroups, static g => g.LabelId == "Label_Clients");
+    }
+
+    [Fact]
+    public async Task Email_label_group_can_expand_and_collapse()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        group.CollapseCommand.Execute(null);
+        Assert.False(group.IsExpanded);
+
+        group.ExpandCommand.Execute(null);
+        Assert.True(group.IsExpanded);
+    }
+
+    [Fact]
+    public async Task Email_label_group_header_shows_loaded_count()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        Assert.Contains("נטענו", group.HeaderStatus, StringComparison.Ordinal);
+        Assert.Contains(group.LoadedCount.ToString(), group.HeaderStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Multi_label_email_appears_in_multiple_label_groups()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var workGroup = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var clientsGroup = sut.LabelGroups.First(static g => g.LabelId == "Label_Clients");
+
+        Assert.Contains(workGroup.Emails, static row => row.Id == "msg-multi");
+        Assert.Contains(clientsGroup.Emails, static row => row.Id == "msg-multi");
+    }
+
+    [Fact]
+    public async Task Load_all_for_label_uses_label_specific_gmail_query()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadAllForLabelGroupForTestsAsync(group);
+
+        Assert.Equal("Label_Work", gateway.LastLabelGroupQuery?.LabelId);
+        Assert.Equal(EmailMailboxScope.Label, gateway.LastLabelGroupQuery?.MailboxScope);
+    }
+
+    [Fact]
+    public async Task Load_all_for_label_uses_label_id_not_display_name()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadMoreForLabelGroupForTestsAsync(group);
+
+        Assert.Equal("Label_Work", gateway.LastLabelGroupQuery?.LabelId);
+        Assert.NotEqual("Work", gateway.LastLabelGroupQuery?.LabelId);
+    }
+
+    [Fact]
+    public async Task Load_all_for_label_loads_pages_until_no_next_token()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadAllForLabelGroupForTestsAsync(group);
+
+        Assert.True(gateway.LabelPageCalls.Count >= 2);
+        Assert.True(group.HasLoadedAll);
+    }
+
+    [Fact]
+    public async Task Load_all_for_label_does_not_duplicate_messages_in_same_group()
+    {
+        var gateway = new LabelGroupingEmailGateway { DuplicateSecondLabelPage = true };
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadAllForLabelGroupForTestsAsync(group);
+
+        Assert.Equal(1, group.Emails.Count(static row => row.Id == "label-work-page-1"));
+    }
+
+    [Fact]
+    public async Task Load_more_for_label_uses_group_next_page_token()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadMoreForLabelGroupForTestsAsync(group);
+        await sut.LoadMoreForLabelGroupForTestsAsync(group);
+
+        Assert.Equal(2, gateway.LabelPageCalls.Count);
+        Assert.Null(gateway.LabelPageCalls[0].PageToken);
+        Assert.Equal("label-Label_Work-page-2", gateway.LabelPageCalls[1].PageToken);
+    }
+
+    [Fact]
+    public async Task General_paging_token_is_separate_from_label_group_tokens()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+
+        await sut.LoadNextPageAsync();
+        var globalMailboxCalls = gateway.MailboxPageCalls;
+
+        sut.ToggleGroupByLabelCommand.Execute(null);
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadMoreForLabelGroupForTestsAsync(group);
+
+        Assert.Equal(globalMailboxCalls, gateway.MailboxPageCalls);
+        Assert.NotEmpty(gateway.LabelPageCalls);
+    }
+
+    [Fact]
+    public async Task Changing_filters_resets_label_groups()
+    {
+        var gateway = new LabelGroupingEmailGateway();
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        await sut.LoadMoreForLabelGroupForTestsAsync(group);
+        Assert.Equal("label-Label_Work-page-2", group.NextPageToken);
+
+        sut.SearchText = "hello";
+        await sut.ApplyFiltersAsync();
+
+        var rebuilt = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        Assert.Null(rebuilt.NextPageToken);
+        Assert.True(rebuilt.HasMore);
+    }
+
+    [Fact]
+    public async Task Load_all_for_label_partial_failure_keeps_loaded_messages_and_shows_warning()
+    {
+        var gateway = new LabelGroupingEmailGateway
+        {
+            FailLabelPageOnToken = "label-Label_Work-page-2",
+        };
+        var sut = await CreateLabelGroupingSutAsync(gateway);
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var countBeforeFailure = group.LoadedCount;
+        await sut.LoadAllForLabelGroupForTestsAsync(group);
+
+        Assert.True(group.LoadedCount >= countBeforeFailure);
+        Assert.Contains("שגיאה", group.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    private static async Task<EmailListViewModel> CreateLabelGroupingSutAsync(LabelGroupingEmailGateway gateway)
+    {
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+        await sut.InitializeAsync();
+        await sut.RefreshPageAsync();
+        return sut;
+    }
+
+    private sealed class LabelGroupingEmailGateway : IEmailGateway
+    {
+        private static readonly IReadOnlyList<GmailLabelInfo> Labels =
+        [
+            new GmailLabelInfo("Label_Work", "Work"),
+            new GmailLabelInfo("Label_Clients", "Clients"),
+        ];
+
+        public int MailboxPageCalls { get; private set; }
+
+        public List<(EmailMailboxQuery Query, string? PageToken)> LabelPageCalls { get; } = [];
+
+        public EmailMailboxQuery? LastLabelGroupQuery { get; private set; }
+
+        public bool DuplicateSecondLabelPage { get; set; }
+
+        public string? FailLabelPageOnToken { get; set; }
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(null);
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (!string.IsNullOrWhiteSpace(query.LabelId))
+            {
+                LabelPageCalls.Add((query, pageToken));
+                LastLabelGroupQuery = query;
+
+                if (!string.IsNullOrEmpty(FailLabelPageOnToken) && pageToken == FailLabelPageOnToken)
+                {
+                    throw new InvalidOperationException("Label page failed");
+                }
+
+                if (pageToken is null)
+                {
+                    return Task.FromResult(new EmailMailboxPage(
+                    [
+                        CreateSummary("label-work-page-1", "Work extra"),
+                    ],
+                    query.PageSize,
+                    "label-Label_Work-page-2",
+                    true));
+                }
+
+                if (pageToken == "label-Label_Work-page-2")
+                {
+                    var messageId = DuplicateSecondLabelPage ? "label-work-page-1" : "label-work-page-2";
+                    return Task.FromResult(new EmailMailboxPage(
+                    [
+                        CreateSummary(messageId, "Work page 2"),
+                    ],
+                    query.PageSize,
+                    null,
+                    false));
+                }
+
+                return Task.FromResult(new EmailMailboxPage([], query.PageSize, null, false));
+            }
+
+            MailboxPageCalls++;
+            return Task.FromResult(new EmailMailboxPage(
+            [
+                CreateSummary(
+                    "msg-multi",
+                    "Multi label",
+                    ["INBOX", "Work", "Clients"],
+                    "Work"),
+                CreateSummary(
+                    "msg-work-only",
+                    "Work only",
+                    ["INBOX", "Work"],
+                    "Work"),
+            ],
+            query.PageSize,
+            "global-page-2",
+            true));
+        }
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Labels);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
+
+        private static EmailSummary CreateSummary(
+            string messageId,
+            string subject,
+            IReadOnlyList<string>? labelNames = null,
+            string? primaryLabel = null) =>
+            new(
+                messageId,
+                $"thread-{messageId}",
+                EmailAddress.CreateOrFallback($"{messageId}@example.com"),
+                subject,
+                DateTimeOffset.UtcNow,
+                false,
+                LabelNames: labelNames ?? ["Work"],
+                PrimaryLabel: primaryLabel ?? "Work");
+    }
+
     private sealed class TrackingAuthService : IConnectorAuthService
     {
         public bool IsAuthenticated { get; set; }

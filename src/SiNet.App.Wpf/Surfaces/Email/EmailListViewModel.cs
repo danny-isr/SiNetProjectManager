@@ -22,6 +22,7 @@ public sealed class EmailListViewModel : ObservableObject
 {
     public const int PageSize = EmailMailboxQuery.DefaultPageSize;
     public const int ProjectEmailChunkSize = 10;
+    internal const int MaxPagesPerLabelLoad = 20;
 
     private readonly IEmailGateway _emailGateway;
     private readonly IEmailThreadLinkQueryService? _threadLinkQuery;
@@ -72,6 +73,7 @@ public sealed class EmailListViewModel : ObservableObject
 
         Emails = [];
         AvailableLabels = [];
+        LabelGroups = [];
         ProjectLinkFilterOptions =
         [
             new EmailProjectLinkFilterOption(EmailProjectLinkFilter.All, "הכול"),
@@ -138,6 +140,12 @@ public sealed class EmailListViewModel : ObservableObject
     public ObservableCollection<EmailListRow> Emails { get; }
 
     public ObservableCollection<GmailLabelInfo> AvailableLabels { get; }
+
+    public ObservableCollection<EmailLabelGroupViewModel> LabelGroups { get; }
+
+    public bool ShowLabelGroups => GroupByLabel && IsAllEmailsMode;
+
+    public bool ShowFlatEmailList => !ShowLabelGroups;
 
     public ObservableCollection<EmailProjectLinkFilterOption> ProjectLinkFilterOptions { get; }
 
@@ -635,6 +643,7 @@ public sealed class EmailListViewModel : ObservableObject
         SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
         GroupByLabel = false;
+        ClearLabelGroups();
         MailboxUnreadTotal = 0;
         MailboxUnreadIsExact = true;
         _lastLoadedGmailQuery = null;
@@ -722,13 +731,24 @@ public sealed class EmailListViewModel : ObservableObject
         SelectedLabel = null;
         SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+        ClearLabelGroups();
         await LoadPageAsync(resetStack: true).ConfigureAwait(true);
     }
 
     private void ToggleGroupByLabel()
     {
         GroupByLabel = !GroupByLabel;
+        if (GroupByLabel)
+        {
+            RebuildLabelGroupsFromCurrentEmails();
+        }
+        else
+        {
+            ClearLabelGroups();
+        }
+
         ApplyGrouping();
+        OnPropertyChanged(nameof(ShowLabelGroups));
     }
 
     private void ApplyGrouping()
@@ -739,13 +759,162 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         _emailsView.GroupDescriptions.Clear();
-        if (GroupByLabel && IsAllEmailsMode)
-        {
-            _emailsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(EmailListRow.PrimaryLabel)));
-        }
-
         _emailsView.Refresh();
     }
+
+    private void ClearLabelGroups()
+    {
+        LabelGroups.Clear();
+        OnPropertyChanged(nameof(ShowLabelGroups));
+    }
+
+    private void RebuildLabelGroupsFromCurrentEmails()
+    {
+        if (!GroupByLabel || !IsAllEmailsMode)
+        {
+            ClearLabelGroups();
+            return;
+        }
+
+        var expandedByLabelId = LabelGroups.ToDictionary(static g => g.LabelId, static g => g.IsExpanded, StringComparer.Ordinal);
+        ClearLabelGroups();
+
+        var labelIdByName = AvailableLabels
+            .Where(static label => !string.IsNullOrWhiteSpace(label.Name) && !string.IsNullOrWhiteSpace(label.Id))
+            .GroupBy(static label => label.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static g => g.Key, static g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        var groupsById = new Dictionary<string, EmailLabelGroupViewModel>(StringComparer.Ordinal);
+
+        foreach (var row in Emails)
+        {
+            var labelNames = row.LabelChipNames is { Count: > 0 }
+                ? row.LabelChipNames
+                : [row.PrimaryLabel ?? "ללא label"];
+
+            foreach (var labelName in labelNames)
+            {
+                if (string.IsNullOrWhiteSpace(labelName)
+                    || !labelIdByName.TryGetValue(labelName, out var labelId)
+                    || string.IsNullOrWhiteSpace(labelId))
+                {
+                    continue;
+                }
+
+                if (!groupsById.TryGetValue(labelId, out var group))
+                {
+                    group = CreateLabelGroup(labelId, labelName);
+                    if (expandedByLabelId.TryGetValue(labelId, out var isExpanded))
+                    {
+                        group.IsExpanded = isExpanded;
+                    }
+
+                    groupsById[labelId] = group;
+                    LabelGroups.Add(group);
+                }
+
+                group.TryAddEmail(row);
+            }
+        }
+
+        foreach (var group in LabelGroups)
+        {
+            group.ResetPagingState();
+        }
+
+        OnPropertyChanged(nameof(ShowLabelGroups));
+    }
+
+    private EmailLabelGroupViewModel CreateLabelGroup(string labelId, string labelDisplayName) =>
+        new(
+            labelId,
+            labelDisplayName,
+            LoadMoreEmailsForGroupAsync,
+            LoadAllEmailsForGroupAsync);
+
+    private EmailMailboxQuery BuildLabelGroupQuery(EmailLabelGroupViewModel group) =>
+        BuildQuery() with
+        {
+            MailboxScope = EmailMailboxScope.Label,
+            LabelId = group.LabelId,
+            LabelName = group.LabelDisplayName,
+        };
+
+    private async Task LoadMoreEmailsForGroupAsync(EmailLabelGroupViewModel group)
+    {
+        if (!IsConnected || string.IsNullOrWhiteSpace(group.LabelId))
+        {
+            return;
+        }
+
+        group.IsExpanded = true;
+        group.IsLoading = true;
+        group.ErrorMessage = null;
+        StatusMessage = $"טוען מיילים מהלייבל {group.LabelDisplayName}...";
+
+        try
+        {
+            var query = BuildLabelGroupQuery(group);
+            var page = await _emailGateway
+                .GetMailboxPageAsync(query, group.NextPageToken)
+                .ConfigureAwait(true);
+
+            var (rows, _) = await MapSummariesAsync(page.Items).ConfigureAwait(true);
+            rows = ApplyClientLinkFilter(rows);
+            foreach (var row in rows)
+            {
+                group.TryAddEmail(row);
+            }
+
+            group.NextPageToken = page.NextPageToken;
+            group.HasMore = page.HasNextPage;
+            if (!page.HasNextPage)
+            {
+                group.HasLoadedAll = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            group.ErrorMessage = $"נטענו {group.LoadedCount} מיילים, אך הטעינה נעצרה בגלל שגיאה: {ex.Message}";
+        }
+        finally
+        {
+            group.IsLoading = false;
+            group.NotifyHeaderChanged();
+        }
+    }
+
+    private async Task LoadAllEmailsForGroupAsync(EmailLabelGroupViewModel group)
+    {
+        group.IsExpanded = true;
+        group.ErrorMessage = null;
+
+        for (var page = 0; page < MaxPagesPerLabelLoad && group.HasMore; page++)
+        {
+            await LoadMoreEmailsForGroupAsync(group).ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(group.ErrorMessage))
+            {
+                return;
+            }
+        }
+
+        if (group.HasMore)
+        {
+            group.ErrorMessage = $"נטענו {group.LoadedCount} מיילים. יש עוד — לחץ טען עוד.";
+        }
+        else
+        {
+            group.HasLoadedAll = true;
+        }
+
+        group.NotifyHeaderChanged();
+    }
+
+    internal Task LoadMoreForLabelGroupForTestsAsync(EmailLabelGroupViewModel group) =>
+        LoadMoreEmailsForGroupAsync(group);
+
+    internal Task LoadAllForLabelGroupForTestsAsync(EmailLabelGroupViewModel group) =>
+        LoadAllEmailsForGroupAsync(group);
 
     private async Task LoadPreviousPageAsync()
     {
@@ -1194,6 +1363,11 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         ApplyGrouping();
+        if (GroupByLabel)
+        {
+            RebuildLabelGroupsFromCurrentEmails();
+        }
+
         SelectedEmail = preserveSelectionId is null
             ? Emails.FirstOrDefault()
             : Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))

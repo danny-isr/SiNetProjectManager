@@ -13,6 +13,9 @@ public sealed record EmailMailboxQuery
 
     public string? LabelName { get; init; }
 
+    /// <summary>Gmail API label id — preferred for label-group paging via <c>LabelIds</c>.</summary>
+    public string? LabelId { get; init; }
+
     public EmailMailboxScope MailboxScope { get; init; } = EmailMailboxScope.Inbox;
 
     public EmailProjectLinkFilter ProjectLinkFilter { get; init; } = EmailProjectLinkFilter.All;
