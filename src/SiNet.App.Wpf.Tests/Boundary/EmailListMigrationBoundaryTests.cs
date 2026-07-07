@@ -24,7 +24,8 @@ public sealed class EmailListMigrationBoundaryTests
 
         Assert.Contains("EmailListView", xaml, StringComparison.Ordinal);
         Assert.Contains("Binding EmailList", xaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding EmailsView}\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding DisplayGroups}\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding FlatDisplayEmails}\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("EmailListItemCard", listXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("GridView", listXaml, StringComparison.Ordinal);
         Assert.Contains("IEmailGateway", vmSource, StringComparison.Ordinal);
@@ -133,8 +134,10 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("HasAnyLabels", cardXaml, StringComparison.Ordinal);
         Assert.Contains("PrimaryLabel", listVmSource, StringComparison.Ordinal);
         Assert.Contains("EmailLabelGroupViewModel", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("LabelGroups", listXaml, StringComparison.Ordinal);
+        Assert.Contains("DisplayGroups", listXaml, StringComparison.Ordinal);
+        Assert.Contains("FlatDisplayEmails", listXaml, StringComparison.Ordinal);
         Assert.Contains("EmailLabelGroupHeader", listXaml, StringComparison.Ordinal);
+        Assert.Contains("HasActiveProject", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -155,6 +158,7 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("more than one group", doc, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LabelId", doc, StringComparison.Ordinal);
         Assert.Contains("1000", doc, StringComparison.Ordinal);
+        Assert.Contains("dedupe", doc, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

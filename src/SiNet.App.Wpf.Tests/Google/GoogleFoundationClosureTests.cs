@@ -176,11 +176,12 @@ public sealed class GoogleFoundationClosureTests
 
         await sut.RefreshAsync();
 
-        Assert.False(gateway.LastMailboxPageRequested);
+        Assert.True(gateway.LastMailboxPageRequested);
         Assert.Equal("(1042) North Towers", gateway.LastProjectLabelName);
-        Assert.True(sut.EmailList.IsProjectMode);
-        Assert.Single(sut.Emails);
-        Assert.Equal("msg-42", sut.Emails[0].Id);
+        Assert.True(sut.EmailList.HasActiveProject);
+        Assert.NotNull(sut.EmailList.ActiveProjectGroup);
+        Assert.Single(sut.EmailList.ActiveProjectGroup!.Emails);
+        Assert.Equal("msg-42", sut.EmailList.ActiveProjectGroup.Emails[0].Id);
     }
 
     [Fact]

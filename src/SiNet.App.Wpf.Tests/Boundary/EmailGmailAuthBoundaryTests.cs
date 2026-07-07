@@ -63,7 +63,7 @@ public sealed class EmailGmailAuthBoundaryTests
 
         Assert.Contains("ConnectorLoginOptions", listVmSource, StringComparison.Ordinal);
         Assert.Contains("SkipSilentRestore: true", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("LoadPageAsync(resetStack: true)", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadMailboxAndProjectAsync(resetStack: true)", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

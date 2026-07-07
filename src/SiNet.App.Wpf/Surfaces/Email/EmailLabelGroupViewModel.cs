@@ -7,14 +7,14 @@ using SiNet.App.Wpf.Shell;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
 
-/// <summary>Collapsible label group in group-by-label mode with per-label Gmail paging.</summary>
+/// <summary>Collapsible email group (project or label) with optional per-label Gmail paging.</summary>
 public sealed class EmailLabelGroupViewModel : ObservableObject
 {
     private readonly Func<EmailLabelGroupViewModel, Task> _loadMore;
     private readonly Func<EmailLabelGroupViewModel, Task> _loadAll;
     private readonly HashSet<string> _seenMessageIds = new(StringComparer.Ordinal);
 
-    private bool _isExpanded = true;
+    private bool _isExpanded;
     private bool _isLoading;
     private bool _hasLoadedAll;
     private string? _nextPageToken;
@@ -25,27 +25,41 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         string labelId,
         string labelDisplayName,
         Func<EmailLabelGroupViewModel, Task> loadMore,
-        Func<EmailLabelGroupViewModel, Task> loadAll)
+        Func<EmailLabelGroupViewModel, Task> loadAll,
+        EmailListGroupKind groupKind = EmailListGroupKind.Label)
     {
         LabelId = labelId ?? throw new ArgumentNullException(nameof(labelId));
         LabelDisplayName = labelDisplayName ?? throw new ArgumentNullException(nameof(labelDisplayName));
         _loadMore = loadMore ?? throw new ArgumentNullException(nameof(loadMore));
         _loadAll = loadAll ?? throw new ArgumentNullException(nameof(loadAll));
+        GroupKind = groupKind;
+        SupportsRemotePaging = groupKind == EmailListGroupKind.Project
+            || !EmailListGroupBuilder.IsSyntheticLabelId(labelId);
 
         Emails = [];
 
         ToggleExpandCommand = new RelayCommand(_ => IsExpanded = !IsExpanded);
         ExpandCommand = new RelayCommand(_ => IsExpanded = true);
         CollapseCommand = new RelayCommand(_ => IsExpanded = false);
-        LoadMoreForLabelCommand = new AsyncRelayCommand(() => _loadMore(this), () => !IsLoading && HasMore);
-        LoadAllForLabelCommand = new AsyncRelayCommand(() => _loadAll(this), () => !IsLoading);
+        LoadMoreForLabelCommand = new AsyncRelayCommand(() => _loadMore(this), () => !IsLoading && HasMore && SupportsRemotePaging);
+        LoadAllForLabelCommand = new AsyncRelayCommand(() => _loadAll(this), () => !IsLoading && SupportsRemotePaging);
     }
+
+    public EmailListGroupKind GroupKind { get; }
+
+    public bool IsProjectGroup => GroupKind == EmailListGroupKind.Project;
+
+    public bool IsPinned => IsProjectGroup;
+
+    public bool SupportsRemotePaging { get; }
 
     public string LabelId { get; }
 
     public string LabelDisplayName { get; }
 
     public ObservableCollection<EmailListRow> Emails { get; }
+
+    public IReadOnlyCollection<string> SeenMessageIds => _seenMessageIds;
 
     public bool IsExpanded
     {
@@ -121,16 +135,19 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         {
             if (IsLoading)
             {
-                return $"{LabelDisplayName} — טוען...";
+                return IsProjectGroup
+                    ? $"📂 {LabelDisplayName} — טוען..."
+                    : $"{LabelDisplayName} — טוען...";
             }
 
-            var status = $"{LabelDisplayName} — {LoadedCount} נטענו";
+            var prefix = IsProjectGroup ? "📂 " : string.Empty;
+            var status = $"{prefix}{LabelDisplayName} — {LoadedCount} נטענו";
             if (HasLoadedAll)
             {
                 return $"{status} — הכול נטען";
             }
 
-            if (HasMore)
+            if (HasMore && SupportsRemotePaging)
             {
                 return $"{status} — יש עוד";
             }
@@ -163,6 +180,11 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
 
     internal void ResetPagingState()
     {
+        if (IsProjectGroup)
+        {
+            return;
+        }
+
         _nextPageToken = null;
         _hasMore = true;
         _hasLoadedAll = false;
@@ -177,6 +199,16 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         Emails.Clear();
         _seenMessageIds.Clear();
         ResetPagingState();
+        if (IsProjectGroup)
+        {
+            _nextPageToken = null;
+            _hasMore = true;
+            _hasLoadedAll = false;
+            _errorMessage = null;
+            OnPropertyChanged(nameof(ErrorMessage));
+            OnPropertyChanged(nameof(ShowGroupError));
+            NotifyHeaderChanged();
+        }
     }
 
     internal void NotifyHeaderChanged()

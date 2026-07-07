@@ -12,7 +12,7 @@ Self-contained **Email List component** for the Email Workbench: Outlook-style c
 | Component | Path | Role |
 | --- | --- | --- |
 | `EmailWindowView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml` | Workbench shell: project bar (row 1), filter bar (row 2), list + preview + sidebar (row 3) |
-| `EmailListFilterBar` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml` | Full-width account bar, paging, filters, project-group chrome |
+| `EmailListFilterBar` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml` | Full-width account bar, paging, filters, group-by-label toggle |
 | `EmailListView` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml` | List panel only: load banners + scrollable virtualized card list |
 | `EmailListItemCard` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml` | Compact Outlook-style row |
 | `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, auth, load states, link enrichment |
@@ -103,7 +103,7 @@ Context menu on group header: load all, load more 50, expand, collapse.
 | --- | --- |
 | 0 | Header chrome |
 | 1 | Project context bar — shared `ProjectSelectorView` via `ICurrentProjectContext` (full width) |
-| 2 | `EmailListFilterBar` — account, filters, paging, project-group chrome (`DataContext="{Binding EmailList}"`) |
+| 2 | `EmailListFilterBar` — account, filters, paging, group-by-label toggle (`DataContext="{Binding EmailList}"`) |
 | 3 | Main split: `EmailListView` (list only) \| preview \| context sidebar |
 | 4 | Status bar |
 
@@ -111,8 +111,18 @@ The list component receives `EmailListProjectContext` through `ApplyProjectConte
 
 | Mode | Behavior |
 | --- | --- |
-| No project selected | Gmail Primary Inbox paging (50), mailbox scope filters, label grouping |
-| Project selected | Gmail project-label query; first 10 emails + "הצג עוד" (+10); separate from 50-page paging |
+| No project selected | Gmail Primary Inbox paging (50), mailbox scope filters, **group-by-label on by default** (groups collapsed) |
+| Project selected | **Pinned project group** at top (first 10 via `OptionalProjectLabel` paging) + load-all via group header; **below:** global 50-page inbox with label groups; **dedupe** by `messageId` |
+
+### Project + mailbox combined layout
+
+| Aspect | Behavior |
+| --- | --- |
+| Project group | `EmailListGroupKind.Project` — top `DisplayGroups` entry, green header, context menu load-all |
+| Global page | Always loaded in parallel (`LoadMailboxAndProjectAsync`); paging 50/50 unchanged |
+| Dedupe | Messages in project group excluded from `FlatDisplayEmails` and other label groups |
+| Label merge | If project Gmail label matches a label group from the current page, **one merged group** at top |
+| Empty label groups | Fallback to flat `FlatDisplayEmails` when `GroupByLabel` but no resolvable groups |
 
 ## Workflow gaps (deferred)
 

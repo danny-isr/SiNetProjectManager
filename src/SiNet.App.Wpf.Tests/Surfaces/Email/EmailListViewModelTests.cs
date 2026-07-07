@@ -82,15 +82,14 @@ public sealed class EmailListViewModelTests
             "2466 — תכנית דוגמה",
             "תל אביב"));
 
-        Assert.True(sut.IsProjectMode);
-        Assert.Equal(10, sut.Emails.Count);
-        Assert.True(sut.HasMoreProjectEmails);
-        Assert.Equal("2466 — תכנית דוגמה", sut.ProjectGroupHeader);
+        Assert.True(sut.HasActiveProject);
+        Assert.NotNull(sut.ActiveProjectGroup);
+        Assert.Equal(10, sut.ActiveProjectGroup!.Emails.Count);
 
-        sut.ShowMoreProjectEmailsCommand.Execute(null);
+        await sut.LoadAllForLabelGroupForTestsAsync(sut.ActiveProjectGroup);
 
-        Assert.Equal(15, sut.Emails.Count);
-        Assert.False(sut.HasMoreProjectEmails);
+        Assert.Equal(15, sut.ActiveProjectGroup.Emails.Count);
+        Assert.True(sut.ActiveProjectGroup.HasLoadedAll);
     }
 
     [Fact]
@@ -102,8 +101,9 @@ public sealed class EmailListViewModelTests
         await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
         await sut.ApplyProjectContextAsync(null);
 
-        Assert.True(sut.IsAllEmailsMode);
-        Assert.Equal(1, gateway.MailboxPageCalls);
+        Assert.False(sut.HasActiveProject);
+        Assert.Null(sut.ActiveProjectGroup);
+        Assert.True(gateway.MailboxPageCalls >= 2);
     }
 
     [Fact]
@@ -542,11 +542,9 @@ public sealed class EmailListViewModelTests
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
 
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        Assert.NotEmpty(sut.LabelGroups);
-        Assert.Contains(sut.LabelGroups, static g => g.LabelId == "Label_Work");
-        Assert.Contains(sut.LabelGroups, static g => g.LabelId == "Label_Clients");
+        Assert.NotEmpty(sut.DisplayGroups);
+        Assert.Contains(sut.DisplayGroups, static g => g.LabelId == "Label_Work");
+        Assert.Contains(sut.DisplayGroups, static g => g.LabelId == "Label_Clients");
     }
 
     [Fact]
@@ -554,9 +552,8 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        Assert.False(group.IsExpanded);
         group.CollapseCommand.Execute(null);
         Assert.False(group.IsExpanded);
 
@@ -569,9 +566,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         Assert.Contains("נטענו", group.HeaderStatus, StringComparison.Ordinal);
         Assert.Contains(group.LoadedCount.ToString(), group.HeaderStatus, StringComparison.Ordinal);
     }
@@ -581,10 +576,8 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var workGroup = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
-        var clientsGroup = sut.LabelGroups.First(static g => g.LabelId == "Label_Clients");
+        var workGroup = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var clientsGroup = sut.DisplayGroups.First(static g => g.LabelId == "Label_Clients");
 
         Assert.Contains(workGroup.Emails, static row => row.Id == "msg-multi");
         Assert.Contains(clientsGroup.Emails, static row => row.Id == "msg-multi");
@@ -595,9 +588,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
         Assert.Equal("Label_Work", gateway.LastLabelGroupQuery?.LabelId);
@@ -609,9 +600,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
 
         Assert.Equal("Label_Work", gateway.LastLabelGroupQuery?.LabelId);
@@ -623,9 +612,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
         Assert.True(gateway.LabelPageCalls.Count >= 2);
@@ -637,9 +624,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway { DuplicateSecondLabelPage = true };
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
         Assert.Equal(1, group.Emails.Count(static row => row.Id == "label-work-page-1"));
@@ -650,9 +635,7 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
 
@@ -670,8 +653,7 @@ public sealed class EmailListViewModelTests
         await sut.LoadNextPageAsync();
         var globalMailboxCalls = gateway.MailboxPageCalls;
 
-        sut.ToggleGroupByLabelCommand.Execute(null);
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
 
         Assert.Equal(globalMailboxCalls, gateway.MailboxPageCalls);
@@ -683,16 +665,14 @@ public sealed class EmailListViewModelTests
     {
         var gateway = new LabelGroupingEmailGateway();
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
         Assert.Equal("label-Label_Work-page-2", group.NextPageToken);
 
         sut.SearchText = "hello";
         await sut.ApplyFiltersAsync();
 
-        var rebuilt = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var rebuilt = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         Assert.Null(rebuilt.NextPageToken);
         Assert.True(rebuilt.HasMore);
     }
@@ -705,14 +685,123 @@ public sealed class EmailListViewModelTests
             FailLabelPageOnToken = "label-Label_Work-page-2",
         };
         var sut = await CreateLabelGroupingSutAsync(gateway);
-        sut.ToggleGroupByLabelCommand.Execute(null);
-
-        var group = sut.LabelGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
         var countBeforeFailure = group.LoadedCount;
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
         Assert.True(group.LoadedCount >= countBeforeFailure);
         Assert.Contains("שגיאה", group.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Group_by_label_default_on_and_collapsed()
+    {
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, new StubAuthService());
+        Assert.True(sut.GroupByLabel);
+    }
+
+    [Fact]
+    public async Task Project_selected_loads_global_page_and_project_group()
+    {
+        var gateway = new ProjectEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+
+        Assert.True(gateway.MailboxPageCalls >= 1);
+        Assert.True(gateway.ProjectPageCalls >= 1);
+        Assert.NotNull(sut.ActiveProjectGroup);
+    }
+
+    [Fact]
+    public async Task Project_group_shows_first_10_only()
+    {
+        var gateway = new ProjectEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+
+        Assert.Equal(10, sut.ActiveProjectGroup!.Emails.Count);
+        Assert.Equal("1 — A", sut.ProjectGroupHeader);
+        Assert.True(sut.ActiveProjectGroup.HasMore);
+    }
+
+    [Fact]
+    public async Task Project_load_all_fetches_remaining_pages()
+    {
+        var gateway = new ProjectEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+        await sut.LoadAllForLabelGroupForTestsAsync(sut.ActiveProjectGroup!);
+
+        Assert.True(gateway.ProjectPageCalls >= 2);
+        Assert.Equal(15, sut.ActiveProjectGroup!.Emails.Count);
+    }
+
+    [Fact]
+    public async Task Clearing_project_removes_pinned_group()
+    {
+        var gateway = new ProjectEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+        await sut.ApplyProjectContextAsync(null);
+
+        Assert.Null(sut.ActiveProjectGroup);
+        Assert.DoesNotContain(sut.DisplayGroups, static g => g.IsProjectGroup);
+    }
+
+    [Fact]
+    public async Task Project_emails_excluded_from_mailbox_list()
+    {
+        var gateway = new ProjectDedupeEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+
+        var projectIds = sut.ActiveProjectGroup!.Emails.Select(static e => e.Id).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("proj-1", projectIds);
+
+        Assert.DoesNotContain(sut.FlatDisplayEmails, e => projectIds.Contains(e.Id));
+        foreach (var group in sut.DisplayGroups.Where(static g => !g.IsProjectGroup))
+        {
+            Assert.DoesNotContain(group.Emails, e => projectIds.Contains(e.Id));
+        }
+
+        Assert.Contains(sut.FlatDisplayEmails, e => e.Id == "inbox-only");
+    }
+
+    [Fact]
+    public async Task Project_label_merges_with_existing_label_group_at_top()
+    {
+        var gateway = new ProjectMergeEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+        await sut.InitializeAsync();
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+
+        var projectGroup = sut.ActiveProjectGroup;
+        Assert.NotNull(projectGroup);
+        Assert.True(projectGroup.IsProjectGroup);
+        Assert.Equal("Label_1A", projectGroup.LabelId);
+        Assert.Contains(projectGroup.Emails, e => e.Id == "mail-extra");
+        Assert.DoesNotContain(sut.DisplayGroups, g => !g.IsProjectGroup && g.LabelId == "Label_1A");
+        Assert.Equal(2, sut.DisplayGroups.Count);
+        Assert.Same(projectGroup, sut.DisplayGroups[0]);
+    }
+
+    [Fact]
+    public async Task Group_by_label_empty_fallback_shows_flat_list()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+        sut.ToggleGroupByLabelCommand.Execute(null);
+
+        Assert.False(sut.GroupByLabel);
+        Assert.True(sut.ShowFlatEmailList);
+        Assert.NotEmpty(sut.FlatDisplayEmails);
     }
 
     private static async Task<EmailListViewModel> CreateLabelGroupingSutAsync(LabelGroupingEmailGateway gateway)
@@ -923,9 +1012,172 @@ public sealed class EmailListViewModelTests
             Task.CompletedTask;
     }
 
+    private sealed class ProjectDedupeEmailGateway : IEmailGateway
+    {
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(null);
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (!string.IsNullOrWhiteSpace(query.OptionalProjectLabel))
+            {
+                var allItems = Enumerable.Range(1, 15)
+                    .Select(i => new EmailSummary(
+                        $"proj-{i}",
+                        $"thread-{i}",
+                        EmailAddress.CreateOrFallback($"user{i}@example.com"),
+                        $"Subject {i}",
+                        DateTimeOffset.UtcNow.AddHours(-i),
+                        false))
+                    .ToList();
+
+                if (pageToken is null)
+                {
+                    var pageItems = allItems.Take(query.PageSize).ToList();
+                    var hasNext = pageItems.Count < allItems.Count;
+                    return Task.FromResult(new EmailMailboxPage(
+                        pageItems,
+                        query.PageSize,
+                        hasNext ? "project-page-2" : null,
+                        hasNext));
+                }
+
+                if (pageToken == "project-page-2")
+                {
+                    return Task.FromResult(new EmailMailboxPage(allItems.Skip(10).ToList(), query.PageSize, null, false));
+                }
+            }
+
+            return Task.FromResult(new EmailMailboxPage(
+            [
+                CreateSummary("inbox-only", "Inbox only"),
+                CreateSummary("proj-1", "Overlap with project"),
+                CreateSummary("proj-5", "Another overlap"),
+            ],
+            query.PageSize,
+            null,
+            false));
+        }
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
+
+        private static EmailSummary CreateSummary(string messageId, string subject) =>
+            new(
+                messageId,
+                $"thread-{messageId}",
+                EmailAddress.CreateOrFallback($"{messageId}@example.com"),
+                subject,
+                DateTimeOffset.UtcNow,
+                false);
+    }
+
+    private sealed class ProjectMergeEmailGateway : IEmailGateway
+    {
+        private static readonly IReadOnlyList<GmailLabelInfo> Labels =
+        [
+            new GmailLabelInfo("Label_1A", "1 — A"),
+            new GmailLabelInfo("Label_Work", "Work"),
+        ];
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(null);
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (!string.IsNullOrWhiteSpace(query.OptionalProjectLabel))
+            {
+                var allItems = Enumerable.Range(1, 10)
+                    .Select(i => new EmailSummary(
+                        $"proj-{i}",
+                        $"thread-{i}",
+                        EmailAddress.CreateOrFallback($"user{i}@example.com"),
+                        $"Subject {i}",
+                        DateTimeOffset.UtcNow.AddHours(-i),
+                        false))
+                    .ToList();
+
+                return Task.FromResult(new EmailMailboxPage(allItems, query.PageSize, null, false));
+            }
+
+            return Task.FromResult(new EmailMailboxPage(
+            [
+                CreateSummary("mail-extra", "Extra in project label", ["INBOX", "1 — A"], "1 — A"),
+                CreateSummary("mail-work", "Work mail", ["INBOX", "Work"], "Work"),
+            ],
+            query.PageSize,
+            null,
+            false));
+        }
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Labels);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
+
+        private static EmailSummary CreateSummary(
+            string messageId,
+            string subject,
+            IReadOnlyList<string> labelNames,
+            string primaryLabel) =>
+            new(
+                messageId,
+                $"thread-{messageId}",
+                EmailAddress.CreateOrFallback($"{messageId}@example.com"),
+                subject,
+                DateTimeOffset.UtcNow,
+                false,
+                LabelNames: labelNames,
+                PrimaryLabel: primaryLabel);
+    }
+
     private sealed class ProjectEmailGateway : IEmailGateway
     {
         public int MailboxPageCalls { get; private set; }
+
+        public int ProjectPageCalls { get; private set; }
 
         public string? LastProjectLabel { get; private set; }
 
@@ -964,6 +1216,38 @@ public sealed class EmailListViewModelTests
             string? pageToken = null,
             CancellationToken cancellationToken = default)
         {
+            if (!string.IsNullOrWhiteSpace(query.OptionalProjectLabel))
+            {
+                ProjectPageCalls++;
+                LastProjectLabel = query.OptionalProjectLabel;
+                var allItems = Enumerable.Range(1, 15)
+                    .Select(i => new EmailSummary(
+                        $"proj-{i}",
+                        $"thread-{i}",
+                        EmailAddress.CreateOrFallback($"user{i}@example.com"),
+                        $"Subject {i}",
+                        DateTimeOffset.UtcNow.AddHours(-i),
+                        false))
+                    .ToList();
+
+                if (pageToken is null)
+                {
+                    var pageItems = allItems.Take(query.PageSize).ToList();
+                    var hasNext = pageItems.Count < allItems.Count;
+                    return Task.FromResult(new EmailMailboxPage(
+                        pageItems,
+                        query.PageSize,
+                        hasNext ? "project-page-2" : null,
+                        hasNext));
+                }
+
+                if (pageToken == "project-page-2")
+                {
+                    var pageItems = allItems.Skip(10).ToList();
+                    return Task.FromResult(new EmailMailboxPage(pageItems, query.PageSize, null, false));
+                }
+            }
+
             MailboxPageCalls++;
             return Task.FromResult(new EmailMailboxPage([], query.PageSize, null, false));
         }

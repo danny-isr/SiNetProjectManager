@@ -36,7 +36,7 @@ public sealed class EmailListViewModel : ObservableObject
     private int _currentPageNumber = 1;
     private int _displayedCount;
     private bool _hasNextPage;
-    private bool _groupByLabel;
+    private bool _groupByLabel = true;
     private EmailListLoadState _loadState = EmailListLoadState.Idle;
     private string? _loadWarning;
     private string? _loadError;
@@ -52,9 +52,8 @@ public sealed class EmailListViewModel : ObservableObject
     private string? _lastUnreadQuerySignature;
     private EmailProjectLinkFilter _projectLinkFilter = EmailProjectLinkFilter.All;
     private EmailListProjectContext? _projectContext;
-    private IReadOnlyList<EmailListRow> _projectEmailRows = [];
-    private int _projectVisibleCount;
-    private bool _hasMoreProjectEmails;
+    private EmailLabelGroupViewModel? _projectGroup;
+    private bool _hasLabelGroups;
     private ICollectionView? _emailsView;
 
     public EmailListViewModel()
@@ -72,8 +71,9 @@ public sealed class EmailListViewModel : ObservableObject
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
 
         Emails = [];
+        FlatDisplayEmails = [];
         AvailableLabels = [];
-        LabelGroups = [];
+        DisplayGroups = [];
         ProjectLinkFilterOptions =
         [
             new EmailProjectLinkFilterOption(EmailProjectLinkFilter.All, "הכול"),
@@ -91,61 +91,56 @@ public sealed class EmailListViewModel : ObservableObject
         _emailsView.SortDescriptions.Add(new SortDescription(nameof(EmailListRow.ReceivedOn), ListSortDirection.Descending));
 
         LoadFirstPageCommand = new AsyncRelayCommand(() => ReloadForContextAsync(), CanLoadEmails);
-        LoadNextPageCommand = new AsyncRelayCommand(() => LoadPageAsync(resetStack: false, useNextToken: true), () => CanLoadEmails() && HasNextPage && IsAllEmailsMode);
-        LoadPreviousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, () => CanLoadEmails() && HasPreviousPage && IsAllEmailsMode);
+        LoadNextPageCommand = new AsyncRelayCommand(() => LoadPageAsync(resetStack: false, useNextToken: true), () => CanLoadEmails() && HasNextPage);
+        LoadPreviousPageCommand = new AsyncRelayCommand(LoadPreviousPageAsync, () => CanLoadEmails() && HasPreviousPage);
         RefreshPageCommand = new AsyncRelayCommand(() => ReloadForContextAsync(), CanLoadEmails);
-        ApplyFiltersCommand = new AsyncRelayCommand(() => ReloadForContextAsync(), () => CanLoadEmails() && IsAllEmailsMode);
+        ApplyFiltersCommand = new AsyncRelayCommand(() => ReloadForContextAsync(), CanLoadEmails);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync, () => !IsBusy);
-        ToggleGroupByLabelCommand = new RelayCommand(_ => ToggleGroupByLabel(), _ => !IsProjectMode);
+        ToggleGroupByLabelCommand = new RelayCommand(_ => ToggleGroupByLabel());
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         DisconnectCommand = new AsyncRelayCommand(DisconnectGmailAsync, () => IsConnected && !IsBusy);
-        ShowMoreProjectEmailsCommand = new RelayCommand(_ => ShowMoreProjectEmails(), _ => HasMoreProjectEmails && !IsBusy);
 
         _authService.AuthStateChanged += OnAuthStateChanged;
     }
 
     public EmailListDisplayMode DisplayMode =>
-        _projectContext is not null ? EmailListDisplayMode.ProjectEmails : EmailListDisplayMode.AllEmails;
+        HasActiveProject ? EmailListDisplayMode.ProjectEmails : EmailListDisplayMode.AllEmails;
 
-    public bool IsProjectMode => DisplayMode == EmailListDisplayMode.ProjectEmails;
+    public bool HasActiveProject => _projectContext is not null;
 
-    public bool IsAllEmailsMode => !IsProjectMode;
+    public bool IsProjectMode => HasActiveProject;
 
-    public bool ShowAllEmailsPaging => IsAllEmailsMode;
+    public bool IsAllEmailsMode => true;
 
-    public bool ShowProjectGroupChrome => IsProjectMode;
+    public bool ShowAllEmailsPaging => IsConnected;
+
+    public bool ShowProjectGroupChrome => false;
 
     public EmailListProjectContext? SelectedProjectContext => _projectContext;
 
-    public string DisplayModeSummary => IsProjectMode
-        ? "מצב: מיילים של הפרויקט"
+    public string DisplayModeSummary => HasActiveProject
+        ? "מצב: כל המיילים + פרויקט"
         : "מצב: כל המיילים";
 
     public string ProjectGroupHeader => _projectContext?.GroupHeaderDisplay ?? string.Empty;
 
-    public bool HasMoreProjectEmails
-    {
-        get => _hasMoreProjectEmails;
-        private set
-        {
-            if (SetField(ref _hasMoreProjectEmails, value))
-            {
-                (ShowMoreProjectEmailsCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            }
-        }
-    }
-
-    public int ProjectEmailTotalCount => _projectEmailRows.Count;
+    public EmailLabelGroupViewModel? ActiveProjectGroup => _projectGroup;
 
     public ObservableCollection<EmailListRow> Emails { get; }
 
+    public ObservableCollection<EmailListRow> FlatDisplayEmails { get; }
+
     public ObservableCollection<GmailLabelInfo> AvailableLabels { get; }
 
-    public ObservableCollection<EmailLabelGroupViewModel> LabelGroups { get; }
+    public ObservableCollection<EmailLabelGroupViewModel> DisplayGroups { get; }
 
-    public bool ShowLabelGroups => GroupByLabel && IsAllEmailsMode;
+    public bool HasLabelGroups => _hasLabelGroups;
+
+    public bool ShowLabelGroups => GroupByLabel && HasLabelGroups;
 
     public bool ShowFlatEmailList => !ShowLabelGroups;
+
+    public bool ShowProjectGroupAboveFlat => !GroupByLabel && _projectGroup is not null;
 
     public ObservableCollection<EmailProjectLinkFilterOption> ProjectLinkFilterOptions { get; }
 
@@ -366,7 +361,13 @@ public sealed class EmailListViewModel : ObservableObject
     public bool GroupByLabel
     {
         get => _groupByLabel;
-        private set => SetField(ref _groupByLabel, value);
+        private set
+        {
+            if (SetField(ref _groupByLabel, value))
+            {
+                NotifyDisplayGroupProperties();
+            }
+        }
     }
 
     public int DisplayedCount
@@ -412,16 +413,6 @@ public sealed class EmailListViewModel : ObservableObject
     {
         get
         {
-            if (IsProjectMode)
-            {
-                if (ProjectEmailTotalCount == 0)
-                {
-                    return DisplayModeSummary;
-                }
-
-                return $"{DisplayModeSummary} · מציג {DisplayedCount} מתוך {ProjectEmailTotalCount}";
-            }
-
             if (DisplayedCount == 0)
             {
                 return $"{DisplayModeSummary} · עמוד {CurrentPageNumber}";
@@ -429,7 +420,10 @@ public sealed class EmailListViewModel : ObservableObject
 
             var start = (CurrentPageNumber - 1) * PageSize + 1;
             var end = start + DisplayedCount - 1;
-            return $"{DisplayModeSummary} · מציג {start}–{end} · עמוד {CurrentPageNumber}";
+            var projectSuffix = HasActiveProject && _projectGroup is not null
+                ? $" · פרויקט: {_projectGroup.LoadedCount}"
+                : string.Empty;
+            return $"{DisplayModeSummary} · מציג {start}–{end} · עמוד {CurrentPageNumber}{projectSuffix}";
         }
     }
 
@@ -442,7 +436,6 @@ public sealed class EmailListViewModel : ObservableObject
     public ICommand ToggleGroupByLabelCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
-    public ICommand ShowMoreProjectEmailsCommand { get; }
 
     /// <summary>Called by the Email Workbench host when the shared project context changes.</summary>
     public async Task ApplyProjectContextAsync(EmailListProjectContext? context)
@@ -453,8 +446,7 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         _projectContext = context;
-        _projectEmailRows = [];
-        _projectVisibleCount = 0;
+        ClearProjectGroup();
         NotifyDisplayModeProperties();
 
         if (IsConnected)
@@ -473,8 +465,22 @@ public sealed class EmailListViewModel : ObservableObject
 
     public Task LoadPreviousPagePublicAsync() => LoadPreviousPageAsync();
 
-    private Task ReloadForContextAsync() =>
-        IsProjectMode ? LoadProjectEmailsAsync(resetVisibleCount: true) : LoadPageAsync(resetStack: true);
+    private async Task ReloadForContextAsync()
+    {
+        if (!IsConnected)
+        {
+            return;
+        }
+
+        await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
+    }
+
+    private async Task LoadMailboxAndProjectAsync(bool resetStack)
+    {
+        await LoadPageAsync(resetStack, skipDisplayRebuild: true).ConfigureAwait(true);
+        await EnsureProjectGroupAsync(resetPaging: resetStack).ConfigureAwait(true);
+        RebuildDisplayGroups();
+    }
 
     public async Task InitializeAsync()
     {
@@ -549,7 +555,7 @@ public sealed class EmailListViewModel : ObservableObject
             ClearEmailState();
             await LoadLabelsAsync().ConfigureAwait(true);
             StatusMessage = "טוען מיילים...";
-            await LoadPageAsync(resetStack: true).ConfigureAwait(true);
+            await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
 
             var email = ConnectedAccountEmail ?? "Gmail";
             StatusMessage = $"מחובר כ־{email}. נטענו {DisplayedCount} מיילים.";
@@ -642,8 +648,9 @@ public sealed class EmailListViewModel : ObservableObject
         SelectedLabel = null;
         SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
-        GroupByLabel = false;
-        ClearLabelGroups();
+        GroupByLabel = true;
+        ClearProjectGroup();
+        ClearDisplayGroups();
         MailboxUnreadTotal = 0;
         MailboxUnreadIsExact = true;
         _lastLoadedGmailQuery = null;
@@ -651,9 +658,7 @@ public sealed class EmailListViewModel : ObservableObject
 
         AvailableLabels.Clear();
 
-        _projectEmailRows = [];
-        _projectVisibleCount = 0;
-        HasMoreProjectEmails = false;
+        FlatDisplayEmails.Clear();
 
         LoadWarning = null;
         LoadError = null;
@@ -719,36 +724,21 @@ public sealed class EmailListViewModel : ObservableObject
 
     private async Task ClearFiltersAsync()
     {
-        if (IsProjectMode)
-        {
-            StatusMessage = "סינון מיילים בתוך קבוצת פרויקט — מושהה. נקה את בחירת הפרויקט לחזרה לכל המיילים.";
-            return;
-        }
-
         SearchText = string.Empty;
         AddressFilter = string.Empty;
         SubjectFilter = string.Empty;
         SelectedLabel = null;
         SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
-        ClearLabelGroups();
-        await LoadPageAsync(resetStack: true).ConfigureAwait(true);
+        ClearDisplayGroups();
+        await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
     }
 
     private void ToggleGroupByLabel()
     {
         GroupByLabel = !GroupByLabel;
-        if (GroupByLabel)
-        {
-            RebuildLabelGroupsFromCurrentEmails();
-        }
-        else
-        {
-            ClearLabelGroups();
-        }
-
+        RebuildDisplayGroups();
         ApplyGrouping();
-        OnPropertyChanged(nameof(ShowLabelGroups));
     }
 
     private void ApplyGrouping()
@@ -762,67 +752,63 @@ public sealed class EmailListViewModel : ObservableObject
         _emailsView.Refresh();
     }
 
-    private void ClearLabelGroups()
+    private void ClearDisplayGroups()
     {
-        LabelGroups.Clear();
-        OnPropertyChanged(nameof(ShowLabelGroups));
+        _projectGroup = null;
+        DisplayGroups.Clear();
+        _hasLabelGroups = false;
+        NotifyDisplayGroupProperties();
     }
 
-    private void RebuildLabelGroupsFromCurrentEmails()
+    private void ClearProjectGroup()
     {
-        if (!GroupByLabel || !IsAllEmailsMode)
+        _projectGroup?.ClearEmails();
+        _projectGroup = null;
+    }
+
+    private void RebuildDisplayGroups()
+    {
+        var expandedByLabelId = DisplayGroups
+            .Where(static g => !g.IsProjectGroup)
+            .ToDictionary(static g => g.LabelId, static g => g.IsExpanded, StringComparer.Ordinal);
+
+        var preservedProjectGroup = _projectGroup;
+        DisplayGroups.Clear();
+
+        var result = EmailListGroupBuilder.Rebuild(
+            new EmailListGroupBuilder.RebuildInput(
+                Emails,
+                AvailableLabels,
+                preservedProjectGroup,
+                _projectContext?.ProjectLabelName,
+                GroupByLabel,
+                expandedByLabelId),
+            CreateLabelGroup);
+
+        _projectGroup = preservedProjectGroup;
+        _hasLabelGroups = result.HasLabelGroups;
+
+        foreach (var group in result.DisplayGroups)
         {
-            ClearLabelGroups();
-            return;
+            DisplayGroups.Add(group);
         }
 
-        var expandedByLabelId = LabelGroups.ToDictionary(static g => g.LabelId, static g => g.IsExpanded, StringComparer.Ordinal);
-        ClearLabelGroups();
-
-        var labelIdByName = AvailableLabels
-            .Where(static label => !string.IsNullOrWhiteSpace(label.Name) && !string.IsNullOrWhiteSpace(label.Id))
-            .GroupBy(static label => label.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(static g => g.Key, static g => g.First().Id, StringComparer.OrdinalIgnoreCase);
-
-        var groupsById = new Dictionary<string, EmailLabelGroupViewModel>(StringComparer.Ordinal);
-
-        foreach (var row in Emails)
+        FlatDisplayEmails.Clear();
+        foreach (var row in result.FlatDisplayRows)
         {
-            var labelNames = row.LabelChipNames is { Count: > 0 }
-                ? row.LabelChipNames
-                : [row.PrimaryLabel ?? "ללא label"];
-
-            foreach (var labelName in labelNames)
-            {
-                if (string.IsNullOrWhiteSpace(labelName)
-                    || !labelIdByName.TryGetValue(labelName, out var labelId)
-                    || string.IsNullOrWhiteSpace(labelId))
-                {
-                    continue;
-                }
-
-                if (!groupsById.TryGetValue(labelId, out var group))
-                {
-                    group = CreateLabelGroup(labelId, labelName);
-                    if (expandedByLabelId.TryGetValue(labelId, out var isExpanded))
-                    {
-                        group.IsExpanded = isExpanded;
-                    }
-
-                    groupsById[labelId] = group;
-                    LabelGroups.Add(group);
-                }
-
-                group.TryAddEmail(row);
-            }
+            FlatDisplayEmails.Add(row);
         }
 
-        foreach (var group in LabelGroups)
-        {
-            group.ResetPagingState();
-        }
+        NotifyDisplayGroupProperties();
+    }
 
+    private void NotifyDisplayGroupProperties()
+    {
+        OnPropertyChanged(nameof(HasLabelGroups));
         OnPropertyChanged(nameof(ShowLabelGroups));
+        OnPropertyChanged(nameof(ShowFlatEmailList));
+        OnPropertyChanged(nameof(ShowProjectGroupAboveFlat));
+        OnPropertyChanged(nameof(ActiveProjectGroup));
     }
 
     private EmailLabelGroupViewModel CreateLabelGroup(string labelId, string labelDisplayName) =>
@@ -832,35 +818,65 @@ public sealed class EmailListViewModel : ObservableObject
             LoadMoreEmailsForGroupAsync,
             LoadAllEmailsForGroupAsync);
 
-    private EmailMailboxQuery BuildLabelGroupQuery(EmailLabelGroupViewModel group) =>
-        BuildQuery() with
-        {
-            MailboxScope = EmailMailboxScope.Label,
-            LabelId = group.LabelId,
-            LabelName = group.LabelDisplayName,
-        };
-
-    private async Task LoadMoreEmailsForGroupAsync(EmailLabelGroupViewModel group)
+    private async Task EnsureProjectGroupAsync(bool resetPaging)
     {
-        if (!IsConnected || string.IsNullOrWhiteSpace(group.LabelId))
+        if (_projectContext is null || !IsConnected)
+        {
+            ClearProjectGroup();
+            return;
+        }
+
+        var header = _projectContext.GroupHeaderDisplay;
+        if (_projectGroup is null
+            || !string.Equals(_projectGroup.LabelDisplayName, header, StringComparison.Ordinal))
+        {
+            _projectGroup = new EmailLabelGroupViewModel(
+                ResolveProjectGroupLabelId(),
+                header,
+                LoadMoreEmailsForGroupAsync,
+                LoadAllEmailsForGroupAsync,
+                EmailListGroupKind.Project);
+        }
+
+        if (resetPaging)
+        {
+            _projectGroup.ClearEmails();
+            _projectGroup.ResetPagingState();
+            await LoadProjectGroupPageAsync(_projectGroup, isInitialPage: true).ConfigureAwait(true);
+        }
+    }
+
+    private string ResolveProjectGroupLabelId()
+    {
+        var projectLabelName = _projectContext?.ProjectLabelName;
+        if (string.IsNullOrWhiteSpace(projectLabelName))
+        {
+            return $"project:{_projectContext?.ProjectId ?? 0}";
+        }
+
+        var match = AvailableLabels.FirstOrDefault(label =>
+            string.Equals(label.Name, projectLabelName.Trim(), StringComparison.OrdinalIgnoreCase));
+        return !string.IsNullOrWhiteSpace(match?.Id) ? match.Id : $"project:{projectLabelName.Trim()}";
+    }
+
+    private async Task LoadProjectGroupPageAsync(EmailLabelGroupViewModel group, bool isInitialPage)
+    {
+        if (_projectContext is null)
         {
             return;
         }
 
-        group.IsExpanded = true;
         group.IsLoading = true;
         group.ErrorMessage = null;
-        StatusMessage = $"טוען מיילים מהלייבל {group.LabelDisplayName}...";
 
         try
         {
-            var query = BuildLabelGroupQuery(group);
+            var query = BuildProjectGroupQuery(isInitialPage ? ProjectEmailChunkSize : PageSize);
             var page = await _emailGateway
                 .GetMailboxPageAsync(query, group.NextPageToken)
                 .ConfigureAwait(true);
 
             var (rows, _) = await MapSummariesAsync(page.Items).ConfigureAwait(true);
-            rows = ApplyClientLinkFilter(rows);
             foreach (var row in rows)
             {
                 group.TryAddEmail(row);
@@ -868,9 +884,100 @@ public sealed class EmailListViewModel : ObservableObject
 
             group.NextPageToken = page.NextPageToken;
             group.HasMore = page.HasNextPage;
-            if (!page.HasNextPage)
+            group.HasLoadedAll = !page.HasNextPage;
+        }
+        catch (Exception ex)
+        {
+            group.ErrorMessage = $"נטענו {group.LoadedCount} מיילים, אך הטעינה נעצרה בגלל שגיאה: {ex.Message}";
+        }
+        finally
+        {
+            group.IsLoading = false;
+            group.NotifyHeaderChanged();
+        }
+    }
+
+    private EmailMailboxQuery BuildProjectGroupQuery(int pageSize)
+    {
+        var query = BuildQuery() with { PageSize = pageSize };
+        if (!string.IsNullOrWhiteSpace(_projectContext?.ProjectLabelName))
+        {
+            return query with { OptionalProjectLabel = _projectContext.ProjectLabelName.Trim() };
+        }
+
+        return query;
+    }
+
+    private EmailMailboxQuery BuildGroupQuery(EmailLabelGroupViewModel group)
+    {
+        if (group.IsProjectGroup)
+        {
+            return BuildProjectGroupQuery(group.NextPageToken is null ? ProjectEmailChunkSize : PageSize);
+        }
+
+        return BuildQuery() with
+        {
+            MailboxScope = EmailMailboxScope.Label,
+            LabelId = EmailListGroupBuilder.IsSyntheticLabelId(group.LabelId) ? null : group.LabelId,
+            LabelName = group.LabelDisplayName,
+        };
+    }
+
+    private async Task LoadMoreEmailsForGroupAsync(EmailLabelGroupViewModel group)
+    {
+        if (!IsConnected || !group.SupportsRemotePaging)
+        {
+            return;
+        }
+
+        if (group.IsProjectGroup && _projectContext is null)
+        {
+            return;
+        }
+
+        if (!group.IsProjectGroup && string.IsNullOrWhiteSpace(group.LabelId))
+        {
+            return;
+        }
+
+        group.IsExpanded = true;
+        group.IsLoading = true;
+        group.ErrorMessage = null;
+        StatusMessage = group.IsProjectGroup
+            ? $"טוען מיילים של הפרויקט {group.LabelDisplayName}..."
+            : $"טוען מיילים מהלייבל {group.LabelDisplayName}...";
+
+        try
+        {
+            if (group.IsProjectGroup)
             {
-                group.HasLoadedAll = true;
+                await LoadProjectGroupPageAsync(group, isInitialPage: group.NextPageToken is null).ConfigureAwait(true);
+            }
+            else
+            {
+                var query = BuildGroupQuery(group);
+                var page = await _emailGateway
+                    .GetMailboxPageAsync(query, group.NextPageToken)
+                    .ConfigureAwait(true);
+
+                var (rows, _) = await MapSummariesAsync(page.Items).ConfigureAwait(true);
+                rows = ApplyClientLinkFilter(rows);
+                foreach (var row in rows)
+                {
+                    group.TryAddEmail(row);
+                }
+
+                group.NextPageToken = page.NextPageToken;
+                group.HasMore = page.HasNextPage;
+                if (!page.HasNextPage)
+                {
+                    group.HasLoadedAll = true;
+                }
+            }
+
+            if (group.IsProjectGroup)
+            {
+                RebuildDisplayGroups();
             }
         }
         catch (Exception ex)
@@ -907,8 +1014,16 @@ public sealed class EmailListViewModel : ObservableObject
             group.HasLoadedAll = true;
         }
 
+        if (group.IsProjectGroup)
+        {
+            RebuildDisplayGroups();
+        }
+
         group.NotifyHeaderChanged();
     }
+
+    internal Task LoadMailboxAndProjectForTestsAsync(bool resetStack) =>
+        LoadMailboxAndProjectAsync(resetStack);
 
     internal Task LoadMoreForLabelGroupForTestsAsync(EmailLabelGroupViewModel group) =>
         LoadMoreEmailsForGroupAsync(group);
@@ -931,14 +1046,9 @@ public sealed class EmailListViewModel : ObservableObject
     private async Task LoadPageAsync(
         bool resetStack,
         bool useNextToken = false,
-        string? explicitToken = null)
+        string? explicitToken = null,
+        bool skipDisplayRebuild = false)
     {
-        if (IsProjectMode)
-        {
-            await LoadProjectEmailsAsync(resetVisibleCount: resetStack).ConfigureAwait(true);
-            return;
-        }
-
         LoadError = null;
         LoadWarning = null;
 
@@ -1011,7 +1121,7 @@ public sealed class EmailListViewModel : ObservableObject
 
             rows = ApplyClientLinkFilter(rows);
 
-            ReplaceRows(rows, previousSelectionId);
+            ReplaceRows(rows, previousSelectionId, skipDisplayRebuild);
             DisplayedCount = rows.Count;
             OnPropertyChanged(nameof(PageInfo));
             OnPropertyChanged(nameof(HasPreviousPage));
@@ -1092,114 +1202,10 @@ public sealed class EmailListViewModel : ObservableObject
         OnPropertyChanged(nameof(MailboxDiagnostics));
     }
 
-    private async Task LoadProjectEmailsAsync(bool resetVisibleCount)
-    {
-        LoadError = null;
-        LoadWarning = null;
-
-        if (_projectContext is null)
-        {
-            await LoadPageAsync(resetStack: true).ConfigureAwait(true);
-            return;
-        }
-
-        if (!IsConnected)
-        {
-            LoadState = EmailListLoadState.Error;
-            LoadError = "Gmail לא מחובר. התחבר ונסה שוב.";
-            StatusMessage = LoadError;
-            return;
-        }
-
-        var previousSelectionId = SelectedEmail?.Id;
-        IsBusy = true;
-        LoadState = EmailListLoadState.Loading;
-        StatusMessage = "טוען מיילים של הפרויקט…";
-
-        try
-        {
-            if (resetVisibleCount || _projectEmailRows.Count == 0)
-            {
-                var summaries = await FetchProjectSummariesAsync(_projectContext).ConfigureAwait(true);
-                var (rows, enrichmentWarning) = await MapSummariesAsync(summaries).ConfigureAwait(true);
-                if (!string.IsNullOrWhiteSpace(enrichmentWarning))
-                {
-                    LoadWarning = enrichmentWarning;
-                }
-
-                _projectEmailRows = rows;
-                _projectVisibleCount = Math.Min(ProjectEmailChunkSize, rows.Count);
-            }
-
-            var visibleRows = _projectEmailRows.Take(_projectVisibleCount).ToList();
-            HasMoreProjectEmails = _projectVisibleCount < _projectEmailRows.Count;
-            ReplaceRows(visibleRows, previousSelectionId);
-            DisplayedCount = visibleRows.Count;
-
-            if (_projectEmailRows.Count == 0)
-            {
-                LoadState = EmailListLoadState.NoResults;
-                LoadError = null;
-                StatusMessage = "לא נמצאו מיילים משויכים לפרויקט הנבחר.";
-            }
-            else
-            {
-                LoadState = string.IsNullOrWhiteSpace(LoadWarning)
-                    ? EmailListLoadState.Loaded
-                    : EmailListLoadState.PartialFailure;
-                StatusMessage = $"נטענו {visibleRows.Count} מתוך {_projectEmailRows.Count} מיילים של הפרויקט.";
-            }
-        }
-        catch (Exception ex)
-        {
-            LoadState = EmailListLoadState.Error;
-            LoadError = $"טעינת מיילי הפרויקט נכשלה: {ex.Message}";
-            StatusMessage = LoadError;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private void ShowMoreProjectEmails()
-    {
-        if (!IsProjectMode || _projectEmailRows.Count == 0)
-        {
-            return;
-        }
-
-        _projectVisibleCount = Math.Min(_projectVisibleCount + ProjectEmailChunkSize, _projectEmailRows.Count);
-        var visibleRows = _projectEmailRows.Take(_projectVisibleCount).ToList();
-        HasMoreProjectEmails = _projectVisibleCount < _projectEmailRows.Count;
-        ReplaceRows(visibleRows, SelectedEmail?.Id);
-        DisplayedCount = visibleRows.Count;
-        StatusMessage = $"מציג {visibleRows.Count} מתוך {_projectEmailRows.Count} מיילים של הפרויקט.";
-    }
-
-    private async Task<IReadOnlyList<EmailSummary>> FetchProjectSummariesAsync(EmailListProjectContext context)
-    {
-        if (!string.IsNullOrWhiteSpace(context.ProjectLabelName))
-        {
-            return await _emailGateway
-                .GetProjectEmailsByProjectLabelAsync(context.ProjectLabelName.Trim())
-                .ConfigureAwait(true);
-        }
-
-        if (!string.IsNullOrWhiteSpace(context.LocationName)
-            && !string.IsNullOrWhiteSpace(context.ProjectName))
-        {
-            return await _emailGateway
-                .GetProjectEmailsAsync(context.LocationName.Trim(), context.ProjectName.Trim())
-                .ConfigureAwait(true);
-        }
-
-        throw new InvalidOperationException("חסר Project label לטעינת מיילי פרויקט.");
-    }
-
     private void NotifyDisplayModeProperties()
     {
         OnPropertyChanged(nameof(DisplayMode));
+        OnPropertyChanged(nameof(HasActiveProject));
         OnPropertyChanged(nameof(IsProjectMode));
         OnPropertyChanged(nameof(IsAllEmailsMode));
         OnPropertyChanged(nameof(ShowAllEmailsPaging));
@@ -1208,6 +1214,7 @@ public sealed class EmailListViewModel : ObservableObject
         OnPropertyChanged(nameof(DisplayModeSummary));
         OnPropertyChanged(nameof(ProjectGroupHeader));
         OnPropertyChanged(nameof(PageInfo));
+        OnPropertyChanged(nameof(ActiveProjectGroup));
         (ToggleGroupByLabelCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (ApplyFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
@@ -1354,7 +1361,7 @@ public sealed class EmailListViewModel : ObservableObject
         };
     }
 
-    private void ReplaceRows(IReadOnlyList<EmailListRow> rows, string? preserveSelectionId = null)
+    private void ReplaceRows(IReadOnlyList<EmailListRow> rows, string? preserveSelectionId = null, bool skipDisplayRebuild = false)
     {
         Emails.Clear();
         foreach (var row in rows)
@@ -1363,15 +1370,18 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         ApplyGrouping();
-        if (GroupByLabel)
+        if (!skipDisplayRebuild)
         {
-            RebuildLabelGroupsFromCurrentEmails();
+            RebuildDisplayGroups();
         }
 
+        var selectionPool = FlatDisplayEmails.Count > 0 ? FlatDisplayEmails : Emails;
         SelectedEmail = preserveSelectionId is null
-            ? Emails.FirstOrDefault()
-            : Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
-              ?? Emails.FirstOrDefault();
+            ? selectionPool.FirstOrDefault() ?? _projectGroup?.Emails.FirstOrDefault()
+            : selectionPool.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
+              ?? _projectGroup?.Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
+              ?? selectionPool.FirstOrDefault()
+              ?? _projectGroup?.Emails.FirstOrDefault();
         OnPropertyChanged(nameof(UnreadInCurrentPage));
         OnPropertyChanged(nameof(UnreadCountDisplay));
         OnPropertyChanged(nameof(ShowUnreadCount));
@@ -1388,7 +1398,6 @@ public sealed class EmailListViewModel : ObservableObject
         (ClearFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        (ShowMoreProjectEmailsCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private sealed class DesignEmailListGateway : IEmailGateway

@@ -56,7 +56,8 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
     {
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
-        Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("<ScrollViewer", listXaml, StringComparison.Ordinal);
         Assert.Contains("Height=\"*\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Stretch\"", listXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("VirtualizingStackPanel", listXaml, StringComparison.Ordinal);
@@ -67,8 +68,8 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
     {
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
-        Assert.Contains("ScrollViewer.CanContentScroll=\"False\"", listXaml, StringComparison.Ordinal);
-        Assert.Contains("LabelGroups", listXaml, StringComparison.Ordinal);
+        Assert.Contains("CanContentScroll=\"False\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("DisplayGroups", listXaml, StringComparison.Ordinal);
         Assert.Contains("Expander", listXaml, StringComparison.Ordinal);
     }
 

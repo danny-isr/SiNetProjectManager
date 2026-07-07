@@ -179,11 +179,11 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Selected_project_shows_project_email_group()
     {
-        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
+        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
 
-        Assert.Contains("ShowProjectGroupChrome", filterBarXaml, StringComparison.Ordinal);
-        Assert.Contains("ProjectGroupHeader", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ActiveProjectGroup", listXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListGroupKind.Project", listVmSource, StringComparison.Ordinal);
         Assert.Contains("EmailListDisplayMode.ProjectEmails", listVmSource, StringComparison.Ordinal);
     }
 
@@ -193,17 +193,18 @@ public sealed class EmailListSliceBoundaryTests
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
 
         Assert.Contains("ProjectEmailChunkSize = 10", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("GetProjectEmailsByProjectLabelAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("OptionalProjectLabel", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("EnsureProjectGroupAsync", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Selected_project_group_show_more_loads_next_10()
+    public void Selected_project_group_load_all_uses_group_commands()
     {
+        var headerXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailLabelGroupHeader.xaml");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
-        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
-        Assert.Contains("ShowMoreProjectEmails", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("ShowMoreProjectEmailsCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadAllForLabelCommand", headerXaml, StringComparison.Ordinal);
+        Assert.Contains("LoadAllEmailsForGroupAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("ProjectEmailChunkSize", listVmSource, StringComparison.Ordinal);
     }
 
@@ -223,10 +224,9 @@ public sealed class EmailListSliceBoundaryTests
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
 
-        Assert.Contains("ShowAllEmailsPaging", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("IsAllEmailsMode", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadMailboxAndProjectAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("GetMailboxPageAsync", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("GetProjectEmailsByProjectLabelAsync", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("OptionalProjectLabel", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

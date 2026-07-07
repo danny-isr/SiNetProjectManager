@@ -124,49 +124,18 @@
                                 Command="{Binding LoadNextPageCommand}"
                                 Style="{StaticResource ActionButton}"
                                 IsEnabled="{Binding HasNextPage}" />
-                        <Button Content="קבץ label"
-                                Command="{Binding ToggleGroupByLabelCommand}"
-                                Style="{StaticResource ActionButton}" />
+                        <ToggleButton Content="קבץ label"
+                                      IsChecked="{Binding GroupByLabel, Mode=OneWay}"
+                                      Command="{Binding ToggleGroupByLabelCommand}"
+                                      Style="{StaticResource ActionButton}" />
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- Project group chrome -->
-            <Border Padding="0,6"
-                    BorderBrush="#EEE"
-                    BorderThickness="0,1,0,0"
-                    Background="#F5F8FF"
-                    Visibility="{Binding ShowProjectGroupChrome, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <TextBlock Text="{Binding DisplayModeSummary}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource SiPrimaryBrush}"
-                               FontSize="{DynamicResource SiTextSmallFontSize}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <TextBlock Text="מיילים של הפרויקט:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,6,0"
-                                   FontSize="{DynamicResource SiTextSmallFontSize}" />
-                        <TextBlock Text="{Binding ProjectGroupHeader}"
-                                   FontWeight="Bold"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxWidth="480"
-                                   ToolTip="{Binding ProjectGroupHeader}" />
-                        <Button Content="הצג עוד"
-                                Command="{Binding ShowMoreProjectEmailsCommand}"
-                                Style="{StaticResource ActionButton}"
-                                Margin="12,0,0,0"
-                                Visibility="{Binding HasMoreProjectEmails, Converter={StaticResource BoolToVis}}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Filters (all-emails mode) -->
+            <!-- Filters -->
             <Border Padding="0,6,0,0"
                     BorderBrush="#EEE"
-                    BorderThickness="0,1,0,0"
-                    Visibility="{Binding IsAllEmailsMode, Converter={StaticResource BoolToVis}}">
+                    BorderThickness="0,1,0,0">
                 <StackPanel>
                 <WrapPanel Orientation="Horizontal">
                     <ComboBox Width="100" Height="24"
