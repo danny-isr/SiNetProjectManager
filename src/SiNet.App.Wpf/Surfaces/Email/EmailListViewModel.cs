@@ -594,17 +594,162 @@ public sealed class EmailListViewModel : ObservableObject
     private bool CanExecuteWriteAction(EmailListRow? row) =>
         row is not null && IsConnected && !IsBusy;
 
+    /// <summary>Hebrew tooltip when a context menu action is disabled; null when enabled.</summary>
+    public string? GetContextMenuDisabledReason(EmailListRow? row, EmailContextMenuAction action)
+    {
+        if (IsActionEnabled(row, action))
+        {
+            return null;
+        }
+
+        return action switch
+        {
+            EmailContextMenuAction.FileToProject => DescribeFileToProjectDisabledReason(row),
+            EmailContextMenuAction.Unfile => DescribeUnfileDisabledReason(row),
+            EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
+                => DescribeSetStatusDisabledReason(row),
+            _ => "הפעולה אינה זמינה.",
+        };
+    }
+
+    private bool IsActionEnabled(EmailListRow? row, EmailContextMenuAction action) =>
+        action switch
+        {
+            EmailContextMenuAction.FileToProject => CanFileEmailToProject(row),
+            EmailContextMenuAction.Unfile => CanUnfileEmail(row),
+            EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
+                => CanSetEmailStatus(row),
+            _ => false,
+        };
+
+    private string? DescribeWriteActionBlockedReason(EmailListRow? row)
+    {
+        if (row is null)
+        {
+            return "לא נבחר מייל.";
+        }
+
+        if (!IsConnected)
+        {
+            return "חבר Gmail לפני ביצוע פעולה.";
+        }
+
+        if (IsBusy)
+        {
+            return "המערכת עסוקה — נסה שוב בעוד רגע.";
+        }
+
+        return null;
+    }
+
+    private string? DescribeFileToProjectDisabledReason(EmailListRow? row)
+    {
+        var blocked = DescribeWriteActionBlockedReason(row);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        if (_filingService is null)
+        {
+            return "שירות שיוך מיילים לא זמין.";
+        }
+
+        if ((_currentUser?.UserId ?? 0) <= 0)
+        {
+            return "לא ניתן לבצע פעולה — אין משתמש מחובר במערכת.";
+        }
+
+        if (_currentProject?.CurrentProject is null)
+        {
+            return "בחר פרויקט לפני שיוך מייל.";
+        }
+
+        if (row is not null && IsFiledToSameProject(row))
+        {
+            return "המייל כבר משויך לפרויקט הנבחר.";
+        }
+
+        return "לא ניתן לשייך מייל לפרויקט.";
+    }
+
+    private string? DescribeUnfileDisabledReason(EmailListRow? row)
+    {
+        var blocked = DescribeWriteActionBlockedReason(row);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        if (_filingService is null)
+        {
+            return "שירות שיוך מיילים לא זמין.";
+        }
+
+        if ((_currentUser?.UserId ?? 0) <= 0)
+        {
+            return "לא ניתן לבצע פעולה — אין משתמש מחובר במערכת.";
+        }
+
+        if (row is not { IsFiledToProject: true })
+        {
+            return "המייל לא משויך לפרויקט.";
+        }
+
+        return "לא ניתן לבטל שיוך.";
+    }
+
+    private string? DescribeSetStatusDisabledReason(EmailListRow? row)
+    {
+        var blocked = DescribeWriteActionBlockedReason(row);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        if (_statusService is null)
+        {
+            return "שירות עדכון סטטוס מייל לא זמין.";
+        }
+
+        if ((_currentUser?.UserId ?? 0) <= 0)
+        {
+            return "לא ניתן לבצע פעולה — אין משתמש מחובר במערכת.";
+        }
+
+        return "לא ניתן לעדכן סטטוס.";
+    }
+
     private async Task FileEmailToProjectAsync(EmailListRow? row)
     {
-        if (row is null || _filingService is null || _currentProject?.CurrentProject is not { } project)
+        if (row is null)
         {
+            LoadWarning = DescribeWriteActionBlockedReason(null) ?? "לא נבחר מייל.";
+            return;
+        }
+
+        if (_filingService is null)
+        {
+            LoadWarning = DescribeFileToProjectDisabledReason(row);
+            return;
+        }
+
+        if (_currentProject?.CurrentProject is not { } project)
+        {
+            LoadWarning = DescribeFileToProjectDisabledReason(row);
             return;
         }
 
         var actingUserId = _currentUser?.UserId;
         if (actingUserId is null or <= 0)
         {
-            LoadWarning = "לא ניתן לשייך — חסר משתמש מחובר.";
+            LoadWarning = DescribeFileToProjectDisabledReason(row);
+            return;
+        }
+
+        if (IsFiledToSameProject(row))
+        {
+            LoadWarning = DescribeFileToProjectDisabledReason(row);
             return;
         }
 
@@ -626,6 +771,7 @@ public sealed class EmailListViewModel : ObservableObject
             }
 
             LoadWarning = null;
+            StatusMessage = "המייל שויך לפרויקט בהצלחה.";
             await RefreshPageAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -640,15 +786,28 @@ public sealed class EmailListViewModel : ObservableObject
 
     private async Task UnfileEmailAsync(EmailListRow? row)
     {
-        if (row is null || _filingService is null)
+        if (row is null)
         {
+            LoadWarning = DescribeWriteActionBlockedReason(null) ?? "לא נבחר מייל.";
+            return;
+        }
+
+        if (_filingService is null)
+        {
+            LoadWarning = DescribeUnfileDisabledReason(row);
             return;
         }
 
         var actingUserId = _currentUser?.UserId;
         if (actingUserId is null or <= 0)
         {
-            LoadWarning = "לא ניתן לבטל שיוך — חסר משתמש מחובר.";
+            LoadWarning = DescribeUnfileDisabledReason(row);
+            return;
+        }
+
+        if (!row.IsFiledToProject)
+        {
+            LoadWarning = DescribeUnfileDisabledReason(row);
             return;
         }
 
@@ -670,6 +829,7 @@ public sealed class EmailListViewModel : ObservableObject
             }
 
             LoadWarning = null;
+            StatusMessage = "שיוך המייל לפרויקט בוטל.";
             await RefreshPageAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -684,15 +844,22 @@ public sealed class EmailListViewModel : ObservableObject
 
     private async Task SetEmailStatusAsync(EmailListRow? row, EmailTriageStatus status)
     {
-        if (row is null || _statusService is null)
+        if (row is null)
         {
+            LoadWarning = DescribeWriteActionBlockedReason(null) ?? "לא נבחר מייל.";
+            return;
+        }
+
+        if (_statusService is null)
+        {
+            LoadWarning = DescribeSetStatusDisabledReason(row);
             return;
         }
 
         var actingUserId = _currentUser?.UserId;
         if (actingUserId is null or <= 0)
         {
-            LoadWarning = "לא ניתן לעדכן סטטוס — חסר משתמש מחובר.";
+            LoadWarning = DescribeSetStatusDisabledReason(row);
             return;
         }
 
@@ -714,6 +881,13 @@ public sealed class EmailListViewModel : ObservableObject
             }
 
             LoadWarning = null;
+            StatusMessage = status switch
+            {
+                EmailTriageStatus.Pending => "המייל סומן כממתין לטיפול.",
+                EmailTriageStatus.Personal => "המייל סומן כאישי.",
+                EmailTriageStatus.Irrelevant => "המייל סומן כלא רלוונטי.",
+                _ => "סטטוס המייל עודכן.",
+            };
 
             if (status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant)
             {
@@ -846,6 +1020,11 @@ public sealed class EmailListViewModel : ObservableObject
     }
 
     internal Task FileEmailToProjectForTestsAsync(EmailListRow? row) => FileEmailToProjectAsync(row);
+
+    internal Task UnfileEmailForTestsAsync(EmailListRow? row) => UnfileEmailAsync(row);
+
+    internal Task MarkAsPersonalForTestsAsync(EmailListRow? row) =>
+        SetEmailStatusAsync(row, EmailTriageStatus.Personal);
 
     internal void ClearEmailStateForTests() => ClearEmailState();
 

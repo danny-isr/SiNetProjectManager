@@ -14,6 +14,7 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <theme:HexToBrushConverter x:Key="HexToBrush" />
+        <local:EmailContextMenuDisabledReasonConverter x:Key="ContextMenuDisabledReasonConverter" />
 
         <Style x:Key="EmailListContainerStyle" TargetType="ListBox">
             <Setter Property="BorderThickness" Value="0" />
@@ -30,12 +31,23 @@
             <Setter Property="BorderBrush" Value="#EEEEEE" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Background" Value="{Binding RowBackgroundColor, Converter={StaticResource HexToBrush}}" />
+            <Setter Property="Tag"
+                    Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=local:EmailListView}}" />
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                         <MenuItem Header="📁 שייך לפרויקט"
-                                  Command="{Binding DataContext.FileEmailToProjectCommand, Source={x:Reference EmailListRoot}}"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.FileEmailToProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="FileToProject">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
                             <MenuItem.Style>
                                 <Style TargetType="MenuItem">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -48,8 +60,17 @@
                             </MenuItem.Style>
                         </MenuItem>
                         <MenuItem Header="↩️ בטל שיוך"
-                                  Command="{Binding DataContext.UnfileEmailCommand, Source={x:Reference EmailListRoot}}"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.UnfileEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="Unfile">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
                             <MenuItem.Style>
                                 <Style TargetType="MenuItem">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -63,14 +84,44 @@
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="⏳ סמן כממתין לטיפול"
-                                  Command="{Binding DataContext.MarkAsPendingCommand, Source={x:Reference EmailListRoot}}"
-                                  CommandParameter="{Binding}" />
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.MarkAsPendingCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="MarkPending">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
+                        </MenuItem>
                         <MenuItem Header="👤 סמן כאישי"
-                                  Command="{Binding DataContext.MarkAsPersonalCommand, Source={x:Reference EmailListRoot}}"
-                                  CommandParameter="{Binding}" />
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.MarkAsPersonalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="MarkPersonal">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
+                        </MenuItem>
                         <MenuItem Header="🚫 סמן כלא רלוונטי"
-                                  Command="{Binding DataContext.MarkAsIrrelevantCommand, Source={x:Reference EmailListRoot}}"
-                                  CommandParameter="{Binding}" />
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.MarkAsIrrelevantCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="MarkIrrelevant">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
+                        </MenuItem>
                     </ContextMenu>
                 </Setter.Value>
             </Setter>

@@ -40,6 +40,8 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSiNetAutodesk();
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         services.AddSiNetGoogle(ConfigureNewSystemGmail);
+        SiNet.Infrastructure.Sql.EmailReadServiceCollectionExtensions.AddSiNetEmailReadSql(services);
+        SiNet.Infrastructure.Sql.EmailWriteServiceCollectionExtensions.AddSiNetEmailWriteSql(services);
         services.AddSiNetNewSystemWpf();
         services.AddSiNetDevTools();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();

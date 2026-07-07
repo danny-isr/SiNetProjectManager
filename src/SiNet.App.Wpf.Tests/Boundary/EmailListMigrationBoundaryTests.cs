@@ -40,14 +40,30 @@ public sealed class EmailListMigrationBoundaryTests
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var composition = ReadRepoFile("src/SiNet.App.Composition/SiNetCompositionExtensions.cs");
+        var v2Graph = ReadRepoFile("SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs");
 
         Assert.Contains("IEmailFilingService", listVmSource, StringComparison.Ordinal);
         Assert.Contains("IEmailStatusService", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("FileEmailToProjectCommand", listXaml, StringComparison.Ordinal);
+        Assert.Contains("GetContextMenuDisabledReason", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("PlacementTarget.Tag.FileEmailToProjectCommand", listXaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTipService.ShowOnDisabled", listXaml, StringComparison.Ordinal);
+        Assert.Contains("AncestorType=local:EmailListView", listXaml, StringComparison.Ordinal);
         Assert.Contains("📁 שייך לפרויקט", listXaml, StringComparison.Ordinal);
         Assert.Contains("↩️ בטל שיוך", listXaml, StringComparison.Ordinal);
         Assert.Contains("⏳ סמן כממתין לטיפול", listXaml, StringComparison.Ordinal);
         Assert.Contains("AddSiNetEmailWriteSql", composition, StringComparison.Ordinal);
+        Assert.Contains("AddSiNetEmailWriteSql", v2Graph, StringComparison.Ordinal);
+        Assert.Contains("AddSiNetEmailReadSql", v2Graph, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_view_model_has_no_direct_db_write()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+
+        Assert.DoesNotContain("SiNetDbContext", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SqlEmailFilingService", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GmailEmailModifyService", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

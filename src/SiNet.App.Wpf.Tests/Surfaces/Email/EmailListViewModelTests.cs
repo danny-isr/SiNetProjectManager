@@ -896,6 +896,174 @@ public sealed class EmailListViewModelTests
         Assert.True(sut.UnfileEmailCommand.CanExecute(row));
     }
 
+    [Fact]
+    public void Email_context_menu_commands_receive_email_row_parameter()
+    {
+        var filing = new RecordingFilingService();
+        var sut = CreateWriteCapableSut(filing: filing);
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.True(sut.FileEmailToProjectCommand.CanExecute(row));
+        sut.FileEmailToProjectCommand.Execute(row);
+        Assert.True(filing.FileCalled);
+        Assert.Equal("msg-1", filing.LastFileCommand?.GmailMessageId);
+    }
+
+    [Fact]
+    public void Email_context_menu_link_project_disabled_without_current_user()
+    {
+        var sut = CreateWriteCapableSut(
+            filing: new RecordingFilingService(),
+            user: new StubCurrentUser(0));
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.False(sut.FileEmailToProjectCommand.CanExecute(row));
+        var reason = sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.FileToProject);
+        Assert.NotNull(reason);
+        Assert.Contains("משתמש", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_context_menu_link_project_disabled_without_current_project()
+    {
+        var sut = CreateWriteCapableSut(
+            filing: new RecordingFilingService(),
+            project: new StubCurrentProjectContext(project: null));
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.False(sut.FileEmailToProjectCommand.CanExecute(row));
+        var reason = sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.FileToProject);
+        Assert.NotNull(reason);
+        Assert.Contains("פרויקט", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_context_menu_link_project_disabled_without_filing_service()
+    {
+        var sut = CreateWriteCapableSut(filing: null);
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.False(sut.FileEmailToProjectCommand.CanExecute(row));
+        var reason = sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.FileToProject);
+        Assert.NotNull(reason);
+        Assert.Contains("שירות", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_context_menu_link_project_enabled_with_user_project_and_service()
+    {
+        var sut = CreateWriteCapableSut(filing: new RecordingFilingService());
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.True(sut.FileEmailToProjectCommand.CanExecute(row));
+        Assert.Null(sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.FileToProject));
+    }
+
+    [Fact]
+    public void Email_context_menu_unfile_enabled_for_filed_email()
+    {
+        var sut = CreateWriteCapableSut(filing: new RecordingFilingService());
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: true);
+
+        Assert.True(sut.UnfileEmailCommand.CanExecute(row));
+    }
+
+    [Fact]
+    public void Email_context_menu_unfile_disabled_for_unfiled_email()
+    {
+        var sut = CreateWriteCapableSut(filing: new RecordingFilingService());
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.False(sut.UnfileEmailCommand.CanExecute(row));
+        Assert.NotNull(sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.Unfile));
+    }
+
+    [Fact]
+    public void Email_context_menu_personal_disabled_without_status_service()
+    {
+        var sut = CreateWriteCapableSut(status: null);
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.False(sut.MarkAsPersonalCommand.CanExecute(row));
+        var reason = sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.MarkPersonal);
+        Assert.NotNull(reason);
+        Assert.Contains("סטטוס", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_context_menu_personal_disabled_without_current_user()
+    {
+        var sut = CreateWriteCapableSut(
+            status: new RecordingStatusService(),
+            user: new StubCurrentUser(0));
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.False(sut.MarkAsPersonalCommand.CanExecute(row));
+        Assert.NotNull(sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.MarkPersonal));
+    }
+
+    [Fact]
+    public void Email_context_menu_personal_enabled_with_user_and_status_service()
+    {
+        var sut = CreateWriteCapableSut(status: new RecordingStatusService());
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.True(sut.MarkAsPersonalCommand.CanExecute(row));
+    }
+
+    [Fact]
+    public void Disabled_context_menu_actions_show_reason_or_status_message()
+    {
+        var sut = CreateWriteCapableSut(
+            filing: null,
+            status: null,
+            user: new StubCurrentUser(0));
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
+
+        Assert.NotNull(sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.FileToProject));
+        Assert.NotNull(sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.MarkPersonal));
+    }
+
+    [Fact]
+    public async Task Unfile_email_calls_IEmailFilingService()
+    {
+        var filing = new RecordingFilingService();
+        var sut = CreateWriteCapableSut(filing: filing);
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: true);
+
+        await sut.UnfileEmailForTestsAsync(row);
+
+        Assert.True(filing.UnfileCalled);
+    }
+
+    [Fact]
+    public async Task Mark_personal_calls_IEmailStatusService()
+    {
+        var status = new RecordingStatusService();
+        var sut = CreateWriteCapableSut(status: status);
+        var row = CreateRow(inboxMessageId: 5, isFiledToProject: false);
+
+        await sut.MarkAsPersonalForTestsAsync(row);
+
+        Assert.True(status.StatusCalled);
+        Assert.Equal(EmailTriageStatus.Personal, status.LastStatus);
+    }
+
+    private static EmailListViewModel CreateWriteCapableSut(
+        IEmailFilingService? filing = null,
+        IEmailStatusService? status = null,
+        ICurrentProjectContext? project = null,
+        ICurrentUserContext? user = null,
+        IConnectorAuthService? auth = null) =>
+        new(
+            new PagingEmailGateway(),
+            threadLinkQuery: null,
+            auth ?? new StubAuthService(),
+            filing,
+            status,
+            project ?? new StubCurrentProjectContext(CreateProject()),
+            user ?? new StubCurrentUser(7));
+
     private static EmailListRow CreateRow(int? inboxMessageId, bool isFiledToProject) =>
         new(
             Id: "msg-1",
@@ -1557,7 +1725,11 @@ public sealed class EmailListViewModelTests
     {
         public bool FileCalled { get; private set; }
 
+        public bool UnfileCalled { get; private set; }
+
         public FileEmailToProjectCommand? LastFileCommand { get; private set; }
+
+        public UnfileEmailCommand? LastUnfileCommand { get; private set; }
 
         public Task<EmailFilingResult> FileToProjectAsync(
             FileEmailToProjectCommand command,
@@ -1570,8 +1742,28 @@ public sealed class EmailListViewModelTests
 
         public Task<EmailFilingResult> UnfileFromProjectAsync(
             UnfileEmailCommand command,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new EmailFilingResult(true));
+            CancellationToken cancellationToken = default)
+        {
+            UnfileCalled = true;
+            LastUnfileCommand = command;
+            return Task.FromResult(new EmailFilingResult(true));
+        }
+    }
+
+    private sealed class RecordingStatusService : IEmailStatusService
+    {
+        public bool StatusCalled { get; private set; }
+
+        public EmailTriageStatus? LastStatus { get; private set; }
+
+        public Task<EmailStatusResult> SetStatusAsync(
+            SetEmailStatusCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            StatusCalled = true;
+            LastStatus = command.Status;
+            return Task.FromResult(new EmailStatusResult(true));
+        }
     }
 
     private sealed class AttachmentCountEmailGateway : IEmailGateway
