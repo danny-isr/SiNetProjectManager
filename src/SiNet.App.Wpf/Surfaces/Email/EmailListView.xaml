@@ -73,13 +73,7 @@
                      BorderThickness="0"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.CanContentScroll="True">
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <VirtualizingStackPanel VirtualizingPanel.IsVirtualizing="True"
-                                                VirtualizingPanel.VirtualizationMode="Recycling" />
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
+                     ScrollViewer.CanContentScroll="False">
                 <ListBox.GroupStyle>
                     <GroupStyle>
                         <GroupStyle.HeaderTemplate>

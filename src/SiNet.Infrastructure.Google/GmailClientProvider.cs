@@ -1,9 +1,11 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Requests;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Common;
 using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Google;
@@ -143,15 +145,31 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// On success the cached <see cref="GmailService"/> is (re)built so a subsequent inbox load
     /// uses the new session. Never throws; failures are reported via the returned result.
     /// </summary>
-    public async Task<GmailSignInResult> SignInInteractiveAsync(CancellationToken cancellationToken = default)
+    public Task<GmailSignInResult> SignInInteractiveAsync(CancellationToken cancellationToken = default) =>
+        SignInInteractiveAsync(options: null, cancellationToken);
+
+    /// <summary>
+    /// Performs an <b>explicit, user-initiated</b> sign-in. By default tries silent restore first;
+    /// when <paramref name="options"/>.<see cref="ConnectorLoginOptions.SkipSilentRestore"/> is
+    /// <c>true</c>, opens the browser immediately. Raises <see cref="AuthStateChanged"/> on transition.
+    /// </summary>
+    public async Task<GmailSignInResult> SignInInteractiveAsync(
+        ConnectorLoginOptions? options,
+        CancellationToken cancellationToken = default)
     {
         var wasSignedIn = _gmailService != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_gmailService != null)
+            if (_gmailService != null && options?.SkipSilentRestore != true)
             {
                 return GmailSignInResult.Success;
+            }
+
+            if (_gmailService != null)
+            {
+                _gmailService.Dispose();
+                _gmailService = null;
             }
 
             var setup = await TryPrepareAuthAsync(cancellationToken).ConfigureAwait(false);
@@ -162,9 +180,17 @@ public sealed class GmailClientProvider : IAsyncDisposable
 
             var (secrets, dataStore) = setup.Value;
 
-            var credential =
-                await TryRestoreAsync(secrets, dataStore, cancellationToken).ConfigureAwait(false)
-                ?? await AuthorizeInteractiveAsync(secrets, dataStore, cancellationToken).ConfigureAwait(false);
+            UserCredential? credential = null;
+            if (options?.SkipSilentRestore != true)
+            {
+                credential = await TryRestoreAsync(secrets, dataStore, cancellationToken).ConfigureAwait(false);
+            }
+
+            credential ??= await AuthorizeInteractiveAsync(
+                secrets,
+                dataStore,
+                promptAccountSelection: options?.PromptAccountSelection == true,
+                cancellationToken).ConfigureAwait(false);
 
             if (credential == null)
             {
@@ -187,10 +213,8 @@ public sealed class GmailClientProvider : IAsyncDisposable
     }
 
     /// <summary>
-    /// Drops the cached Gmail session so the provider reports as signed-out. Does not revoke or
-    /// delete the persisted refresh token, so a subsequent <see cref="TrySignInSilentlyAsync"/>
-    /// can restore the session without a browser. Raises <see cref="AuthStateChanged"/> when the
-    /// state actually transitions from signed-in to signed-out.
+    /// Signs out: disposes the cached client and deletes the persisted refresh token directory so
+    /// the next sign-in requires fresh OAuth consent. Raises <see cref="AuthStateChanged"/> on transition.
     /// </summary>
     public void Logout()
     {
@@ -200,11 +224,43 @@ public sealed class GmailClientProvider : IAsyncDisposable
         {
             _gmailService?.Dispose();
             _gmailService = null;
+            DeletePersistedTokenStore();
         }
         finally
         {
             _gate.Release();
             RaiseIfAuthStateChanged(wasSignedIn);
+        }
+    }
+
+    internal static void DeleteTokenStoreDirectory(string? tokenStorePath)
+    {
+        var tokenPath = Environment.ExpandEnvironmentVariables(
+            string.IsNullOrWhiteSpace(tokenStorePath) ? "sinet-google-token" : tokenStorePath);
+
+        try
+        {
+            if (Directory.Exists(tokenPath))
+            {
+                Directory.Delete(tokenPath, recursive: true);
+            }
+        }
+        catch
+        {
+            // Best-effort; callers must not throw to UI.
+        }
+    }
+
+    private void DeletePersistedTokenStore()
+    {
+        try
+        {
+            DeleteTokenStoreDirectory(_options.TokenStorePath);
+            _logger.Info("[Gmail] Persisted token store deleted on logout.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Gmail] Failed to delete token store on logout: {ex.Message}");
         }
     }
 
@@ -260,7 +316,8 @@ public sealed class GmailClientProvider : IAsyncDisposable
             return null;
         }
 
-        return await AuthorizeInteractiveAsync(secrets, dataStore, cancellationToken).ConfigureAwait(false);
+        return await AuthorizeInteractiveAsync(secrets, dataStore, promptAccountSelection: false, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -326,19 +383,44 @@ public sealed class GmailClientProvider : IAsyncDisposable
     private async Task<UserCredential?> AuthorizeInteractiveAsync(
         ClientSecrets secrets,
         IDataStore dataStore,
+        bool promptAccountSelection,
         CancellationToken cancellationToken)
     {
         try
         {
-            var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-                secrets,
-                Scopes,
-                TokenUser,
-                cancellationToken,
-                dataStore).ConfigureAwait(false);
+            if (!promptAccountSelection)
+            {
+                var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+                    secrets,
+                    Scopes,
+                    TokenUser,
+                    cancellationToken,
+                    dataStore).ConfigureAwait(false);
 
-            _logger.Info("[Gmail] Interactive sign-in completed.");
-            return credential;
+                _logger.Info("[Gmail] Interactive sign-in completed.");
+                return credential;
+            }
+
+            var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+            {
+                ClientSecrets = secrets,
+                Scopes = Scopes,
+                DataStore = dataStore,
+            });
+
+            var receiver = new LocalServerCodeReceiver();
+            var request = (GoogleAuthorizationCodeRequestUrl)flow.CreateAuthorizationCodeRequest(receiver.RedirectUri);
+            request.Prompt = "select_account";
+
+            var response = await receiver.ReceiveCodeAsync(request, cancellationToken).ConfigureAwait(false);
+            var token = await flow.ExchangeCodeForTokenAsync(
+                TokenUser,
+                response.Code,
+                receiver.RedirectUri,
+                cancellationToken).ConfigureAwait(false);
+
+            _logger.Info("[Gmail] Interactive sign-in completed (account selection prompted).");
+            return new UserCredential(flow, TokenUser, token);
         }
         catch (Exception ex)
         {

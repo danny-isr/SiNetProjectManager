@@ -148,15 +148,294 @@ public sealed class EmailListViewModelTests
     }
 
     [Fact]
-    public void Disconnect_clears_connected_account_email()
+    public async Task Gmail_disconnect_clears_email_list()
     {
-        var auth = new StubAuthService { IsAuthenticated = true, ConnectedAccountEmail = "user@example.com" };
+        var auth = new TrackingAuthService { IsAuthenticated = true, ConnectedAccountEmail = "user@example.com" };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.RefreshPageAsync();
+        Assert.NotEmpty(sut.Emails);
+
+        await sut.DisconnectGmailForTestsAsync();
+
+        Assert.Empty(sut.Emails);
+        Assert.False(sut.IsConnected);
+    }
+
+    [Fact]
+    public async Task Gmail_disconnect_clears_paging_tokens()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = true };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.RefreshPageAsync();
+        await sut.LoadNextPageAsync();
+        Assert.Equal(2, sut.CurrentPageNumber);
+
+        await sut.DisconnectGmailForTestsAsync();
+
+        Assert.Equal(1, sut.CurrentPageNumber);
+        Assert.False(sut.HasNextPage);
+        Assert.False(sut.HasPreviousPage);
+    }
+
+    [Fact]
+    public async Task Gmail_disconnect_clears_selected_email()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = true };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.RefreshPageAsync();
+        Assert.NotNull(sut.SelectedEmail);
+
+        await sut.DisconnectGmailForTestsAsync();
+
+        Assert.Null(sut.SelectedEmail);
+    }
+
+    [Fact]
+    public async Task Gmail_reconnect_loads_first_page_from_new_account()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.True(auth.LastLoginOptions?.SkipSilentRestore);
+        Assert.True(auth.LastLoginOptions?.PromptAccountSelection);
+        Assert.Equal(1, gateway.MailboxPageCalls);
+        Assert.Equal(1, sut.CurrentPageNumber);
+        Assert.NotEmpty(sut.Emails);
+    }
+
+    [Fact]
+    public async Task Connect_gmail_refreshes_account_status_after_success()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false };
         var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
 
-        sut.DisconnectCommand.Execute(null);
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.True(sut.IsConnected);
+        Assert.Contains("new-user@example.com", sut.AccountStatusDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Connect_gmail_updates_connected_email_without_reopening_window()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false, ConnectedAccountEmail = "old@example.com" };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.Equal("new-user@example.com", sut.ConnectedAccountEmail);
+    }
+
+    [Fact]
+    public async Task Connect_gmail_enables_disconnect_command()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.True(sut.DisconnectCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Connect_gmail_disables_connect_command_after_success()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.False(sut.ShowConnectButton);
+    }
+
+    [Fact]
+    public async Task Connect_gmail_loads_first_email_page_after_success()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.True(gateway.MailboxPageCalls >= 1);
+    }
+
+    [Fact]
+    public async Task Disconnect_then_connect_updates_ui_to_new_account()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = true, ConnectedAccountEmail = "first@example.com" };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        await sut.DisconnectGmailForTestsAsync();
+        auth.LoginConnectedEmail = "second@example.com";
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.Equal("second@example.com", sut.ConnectedAccountEmail);
+        Assert.Contains("second@example.com", sut.AccountStatusDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Connect_failure_shows_error_message()
+    {
+        var auth = new TrackingAuthService
+        {
+            IsAuthenticated = false,
+            LoginSucceeds = false,
+            RestoreSessionOnFailedLogin = false,
+        };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.False(sut.IsConnected);
+        Assert.Contains("בוטלה", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Connect_restores_session_when_login_returns_false_but_token_exists()
+    {
+        var auth = new TrackingAuthService
+        {
+            IsAuthenticated = false,
+            LoginSucceeds = false,
+            RestoreSessionOnFailedLogin = true,
+            RestoredAccountEmail = "restored@example.com",
+        };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.True(sut.IsConnected);
+        Assert.Equal("restored@example.com", sut.ConnectedAccountEmail);
+        Assert.True(gateway.MailboxPageCalls >= 1);
+    }
+
+    [Fact]
+    public async Task Refresh_emails_success_implies_account_status_connected()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = false };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.ConnectGmailForTestsAsync();
+        await sut.RefreshPageAsync();
+
+        Assert.True(sut.IsConnected);
+        Assert.True(gateway.MailboxPageCalls >= 1);
+    }
+
+    [Fact]
+    public async Task Gmail_reconnect_resets_page_index_to_first_page()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = true };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.RefreshPageAsync();
+        await sut.LoadNextPageAsync();
+        Assert.Equal(2, sut.CurrentPageNumber);
+
+        auth.IsAuthenticated = false;
+        await sut.DisconnectGmailForTestsAsync();
+
+        await sut.ConnectGmailForTestsAsync();
+
+        Assert.Equal(1, sut.CurrentPageNumber);
+    }
+
+    [Fact]
+    public async Task Gmail_refresh_after_disconnect_does_not_load_old_emails()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = true };
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, auth);
+
+        await sut.RefreshPageAsync();
+        var callsBeforeDisconnect = gateway.MailboxPageCalls;
+
+        await sut.DisconnectGmailForTestsAsync();
+        await sut.RefreshPageAsync();
+
+        Assert.Equal(callsBeforeDisconnect, gateway.MailboxPageCalls);
+        Assert.Empty(sut.Emails);
+    }
+
+    [Fact]
+    public void Disconnect_clears_connected_account_email()
+    {
+        var auth = new TrackingAuthService { IsAuthenticated = true, ConnectedAccountEmail = "user@example.com" };
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, auth);
+
+        sut.DisconnectGmailForTestsAsync().GetAwaiter().GetResult();
 
         Assert.False(sut.IsConnected);
         Assert.Null(auth.ConnectedAccountEmail);
+    }
+
+    private sealed class TrackingAuthService : IConnectorAuthService
+    {
+        public bool IsAuthenticated { get; set; }
+
+        public string? ConnectedAccountEmail { get; set; } = "test@example.com";
+
+        public bool LoginSucceeds { get; set; } = true;
+
+        public string LoginConnectedEmail { get; set; } = "new-user@example.com";
+
+        public bool RestoreSessionOnFailedLogin { get; set; }
+
+        public string? RestoredAccountEmail { get; set; }
+
+        public ConnectorLoginOptions? LastLoginOptions { get; private set; }
+
+        public event Action<bool>? AuthStateChanged;
+
+        public Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            LastLoginOptions = options;
+            if (!LoginSucceeds)
+            {
+                return Task.FromResult(false);
+            }
+
+            IsAuthenticated = true;
+            ConnectedAccountEmail = LoginConnectedEmail;
+            AuthStateChanged?.Invoke(true);
+            return Task.FromResult(true);
+        }
+
+        public void Logout()
+        {
+            IsAuthenticated = false;
+            ConnectedAccountEmail = null;
+            AuthStateChanged?.Invoke(false);
+        }
+
+        public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default)
+        {
+            if (!RestoreSessionOnFailedLogin)
+            {
+                return Task.FromResult(IsAuthenticated);
+            }
+
+            IsAuthenticated = true;
+            ConnectedAccountEmail = RestoredAccountEmail;
+            AuthStateChanged?.Invoke(true);
+            return Task.FromResult(true);
+        }
+
+        public Task RefreshAccountProfileAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class StubAuthService : IConnectorAuthService
@@ -167,7 +446,7 @@ public sealed class EmailListViewModelTests
 
         public event Action<bool>? AuthStateChanged;
 
-        public Task<bool> LoginAsync(CancellationToken cancellationToken = default) =>
+        public Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(IsAuthenticated);
 
         public void Logout()
@@ -237,6 +516,8 @@ public sealed class EmailListViewModelTests
     {
         public bool FailOnSecondPage { get; set; }
 
+        public int MailboxPageCalls { get; private set; }
+
         public EmailMailboxQuery? LastQuery { get; private set; }
 
         public string? LastPageToken { get; private set; }
@@ -265,6 +546,7 @@ public sealed class EmailListViewModelTests
             string? pageToken = null,
             CancellationToken cancellationToken = default)
         {
+            MailboxPageCalls++;
             if (FailOnSecondPage && pageToken is not null)
             {
                 throw new InvalidOperationException("Gmail page failed");

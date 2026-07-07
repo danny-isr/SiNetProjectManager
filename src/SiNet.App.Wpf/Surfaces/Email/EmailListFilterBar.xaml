@@ -81,7 +81,8 @@
                             Visibility="{Binding ShowConnectButton, Converter={StaticResource BoolToVis}}" />
                     <Button Content="רענן"
                             Command="{Binding RefreshPageCommand}"
-                            Style="{StaticResource ActionButton}" />
+                            Style="{StaticResource ActionButton}"
+                            IsEnabled="{Binding CanRefreshEmails}" />
                     <Button Content="התנתק"
                             Command="{Binding DisconnectCommand}"
                             Style="{StaticResource ActionButton}"

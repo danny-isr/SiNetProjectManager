@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
 using SiNet.App.Wpf.Infrastructure;
@@ -84,7 +85,7 @@ public sealed class EmailListViewModel : ObservableObject
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync, () => !IsBusy);
         ToggleGroupByLabelCommand = new RelayCommand(_ => ToggleGroupByLabel(), _ => !IsProjectMode);
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
-        DisconnectCommand = new RelayCommand(_ => Disconnect(), _ => IsConnected && !IsBusy);
+        DisconnectCommand = new AsyncRelayCommand(DisconnectGmailAsync, () => IsConnected && !IsBusy);
         ShowMoreProjectEmailsCommand = new RelayCommand(_ => ShowMoreProjectEmails(), _ => HasMoreProjectEmails && !IsBusy);
 
         _authService.AuthStateChanged += OnAuthStateChanged;
@@ -146,6 +147,8 @@ public sealed class EmailListViewModel : ObservableObject
     public event EventHandler<EmailListRow?>? SelectedEmailChanged;
 
     public event EventHandler<string>? StatusMessageChanged;
+
+    public event EventHandler? AccountStatusChanged;
 
     public int UnreadEmailCount => Emails.Count(static row => row.IsUnread);
 
@@ -259,6 +262,8 @@ public sealed class EmailListViewModel : ObservableObject
     }
 
     public bool ShowConnectButton => !IsConnected;
+
+    public bool CanRefreshEmails => IsConnected && !IsBusy;
 
     public bool GroupByLabel
     {
@@ -425,51 +430,150 @@ public sealed class EmailListViewModel : ObservableObject
     private async Task ConnectAsync()
     {
         IsBusy = true;
-        StatusMessage = "מתחבר ל-Google…";
+        StatusMessage = "מתחבר ל-Gmail...";
         try
         {
-            var connected = await _authService.LoginAsync().ConfigureAwait(true);
-            if (connected)
+            var connected = await _authService.LoginAsync(
+                new ConnectorLoginOptions(SkipSilentRestore: true, PromptAccountSelection: true))
+                .ConfigureAwait(true);
+            if (!connected && await _authService.TryRestoreSessionAsync().ConfigureAwait(true))
             {
-                await RefreshAccountProfileAsync().ConfigureAwait(true);
-                await LoadLabelsAsync().ConfigureAwait(true);
-                StatusMessage = "החיבור ל-Google הושלם. ניתן לרענן כדי לטעון מיילים.";
+                connected = true;
             }
-            else
+
+            if (!connected)
             {
-                StatusMessage = "ההתחברות ל-Google לא הושלמה.";
+                StatusMessage = "התחברות ל-Gmail בוטלה.";
+                return;
             }
+
+            await RefreshGmailAccountStatusAsync().ConfigureAwait(true);
+            ClearEmailState();
+            await LoadLabelsAsync().ConfigureAwait(true);
+            StatusMessage = "טוען מיילים...";
+            await LoadPageAsync(resetStack: true).ConfigureAwait(true);
+
+            var email = ConnectedAccountEmail ?? "Gmail";
+            StatusMessage = $"מחובר כ־{email}. נטענו {DisplayedCount} מיילים.";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"התחברות ל-Google נכשלה: {ex.Message}";
+            StatusMessage = $"התחברות ל-Gmail נכשלה: {ex.Message}";
+            LoadError = StatusMessage;
         }
         finally
         {
             IsBusy = false;
-            NotifyAuthProperties();
+            await RefreshGmailAccountStatusAsync().ConfigureAwait(true);
         }
     }
 
-    private void Disconnect()
+    private async Task DisconnectGmailAsync()
     {
-        _authService.Logout();
+        if (!IsConnected)
+        {
+            return;
+        }
+
+        if (MessageBox.Show(
+                "להתנתק מחשבון Gmail הנוכחי?",
+                "התנתקות מ-Gmail",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "מתנתק...";
+        try
+        {
+            _authService.Logout();
+            StatusMessage = "מנותק מ-Gmail.";
+        }
+        finally
+        {
+            IsBusy = false;
+            await RefreshGmailAccountStatusAsync().ConfigureAwait(true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>Test seam: disconnect without confirmation dialog.</summary>
+    internal Task ConnectGmailForTestsAsync() => ConnectAsync();
+
+    internal async Task DisconnectGmailForTestsAsync()
+    {
+        if (!IsConnected)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "מתנתק...";
+        try
+        {
+            _authService.Logout();
+            StatusMessage = "מנותק מ-Gmail.";
+        }
+        finally
+        {
+            IsBusy = false;
+            await RefreshGmailAccountStatusAsync().ConfigureAwait(true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    internal void ClearEmailStateForTests() => ClearEmailState();
+
+    private void ClearEmailState()
+    {
+        _pageTokenStack.Clear();
+        _nextPageToken = null;
+        _lastUsedPageToken = null;
+        CurrentPageNumber = 1;
+        DisplayedCount = 0;
+        HasNextPage = false;
+        OnPropertyChanged(nameof(HasPreviousPage));
+
+        SearchText = string.Empty;
+        AddressFilter = string.Empty;
+        SubjectFilter = string.Empty;
+        SelectedLabel = null;
+        SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+        GroupByLabel = false;
+
+        AvailableLabels.Clear();
+
+        _projectEmailRows = [];
+        _projectVisibleCount = 0;
+        HasMoreProjectEmails = false;
+
         LoadWarning = null;
         LoadError = null;
         LoadState = EmailListLoadState.Idle;
+
+        SelectedEmail = null;
         ReplaceRows([]);
-        StatusMessage = "התנתקת מ-Gmail.";
-        NotifyAuthProperties();
     }
 
     private void OnAuthStateChanged(bool isAuthenticated)
     {
-        NotifyAuthProperties();
+        UiThread.Run(() => _ = HandleAuthStateChangedOnUiThreadAsync(isAuthenticated));
+    }
+
+    private async Task HandleAuthStateChangedOnUiThreadAsync(bool isAuthenticated)
+    {
+        await RefreshGmailAccountStatusAsync().ConfigureAwait(true);
         if (!isAuthenticated)
         {
-            ReplaceRows([]);
-            LoadState = EmailListLoadState.Idle;
-            StatusMessage = "Gmail לא מחובר.";
+            ClearEmailState();
+            if (!IsBusy)
+            {
+                StatusMessage = "לא מחובר ל-Gmail.";
+            }
         }
     }
 
@@ -479,14 +583,18 @@ public sealed class EmailListViewModel : ObservableObject
         OnPropertyChanged(nameof(ConnectedAccountEmail));
         OnPropertyChanged(nameof(AccountStatusDisplay));
         OnPropertyChanged(nameof(ShowConnectButton));
+        OnPropertyChanged(nameof(CanRefreshEmails));
         RaiseCommandStates();
+        AccountStatusChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private async Task RefreshAccountProfileAsync()
+    private async Task RefreshGmailAccountStatusAsync()
     {
         await _authService.RefreshAccountProfileAsync().ConfigureAwait(true);
-        NotifyAuthProperties();
+        UiThread.Run(NotifyAuthProperties);
     }
+
+    private Task RefreshAccountProfileAsync() => RefreshGmailAccountStatusAsync();
 
     private async Task LoadLabelsAsync()
     {
@@ -962,7 +1070,7 @@ public sealed class EmailListViewModel : ObservableObject
         (ApplyFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ClearFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        (DisconnectCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ShowMoreProjectEmailsCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
@@ -1016,7 +1124,7 @@ public sealed class EmailListViewModel : ObservableObject
 
         public event Action<bool>? AuthStateChanged;
 
-        public Task<bool> LoginAsync(CancellationToken cancellationToken = default)
+        public Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default)
         {
             IsAuthenticated = true;
             ConnectedAccountEmail = "design@example.com";

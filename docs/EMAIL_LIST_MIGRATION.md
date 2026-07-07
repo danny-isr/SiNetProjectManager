@@ -29,10 +29,13 @@ Configured in `GmailOptions.DefaultMailboxQuery`. Optional project filter pushes
 | Feature | Implementation |
 | --- | --- |
 | Workbench layout | Row 1: project context bar (full width). Row 2: `EmailListFilterBar` (account, filters, paging). Row 3: list column = `EmailListView` only |
-| List scroll | Internal `ListBox` scroll within current page (`VirtualizingStackPanel`, row `Height="*"`) — separate from Gmail 50-item paging |
+| List scroll | Internal `ListBox` scroll within current page (row `Height="*"`; non-virtualized because label grouping is enabled) — separate from Gmail 50-item paging |
 | Default load | `IEmailGateway.GetMailboxPageAsync` — INBOX; no project required |
 | Paging | 50 items; token stack; prev/next in filter bar |
 | Account status | `IConnectorAuthService.ConnectedAccountEmail` + Connect/Disconnect in filter bar |
+| Disconnect | Hard logout (deletes persisted token + cached client); `ClearEmailState()` wipes list, preview selection, paging tokens, filters, labels |
+| Reconnect | `ConnectorLoginOptions(SkipSilentRestore, PromptAccountSelection)` → OAuth → auto-load page 1 (50 items) |
+| Post-connect UI refresh | `RefreshGmailAccountStatusAsync` + `AccountStatusChanged` on UI thread — no window reopen required after disconnect/reconnect |
 | Cards | `ListBox` + `EmailListItemCard` (not GridView) |
 | Load states | `EmailListLoadState`: Loading, Loaded, PartialFailure, Error, NoResults |
 | Partial enrichment | Gmail rows shown + warning if DB link query fails |

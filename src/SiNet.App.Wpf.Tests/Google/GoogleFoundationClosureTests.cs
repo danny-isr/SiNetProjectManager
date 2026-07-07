@@ -390,7 +390,7 @@ public sealed class GoogleFoundationClosureTests
 
         public event Action<bool>? AuthStateChanged;
 
-        public Task<bool> LoginAsync(CancellationToken cancellationToken = default) =>
+        public Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(IsAuthenticated);
 
         public void Logout() => SetAuthenticated(false);

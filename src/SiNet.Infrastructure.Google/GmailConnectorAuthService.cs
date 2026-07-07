@@ -42,9 +42,9 @@ public sealed class GmailConnectorAuthService : IConnectorAuthService
     /// Performs an explicit, user-initiated Google sign-in. Returns <c>true</c> when a usable
     /// session was established. Never throws for the not-configured / not-signed-in cases.
     /// </summary>
-    public async Task<bool> LoginAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var result = await _provider.SignInInteractiveAsync(cancellationToken).ConfigureAwait(false);
+        var result = await _provider.SignInInteractiveAsync(options, cancellationToken).ConfigureAwait(false);
         if (result == GmailSignInResult.Success)
         {
             await RefreshAccountProfileAsync(cancellationToken).ConfigureAwait(false);

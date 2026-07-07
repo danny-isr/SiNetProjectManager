@@ -12,7 +12,7 @@ public interface IConnectorAuthService
     /// <summary>Best-effort connected account email; null when unknown or not authenticated.</summary>
     string? ConnectedAccountEmail { get; }
 
-    Task<bool> LoginAsync(CancellationToken cancellationToken = default);
+    Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default);
 
     void Logout();
 

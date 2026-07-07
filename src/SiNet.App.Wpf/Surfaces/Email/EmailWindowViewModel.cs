@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -127,6 +128,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         EmailList = new EmailListViewModel(_emailGateway, _threadLinkQuery, _googleAuthService);
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
+        EmailList.AccountStatusChanged += (_, _) => RefreshAuthDisplay();
 
         _selectedFolder = Folders.FirstOrDefault();
         _selectedStatus = StatusOptions.FirstOrDefault();
@@ -460,22 +462,31 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
     private void OnAuthStateChanged(bool isAuthenticated)
     {
+        UiThread.Run(() =>
+        {
+            RefreshAuthDisplay();
+            if (!IsBusy)
+            {
+                StatusMessage = isAuthenticated
+                    ? "החיבור ל-Google זמין. ניתן לרענן כדי לטעון מיילים."
+                    : "החיבור ל-Google נותק.";
+            }
+
+            if (!isAuthenticated)
+            {
+                ClearSelectedEmailDetails();
+            }
+
+            (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        });
+    }
+
+    private void RefreshAuthDisplay()
+    {
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(RuntimeSummary));
-        if (!IsBusy)
-        {
-            StatusMessage = isAuthenticated
-                ? "החיבור ל-Google זמין. ניתן לרענן כדי לטעון מיילים."
-                : "החיבור ל-Google נותק.";
-        }
-
-        if (!isAuthenticated)
-        {
-            ClearSelectedEmailDetails();
-        }
-
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private void PrepareSelectedEmailDetailsLoading()
@@ -720,7 +731,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         public event Action<bool>? AuthStateChanged;
 
-        public Task<bool> LoginAsync(CancellationToken cancellationToken = default)
+        public Task<bool> LoginAsync(ConnectorLoginOptions? options = null, CancellationToken cancellationToken = default)
         {
             IsAuthenticated = true;
             ConnectedAccountEmail = "design@example.com";

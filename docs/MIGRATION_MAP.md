@@ -913,7 +913,7 @@ task/VM services).
 
 | Artifact | Detail |
 | --- | --- |
-| `GmailClientProvider.cs` | New `event Action<bool>? AuthStateChanged` + private `RaiseIfAuthStateChanged(wasSignedIn)`. Raised (outside `_gate`) on a real transition from `TryGetServiceAsync`, `TrySignInSilentlyAsync`, `SignInInteractiveAsync` (false\u2192true) and on `Logout` / `DisposeAsync` (true\u2192false). New `Logout()` drops the cached session **without** deleting the persisted refresh token (silent restore can re-establish it). |
+| `GmailClientProvider.cs` | New `event Action<bool>? AuthStateChanged` + private `RaiseIfAuthStateChanged(wasSignedIn)`. Raised (outside `_gate`) on a real transition from `TryGetServiceAsync`, `TrySignInSilentlyAsync`, `SignInInteractiveAsync` (false\u2192true) and on `Logout` / `DisposeAsync` (true\u2192false). `Logout()` disposes the cached client **and deletes the persisted refresh-token directory** (matches legacy `GoogleService.Logout`; next sign-in requires fresh OAuth). |
 | `GmailConnectorAuthService.cs` *(new)* | `IConnectorAuthService` adapter over the provider: `IsAuthenticated`\u21d2`IsSignedIn`, `LoginAsync`\u21d2`SignInInteractiveAsync` (true on `Success`), `TryRestoreSessionAsync`\u21d2`TrySignInSilentlyAsync`, `Logout`\u21d2`Logout`, and `AuthStateChanged` forwarded via add/remove accessors. |
 | `GoogleServiceCollectionExtensions.cs` | `AddSiNetGoogle` now registers `IConnectorAuthService \u2192 GmailConnectorAuthService` as a singleton **over the same `GmailClientProvider` singleton** that backs `IEmailGateway` \u2014 one shared source of truth for signed-in state + events. |
 
