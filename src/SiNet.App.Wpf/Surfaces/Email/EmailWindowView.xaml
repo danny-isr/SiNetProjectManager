@@ -149,7 +149,8 @@
                 <!-- EMAIL LIST column: list only -->
                 <local:EmailListView Grid.Column="0"
                                      DataContext="{Binding EmailList}"
-                                     VerticalAlignment="Stretch" />
+                                     VerticalAlignment="Stretch"
+                                     MinHeight="0" />
 
                 <!-- SPLITTER: Email list | viewer. -->
                 <GridSplitter Grid.Column="1"

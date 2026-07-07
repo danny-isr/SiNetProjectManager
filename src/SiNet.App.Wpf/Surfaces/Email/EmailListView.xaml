@@ -12,6 +12,15 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
+        <Style x:Key="EmailListContainerStyle" TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="False" />
+        </Style>
+
         <Style TargetType="ListBoxItem" x:Key="EmailCardItemStyle">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="8,6" />
@@ -37,10 +46,9 @@
                     <local:EmailLabelGroupHeader DataContext="{Binding}" />
                 </Expander.Header>
                 <ListBox ItemsSource="{Binding Emails}"
+                         Style="{StaticResource EmailListContainerStyle}"
                          SelectedItem="{Binding DataContext.SelectedEmail, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                         ItemContainerStyle="{StaticResource EmailCardItemStyle}"
-                         BorderThickness="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ItemContainerStyle="{StaticResource EmailCardItemStyle}">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:EmailListRow}">
                             <local:EmailListItemCard />
@@ -54,13 +62,14 @@
     <Border BorderBrush="#E0E0E0"
             BorderThickness="1"
             CornerRadius="4"
+            ClipToBounds="True"
             VerticalAlignment="Stretch"
             HorizontalAlignment="Stretch">
         <Grid VerticalAlignment="Stretch">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" MinHeight="120" />
+                <RowDefinition Height="*" MinHeight="0" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
@@ -88,31 +97,31 @@
             </Border>
 
             <ScrollViewer Grid.Row="2"
+                          VerticalAlignment="Stretch"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
-                          CanContentScroll="False">
+                          CanContentScroll="False"
+                          PanningMode="VerticalOnly"
+                          MinHeight="120">
                 <StackPanel>
                     <ContentControl Content="{Binding ActiveProjectGroup}"
                                     ContentTemplate="{StaticResource EmailGroupExpanderTemplate}"
                                     Visibility="{Binding ShowProjectGroupAboveFlat, Converter={StaticResource BoolToVis}}" />
 
-                    <ListBox ItemsSource="{Binding DisplayGroups}"
-                             BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             Visibility="{Binding ShowLabelGroups, Converter={StaticResource BoolToVis}}">
-                        <ListBox.ItemTemplate>
+                    <ItemsControl ItemsSource="{Binding DisplayGroups}"
+                                  Visibility="{Binding ShowLabelGroups, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type local:EmailLabelGroupViewModel}">
                                 <ContentControl Content="{Binding}"
                                                 ContentTemplate="{StaticResource EmailGroupExpanderTemplate}" />
                             </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
                     <ListBox ItemsSource="{Binding FlatDisplayEmails}"
+                             Style="{StaticResource EmailListContainerStyle}"
                              SelectedItem="{Binding SelectedEmail}"
                              ItemContainerStyle="{StaticResource EmailCardItemStyle}"
-                             BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              Visibility="{Binding ShowFlatEmailList, Converter={StaticResource BoolToVis}}">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type local:EmailListRow}">

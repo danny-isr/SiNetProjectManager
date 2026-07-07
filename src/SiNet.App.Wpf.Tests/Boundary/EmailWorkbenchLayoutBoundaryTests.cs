@@ -69,6 +69,9 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         Assert.Contains("CanContentScroll=\"False\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListContainerStyle", listXaml, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing\" Value=\"False\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"0\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("DisplayGroups", listXaml, StringComparison.Ordinal);
         Assert.Contains("Expander", listXaml, StringComparison.Ordinal);
     }
