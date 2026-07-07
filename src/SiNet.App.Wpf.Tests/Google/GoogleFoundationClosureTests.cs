@@ -298,6 +298,11 @@ public sealed class GoogleFoundationClosureTests
 
         public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
     }
 
     private sealed class RecordingEmailGateway : IEmailGateway
@@ -380,6 +385,11 @@ public sealed class GoogleFoundationClosureTests
             Task.FromResult<IReadOnlyList<GmailLabelInfo>>([
                 new GmailLabelInfo("INBOX", "INBOX"),
             ]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(1, IsExact: true));
     }
 
     private sealed class StubConnectorAuthService(bool isAuthenticated) : IConnectorAuthService

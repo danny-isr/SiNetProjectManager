@@ -13,6 +13,8 @@ public sealed record EmailMailboxQuery
 
     public string? LabelName { get; init; }
 
+    public EmailMailboxScope MailboxScope { get; init; } = EmailMailboxScope.Inbox;
+
     public EmailProjectLinkFilter ProjectLinkFilter { get; init; } = EmailProjectLinkFilter.All;
 
     public int? OptionalProjectId { get; init; }

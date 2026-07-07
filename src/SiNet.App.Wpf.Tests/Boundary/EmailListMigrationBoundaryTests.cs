@@ -70,14 +70,35 @@ public sealed class EmailListMigrationBoundaryTests
     }
 
     [Fact]
-    public void Email_list_default_loads_all_emails()
+    public void Email_list_default_scope_is_inbox_not_all_mail()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var composerSource = ReadRepoFile("src/SiNet.Application/Abstractions/Email/EmailMailboxQueryComposer.cs");
+
+        Assert.Contains("EmailMailboxScope.Inbox", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("category:primary", composerSource, StringComparison.Ordinal);
+        Assert.Contains("GetMailboxUnreadCountAsync", listVmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Legacy_email_inbox_query_behavior_documented()
+    {
+        var doc = ReadRepoFile("docs/EMAIL_LIST_MIGRATION.md");
+
+        Assert.Contains("category:primary", doc, StringComparison.Ordinal);
+        Assert.Contains("label:INBOX", doc, StringComparison.Ordinal);
+        Assert.Contains("GetMailboxUnreadCountAsync", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void No_schema_change_or_migration_for_inbox_scope()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         var gatewaySource = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
 
-        Assert.Contains("GetMailboxPageAsync", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("CanLoadEmails() => !IsBusy && IsConnected", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("DefaultMailboxQuery", gatewaySource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Migration", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("LegacyBridge", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Migration", gatewaySource, StringComparison.Ordinal);
     }
 
     [Fact]

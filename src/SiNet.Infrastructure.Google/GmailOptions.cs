@@ -29,9 +29,10 @@ public sealed class GmailOptions
     public string RootLabel { get; set; } = "פרויקטים_משרד";
 
     /// <summary>
-    /// Default Gmail search query for the general mailbox list (legacy: <c>label:INBOX</c>).
+    /// Optional override for <see cref="EmailMailboxScope.Inbox"/> list query.
+    /// Default matches Gmail Primary tab: <c>label:INBOX category:primary</c>.
     /// </summary>
-    public string DefaultMailboxQuery { get; set; } = "label:INBOX";
+    public string DefaultMailboxQuery { get; set; } = "label:INBOX category:primary";
 
     /// <summary>
     /// When <c>true</c>, the provider may open a browser for interactive OAuth consent if no

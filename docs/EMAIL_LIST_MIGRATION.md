@@ -18,11 +18,34 @@ Self-contained **Email List component** for the Email Workbench: Outlook-style c
 | `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, auth, load states, link enrichment |
 | `EmailWindowViewModel` | parent shell | Detail pane, `ApplyContext`, optional project context |
 
-## Default Gmail query (legacy port)
+## Default Gmail query (legacy vs new)
 
-Legacy `GoogleService.GetUnassignedEmailsPagedAsync` uses `label:INBOX`, page size 50, Gmail `pageToken` stack.
+### Legacy (`GoogleService` / `EmailManagementViewModel`)
 
-Configured in `GmailOptions.DefaultMailboxQuery`. Optional project filter pushes `label:` when enabled.
+| Concern | Legacy behavior |
+| --- | --- |
+| Default list | `label:INBOX` — all Inbox tabs (Primary + Promotions + Social + …) |
+| Unread-only list | `label:INBOX category:primary is:unread` when `ShowUnreadOnly` ON |
+| Global unread badge | Count IDs with `label:INBOX category:primary is:unread` (not `ResultSizeEstimate`) |
+| Per-message unread | `LabelIds` contains `UNREAD` |
+
+Legacy default **list** was broader than Gmail Primary tab; only unread badge/unread-only mode used `category:primary`.
+
+### New default (2026-07-07)
+
+| Concern | New behavior |
+| --- | --- |
+| Default scope | **Primary Inbox** — `label:INBOX category:primary` via `EmailMailboxScope.Inbox` |
+| All Mail | Opt-in scope — `-in:spam -in:trash -in:drafts -in:sent` |
+| Unread scope | `label:INBOX category:primary is:unread` |
+| Label scope | Explicit label selection only (Promotions etc. only when user picks label) |
+| Unread total | Separate `IEmailGateway.GetMailboxUnreadCountAsync` — not derived from current 50-item page |
+| Unread in page | `UnreadInCurrentPage` — count on loaded page only |
+| Per-message unread | `GmailEmailGateway.ResolveIsUnread` — `UNREAD` in `labelIds`; missing labels → read |
+
+**`category:primary` caveat:** some org Gmail configs may categorize inconsistently. Host can override `GmailOptions.DefaultMailboxQuery` if Primary tab returns empty results.
+
+Query composition lives in `EmailMailboxQueryComposer` (Application) and is used by `GmailEmailGateway` + `EmailListViewModel` diagnostics.
 
 ## V3 scope (read-only)
 
@@ -30,7 +53,8 @@ Configured in `GmailOptions.DefaultMailboxQuery`. Optional project filter pushes
 | --- | --- |
 | Workbench layout | Row 1: project context bar (full width). Row 2: `EmailListFilterBar` (account, filters, paging). Row 3: list column = `EmailListView` only |
 | List scroll | Internal `ListBox` scroll within current page (row `Height="*"`; non-virtualized because label grouping is enabled) — separate from Gmail 50-item paging |
-| Default load | `IEmailGateway.GetMailboxPageAsync` — INBOX; no project required |
+| Default load | `IEmailGateway.GetMailboxPageAsync` — Primary Inbox (`EmailMailboxScope.Inbox`); no project required |
+| Mailbox scope | Filter bar: Inbox (default) / All Mail / Unread + optional label picker |
 | Paging | 50 items; token stack; prev/next in filter bar |
 | Account status | `IConnectorAuthService.ConnectedAccountEmail` + Connect/Disconnect in filter bar |
 | Disconnect | Hard logout (deletes persisted token + cached client); `ClearEmailState()` wipes list, preview selection, paging tokens, filters, labels |
@@ -41,7 +65,7 @@ Configured in `GmailOptions.DefaultMailboxQuery`. Optional project filter pushes
 | Partial enrichment | Gmail rows shown + warning if DB link query fails |
 | Labels | Chips on card; filter + group-by `PrimaryLabel` |
 | Link state | `IEmailThreadLinkQueryService` + client filter All/Linked/Unlinked |
-| Unread | `GmailEmailGateway.ResolveIsUnread`: `true` only when Gmail `LabelIds` contains `UNREAD`; card shows blue side bar (unread) or gray side bar (read) — no badge |
+| Unread | Per-message: `UNREAD` in Gmail `labelIds`. Total: `GetMailboxUnreadCountAsync` (scope-accurate). Page: `UnreadInCurrentPage`. Display: `UnreadCountDisplay` shows total + page separately |
 
 ## Grouping rule
 
@@ -49,7 +73,7 @@ Multi-label messages appear once under **PrimaryLabel** (first user label under 
 
 ## Application ports (reuse — no parallel IEmailListService)
 
-- `IEmailGateway.GetMailboxPageAsync` / `GetMailboxLabelsAsync`
+- `IEmailGateway.GetMailboxPageAsync` / `GetMailboxLabelsAsync` / `GetMailboxUnreadCountAsync`
 - `IEmailThreadLinkQueryService.GetLinkStatesByInternetMessageIdsAsync`
 - `IConnectorAuthService` (+ `ConnectedAccountEmail`, `RefreshAccountProfileAsync`, `Logout`)
 
@@ -69,7 +93,7 @@ The list component receives `EmailListProjectContext` through `ApplyProjectConte
 
 | Mode | Behavior |
 | --- | --- |
-| No project selected | Gmail INBOX paging (50), filters, label grouping |
+| No project selected | Gmail Primary Inbox paging (50), mailbox scope filters, label grouping |
 | Project selected | Gmail project-label query; first 10 emails + "הצג עוד" (+10); separate from 50-page paging |
 
 ## Workflow gaps (deferred)

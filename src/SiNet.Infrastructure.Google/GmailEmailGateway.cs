@@ -24,6 +24,12 @@ public sealed class GmailEmailGateway : IEmailGateway
 {
     private const int InternalDrainPageSize = 100;
     public const int MailboxPageSizeCap = 50;
+    private const int UnreadCountPageSize = 500;
+    private const int UnreadCountMaxPages = 3;
+    internal const string InboxPrimaryQuery = EmailMailboxQueryComposer.InboxPrimaryQuery;
+    internal const string AllMailQuery = EmailMailboxQueryComposer.AllMailQuery;
+    internal const string InboxPrimaryUnreadQuery = EmailMailboxQueryComposer.InboxPrimaryUnreadQuery;
+    internal const string AllMailUnreadQuery = EmailMailboxQueryComposer.AllMailUnreadQuery;
     private static readonly string[] MetadataHeaders = { "Subject", "From", "To", "Date", "Message-ID" };
 
     private readonly GmailClientProvider _provider;
@@ -130,7 +136,7 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
         else
         {
-            listQuery = BuildMailboxQuery(query, _provider.DefaultMailboxQuery);
+            listQuery = EmailMailboxQueryComposer.BuildSearchQuery(query, _provider.DefaultMailboxQuery);
         }
 
         var listRequest = gmail.Users.Messages.List("me");
@@ -179,6 +185,35 @@ public sealed class GmailEmailGateway : IEmailGateway
 
         var hasNext = !string.IsNullOrEmpty(listResponse.NextPageToken);
         return new EmailMailboxPage(summaries, pageSize, listResponse.NextPageToken, hasNext);
+    }
+
+    public async Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+        EmailMailboxQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var scopeDescription = EmailMailboxQueryComposer.DescribeMailboxScope(query);
+        if (EmailMailboxQueryComposer.HasNonScopeListFilters(query))
+        {
+            return new EmailMailboxUnreadCount(0, IsExact: false, scopeDescription);
+        }
+
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail == null)
+        {
+            return new EmailMailboxUnreadCount(0, IsExact: true, scopeDescription);
+        }
+
+        if (query.MailboxScope == EmailMailboxScope.Label)
+        {
+            return await GetLabelScopeUnreadCountAsync(gmail, query, scopeDescription, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var unreadQuery = EmailMailboxQueryComposer.BuildUnreadCountQuery(query, _provider.DefaultMailboxQuery);
+        var count = await CountMessagesByQueryAsync(gmail, unreadQuery, cancellationToken).ConfigureAwait(false);
+        return new EmailMailboxUnreadCount(count, IsExact: true, scopeDescription);
     }
 
     public async Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default)
@@ -343,36 +378,81 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
     }
 
-    private static string BuildMailboxQuery(EmailMailboxQuery query, string defaultMailboxQuery)
+    internal static string BuildMailboxQueryString(EmailMailboxQuery query, string? inboxQueryOverride = null) =>
+        EmailMailboxQueryComposer.BuildSearchQuery(query, inboxQueryOverride);
+
+    internal static string ResolveScopeBaseQuery(EmailMailboxQuery query, string? inboxQueryOverride) =>
+        EmailMailboxQueryComposer.ResolveScopeBaseQuery(query, inboxQueryOverride);
+
+    internal static string BuildUnreadCountQuery(EmailMailboxQuery query, string? inboxQueryOverride) =>
+        EmailMailboxQueryComposer.BuildUnreadCountQuery(query, inboxQueryOverride);
+
+    internal static bool HasNonScopeListFilters(EmailMailboxQuery query) =>
+        EmailMailboxQueryComposer.HasNonScopeListFilters(query);
+
+    internal static string DescribeMailboxScope(EmailMailboxQuery query) =>
+        EmailMailboxQueryComposer.DescribeMailboxScope(query);
+
+    private async Task<EmailMailboxUnreadCount> GetLabelScopeUnreadCountAsync(
+        GmailService gmail,
+        EmailMailboxQuery query,
+        string scopeDescription,
+        CancellationToken cancellationToken)
     {
-        var parts = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(query.LabelName))
+        if (string.IsNullOrWhiteSpace(query.LabelName))
         {
-            parts.Add($"label:{QuoteGmailTerm(query.LabelName.Trim())}");
-        }
-        else
-        {
-            parts.Add(defaultMailboxQuery.Trim());
+            return new EmailMailboxUnreadCount(0, IsExact: true, scopeDescription);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Subject))
+        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+        var label = labelMap.Values.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, query.LabelName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (label?.Id is not null && label.MessagesUnread is { } unreadFromLabel)
         {
-            parts.Add($"subject:{QuoteGmailTerm(query.Subject.Trim())}");
+            return new EmailMailboxUnreadCount((int)Math.Min(unreadFromLabel, int.MaxValue), IsExact: true, scopeDescription);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.FromOrTo))
+        var unreadQuery = EmailMailboxQueryComposer.BuildUnreadCountQuery(query, _provider.DefaultMailboxQuery);
+        var count = await CountMessagesByQueryAsync(gmail, unreadQuery, cancellationToken).ConfigureAwait(false);
+        return new EmailMailboxUnreadCount(count, IsExact: true, scopeDescription);
+    }
+
+    private static async Task<int> CountMessagesByQueryAsync(
+        GmailService gmail,
+        string gmailQuery,
+        CancellationToken cancellationToken)
+    {
+        var totalCount = 0;
+        string? pageToken = null;
+
+        for (var page = 0; page < UnreadCountMaxPages; page++)
         {
-            var address = query.FromOrTo.Trim();
-            parts.Add($"from:{QuoteGmailTerm(address)} OR to:{QuoteGmailTerm(address)}");
+            var token = pageToken;
+            var listRequest = gmail.Users.Messages.List("me");
+            listRequest.Q = gmailQuery;
+            listRequest.MaxResults = UnreadCountPageSize;
+            listRequest.PageToken = token;
+
+            ListMessagesResponse listResponse;
+            try
+            {
+                listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                break;
+            }
+
+            totalCount += listResponse.Messages?.Count ?? 0;
+            pageToken = listResponse.NextPageToken;
+            if (string.IsNullOrEmpty(pageToken))
+            {
+                break;
+            }
         }
 
-        if (!string.IsNullOrWhiteSpace(query.FreeText))
-        {
-            parts.Add(query.FreeText.Trim());
-        }
-
-        return string.Join(' ', parts);
+        return totalCount;
     }
 
     private static string QuoteGmailTerm(string value)

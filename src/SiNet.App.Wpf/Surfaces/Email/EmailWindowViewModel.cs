@@ -174,7 +174,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     public string ProductionPilotNotice { get; } =
         "מצב פרודקשן ראשוני: צפייה במיילים ובפרטי קבצים מצורפים בלבד. פעולות תיוק ושליחה יחוברו בסלייס נפרד.";
 
-    public int UnreadEmailCount => EmailList.UnreadEmailCount;
+    public string UnreadCountDisplay => EmailList.UnreadCountDisplay;
 
     public bool ShowUnreadCount => EmailList.ShowUnreadCount;
 
@@ -721,6 +721,11 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             => Task.FromResult<IReadOnlyList<GmailLabelInfo>>([
                 new GmailLabelInfo("INBOX", "INBOX"),
             ]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
     }
 
     private sealed class DesignConnectorAuthService : IConnectorAuthService

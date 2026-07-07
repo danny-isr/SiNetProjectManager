@@ -68,10 +68,9 @@
                             Padding="6,1"
                             Margin="10,0,0,0"
                             Visibility="{Binding ShowUnreadCount, Converter={StaticResource BoolToVis}}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="לא נקראו " Foreground="#1565C0" FontSize="{DynamicResource SiTextTinyFontSize}" />
-                            <TextBlock Text="{Binding UnreadEmailCount}" Foreground="#1565C0" FontWeight="Bold" FontSize="{DynamicResource SiTextTinyFontSize}" />
-                        </StackPanel>
+                        <TextBlock Text="{Binding UnreadCountDisplay}"
+                                   Foreground="#1565C0"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}" />
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -168,7 +167,14 @@
                     BorderBrush="#EEE"
                     BorderThickness="0,1,0,0"
                     Visibility="{Binding IsAllEmailsMode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
                 <WrapPanel Orientation="Horizontal">
+                    <ComboBox Width="100" Height="24"
+                              ItemsSource="{Binding MailboxScopeOptions}"
+                              SelectedValue="{Binding SelectedMailboxScope}"
+                              SelectedValuePath="Scope"
+                              DisplayMemberPath="DisplayName"
+                              Margin="0,0,4,0" ToolTip="תיבה" />
                     <TextBox Width="120" Height="24" VerticalContentAlignment="Center"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,4,0" ToolTip="חיפוש חופשי" />
@@ -193,6 +199,13 @@
                     <Button Content="חפש" Command="{Binding ApplyFiltersCommand}" Style="{StaticResource ActionButton}" />
                     <Button Content="נקה" Command="{Binding ClearFiltersCommand}" Style="{StaticResource ActionButton}" />
                 </WrapPanel>
+                <TextBlock Text="{Binding MailboxDiagnostics}"
+                           Foreground="#999"
+                           FontSize="{DynamicResource SiTextTinyFontSize}"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding ShowMailboxDiagnostics, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
             </Border>
         </StackPanel>
     </Border>

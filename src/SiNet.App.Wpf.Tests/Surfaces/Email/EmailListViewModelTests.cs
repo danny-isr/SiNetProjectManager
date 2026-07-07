@@ -382,6 +382,160 @@ public sealed class EmailListViewModelTests
         Assert.Null(auth.ConnectedAccountEmail);
     }
 
+    [Fact]
+    public void Email_list_default_scope_is_inbox()
+    {
+        var sut = new EmailListViewModel(new PagingEmailGateway(), threadLinkQuery: null, new StubAuthService());
+        Assert.Equal(EmailMailboxScope.Inbox, sut.SelectedMailboxScope);
+    }
+
+    [Fact]
+    public async Task Email_list_default_query_uses_inbox_label()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.Equal(EmailMailboxScope.Inbox, gateway.LastQuery?.MailboxScope);
+        Assert.Contains("category:primary", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery!), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Email_list_default_does_not_include_promotions_unless_selected()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+        var defaultQuery = EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery!);
+        Assert.DoesNotContain("promotions", defaultQuery, StringComparison.OrdinalIgnoreCase);
+
+        sut.SelectedLabel = "CATEGORY_PROMOTIONS";
+        await sut.ApplyFiltersAsync();
+        Assert.Equal(EmailMailboxScope.Label, gateway.LastQuery?.MailboxScope);
+        Assert.Equal("CATEGORY_PROMOTIONS", gateway.LastQuery?.LabelName);
+    }
+
+    [Fact]
+    public async Task Email_list_can_select_all_mail_scope()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService())
+        {
+            SelectedMailboxScope = EmailMailboxScope.AllMail,
+        };
+
+        await sut.RefreshPageAsync();
+
+        Assert.Equal(EmailMailboxScope.AllMail, gateway.LastQuery?.MailboxScope);
+    }
+
+    [Fact]
+    public async Task Email_list_can_select_label_scope()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService())
+        {
+            SelectedLabel = "INBOX",
+        };
+
+        await sut.ApplyFiltersAsync();
+
+        Assert.Equal(EmailMailboxScope.Label, sut.SelectedMailboxScope);
+        Assert.Equal(EmailMailboxScope.Label, gateway.LastQuery?.MailboxScope);
+    }
+
+    [Fact]
+    public async Task Email_list_unread_total_uses_separate_gmail_query_not_current_page_only()
+    {
+        var gateway = new PagingEmailGateway { ConfiguredUnreadTotal = 7 };
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.True(gateway.UnreadCountCalls >= 1);
+        Assert.Equal(7, sut.MailboxUnreadTotal);
+    }
+
+    [Fact]
+    public async Task Email_list_displays_unread_total_for_inbox_scope()
+    {
+        var gateway = new PagingEmailGateway { ConfiguredUnreadTotal = 3 };
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.True(sut.MailboxUnreadIsExact);
+        Assert.Equal(3, sut.MailboxUnreadTotal);
+        Assert.Contains("3", sut.UnreadCountDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Email_list_displays_unread_in_current_page_separately()
+    {
+        var gateway = new UnreadPagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.Contains("בעמוד:", sut.UnreadCountDisplay, StringComparison.Ordinal);
+        Assert.Equal(1, sut.UnreadInCurrentPage);
+        Assert.Equal(5, sut.MailboxUnreadTotal);
+    }
+
+    [Fact]
+    public async Task Email_list_clears_old_unread_state_on_refresh()
+    {
+        var gateway = new UnreadPagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+        gateway.ReturnUnreadRows = false;
+        await sut.RefreshPageAsync();
+
+        Assert.Equal(0, sut.UnreadInCurrentPage);
+    }
+
+    [Fact]
+    public async Task Email_list_paging_does_not_change_total_unread_count_incorrectly()
+    {
+        var gateway = new PagingEmailGateway { ConfiguredUnreadTotal = 4 };
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+        var unreadCallsAfterFirst = gateway.UnreadCountCalls;
+        var totalAfterFirst = sut.MailboxUnreadTotal;
+
+        await sut.LoadNextPageAsync();
+
+        Assert.Equal(unreadCallsAfterFirst, gateway.UnreadCountCalls);
+        Assert.Equal(totalAfterFirst, sut.MailboxUnreadTotal);
+    }
+
+    [Fact]
+    public async Task Email_list_unread_item_true_only_when_labelIds_contains_UNREAD()
+    {
+        var gateway = new UnreadPagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.Contains(sut.Emails, static row => row.IsUnread);
+        Assert.Contains(sut.Emails, static row => !row.IsUnread);
+    }
+
+    [Fact]
+    public async Task Email_list_missing_labelIds_does_not_mark_unread()
+    {
+        var gateway = new UnreadPagingEmailGateway { ReturnUnreadRows = false };
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.All(sut.Emails, static row => Assert.False(row.IsUnread));
+    }
+
     private sealed class TrackingAuthService : IConnectorAuthService
     {
         public bool IsAuthenticated { get; set; }
@@ -510,6 +664,11 @@ public sealed class EmailListViewModelTests
 
         public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
     }
 
     private sealed class PagingEmailGateway : IEmailGateway
@@ -518,7 +677,13 @@ public sealed class EmailListViewModelTests
 
         public int MailboxPageCalls { get; private set; }
 
+        public int UnreadCountCalls { get; private set; }
+
+        public int ConfiguredUnreadTotal { get; set; } = 3;
+
         public EmailMailboxQuery? LastQuery { get; private set; }
+
+        public EmailMailboxQuery? LastUnreadQuery { get; private set; }
 
         public string? LastPageToken { get; private set; }
 
@@ -572,6 +737,77 @@ public sealed class EmailListViewModelTests
 
         public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            UnreadCountCalls++;
+            LastUnreadQuery = query;
+            return Task.FromResult(new EmailMailboxUnreadCount(ConfiguredUnreadTotal, IsExact: true));
+        }
+    }
+
+    private sealed class UnreadPagingEmailGateway : IEmailGateway
+    {
+        public bool ReturnUnreadRows { get; set; } = true;
+
+        public int UnreadCountCalls { get; private set; }
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(null);
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxPage(
+            [
+                new EmailSummary(
+                    "msg-unread",
+                    "thread-1",
+                    EmailAddress.CreateOrFallback("a@example.com"),
+                    "Unread",
+                    DateTimeOffset.UtcNow,
+                    false,
+                    IsUnread: ReturnUnreadRows),
+                new EmailSummary(
+                    "msg-read",
+                    "thread-2",
+                    EmailAddress.CreateOrFallback("b@example.com"),
+                    "Read",
+                    DateTimeOffset.UtcNow,
+                    false,
+                    IsUnread: false),
+            ],
+            query.PageSize,
+            null,
+            false));
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            UnreadCountCalls++;
+            return Task.FromResult(new EmailMailboxUnreadCount(5, IsExact: true));
+        }
     }
 
     private sealed class StubThreadLinkQuery : IEmailThreadLinkQueryService

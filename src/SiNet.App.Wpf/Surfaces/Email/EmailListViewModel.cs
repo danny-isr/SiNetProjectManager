@@ -44,6 +44,11 @@ public sealed class EmailListViewModel : ObservableObject
     private string _addressFilter = string.Empty;
     private string _subjectFilter = string.Empty;
     private string? _selectedLabel;
+    private EmailMailboxScope _selectedMailboxScope = EmailMailboxScope.Inbox;
+    private int _mailboxUnreadTotal;
+    private bool _mailboxUnreadIsExact = true;
+    private string? _lastLoadedGmailQuery;
+    private string? _lastUnreadQuerySignature;
     private EmailProjectLinkFilter _projectLinkFilter = EmailProjectLinkFilter.All;
     private EmailListProjectContext? _projectContext;
     private IReadOnlyList<EmailListRow> _projectEmailRows = [];
@@ -72,6 +77,12 @@ public sealed class EmailListViewModel : ObservableObject
             new EmailProjectLinkFilterOption(EmailProjectLinkFilter.All, "הכול"),
             new EmailProjectLinkFilterOption(EmailProjectLinkFilter.Linked, "משויכים"),
             new EmailProjectLinkFilterOption(EmailProjectLinkFilter.Unlinked, "לא משויכים"),
+        ];
+        MailboxScopeOptions =
+        [
+            new EmailMailboxScopeOption(EmailMailboxScope.Inbox, "אינבוקס"),
+            new EmailMailboxScopeOption(EmailMailboxScope.AllMail, "כל הדואר"),
+            new EmailMailboxScopeOption(EmailMailboxScope.Unread, "לא נקראו"),
         ];
 
         _emailsView = CollectionViewSource.GetDefaultView(Emails);
@@ -130,6 +141,8 @@ public sealed class EmailListViewModel : ObservableObject
 
     public ObservableCollection<EmailProjectLinkFilterOption> ProjectLinkFilterOptions { get; }
 
+    public ObservableCollection<EmailMailboxScopeOption> MailboxScopeOptions { get; }
+
     public ICollectionView? EmailsView => _emailsView;
 
     public EmailListRow? SelectedEmail
@@ -150,9 +163,48 @@ public sealed class EmailListViewModel : ObservableObject
 
     public event EventHandler? AccountStatusChanged;
 
-    public int UnreadEmailCount => Emails.Count(static row => row.IsUnread);
+    public int UnreadInCurrentPage => Emails.Count(static row => row.IsUnread);
 
-    public bool ShowUnreadCount => UnreadEmailCount > 0;
+    public int MailboxUnreadTotal
+    {
+        get => _mailboxUnreadTotal;
+        private set => SetField(ref _mailboxUnreadTotal, value);
+    }
+
+    public bool MailboxUnreadIsExact
+    {
+        get => _mailboxUnreadIsExact;
+        private set => SetField(ref _mailboxUnreadIsExact, value);
+    }
+
+    public string UnreadCountDisplay
+    {
+        get
+        {
+            if (MailboxUnreadIsExact)
+            {
+                var scopeLabel = SelectedMailboxScope switch
+                {
+                    EmailMailboxScope.AllMail => "בכל הדואר",
+                    EmailMailboxScope.Unread => "לא נקראו",
+                    EmailMailboxScope.Label => $"ב־{SelectedLabel ?? "label"}",
+                    _ => "באינבוקס",
+                };
+                return $"לא נקראו {scopeLabel}: {MailboxUnreadTotal} · בעמוד: {UnreadInCurrentPage}";
+            }
+
+            return $"לא נקראו בעמוד זה: {UnreadInCurrentPage}";
+        }
+    }
+
+    public bool ShowUnreadCount => MailboxUnreadIsExact
+        ? MailboxUnreadTotal > 0 || UnreadInCurrentPage > 0
+        : UnreadInCurrentPage > 0;
+
+    public string MailboxDiagnostics =>
+        $"Scope: {SelectedMailboxScope} | Query: {_lastLoadedGmailQuery ?? "—"} | Loaded: {DisplayedCount} | Unread total: {(MailboxUnreadIsExact ? MailboxUnreadTotal.ToString() : "n/a")} | Unread page: {UnreadInCurrentPage} | Next: {(HasNextPage ? "yes" : "no")}";
+
+    public bool ShowMailboxDiagnostics => IsAllEmailsMode && IsConnected;
 
     public bool IsConnected => _authService.IsAuthenticated;
 
@@ -246,7 +298,45 @@ public sealed class EmailListViewModel : ObservableObject
     public string? SelectedLabel
     {
         get => _selectedLabel;
-        set => SetField(ref _selectedLabel, value);
+        set
+        {
+            if (!SetField(ref _selectedLabel, value))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                if (_selectedMailboxScope != EmailMailboxScope.Label)
+                {
+                    _selectedMailboxScope = EmailMailboxScope.Label;
+                    OnPropertyChanged(nameof(SelectedMailboxScope));
+                }
+            }
+            else if (_selectedMailboxScope == EmailMailboxScope.Label)
+            {
+                _selectedMailboxScope = EmailMailboxScope.Inbox;
+                OnPropertyChanged(nameof(SelectedMailboxScope));
+            }
+        }
+    }
+
+    public EmailMailboxScope SelectedMailboxScope
+    {
+        get => _selectedMailboxScope;
+        set
+        {
+            if (!SetField(ref _selectedMailboxScope, value))
+            {
+                return;
+            }
+
+            if (value != EmailMailboxScope.Label && !string.IsNullOrWhiteSpace(_selectedLabel))
+            {
+                _selectedLabel = null;
+                OnPropertyChanged(nameof(SelectedLabel));
+            }
+        }
     }
 
     public EmailProjectLinkFilter SelectedProjectLinkFilter
@@ -542,8 +632,13 @@ public sealed class EmailListViewModel : ObservableObject
         AddressFilter = string.Empty;
         SubjectFilter = string.Empty;
         SelectedLabel = null;
+        SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
         GroupByLabel = false;
+        MailboxUnreadTotal = 0;
+        MailboxUnreadIsExact = true;
+        _lastLoadedGmailQuery = null;
+        _lastUnreadQuerySignature = null;
 
         AvailableLabels.Clear();
 
@@ -625,6 +720,7 @@ public sealed class EmailListViewModel : ObservableObject
         AddressFilter = string.Empty;
         SubjectFilter = string.Empty;
         SelectedLabel = null;
+        SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
         await LoadPageAsync(resetStack: true).ConfigureAwait(true);
     }
@@ -718,9 +814,22 @@ public sealed class EmailListViewModel : ObservableObject
             _lastUsedPageToken = requestToken;
 
             var query = BuildQuery();
-            var page = await _emailGateway
-                .GetMailboxPageAsync(query, requestToken)
-                .ConfigureAwait(true);
+            _lastLoadedGmailQuery = EmailMailboxQueryComposer.BuildSearchQuery(query);
+            var refreshUnreadTotal = ShouldRefreshUnreadTotal(query, resetStack);
+
+            var pageTask = _emailGateway.GetMailboxPageAsync(query, requestToken);
+            var unreadTask = refreshUnreadTotal
+                ? _emailGateway.GetMailboxUnreadCountAsync(query)
+                : Task.FromResult(new EmailMailboxUnreadCount(MailboxUnreadTotal, MailboxUnreadIsExact));
+
+            await Task.WhenAll(pageTask, unreadTask).ConfigureAwait(true);
+            var page = await pageTask.ConfigureAwait(true);
+            var unreadCount = await unreadTask.ConfigureAwait(true);
+
+            if (refreshUnreadTotal)
+            {
+                ApplyMailboxUnreadCount(unreadCount);
+            }
 
             _nextPageToken = page.NextPageToken;
             HasNextPage = page.HasNextPage;
@@ -772,15 +881,47 @@ public sealed class EmailListViewModel : ObservableObject
         }
     }
 
-    private EmailMailboxQuery BuildQuery() => new()
+    private EmailMailboxQuery BuildQuery()
     {
-        FreeText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
-        Subject = string.IsNullOrWhiteSpace(SubjectFilter) ? null : SubjectFilter.Trim(),
-        FromOrTo = string.IsNullOrWhiteSpace(AddressFilter) ? null : AddressFilter.Trim(),
-        LabelName = SelectedLabel,
-        ProjectLinkFilter = SelectedProjectLinkFilter,
-        PageSize = PageSize,
-    };
+        var scope = SelectedMailboxScope;
+        if (!string.IsNullOrWhiteSpace(SelectedLabel))
+        {
+            scope = EmailMailboxScope.Label;
+        }
+
+        return new EmailMailboxQuery
+        {
+            FreeText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
+            Subject = string.IsNullOrWhiteSpace(SubjectFilter) ? null : SubjectFilter.Trim(),
+            FromOrTo = string.IsNullOrWhiteSpace(AddressFilter) ? null : AddressFilter.Trim(),
+            LabelName = SelectedLabel,
+            MailboxScope = scope,
+            ProjectLinkFilter = SelectedProjectLinkFilter,
+            PageSize = PageSize,
+        };
+    }
+
+    private bool ShouldRefreshUnreadTotal(EmailMailboxQuery query, bool resetStack) =>
+        resetStack || !string.Equals(_lastUnreadQuerySignature, BuildUnreadQuerySignature(query), StringComparison.Ordinal);
+
+    private static string BuildUnreadQuerySignature(EmailMailboxQuery query) =>
+        $"{query.MailboxScope}|{query.LabelName}|{query.Subject}|{query.FromOrTo}|{query.FreeText}|{query.ProjectLinkFilter}";
+
+    private void ApplyMailboxUnreadCount(EmailMailboxUnreadCount unreadCount)
+    {
+        MailboxUnreadTotal = unreadCount.Count;
+        MailboxUnreadIsExact = unreadCount.IsExact;
+        _lastUnreadQuerySignature = BuildUnreadQuerySignature(BuildQuery());
+        NotifyUnreadDisplayProperties();
+    }
+
+    private void NotifyUnreadDisplayProperties()
+    {
+        OnPropertyChanged(nameof(UnreadInCurrentPage));
+        OnPropertyChanged(nameof(UnreadCountDisplay));
+        OnPropertyChanged(nameof(ShowUnreadCount));
+        OnPropertyChanged(nameof(MailboxDiagnostics));
+    }
 
     private async Task LoadProjectEmailsAsync(bool resetVisibleCount)
     {
@@ -1057,8 +1198,10 @@ public sealed class EmailListViewModel : ObservableObject
             ? Emails.FirstOrDefault()
             : Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
               ?? Emails.FirstOrDefault();
-        OnPropertyChanged(nameof(UnreadEmailCount));
+        OnPropertyChanged(nameof(UnreadInCurrentPage));
+        OnPropertyChanged(nameof(UnreadCountDisplay));
         OnPropertyChanged(nameof(ShowUnreadCount));
+        OnPropertyChanged(nameof(MailboxDiagnostics));
     }
 
     private void RaiseCommandStates()
@@ -1114,6 +1257,11 @@ public sealed class EmailListViewModel : ObservableObject
                 new GmailLabelInfo("INBOX", "INBOX"),
                 new GmailLabelInfo("lbl1", "פרויקטים_משרד/תל אביב/1042 — דוגמה"),
             ]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(2, IsExact: true, EmailMailboxQueryComposer.DescribeMailboxScope(query)));
     }
 
     private sealed class DesignAuthService : IConnectorAuthService

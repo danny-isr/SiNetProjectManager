@@ -50,4 +50,12 @@ public interface IEmailGateway
 
     /// <summary>Lists SiNet-relevant Gmail labels for filter dropdowns (read-only).</summary>
     Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets unread count for the mailbox scope in <paramref name="query"/>.
+    /// Uses a separate Gmail query from paged list fetch — not derived from the current page.
+    /// </summary>
+    Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+        EmailMailboxQuery query,
+        CancellationToken cancellationToken = default);
 }
