@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
+using SiNet.Application.Email.Acc;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.WorkSurfaces;
@@ -52,6 +53,8 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     private readonly IConnectorAuthService _googleAuthService;
     private readonly IEmailInboxQueryService? _emailInboxQuery;
     private readonly IEmailThreadLinkQueryService? _threadLinkQuery;
+    private readonly IEmailAccStatusService? _accStatusService;
+    private readonly IEmailMoveToProjectCoordinator? _moveToProjectCoordinator;
     private WorkSurfaceContext? _workSurfaceContext;
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
@@ -60,6 +63,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     private int _selectedEmailLoadVersion;
     private string _activeProjectDisplay = "לא נבחר פרויקט";
     private string _statusMessage = "חבר Gmail ולחץ רענן כדי לטעון את כל המיילים.";
+    private string _selectedAccStatusDisplay = string.Empty;
 
     public EmailWindowViewModel()
         : this(
@@ -116,7 +120,10 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             threadLinkQuery,
             filingService: null,
             statusService: null,
-            currentUser: null)
+            currentUser: null,
+            accStatusService: null,
+            accUploadCoordinator: null,
+            moveToProjectCoordinator: null)
     {
     }
 
@@ -136,7 +143,10 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailThreadLinkQueryService? threadLinkQuery,
         IEmailFilingService? filingService,
         IEmailStatusService? statusService,
-        ICurrentUserContext? currentUser)
+        ICurrentUserContext? currentUser,
+        IEmailAccStatusService? accStatusService = null,
+        IEmailAccUploadCoordinator? accUploadCoordinator = null,
+        IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -146,6 +156,8 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         _googleAuthService = googleAuthService ?? throw new ArgumentNullException(nameof(googleAuthService));
         _emailInboxQuery = emailInboxQuery;
         _threadLinkQuery = threadLinkQuery;
+        _accStatusService = accStatusService;
+        _moveToProjectCoordinator = moveToProjectCoordinator;
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
@@ -158,7 +170,10 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
             filingService,
             statusService,
             _currentProject,
-            currentUser);
+            currentUser,
+            accStatusService,
+            accUploadCoordinator,
+            moveToProjectCoordinator);
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
         EmailList.AccountStatusChanged += (_, _) => RefreshAuthDisplay();
@@ -180,7 +195,9 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         OpenEmailCommand = new AsyncRelayCommand(OpenSelectedEmailAsync, () => !IsBusy && SelectedEmail is not null);
         LinkToProjectCommand = DeferredProductionPilotAction("שיוך בפועל לפרויקט — מושהה (production pilot read-only).");
         CreateTaskFromEmailCommand = DeferredProductionPilotAction("יצירת משימה מהמייל — מושהה (דורש slice Workflow/Tasks).");
-        MarkHandledCommand = DeferredProductionPilotAction("Move-to-project / mark-handled — מושהה (production pilot read-only).");
+        MarkHandledCommand = _moveToProjectCoordinator?.IsAvailable == true
+            ? new AsyncRelayCommand(MoveSelectedEmailToProjectAsync, () => SelectedEmail?.InboxMessageId is > 0)
+            : DeferredProductionPilotAction("Move-to-project / mark-handled — מושהה (production pilot read-only).");
         ArchiveCommand = DeferredProductionPilotAction("ארכוב — מושהה (production pilot read-only).");
         ReplyCommand = DeferredProductionPilotAction("Reply/Send — מושהה (דורש G-Policy).");
         ForwardCommand = DeferredProductionPilotAction("Forward/Send — מושהה (דורש G-Policy).");
@@ -288,6 +305,15 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         get => _statusMessage;
         private set => SetField(ref _statusMessage, value);
     }
+
+    /// <summary>ACC inbox status line for the selected email preview pane.</summary>
+    public string SelectedAccStatusDisplay
+    {
+        get => _selectedAccStatusDisplay;
+        private set => SetField(ref _selectedAccStatusDisplay, value);
+    }
+
+    public bool ShowSelectedAccStatus => !string.IsNullOrWhiteSpace(SelectedAccStatusDisplay);
 
     public ICommand RefreshCommand { get; }
     public ICommand SearchCommand { get; }
@@ -405,7 +431,60 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
 
         var loadVersion = ++_selectedEmailLoadVersion;
         PrepareSelectedEmailDetailsLoading();
+        SelectedAccStatusDisplay = string.Empty;
         _ = LoadSelectedEmailDetailsAsync(value.Id, loadVersion);
+        _ = LoadSelectedEmailAccStatusAsync(value, loadVersion);
+    }
+
+    private async Task LoadSelectedEmailAccStatusAsync(EmailListRow row, int loadVersion)
+    {
+        if (_accStatusService is null)
+        {
+            return;
+        }
+
+        var status = await EmailList.LoadAccStatusForRowAsync(row).ConfigureAwait(true);
+        if (loadVersion != _selectedEmailLoadVersion
+            || !string.Equals(SelectedEmail?.Id, row.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SelectedAccStatusDisplay = status?.StatusDisplay
+            ?? SelectedEmail?.AccStatusDisplay
+            ?? string.Empty;
+    }
+
+    private async Task MoveSelectedEmailToProjectAsync()
+    {
+        if (_moveToProjectCoordinator is null || SelectedEmail?.InboxMessageId is not int inboxMessageId)
+        {
+            StatusMessage = "MoveToProject אינו זמין.";
+            return;
+        }
+
+        var projectId = _currentProject.CurrentProject?.ProjectId ?? SelectedEmail.ProjectId ?? 0;
+        if (projectId <= 0)
+        {
+            StatusMessage = "בחר פרויקט לפני העברה.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var result = await _moveToProjectCoordinator.MoveAsync(
+                new EmailMoveToProjectCommand(inboxMessageId, projectId)).ConfigureAwait(true);
+            StatusMessage = result.Message;
+            if (SelectedEmail is not null)
+            {
+                await EmailList.LoadAccStatusForRowAsync(SelectedEmail).ConfigureAwait(true);
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     public async Task RefreshAsync()
@@ -609,6 +688,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     {
         _selectedEmailLoadVersion++;
         SelectedEmailBody = string.Empty;
+        SelectedAccStatusDisplay = string.Empty;
         Attachments.Clear();
     }
 

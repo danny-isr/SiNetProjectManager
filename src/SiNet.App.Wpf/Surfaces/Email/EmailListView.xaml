@@ -122,6 +122,20 @@
                                 </MultiBinding>
                             </MenuItem.ToolTip>
                         </MenuItem>
+                        <Separator />
+                        <MenuItem Header="☁️ העלה ל-ACC Inbox"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.UploadToAccInboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="UploadToAccInbox">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
+                        </MenuItem>
                     </ContextMenu>
                 </Setter.Value>
             </Setter>

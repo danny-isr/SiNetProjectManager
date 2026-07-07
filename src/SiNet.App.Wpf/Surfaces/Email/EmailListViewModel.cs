@@ -11,6 +11,7 @@ using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
+using SiNet.Application.Email.Acc;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Domain.ValueObjects;
@@ -32,6 +33,9 @@ public sealed class EmailListViewModel : ObservableObject
     private readonly IConnectorAuthService _authService;
     private readonly IEmailFilingService? _filingService;
     private readonly IEmailStatusService? _statusService;
+    private readonly IEmailAccStatusService? _accStatusService;
+    private readonly IEmailAccUploadCoordinator? _accUploadCoordinator;
+    private readonly IEmailMoveToProjectCoordinator? _moveToProjectCoordinator;
     private readonly ICurrentProjectContext? _currentProject;
     private readonly ICurrentUserContext? _currentUser;
     private readonly Stack<string?> _pageTokenStack = new();
@@ -78,13 +82,19 @@ public sealed class EmailListViewModel : ObservableObject
         IEmailFilingService? filingService = null,
         IEmailStatusService? statusService = null,
         ICurrentProjectContext? currentProject = null,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        IEmailAccStatusService? accStatusService = null,
+        IEmailAccUploadCoordinator? accUploadCoordinator = null,
+        IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _filingService = filingService;
         _statusService = statusService;
+        _accStatusService = accStatusService;
+        _accUploadCoordinator = accUploadCoordinator;
+        _moveToProjectCoordinator = moveToProjectCoordinator;
         _currentProject = currentProject;
         _currentUser = currentUser;
 
@@ -121,6 +131,7 @@ public sealed class EmailListViewModel : ObservableObject
         MarkAsPendingCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Pending), CanSetEmailStatus, allowConcurrentParameters: true);
         MarkAsPersonalCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Personal), CanSetEmailStatus, allowConcurrentParameters: true);
         MarkAsIrrelevantCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Irrelevant), CanSetEmailStatus, allowConcurrentParameters: true);
+        UploadToAccInboxCommand = new AsyncRelayCommand<EmailListRow>(UploadToAccInboxAsync, CanUploadToAccInbox, allowConcurrentParameters: true);
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         DisconnectCommand = new AsyncRelayCommand(DisconnectGmailAsync, () => IsConnected && !IsBusy);
 
@@ -485,6 +496,7 @@ public sealed class EmailListViewModel : ObservableObject
     public ICommand MarkAsPendingCommand { get; }
     public ICommand MarkAsPersonalCommand { get; }
     public ICommand MarkAsIrrelevantCommand { get; }
+    public ICommand UploadToAccInboxCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
 
@@ -617,6 +629,7 @@ public sealed class EmailListViewModel : ObservableObject
             EmailContextMenuAction.Unfile => DescribeUnfileDisabledReason(row),
             EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
                 => DescribeSetStatusDisabledReason(row),
+            EmailContextMenuAction.UploadToAccInbox => DescribeUploadToAccDisabledReason(row),
             _ => "הפעולה אינה זמינה.",
         };
     }
@@ -628,8 +641,62 @@ public sealed class EmailListViewModel : ObservableObject
             EmailContextMenuAction.Unfile => CanUnfileEmail(row),
             EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
                 => CanSetEmailStatus(row),
+            EmailContextMenuAction.UploadToAccInbox => CanUploadToAccInbox(row),
             _ => false,
         };
+
+    private bool CanUploadToAccInbox(EmailListRow? row) =>
+        row is not null
+        && IsConnected
+        && _accUploadCoordinator is not null
+        && row.HasAttachments
+        && !_busyRowIds.Contains(row.Id)
+        && row.AccProcessingStatus is not (
+            EmailAccProcessingStatus.UploadedToAcc
+            or EmailAccProcessingStatus.MovedToProject
+            or EmailAccProcessingStatus.LockedByOtherUser
+            or EmailAccProcessingStatus.UploadInProgress)
+        && !row.IsAccUploadBusy;
+
+    private string? DescribeUploadToAccDisabledReason(EmailListRow? row)
+    {
+        if (row is null)
+        {
+            return "לא נבחר מייל.";
+        }
+
+        if (!IsConnected)
+        {
+            return "התחבר ל-Gmail.";
+        }
+
+        if (_accUploadCoordinator is null)
+        {
+            return "העלאה ל-ACC אינה זמינה.";
+        }
+
+        if (!row.HasAttachments)
+        {
+            return "אין קבצים מצורפים.";
+        }
+
+        if (row.AccProcessingStatus == EmailAccProcessingStatus.LockedByOtherUser)
+        {
+            return row.AccStatusDisplay ?? "המייל בטיפול על ידי משתמש אחר.";
+        }
+
+        if (row.AccProcessingStatus is EmailAccProcessingStatus.UploadedToAcc or EmailAccProcessingStatus.MovedToProject)
+        {
+            return "כבר הועלה ל-ACC.";
+        }
+
+        if (row.IsAccUploadBusy || row.AccProcessingStatus == EmailAccProcessingStatus.UploadInProgress)
+        {
+            return "העלאה מתבצעת.";
+        }
+
+        return "הפעולה אינה זמינה.";
+    }
 
     private string? DescribeWriteActionBlockedReason(EmailListRow? row)
     {
@@ -1186,6 +1253,16 @@ public sealed class EmailListViewModel : ObservableObject
         return Emails.FirstOrDefault(row => string.Equals(row.Id, rowId, StringComparison.Ordinal));
     }
 
+    private void RebindSelectedEmail(EmailListRow updated)
+    {
+        if (!string.Equals(SelectedEmail?.Id, updated.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SelectedEmail = FindVisibleRowById(updated.Id) ?? updated;
+    }
+
     private async Task<EmailListRow?> RefreshRowAfterFileAsync(EmailListRow row, ProjectSummaryDto project)
     {
         var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
@@ -1515,6 +1592,195 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         await Task.CompletedTask;
+    }
+
+    /// <summary>Targeted ACC status load for the selected row — read-only, no upload.</summary>
+    public async Task<EmailAccInboxStatus?> LoadAccStatusForRowAsync(EmailListRow row, CancellationToken cancellationToken = default)
+    {
+        if (_accStatusService is null)
+        {
+            return null;
+        }
+
+        PatchAccRow(row with
+        {
+            IsAccStatusLoading = true,
+            AccStatusDisplay = "בודק ACC…",
+        });
+
+        try
+        {
+            var status = await _accStatusService
+                .GetStatusByInternetMessageIdAsync(
+                    row.InternetMessageId,
+                    row.Id,
+                    ResolveActingUserLogin(),
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            if (status is not null)
+            {
+                PatchAccRow(ApplyAccStatus(row, status));
+            }
+            else
+            {
+                PatchAccRow(row with { IsAccStatusLoading = false, AccStatusDisplay = "סטטוס ACC לא זמין" });
+            }
+
+            return status;
+        }
+        catch (Exception ex)
+        {
+            PatchAccRow(row with
+            {
+                IsAccStatusLoading = false,
+                AccProcessingStatus = EmailAccProcessingStatus.Unknown,
+                AccStatusDisplay = $"שגיאת ACC: {ex.Message}",
+            });
+            return null;
+        }
+    }
+
+    private async Task UploadToAccInboxAsync(EmailListRow? row)
+    {
+        if (row is null || _accUploadCoordinator is null || !CanUploadToAccInbox(row))
+        {
+            return;
+        }
+
+        await ExecuteAccRowActionAsync(
+            row,
+            "מעלה ל-ACC Inbox…",
+            async () =>
+            {
+                var command = new EmailAccUploadCommand(
+                    row.Id,
+                    row.ThreadId ?? string.Empty,
+                    row.InternetMessageId,
+                    ResolveActingUserLogin());
+
+                var upload = await _accUploadCoordinator
+                    .UploadToAccInboxAsync(command)
+                    .ConfigureAwait(true);
+
+                if (upload.Outcome == EmailAccUploadOutcome.InProgress
+                    && !string.IsNullOrWhiteSpace(upload.MessageUniqueId))
+                {
+                    StatusMessageChanged?.Invoke(this, "המייל בטיפול על ידי משתמש אחר — ממתין לסיום…");
+                    await _accUploadCoordinator
+                        .WaitForCompletionAsync(
+                            upload.MessageUniqueId!,
+                            ResolveActingUserLogin(),
+                            TimeSpan.FromSeconds(5),
+                            maxAttempts: 24,
+                            shouldContinue: () => string.Equals(SelectedEmail?.Id, row.Id, StringComparison.Ordinal))
+                        .ConfigureAwait(true);
+                }
+
+                var status = await _accStatusService!
+                    .GetStatusByInternetMessageIdAsync(
+                        row.InternetMessageId,
+                        row.Id,
+                        ResolveActingUserLogin())
+                    .ConfigureAwait(true);
+
+                var patched = ApplyAccStatus(row, status);
+                patched = patched with
+                {
+                    IsAccUploadBusy = false,
+                    AccUploadStatusText = upload.Succeeded
+                        ? "הועלה ל-ACC"
+                        : upload.Outcome == EmailAccUploadOutcome.InProgress
+                            ? "בטיפול על ידי משתמש אחר"
+                            : upload.ErrorMessage,
+                };
+
+                ReplaceRowInDisplay(patched);
+                RebindSelectedEmail(patched);
+
+                if (!upload.Succeeded && upload.Outcome != EmailAccUploadOutcome.InProgress)
+                {
+                    throw new InvalidOperationException(upload.ErrorMessage ?? "העלאה ל-ACC נכשלה.");
+                }
+
+                return patched;
+            }).ConfigureAwait(true);
+    }
+
+    private async Task ExecuteAccRowActionAsync(
+        EmailListRow row,
+        string busyText,
+        Func<Task<EmailListRow>> action)
+    {
+        if (!_busyRowIds.Add(row.Id))
+        {
+            return;
+        }
+
+        var busy = row with
+        {
+            IsAccUploadBusy = true,
+            AccUploadStatusText = busyText,
+        };
+        ReplaceRowInDisplay(busy);
+        RebindSelectedEmail(busy);
+
+        try
+        {
+            var result = await action().ConfigureAwait(true);
+            StatusMessageChanged?.Invoke(this, result.AccStatusDisplay ?? busyText);
+        }
+        catch (Exception ex)
+        {
+            var failed = row with
+            {
+                IsAccUploadBusy = false,
+                AccUploadStatusText = null,
+                AccStatusDisplay = ex.Message,
+                AccProcessingStatus = EmailAccProcessingStatus.Failed,
+            };
+            ReplaceRowInDisplay(failed);
+            RebindSelectedEmail(failed);
+            StatusMessageChanged?.Invoke(this, ex.Message);
+        }
+        finally
+        {
+            _busyRowIds.Remove(row.Id);
+        }
+    }
+
+    private static EmailListRow ApplyAccStatus(EmailListRow row, EmailAccInboxStatus? status)
+    {
+        if (status is null)
+        {
+            return row with { IsAccStatusLoading = false };
+        }
+
+        return row with
+        {
+            IsAccStatusLoading = false,
+            AccProcessingStatus = status.ProcessingStatus,
+            AccStatusDisplay = status.StatusDisplay,
+            InboxMessageId = status.InboxMessageId ?? row.InboxMessageId,
+        };
+    }
+
+    private void PatchAccRow(EmailListRow updated)
+    {
+        ReplaceRowInDisplay(updated);
+        RebindSelectedEmail(updated);
+    }
+
+    private string ResolveActingUserLogin()
+    {
+        try
+        {
+            return Environment.UserDomainName + "\\" + Environment.UserName;
+        }
+        catch
+        {
+            return Environment.UserName;
+        }
     }
 
     internal Task FileEmailToProjectForTestsAsync(EmailListRow? row) => FileEmailToProjectAsync(row);

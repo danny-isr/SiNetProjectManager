@@ -206,6 +206,10 @@ namespace SiNetProjectManagerV2
 
             // Email Ingestion Service Factory: Singleton (caches ACC configuration)
             services.AddSingleton<SiNetSQL.Services.IEmailIngestionServiceFactory, SiNetSQL.Services.EmailIngestionServiceFactory>();
+            services.AddSingleton<SiNetSQL.Services.EmailIngestion.IEmailPdfRenderer>(sp =>
+                sp.GetRequiredService<WebView2PdfRenderer>());
+            services.AddTransient<SiNet.Application.Email.Acc.IEmailAccIngestionExecutor, LegacyEmailAccIngestionExecutor>();
+            services.AddTransient<SiNet.Application.Email.Acc.IEmailMoveToProjectExecutor, LegacyEmailMoveToProjectExecutor>();
             services.AddTransient<IEmailRelevanceService, EmailRelevanceService>();
 
             // PDF Renderer: Singleton (reused for all PDF generations)

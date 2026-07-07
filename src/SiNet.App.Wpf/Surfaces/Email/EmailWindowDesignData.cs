@@ -1,3 +1,6 @@
+using SiNet.Application.Email;
+using SiNet.Application.Email.Acc;
+
 namespace SiNet.App.Wpf.Surfaces.Email;
 
 using SiNet.Application.Abstractions.Email;
@@ -139,7 +142,12 @@ public sealed record EmailListRow(
     string? RowBackgroundColor = null,
     bool IsActionBusy = false,
     string? ActionStatusText = null,
-    string? ActionErrorText = null)
+    string? ActionErrorText = null,
+    EmailAccProcessingStatus AccProcessingStatus = EmailAccProcessingStatus.NotChecked,
+    string? AccStatusDisplay = null,
+    bool IsAccStatusLoading = false,
+    bool IsAccUploadBusy = false,
+    string? AccUploadStatusText = null)
 {
     public const int MaxVisibleLabelChips = 3;
 
@@ -165,6 +173,27 @@ public sealed record EmailListRow(
 
     /// <summary>True when this email carries at least one attachment (drives the badge visibility).</summary>
     public bool HasAttachments => AttachmentCount > 0;
+
+    public bool ShowAccStatus =>
+        AccProcessingStatus != EmailAccProcessingStatus.NotChecked
+        || IsAccStatusLoading
+        || IsAccUploadBusy;
+
+    public string AccStatusBadge =>
+        IsAccUploadBusy
+            ? AccUploadStatusText ?? "מעלה ל-ACC…"
+            : IsAccStatusLoading
+                ? "בודק ACC…"
+                : AccStatusDisplay ?? string.Empty;
+
+    public bool HasAccStatusBadge => ShowAccStatus && !string.IsNullOrWhiteSpace(AccStatusBadge);
+
+    public bool IsAccLockedByOther =>
+        AccProcessingStatus == EmailAccProcessingStatus.LockedByOtherUser;
+
+    public bool IsAccPartialFailure =>
+        AccProcessingStatus == EmailAccProcessingStatus.PartiallyUploaded
+        || AccProcessingStatus == EmailAccProcessingStatus.MissingInAcc;
 
     public string ProjectLinkDisplay => ProjectLinkState == EmailProjectLinkState.Linked
         ? "משויך"

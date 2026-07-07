@@ -221,7 +221,15 @@
 
                             <!-- Row 2: Body preview. -->
                             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="12,8">
-                                <TextBlock Text="{Binding SelectedEmailBody}" TextWrapping="Wrap" Foreground="#333" />
+                                <StackPanel>
+                                    <TextBlock Text="{Binding SelectedAccStatusDisplay}"
+                                               TextWrapping="Wrap"
+                                               Foreground="#4527A0"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,8"
+                                               Visibility="{Binding ShowSelectedAccStatus, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding SelectedEmailBody}" TextWrapping="Wrap" Foreground="#333" />
+                                </StackPanel>
                             </ScrollViewer>
 
                             <!-- Row 3: Action bar — hidden in production pilot (write/workflow deferred). -->

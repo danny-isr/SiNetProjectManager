@@ -21,6 +21,9 @@
                     <DataTrigger Binding="{Binding IsActionBusy}" Value="True">
                         <Setter Property="Opacity" Value="0.65" />
                     </DataTrigger>
+                    <DataTrigger Binding="{Binding IsAccUploadBusy}" Value="True">
+                        <Setter Property="Opacity" Value="0.65" />
+                    </DataTrigger>
                 </Style.Triggers>
             </Style>
         </Grid.Style>
@@ -106,12 +109,38 @@
                          IsIndeterminate="True"
                          Visibility="{Binding IsActionBusy, Converter={StaticResource BoolToVis}}" />
 
+            <ProgressBar Height="2"
+                         Margin="0,2,0,0"
+                         IsIndeterminate="True"
+                         Foreground="#FF9800">
+                <ProgressBar.Style>
+                    <Style TargetType="ProgressBar">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsAccUploadBusy}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsAccStatusLoading}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ProgressBar.Style>
+            </ProgressBar>
+
             <TextBlock Text="{Binding ActionStatusText, TargetNullValue=מבצע פעולה...}"
                        Margin="0,2,0,0"
                        Foreground="#1565C0"
                        FontSize="{DynamicResource SiTextTinyFontSize}"
                        FontStyle="Italic"
                        Visibility="{Binding IsActionBusy, Converter={StaticResource BoolToVis}}" />
+
+            <TextBlock Text="{Binding AccStatusBadge, Mode=OneWay}"
+                       Margin="0,2,0,0"
+                       Foreground="#6A1B9A"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"
+                       FontStyle="Italic"
+                       Visibility="{Binding HasAccStatusBadge, Converter={StaticResource BoolToVis}}" />
 
             <WrapPanel Margin="0,4,0,0">
                 <ItemsControl ItemsSource="{Binding VisibleLabelChips}"
@@ -189,6 +218,19 @@
                     <TextBlock Text="{Binding ProjectLinkDisplay}"
                                FontSize="{DynamicResource SiTextTinyFontSize}"
                                Foreground="#E65100" />
+                </Border>
+
+                <Border Background="#EDE7F6"
+                        BorderBrush="#B39DDB"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        Padding="4,1"
+                        Margin="0,0,4,2"
+                        Visibility="{Binding HasAccStatusBadge, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding AccStatusBadge, Mode=OneWay}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"
+                               Foreground="#4527A0"
+                               FontWeight="SemiBold" />
                 </Border>
             </WrapPanel>
         </StackPanel>

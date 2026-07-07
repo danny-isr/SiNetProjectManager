@@ -42,6 +42,7 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSiNetGoogle(ConfigureNewSystemGmail);
         SiNet.Infrastructure.Sql.EmailReadServiceCollectionExtensions.AddSiNetEmailReadSql(services);
         SiNet.Infrastructure.Sql.EmailWriteServiceCollectionExtensions.AddSiNetEmailWriteSql(services);
+        SiNet.Infrastructure.Sql.EmailAccServiceCollectionExtensions.AddSiNetEmailAccSql(services);
         services.AddSiNetNewSystemWpf();
         services.AddSiNetDevTools();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();

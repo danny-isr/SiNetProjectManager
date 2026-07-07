@@ -8,4 +8,5 @@ public enum EmailContextMenuAction
     MarkPending,
     MarkPersonal,
     MarkIrrelevant,
+    UploadToAccInbox,
 }
