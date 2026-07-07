@@ -32,7 +32,7 @@
                 <Setter.Value>
                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                         <MenuItem Header="📁 שייך לפרויקט"
-                                  Command="{Binding FileEmailToProjectCommand, Source={x:Reference EmailListRoot}}"
+                                  Command="{Binding DataContext.FileEmailToProjectCommand, Source={x:Reference EmailListRoot}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
                                 <Style TargetType="MenuItem">
@@ -46,7 +46,7 @@
                             </MenuItem.Style>
                         </MenuItem>
                         <MenuItem Header="↩️ בטל שיוך"
-                                  Command="{Binding UnfileEmailCommand, Source={x:Reference EmailListRoot}}"
+                                  Command="{Binding DataContext.UnfileEmailCommand, Source={x:Reference EmailListRoot}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
                                 <Style TargetType="MenuItem">
@@ -61,13 +61,13 @@
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="⏳ סמן כממתין לטיפול"
-                                  Command="{Binding MarkAsPendingCommand, Source={x:Reference EmailListRoot}}"
+                                  Command="{Binding DataContext.MarkAsPendingCommand, Source={x:Reference EmailListRoot}}"
                                   CommandParameter="{Binding}" />
                         <MenuItem Header="👤 סמן כאישי"
-                                  Command="{Binding MarkAsPersonalCommand, Source={x:Reference EmailListRoot}}"
+                                  Command="{Binding DataContext.MarkAsPersonalCommand, Source={x:Reference EmailListRoot}}"
                                   CommandParameter="{Binding}" />
                         <MenuItem Header="🚫 סמן כלא רלוונטי"
-                                  Command="{Binding MarkAsIrrelevantCommand, Source={x:Reference EmailListRoot}}"
+                                  Command="{Binding DataContext.MarkAsIrrelevantCommand, Source={x:Reference EmailListRoot}}"
                                   CommandParameter="{Binding}" />
                     </ContextMenu>
                 </Setter.Value>
