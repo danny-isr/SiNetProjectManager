@@ -6,4 +6,7 @@ public sealed record EmailProjectLinkInfo(
     int? ProjectId,
     string? ProjectNumber,
     string? ProjectName,
-    string? DisplayName);
+    string? DisplayName,
+    int? InboxMessageId = null,
+    string? ThreadUniqueId = null,
+    string? GmailThreadId = null);

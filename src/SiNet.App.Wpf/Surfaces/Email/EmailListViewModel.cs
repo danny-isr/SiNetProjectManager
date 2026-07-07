@@ -10,6 +10,8 @@ using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
+using SiNet.Application.Identity;
+using SiNet.Application.Projects;
 using SiNet.Domain.ValueObjects;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
@@ -27,6 +29,10 @@ public sealed class EmailListViewModel : ObservableObject
     private readonly IEmailGateway _emailGateway;
     private readonly IEmailThreadLinkQueryService? _threadLinkQuery;
     private readonly IConnectorAuthService _authService;
+    private readonly IEmailFilingService? _filingService;
+    private readonly IEmailStatusService? _statusService;
+    private readonly ICurrentProjectContext? _currentProject;
+    private readonly ICurrentUserContext? _currentUser;
     private readonly Stack<string?> _pageTokenStack = new();
 
     private EmailListRow? _selectedEmail;
@@ -37,6 +43,7 @@ public sealed class EmailListViewModel : ObservableObject
     private int _displayedCount;
     private bool _hasNextPage;
     private bool _groupByLabel = true;
+    private bool _attachmentsOnly;
     private EmailListLoadState _loadState = EmailListLoadState.Idle;
     private string? _loadWarning;
     private string? _loadError;
@@ -64,11 +71,19 @@ public sealed class EmailListViewModel : ObservableObject
     public EmailListViewModel(
         IEmailGateway emailGateway,
         IEmailThreadLinkQueryService? threadLinkQuery,
-        IConnectorAuthService authService)
+        IConnectorAuthService authService,
+        IEmailFilingService? filingService = null,
+        IEmailStatusService? statusService = null,
+        ICurrentProjectContext? currentProject = null,
+        ICurrentUserContext? currentUser = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _filingService = filingService;
+        _statusService = statusService;
+        _currentProject = currentProject;
+        _currentUser = currentUser;
 
         Emails = [];
         FlatDisplayEmails = [];
@@ -97,10 +112,21 @@ public sealed class EmailListViewModel : ObservableObject
         ApplyFiltersCommand = new AsyncRelayCommand(() => ReloadForContextAsync(), CanLoadEmails);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync, () => !IsBusy);
         ToggleGroupByLabelCommand = new RelayCommand(_ => ToggleGroupByLabel());
+        ToggleAttachmentsOnlyCommand = new AsyncRelayCommand(ToggleAttachmentsOnlyAsync, CanLoadEmails);
+        FileEmailToProjectCommand = new AsyncRelayCommand<EmailListRow>(FileEmailToProjectAsync, CanFileEmailToProject);
+        UnfileEmailCommand = new AsyncRelayCommand<EmailListRow>(UnfileEmailAsync, CanUnfileEmail);
+        MarkAsPendingCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Pending), CanSetEmailStatus);
+        MarkAsPersonalCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Personal), CanSetEmailStatus);
+        MarkAsIrrelevantCommand = new AsyncRelayCommand<EmailListRow>(row => SetEmailStatusAsync(row, EmailTriageStatus.Irrelevant), CanSetEmailStatus);
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => !IsBusy);
         DisconnectCommand = new AsyncRelayCommand(DisconnectGmailAsync, () => IsConnected && !IsBusy);
 
         _authService.AuthStateChanged += OnAuthStateChanged;
+
+        if (_currentProject is not null)
+        {
+            _currentProject.CurrentProjectChanged += (_, _) => RaiseCommandStates();
+        }
     }
 
     public EmailListDisplayMode DisplayMode =>
@@ -370,6 +396,12 @@ public sealed class EmailListViewModel : ObservableObject
         }
     }
 
+    public bool AttachmentsOnly
+    {
+        get => _attachmentsOnly;
+        private set => SetField(ref _attachmentsOnly, value);
+    }
+
     public int DisplayedCount
     {
         get => _displayedCount;
@@ -434,6 +466,12 @@ public sealed class EmailListViewModel : ObservableObject
     public ICommand ApplyFiltersCommand { get; }
     public ICommand ClearFiltersCommand { get; }
     public ICommand ToggleGroupByLabelCommand { get; }
+    public ICommand ToggleAttachmentsOnlyCommand { get; }
+    public ICommand FileEmailToProjectCommand { get; }
+    public ICommand UnfileEmailCommand { get; }
+    public ICommand MarkAsPendingCommand { get; }
+    public ICommand MarkAsPersonalCommand { get; }
+    public ICommand MarkAsIrrelevantCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
 
@@ -527,6 +565,177 @@ public sealed class EmailListViewModel : ObservableObject
 
         SelectedEmail = match;
         return true;
+    }
+
+    private bool CanFileEmailToProject(EmailListRow? row) =>
+        CanExecuteWriteAction(row)
+        && _filingService is not null
+        && row is { IsFiledToProject: false, InboxMessageId: > 0 }
+        && _currentProject?.CurrentProject is not null
+        && (_currentUser?.UserId ?? 0) > 0;
+
+    private bool CanUnfileEmail(EmailListRow? row) =>
+        CanExecuteWriteAction(row)
+        && _filingService is not null
+        && row is { IsFiledToProject: true, InboxMessageId: > 0 }
+        && (_currentUser?.UserId ?? 0) > 0;
+
+    private bool CanSetEmailStatus(EmailListRow? row) =>
+        CanExecuteWriteAction(row)
+        && _statusService is not null
+        && row is { InboxMessageId: > 0 }
+        && (_currentUser?.UserId ?? 0) > 0;
+
+    private bool CanExecuteWriteAction(EmailListRow? row) =>
+        row is not null && IsConnected && !IsBusy;
+
+    private async Task FileEmailToProjectAsync(EmailListRow? row)
+    {
+        if (row is null || _filingService is null || _currentProject?.CurrentProject is not { } project)
+        {
+            return;
+        }
+
+        var actingUserId = _currentUser?.UserId;
+        if (actingUserId is null or <= 0 || row.InboxMessageId is null or <= 0)
+        {
+            LoadWarning = "לא ניתן לשייך — חסר משתמש מחובר או מזהה inbox מקומי.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var result = await _filingService.FileToProjectAsync(new FileEmailToProjectCommand(
+                row.InboxMessageId.Value,
+                project.ProjectId,
+                actingUserId.Value,
+                row.Id,
+                row.ThreadId,
+                row.InternetMessageId)).ConfigureAwait(true);
+
+            if (!result.Succeeded)
+            {
+                LoadWarning = result.ErrorMessage ?? "שיוך לפרויקט נכשל.";
+                return;
+            }
+
+            LoadWarning = null;
+            await RefreshPageAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LoadWarning = $"שיוך לפרויקט נכשל: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task UnfileEmailAsync(EmailListRow? row)
+    {
+        if (row is null || _filingService is null)
+        {
+            return;
+        }
+
+        var actingUserId = _currentUser?.UserId;
+        if (actingUserId is null or <= 0 || row.InboxMessageId is null or <= 0)
+        {
+            LoadWarning = "לא ניתן לבטל שיוך — חסר משתמש מחובר או מזהה inbox מקומי.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var result = await _filingService.UnfileFromProjectAsync(new UnfileEmailCommand(
+                row.InboxMessageId.Value,
+                actingUserId.Value,
+                row.Id,
+                row.ThreadId,
+                row.InternetMessageId)).ConfigureAwait(true);
+
+            if (!result.Succeeded)
+            {
+                LoadWarning = result.ErrorMessage ?? "ביטול שיוך נכשל.";
+                return;
+            }
+
+            LoadWarning = null;
+            await RefreshPageAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LoadWarning = $"ביטול שיוך נכשל: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SetEmailStatusAsync(EmailListRow? row, EmailTriageStatus status)
+    {
+        if (row is null || _statusService is null)
+        {
+            return;
+        }
+
+        var actingUserId = _currentUser?.UserId;
+        if (actingUserId is null or <= 0)
+        {
+            LoadWarning = "לא ניתן לעדכן סטטוס — חסר משתמש מחובר.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var result = await _statusService.SetStatusAsync(new SetEmailStatusCommand(
+                row.Id,
+                row.ThreadId,
+                status,
+                actingUserId.Value,
+                row.InboxMessageId,
+                row.ThreadUniqueId)).ConfigureAwait(true);
+
+            if (!result.Succeeded)
+            {
+                LoadWarning = result.ErrorMessage ?? "עדכון סטטוס נכשל.";
+                return;
+            }
+
+            LoadWarning = null;
+
+            if (status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant)
+            {
+                RemoveRowFromDisplay(row);
+            }
+
+            await RefreshPageAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LoadWarning = $"עדכון סטטוס נכשל: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void RemoveRowFromDisplay(EmailListRow row)
+    {
+        Emails.Remove(row);
+        foreach (var group in DisplayGroups)
+        {
+            group.Emails.Remove(row);
+        }
+
+        _projectGroup?.Emails.Remove(row);
+        RebuildDisplayGroups();
     }
 
     private bool CanLoadEmails() => !IsBusy && IsConnected;
@@ -630,6 +839,8 @@ public sealed class EmailListViewModel : ObservableObject
         await Task.CompletedTask;
     }
 
+    internal Task FileEmailToProjectForTestsAsync(EmailListRow? row) => FileEmailToProjectAsync(row);
+
     internal void ClearEmailStateForTests() => ClearEmailState();
 
     private void ClearEmailState()
@@ -730,6 +941,14 @@ public sealed class EmailListViewModel : ObservableObject
         SelectedLabel = null;
         SelectedMailboxScope = EmailMailboxScope.Inbox;
         SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+        AttachmentsOnly = false;
+        ClearDisplayGroups();
+        await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
+    }
+
+    private async Task ToggleAttachmentsOnlyAsync()
+    {
+        AttachmentsOnly = !AttachmentsOnly;
         ClearDisplayGroups();
         await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
     }
@@ -961,7 +1180,7 @@ public sealed class EmailListViewModel : ObservableObject
                     .ConfigureAwait(true);
 
                 var (rows, _) = await MapSummariesAsync(page.Items).ConfigureAwait(true);
-                rows = ApplyClientLinkFilter(rows);
+                rows = ApplyClientRowFilters(rows);
                 foreach (var row in rows)
                 {
                     group.TryAddEmail(row);
@@ -1119,7 +1338,7 @@ public sealed class EmailListViewModel : ObservableObject
                 LoadWarning = enrichmentWarning;
             }
 
-            rows = ApplyClientLinkFilter(rows);
+            rows = ApplyClientRowFilters(rows);
 
             ReplaceRows(rows, previousSelectionId, skipDisplayRebuild);
             DisplayedCount = rows.Count;
@@ -1176,6 +1395,7 @@ public sealed class EmailListViewModel : ObservableObject
             LabelName = SelectedLabel,
             MailboxScope = scope,
             ProjectLinkFilter = SelectedProjectLinkFilter,
+            AttachmentsOnly = AttachmentsOnly,
             PageSize = PageSize,
         };
     }
@@ -1184,7 +1404,7 @@ public sealed class EmailListViewModel : ObservableObject
         resetStack || !string.Equals(_lastUnreadQuerySignature, BuildUnreadQuerySignature(query), StringComparison.Ordinal);
 
     private static string BuildUnreadQuerySignature(EmailMailboxQuery query) =>
-        $"{query.MailboxScope}|{query.LabelName}|{query.Subject}|{query.FromOrTo}|{query.FreeText}|{query.ProjectLinkFilter}";
+        $"{query.MailboxScope}|{query.LabelName}|{query.Subject}|{query.FromOrTo}|{query.FreeText}|{query.ProjectLinkFilter}|{query.AttachmentsOnly}";
 
     private void ApplyMailboxUnreadCount(EmailMailboxUnreadCount unreadCount)
     {
@@ -1216,6 +1436,7 @@ public sealed class EmailListViewModel : ObservableObject
         OnPropertyChanged(nameof(PageInfo));
         OnPropertyChanged(nameof(ActiveProjectGroup));
         (ToggleGroupByLabelCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (ToggleAttachmentsOnlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ApplyFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
@@ -1301,7 +1522,7 @@ public sealed class EmailListViewModel : ObservableObject
             IsUnread: summary.IsUnread,
             IsAssigned: isLinked,
             AssignedProjectName: isLinked ? projectDisplay : null,
-            AttachmentCount: summary.HasAttachments ? 1 : 0,
+            AttachmentCount: summary.AttachmentCount,
             InternetMessageId: summary.InternetMessageId,
             To: summary.To?.Value ?? string.Empty,
             Snippet: summary.Snippet ?? string.Empty,
@@ -1312,7 +1533,23 @@ public sealed class EmailListViewModel : ObservableObject
             ProjectNumber: link?.ProjectNumber,
             ProjectName: link?.ProjectName,
             ProjectDisplay: projectDisplay,
-            LabelChipNames: labelChipNames);
+            LabelChipNames: labelChipNames,
+            ThreadId: summary.ThreadId,
+            InboxMessageId: link?.InboxMessageId,
+            ThreadUniqueId: link?.ThreadUniqueId,
+            IsFiledToProject: IsFiledToProject(summary.LabelNames));
+    }
+
+    private static bool IsFiledToProject(IReadOnlyList<string>? labelNames)
+    {
+        if (labelNames is null || labelNames.Count == 0)
+        {
+            return false;
+        }
+
+        return labelNames.Any(static label =>
+            label.Contains("פרויקטים_משרד/", StringComparison.OrdinalIgnoreCase)
+            && label.Count(static ch => ch == '/') >= 2);
     }
 
     private static IReadOnlyList<string> FilterDisplayLabels(IReadOnlyList<string>? labelNames)
@@ -1351,14 +1588,21 @@ public sealed class EmailListViewModel : ObservableObject
             && label.Count(static ch => ch == '/') >= 2);
     }
 
-    private IReadOnlyList<EmailListRow> ApplyClientLinkFilter(IReadOnlyList<EmailListRow> rows)
+    private IReadOnlyList<EmailListRow> ApplyClientRowFilters(IReadOnlyList<EmailListRow> rows)
     {
-        return SelectedProjectLinkFilter switch
+        var filtered = SelectedProjectLinkFilter switch
         {
             EmailProjectLinkFilter.Linked => rows.Where(static row => row.IsLinked).ToList(),
             EmailProjectLinkFilter.Unlinked => rows.Where(static row => !row.IsLinked).ToList(),
             _ => rows,
         };
+
+        if (AttachmentsOnly)
+        {
+            filtered = filtered.Where(static row => row.HasAttachments).ToList();
+        }
+
+        return filtered;
     }
 
     private void ReplaceRows(IReadOnlyList<EmailListRow> rows, string? preserveSelectionId = null, bool skipDisplayRebuild = false)
@@ -1398,6 +1642,11 @@ public sealed class EmailListViewModel : ObservableObject
         (ClearFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (FileEmailToProjectCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (UnfileEmailCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (MarkAsPendingCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (MarkAsPersonalCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (MarkAsIrrelevantCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
     }
 
     private sealed class DesignEmailListGateway : IEmailGateway
@@ -1423,7 +1672,7 @@ public sealed class EmailListViewModel : ObservableObject
                     EmailAddress.CreateOrFallback(row.Sender),
                     row.Subject,
                     row.ReceivedOn == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(row.ReceivedOn),
-                    row.HasAttachments,
+                    row.AttachmentCount,
                     InternetMessageId: null,
                     To: null,
                     Snippet: row.Preview,

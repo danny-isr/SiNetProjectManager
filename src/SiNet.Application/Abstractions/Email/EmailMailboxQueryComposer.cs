@@ -30,6 +30,11 @@ public static class EmailMailboxQueryComposer
             parts.Add(query.FreeText.Trim());
         }
 
+        if (query.AttachmentsOnly)
+        {
+            parts.Add("has:attachment");
+        }
+
         return string.Join(' ', parts);
     }
 
@@ -65,7 +70,8 @@ public static class EmailMailboxQueryComposer
         !string.IsNullOrWhiteSpace(query.Subject)
         || !string.IsNullOrWhiteSpace(query.FromOrTo)
         || !string.IsNullOrWhiteSpace(query.FreeText)
-        || query.ProjectLinkFilter != EmailProjectLinkFilter.All;
+        || query.ProjectLinkFilter != EmailProjectLinkFilter.All
+        || query.AttachmentsOnly;
 
     public static string DescribeMailboxScope(EmailMailboxQuery query) =>
         query.MailboxScope switch

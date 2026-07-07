@@ -1,7 +1,10 @@
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
+using SiNet.Application.Identity;
+using SiNet.Application.Projects;
 using SiNet.Domain.ValueObjects;
 using Xunit;
 
@@ -804,6 +807,91 @@ public sealed class EmailListViewModelTests
         Assert.NotEmpty(sut.FlatDisplayEmails);
     }
 
+    [Fact]
+    public async Task Attachments_only_filter_adds_has_attachment_to_gmail_query()
+    {
+        var gateway = new PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+        sut.ToggleAttachmentsOnlyCommand.Execute(null);
+        await Task.Delay(250);
+
+        Assert.NotNull(gateway.LastQuery);
+        Assert.Contains("has:attachment", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Attachment_count_maps_from_email_summary()
+    {
+        var gateway = new AttachmentCountEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
+
+        await sut.RefreshPageAsync();
+
+        Assert.Equal(3, sut.Emails.Single().AttachmentCount);
+    }
+
+    [Fact]
+    public void File_command_requires_inbox_message_id_and_active_project()
+    {
+        var filing = new RecordingFilingService();
+        var projectContext = new StubCurrentProjectContext(CreateProject());
+        var sut = new EmailListViewModel(
+            new PagingEmailGateway(),
+            threadLinkQuery: null,
+            new StubAuthService(),
+            filing,
+            statusService: null,
+            projectContext,
+            new StubCurrentUser(7));
+
+        var rowWithoutInbox = CreateRow(inboxMessageId: null, isFiledToProject: false);
+        var rowReady = CreateRow(inboxMessageId: 42, isFiledToProject: false);
+
+        Assert.False(sut.FileEmailToProjectCommand.CanExecute(rowWithoutInbox));
+        Assert.True(sut.FileEmailToProjectCommand.CanExecute(rowReady));
+        Assert.False(sut.UnfileEmailCommand.CanExecute(rowReady));
+    }
+
+    [Fact]
+    public async Task File_command_calls_filing_service_and_refreshes()
+    {
+        var gateway = new PagingEmailGateway();
+        var filing = new RecordingFilingService();
+        var projectContext = new StubCurrentProjectContext(CreateProject());
+        var sut = new EmailListViewModel(
+            gateway,
+            threadLinkQuery: null,
+            new StubAuthService(),
+            filing,
+            statusService: null,
+            projectContext,
+            new StubCurrentUser(7));
+
+        var row = CreateRow(inboxMessageId: 42, isFiledToProject: false);
+        await sut.FileEmailToProjectForTestsAsync(row);
+
+        Assert.True(filing.FileCalled);
+        Assert.Equal(42, filing.LastFileCommand?.InboxMessageId);
+        Assert.Equal(1042, filing.LastFileCommand?.TargetProjectId);
+    }
+
+    private static EmailListRow CreateRow(int? inboxMessageId, bool isFiledToProject) =>
+        new(
+            Id: "msg-1",
+            Sender: "a@example.com",
+            Subject: "Subject",
+            Preview: "Preview",
+            ReceivedOn: DateTime.UtcNow,
+            GroupName: "INBOX",
+            IsUnread: false,
+            IsAssigned: isFiledToProject,
+            AssignedProjectName: null,
+            AttachmentCount: 0,
+            InboxMessageId: inboxMessageId,
+            IsFiledToProject: isFiledToProject);
+
     private static async Task<EmailListViewModel> CreateLabelGroupingSutAsync(LabelGroupingEmailGateway gateway)
     {
         var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new StubAuthService());
@@ -926,7 +1014,7 @@ public sealed class EmailListViewModelTests
                 EmailAddress.CreateOrFallback($"{messageId}@example.com"),
                 subject,
                 DateTimeOffset.UtcNow,
-                false,
+                0,
                 LabelNames: labelNames ?? ["Work"],
                 PrimaryLabel: primaryLabel ?? "Work");
     }
@@ -1045,7 +1133,7 @@ public sealed class EmailListViewModelTests
                         EmailAddress.CreateOrFallback($"user{i}@example.com"),
                         $"Subject {i}",
                         DateTimeOffset.UtcNow.AddHours(-i),
-                        false))
+                        0))
                     .ToList();
 
                 if (pageToken is null)
@@ -1091,7 +1179,7 @@ public sealed class EmailListViewModelTests
                 EmailAddress.CreateOrFallback($"{messageId}@example.com"),
                 subject,
                 DateTimeOffset.UtcNow,
-                false);
+                0);
     }
 
     private sealed class ProjectMergeEmailGateway : IEmailGateway
@@ -1133,7 +1221,7 @@ public sealed class EmailListViewModelTests
                         EmailAddress.CreateOrFallback($"user{i}@example.com"),
                         $"Subject {i}",
                         DateTimeOffset.UtcNow.AddHours(-i),
-                        false))
+                        0))
                     .ToList();
 
                 return Task.FromResult(new EmailMailboxPage(allItems, query.PageSize, null, false));
@@ -1168,7 +1256,7 @@ public sealed class EmailListViewModelTests
                 EmailAddress.CreateOrFallback($"{messageId}@example.com"),
                 subject,
                 DateTimeOffset.UtcNow,
-                false,
+                0,
                 LabelNames: labelNames,
                 PrimaryLabel: primaryLabel);
     }
@@ -1199,7 +1287,7 @@ public sealed class EmailListViewModelTests
                     EmailAddress.CreateOrFallback($"user{i}@example.com"),
                     $"Subject {i}",
                     DateTimeOffset.UtcNow.AddHours(-i),
-                    false))
+                    0))
                 .ToList();
 
             return Task.FromResult<IReadOnlyList<EmailSummary>>(items);
@@ -1227,7 +1315,7 @@ public sealed class EmailListViewModelTests
                         EmailAddress.CreateOrFallback($"user{i}@example.com"),
                         $"Subject {i}",
                         DateTimeOffset.UtcNow.AddHours(-i),
-                        false))
+                        0))
                     .ToList();
 
                 if (pageToken is null)
@@ -1317,7 +1405,7 @@ public sealed class EmailListViewModelTests
                     EmailAddress.CreateOrFallback("a@example.com"),
                     "Hello",
                     DateTimeOffset.UtcNow,
-                    false,
+                    0,
                     InternetMessageId: "<abc@mail.com>"),
             ],
             query.PageSize,
@@ -1373,7 +1461,7 @@ public sealed class EmailListViewModelTests
                     EmailAddress.CreateOrFallback("a@example.com"),
                     "Unread",
                     DateTimeOffset.UtcNow,
-                    false,
+                    0,
                     IsUnread: ReturnUnreadRows),
                 new EmailSummary(
                     "msg-read",
@@ -1381,7 +1469,7 @@ public sealed class EmailListViewModelTests
                     EmailAddress.CreateOrFallback("b@example.com"),
                     "Read",
                     DateTimeOffset.UtcNow,
-                    false,
+                    0,
                     IsUnread: false),
             ],
             query.PageSize,
@@ -1426,5 +1514,90 @@ public sealed class EmailListViewModelTests
             IReadOnlyList<string> internetMessageIds,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("DB enrichment failed");
+    }
+
+    private static ProjectSummaryDto CreateProject() =>
+        new(1042, "1042", "North", "Tel Aviv", null, null, null, null, true);
+
+    private sealed class StubCurrentProjectContext(ProjectSummaryDto? project) : ICurrentProjectContext
+    {
+        public ProjectSummaryDto? CurrentProject { get; } = project;
+
+        public event EventHandler<ProjectChangedEventArgs>? CurrentProjectChanged;
+
+        public Task SetCurrentProjectAsync(ProjectSummaryDto? project, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class StubCurrentUser(int userId) : ICurrentUserContext
+    {
+        public int? UserId { get; } = userId;
+    }
+
+    private sealed class RecordingFilingService : IEmailFilingService
+    {
+        public bool FileCalled { get; private set; }
+
+        public FileEmailToProjectCommand? LastFileCommand { get; private set; }
+
+        public Task<EmailFilingResult> FileToProjectAsync(
+            FileEmailToProjectCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            FileCalled = true;
+            LastFileCommand = command;
+            return Task.FromResult(new EmailFilingResult(true, AssignedProjectId: command.TargetProjectId));
+        }
+
+        public Task<EmailFilingResult> UnfileFromProjectAsync(
+            UnfileEmailCommand command,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailFilingResult(true));
+    }
+
+    private sealed class AttachmentCountEmailGateway : IEmailGateway
+    {
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
+            string location,
+            string projectName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
+            string projectLabelName,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EmailSummary>>([]);
+
+        public Task<EmailSummary?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailSummary?>(null);
+
+        public Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EmailMessageDetails?>(null);
+
+        public Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxPage(
+            [
+                new EmailSummary(
+                    "msg-att",
+                    "thread-att",
+                    EmailAddress.CreateOrFallback("a@example.com"),
+                    "Attachments",
+                    DateTimeOffset.UtcNow,
+                    3),
+            ],
+            query.PageSize,
+            null,
+            false));
+
+        public Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+        public Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
+            EmailMailboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new EmailMailboxUnreadCount(0, IsExact: true));
     }
 }

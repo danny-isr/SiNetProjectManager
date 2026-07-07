@@ -49,3 +49,52 @@ public sealed class AsyncRelayCommand : ICommand
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
+
+/// <summary>
+/// Parameterized async <see cref="ICommand"/> for row-scoped actions (e.g. context menu on email list items).
+/// </summary>
+public sealed class AsyncRelayCommand<T> : ICommand
+{
+    private readonly Func<T?, Task> _execute;
+    private readonly Func<T?, bool>? _canExecute;
+    private bool _isExecuting;
+
+    public AsyncRelayCommand(Func<T?, Task> execute, Func<T?, bool>? canExecute = null)
+    {
+        _execute = execute;
+        _canExecute = canExecute;
+    }
+
+    public bool CanExecute(object? parameter) =>
+        !_isExecuting && (_canExecute?.Invoke(parameter is T t ? t : default) ?? true);
+
+    public async void Execute(object? parameter)
+    {
+        if (!CanExecute(parameter))
+        {
+            return;
+        }
+
+        var typed = parameter is T t ? t : default;
+
+        try
+        {
+            _isExecuting = true;
+            RaiseCanExecuteChanged();
+            await _execute(typed).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppErrorReporter.Report(ex, "AsyncRelayCommand");
+        }
+        finally
+        {
+            _isExecuting = false;
+            RaiseCanExecuteChanged();
+        }
+    }
+
+    public event EventHandler? CanExecuteChanged;
+
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}

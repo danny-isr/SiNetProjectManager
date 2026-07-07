@@ -238,13 +238,15 @@ public sealed class EmailListSliceBoundaryTests
     }
 
     [Fact]
-    public void No_Gmail_write_operations_in_this_slice()
+    public void Email_list_uses_application_write_ports_not_direct_gmail()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         var windowVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
-        Assert.DoesNotContain("IEmailFilingService", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailFilingService", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailStatusService", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("SendAsync", listVmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GoogleService", listVmSource, StringComparison.Ordinal);
         Assert.Contains("ShowDeferredWriteActions => false", windowVmSource, StringComparison.Ordinal);
     }
 

@@ -523,7 +523,7 @@ public sealed class GmailEmailGateway : IEmailGateway
 
         var subject = GetHeader(headers, "Subject") ?? string.Empty;
         var receivedAt = ResolveReceivedAt(message, GetHeader(headers, "Date"));
-        var hasAttachments = HasAttachments(message.Payload);
+        var attachmentCount = CountAttachments(message.Payload);
         var labelNames = ResolveLabelNames(message, labelMap);
         var primaryLabel = ResolvePrimaryLabel(labelNames);
         var isUnread = GmailEmailGateway.ResolveIsUnread(message.LabelIds);
@@ -534,7 +534,7 @@ public sealed class GmailEmailGateway : IEmailGateway
             from,
             subject,
             receivedAt,
-            hasAttachments,
+            attachmentCount,
             GetHeader(headers, "Message-ID"),
             to,
             message.Snippet ?? string.Empty,
@@ -639,34 +639,38 @@ public sealed class GmailEmailGateway : IEmailGateway
         return DateTimeOffset.MinValue;
     }
 
-    private static bool HasAttachments(MessagePart? payload)
+    internal static int CountAttachments(MessagePart? payload)
     {
-        // Best-effort from the metadata payload: a real attachment is a part with a filename and
-        // an attachment body id. Inline images (signatures/logos) are intentionally not counted.
-        if (payload?.Parts == null)
+        if (payload == null)
         {
-            return false;
+            return 0;
         }
 
-        return AnyAttachmentPart(payload.Parts);
+        var count = 0;
+        CountAttachmentsRecursive(payload, ref count);
+        return count;
     }
 
-    private static bool AnyAttachmentPart(IList<MessagePart> parts)
+    private static void CountAttachmentsRecursive(MessagePart part, ref int count)
     {
-        foreach (var part in parts)
+        var filename = ResolveFileName(part);
+        if (!string.IsNullOrWhiteSpace(filename) && part.Body?.AttachmentId is { Length: > 0 })
         {
-            if (!string.IsNullOrEmpty(part.Filename) && part.Body?.AttachmentId != null)
+            if (!IsInlineAttachment(part))
             {
-                return true;
-            }
-
-            if (part.Parts != null && AnyAttachmentPart(part.Parts))
-            {
-                return true;
+                count++;
             }
         }
 
-        return false;
+        if (part.Parts == null)
+        {
+            return;
+        }
+
+        foreach (var nested in part.Parts)
+        {
+            CountAttachmentsRecursive(nested, ref count);
+        }
     }
 
     private static string ExtractBodyText(MessagePart? payload)

@@ -1,16 +1,18 @@
 # IEmailFilingService — Application Port Design
 
-> **Status:** Design only (2026-07-06). **No** Infrastructure implementation until write policy approval.  
-> Related: [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md), [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md)
+> **Status:** Implemented (2026-07-07) — `SqlEmailFilingService` + `GmailEmailModifyService` registered via `AddSiNetEmailWriteSql()`.  
+> Related: [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md), [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md)
 
 ## Purpose
 
-Provide a single Application-layer port for project filing side effects so `EmailWindowViewModel` never calls legacy `EmailFilingService` or Gmail modify APIs directly.
+Provide a single Application-layer port for project filing side effects so WPF never calls legacy `EmailFilingService` or Gmail modify APIs directly.
 
 ## Port location
 
 - Interface: `src/SiNet.Application/Email/IEmailFilingService.cs`
 - Commands: `src/SiNet.Application/Email/EmailFilingCommands.cs`
+- Status port: `src/SiNet.Application/Email/IEmailStatusService.cs`
+- Gmail modify: `src/SiNet.Application/Abstractions/Email/IEmailGmailModifyService.cs` → `GmailEmailModifyService`
 
 ## Operations
 
@@ -18,27 +20,30 @@ Provide a single Application-layer port for project filing side effects so `Emai
 | --- | --- | --- |
 | `FileToProjectAsync` | `FileEmailToProjectCommand` | `EmailManagementService.FileToProjectAsync` / `EmailFilingService` |
 | `UnfileFromProjectAsync` | `UnfileEmailCommand` | `EmailManagementService.UnfileFromProjectAsync` |
+| `SetStatusAsync` | `SetEmailStatusCommand` | `EmailStatusService.SetStatusAsync` |
 
 ## Command fields
 
-**FileEmailToProjectCommand:** `InboxMessageId`, `TargetProjectId`, `ActingUserId`, optional `TaskId`, optional `TaskResultCode` (for workflow completion bridge after filing).
+**FileEmailToProjectCommand:** `InboxMessageId`, `TargetProjectId`, `ActingUserId`, `GmailMessageId`, optional `GmailThreadId`, `InternetMessageId`, optional `TaskId`, optional `TaskResultCode`.
 
-**UnfileEmailCommand:** `InboxMessageId`, `ActingUserId`, optional `TaskId`.
+**UnfileEmailCommand:** `InboxMessageId`, `ActingUserId`, `GmailMessageId`, optional `GmailThreadId`, `InternetMessageId`, optional `TaskId`.
+
+**SetEmailStatusCommand:** `GmailMessageId`, `GmailThreadId`, `EmailTriageStatus`, `ActingUserId`, optional `InboxMessageId`, `ThreadUniqueId`.
 
 ## Result
 
 `EmailFilingResult(Succeeded, ErrorMessage?, AssignedProjectId?)` — structured failure; no fallback paths.
 
-## Implementation plan (after approval)
+## Implementation
 
-1. `SqlEmailFilingService` in `SiNet.Infrastructure.Sql` — thin wrapper over migrated legacy logic
-2. Register in composition root only when write policy closes
-3. Wire Email window buttons (`LinkToProject`, etc.) through the port — not before
+1. `SqlEmailFilingService` / `SqlEmailStatusService` in `SiNet.Infrastructure.Sql`
+2. Registered in `AddSiNetEmailWriteSql()` (called from `AddSiNet()` composition root)
+3. **Wired:** `EmailListViewModel` context menu (file/unfile/status). **Deferred:** viewer action bar buttons in `EmailWindowViewModel` (`ShowDeferredWriteActions`).
 
 ## Out of scope
 
 - MoveToProject / ACC filing
-- Gmail send / reply
+- Gmail send / reply from the email viewer
 - Direct WPF → `GoogleService` calls
 
 ## Companion read port

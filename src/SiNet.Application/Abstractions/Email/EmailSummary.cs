@@ -12,10 +12,13 @@ public sealed record EmailSummary(
     EmailAddress From,
     string Subject,
     DateTimeOffset ReceivedAt,
-    bool HasAttachments,
+    int AttachmentCount = 0,
     string? InternetMessageId = null,
     EmailAddress? To = null,
     string Snippet = "",
     IReadOnlyList<string>? LabelNames = null,
     string? PrimaryLabel = null,
-    bool IsUnread = false);
+    bool IsUnread = false)
+{
+    public bool HasAttachments => AttachmentCount > 0;
+}

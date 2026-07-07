@@ -43,9 +43,11 @@ public sealed class SqlEmailThreadLinkQueryService(IDbContextFactory<SiNetSQLDbC
                 || lookupKeys.Contains(message.MessageUniqueId))
             .Select(message => new
             {
+                message.Id,
                 message.InternetMessageId,
                 message.MessageUniqueId,
                 message.ThreadUniqueId,
+                message.GmailThreadId,
                 message.ProjectId,
             })
             .ToListAsync(cancellationToken)
@@ -122,7 +124,10 @@ public sealed class SqlEmailThreadLinkQueryService(IDbContextFactory<SiNetSQLDbC
                 ProjectId: isLinked ? projectId : null,
                 ProjectNumber: project?.Number?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ProjectName: project?.Title,
-                DisplayName: isLinked ? display : null);
+                DisplayName: isLinked ? display : null,
+                InboxMessageId: inbox.Id,
+                ThreadUniqueId: inbox.ThreadUniqueId,
+                GmailThreadId: inbox.GmailThreadId);
 
             AddKey(result, inbox.InternetMessageId, info);
             AddKey(result, inbox.MessageUniqueId, info);

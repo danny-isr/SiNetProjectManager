@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
+using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.WorkSurfaces;
 using SiNet.Domain.ValueObjects;
@@ -97,6 +98,28 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
     {
     }
 
+    public EmailWindowViewModel(
+        IProjectQueryService projectQuery,
+        IProjectFilterOptionsService filterOptions,
+        ICurrentProjectContext currentProject,
+        IEmailGateway emailGateway,
+        IConnectorAuthService googleAuthService,
+        IEmailInboxQueryService? emailInboxQuery,
+        IEmailThreadLinkQueryService? threadLinkQuery)
+        : this(
+            projectQuery,
+            filterOptions,
+            currentProject,
+            emailGateway,
+            googleAuthService,
+            emailInboxQuery,
+            threadLinkQuery,
+            filingService: null,
+            statusService: null,
+            currentUser: null)
+    {
+    }
+
     /// <summary>
     /// Primary constructor: hosts the shared <see cref="ProjectSelectorViewModel"/> over the supplied
     /// read ports and shared current-project context, and observes that context for display updates.
@@ -110,7 +133,10 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailGateway emailGateway,
         IConnectorAuthService googleAuthService,
         IEmailInboxQueryService? emailInboxQuery,
-        IEmailThreadLinkQueryService? threadLinkQuery)
+        IEmailThreadLinkQueryService? threadLinkQuery,
+        IEmailFilingService? filingService,
+        IEmailStatusService? statusService,
+        ICurrentUserContext? currentUser)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -125,7 +151,14 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
         Attachments = [];
 
-        EmailList = new EmailListViewModel(_emailGateway, _threadLinkQuery, _googleAuthService);
+        EmailList = new EmailListViewModel(
+            _emailGateway,
+            _threadLinkQuery,
+            _googleAuthService,
+            filingService,
+            statusService,
+            _currentProject,
+            currentUser);
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
         EmailList.AccountStatusChanged += (_, _) => RefreshAuthDisplay();
@@ -653,7 +686,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
                 EmailAddress.CreateOrFallback(row.Sender),
                 row.Subject,
                 row.ReceivedOn == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(row.ReceivedOn),
-                row.HasAttachments))
+                row.AttachmentCount))
             .ToList();
 
         public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
@@ -706,7 +739,7 @@ public sealed class EmailWindowViewModel : ObservableObject, IDisposable
                     EmailAddress.CreateOrFallback(row.Sender),
                     row.Subject,
                     row.ReceivedOn == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(row.ReceivedOn),
-                    row.HasAttachments,
+                    row.AttachmentCount,
                     InternetMessageId: null,
                     To: null,
                     Snippet: row.Preview,

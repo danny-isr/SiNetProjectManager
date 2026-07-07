@@ -31,6 +31,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
     {
         GmailService.Scope.GmailReadonly,
         GmailService.Scope.GmailSend,
+        GmailService.Scope.GmailModify,
     };
     private const string TokenUser = "user";
 

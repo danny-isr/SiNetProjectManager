@@ -2,12 +2,7 @@ namespace SiNet.Application.Email;
 
 /// <summary>
 /// Application port for project filing side effects (Gmail labels, DB project assignment, workflow events).
-/// <para>
-/// <b>Design-only in V1.</b> No Infrastructure implementation is registered until write policy is
-/// approved (<c>docs/GOOGLE_BOUNDARY.md</c>, <c>docs/NEW_SYSTEM_PRODUCTION_READINESS.md</c>).
-/// The legacy seam is <c>EmailFilingService</c> / <c>EmailManagementService.FileToProjectAsync</c>
-/// in SiNetSQL — a future slice wraps that logic here without exposing EF or Gmail types to WPF.
-/// </para>
+/// Implemented by <c>SqlEmailFilingService</c> and wired from <c>EmailListViewModel</c> context menu actions.
 /// </summary>
 public interface IEmailFilingService
 {

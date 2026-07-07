@@ -117,6 +117,7 @@ public sealed record EmailListRow(
     string? AssignedProjectName,
     int AttachmentCount,
     string? InternetMessageId = null,
+    string? ThreadId = null,
     string To = "",
     string Snippet = "",
     string LabelsDisplay = "",
@@ -126,7 +127,10 @@ public sealed record EmailListRow(
     string? ProjectNumber = null,
     string? ProjectName = null,
     string ProjectDisplay = "לא משויך",
-    IReadOnlyList<string>? LabelChipNames = null)
+    IReadOnlyList<string>? LabelChipNames = null,
+    int? InboxMessageId = null,
+    string? ThreadUniqueId = null,
+    bool IsFiledToProject = false)
 {
     public const int MaxVisibleLabelChips = 3;
 

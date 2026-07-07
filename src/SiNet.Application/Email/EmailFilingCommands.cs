@@ -5,6 +5,9 @@ public sealed record FileEmailToProjectCommand(
     int InboxMessageId,
     int TargetProjectId,
     int ActingUserId,
+    string GmailMessageId,
+    string? GmailThreadId = null,
+    string? InternetMessageId = null,
     int? TaskId = null,
     string? TaskResultCode = null);
 
@@ -12,6 +15,9 @@ public sealed record FileEmailToProjectCommand(
 public sealed record UnfileEmailCommand(
     int InboxMessageId,
     int ActingUserId,
+    string GmailMessageId,
+    string? GmailThreadId = null,
+    string? InternetMessageId = null,
     int? TaskId = null);
 
 /// <summary>Outcome of a filing attempt (success or structured failure).</summary>

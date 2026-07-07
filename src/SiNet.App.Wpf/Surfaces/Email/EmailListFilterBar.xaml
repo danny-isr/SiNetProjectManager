@@ -203,6 +203,10 @@
                               Margin="0,0,4,0" />
                     <Button Content="חפש" Command="{Binding ApplyFiltersCommand}" Style="{StaticResource ActionButton}" />
                     <Button Content="נקה" Command="{Binding ClearFiltersCommand}" Style="{StaticResource ActionButton}" />
+                    <ToggleButton Content="עם צרופות"
+                                  IsChecked="{Binding AttachmentsOnly, Mode=OneWay}"
+                                  Command="{Binding ToggleAttachmentsOnlyCommand}"
+                                  Style="{StaticResource ToggleActionButton}" />
                 </WrapPanel>
                 <TextBlock Text="{Binding MailboxDiagnostics}"
                            Foreground="#999"

@@ -36,7 +36,7 @@ decision for any behavior change.
 | Gmail auth/health bridge | `IConnectorAuthService` -> `GmailConnectorAuthService` | Native | Active |
 | Gmail send capability | `IEmailSender` -> `GmailEmailSender` | Native module | Implemented in code; host adoption is still separate |
 | Gmail outbound send used by legacy flows | `GmailOutboundMailService` / `GoogleService` | Legacy host | Active |
-| Gmail modify / labels / mark-read | `GoogleService` | Legacy host | Active, not ported |
+| Gmail modify / labels / mark-read | `GmailEmailModifyService` / `IEmailGmailModifyService` | Native module | Implemented for list filing + triage; **requires OAuth re-consent** (`GmailModify` scope) |
 | Gmail full-body / attachments / throttle | `GoogleService` / `GmailThrottleService` | Legacy host | Active, not ported |
 | Google Sheets reports (`R01/R02/R03`) | `SiOffice.GoogleConnector/Reports/*` | Legacy host | Active, not ported |
 | Google Sheets migration readers | `SiNetProjectManagerV2/Services/Migration/*` | Legacy host | Active, not ported |
@@ -63,8 +63,9 @@ behavior still belongs to the legacy host.
 | `src/SiNet.Infrastructure.Google/GmailClientProvider.cs` | OAuth session, silent restore, interactive sign-in, cached Gmail client |
 | `src/SiNet.Infrastructure.Google/GmailEmailGateway.cs` | Native Gmail read path (`IEmailGateway`), including project-label lookup across Gmail location buckets and best-effort body/attachment metadata extraction |
 | `src/SiNet.Infrastructure.Google/GmailEmailSender.cs` | Native Gmail send path (`IEmailSender`) |
+| `src/SiNet.Infrastructure.Google/GmailEmailModifyService.cs` | Native Gmail label modify (project labels + triage status) |
 | `src/SiNet.Infrastructure.Google/GmailConnectorAuthService.cs` | Auth-state / health bridge (`IConnectorAuthService`) |
-| `src/SiNet.Infrastructure.Google/GoogleServiceCollectionExtensions.cs` | Registers read + auth-state + send over the shared provider |
+| `src/SiNet.Infrastructure.Google/GoogleServiceCollectionExtensions.cs` | Registers read + auth-state + send + modify over the shared provider |
 | `src/SiNet.Infrastructure.Google/GmailOptions.cs` | Configurable options: client secrets path, token store path, app name, root label, interactive sign-in |
 
 ### 3.2 Current scope truth
@@ -73,10 +74,11 @@ The live code in `GmailClientProvider` currently uses these hard-coded scopes:
 
 - `GmailService.Scope.GmailReadonly`
 - `GmailService.Scope.GmailSend`
+- `GmailService.Scope.GmailModify`
 
 That means the native module is **not** "read-only" anymore at the OAuth level. The **read gateway**
-remains read-only in behavior, but the module also contains a native send capability and therefore a
-send-capable scope set.
+remains read-only in behavior, but the module also contains native send and **label-modify** capabilities
+and therefore a broader scope set. Existing users must re-consent after `GmailModify` is deployed.
 
 `GmailOptions` does **not** currently expose scopes; only path/app/root/interactive settings are
 configurable. Scope selection remains a code-level decision inside `GmailClientProvider`.

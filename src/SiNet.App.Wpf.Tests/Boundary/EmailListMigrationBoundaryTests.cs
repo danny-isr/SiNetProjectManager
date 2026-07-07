@@ -35,26 +35,57 @@ public sealed class EmailListMigrationBoundaryTests
     }
 
     [Fact]
-    public void Email_list_does_not_write_gmail_labels_in_v1()
+    public void Email_list_context_menu_wires_filing_and_status_commands()
     {
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var composition = ReadRepoFile("src/SiNet.App.Composition/SiNetCompositionExtensions.cs");
 
-        Assert.Contains("ShowDeferredWriteActions => false", vmSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("IEmailFilingService", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailFilingService", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailStatusService", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("FileEmailToProjectCommand", listXaml, StringComparison.Ordinal);
+        Assert.Contains("📁 שייך לפרויקט", listXaml, StringComparison.Ordinal);
+        Assert.Contains("↩️ בטל שיוך", listXaml, StringComparison.Ordinal);
+        Assert.Contains("⏳ סמן כממתין לטיפול", listXaml, StringComparison.Ordinal);
+        Assert.Contains("AddSiNetEmailWriteSql", composition, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Email_filing_port_design_exists_without_sql_implementation()
+    public void Email_viewer_deferred_write_actions_remain_disabled()
+    {
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+
+        Assert.Contains("ShowDeferredWriteActions => false", vmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_filing_and_status_ports_registered_in_composition()
     {
         var doc = ReadRepoFile("docs/EMAIL_FILING_SERVICE_DESIGN.md");
         var appSource = ReadRepoFile("src/SiNet.Application/Email/IEmailFilingService.cs");
+        var writeExtensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailWriteServiceCollectionExtensions.cs");
         var composition = ReadRepoFile("src/SiNet.App.Composition/SiNetCompositionExtensions.cs");
 
         Assert.Contains("IEmailFilingService", doc, StringComparison.Ordinal);
-        Assert.Contains("write policy", doc, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("interface IEmailFilingService", appSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("IEmailFilingService", composition, StringComparison.Ordinal);
+        Assert.Contains("SqlEmailFilingService", writeExtensions, StringComparison.Ordinal);
+        Assert.Contains("IEmailStatusService", writeExtensions, StringComparison.Ordinal);
+        Assert.Contains("AddSiNetEmailWriteSql", composition, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_list_supports_attachments_filter_and_count_display()
+    {
+        var cardXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListItemCard.xaml");
+        var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var composerSource = ReadRepoFile("src/SiNet.Application/Abstractions/Email/EmailMailboxQueryComposer.cs");
+
+        Assert.Contains("AttachmentCount", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("ToggleAttachmentsOnlyCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("עם צרופות", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("AttachmentsOnly", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("has:attachment", composerSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -120,7 +151,7 @@ public sealed class EmailListMigrationBoundaryTests
 
         Assert.Contains("EmailProjectLinkFilter.Linked", listVmSource, StringComparison.Ordinal);
         Assert.Contains("EmailProjectLinkFilter.Unlinked", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("ApplyClientLinkFilter", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("ApplyClientRowFilters", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

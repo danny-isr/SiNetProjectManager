@@ -53,6 +53,7 @@ public static class GoogleServiceCollectionExtensions
         // Native Gmail send over the same provider singleton. Requires the GmailSend scope; until a
         // user re-consents, SendAsync reports RequiresConsent rather than throwing.
         services.AddSingleton<IEmailSender, GmailEmailSender>();
+        services.AddSingleton<IEmailGmailModifyService, GmailEmailModifyService>();
 
         return services;
     }

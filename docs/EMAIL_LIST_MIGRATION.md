@@ -65,6 +65,8 @@ Query composition lives in `EmailMailboxQueryComposer` (Application) and is used
 | Partial enrichment | Gmail rows shown + warning if DB link query fails |
 | Labels | Chips on card; collapsible group-by label; per-label load more/all |
 | Link state | `IEmailThreadLinkQueryService` + client filter All/Linked/Unlinked |
+| Attachments | Real `AttachmentCount` on cards (inline images excluded); `AttachmentsOnly` filter adds `has:attachment` |
+| Context menu | File/unfile to project + triage status (Pending/Personal/Irrelevant) via `IEmailFilingService` / `IEmailStatusService` |
 | Unread | Per-message: `UNREAD` in Gmail `labelIds`. Total: `GetMailboxUnreadCountAsync` (scope-accurate). Page: `UnreadInCurrentPage`. Display: `UnreadCountDisplay` shows total + page separately |
 
 ## Grouping rule
@@ -130,12 +132,23 @@ The list component receives `EmailListProjectContext` through `ApplyProjectConte
 | --- | --- |
 | Unlinked → triage task | Not implemented |
 | Linked → ProjectWork | Not implemented |
-| File/unlink | `IEmailFilingService` design only |
+| File/unlink (list context menu) | **Implemented** — `SqlEmailFilingService` + Gmail modify |
+| Triage status labels (list context menu) | **Implemented** — `SqlEmailStatusService` |
 | Cross-page task mail select | Current page only |
+
+## List write actions (2026-07-07)
+
+| Menu item | Port | Notes |
+| --- | --- | --- |
+| 📁 שייך לפרויקט | `IEmailFilingService.FileToProjectAsync` | Requires `ICurrentProjectContext.CurrentProject`, `InboxMessageId`, authenticated user |
+| ↩️ בטל שיוך | `IEmailFilingService.UnfileFromProjectAsync` | Visible when Gmail project label detected (`IsFiledToProject`) |
+| ⏳ / 👤 / 🚫 status | `IEmailStatusService.SetStatusAsync` | Gmail `OfficeSystem_*` labels; Personal/Irrelevant remove row + reload |
+
+Viewer action bar (`LinkToProject`, reply, archive) remains deferred via `ShowDeferredWriteActions`.
 
 ## Explicitly deferred
 
-- Gmail write / label modify / send / delete
-- `IEmailFilingService` implementation
+- Gmail send / delete
+- Viewer write actions (reply/forward/archive) — still gated by `ShowDeferredWriteActions`
 - LegacyBridge / `EmailManagementView` hosting
 - Schema changes

@@ -169,12 +169,17 @@
             </WrapPanel>
         </StackPanel>
 
-        <TextBlock Grid.Column="2"
-                   Text="&#x1F4CE;"
-                   VerticalAlignment="Top"
-                   Margin="8,0,0,0"
-                   FontSize="{DynamicResource SiTextSmallFontSize}"
-                   ToolTip="יש קבצים מצורפים"
-                   Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+            <TextBlock Text="&#x1F4CE;"
+                       Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
+                       ToolTip="{Binding AttachmentCount, StringFormat='{}{0} attachment(s)'}"
+                       Margin="0,0,2,0"
+                       FontSize="{DynamicResource SiTextSmallFontSize}" />
+            <TextBlock Text="{Binding AttachmentCount}"
+                       Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}"
+                       Opacity="0.7"
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource SiTextSmallFontSize}" />
+        </StackPanel>
     </Grid>
 </UserControl>

@@ -25,4 +25,6 @@ public sealed record EmailMailboxQuery
     public string? OptionalProjectLabel { get; init; }
 
     public int PageSize { get; init; } = DefaultPageSize;
+
+    public bool AttachmentsOnly { get; init; }
 }

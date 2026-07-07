@@ -270,7 +270,7 @@ public sealed class GoogleFoundationClosureTests
                     EmailAddress.CreateOrFallback("sender@example.com"),
                     "Subject",
                     DateTimeOffset.UtcNow,
-                    true),
+                    1),
             ]);
 
         public Task<IReadOnlyList<EmailSummary>> GetProjectEmailsByProjectLabelAsync(
@@ -334,7 +334,7 @@ public sealed class GoogleFoundationClosureTests
                     EmailAddress.CreateOrFallback("north@example.com"),
                     "North update",
                     DateTimeOffset.UtcNow,
-                    true),
+                    1),
             ]);
         }
 
@@ -375,7 +375,7 @@ public sealed class GoogleFoundationClosureTests
                     EmailAddress.CreateOrFallback("north@example.com"),
                     "North update",
                     DateTimeOffset.UtcNow,
-                    true),
+                    1),
             ],
             query.PageSize,
             "next-token",
