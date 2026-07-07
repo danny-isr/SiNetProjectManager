@@ -237,7 +237,11 @@ public sealed class GmailEmailGateway : IEmailGateway
                 string.Equals(label.Name, "INBOX", StringComparison.OrdinalIgnoreCase)
                 || label.Name!.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
             .OrderBy(static label => label.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(static label => new GmailLabelInfo(label.Id ?? string.Empty, label.Name ?? string.Empty))
+            .Select(static label => new GmailLabelInfo(
+                label.Id ?? string.Empty,
+                label.Name ?? string.Empty,
+                label.Color?.BackgroundColor,
+                label.Color?.TextColor))
             .ToList();
     }
 
@@ -249,6 +253,7 @@ public sealed class GmailEmailGateway : IEmailGateway
     {
         var summaries = new List<EmailSummary>();
         var seenMessageIds = new HashSet<string>(StringComparer.Ordinal);
+        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
 
         foreach (var labelId in labelIds)
         {
@@ -288,7 +293,7 @@ public sealed class GmailEmailGateway : IEmailGateway
                         continue;
                     }
 
-                    var summary = await TryGetSummaryAsync(gmail, item.Id, labelMap: null, cancellationToken).ConfigureAwait(false);
+                    var summary = await TryGetSummaryAsync(gmail, item.Id, labelMap, cancellationToken).ConfigureAwait(false);
                     if (summary != null)
                     {
                         summaries.Add(summary);
@@ -373,6 +378,11 @@ public sealed class GmailEmailGateway : IEmailGateway
             getRequest.MetadataHeaders = MetadataHeaders;
 
             var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            if (labelMap is null)
+            {
+                labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+            }
+
             return Map(message, labelMap);
         }
         catch (Exception ex)
@@ -525,6 +535,7 @@ public sealed class GmailEmailGateway : IEmailGateway
         var receivedAt = ResolveReceivedAt(message, GetHeader(headers, "Date"));
         var attachmentCount = CountAttachments(message.Payload);
         var labelNames = ResolveLabelNames(message, labelMap);
+        var labelChips = ResolveLabelChips(message, labelMap);
         var primaryLabel = ResolvePrimaryLabel(labelNames);
         var isUnread = GmailEmailGateway.ResolveIsUnread(message.LabelIds);
 
@@ -539,8 +550,39 @@ public sealed class GmailEmailGateway : IEmailGateway
             to,
             message.Snippet ?? string.Empty,
             labelNames,
+            labelChips,
             primaryLabel,
             isUnread);
+    }
+
+    internal static IReadOnlyList<EmailLabelChip> ResolveLabelChips(
+        Message message,
+        IReadOnlyDictionary<string, Label>? labelMap)
+    {
+        if (message.LabelIds is null || message.LabelIds.Count == 0 || labelMap is null)
+        {
+            return [];
+        }
+
+        var chips = new List<EmailLabelChip>();
+        foreach (var labelId in message.LabelIds)
+        {
+            if (!labelMap.TryGetValue(labelId, out var label) || string.IsNullOrWhiteSpace(label.Name))
+            {
+                continue;
+            }
+
+            chips.Add(new EmailLabelChip(
+                label.Name,
+                label.Color?.BackgroundColor,
+                label.Color?.TextColor,
+                label.Color?.BackgroundColor));
+        }
+
+        return chips
+            .DistinctBy(static chip => chip.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static chip => chip.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static IReadOnlyList<string> ResolveLabelNames(

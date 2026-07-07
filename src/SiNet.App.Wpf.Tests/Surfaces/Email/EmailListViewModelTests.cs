@@ -833,7 +833,7 @@ public sealed class EmailListViewModelTests
     }
 
     [Fact]
-    public void File_command_requires_inbox_message_id_and_active_project()
+    public void File_command_works_without_inbox_message_id_when_project_selected()
     {
         var filing = new RecordingFilingService();
         var projectContext = new StubCurrentProjectContext(CreateProject());
@@ -849,13 +849,13 @@ public sealed class EmailListViewModelTests
         var rowWithoutInbox = CreateRow(inboxMessageId: null, isFiledToProject: false);
         var rowReady = CreateRow(inboxMessageId: 42, isFiledToProject: false);
 
-        Assert.False(sut.FileEmailToProjectCommand.CanExecute(rowWithoutInbox));
+        Assert.True(sut.FileEmailToProjectCommand.CanExecute(rowWithoutInbox));
         Assert.True(sut.FileEmailToProjectCommand.CanExecute(rowReady));
         Assert.False(sut.UnfileEmailCommand.CanExecute(rowReady));
     }
 
     [Fact]
-    public async Task File_command_calls_filing_service_and_refreshes()
+    public async Task File_command_calls_filing_service_without_requiring_inbox_id()
     {
         var gateway = new PagingEmailGateway();
         var filing = new RecordingFilingService();
@@ -869,12 +869,31 @@ public sealed class EmailListViewModelTests
             projectContext,
             new StubCurrentUser(7));
 
-        var row = CreateRow(inboxMessageId: 42, isFiledToProject: false);
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: false);
         await sut.FileEmailToProjectForTestsAsync(row);
 
         Assert.True(filing.FileCalled);
-        Assert.Equal(42, filing.LastFileCommand?.InboxMessageId);
+        Assert.Null(filing.LastFileCommand?.InboxMessageId);
         Assert.Equal(1042, filing.LastFileCommand?.TargetProjectId);
+        Assert.Equal("msg-1", filing.LastFileCommand?.GmailMessageId);
+    }
+
+    [Fact]
+    public void Unfile_command_works_when_filed_without_inbox_message_id()
+    {
+        var filing = new RecordingFilingService();
+        var sut = new EmailListViewModel(
+            new PagingEmailGateway(),
+            threadLinkQuery: null,
+            new StubAuthService(),
+            filing,
+            statusService: null,
+            new StubCurrentProjectContext(CreateProject()),
+            new StubCurrentUser(7));
+
+        var row = CreateRow(inboxMessageId: null, isFiledToProject: true);
+
+        Assert.True(sut.UnfileEmailCommand.CanExecute(row));
     }
 
     private static EmailListRow CreateRow(int? inboxMessageId, bool isFiledToProject) =>

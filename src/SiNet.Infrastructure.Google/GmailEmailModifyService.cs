@@ -15,6 +15,8 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
     private readonly GmailClientProvider _provider = provider ?? throw new ArgumentNullException(nameof(provider));
     private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
+    public string RootLabel => _provider.RootLabel;
+
     public async Task<string> GetOrCreateProjectLabelAsync(
         string location,
         string projectDisplayName,
@@ -55,6 +57,63 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         return labels.Labels?
             .FirstOrDefault(label => string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase))
             ?.Id;
+    }
+
+    public async Task<string?> GetProjectLabelIdByFullPathAsync(
+        string fullPath,
+        CancellationToken cancellationToken = default)
+    {
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        return labels.Labels?
+            .FirstOrDefault(label => string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase))
+            ?.Id;
+    }
+
+    public async Task<IReadOnlyList<string>> GetProjectLabelIdsOnMessageAsync(
+        string gmailMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        var message = await gmail.Users.Messages.Get("me", gmailMessageId).ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        if (message.LabelIds is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var labelMap = labels.Labels?
+            .Where(static label => !string.IsNullOrWhiteSpace(label.Id) && !string.IsNullOrWhiteSpace(label.Name))
+            .ToDictionary(static label => label.Id!, static label => label.Name!, StringComparer.Ordinal)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var rootPrefix = $"{RootLabel}/";
+        return message.LabelIds
+            .Where(labelMap.ContainsKey)
+            .Select(id => labelMap[id])
+            .Where(name => name.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase)
+                && name.Count(static ch => ch == '/') >= 2)
+            .Select(name => labels.Labels!.First(label => string.Equals(label.Name, name, StringComparison.OrdinalIgnoreCase)).Id!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public Task RemoveProjectLabelsFromMessageAsync(
+        string gmailMessageId,
+        IReadOnlyList<string> labelIdsToRemove,
+        bool moveToInbox = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (labelIdsToRemove.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ModifyMessageLabelsAsync(
+            gmailMessageId,
+            addLabelIds: moveToInbox ? ["INBOX"] : [],
+            removeLabelIds: labelIdsToRemove,
+            cancellationToken);
     }
 
     public async Task AttachProjectLabelAsync(

@@ -4,11 +4,13 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
+             xmlns:theme="clr-namespace:SiNet.App.Wpf.Theme"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=local:EmailListRow, IsDesignTimeCreatable=False}">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <theme:HexToBrushConverter x:Key="HexToBrush" />
     </UserControl.Resources>
 
     <Grid Margin="0,2">
@@ -99,15 +101,15 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="#F0F4FF"
-                                    BorderBrush="#C5CAE9"
-                                    BorderThickness="1"
-                                    CornerRadius="3"
+                            <Border CornerRadius="3"
                                     Padding="4,1"
-                                    Margin="0,0,4,2">
-                                <TextBlock Text="{Binding}"
+                                    Margin="0,0,4,2"
+                                    BorderThickness="1"
+                                    Background="{Binding BackgroundColor, Converter={StaticResource HexToBrush}, TargetNullValue=#F0F4FF}"
+                                    BorderBrush="{Binding BorderColor, Converter={StaticResource HexToBrush}, TargetNullValue=#C5CAE9}">
+                                <TextBlock Text="{Binding DisplayName}"
                                            FontSize="{DynamicResource SiTextTinyFontSize}"
-                                           Foreground="#5C6BC0" />
+                                           Foreground="{Binding TextColor, Converter={StaticResource HexToBrush}, TargetNullValue=#5C6BC0}" />
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

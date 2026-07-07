@@ -162,6 +162,10 @@ public sealed class EmailListMigrationBoundaryTests
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         Assert.Contains("VisibleLabelChips", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("BackgroundColor", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("HexToBrush", cardXaml, StringComparison.Ordinal);
+        Assert.Contains("RowBackgroundColor", listXaml, StringComparison.Ordinal);
+        Assert.Contains("LabelChips", listVmSource, StringComparison.Ordinal);
         Assert.Contains("HasAnyLabels", cardXaml, StringComparison.Ordinal);
         Assert.Contains("PrimaryLabel", listVmSource, StringComparison.Ordinal);
         Assert.Contains("EmailLabelGroupViewModel", listVmSource, StringComparison.Ordinal);

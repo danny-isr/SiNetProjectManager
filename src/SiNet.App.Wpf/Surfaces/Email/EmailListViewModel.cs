@@ -125,7 +125,11 @@ public sealed class EmailListViewModel : ObservableObject
 
         if (_currentProject is not null)
         {
-            _currentProject.CurrentProjectChanged += (_, _) => RaiseCommandStates();
+            _currentProject.CurrentProjectChanged += (_, _) =>
+            {
+                RefreshRowBackgrounds();
+                RaiseCommandStates();
+            };
         }
     }
 
@@ -570,20 +574,21 @@ public sealed class EmailListViewModel : ObservableObject
     private bool CanFileEmailToProject(EmailListRow? row) =>
         CanExecuteWriteAction(row)
         && _filingService is not null
-        && row is { IsFiledToProject: false, InboxMessageId: > 0 }
+        && row is not null
+        && !IsFiledToSameProject(row)
         && _currentProject?.CurrentProject is not null
         && (_currentUser?.UserId ?? 0) > 0;
 
     private bool CanUnfileEmail(EmailListRow? row) =>
         CanExecuteWriteAction(row)
         && _filingService is not null
-        && row is { IsFiledToProject: true, InboxMessageId: > 0 }
+        && row is { IsFiledToProject: true }
         && (_currentUser?.UserId ?? 0) > 0;
 
     private bool CanSetEmailStatus(EmailListRow? row) =>
         CanExecuteWriteAction(row)
         && _statusService is not null
-        && row is { InboxMessageId: > 0 }
+        && row is not null
         && (_currentUser?.UserId ?? 0) > 0;
 
     private bool CanExecuteWriteAction(EmailListRow? row) =>
@@ -597,9 +602,9 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         var actingUserId = _currentUser?.UserId;
-        if (actingUserId is null or <= 0 || row.InboxMessageId is null or <= 0)
+        if (actingUserId is null or <= 0)
         {
-            LoadWarning = "לא ניתן לשייך — חסר משתמש מחובר או מזהה inbox מקומי.";
+            LoadWarning = "לא ניתן לשייך — חסר משתמש מחובר.";
             return;
         }
 
@@ -607,10 +612,10 @@ public sealed class EmailListViewModel : ObservableObject
         try
         {
             var result = await _filingService.FileToProjectAsync(new FileEmailToProjectCommand(
-                row.InboxMessageId.Value,
                 project.ProjectId,
                 actingUserId.Value,
                 row.Id,
+                row.InboxMessageId,
                 row.ThreadId,
                 row.InternetMessageId)).ConfigureAwait(true);
 
@@ -641,9 +646,9 @@ public sealed class EmailListViewModel : ObservableObject
         }
 
         var actingUserId = _currentUser?.UserId;
-        if (actingUserId is null or <= 0 || row.InboxMessageId is null or <= 0)
+        if (actingUserId is null or <= 0)
         {
-            LoadWarning = "לא ניתן לבטל שיוך — חסר משתמש מחובר או מזהה inbox מקומי.";
+            LoadWarning = "לא ניתן לבטל שיוך — חסר משתמש מחובר.";
             return;
         }
 
@@ -651,11 +656,12 @@ public sealed class EmailListViewModel : ObservableObject
         try
         {
             var result = await _filingService.UnfileFromProjectAsync(new UnfileEmailCommand(
-                row.InboxMessageId.Value,
                 actingUserId.Value,
                 row.Id,
+                row.InboxMessageId,
                 row.ThreadId,
-                row.InternetMessageId)).ConfigureAwait(true);
+                row.InternetMessageId,
+                row.FiledProjectLabelPath)).ConfigureAwait(true);
 
             if (!result.Succeeded)
             {
@@ -1484,7 +1490,7 @@ public sealed class EmailListViewModel : ObservableObject
         return (rows, enrichmentWarning);
     }
 
-    private static EmailListRow ToEmailListRow(
+    private EmailListRow ToEmailListRow(
         EmailSummary summary,
         IReadOnlyDictionary<string, EmailProjectLinkInfo> linkStates)
     {
@@ -1506,9 +1512,16 @@ public sealed class EmailListViewModel : ObservableObject
             : "לא משויך";
 
         var labelChipNames = FilterDisplayLabels(summary.LabelNames);
+        var labelChips = FilterDisplayLabelChips(summary.LabelChips, summary.LabelNames);
         var labelsDisplay = labelChipNames.Count > 0
             ? string.Join(", ", labelChipNames)
             : string.Empty;
+        var isFiledToProject = IsFiledToProject(summary.LabelNames);
+        var filedProjectLabelPath = EmailGmailLabelNames.FindProjectLabelPath(summary.LabelNames);
+        var isFiledToSameProject = IsFiledToSameProjectForMapping(
+            isFiledToProject,
+            link?.ProjectId,
+            filedProjectLabelPath);
 
         return new EmailListRow(
             Id: summary.MessageId,
@@ -1534,22 +1547,145 @@ public sealed class EmailListViewModel : ObservableObject
             ProjectName: link?.ProjectName,
             ProjectDisplay: projectDisplay,
             LabelChipNames: labelChipNames,
+            LabelChips: labelChips,
             ThreadId: summary.ThreadId,
             InboxMessageId: link?.InboxMessageId,
             ThreadUniqueId: link?.ThreadUniqueId,
-            IsFiledToProject: IsFiledToProject(summary.LabelNames));
+            IsFiledToProject: isFiledToProject,
+            IsFiledToSameProject: isFiledToSameProject,
+            FiledProjectLabelPath: filedProjectLabelPath,
+            RowBackgroundColor: ResolveRowBackgroundColor(summary.LabelNames, isFiledToProject, link?.ProjectId));
     }
 
-    private static bool IsFiledToProject(IReadOnlyList<string>? labelNames)
+    private bool IsFiledToSameProject(EmailListRow row) =>
+        row.IsFiledToSameProject;
+
+    private bool IsFiledToSameProjectForMapping(
+        bool isFiledToProject,
+        int? linkedProjectId,
+        string? filedProjectLabelPath)
     {
-        if (labelNames is null || labelNames.Count == 0)
+        if (!isFiledToProject)
         {
             return false;
         }
 
-        return labelNames.Any(static label =>
-            label.Contains("פרויקטים_משרד/", StringComparison.OrdinalIgnoreCase)
-            && label.Count(static ch => ch == '/') >= 2);
+        var current = _currentProject?.CurrentProject;
+        if (current is null)
+        {
+            return false;
+        }
+
+        if (linkedProjectId == current.ProjectId)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(current.ProjectLabelName) || string.IsNullOrWhiteSpace(filedProjectLabelPath))
+        {
+            return false;
+        }
+
+        return filedProjectLabelPath.EndsWith(
+            "/" + current.ProjectLabelName,
+            StringComparison.OrdinalIgnoreCase)
+            || filedProjectLabelPath.EndsWith(
+                current.ProjectLabelName,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string? ResolveRowBackgroundColor(
+        IReadOnlyList<string>? labelNames,
+        bool isFiledToProject,
+        int? linkedProjectId)
+    {
+        if (labelNames is not null)
+        {
+            if (labelNames.Any(static label =>
+                    label.Equals(EmailGmailLabelNames.Pending, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "#F3E5F5";
+            }
+
+            if (labelNames.Any(static label =>
+                    label.Equals(EmailGmailLabelNames.Personal, StringComparison.OrdinalIgnoreCase)
+                    || label.Equals(EmailGmailLabelNames.Irrelevant, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "#E3F2FD";
+            }
+        }
+
+        if (!isFiledToProject)
+        {
+            return null;
+        }
+
+        var currentProjectId = _currentProject?.CurrentProject?.ProjectId;
+        if (currentProjectId.HasValue && linkedProjectId == currentProjectId)
+        {
+            return "#C8E6C9";
+        }
+
+        return "#E0E0E0";
+    }
+
+    private void RefreshRowBackgrounds()
+    {
+        if (Emails.Count == 0)
+        {
+            return;
+        }
+
+        var updated = false;
+        for (var index = 0; index < Emails.Count; index++)
+        {
+            var row = Emails[index];
+            var background = ResolveRowBackgroundColor(
+                row.LabelChipNames,
+                row.IsFiledToProject,
+                row.ProjectId);
+            var isFiledToSameProject = IsFiledToSameProjectForMapping(
+                row.IsFiledToProject,
+                row.ProjectId,
+                row.FiledProjectLabelPath);
+            if (background == row.RowBackgroundColor && isFiledToSameProject == row.IsFiledToSameProject)
+            {
+                continue;
+            }
+
+            Emails[index] = row with
+            {
+                RowBackgroundColor = background,
+                IsFiledToSameProject = isFiledToSameProject,
+            };
+            updated = true;
+        }
+
+        if (updated)
+        {
+            RebuildDisplayGroups();
+            RaiseCommandStates();
+        }
+    }
+
+    private static bool IsFiledToProject(IReadOnlyList<string>? labelNames) =>
+        labelNames?.Any(static label => EmailGmailLabelNames.IsProjectLabel(label)) == true;
+
+    private static IReadOnlyList<EmailLabelChip> FilterDisplayLabelChips(
+        IReadOnlyList<EmailLabelChip>? labelChips,
+        IReadOnlyList<string>? labelNames)
+    {
+        if (labelChips is { Count: > 0 })
+        {
+            return labelChips
+                .Where(static chip => !IsSystemGmailLabel(chip.DisplayName))
+                .DistinctBy(static chip => chip.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        return FilterDisplayLabels(labelNames)
+            .Select(static name => new EmailLabelChip(name))
+            .ToList();
     }
 
     private static IReadOnlyList<string> FilterDisplayLabels(IReadOnlyList<string>? labelNames)
@@ -1583,9 +1719,7 @@ public sealed class EmailListViewModel : ObservableObject
             return false;
         }
 
-        return labelNames.Any(static label =>
-            label.Contains("פרויקטים_משרד", StringComparison.OrdinalIgnoreCase)
-            && label.Count(static ch => ch == '/') >= 2);
+        return labelNames.Any(static label => EmailGmailLabelNames.IsProjectLabel(label));
     }
 
     private IReadOnlyList<EmailListRow> ApplyClientRowFilters(IReadOnlyList<EmailListRow> rows)

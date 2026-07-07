@@ -3,6 +3,8 @@ namespace SiNet.Application.Abstractions.Email;
 /// <summary>Gmail label modify operations for project filing and triage status labels.</summary>
 public interface IEmailGmailModifyService
 {
+    string RootLabel { get; }
+
     Task<string> GetOrCreateProjectLabelAsync(
         string location,
         string projectDisplayName,
@@ -11,6 +13,10 @@ public interface IEmailGmailModifyService
     Task<string?> GetProjectLabelIdAsync(
         string location,
         string projectDisplayName,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> GetProjectLabelIdByFullPathAsync(
+        string fullPath,
         CancellationToken cancellationToken = default);
 
     Task AttachProjectLabelAsync(
@@ -22,6 +28,16 @@ public interface IEmailGmailModifyService
         string gmailMessageId,
         string projectLabelId,
         bool moveToInbox = true,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<string>> GetProjectLabelIdsOnMessageAsync(
+        string gmailMessageId,
+        CancellationToken cancellationToken = default);
+
+    Task RemoveProjectLabelsFromMessageAsync(
+        string gmailMessageId,
+        IReadOnlyList<string> labelIdsToRemove,
+        bool moveToInbox = false,
         CancellationToken cancellationToken = default);
 
     Task ApplyTriageStatusLabelAsync(

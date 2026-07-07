@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
+             xmlns:theme="clr-namespace:SiNet.App.Wpf.Theme"
              mc:Ignorable="d"
              VerticalAlignment="Stretch"
              HorizontalAlignment="Stretch"
@@ -12,6 +13,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <theme:HexToBrushConverter x:Key="HexToBrush" />
 
         <Style x:Key="EmailListContainerStyle" TargetType="ListBox">
             <Setter Property="BorderThickness" Value="0" />
@@ -27,7 +29,7 @@
             <Setter Property="Padding" Value="8,6" />
             <Setter Property="BorderBrush" Value="#EEEEEE" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Background" Value="{Binding RowBackgroundColor, Converter={StaticResource HexToBrush}}" />
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
@@ -38,7 +40,7 @@
                                 <Style TargetType="MenuItem">
                                     <Setter Property="Visibility" Value="Visible" />
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsFiledToProject}" Value="True">
+                                        <DataTrigger Binding="{Binding IsFiledToSameProject}" Value="True">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                         </DataTrigger>
                                     </Style.Triggers>

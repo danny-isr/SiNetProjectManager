@@ -1,5 +1,7 @@
 namespace SiNet.App.Wpf.Surfaces.Email;
 
+using SiNet.Application.Abstractions.Email;
+
 /// <summary>
 /// Lightweight, read-only presentation records used by <see cref="EmailWindowViewModel"/> to populate
 /// the visual clone of the legacy <c>EmailManagementView</c> with fake/design-time data ONLY.
@@ -128,17 +130,24 @@ public sealed record EmailListRow(
     string? ProjectName = null,
     string ProjectDisplay = "לא משויך",
     IReadOnlyList<string>? LabelChipNames = null,
+    IReadOnlyList<EmailLabelChip>? LabelChips = null,
     int? InboxMessageId = null,
     string? ThreadUniqueId = null,
-    bool IsFiledToProject = false)
+    bool IsFiledToProject = false,
+    bool IsFiledToSameProject = false,
+    string? FiledProjectLabelPath = null,
+    string? RowBackgroundColor = null)
 {
     public const int MaxVisibleLabelChips = 3;
 
-    public IReadOnlyList<string> DisplayLabelChips => LabelChipNames ?? [];
+    public IReadOnlyList<EmailLabelChip> DisplayLabelChips =>
+        LabelChips is { Count: > 0 } chips
+            ? chips
+            : (LabelChipNames ?? []).Select(static name => new EmailLabelChip(name)).ToList();
 
     public bool HasAnyLabels => DisplayLabelChips.Count > 0;
 
-    public IReadOnlyList<string> VisibleLabelChips =>
+    public IReadOnlyList<EmailLabelChip> VisibleLabelChips =>
         DisplayLabelChips.Take(MaxVisibleLabelChips).ToList();
 
     public int ExtraLabelCount => Math.Max(0, DisplayLabelChips.Count - MaxVisibleLabelChips);

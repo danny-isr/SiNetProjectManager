@@ -140,9 +140,24 @@ The list component receives `EmailListProjectContext` through `ApplyProjectConte
 
 | Menu item | Port | Notes |
 | --- | --- | --- |
-| 📁 שייך לפרויקט | `IEmailFilingService.FileToProjectAsync` | Requires `ICurrentProjectContext.CurrentProject`, `InboxMessageId`, authenticated user |
-| ↩️ בטל שיוך | `IEmailFilingService.UnfileFromProjectAsync` | Visible when Gmail project label detected (`IsFiledToProject`) |
-| ⏳ / 👤 / 🚫 status | `IEmailStatusService.SetStatusAsync` | Gmail `OfficeSystem_*` labels; Personal/Irrelevant remove row + reload |
+| 📁 שייך לפרויקט | `IEmailFilingService.FileToProjectAsync` | **Gmail-first** — requires `ICurrentProjectContext.CurrentProject` + authenticated user; `InboxMessageId` optional (SQL sync best-effort) |
+| ↩️ בטל שיוך | `IEmailFilingService.UnfileFromProjectAsync` | Visible when Gmail project label detected (`IsFiledToProject`); removes project label + adds `INBOX`; `ProjectLabelFullPath` from row |
+| ⏳ / 👤 / 🚫 status | `IEmailStatusService.SetStatusAsync` | Gmail `OfficeSystem_*` labels (add-only); Personal/Irrelevant remove row + reload; no `InboxMessageId` required |
+
+### Gmail-first filing (legacy parity)
+
+1. **File:** create/attach Gmail project label hierarchy (`RootLabel/location/projectDisplayName`); remove other project labels under `RootLabel/*` before attach; SQL `EmailInboxMessage` update is best-effort when a row exists (by `InboxMessageId` or `MessageUniqueId` lookup).
+2. **Unfile:** remove project label + restore `INBOX`; default SQL project from `SystemSettings.DefaultProjectTitle`.
+3. **OAuth:** `GmailModify` scope required — re-consent if token predates modify scope.
+
+### Label chips + row colors
+
+| UI element | Source |
+| --- | --- |
+| Label chips | `EmailSummary.LabelChips` from Gmail `Label.Color` (fallback `#F0F4FF` / `#5C6BC0`) |
+| Row background | Legacy priority: pending `#F3E5F5`, personal/irrelevant `#E3F2FD`, filed-to-current-project `#C8E6C9`, filed-other `#E0E0E0` |
+
+Row colors refresh when `ICurrentProjectContext.CurrentProject` changes.
 
 Viewer action bar (`LinkToProject`, reply, archive) remains deferred via `ShowDeferredWriteActions`.
 
