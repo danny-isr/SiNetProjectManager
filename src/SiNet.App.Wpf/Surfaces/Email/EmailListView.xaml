@@ -96,7 +96,8 @@
                            TextWrapping="Wrap" />
             </Border>
 
-            <ScrollViewer Grid.Row="2"
+            <ScrollViewer x:Name="EmailListScrollViewer"
+                          Grid.Row="2"
                           VerticalAlignment="Stretch"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"

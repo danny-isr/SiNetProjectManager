@@ -52,7 +52,7 @@ Query composition lives in `EmailMailboxQueryComposer` (Application) and is used
 | Feature | Implementation |
 | --- | --- |
 | Workbench layout | Row 1: project context bar (full width). Row 2: `EmailListFilterBar` (account, filters, paging). Row 3: list column = `EmailListView` only |
-| List scroll | Single outer `ScrollViewer` (`MinHeight="0"` row constraint); inner `ListBox` scroll disabled (`EmailListContainerStyle`) so expanded label groups scroll as one list |
+| List scroll | Single outer `ScrollViewer` (`EmailListScrollViewer`); inner `ListBox` scroll disabled; `PreviewMouseWheel` forwards wheel from cards/groups to the outer scroller |
 | Default load | `IEmailGateway.GetMailboxPageAsync` — Primary Inbox (`EmailMailboxScope.Inbox`); no project required |
 | Mailbox scope | Filter bar: Inbox (default) / All Mail / Unread + optional label picker |
 | Paging | 50 items; token stack; prev/next in filter bar |

@@ -67,11 +67,14 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
     public void Email_list_can_scroll_inside_current_page()
     {
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
+        var listCodeBehind = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml.cs");
 
         Assert.Contains("CanContentScroll=\"False\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("EmailListContainerStyle", listXaml, StringComparison.Ordinal);
         Assert.Contains("VirtualizingPanel.IsVirtualizing\" Value=\"False\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("MinHeight=\"0\"", listXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListScrollViewer", listXaml, StringComparison.Ordinal);
+        Assert.Contains("PreviewMouseWheel", listCodeBehind, StringComparison.Ordinal);
         Assert.Contains("DisplayGroups", listXaml, StringComparison.Ordinal);
         Assert.Contains("Expander", listXaml, StringComparison.Ordinal);
     }
