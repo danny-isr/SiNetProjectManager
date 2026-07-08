@@ -74,12 +74,7 @@ internal sealed class EmailListRowDisplayCoordinator
 
     public void RebindSelectedEmail(EmailListRow updated)
     {
-        if (!string.Equals(_owner.SelectedEmail?.Id, updated.Id, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        _owner.SelectedEmail = FindVisibleRowById(updated.Id) ?? updated;
+        _owner.SyncSelectedEmailInstance(updated);
     }
 
     public bool TrySelectByInboxCorrelation(
@@ -123,10 +118,7 @@ internal sealed class EmailListRowDisplayCoordinator
             _ => rows,
         };
 
-        if (_owner.AttachmentsOnly)
-        {
-            filtered = filtered.Where(static row => row.HasAttachments).ToList();
-        }
+        // AttachmentsOnly is enforced server-side via has:attachment.
 
         return filtered;
     }
@@ -265,7 +257,7 @@ internal sealed class EmailListRowDisplayCoordinator
 
         if (string.Equals(_owner.SelectedEmail?.Id, id, StringComparison.Ordinal))
         {
-            _owner.SelectedEmail = updated;
+            _owner.SyncSelectedEmailInstance(updated);
         }
 
         if (replaced)

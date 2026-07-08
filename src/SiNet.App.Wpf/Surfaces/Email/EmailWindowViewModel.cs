@@ -402,11 +402,21 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (HasLoadedBodyForCurrentSelection(value.Id))
+        {
+            return;
+        }
+
         var loadVersion = ++_selectedEmailLoadVersion;
         _selectionHandler.PrepareSelectedEmailDetailsLoading();
         SelectedAccStatusDisplay = string.Empty;
         _ = _selectionHandler.LoadSelectedEmailWithAccPipelineAsync(value, loadVersion);
     }
+
+    private bool HasLoadedBodyForCurrentSelection(string messageId) =>
+        string.Equals(SelectedEmail?.Id, messageId, StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(SelectedEmailBody)
+        && !string.Equals(SelectedEmailBody, "טוען תוכן מייל...", StringComparison.Ordinal);
 
     private async Task MoveSelectedEmailToProjectAsync()
     {

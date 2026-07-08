@@ -1,4 +1,5 @@
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.Surfaces.Email.Internal;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
 using Xunit;
@@ -26,7 +27,7 @@ public sealed class EmailListViewModelTests
         var gateway = new EmailListViewModelTestFixtures.ProjectEmailGateway();
         var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new EmailListViewModelTestFixtures.StubAuthService());
 
-        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1  A"));
 
         Assert.True(sut.HasActiveProject);
         Assert.NotNull(sut.ActiveProjectGroup);
@@ -57,5 +58,29 @@ public sealed class EmailListViewModelTests
             new EmailListViewModelTestFixtures.StubAuthService());
 
         Assert.True(sut.GroupByLabel);
+    }
+
+    [Fact]
+    public async Task Replace_row_instance_keeps_selected_email_id_without_selection_event()
+    {
+        var gateway = new EmailListViewModelTestFixtures.PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new EmailListViewModelTestFixtures.StubAuthService());
+        await sut.RefreshPageAsync();
+
+        var row = sut.Emails.Single();
+        sut.SelectedEmail = row;
+        Assert.Equal(row.Id, sut.SelectedEmailId);
+
+        var selectionChanges = 0;
+        sut.SelectedEmailChanged += (_, _) => selectionChanges++;
+
+        var updated = row with { AccStatusDisplay = "?-ACC" };
+        var mutator = (IEmailListRowMutator)sut;
+        mutator.ReplaceRowInDisplay(updated);
+        mutator.RebindSelectedEmail(updated);
+
+        Assert.Equal(row.Id, sut.SelectedEmailId);
+        Assert.Equal("?-ACC", sut.SelectedEmail?.AccStatusDisplay);
+        Assert.Equal(0, selectionChanges);
     }
 }

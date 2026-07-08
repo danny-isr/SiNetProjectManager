@@ -41,6 +41,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private readonly EmailListFilingCoordinator _filing;
 
     private EmailListRow? _selectedEmail;
+    private string? _selectedEmailId;
     private bool _isBusy;
     private string? _nextPageToken;
     private string? _lastUsedPageToken;
@@ -220,11 +221,67 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         get => _selectedEmail;
         set
         {
-            if (SetField(ref _selectedEmail, value))
+            var newId = value?.Id;
+            var idChanged = !string.Equals(_selectedEmail?.Id, newId, StringComparison.Ordinal);
+            if (!idChanged && (value is null || ReferenceEquals(_selectedEmail, value)))
+            {
+                return;
+            }
+
+            _selectedEmail = value;
+            if (!string.Equals(_selectedEmailId, newId, StringComparison.Ordinal))
+            {
+                _selectedEmailId = newId;
+                OnPropertyChanged(nameof(SelectedEmailId));
+            }
+
+            OnPropertyChanged(nameof(SelectedEmail));
+            if (idChanged)
             {
                 SelectedEmailChanged?.Invoke(this, value);
             }
         }
+    }
+
+    public string? SelectedEmailId
+    {
+        get => _selectedEmailId;
+        set
+        {
+            if (string.Equals(_selectedEmailId, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _selectedEmailId = value;
+            OnPropertyChanged(nameof(SelectedEmailId));
+
+            var row = value is null ? null : _display.FindRowById(value);
+            var idChanged = !string.Equals(_selectedEmail?.Id, value, StringComparison.Ordinal);
+            _selectedEmail = row;
+            OnPropertyChanged(nameof(SelectedEmail));
+            if (idChanged)
+            {
+                SelectedEmailChanged?.Invoke(this, row);
+            }
+        }
+    }
+
+    internal void SyncSelectedEmailInstance(EmailListRow? candidate)
+    {
+        if (candidate is null || !string.Equals(_selectedEmailId, candidate.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var resolved = _display.FindRowById(candidate.Id) ?? candidate;
+        if (ReferenceEquals(_selectedEmail, resolved))
+        {
+            return;
+        }
+
+        _selectedEmail = resolved;
+        OnPropertyChanged(nameof(SelectedEmail));
     }
 
     public event EventHandler<EmailListRow?>? SelectedEmailChanged;

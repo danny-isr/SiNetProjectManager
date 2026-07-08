@@ -31,6 +31,9 @@ public sealed class GmailEmailGateway : IEmailGateway
     internal const string InboxPrimaryUnreadQuery = EmailMailboxQueryComposer.InboxPrimaryUnreadQuery;
     internal const string AllMailUnreadQuery = EmailMailboxQueryComposer.AllMailUnreadQuery;
     private static readonly string[] MetadataHeaders = { "Subject", "From", "To", "Date", "Message-ID" };
+    internal const string SummaryFieldsMask =
+        "id,threadId,labelIds,snippet," +
+        "payload(mimeType,headers,parts(mimeType,filename,headers,body(attachmentId),parts))";
 
     private readonly GmailClientProvider _provider;
     private readonly IAppLogger _logger;
@@ -374,8 +377,8 @@ public sealed class GmailEmailGateway : IEmailGateway
         try
         {
             var getRequest = gmail.Users.Messages.Get("me", messageId);
-            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Metadata;
-            getRequest.MetadataHeaders = MetadataHeaders;
+            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
+            getRequest.Fields = SummaryFieldsMask;
 
             var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
             if (labelMap is null)
@@ -554,6 +557,8 @@ public sealed class GmailEmailGateway : IEmailGateway
             primaryLabel,
             isUnread);
     }
+
+    internal EmailSummary MapForTests(Message message) => Map(message, labelMap: null);
 
     internal static IReadOnlyList<EmailLabelChip> ResolveLabelChips(
         Message message,

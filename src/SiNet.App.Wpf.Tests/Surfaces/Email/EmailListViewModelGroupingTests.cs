@@ -301,7 +301,9 @@ public sealed class EmailListViewModelGroupingTests
 
         await sut.RefreshPageAsync();
 
-        Assert.Equal(3, sut.Emails.Single().AttachmentCount);
+        var row = sut.Emails.Single();
+        Assert.Equal(3, row.AttachmentCount);
+        Assert.True(row.HasAttachments);
     }
 }
 
