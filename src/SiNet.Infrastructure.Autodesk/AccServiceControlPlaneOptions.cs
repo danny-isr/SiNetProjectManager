@@ -7,6 +7,12 @@ public sealed class AccServiceControlPlaneOptions
 
     public TimeSpan DiagnosticsTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// HttpClient timeout for ACC file upload/download via SiOffice.AccService.
+    /// Large attachments (e.g. DWF) can exceed the .NET default of 100 seconds.
+    /// </summary>
+    public TimeSpan FileTransferTimeout { get; set; } = Timeout.InfiniteTimeSpan;
+
     public IReadOnlyList<string> ApprovedSelfSignedHosts { get; set; } =
     [
         "SI-WIN-2K19",

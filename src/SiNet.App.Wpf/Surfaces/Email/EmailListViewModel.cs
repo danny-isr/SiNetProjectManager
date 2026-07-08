@@ -28,6 +28,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
     private readonly IEmailGateway _emailGateway;
     private readonly IEmailThreadLinkQueryService? _threadLinkQuery;
+    private readonly IEmailThreadMappingSyncService? _threadMappingSync;
     private readonly IConnectorAuthService _authService;
     private readonly IEmailFilingService? _filingService;
     private readonly IEmailStatusService? _statusService;
@@ -89,10 +90,12 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         IEmailAccUploadCoordinator? accUploadCoordinator = null,
         IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null,
         IEmailAccIngestQueue? accIngestQueue = null,
-        IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null)
+        IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
+        IEmailThreadMappingSyncService? threadMappingSync = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
+        _threadMappingSync = threadMappingSync;
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _filingService = filingService;
         _statusService = statusService;
@@ -154,6 +157,10 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         FileEmailToProjectCommand = new AsyncRelayCommand<EmailListRow>(
             row => _filing.FileEmailToProjectAsync(row),
             _filing.CanFileEmailToProject,
+            allowConcurrentParameters: true);
+        FileEmailToThreadProjectCommand = new AsyncRelayCommand<EmailListRow>(
+            row => _filing.FileEmailToThreadProjectAsync(row),
+            _filing.CanFileEmailToThreadProject,
             allowConcurrentParameters: true);
         UnfileEmailCommand = new AsyncRelayCommand<EmailListRow>(
             row => _filing.UnfileEmailAsync(row),
@@ -581,6 +588,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public ICommand ToggleGroupByLabelCommand { get; }
     public ICommand ToggleAttachmentsOnlyCommand { get; }
     public ICommand FileEmailToProjectCommand { get; }
+    public ICommand FileEmailToThreadProjectCommand { get; }
     public ICommand UnfileEmailCommand { get; }
     public ICommand MarkAsPendingCommand { get; }
     public ICommand MarkAsPersonalCommand { get; }
@@ -664,6 +672,25 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         }
 
         return await _accHandler.TryPassiveIngestAsync(row, isStillSelected, cancellationToken).ConfigureAwait(true);
+    }
+
+    internal async Task SyncThreadMappingsFromPageAsync(IReadOnlyList<EmailSummary> summaries)
+    {
+        if (_threadMappingSync is null || summaries.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _threadMappingSync
+                .SyncFiledThreadsFromSummariesAsync(summaries)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort background sync; mailbox rows are already visible.
+        }
     }
 
     public EmailListRow? FindRowById(string rowId) => _display.FindRowById(rowId);

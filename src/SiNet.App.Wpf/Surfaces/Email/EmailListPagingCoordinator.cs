@@ -132,6 +132,8 @@ internal sealed class EmailListPagingCoordinator
                 _owner.SetLoadWarning(enrichmentWarning);
             }
 
+            _ = _owner.SyncThreadMappingsFromPageAsync(page.Items);
+
             rows = _display.ApplyClientRowFilters(rows);
 
             _display.ReplaceRows(rows, previousSelectionId, skipDisplayRebuild);

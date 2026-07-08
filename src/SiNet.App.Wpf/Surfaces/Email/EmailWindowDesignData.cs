@@ -147,7 +147,14 @@ public sealed record EmailListRow(
     string? AccStatusDisplay = null,
     bool IsAccStatusLoading = false,
     bool IsAccUploadBusy = false,
-    string? AccUploadStatusText = null)
+    string? AccUploadStatusText = null,
+    int? LabelProjectId = null,
+    string? LabelProjectName = null,
+    int? ThreadProjectId = null,
+    string? ThreadProjectName = null,
+    bool HasThreadHistory = false,
+    bool IsProjectMismatch = false,
+    bool ShowLinkToThreadButton = false)
 {
     public const int MaxVisibleLabelChips = 3;
 
@@ -222,6 +229,21 @@ public sealed record EmailListRow(
     public string? ProjectDiagnosticsTooltip => ProjectId is int id
         ? $"ProjectId: {id}"
         : null;
+
+    public string ThreadLinkButtonText
+    {
+        get
+        {
+            if (!HasThreadHistory || string.IsNullOrWhiteSpace(ThreadProjectName))
+            {
+                return string.Empty;
+            }
+
+            return IsProjectMismatch
+                ? $"⚠️ העבר לשרשור: {ThreadProjectName}"
+                : $"🔗 שייך לשרשור: {ThreadProjectName}";
+        }
+    }
 }
 
 /// <summary>Fake attachment row for the selected-email viewer (name + type + size). Presentation-only.</summary>

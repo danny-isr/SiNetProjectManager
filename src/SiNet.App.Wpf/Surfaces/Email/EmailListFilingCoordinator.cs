@@ -29,6 +29,14 @@ internal sealed class EmailListFilingCoordinator
         && _owner.GetCurrentProject() is not null
         && (_owner.GetCurrentUserId() ?? 0) > 0;
 
+    public bool CanFileEmailToThreadProject(EmailListRow? row) =>
+        CanExecuteWriteAction(row)
+        && _owner.FilingService is not null
+        && row is not null
+        && row.ShowLinkToThreadButton
+        && row.ThreadProjectId is int and > 0
+        && (_owner.GetCurrentUserId() ?? 0) > 0;
+
     public bool CanUnfileEmail(EmailListRow? row) =>
         CanExecuteWriteAction(row)
         && _owner.FilingService is not null
@@ -45,6 +53,7 @@ internal sealed class EmailListFilingCoordinator
         action switch
         {
             EmailContextMenuAction.FileToProject => CanFileEmailToProject(row),
+            EmailContextMenuAction.FileToThreadProject => CanFileEmailToThreadProject(row),
             EmailContextMenuAction.Unfile => CanUnfileEmail(row),
             EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
                 => CanSetEmailStatus(row),
@@ -61,6 +70,7 @@ internal sealed class EmailListFilingCoordinator
         return action switch
         {
             EmailContextMenuAction.FileToProject => DescribeFileToProjectDisabledReason(row),
+            EmailContextMenuAction.FileToThreadProject => DescribeFileToThreadProjectDisabledReason(row),
             EmailContextMenuAction.Unfile => DescribeUnfileDisabledReason(row),
             EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
                 => DescribeSetStatusDisabledReason(row),
@@ -119,6 +129,61 @@ internal sealed class EmailListFilingCoordinator
             },
             onSuccessLocalUpdate: currentRow => RefreshRowAfterFileAsync(currentRow, project),
             failureMessagePrefix: "שיוך לפרויקט נכשל").ConfigureAwait(true);
+    }
+
+    public async Task FileEmailToThreadProjectAsync(EmailListRow? row)
+    {
+        if (row is null)
+        {
+            _owner.SetLoadWarning(DescribeWriteActionBlockedReason(null) ?? "לא נבחר מייל.");
+            return;
+        }
+
+        if (_owner.FilingService is null)
+        {
+            _owner.SetLoadWarning(DescribeFileToThreadProjectDisabledReason(row));
+            return;
+        }
+
+        if (row.ThreadProjectId is not int threadProjectId || threadProjectId <= 0)
+        {
+            _owner.SetLoadWarning(DescribeFileToThreadProjectDisabledReason(row));
+            return;
+        }
+
+        var actingUserId = _owner.GetCurrentUserId();
+        if (actingUserId is null or <= 0)
+        {
+            _owner.SetLoadWarning(DescribeFileToThreadProjectDisabledReason(row));
+            return;
+        }
+
+        if (!row.ShowLinkToThreadButton)
+        {
+            _owner.SetLoadWarning(DescribeFileToThreadProjectDisabledReason(row));
+            return;
+        }
+
+        var threadProject = BuildProjectFromThreadRow(row);
+
+        await ExecuteRowActionAsync(
+            row,
+            startingStatusMessage: "מתייק לפרויקט השרשור...",
+            rowStatusText: "משייך לשרשור...",
+            successStatusMessage: "המייל שויך לפרויקט השרשור בהצלחה.",
+            serviceCall: async () =>
+            {
+                var result = await _owner.FilingService!.FileToProjectAsync(new FileEmailToProjectCommand(
+                    threadProjectId,
+                    actingUserId.Value,
+                    row.Id,
+                    row.InboxMessageId,
+                    row.ThreadId,
+                    row.InternetMessageId)).ConfigureAwait(true);
+                return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט השרשור נכשל.");
+            },
+            onSuccessLocalUpdate: currentRow => RefreshRowAfterThreadFileAsync(currentRow, threadProject),
+            failureMessagePrefix: "שיוך לפרויקט השרשור נכשל").ConfigureAwait(true);
     }
 
     public async Task UnfileEmailAsync(EmailListRow? row)
@@ -333,6 +398,41 @@ internal sealed class EmailListFilingCoordinator
         };
     }
 
+    private async Task<EmailListRow?> RefreshRowAfterThreadFileAsync(EmailListRow row, ProjectSummaryDto project)
+    {
+        var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
+        var updated = refreshed is null
+            ? EmailListRowMapper.BuildOptimisticFiledRow(row, project)
+            : refreshed with
+            {
+                ProjectId = project.ProjectId,
+                ProjectNumber = project.ProjectNumber,
+                ProjectName = project.ProjectName,
+                ProjectDisplay = $"{project.ProjectNumber} — {project.ProjectName}",
+                AssignedProjectName = $"{project.ProjectNumber} — {project.ProjectName}",
+                IsFiledToProject = true,
+                IsFiledToSameProject = false,
+                IsAssigned = true,
+                ProjectLinkState = EmailProjectLinkState.Linked,
+                LabelProjectId = project.ProjectId,
+                LabelProjectName = project.ProjectLabelName ?? row.ThreadProjectName,
+                ThreadProjectId = project.ProjectId,
+                ThreadProjectName = row.ThreadProjectName ?? project.ProjectLabelName,
+                HasThreadHistory = true,
+                IsProjectMismatch = false,
+                ShowLinkToThreadButton = false,
+                FiledProjectLabelPath = refreshed.FiledProjectLabelPath
+                    ?? $"{EmailGmailLabelNames.RootLabel}/{project.PlaceName ?? string.Empty}/{project.ProjectNumber} — {project.ProjectName}",
+            };
+
+        if (!string.IsNullOrWhiteSpace(row.ThreadId))
+        {
+            _display.ApplyThreadFilingToPeers(row.ThreadId, project);
+        }
+
+        return updated;
+    }
+
     private async Task<EmailListRow?> RefreshRowAfterUnfileAsync(EmailListRow row)
     {
         var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
@@ -425,6 +525,45 @@ internal sealed class EmailListFilingCoordinator
 
         return "לא ניתן לשייך מייל לפרויקט.";
     }
+
+    private string? DescribeFileToThreadProjectDisabledReason(EmailListRow? row)
+    {
+        var blocked = DescribeWriteActionBlockedReason(row);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        if (_owner.FilingService is null)
+        {
+            return "שירות שיוך מיילים לא זמין.";
+        }
+
+        if ((_owner.GetCurrentUserId() ?? 0) <= 0)
+        {
+            return "לא ניתן לבצע פעולה — אין משתמש מחובר במערכת.";
+        }
+
+        if (row is not { ShowLinkToThreadButton: true, ThreadProjectId: int and > 0 })
+        {
+            return "לשרשור זה אין פרויקט ידוע לשיוך.";
+        }
+
+        return "לא ניתן לשייך מייל לפרויקט השרשור.";
+    }
+
+    private static ProjectSummaryDto BuildProjectFromThreadRow(EmailListRow row) =>
+        new(
+            row.ThreadProjectId!.Value,
+            row.ProjectNumber ?? row.ThreadProjectId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            row.ProjectName ?? row.ThreadProjectName ?? $"Project {row.ThreadProjectId}",
+            PlaceName: null,
+            CompanyName: null,
+            JobType: null,
+            Status: null,
+            AssignedUserName: null,
+            IsActive: true,
+            ProjectLabelName: row.ThreadProjectName);
 
     private string? DescribeUnfileDisabledReason(EmailListRow? row)
     {

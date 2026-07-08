@@ -125,7 +125,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailAccIngestQueue? accIngestQueue = null,
         IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
         IEmailAccBackgroundWorkTracker? backgroundWorkTracker = null,
-        IEmailAccClosePrompt? accClosePrompt = null)
+        IEmailAccClosePrompt? accClosePrompt = null,
+        IEmailThreadMappingSyncService? threadMappingSync = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -153,7 +154,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             accUploadCoordinator,
             moveToProjectCoordinator,
             accIngestQueue,
-            ingestSessionEnsurer);
+            ingestSessionEnsurer,
+            threadMappingSync);
 
         _selectionHandler = new EmailWindowSelectionHandler(
             _emailGateway,

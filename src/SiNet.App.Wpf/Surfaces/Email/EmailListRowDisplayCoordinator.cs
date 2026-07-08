@@ -177,8 +177,10 @@ internal sealed class EmailListRowDisplayCoordinator
             var background = EmailListRowMapper.ResolveRowBackgroundColor(
                 row.LabelChipNames,
                 row.IsFiledToProject,
-                row.ProjectId,
-                _getCurrentProject);
+                row.LabelProjectId ?? row.ProjectId,
+                _getCurrentProject,
+                row.IsProjectMismatch,
+                row.HasThreadHistory);
             var isFiledToSameProject = EmailListRowMapper.IsFiledToSameProjectForMapping(
                 row.IsFiledToProject,
                 row.ProjectId,
@@ -382,6 +384,56 @@ internal sealed class EmailListRowDisplayCoordinator
             if (string.Equals(rows[index].Id, rowId, StringComparison.Ordinal))
             {
                 rows.RemoveAt(index);
+            }
+        }
+    }
+
+    public void ApplyThreadFilingToPeers(string gmailThreadId, ProjectSummaryDto project)
+    {
+        if (string.IsNullOrWhiteSpace(gmailThreadId))
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            var peerIds = new HashSet<string>(StringComparer.Ordinal);
+            CollectPeerIds(_owner.Emails, gmailThreadId, peerIds);
+            CollectPeerIds(_owner.FlatDisplayEmails, gmailThreadId, peerIds);
+            foreach (var group in _owner.DisplayGroups)
+            {
+                CollectPeerIds(group.Emails, gmailThreadId, peerIds);
+            }
+
+            var projectGroup = _owner.GetProjectGroup();
+            if (projectGroup is not null)
+            {
+                CollectPeerIds(projectGroup.Emails, gmailThreadId, peerIds);
+            }
+
+            foreach (var peerId in peerIds)
+            {
+                var peer = ResolveSelectionRow(peerId);
+                if (peer is null)
+                {
+                    continue;
+                }
+
+                ApplyLocalEmailMutationCore(EmailListRowMapper.BuildOptimisticFiledRow(peer, project));
+            }
+        });
+    }
+
+    private static void CollectPeerIds(
+        IEnumerable<EmailListRow> rows,
+        string gmailThreadId,
+        ISet<string> peerIds)
+    {
+        foreach (var row in rows)
+        {
+            if (string.Equals(row.ThreadId, gmailThreadId, StringComparison.OrdinalIgnoreCase))
+            {
+                peerIds.Add(row.Id);
             }
         }
     }

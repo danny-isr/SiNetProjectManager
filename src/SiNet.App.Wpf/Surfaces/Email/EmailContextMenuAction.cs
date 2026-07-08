@@ -4,6 +4,7 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 public enum EmailContextMenuAction
 {
     FileToProject,
+    FileToThreadProject,
     Unfile,
     MarkPending,
     MarkPersonal,

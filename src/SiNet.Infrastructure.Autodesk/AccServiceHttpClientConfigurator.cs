@@ -4,6 +4,13 @@ namespace SiNet.Infrastructure.Autodesk;
 
 internal static class AccServiceHttpClientConfigurator
 {
+    public static void ConfigureFileTransferClient(HttpClient client, AccServiceControlPlaneOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(options);
+        client.Timeout = options.FileTransferTimeout;
+    }
+
     public static HttpMessageHandler CreateHandler(AccServiceControlPlaneOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

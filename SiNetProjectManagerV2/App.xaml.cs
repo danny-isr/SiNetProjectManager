@@ -1055,13 +1055,63 @@ namespace SiNetProjectManagerV2
                 return;
             }
 
+            Log.Information("[STARTUP][NewSystem] Loading management settings + default project cache...");
+            LoadManagementSettingsFromDb();
+            WarmDefaultProjectCacheForNewSystem();
+
             Log.Information("[STARTUP][NewSystem] Initializing status colors...");
             InitializeStatusColors();
 
             ApplyNewSystemThemeFromSavedSettings();
+            SchedulePdfRendererInit();
 
             base.OnStartup(e);
             LaunchNewSystemShell();
+        }
+
+        /// <summary>
+        /// New System skips ValidateDatabaseSchema; still warm DefaultProjectService cache
+        /// so the first ACC ingest does not rely on a cold static cache.
+        /// </summary>
+        private static void WarmDefaultProjectCacheForNewSystem()
+        {
+            try
+            {
+                var dbContextFactory =
+                    ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                var defaultProjectService = new SiNetSQL.Services.DefaultProjectService(dbContextFactory);
+                var projectId = defaultProjectService.EnsureDefaultProjectExists();
+
+                // #region agent log
+                try
+                {
+                    var dbg = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        sessionId = "487a8a",
+                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        runId = "post-fix",
+                        hypothesisId = "H-C",
+                        location = "App.WarmDefaultProjectCacheForNewSystem",
+                        message = "default project cache warmed",
+                        data = new
+                        {
+                            projectId,
+                            cached = SiNetSQL.Services.DefaultProjectService.CachedDefaultProjectId,
+                        },
+                    });
+                    System.IO.File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
+                }
+                catch { }
+                // #endregion
+
+                Log.Information(
+                    "[STARTUP][NewSystem] Default project ready. ProjectId={ProjectId}",
+                    projectId);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[STARTUP][NewSystem] Default project cache warmup failed; ingest will retry on demand.");
+            }
         }
 
         /// <summary>

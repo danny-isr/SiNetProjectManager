@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -52,7 +53,34 @@ internal sealed class RemoteAccFileUploadService(
             request.Snapshot,
             request.CompanionDocument);
 
-        using var fileStream = File.OpenRead(request.LocalSourcePath);
+        var fileInfo = new FileInfo(request.LocalSourcePath);
+        var fileSizeBytes = fileInfo.Length;
+
+        // #region agent log
+        try
+        {
+            var dbg = JsonSerializer.Serialize(new
+            {
+                sessionId = "487a8a",
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                runId = "upload-timeout-fix",
+                hypothesisId = "H-A",
+                location = "RemoteAccFileUploadService.UploadAsync",
+                message = "remote upload starting",
+                data = new
+                {
+                    displayName = request.DisplayName,
+                    fileSizeBytes,
+                    httpClientTimeoutSec = _httpClient.Timeout.TotalSeconds,
+                },
+            });
+            File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
+        }
+        catch { }
+        // #endregion
+
+        var stopwatch = Stopwatch.StartNew();
+        using var fileStream = fileInfo.OpenRead();
         using var fileContent = new StreamContent(fileStream);
         using var requestContent = new MultipartFormDataContent();
         requestContent.Add(
@@ -78,6 +106,32 @@ internal sealed class RemoteAccFileUploadService(
         {
             throw new InvalidOperationException("ACC service returned an empty upload response.");
         }
+
+        stopwatch.Stop();
+
+        // #region agent log
+        try
+        {
+            var dbg = JsonSerializer.Serialize(new
+            {
+                sessionId = "487a8a",
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                runId = "upload-timeout-fix",
+                hypothesisId = "H-A",
+                location = "RemoteAccFileUploadService.UploadAsync",
+                message = "remote upload completed",
+                data = new
+                {
+                    displayName = request.DisplayName,
+                    fileSizeBytes,
+                    durationMs = stopwatch.ElapsedMilliseconds,
+                    itemId = body.ItemId,
+                },
+            });
+            File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
+        }
+        catch { }
+        // #endregion
 
         return new AccFileUploadResult(
             body.FolderId,

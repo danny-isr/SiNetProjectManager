@@ -655,5 +655,74 @@ public sealed class EmailListViewModelFilingTests
 
         Assert.Equal(pageCallsAfterLoad, gateway.MailboxPageCalls);
     }
+
+    [Fact]
+    public async Task FileEmailToThreadProject_uses_thread_project_id_not_selected_project()
+    {
+        var filing = new EmailListViewModelTestFixtures.RecordingFilingService();
+        var sut = EmailListViewModelTestFixtures.CreateWriteCapableSut(filing: filing);
+        var row = new EmailListRow(
+            Id: "msg-thread-1",
+            Sender: "sender@example.com",
+            Subject: "Thread subject",
+            Preview: "preview",
+            ReceivedOn: DateTime.Now,
+            GroupName: "INBOX",
+            IsUnread: true,
+            IsAssigned: false,
+            AssignedProjectName: null,
+            AttachmentCount: 0,
+            ThreadId: "gmail-thread-42",
+            ThreadProjectId: 777,
+            ThreadProjectName: "777 — Thread Project",
+            HasThreadHistory: true,
+            ShowLinkToThreadButton: true);
+
+        Assert.True(sut.FileEmailToThreadProjectCommand.CanExecute(row));
+        await sut.FileEmailToThreadProjectForTestsAsync(row);
+
+        Assert.True(filing.FileCalled);
+        Assert.Equal(777, filing.LastFileCommand!.TargetProjectId);
+        Assert.Equal("gmail-thread-42", filing.LastFileCommand.GmailThreadId);
+    }
+
+    [Fact]
+    public async Task FileEmailToThreadProject_updates_peer_rows_in_same_thread()
+    {
+        var filing = new EmailListViewModelTestFixtures.RecordingFilingService();
+        var gateway = new EmailListViewModelTestFixtures.ActionTestEmailGateway();
+        var sut = EmailListViewModelTestFixtures.CreateWriteCapableSut(
+            gateway: gateway,
+            filing: filing);
+        await sut.ConnectGmailForTestsAsync();
+        await sut.LoadMailboxAndProjectForTestsAsync(resetStack: true);
+
+        var peerA = sut.Emails[0] with
+        {
+            ThreadId = "shared-thread",
+            ShowLinkToThreadButton = true,
+            ThreadProjectId = 777,
+            ThreadProjectName = "777 — Thread Project",
+            HasThreadHistory = true,
+        };
+        var peerB = sut.Emails[1] with
+        {
+            ThreadId = "shared-thread",
+            ShowLinkToThreadButton = true,
+            ThreadProjectId = 777,
+            ThreadProjectName = "777 — Thread Project",
+            HasThreadHistory = true,
+        };
+        sut.ApplyLocalEmailMutationForTests(peerA);
+        sut.ApplyLocalEmailMutationForTests(peerB);
+
+        gateway.ConfigureFiledSummary(peerA.Id);
+        await sut.FileEmailToThreadProjectForTestsAsync(peerA);
+
+        var updatedPeerB = sut.FindRowForTests(peerB.Id);
+        Assert.NotNull(updatedPeerB);
+        Assert.True(updatedPeerB!.IsFiledToProject);
+        Assert.Equal(777, updatedPeerB.LabelProjectId);
+    }
 }
 

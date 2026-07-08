@@ -135,6 +135,22 @@
                        FontStyle="Italic"
                        Visibility="{Binding IsActionBusy, Converter={StaticResource BoolToVis}}" />
 
+            <StackPanel Margin="0,2,0,0"
+                        Visibility="{Binding ShowLinkToThreadButton, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding ThreadLinkButtonText, Mode=OneWay}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                           Foreground="#E65100"
+                           TextWrapping="Wrap" />
+                <Button Content="[שייך לפרויקט זה]"
+                        Margin="0,2,0,0"
+                        Padding="6,2"
+                        HorizontalAlignment="Left"
+                        Foreground="#FF5722"
+                        FontWeight="SemiBold"
+                        Command="{Binding Tag.FileEmailToThreadProjectCommand, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                        CommandParameter="{Binding}" />
+            </StackPanel>
+
             <TextBlock Text="{Binding AccStatusBadge, Mode=OneWay}"
                        Margin="0,2,0,0"
                        Foreground="#6A1B9A"

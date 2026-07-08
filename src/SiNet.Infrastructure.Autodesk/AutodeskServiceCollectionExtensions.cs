@@ -85,10 +85,16 @@ public static class AutodeskServiceCollectionExtensions
         services.AddHttpClient<RemoteAccInboxBootstrapService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccFileUploadService>()
+        services.AddHttpClient<RemoteAccFileUploadService>((sp, client) =>
+                AccServiceHttpClientConfigurator.ConfigureFileTransferClient(
+                    client,
+                    sp.GetRequiredService<AccServiceControlPlaneOptions>()))
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccFileDownloadService>()
+        services.AddHttpClient<RemoteAccFileDownloadService>((sp, client) =>
+                AccServiceHttpClientConfigurator.ConfigureFileTransferClient(
+                    client,
+                    sp.GetRequiredService<AccServiceControlPlaneOptions>()))
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddTransient<IAccLiveProjectDiscoveryService, ModeSwitchingAccLiveProjectDiscoveryService>();

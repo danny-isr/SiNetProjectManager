@@ -13,6 +13,7 @@ public sealed partial class EmailListViewModel
 {
     internal void ClearAccSessionStateForTests() => _accHandler?.ClearSessionStateForTests();
     internal Task FileEmailToProjectForTestsAsync(EmailListRow? row) => _filing.FileEmailToProjectAsync(row);
+    internal Task FileEmailToThreadProjectForTestsAsync(EmailListRow? row) => _filing.FileEmailToThreadProjectAsync(row);
     internal Task UnfileEmailForTestsAsync(EmailListRow? row) => _filing.UnfileEmailAsync(row);
     internal Task MarkAsPersonalForTestsAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Personal);
     internal Task MarkAsPendingForTestsAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Pending);
@@ -38,6 +39,7 @@ public sealed partial class EmailListViewModel
 
     internal IEmailGateway EmailGateway => _emailGateway;
     internal IEmailThreadLinkQueryService? ThreadLinkQuery => _threadLinkQuery;
+    internal IEmailThreadMappingSyncService? ThreadMappingSync => _threadMappingSync;
     internal IConnectorAuthService AuthService => _authService;
     internal IGoogleIngestSessionEnsurer? IngestSessionEnsurer => _ingestSessionEnsurer;
     internal IEmailFilingService? FilingService => _filingService;
@@ -132,6 +134,7 @@ public sealed partial class EmailListViewModel
         (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (FileEmailToProjectCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (FileEmailToThreadProjectCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (UnfileEmailCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (MarkAsPendingCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (MarkAsPersonalCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();

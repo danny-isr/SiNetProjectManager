@@ -93,6 +93,9 @@ internal static partial class EmailListViewModelTestFixtures
     }
     internal sealed class StubThreadLinkQuery : IEmailThreadLinkQueryService
     {
+        public IReadOnlyDictionary<string, EmailProjectLinkInfo> ThreadStates { get; init; } =
+            new Dictionary<string, EmailProjectLinkInfo>(StringComparer.OrdinalIgnoreCase);
+
         public Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByInternetMessageIdsAsync(
             IReadOnlyList<string> internetMessageIds,
             CancellationToken cancellationToken = default)
@@ -109,12 +112,22 @@ internal static partial class EmailListViewModelTestFixtures
 
             return Task.FromResult<IReadOnlyDictionary<string, EmailProjectLinkInfo>>(map);
         }
+
+        public Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByGmailThreadIdsAsync(
+            IReadOnlyList<string> gmailThreadIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ThreadStates);
     }
 
     internal sealed class FailingThreadLinkQuery : IEmailThreadLinkQueryService
     {
         public Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByInternetMessageIdsAsync(
             IReadOnlyList<string> internetMessageIds,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("DB enrichment failed");
+
+        public Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByGmailThreadIdsAsync(
+            IReadOnlyList<string> gmailThreadIds,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("DB enrichment failed");
     }

@@ -13,6 +13,7 @@ public static class EmailReadServiceCollectionExtensions
 
         services.AddSingleton<IEmailInboxQueryService, SqlEmailInboxQueryService>();
         services.AddSingleton<IEmailThreadLinkQueryService, SqlEmailThreadLinkQueryService>();
+        services.AddSingleton<IEmailThreadMappingSyncService, SqlEmailThreadMappingSyncService>();
 
         return services;
     }

@@ -59,6 +59,29 @@
                                 </Style>
                             </MenuItem.Style>
                         </MenuItem>
+                        <MenuItem Header="🔗 שייך לפרויקט השרשור"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  Command="{Binding PlacementTarget.Tag.FileEmailToThreadProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.ToolTip>
+                                <MultiBinding Converter="{StaticResource ContextMenuDisabledReasonConverter}"
+                                              ConverterParameter="FileToThreadProject">
+                                    <Binding />
+                                    <Binding Path="PlacementTarget.Tag"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}" />
+                                </MultiBinding>
+                            </MenuItem.ToolTip>
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ShowLinkToThreadButton}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
                         <MenuItem Header="↩️ בטל שיוך"
                                   ToolTipService.ShowOnDisabled="True"
                                   Command="{Binding PlacementTarget.Tag.UnfileEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
