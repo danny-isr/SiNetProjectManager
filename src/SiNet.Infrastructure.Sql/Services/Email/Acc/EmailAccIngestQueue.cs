@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 
@@ -59,6 +60,23 @@ internal sealed class EmailAccIngestQueue(
         }
 
         NotifyActiveCountChanged();
+
+        // #region agent log
+        try
+        {
+            var dbg = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                sessionId = "487a8a",
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                location = "EmailAccIngestQueue.cs:EnqueueAsync",
+                message = "ingest starting",
+                hypothesisId = "H-A",
+                data = new { messageUniqueId, threadId = Environment.CurrentManagedThreadId },
+            });
+            File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
+        }
+        catch { }
+        // #endregion
 
         await _concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
         using var workScope = _backgroundWorkTracker.BeginWork();
