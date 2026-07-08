@@ -12,6 +12,20 @@ public partial class EmailListView : UserControl
         PreviewMouseWheel += OnPreviewMouseWheel;
     }
 
+    private void OnGroupEmailListSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListBox listBox || listBox.SelectedValue is not string selectedId)
+        {
+            return;
+        }
+
+        if (DataContext is EmailListViewModel viewModel
+            && !string.Equals(viewModel.SelectedEmailId, selectedId, StringComparison.Ordinal))
+        {
+            viewModel.SelectedEmailId = selectedId;
+        }
+    }
+
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         ScrollEmailListByWheelDelta(e.Delta);

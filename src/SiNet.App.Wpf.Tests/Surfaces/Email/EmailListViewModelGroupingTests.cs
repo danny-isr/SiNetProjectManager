@@ -294,6 +294,19 @@ public sealed class EmailListViewModelGroupingTests
     }
 
     [Fact]
+    public async Task FindRowById_resolves_row_inside_label_group()
+    {
+        var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
+        var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
+        var groupRow = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work").Emails.First();
+
+        var resolved = sut.ResolveSelectionRowForTests(groupRow.Id);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(groupRow.Id, resolved.Id);
+    }
+
+    [Fact]
     public async Task Attachment_count_maps_from_email_summary()
     {
         var gateway = new EmailListViewModelTestFixtures.AttachmentCountEmailGateway();

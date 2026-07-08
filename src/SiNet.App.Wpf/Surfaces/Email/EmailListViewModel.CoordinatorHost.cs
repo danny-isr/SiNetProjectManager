@@ -17,6 +17,7 @@ public sealed partial class EmailListViewModel
     internal Task MarkAsPersonalForTestsAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Personal);
     internal Task MarkAsPendingForTestsAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Pending);
     internal void ApplyLocalEmailMutationForTests(EmailListRow row) => _display.ApplyLocalEmailMutation(row);
+    internal EmailListRow? ResolveSelectionRowForTests(string rowId) => _display.ResolveSelectionRow(rowId);
     internal void ClearEmailStateForTests() => _paging.ClearEmailState();
     internal Task LoadMailboxAndProjectForTestsAsync(bool resetStack) => _paging.LoadMailboxAndProjectAsync(resetStack);
     internal Task LoadMoreForLabelGroupForTestsAsync(EmailLabelGroupViewModel group) => _grouping.LoadMoreEmailsForGroupAsync(group);

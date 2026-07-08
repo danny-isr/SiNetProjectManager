@@ -253,10 +253,24 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
                 return;
             }
 
+            if (value is null
+                && _selectedEmailId is not null
+                && _display.ResolveSelectionRow(_selectedEmailId) is not null)
+            {
+                return;
+            }
+
+            var row = value is null ? null : _display.ResolveSelectionRow(value);
+            if (value is not null
+                && row is null
+                && string.Equals(_selectedEmail?.Id, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             _selectedEmailId = value;
             OnPropertyChanged(nameof(SelectedEmailId));
 
-            var row = value is null ? null : _display.FindRowById(value);
             var idChanged = !string.Equals(_selectedEmail?.Id, value, StringComparison.Ordinal);
             _selectedEmail = row;
             OnPropertyChanged(nameof(SelectedEmail));
@@ -274,7 +288,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
             return;
         }
 
-        var resolved = _display.FindRowById(candidate.Id) ?? candidate;
+        var resolved = _display.ResolveSelectionRow(candidate.Id) ?? candidate;
         if (ReferenceEquals(_selectedEmail, resolved))
         {
             return;

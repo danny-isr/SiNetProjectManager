@@ -24,21 +24,25 @@ internal sealed class EmailListRowDisplayCoordinator
         _getCurrentProject = getCurrentProject;
     }
 
-    public EmailListRow? FindRowById(string rowId)
-    {
-        foreach (var email in _owner.Emails)
-        {
-            if (string.Equals(email.Id, rowId, StringComparison.Ordinal))
-            {
-                return email;
-            }
-        }
+    public EmailListRow? FindRowById(string rowId) => ResolveSelectionRow(rowId);
 
+    public EmailListRow? ResolveSelectionRow(string rowId)
+    {
         foreach (var flatRow in _owner.FlatDisplayEmails)
         {
             if (string.Equals(flatRow.Id, rowId, StringComparison.Ordinal))
             {
                 return flatRow;
+            }
+        }
+
+        foreach (var group in _owner.DisplayGroups)
+        {
+            var fromGroup = group.Emails.FirstOrDefault(row =>
+                string.Equals(row.Id, rowId, StringComparison.Ordinal));
+            if (fromGroup is not null)
+            {
+                return fromGroup;
             }
         }
 
@@ -51,6 +55,14 @@ internal sealed class EmailListRowDisplayCoordinator
                 {
                     return email;
                 }
+            }
+        }
+
+        foreach (var email in _owner.Emails)
+        {
+            if (string.Equals(email.Id, rowId, StringComparison.Ordinal))
+            {
+                return email;
             }
         }
 
@@ -342,27 +354,7 @@ internal sealed class EmailListRowDisplayCoordinator
             ?? _owner.Emails.FirstOrDefault();
     }
 
-    private EmailListRow? FindVisibleRowById(string rowId)
-    {
-        var fromFlat = _owner.FlatDisplayEmails.FirstOrDefault(row =>
-            string.Equals(row.Id, rowId, StringComparison.Ordinal));
-        if (fromFlat is not null)
-        {
-            return fromFlat;
-        }
-
-        foreach (var group in _owner.DisplayGroups)
-        {
-            var fromGroup = group.Emails.FirstOrDefault(row =>
-                string.Equals(row.Id, rowId, StringComparison.Ordinal));
-            if (fromGroup is not null)
-            {
-                return fromGroup;
-            }
-        }
-
-        return _owner.Emails.FirstOrDefault(row => string.Equals(row.Id, rowId, StringComparison.Ordinal));
-    }
+    private EmailListRow? FindVisibleRowById(string rowId) => ResolveSelectionRow(rowId);
 
     private void RemoveRowFromDisplayCore(EmailListRow row)
     {
@@ -377,7 +369,7 @@ internal sealed class EmailListRowDisplayCoordinator
 
         if (string.Equals(_owner.SelectedEmail?.Id, row.Id, StringComparison.Ordinal))
         {
-            _owner.SelectedEmail = null;
+            _owner.SelectedEmailId = null;
         }
 
         _rebuildDisplayGroups();

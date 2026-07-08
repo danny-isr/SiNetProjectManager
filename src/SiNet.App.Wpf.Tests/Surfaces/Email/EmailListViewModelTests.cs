@@ -83,4 +83,24 @@ public sealed class EmailListViewModelTests
         Assert.Equal("?-ACC", sut.SelectedEmail?.AccStatusDisplay);
         Assert.Equal(0, selectionChanges);
     }
+
+    [Fact]
+    public async Task SelectedEmailId_ignores_spurious_null_when_row_still_visible()
+    {
+        var gateway = new EmailListViewModelTestFixtures.PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new EmailListViewModelTestFixtures.StubAuthService());
+        await sut.RefreshPageAsync();
+
+        var row = sut.Emails.Single();
+        sut.SelectedEmailId = row.Id;
+
+        var selectionChanges = 0;
+        sut.SelectedEmailChanged += (_, _) => selectionChanges++;
+
+        sut.SelectedEmailId = null;
+
+        Assert.Equal(row.Id, sut.SelectedEmailId);
+        Assert.NotNull(sut.SelectedEmail);
+        Assert.Equal(0, selectionChanges);
+    }
 }

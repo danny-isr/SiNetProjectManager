@@ -160,7 +160,8 @@
                 <ListBox ItemsSource="{Binding Emails}"
                          Style="{StaticResource EmailListContainerStyle}"
                          SelectedValuePath="Id"
-                         SelectedValue="{Binding DataContext.SelectedEmailId, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                         SelectedValue="{Binding DataContext.SelectedEmailId, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"
+                         SelectionChanged="OnGroupEmailListSelectionChanged"
                          ItemContainerStyle="{StaticResource EmailCardItemStyle}">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:EmailListRow}">
