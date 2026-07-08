@@ -32,6 +32,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private readonly IEmailFilingService? _filingService;
     private readonly IEmailStatusService? _statusService;
     private readonly EmailAccSelectionHandler? _accHandler;
+    private readonly IGoogleIngestSessionEnsurer? _ingestSessionEnsurer;
     private readonly ICurrentProjectContext? _currentProject;
     private readonly ICurrentUserContext? _currentUser;
 
@@ -86,7 +87,9 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         ICurrentUserContext? currentUser = null,
         IEmailAccStatusService? accStatusService = null,
         IEmailAccUploadCoordinator? accUploadCoordinator = null,
-        IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null)
+        IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null,
+        IEmailAccIngestQueue? accIngestQueue = null,
+        IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
@@ -95,6 +98,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         _statusService = statusService;
         _currentProject = currentProject;
         _currentUser = currentUser;
+        _ingestSessionEnsurer = ingestSessionEnsurer;
         _ = moveToProjectCoordinator;
 
         Emails = [];
@@ -182,8 +186,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
             };
         }
 
-        _accHandler = accStatusService is not null || accUploadCoordinator is not null
-            ? new EmailAccSelectionHandler(accStatusService, accUploadCoordinator, PatchAccRow)
+        _accHandler = accStatusService is not null || accUploadCoordinator is not null || accIngestQueue is not null
+            ? new EmailAccSelectionHandler(accStatusService, accUploadCoordinator, PatchAccRow, accIngestQueue)
             : null;
         if (_accHandler is not null)
         {
@@ -660,6 +664,21 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         }
 
         return await _accHandler.TryPassiveIngestAsync(row, isStillSelected, cancellationToken).ConfigureAwait(true);
+    }
+
+    public EmailListRow? FindRowById(string rowId) => _display.FindRowById(rowId);
+
+    public EmailListRow? PatchRowAttachmentCount(string messageId, int attachmentCount)
+    {
+        var row = _display.FindRowById(messageId);
+        if (row is null || row.AttachmentCount == attachmentCount)
+        {
+            return row;
+        }
+
+        var updated = row with { AttachmentCount = attachmentCount };
+        PatchAccRow(updated);
+        return updated;
     }
 
     private bool CanLoadEmails() => !IsBusy && IsConnected;

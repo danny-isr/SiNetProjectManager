@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using SiNet.Application.WorkSurfaces;
@@ -52,4 +53,12 @@ public partial class EmailWindowView : Window
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void EmailWindowView_OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (ViewModel.TryBlockCloseForBackgroundWork(this))
+        {
+            e.Cancel = true;
+        }
+    }
 }

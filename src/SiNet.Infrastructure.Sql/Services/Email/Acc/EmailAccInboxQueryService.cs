@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Email;
+using SiNet.Application.Email.Acc;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -100,6 +102,33 @@ internal sealed class EmailAccInboxQueryService(IDbContextFactory<SiNetSQLDbCont
                 where message.MessageUniqueId == messageUniqueId
                 select attachment.Id)
             .CountAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<EmailExternalDownloadItem>> ListExternalDownloadsAsync(
+        string? internetMessageId,
+        string gmailMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        var messageUniqueId = EmailAccStatusMapper.ResolveMessageUniqueId(internetMessageId, gmailMessageId);
+        if (string.IsNullOrWhiteSpace(messageUniqueId))
+        {
+            return [];
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        return await (
+                from attachment in db.EmailInboxAttachments.AsNoTracking()
+                join message in db.EmailInboxMessages.AsNoTracking() on attachment.MessageId equals message.Id
+                where message.MessageUniqueId == messageUniqueId && attachment.IsExternalDownload
+                orderby attachment.AttachmentIndex
+                select new EmailExternalDownloadItem(
+                    attachment.OriginalFileName ?? attachment.SavedFileName ?? "קובץ",
+                    attachment.AccItemId,
+                    message.InboxAccFolderId,
+                    attachment.IsExternalDownload))
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
 }

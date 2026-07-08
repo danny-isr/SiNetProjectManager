@@ -1,19 +1,11 @@
 ﻿using System.Windows;
-using SiNetSQL.MVVM;
+using SiNetProjectManagerV2.Services;
 
 namespace SiNetProjectManagerV2.Dialogs;
 
 /// <summary>
 /// Status dialog shown when the user tries to close the application while
 /// background ACC uploads are still in progress.
-/// <para>
-/// Options:
-/// <list type="bullet">
-///   <item><b>Close when done</b> — enters waiting mode; auto-closes the app when uploads finish.</item>
-///   <item><b>Force close</b> — closes immediately (uploads may be lost).</item>
-///   <item><b>Cancel</b> — returns to the application without closing.</item>
-/// </list>
-/// </para>
 /// </summary>
 public partial class BackgroundUploadsDialog : Window
 {
@@ -22,8 +14,8 @@ public partial class BackgroundUploadsDialog : Window
     public BackgroundUploadsDialog()
     {
         InitializeComponent();
-        UpdateCountText(EmailManagementViewModel.ActiveUploadCount);
-        EmailManagementViewModel.ActiveUploadsChanged += OnActiveUploadsChanged;
+        UpdateCountText(AccBackgroundWorkMonitor.TotalActiveCount);
+        AccBackgroundWorkMonitor.TotalActiveCountChanged += OnActiveUploadsChanged;
     }
 
     private void OnActiveUploadsChanged(int count)
@@ -34,7 +26,6 @@ public partial class BackgroundUploadsDialog : Window
 
             if (_waitingForCompletion && count == 0)
             {
-                // All uploads finished — allow the app to close
                 DialogResult = true;
             }
         });
@@ -54,8 +45,7 @@ public partial class BackgroundUploadsDialog : Window
         ForceCloseButton.IsEnabled = true;
         InfoText.Text = "התוכנה תיסגר אוטומטית כשכל התהליכים יסתיימו.";
 
-        // Edge case: uploads already finished between button click and here
-        if (EmailManagementViewModel.ActiveUploadCount == 0)
+        if (AccBackgroundWorkMonitor.TotalActiveCount == 0)
         {
             DialogResult = true;
         }
@@ -73,7 +63,7 @@ public partial class BackgroundUploadsDialog : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        EmailManagementViewModel.ActiveUploadsChanged -= OnActiveUploadsChanged;
+        AccBackgroundWorkMonitor.TotalActiveCountChanged -= OnActiveUploadsChanged;
         base.OnClosed(e);
     }
 }

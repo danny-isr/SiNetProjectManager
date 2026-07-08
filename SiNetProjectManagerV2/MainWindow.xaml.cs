@@ -16,6 +16,8 @@ using SiNetSQL.Data;
 using SiOffice.GoogleConnector;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Projects;
+using SiNetProjectManagerV2.Services;
+
 namespace SiNetProjectManagerV2
 {
     public partial class MainWindow : BaseWindow
@@ -143,7 +145,7 @@ namespace SiNetProjectManagerV2
         /// </summary>
         protected override void OnClosing(CancelEventArgs e)
         {
-            if (EmailManagementViewModel.HasActiveUploads)
+            if (AccBackgroundWorkMonitor.HasActiveUploads)
             {
                 var dialog = new BackgroundUploadsDialog { Owner = this };
                 if (dialog.ShowDialog() != true)

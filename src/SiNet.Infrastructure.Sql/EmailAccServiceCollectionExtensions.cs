@@ -14,6 +14,9 @@ public static class EmailAccServiceCollectionExtensions
         services.AddSingleton<EmailAccInboxQueryService>();
         services.AddSingleton<IEmailAccStatusService, SqlEmailAccStatusService>();
         services.AddSingleton<IEmailAccUploadCoordinator, EmailAccUploadCoordinator>();
+        services.AddSingleton<IEmailExternalDownloadCoordinator, EmailExternalDownloadCoordinator>();
+        services.AddSingleton<IEmailAccBackgroundWorkTracker, EmailAccBackgroundWorkTracker>();
+        services.AddSingleton<IEmailAccIngestQueue, EmailAccIngestQueue>();
         services.AddSingleton<IEmailMoveToProjectCoordinator, EmailMoveToProjectCoordinator>();
 
         return services;

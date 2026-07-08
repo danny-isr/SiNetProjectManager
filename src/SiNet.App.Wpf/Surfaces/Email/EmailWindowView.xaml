@@ -14,6 +14,7 @@
         Width="1200" Height="720"
         MinWidth="820" MinHeight="480"
         FlowDirection="RightToLeft"
+        Closing="EmailWindowView_OnClosing"
         d:DataContext="{d:DesignInstance Type=local:EmailWindowViewModel, IsDesignTimeCreatable=True}">
 
     <!--
@@ -201,7 +202,17 @@
                             <!-- Row 1: Attachment metadata (read-only in production pilot — open/download deferred). -->
                             <Border Grid.Row="1" Padding="12,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
                                 <StackPanel>
-                                    <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="{DynamicResource SiTextSmallFontSize}" Foreground="#666" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="{DynamicResource SiTextSmallFontSize}" Foreground="#666" />
+                                        <Button Content="&#x1F310; \u05E4\u05EA\u05D7 \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05D5\u05E8\u05D3\u05D4"
+                                                Command="{Binding OpenExternalDownloadLinkCommand}"
+                                                Style="{StaticResource ActionButton}"
+                                                Margin="12,0,0,0"
+                                                Padding="8,2"
+                                                FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                Visibility="{Binding ShowExternalDownloadLinkAction, Converter={StaticResource BoolToVis}}"
+                                                ToolTip="JumboMail / WeTransfer — הורדה ואז העלאה ל-ACC" />
+                                    </StackPanel>
                                     <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>

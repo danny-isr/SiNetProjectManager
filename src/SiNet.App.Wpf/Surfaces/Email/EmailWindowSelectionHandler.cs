@@ -62,17 +62,42 @@ internal sealed class EmailWindowSelectionHandler
         }
     }
 
-    public async Task LoadSelectedEmailWithAccPipelineAsync(EmailListRow row, int loadVersion)
+    public async Task LoadSelectedEmailWithAccPipelineAsync(
+        EmailListRow row,
+        int loadVersion,
+        Func<string, bool> isBodyLoadedForMessage)
     {
-        await LoadSelectedEmailDetailsAsync(row.Id, loadVersion).ConfigureAwait(true);
+        row = await LoadBodyIfNeededAsync(row, loadVersion, isBodyLoadedForMessage).ConfigureAwait(true);
+        await RunAccPipelineAsync(row, loadVersion).ConfigureAwait(true);
+    }
 
+    public async Task<EmailListRow> LoadBodyIfNeededAsync(
+        EmailListRow row,
+        int loadVersion,
+        Func<string, bool> isBodyLoadedForMessage)
+    {
+        if (isBodyLoadedForMessage(row.Id))
+        {
+            SyncRowAttachmentCountFromViewer(row.Id);
+            return _emailList.FindRowById(row.Id) ?? row;
+        }
+
+        await LoadSelectedEmailDetailsAsync(row.Id, loadVersion).ConfigureAwait(true);
+        return _emailList.FindRowById(row.Id) ?? row;
+    }
+
+    public async Task RunAccPipelineAsync(EmailListRow row, int loadVersion)
+    {
         if (!ShouldApplySelectedEmailLoad(row.Id, loadVersion))
         {
             return;
         }
 
+        row = _emailList.FindRowById(row.Id) ?? row;
         _setSelectedAccStatusDisplay("בודק ACC…");
-        var (_, status) = await _emailList.TryPassiveAccIngestOnSelectionAsync(
+        _setStatusMessage("בודק ACC…");
+
+        var (updatedRow, status) = await _emailList.TryPassiveAccIngestOnSelectionAsync(
             row,
             () => ShouldApplySelectedEmailLoad(row.Id, loadVersion))
             .ConfigureAwait(true);
@@ -83,8 +108,27 @@ internal sealed class EmailWindowSelectionHandler
         }
 
         _setSelectedAccStatusDisplay(status?.StatusDisplay
+            ?? updatedRow.AccStatusDisplay
             ?? _getSelectedEmail()?.AccStatusDisplay
             ?? string.Empty);
+    }
+
+    public void MergeExternalDownloadAttachments(IReadOnlyList<EmailExternalDownloadItem> externalItems)
+    {
+        foreach (var item in externalItems)
+        {
+            if (_attachments.Any(existing =>
+                    string.Equals(existing.FileName, item.FileName, StringComparison.OrdinalIgnoreCase)
+                    && existing.Kind == "External"))
+            {
+                continue;
+            }
+
+            _attachments.Add(new EmailAttachmentRow(
+                item.FileName,
+                "External",
+                "ACC"));
+        }
     }
 
     public Task OpenSelectedEmailAsync()
@@ -120,6 +164,7 @@ internal sealed class EmailWindowSelectionHandler
             }
 
             ApplySelectedEmailDetails(details);
+            _emailList.PatchRowAttachmentCount(messageId, details.Attachments.Count);
             _setStatusMessage(details.HasAttachments
                 ? $"נטען תוכן המייל ו-{details.Attachments.Count} קבצים מצורפים."
                 : "נטען תוכן המייל המלא.");
@@ -139,6 +184,18 @@ internal sealed class EmailWindowSelectionHandler
     private bool ShouldApplySelectedEmailLoad(string messageId, int loadVersion) =>
         loadVersion == _getLoadVersion()
         && string.Equals(_getSelectedEmail()?.Id, messageId, StringComparison.Ordinal);
+
+    private void SyncRowAttachmentCountFromViewer(string messageId)
+    {
+        var count = _attachments.Count(static row =>
+            !string.Equals(row.Kind, "Loading", StringComparison.Ordinal)
+            && !string.Equals(row.Kind, "Unavailable", StringComparison.Ordinal));
+
+        if (count > 0)
+        {
+            _emailList.PatchRowAttachmentCount(messageId, count);
+        }
+    }
 
     private void ApplySelectedEmailDetails(EmailMessageDetails details)
     {

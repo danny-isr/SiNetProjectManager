@@ -1,4 +1,6 @@
 using System.IO;
+using Moq;
+using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
@@ -178,11 +180,82 @@ public sealed class EmailAccPipelineTests
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         var handlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailAccSelectionHandler.cs");
+        var selectionHandlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowSelectionHandler.cs");
 
         Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", vmSource, StringComparison.Ordinal);
+        Assert.Contains("RunAccPipelineAsync", selectionHandlerSource, StringComparison.Ordinal);
+        Assert.Contains("LoadBodyIfNeededAsync", selectionHandlerSource, StringComparison.Ordinal);
         Assert.Contains("TryPassiveAccIngestOnSelectionAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("TryPassiveIngestAsync", handlerSource, StringComparison.Ordinal);
         Assert.DoesNotContain("read-only, no upload", listVmSource, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Re_select_with_loaded_body_still_runs_acc_pipeline()
+    {
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        Assert.Contains("RunSelectionPipelineAsync", vmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", vmSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("HasLoadedBodyForCurrentSelection(value.Id))\n        {\n            return;", vmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PatchRowAttachmentCount_updates_has_attachments_before_passive_ingest()
+    {
+        var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var selectionHandlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowSelectionHandler.cs");
+
+        Assert.Contains("PatchRowAttachmentCount", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("PatchRowAttachmentCount(messageId, details.Attachments.Count)", selectionHandlerSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Upload_outcome_display_maps_backend_not_available_to_hebrew()
+    {
+        var result = EmailAccUploadResult.BackendNotAvailable("msg@test.com");
+        var text = EmailAccUploadOutcomeDisplay.ResolveFailureMessage(result);
+        Assert.Contains("host", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ACC", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Upload_outcome_display_maps_skipped_not_relevant_to_hebrew()
+    {
+        var result = new EmailAccUploadResult(
+            EmailAccUploadOutcome.SkippedNotRelevant,
+            "msg@test.com",
+            null,
+            0,
+            0,
+            null,
+            0);
+
+        var text = EmailAccUploadOutcomeDisplay.ResolveFailureMessage(result);
+        Assert.Contains("לא רלוונטי", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Not_in_database_maps_to_not_uploaded_hebrew()
+    {
+        var status = EmailAccStatusMapper.Map("msg@test.com", cache: null, reconciliation: null, currentUserLogin: null);
+        Assert.Equal(EmailAccProcessingStatus.NotInDatabase, status.ProcessingStatus);
+        Assert.Equal("לא הועלה ל-ACC", status.StatusDisplay);
+    }
+
+    [Fact]
+    public void External_download_link_detector_finds_jumbomail_and_wetransfer()
+    {
+        const string body = "Download from https://www.jumbomail.me/abc and https://we.tl/xyz";
+        var urls = EmailExternalDownloadLinkDetector.ExtractUrls(body);
+        Assert.Equal(2, urls.Count);
+        Assert.True(EmailExternalDownloadLinkDetector.HasExternalDownloadLink(body));
+    }
+
+    [Fact]
+    public void AddSiNetEmailAccSql_registers_external_download_coordinator()
+    {
+        var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
+        Assert.Contains("IEmailExternalDownloadCoordinator", extensions, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -229,6 +302,145 @@ public sealed class EmailAccPipelineTests
         var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
         Assert.Contains("IEmailMoveToProjectCoordinator", source, StringComparison.Ordinal);
         Assert.DoesNotContain("MoveToProjectProcessActionHandler", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Partial_upload_allows_retry_when_not_fully_complete()
+    {
+        var status = new EmailAccInboxStatus(
+            "msg@test.com",
+            1,
+            EmailAccProcessingStatus.PartiallyUploaded,
+            null,
+            "חלקי",
+            null,
+            TotalAttachments: 2,
+            ExistingInAccCount: 1,
+            MissingInAccCount: 1,
+            Attachments: []);
+
+        Assert.False(EmailAccIngestGates.IsIngestFullyComplete(status));
+        Assert.False(EmailAccIngestGates.ShouldSkipRetryAfterAttempt(status));
+    }
+
+    [Fact]
+    public void Full_upload_blocks_retry_after_attempt()
+    {
+        var status = new EmailAccInboxStatus(
+            "msg@test.com",
+            1,
+            EmailAccProcessingStatus.UploadedToAcc,
+            null,
+            "הועלה",
+            "folder",
+            TotalAttachments: 2,
+            ExistingInAccCount: 2,
+            MissingInAccCount: 0,
+            Attachments: []);
+
+        Assert.True(EmailAccIngestGates.IsIngestFullyComplete(status));
+        Assert.True(EmailAccIngestGates.ShouldSkipRetryAfterAttempt(status));
+    }
+
+    [Fact]
+    public void Legacy_ingest_executor_ensures_auth_before_load_full_email_body()
+    {
+        var source = ReadRepoFile("SiNetProjectManagerV2/Services/LegacyEmailAccIngestionExecutor.cs");
+        Assert.Contains("EnsureAuthenticatedForAccIngestAsync", source, StringComparison.Ordinal);
+        var ensureIndex = source.IndexOf("EnsureAuthenticatedForAccIngestAsync", StringComparison.Ordinal);
+        var loadIndex = source.IndexOf("LoadFullEmailBodyAsync", StringComparison.Ordinal);
+        Assert.True(ensureIndex >= 0);
+        Assert.True(loadIndex > ensureIndex);
+    }
+
+    [Fact]
+    public void Background_work_tracker_increments_and_decrements_in_scope()
+    {
+        var tracker = new EmailAccBackgroundWorkTracker();
+        Assert.Equal(0, tracker.ActiveCount);
+
+        using (tracker.BeginWork())
+        {
+            Assert.Equal(1, tracker.ActiveCount);
+        }
+
+        Assert.Equal(0, tracker.ActiveCount);
+    }
+
+    [Fact]
+    public async Task Locked_by_other_user_does_not_call_upload_coordinator()
+    {
+        var lockedStatus = new EmailAccInboxStatus(
+            "msg@test.com",
+            1,
+            EmailAccProcessingStatus.LockedByOtherUser,
+            new EmailAccLockStatus(true, false, "DOMAIN\\other", DateTime.UtcNow, false),
+            "בטיפול על ידי משתמש אחר",
+            null,
+            TotalAttachments: 2,
+            ExistingInAccCount: 0,
+            MissingInAccCount: 2,
+            Attachments: []);
+
+        var statusService = new Mock<IEmailAccStatusService>();
+        statusService
+            .Setup(s => s.SyncStatusWithRecoveryAsync(
+                It.IsAny<string?>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(lockedStatus);
+
+        var uploadCoordinator = new Mock<IEmailAccUploadCoordinator>();
+
+        var handler = new EmailAccSelectionHandler(
+            statusService.Object,
+            uploadCoordinator.Object);
+
+        var row = new EmailListRow(
+            "gmail-1",
+            "sender@test.com",
+            "Subject",
+            "Preview",
+            DateTime.UtcNow,
+            "Inbox",
+            false,
+            false,
+            null,
+            AttachmentCount: 2,
+            InternetMessageId: "<msg@test.com>");
+
+        await handler.TryPassiveIngestAsync(row, () => true);
+
+        uploadCoordinator.Verify(
+            c => c.UploadToAccInboxAsync(It.IsAny<EmailAccUploadCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public void Ingest_queue_registers_with_max_concurrency_five()
+    {
+        var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
+        Assert.Contains("IEmailAccIngestQueue", extensions, StringComparison.Ordinal);
+        Assert.Contains("DefaultMaxConcurrency = 5", ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Acc/EmailAccIngestQueue.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_window_close_uses_background_work_prompt()
+    {
+        var viewSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml.cs");
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        Assert.Contains("TryBlockCloseForBackgroundWork", viewSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailAccClosePrompt", vmSource, StringComparison.Ordinal);
+        Assert.Contains("Closing=\"EmailWindowView_OnClosing\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Auth_failure_message_maps_not_logged_in_to_hebrew()
+    {
+        var mapped = EmailAccIngestGates.MapAuthFailureMessage("Not logged in.");
+        Assert.Equal("Gmail לא מחובר להעלאה — לחץ התחבר מחדש", mapped);
     }
 
     private static string ReadRepoFile(string relativePath)

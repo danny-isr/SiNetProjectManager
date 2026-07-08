@@ -208,9 +208,13 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNetSQL.Services.IEmailIngestionServiceFactory, SiNetSQL.Services.EmailIngestionServiceFactory>();
             services.AddSingleton<SiNetSQL.Services.EmailIngestion.IEmailPdfRenderer>(sp =>
                 sp.GetRequiredService<WebView2PdfRenderer>());
+            services.AddSingleton<SiNet.Application.Email.Acc.IGoogleIngestSessionEnsurer, GoogleServiceSessionEnsurer>();
+            services.AddSingleton<SiNet.Application.Email.Acc.IEmailAccClosePrompt, EmailAccClosePrompt>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailAccIngestionExecutor, LegacyEmailAccIngestionExecutor>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailAccRecoveryExecutor, LegacyEmailAccRecoveryExecutor>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailMoveToProjectExecutor, LegacyEmailMoveToProjectExecutor>();
+            services.AddTransient<SiNet.Application.Email.Acc.IEmailExternalDownloadExecutor, LegacyEmailExternalDownloadExecutor>();
+            services.AddSingleton<SiNet.Application.Email.Acc.IEmailExternalDownloadBrowserHost, V2EmailExternalDownloadBrowserHost>();
             services.AddTransient<IEmailRelevanceService, EmailRelevanceService>();
 
             // PDF Renderer: Singleton (reused for all PDF generations)

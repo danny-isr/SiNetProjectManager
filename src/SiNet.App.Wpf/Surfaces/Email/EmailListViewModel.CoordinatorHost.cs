@@ -39,6 +39,7 @@ public sealed partial class EmailListViewModel
     internal IEmailGateway EmailGateway => _emailGateway;
     internal IEmailThreadLinkQueryService? ThreadLinkQuery => _threadLinkQuery;
     internal IConnectorAuthService AuthService => _authService;
+    internal IGoogleIngestSessionEnsurer? IngestSessionEnsurer => _ingestSessionEnsurer;
     internal IEmailFilingService? FilingService => _filingService;
     internal IEmailStatusService? StatusService => _statusService;
     internal Stack<string?> PageTokenStack { get; }

@@ -192,6 +192,17 @@ internal sealed class EmailListPagingCoordinator
                 return;
             }
 
+            if (_owner.IngestSessionEnsurer is not null)
+            {
+                var legacyReady = await _owner.IngestSessionEnsurer
+                    .EnsureAuthenticatedForAccIngestAsync()
+                    .ConfigureAwait(true);
+                if (!legacyReady)
+                {
+                    _owner.SetStatusMessage("Gmail מחובר לרשימה — העלאה ל-ACC תדרוש התחברות נוספת.");
+                }
+            }
+
             await RefreshGmailAccountStatusAsync().ConfigureAwait(true);
             ClearEmailState();
             await LoadLabelsAsync().ConfigureAwait(true);
