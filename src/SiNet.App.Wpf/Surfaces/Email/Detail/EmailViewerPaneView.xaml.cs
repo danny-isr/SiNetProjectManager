@@ -20,13 +20,23 @@ public partial class EmailViewerPaneView : UserControl
         {
             _bodyRenderer.AttachHost(BodyHost);
         }
+
+        if (DataContext is EmailViewerPaneViewModel vm)
+        {
+            vm.SetBodyRenderer(_bodyRenderer);
+        }
     }
 
     private void OnDataContextChanged(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
     {
-        if (e.NewValue is EmailViewerPaneViewModel vm && _bodyRenderer?.IsAvailable == true)
+        if (e.NewValue is EmailViewerPaneViewModel vm)
         {
-            _bodyRenderer.AttachHost(BodyHost);
+            if (_bodyRenderer?.IsAvailable == true)
+            {
+                _bodyRenderer.AttachHost(BodyHost);
+            }
+
+            vm.SetBodyRenderer(_bodyRenderer);
         }
     }
 }

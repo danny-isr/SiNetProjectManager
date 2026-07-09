@@ -22,17 +22,20 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private readonly IEmailWorkflowContextService? _workflowContextService;
     private readonly IEmailSuggestedActionService? _suggestedActionService;
     private readonly IEmailSuggestedActionExecutionService? _actionExecutionService;
+    private readonly IEmailAttachmentTaggingService? _attachmentTaggingService;
+    private readonly IEmailAttachmentProjectFilePickerHost? _attachmentProjectFilePicker;
     private readonly ITaskCompletionService? _taskCompletionService;
     private readonly IEmailBodyRenderer? _bodyRenderer;
     private EmailExternalDownloadHandler? _externalDownloadHandler;
-    private readonly EmailDetailSelectionCoordinator _selectionCoordinator;
 
     private EmailListRow? _selectedEmail;
     private WorkSurfaceContext? _workSurfaceContext;
     private int _selectedEmailLoadVersion;
     private string _selectedEmailBody = string.Empty;
+    private string? _selectedEmailHtmlBody;
     private string _selectedAccStatusDisplay = string.Empty;
     private bool _isBusy;
+    private readonly EmailDetailSelectionCoordinator _selectionCoordinator;
 
     public EmailDetailViewModel(
         EmailListViewModel emailList,
@@ -46,7 +49,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IEmailSuggestedActionService? suggestedActionService = null,
         IEmailSuggestedActionExecutionService? actionExecutionService = null,
         ITaskCompletionService? taskCompletionService = null,
-        IEmailBodyRenderer? bodyRenderer = null)
+        IEmailBodyRenderer? bodyRenderer = null,
+        IEmailAttachmentTaggingService? attachmentTaggingService = null,
+        IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null)
     {
         ArgumentNullException.ThrowIfNull(emailList);
         ArgumentNullException.ThrowIfNull(emailGateway);
@@ -61,6 +66,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _actionExecutionService = actionExecutionService;
         _taskCompletionService = taskCompletionService;
         _bodyRenderer = bodyRenderer;
+        _attachmentTaggingService = attachmentTaggingService;
+        _attachmentProjectFilePicker = attachmentProjectFilePicker;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
         ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync);
@@ -71,7 +78,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             emailGateway,
             _emailList,
             message => StatusMessage = message,
-            body => SelectedEmailBody = body,
+            (body, html) => SetSelectedEmailContent(body, html),
             acc => SelectedAccStatusDisplay = acc,
             AttachmentStrip.Attachments,
             () => _selectedEmail,
@@ -101,6 +108,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     public string StatusMessage { get; private set; } = string.Empty;
 
+    private void SetSelectedEmailContent(string bodyText, string? htmlBody)
+    {
+        _selectedEmailHtmlBody = htmlBody;
+        SelectedEmailBody = bodyText;
+    }
+
     public string SelectedEmailBody
     {
         get => _selectedEmailBody;
@@ -108,7 +121,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _selectedEmailBody, value))
             {
-                Viewer.SyncFromBody(value, _bodyRenderer, _selectedEmail?.Id);
+                Viewer.SyncFromBody(value, _selectedEmailHtmlBody, _bodyRenderer, _selectedEmail?.Id);
                 RefreshExternalDownloadActionVisibility();
             }
         }
@@ -151,6 +164,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         await RunSelectionPipelineAsync(row, loadVersion).ConfigureAwait(true);
+        await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
         await RefreshWorkflowContextAsync().ConfigureAwait(true);
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         RefreshActionBarState();
@@ -237,42 +251,27 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     private async Task FileSelectedEmailAsync()
     {
-        if (_filingService is null || _selectedEmail is null)
+        if (_selectedEmail is null)
         {
-            SetStatus("שיוך לפרויקט אינו זמין.");
+            SetStatus("לא נבחר מייל.");
             return;
         }
 
-        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
-        if (projectId <= 0)
+        if (!_emailList.CanFileEmailToProject(_selectedEmail))
         {
-            SetStatus("בחר פרויקט לפני שיוך.");
+            SetStatus("שיוך לפרויקט אינו זמין כרגע.");
             return;
         }
 
-        var userId = _currentUser?.UserId ?? 0;
-        IsBusy = true;
-        try
-        {
-            var result = await _filingService.FileToProjectAsync(
-                new FileEmailToProjectCommand(
-                    projectId,
-                    userId,
-                    _selectedEmail.Id,
-                    _selectedEmail.InboxMessageId,
-                    _selectedEmail.ThreadId,
-                    _selectedEmail.InternetMessageId,
-                    _workSurfaceContext?.TaskId)).ConfigureAwait(true);
+        var selectedId = _selectedEmail.Id;
+        await _emailList.FileEmailToProjectAsync(_selectedEmail).ConfigureAwait(true);
 
-            SetStatus(result.Succeeded
-                ? "המייל שויך לפרויקט."
-                : result.ErrorMessage ?? "שיוך המייל נכשל.");
-        }
-        finally
-        {
-            IsBusy = false;
-            RefreshActionBarState();
-        }
+        _selectedEmail = _emailList.FindRowById(selectedId) ?? _selectedEmail;
+        OnPropertyChanged(nameof(HasSelectedEmail));
+        SyncViewerHeader();
+        await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
+        await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+        RefreshActionBarState();
     }
 
     private async Task MoveSelectedEmailToProjectAsync()
@@ -317,6 +316,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             if (_selectedEmail is not null)
             {
                 await _emailList.LoadAccStatusForRowAsync(_selectedEmail).ConfigureAwait(true);
+                await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
             }
         }
         finally
@@ -331,7 +331,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     {
         if (_moveEligibility is null || _selectedEmail?.InboxMessageId is not int inboxMessageId)
         {
-            ActionBar.MoveBlockReason = null;
+            ActionBar.MoveBlockReason = _selectedEmail?.AttachmentCount > 0
+                ? "בחר יעד תיוק לכל הצרופות לפני העברה."
+                : null;
             return;
         }
 
@@ -341,7 +343,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 inboxMessageId,
                 projectId,
                 _selectedEmail.AttachmentCount,
-                _selectedEmail.ProjectId is > 0)).ConfigureAwait(true);
+                _selectedEmail.IsFiledToProject)).ConfigureAwait(true);
 
         ActionBar.MoveBlockReason = eligibility.CanMove ? null : eligibility.BlockReason;
     }
@@ -405,11 +407,166 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         var hasSelection = _selectedEmail is not null;
         var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail?.ProjectId ?? 0;
         ActionBar.RefreshCommandStates(
-            canFile: hasSelection && projectId > 0 && _filingService is not null,
+            canFile: _selectedEmail is not null && _emailList.CanFileEmailToProject(_selectedEmail),
             canMove: hasSelection
                      && _moveToProjectService?.IsAvailable == true
                      && _selectedEmail?.InboxMessageId is > 0
                      && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason));
+    }
+
+    private async Task RefreshInboxAttachmentsAsync()
+    {
+        AttachmentStrip.TaggingAttachments.Clear();
+        AttachmentStrip.NotifyTaggingAttachmentsChanged();
+
+        if (_attachmentTaggingService is null || _selectedEmail?.InboxMessageId is not int inboxMessageId)
+        {
+            return;
+        }
+
+        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
+        if (projectId <= 0)
+        {
+            return;
+        }
+
+        var inboxAttachments = await _attachmentTaggingService
+            .LoadInboxAttachmentsAsync(inboxMessageId)
+            .ConfigureAwait(true);
+
+        var alternatives = await _attachmentTaggingService
+            .LoadAlternativesAsync(projectId)
+            .ConfigureAwait(true);
+
+        foreach (var attachment in inboxAttachments.Where(a => a.IsTaggable))
+        {
+            var item = new EmailDetailAttachmentItem(
+                attachment.InboxAttachmentId,
+                attachment.FileName,
+                "ACC",
+                string.Empty,
+                attachment.IsTaggable,
+                TagAttachmentAsync,
+                AlternativeChangedAsync);
+
+            item.SetAlternatives(alternatives);
+            item.ApplyTag(
+                attachment.ProjectFileId,
+                attachment.ProjectFileTitle,
+                attachment.ProjectAlternativeId ?? alternatives.FirstOrDefault(a => a.IsDefault)?.Id);
+
+            AttachmentStrip.TaggingAttachments.Add(item);
+        }
+
+        AttachmentStrip.NotifyTaggingAttachmentsChanged();
+    }
+
+    private async Task TagAttachmentAsync(EmailDetailAttachmentItem item)
+    {
+        if (_attachmentTaggingService is null
+            || _attachmentProjectFilePicker?.IsAvailable != true
+            || _selectedEmail?.InboxMessageId is not int inboxMessageId)
+        {
+            SetStatus("בחירת קובץ פרויקט אינה זמינה.");
+            return;
+        }
+
+        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
+        if (projectId <= 0)
+        {
+            SetStatus("בחר פרויקט לפני תיוג.");
+            return;
+        }
+
+        var pickedProjectFileId = await _attachmentProjectFilePicker
+            .PickProjectFileAsync(projectId, item.ProjectFileId)
+            .ConfigureAwait(true);
+
+        if (pickedProjectFileId is not int projectFileId || projectFileId <= 0)
+        {
+            return;
+        }
+
+        var alternativeId = item.SelectedAlternativeId
+            ?? item.AvailableAlternatives.FirstOrDefault(a => a.IsDefault)?.Id;
+
+        var validation = await _attachmentTaggingService.ValidateTagAsync(
+            new EmailAttachmentTagValidationQuery(
+                inboxMessageId,
+                item.InboxAttachmentId,
+                projectFileId,
+                alternativeId)).ConfigureAwait(true);
+
+        if (!validation.IsAllowed)
+        {
+            SetStatus(validation.BlockReason ?? "לא ניתן לתייג ליעד זה.");
+            return;
+        }
+
+        if (validation.WillCreateNewVersion)
+        {
+            SetStatus("שים לב: קיים כבר קובץ ביעד זה — ההעברה תיצור גרסה חדשה.");
+        }
+
+        var targets = await _attachmentTaggingService.LoadTagTargetsAsync(projectId).ConfigureAwait(true);
+        var targetTitle = targets.FirstOrDefault(t => t.ProjectFileId == projectFileId)?.DisplayName;
+
+        var result = await _attachmentTaggingService.SetTagAsync(
+            new EmailAttachmentTagCommand(
+                item.InboxAttachmentId,
+                projectFileId,
+                alternativeId,
+                _currentUser?.UserId ?? 0)).ConfigureAwait(true);
+
+        if (!result.Succeeded)
+        {
+            SetStatus(result.ErrorMessage ?? "תיוג הצרופה נכשל.");
+            return;
+        }
+
+        item.ApplyTag(projectFileId, targetTitle, alternativeId);
+        SetStatus("הצרופה תויגה לקובץ הפרויקט.");
+        await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+        RefreshActionBarState();
+    }
+
+    private async Task AlternativeChangedAsync(EmailDetailAttachmentItem item)
+    {
+        if (_attachmentTaggingService is null
+            || _selectedEmail?.InboxMessageId is not int inboxMessageId
+            || item.ProjectFileId is not int projectFileId)
+        {
+            return;
+        }
+
+        var validation = await _attachmentTaggingService.ValidateTagAsync(
+            new EmailAttachmentTagValidationQuery(
+                inboxMessageId,
+                item.InboxAttachmentId,
+                projectFileId,
+                item.SelectedAlternativeId)).ConfigureAwait(true);
+
+        if (!validation.IsAllowed)
+        {
+            SetStatus(validation.BlockReason ?? "לא ניתן לשנות אלטרנטיבה ליעד זה.");
+            return;
+        }
+
+        var result = await _attachmentTaggingService.SetTagAsync(
+            new EmailAttachmentTagCommand(
+                item.InboxAttachmentId,
+                projectFileId,
+                item.SelectedAlternativeId,
+                _currentUser?.UserId ?? 0)).ConfigureAwait(true);
+
+        if (!result.Succeeded)
+        {
+            SetStatus(result.ErrorMessage ?? "עדכון האלטרנטיבה נכשל.");
+            return;
+        }
+
+        await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+        RefreshActionBarState();
     }
 
     private void SetStatus(string message)

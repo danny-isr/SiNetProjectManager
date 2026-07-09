@@ -129,7 +129,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
         IEmailAccBackgroundWorkTracker? backgroundWorkTracker = null,
         IEmailAccClosePrompt? accClosePrompt = null,
-        IEmailThreadMappingSyncService? threadMappingSync = null)
+        IEmailThreadMappingSyncService? threadMappingSync = null,
+        IEmailAttachmentTaggingService? attachmentTaggingService = null,
+        IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -169,7 +171,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             suggestedActionService,
             actionExecutionService,
             taskCompletionService,
-            bodyRenderer);
+            bodyRenderer,
+            attachmentTaggingService,
+            attachmentProjectFilePicker);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null
             ? new EmailExternalDownloadHandler(

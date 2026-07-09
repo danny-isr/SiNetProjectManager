@@ -12,12 +12,17 @@ public sealed class EmailAttachmentStripViewModel : ObservableObject
     public EmailAttachmentStripViewModel(Action openExternalDownloadLink)
     {
         Attachments = [];
+        TaggingAttachments = [];
         OpenExternalDownloadLinkCommand = new RelayCommand(
             _ => openExternalDownloadLink(),
             _ => ShowExternalDownloadLinkAction);
     }
 
     public ObservableCollection<EmailAttachmentRow> Attachments { get; }
+
+    public ObservableCollection<EmailDetailAttachmentItem> TaggingAttachments { get; }
+
+    public bool HasTaggingAttachments => TaggingAttachments.Count > 0;
 
     public bool ShowExternalDownloadLinkAction
     {
@@ -33,5 +38,12 @@ public sealed class EmailAttachmentStripViewModel : ObservableObject
 
     public ICommand OpenExternalDownloadLinkCommand { get; }
 
-    public void Clear() => Attachments.Clear();
+    public void Clear()
+    {
+        Attachments.Clear();
+        TaggingAttachments.Clear();
+        NotifyTaggingAttachmentsChanged();
+    }
+
+    public void NotifyTaggingAttachmentsChanged() => OnPropertyChanged(nameof(HasTaggingAttachments));
 }

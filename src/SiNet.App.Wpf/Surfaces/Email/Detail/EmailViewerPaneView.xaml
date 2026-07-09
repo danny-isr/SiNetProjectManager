@@ -38,7 +38,18 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
-                <ContentControl x:Name="BodyHost" Visibility="Collapsed" />
+                <ContentControl x:Name="BodyHost">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding UseRichBodyRenderer}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
                 <TextBlock Text="{Binding BodyText}" TextWrapping="Wrap" Foreground="#333">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">

@@ -11,7 +11,8 @@ public interface IEmailBodyRenderer
     /// <summary>Attach renderer to a WPF host element (e.g. <c>ContentControl</c> or panel).</summary>
     void AttachHost(object hostElement);
 
-    Task LoadAsync(EmailBodyRenderRequest request, CancellationToken cancellationToken = default);
+    /// <returns>True when HTML was rendered into the host; false when host is not ready.</returns>
+    Task<bool> LoadAsync(EmailBodyRenderRequest request, CancellationToken cancellationToken = default);
 
     void Clear();
 }

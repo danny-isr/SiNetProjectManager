@@ -1,4 +1,3 @@
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Web.WebView2.Wpf;
@@ -13,6 +12,7 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 {
     private WebView2? _webView;
     private ContentControl? _host;
+    private EmailBodyRenderRequest? _pendingRequest;
 
     public bool IsAvailable => true;
 
@@ -34,25 +34,43 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
         host.Content = _webView;
         host.Visibility = Visibility.Visible;
+
+        if (_pendingRequest is not null)
+        {
+            var pending = _pendingRequest;
+            _pendingRequest = null;
+            _ = LoadAsync(pending, CancellationToken.None);
+        }
     }
 
-    public async Task LoadAsync(EmailBodyRenderRequest request, CancellationToken cancellationToken = default)
+    public async Task<bool> LoadAsync(EmailBodyRenderRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         if (_webView is null || _host is null)
         {
-            return;
+            _pendingRequest = request;
+            return false;
         }
 
-        await EnsureInitializedAsync().ConfigureAwait(true);
+        try
+        {
+            await EnsureInitializedAsync().ConfigureAwait(true);
 
-        var html = BuildHtmlDocument(request.HtmlBody, request.BodyText);
-        _webView.NavigateToString(html);
+            var html = BuildHtmlDocument(request.HtmlBody, request.BodyText);
+            _webView.NavigateToString(html);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Clear()
     {
+        _pendingRequest = null;
+
         if (_webView?.CoreWebView2 is not null)
         {
             _webView.NavigateToString("<html><body></body></html>");
@@ -100,7 +118,7 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
             .Replace("\r\n", "<br/>", StringComparison.Ordinal)
             .Replace("\n", "<br/>", StringComparison.Ordinal);
 
-        var sb = new StringBuilder();
+        var sb = new System.Text.StringBuilder();
         sb.Append("<html><head><meta charset=\"utf-8\"/>");
         sb.Append("<style>body{font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5;padding:12px;}</style>");
         sb.Append("</head><body dir=\"auto\">");

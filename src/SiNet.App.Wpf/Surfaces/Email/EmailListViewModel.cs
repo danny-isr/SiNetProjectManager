@@ -715,6 +715,10 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
     public EmailListRow? FindRowById(string rowId) => _display.FindRowById(rowId);
 
+    public bool CanFileEmailToProject(EmailListRow? row) => _filing.CanFileEmailToProject(row);
+
+    public Task FileEmailToProjectAsync(EmailListRow? row) => _filing.FileEmailToProjectAsync(row);
+
     public EmailListRow? PatchRowAttachmentCount(string messageId, int attachmentCount)
     {
         var row = _display.FindRowById(messageId);

@@ -696,7 +696,7 @@ public sealed class GmailEmailGateway : IEmailGateway
     private EmailMessageDetails MapDetails(Message message)
     {
         var summary = Map(message);
-        var bodyText = ExtractBodyText(message.Payload);
+        var (bodyText, htmlBody) = ExtractBodies(message.Payload);
         var attachments = ExtractAttachmentDetails(message.Payload);
 
         return new EmailMessageDetails(
@@ -706,7 +706,8 @@ public sealed class GmailEmailGateway : IEmailGateway
             summary.Subject,
             summary.ReceivedAt,
             bodyText,
-            attachments);
+            attachments,
+            htmlBody);
     }
 
     private static string? GetHeader(IList<MessagePartHeader>? headers, string name)
@@ -764,29 +765,27 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
     }
 
-    private static string ExtractBodyText(MessagePart? payload)
+    private static (string BodyText, string? HtmlBody) ExtractBodies(MessagePart? payload)
     {
         if (payload == null)
         {
-            return string.Empty;
+            return (string.Empty, null);
         }
 
         string? plainBody = null;
         string? htmlBody = null;
         ExtractBodiesRecursive(payload, ref plainBody, ref htmlBody);
 
-        if (!string.IsNullOrWhiteSpace(plainBody))
-        {
-            return plainBody.Trim();
-        }
+        var bodyText = !string.IsNullOrWhiteSpace(plainBody)
+            ? plainBody.Trim()
+            : !string.IsNullOrWhiteSpace(htmlBody)
+                ? StripHtml(htmlBody)
+                : string.Empty;
 
-        if (!string.IsNullOrWhiteSpace(htmlBody))
-        {
-            return StripHtml(htmlBody);
-        }
-
-        return string.Empty;
+        return (bodyText, string.IsNullOrWhiteSpace(htmlBody) ? null : htmlBody);
     }
+
+    private static string ExtractBodyText(MessagePart? payload) => ExtractBodies(payload).BodyText;
 
     private static void ExtractBodiesRecursive(MessagePart part, ref string? plainBody, ref string? htmlBody)
     {

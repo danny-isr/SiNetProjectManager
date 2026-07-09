@@ -42,34 +42,43 @@ internal sealed class SqlEmailMoveToProjectEligibilityService(IDbContextFactory<
         var attachments = await db.EmailInboxAttachments
             .AsNoTracking()
             .Where(a => a.MessageId == query.InboxMessageId)
-            .Select(a => new { a.ProjectFileId, a.AccItemId })
+            .Select(a => new { a.AttachmentIndex, a.ProjectFileId, a.AccItemId, a.SavedFileName, a.OriginalFileName })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (attachments.Count == 0)
+        var taggable = attachments
+            .Where(a => IsTaggableAttachment(a.AttachmentIndex, a.SavedFileName ?? a.OriginalFileName))
+            .ToList();
+
+        if (taggable.Count == 0)
         {
+            if (attachments.Count == 0)
+            {
+                return Block("ממתין לסנכרון צרופות מ-ACC. נסה שוב בעוד רגע.");
+            }
+
             return Allow();
         }
 
-        var untagged = attachments.Count(a => a.ProjectFileId is null or <= 0);
+        var untagged = taggable.Count(a => a.ProjectFileId is null or <= 0);
         if (untagged > 0)
         {
-            return Block($"נותרו {untagged} צרופות לא מתויגות.");
+            return Block($"נותרו {untagged} צרופות לא מתויגות. בחר קובץ פרויקט (חומר חיצוני) לכל צרופה.");
         }
 
-        var unplaced = attachments.Count(a => string.IsNullOrWhiteSpace(a.AccItemId));
-        if (unplaced == attachments.Count)
+        var unplaced = taggable.Count(a => string.IsNullOrWhiteSpace(a.AccItemId));
+        if (unplaced == taggable.Count)
         {
             return Block("שירות ה-ACC (Ingestion) אינו זמין.");
         }
 
-        if (attachments.All(a => !string.IsNullOrWhiteSpace(a.AccItemId)))
-        {
-            // All tagged and in ACC — move is allowed unless already placed (handled by move service).
-        }
-
         return Allow();
     }
+
+    private static bool IsTaggableAttachment(int attachmentIndex, string? fileName) =>
+        attachmentIndex >= 0
+        && !string.Equals(fileName, "00_Email.pdf", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(fileName, "manifest.json", StringComparison.OrdinalIgnoreCase);
 
     private static EmailMoveToProjectEligibility Allow() => new(true, null);
 

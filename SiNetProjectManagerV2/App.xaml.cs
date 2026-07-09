@@ -220,6 +220,8 @@ namespace SiNetProjectManagerV2
             // PDF Renderer: Singleton (reused for all PDF generations)
             services.AddSingleton<WebView2PdfRenderer>();
             services.AddSingleton<SiNet.Application.Email.Detail.IEmailBodyRenderer, SiNetProjectManagerV2.Services.Email.WebView2EmailBodyRenderer>();
+            services.AddTransient<SiNet.Application.Email.Detail.IEmailAttachmentProjectFilePickerHost,
+                SiNetProjectManagerV2.Services.Email.EmailAttachmentProjectFilePickerHost>();
 
             // DISABLED LEGACY — Gap 8 (DocumentationVsImplementationGaps-2026-05-26.md).
             // GmailVisibleAttachmentsDomExtractor is commented out (its source is

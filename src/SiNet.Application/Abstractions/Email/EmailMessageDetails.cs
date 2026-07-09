@@ -13,7 +13,8 @@ public sealed record EmailMessageDetails(
     string Subject,
     DateTimeOffset ReceivedAt,
     string BodyText,
-    IReadOnlyList<EmailMessageAttachmentDetails> Attachments)
+    IReadOnlyList<EmailMessageAttachmentDetails> Attachments,
+    string? HtmlBody = null)
 {
     public bool HasAttachments => Attachments.Count > 0;
 }
