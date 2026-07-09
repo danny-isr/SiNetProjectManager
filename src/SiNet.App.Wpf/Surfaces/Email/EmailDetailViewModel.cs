@@ -301,16 +301,33 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
             SetStatus(result.Message);
 
-            if (result.Succeeded && _workSurfaceContext?.TaskId is int taskId && _taskCompletionService is not null)
+            string? completionBlockReason = null;
+            if (result.Succeeded
+                && _workSurfaceContext?.TaskId is int taskId
+                && _taskCompletionService is not null
+                && TryResolveTaskCompletionParams(out var completionEventCode, out var actingUserId, out completionBlockReason))
             {
-                await _taskCompletionService.CompleteAsync(
+                var completion = await _taskCompletionService.CompleteAsync(
                     new CompleteTaskCommand(
                         taskId,
-                        _workSurfaceContext.CompletionEventCode ?? "ReviewMaterialFiled",
+                        completionEventCode,
                         TaskResultCode: null,
                         CompletedTaskLinkIds: null,
-                        _currentUser?.UserId ?? 0),
+                        actingUserId),
                     CancellationToken.None).ConfigureAwait(true);
+
+                if (!completion.Success)
+                {
+                    SetStatus(
+                        $"העברה הצליחה אך השלמת המשימה נכשלה: {completion.ErrorMessage ?? "unknown error"}.");
+                }
+            }
+            else if (result.Succeeded
+                     && _workSurfaceContext?.TaskId is int
+                     && _taskCompletionService is not null
+                     && !TryResolveTaskCompletionParams(out _, out _, out completionBlockReason))
+            {
+                SetStatus($"העברה הצליחה אך השלמת המשימה נחסמה: {completionBlockReason}.");
             }
 
             if (_selectedEmail is not null)
@@ -567,6 +584,38 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         RefreshActionBarState();
+    }
+
+    private bool TryResolveTaskCompletionParams(
+        out string completionEventCode,
+        out int actingUserId,
+        out string? blockReason)
+    {
+        completionEventCode = string.Empty;
+        actingUserId = 0;
+        blockReason = null;
+
+        if (_workSurfaceContext is null)
+        {
+            blockReason = "missing work surface context";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_workSurfaceContext.CompletionEventCode))
+        {
+            blockReason = "completion event code is not configured for this task";
+            return false;
+        }
+
+        if (_currentUser?.UserId is not int userId || userId <= 0)
+        {
+            blockReason = "acting user is unknown";
+            return false;
+        }
+
+        completionEventCode = _workSurfaceContext.CompletionEventCode;
+        actingUserId = userId;
+        return true;
     }
 
     private void SetStatus(string message)

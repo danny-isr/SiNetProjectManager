@@ -1574,7 +1574,7 @@ through the official services, and both solutions still build.
 | `Tasks/LegacyTaskNavigationService.cs` *(new)* | Implements `ITaskNavigationService`; maps the seam DTO → `WorkSurfaceContext` (clamps `long`→`int?`, never truncating into a different valid id). Returns `null` when the seam is unbound **or** the resolver failed — caller shows a clear error, never guesses a target. |
 | `Tasks/LegacyTaskCompletionResultDto.cs`, `LegacyCompleteTaskCommandDto.cs`, `ILegacyTaskCompletionSource.cs` *(new)* | Bridge-local completion seam mirroring `TaskCompletionCoordinator.CompleteAsync`; the legacy coordinator already routes auto-advance through `IWorkflowCommandService.CheckAndAutoAdvanceAsync`. |
 | `Tasks/LegacyTaskCompletionService.cs` *(new)* | Implements `ITaskCompletionService`; returns `Unavailable` when the seam is unbound, else projects the legacy result (incl. `StageAdvanceResult`). |
-| `LegacyBridgeServiceCollectionExtensions.cs` | `AddSiNetLegacyBridge()` now also registers `ITaskNavigationService → LegacyTaskNavigationService` and `ITaskCompletionService → LegacyTaskCompletionService` (both seams optional → graceful degradation). |
+| `LegacyBridgeServiceCollectionExtensions.cs` | `AddSiNetLegacyBridge()` registers **Inspection only** — task ports are **NOT** registered here; see Process backbone table (line ~1710). Native task services come from `AddSiNetProcessBackbone()` / `AddSiNetTaskServices()`. |
 
 **Inspection task-mode (navigation half wired; completion pending a bound seam):**
 
@@ -1598,9 +1598,9 @@ through the official services, and both solutions still build.
 | --- | --- |
 | `WorkSurfaceContext` added (runtime-only, exact doc shape) | ✅ |
 | Task navigation/completion ports + command/result DTOs added | ✅ |
-| LegacyBridge task seams + strangler adapters added (no `SiNetSQL` dependency) | ✅ |
-| Adapters degrade gracefully when seam unbound (null nav / `Unavailable` completion) | ✅ |
-| Task adapters registered in `AddSiNetLegacyBridge()` | ✅ |
+| LegacyBridge task seams + strangler adapters added (no `SiNetSQL` dependency) | ✅ (reference only — not registered in `AddSiNetLegacyBridge()`) |
+| Adapters degrade gracefully when seam unbound (null nav / `Unavailable` completion) | ✅ (legacy adapters only; native backbone is required in production hosts) |
+| Task adapters registered in `AddSiNetLegacyBridge()` | ❌ **Removed** — use `AddSiNetProcessBackbone()` |
 | Inspection shell opens an **exact** report from `WorkSurfaceContext`; no first/last fallback | ✅ |
 | Inspection task-mode status surfaced in the shell view | ✅ |
 | `dotnet build SiNet.sln` green | ✅ _0 errors_ |
@@ -1700,8 +1700,8 @@ MoveToProject belongs outside the screen, in ProjectFileFilingService or equival
 | --- | --- | --- | --- | --- |
 | Workflow reads | `IWorkflowQueryService`, `IProjectWorkflowPolicyService` | `WorkflowQueryService` | — | — |
 | Workflow writes | `IWorkflowCommandService` | — (blocked: orchestrator) | `WorkflowCommandServiceAdapter`, engine/orchestrator | — |
-| Task navigation | `ITaskNavigationService` | `SqlTaskNavigationService` | `TaskNavigationResolver` (legacy UI) | `LegacyTaskNavigationService` (not registered) |
-| Task completion | `ITaskCompletionService` | `SqlTaskCompletionService` | `TaskCompletionCoordinator` (legacy UI) | `LegacyTaskCompletionService` (not registered) |
+| Task navigation | `ITaskNavigationService` | `SqlTaskNavigationService` (blocks ambiguous multi-target tasks) | `TaskNavigationResolver` (legacy UI) | `LegacyTaskNavigationService` (not registered) |
+| Task completion | `ITaskCompletionService` | `SqlTaskCompletionService` (requires `IWorkflowCommandService`; auto-advance failures surface explicitly) | `TaskCompletionCoordinator` (legacy UI) | `LegacyTaskCompletionService` (not registered) |
 | Task query | `ITaskQueryService`, `TaskSummaryDto` | `SqlTaskQueryService` | `TaskService` (legacy UI) | — |
 | Completion metadata | `ITaskCompletionMetadataResolver` | `SqlTaskCompletionMetadataResolver` | `ReviewCompletionEventBehavior` (duplicate table in Infra) | V2 `TaskCompletionMetadataResolver` (removed from DI) |
 | Actions | `IProcessActionService`, `ProcessActionCatalog` | `ProcessActionService` + foundation handlers (5) | Full handler set + `ProcessActionDispatcher` | — |

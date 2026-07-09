@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
@@ -29,6 +30,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private readonly IAuthorizationQueryService? _authorization;
     private readonly IUserLookupService? _userLookup;
     private readonly ITaskCreateDialogFactory? _taskCreateDialogFactory;
+    private readonly IWorkSurfaceLauncher? _workSurfaceLauncher;
     private readonly InMemoryCurrentProjectContext _localProjectFilterContext = new();
 
     private TaskSummaryDto? _selectedTask;
@@ -54,6 +56,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             null,
             new FakeProjectQueryService(),
             new FakeProjectFilterOptionsService(),
+            null,
             null)
     {
     }
@@ -68,7 +71,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         ITaskQueueService? taskQueue = null,
         IProjectQueryService? projectQuery = null,
         IProjectFilterOptionsService? projectFilterOptions = null,
-        ITaskCreateDialogFactory? taskCreateDialogFactory = null)
+        ITaskCreateDialogFactory? taskCreateDialogFactory = null,
+        IWorkSurfaceLauncher? workSurfaceLauncher = null)
     {
         _taskQuery = taskQuery ?? throw new ArgumentNullException(nameof(taskQuery));
         _taskNavigation = taskNavigation ?? throw new ArgumentNullException(nameof(taskNavigation));
@@ -78,6 +82,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         _authorization = authorization;
         _userLookup = userLookup;
         _taskCreateDialogFactory = taskCreateDialogFactory;
+        _workSurfaceLauncher = workSurfaceLauncher;
 
         QuickTasks = [];
         MediumTasks = [];
@@ -94,6 +99,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         }
 
         RefreshCommand = new AsyncRelayCommand(() => LoadAsync(), () => !IsBusy);
+        OpenTaskCommand = new AsyncRelayCommand(() => OpenSelectedTaskAsync(), () => !IsBusy && SelectedTask is not null && _workSurfaceLauncher is not null);
         ResolveCommand = new AsyncRelayCommand(() => ResolveSelectedAsync(), () => !IsBusy && SelectedTask is not null);
         AddTaskCommand = new AsyncRelayCommand(AddTaskAsync, () => !IsBusy && _workbench is not null && _taskCreateDialogFactory is not null);
         DeleteTaskCommand = new AsyncRelayCommand(DeleteSelectedAsync, () => !IsBusy && SelectedTask is not null && _workbench is not null);
@@ -256,6 +262,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     public bool CanWrite => _workbench is not null;
 
     public ICommand RefreshCommand { get; }
+    public ICommand OpenTaskCommand { get; }
     public ICommand ResolveCommand { get; }
     public ICommand AddTaskCommand { get; }
     public ICommand DeleteTaskCommand { get; }
@@ -796,6 +803,33 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             ? tasks.Where(t => t.ProjectId == projectId).ToList()
             : tasks;
 
+    internal async Task OpenSelectedTaskAsync(CancellationToken ct = default)
+    {
+        if (SelectedTask is null || _workSurfaceLauncher is null)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var opened = await _workSurfaceLauncher
+                .TryOpenFromTaskAsync(SelectedTask.TaskId, ct)
+                .ConfigureAwait(true);
+
+            StatusMessage = opened
+                ? $"נפתחה משימה #{SelectedTask.TaskId}."
+                : $"לא ניתן לפתוח את משימה #{SelectedTask.TaskId}. אין fallback.";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            StatusMessage = $"שגיאה בפתיחת משימה: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     internal async Task ResolveSelectedAsync(CancellationToken ct = default)
     {
         if (SelectedTask is null) return;
@@ -837,6 +871,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private void RaiseCommandStates()
     {
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (OpenTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ResolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (AddTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DeleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -893,7 +928,7 @@ public sealed class TaskPanelReadOnlyViewModel : TaskWorkbenchViewModel
         ICurrentUserContext? currentUser = null,
         IProjectQueryService? projectQuery = null,
         IProjectFilterOptionsService? projectFilterOptions = null)
-        : base(taskQuery, taskNavigation, null, currentUser, null, null, null, projectQuery, projectFilterOptions, null)
+        : base(taskQuery, taskNavigation, null, currentUser, null, null, null, projectQuery, projectFilterOptions, null, null)
     {
     }
 

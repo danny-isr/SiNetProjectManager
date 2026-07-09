@@ -12,8 +12,9 @@ public static class ProcessBackboneServiceCollectionExtensions
     /// <summary>
     /// Registers native read/write backbone ports implemented in Infrastructure.Sql:
     /// workflow reads, task navigation/completion/metadata, and the foundation action dispatcher.
-    /// Workflow command writes remain in SiNetSQL until orchestrator migration completes; bind
-    /// <see cref="SiNet.Application.Workflow.IWorkflowCommandService"/> separately when available.
+    /// Workflow command writes remain in SiNetSQL until orchestrator migration completes; hosts must
+    /// bind <see cref="SiNet.Application.Workflow.IWorkflowCommandService"/> — it is required by
+    /// <c>SqlTaskCompletionService</c> when auto-advance is requested.
     /// </summary>
     public static IServiceCollection AddSiNetProcessBackbone(this IServiceCollection services)
     {

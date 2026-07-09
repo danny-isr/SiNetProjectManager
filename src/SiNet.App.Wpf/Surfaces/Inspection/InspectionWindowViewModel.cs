@@ -33,6 +33,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private const string NotWiredYet =
         "\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05D8\u05E8\u05DD \u05D7\u05D5\u05D1\u05E8\u05D4 (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u05D1\u05DC\u05D1\u05D3)."; // "This action is not wired yet (visual shell only)."
 
+    private WorkSurfaceContext? _taskContext;
     private string _activeProjectDisplay = "\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4 \u2014 \u05D3\u05D5\u05D7\u05D5\u05EA \u05D1\u05D9\u05E7\u05D5\u05E8\u05EA"; // "Sample project — Inspection reports"
     private bool _isPinned;
     private bool _isDocked;
@@ -160,6 +161,12 @@ public sealed class InspectionWindowViewModel : ObservableObject
         private set => SetField(ref _statusMessage, value);
     }
 
+    /// <summary><see langword="true"/> when opened from a resolved task work surface context.</summary>
+    public bool IsTaskMode => _taskContext is not null;
+
+    /// <summary>The task work surface context when opened in task mode; otherwise <see langword="null"/>.</summary>
+    public WorkSurfaceContext? TaskContext => _taskContext;
+
     public ICommand ToggleCollapseCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand CreateReportCommand { get; }
@@ -177,18 +184,38 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public ICommand CompleteTaskCommand { get; }
 
     /// <summary>
-    /// Placeholder hook for the workflow-first open path. A later slice will project the task's
-    /// project/report into the header and (read-only) data; for the visual-clone slice it only
-    /// records that a context was supplied. No workflow is started, advanced, or mutated here.
+    /// Task-mode entry point: records the resolved <see cref="WorkSurfaceContext"/> and projects
+    /// task/project/report identifiers into the header. Data wiring and completion remain deferred;
+    /// this slice only opens the visual shell from the canonical navigation port.
     /// </summary>
     public void ApplyContext(WorkSurfaceContext? context)
     {
+        _taskContext = context;
+        OnPropertyChanged(nameof(IsTaskMode));
+        OnPropertyChanged(nameof(TaskContext));
+
         if (context is null)
         {
             return;
         }
 
-        StatusMessage = "\u05E0\u05E4\u05EA\u05D7 \u05DE\u05EA\u05D5\u05DA \u05DE\u05E9\u05D9\u05DE\u05D4 (\u05D7\u05D9\u05D1\u05D5\u05E8 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D9\u05D5\u05E9\u05DC\u05DD \u05D1\u05D4\u05DE\u05E9\u05DA)"; // "Opened from a task (data wiring to follow)"
+        if (context.ProjectId > 0 && context.PrimaryWorkTargetEntityId is int reportId)
+        {
+            ActiveProjectDisplay =
+                $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId} \u2014 \u05D3\u05D5\u05D7 #{reportId} (\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId})";
+        }
+        else if (context.ProjectId > 0)
+        {
+            ActiveProjectDisplay =
+                $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId} (\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId})";
+        }
+        else
+        {
+            ActiveProjectDisplay = $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId}";
+        }
+
+        StatusMessage =
+            "\u05E0\u05E4\u05EA\u05D7 \u05DE\u05EA\u05D5\u05DA \u05DE\u05E9\u05D9\u05DE\u05D4 (\u05D7\u05D9\u05D1\u05D5\u05E8 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D9\u05D5\u05E9\u05DC\u05DD \u05D1\u05D4\u05DE\u05E9\u05DA)"; // "Opened from a task (data wiring to follow)"
     }
 
     private AsyncRelayCommand Stub() => new(() =>

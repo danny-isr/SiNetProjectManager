@@ -117,6 +117,46 @@ public sealed class ProcessBackboneBoundaryTests
     }
 
     [Fact]
+    public async Task Task_navigation_service_returns_null_when_multiple_work_targets()
+    {
+        var (provider, taskId) = await CreateSeededProviderAsync(
+            seedNavigation: true,
+            seedMultipleWorkTargets: true).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+
+        var navigation = scope.ServiceProvider.GetRequiredService<ITaskNavigationService>();
+        var context = await navigation.ResolveAsync(taskId, CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Null(context);
+    }
+
+    [Fact]
+    public async Task Task_completion_reports_failure_when_workflow_auto_advance_throws()
+    {
+        var throwingWorkflow = new ThrowingWorkflowCommandService();
+        var (provider, taskId) = await CreateSeededProviderAsync(
+            seedNavigation: false,
+            configureServices: s => s.AddSingleton<IWorkflowCommandService>(throwingWorkflow)).ConfigureAwait(false);
+
+        await using var scope = provider.CreateAsyncScope();
+        var completion = scope.ServiceProvider.GetRequiredService<ITaskCompletionService>();
+
+        var result = await completion.CompleteAsync(
+            new CompleteTaskCommand(
+                TaskId: taskId,
+                CompletionEventCode: ReviewCompletionEvents.ReviewProfessionalReviewCompleted,
+                TaskResultCode: TaskResultCodes.ProfessionalReviewCompleted,
+                CompletedTaskLinkIds: null,
+                UserId: 7),
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.False(result.Success);
+        Assert.True(result.TaskClosed);
+        Assert.True(result.WorkflowAdvanced);
+        Assert.Contains("Workflow auto-advance failed", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Process_action_dispatcher_executes_registered_handler()
     {
         var dbName = Guid.NewGuid().ToString("N");
@@ -294,6 +334,7 @@ public sealed class ProcessBackboneBoundaryTests
 
     private static async Task<(Microsoft.Extensions.DependencyInjection.ServiceProvider Provider, int TaskId)> CreateSeededProviderAsync(
         bool seedNavigation,
+        bool seedMultipleWorkTargets = false,
         Action<IServiceCollection>? configureServices = null)
     {
         var dbName = Guid.NewGuid().ToString("N");
@@ -340,6 +381,21 @@ public sealed class ProcessBackboneBoundaryTests
                     CreatedAtUtc = DateTime.UtcNow,
                     CreatedByUserId = 1,
                 });
+
+                if (seedMultipleWorkTargets)
+                {
+                    task.TaskLinks.Add(new TaskLink
+                    {
+                        Id = 201,
+                        TaskId = task.Id,
+                        Role = TaskLinkRole.Related,
+                        LinkedEntityType = TaskLinkEntityType.InspectionReport,
+                        LinkedEntityId = 43,
+                        IsWorkTarget = true,
+                        CreatedAtUtc = DateTime.UtcNow,
+                        CreatedByUserId = 1,
+                    });
+                }
             }
 
             seed.ProjectAssignments.Add(task);
@@ -350,6 +406,8 @@ public sealed class ProcessBackboneBoundaryTests
         services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(new StubDbContextFactory(options));
         services.AddSiNetTaskServices();
         configureServices?.Invoke(services);
+        if (!services.Any(d => d.ServiceType == typeof(IWorkflowCommandService)))
+            services.AddSingleton<IWorkflowCommandService>(new NoOpWorkflowCommandService());
 
         return (services.BuildServiceProvider(), 100);
     }
@@ -381,6 +439,42 @@ public sealed class ProcessBackboneBoundaryTests
 
         public Task<SiNetSQLDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new SiNetSQLDbContext(options));
+    }
+
+    private sealed class NoOpWorkflowCommandService : IWorkflowCommandService
+    {
+        public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct)
+            => ValueTask.FromResult<StageCompletionResultDto?>(null);
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingWorkflowCommandService : IWorkflowCommandService
+    {
+        public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct)
+            => throw new InvalidOperationException("simulated orchestrator failure");
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
     }
 
     private sealed class RecordingWorkflowCommandService : IWorkflowCommandService
