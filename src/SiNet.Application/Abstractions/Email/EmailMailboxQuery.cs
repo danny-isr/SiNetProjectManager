@@ -27,4 +27,6 @@ public sealed record EmailMailboxQuery
     public int PageSize { get; init; } = DefaultPageSize;
 
     public bool AttachmentsOnly { get; init; }
+
+    public bool UnreadOnly { get; init; }
 }

@@ -100,9 +100,13 @@ public sealed class EmailListMigrationBoundaryTests
 
         Assert.Contains("AttachmentCount", cardXaml, StringComparison.Ordinal);
         Assert.Contains("ToggleAttachmentsOnlyCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ToggleUnreadOnlyCommand", filterBarXaml, StringComparison.Ordinal);
+        Assert.Contains("ShowUnreadFilterActive", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("עם צרופות", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("AttachmentsOnly", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("UnreadOnly", listVmSource, StringComparison.Ordinal);
         Assert.Contains("has:attachment", composerSource, StringComparison.Ordinal);
+        Assert.Contains("is:unread", composerSource, StringComparison.Ordinal);
     }
 
     [Fact]

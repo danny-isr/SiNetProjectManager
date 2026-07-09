@@ -28,7 +28,7 @@ public sealed class EmailListViewModelGroupingTests
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
         var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
-        Assert.False(group.IsExpanded);
+        Assert.True(group.IsExpanded);
         group.CollapseCommand.Execute(null);
         Assert.False(group.IsExpanded);
 
@@ -291,6 +291,39 @@ public sealed class EmailListViewModelGroupingTests
 
         Assert.NotNull(gateway.LastQuery);
         Assert.Contains("has:attachment", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unread_only_toggle_adds_is_unread_to_gmail_query()
+    {
+        var gateway = new EmailListViewModelTestFixtures.PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new EmailListViewModelTestFixtures.StubAuthService());
+
+        await sut.RefreshPageAsync();
+        sut.ToggleUnreadOnlyCommand.Execute(null);
+        await Task.Delay(250);
+
+        Assert.NotNull(gateway.LastQuery);
+        Assert.True(sut.ShowUnreadFilterActive);
+        Assert.Contains("is:unread", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unread_only_toggle_off_returns_to_normal_inbox_query()
+    {
+        var gateway = new EmailListViewModelTestFixtures.PagingEmailGateway();
+        var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new EmailListViewModelTestFixtures.StubAuthService());
+
+        await sut.RefreshPageAsync();
+        sut.ToggleUnreadOnlyCommand.Execute(null);
+        await Task.Delay(250);
+        sut.ToggleUnreadOnlyCommand.Execute(null);
+        await Task.Delay(250);
+
+        Assert.NotNull(gateway.LastQuery);
+        Assert.False(sut.ShowUnreadFilterActive);
+        Assert.Equal(EmailMailboxScope.Inbox, gateway.LastQuery.MailboxScope);
+        Assert.DoesNotContain("is:unread", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery), StringComparison.Ordinal);
     }
 
     [Fact]

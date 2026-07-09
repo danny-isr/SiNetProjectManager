@@ -183,6 +183,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
+        EmailList.AccStatusPatched += (_, display) => SelectedAccStatusDisplay = display;
         EmailList.AccountStatusChanged += (_, _) => RefreshAuthDisplay();
 
         _selectedFolder = Folders.FirstOrDefault();

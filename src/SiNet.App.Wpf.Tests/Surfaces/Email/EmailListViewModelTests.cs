@@ -27,7 +27,7 @@ public sealed class EmailListViewModelTests
         var gateway = new EmailListViewModelTestFixtures.ProjectEmailGateway();
         var sut = new EmailListViewModel(gateway, threadLinkQuery: null, new EmailListViewModelTestFixtures.StubAuthService());
 
-        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 ù A"));
+        await sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 ÔøΩ A"));
 
         Assert.True(sut.HasActiveProject);
         Assert.NotNull(sut.ActiveProjectGroup);

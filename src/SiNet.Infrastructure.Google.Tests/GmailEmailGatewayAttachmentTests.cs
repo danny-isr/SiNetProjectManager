@@ -74,13 +74,40 @@ public sealed class GmailEmailGatewayAttachmentTests
     }
 
     [Fact]
-    public void TryGetSummaryAsync_uses_full_format_with_fields_mask()
+    public void TryGetSummaryAsync_uses_metadata_format_with_headers_only_fields_mask()
     {
         var source = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
 
-        Assert.Contains("FormatEnum.Full", source, StringComparison.Ordinal);
-        Assert.Contains("SummaryFieldsMask", source, StringComparison.Ordinal);
-        Assert.Contains("body(attachmentId)", source, StringComparison.Ordinal);
+        Assert.Contains("FormatEnum.Metadata", source, StringComparison.Ordinal);
+        Assert.Contains("MetadataSummaryFieldsMask", source, StringComparison.Ordinal);
+        Assert.Contains("payload(headers)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapForTests_metadata_only_message_has_zero_attachment_count()
+    {
+        var gateway = CreateGateway();
+        var message = new Message
+        {
+            Id = "msg-meta",
+            ThreadId = "thread-meta",
+            Snippet = "Hello",
+            LabelIds = ["INBOX"],
+            Payload = new MessagePart
+            {
+                Headers =
+                [
+                    new MessagePartHeader { Name = "From", Value = "a@example.com" },
+                    new MessagePartHeader { Name = "Subject", Value = "Metadata only" },
+                    new MessagePartHeader { Name = "Date", Value = "Mon, 1 Jan 2024 12:00:00 +0000" },
+                ],
+            },
+        };
+
+        var summary = gateway.MapForTests(message);
+
+        Assert.Equal(0, summary.AttachmentCount);
+        Assert.Equal("Metadata only", summary.Subject);
     }
 
     private static GmailEmailGateway CreateGateway()

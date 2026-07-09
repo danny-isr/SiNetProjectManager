@@ -52,6 +52,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private bool _hasNextPage;
     private bool _groupByLabel = true;
     private bool _attachmentsOnly;
+    private bool _unreadOnly;
     private EmailListLoadState _loadState = EmailListLoadState.Idle;
     private string? _loadWarning;
     private string? _loadError;
@@ -154,6 +155,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         ClearFiltersCommand = new AsyncRelayCommand(() => _paging.ClearFiltersAsync(), () => !IsBusy);
         ToggleGroupByLabelCommand = new RelayCommand(_ => _grouping.ToggleGroupByLabel());
         ToggleAttachmentsOnlyCommand = new AsyncRelayCommand(() => _paging.ToggleAttachmentsOnlyAsync(), CanLoadEmails);
+        ToggleUnreadOnlyCommand = new AsyncRelayCommand(() => _paging.ToggleUnreadOnlyAsync(), CanLoadEmails);
         FileEmailToProjectCommand = new AsyncRelayCommand<EmailListRow>(
             row => _filing.FileEmailToProjectAsync(row),
             _filing.CanFileEmailToProject,
@@ -194,7 +196,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         }
 
         _accHandler = accStatusService is not null || accUploadCoordinator is not null || accIngestQueue is not null
-            ? new EmailAccSelectionHandler(accStatusService, accUploadCoordinator, PatchAccRow, accIngestQueue)
+            ? new EmailAccSelectionHandler(accStatusService, accUploadCoordinator, PatchAccRow, accIngestQueue, FindRowById)
             : null;
         if (_accHandler is not null)
         {
@@ -311,6 +313,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
     public event EventHandler<EmailListRow?>? SelectedEmailChanged;
     public event EventHandler<string>? StatusMessageChanged;
+    public event EventHandler<string>? AccStatusPatched;
     public event EventHandler? AccountStatusChanged;
 
     public int UnreadInCurrentPage => Emails.Count(static row => row.IsUnread);
@@ -350,6 +353,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public bool ShowUnreadCount => MailboxUnreadIsExact
         ? MailboxUnreadTotal > 0 || UnreadInCurrentPage > 0
         : UnreadInCurrentPage > 0;
+
+    public bool ShowUnreadFilterActive => UnreadOnly || SelectedMailboxScope == EmailMailboxScope.Unread;
 
     public string MailboxDiagnostics =>
         $"Scope: {SelectedMailboxScope} | Query: {_lastLoadedGmailQuery ?? "—"} | Loaded: {DisplayedCount} | Unread total: {(MailboxUnreadIsExact ? MailboxUnreadTotal.ToString() : "n/a")} | Unread page: {UnreadInCurrentPage} | Next: {(HasNextPage ? "yes" : "no")}";
@@ -481,6 +486,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
                 return;
             }
 
+            OnPropertyChanged(nameof(ShowUnreadFilterActive));
+
             if (value != EmailMailboxScope.Label && !string.IsNullOrWhiteSpace(_selectedLabel))
             {
                 _selectedLabel = null;
@@ -520,6 +527,18 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     {
         get => _attachmentsOnly;
         private set => SetField(ref _attachmentsOnly, value);
+    }
+
+    public bool UnreadOnly
+    {
+        get => _unreadOnly;
+        private set
+        {
+            if (SetField(ref _unreadOnly, value))
+            {
+                OnPropertyChanged(nameof(ShowUnreadFilterActive));
+            }
+        }
     }
 
     public int DisplayedCount
@@ -587,6 +606,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public ICommand ClearFiltersCommand { get; }
     public ICommand ToggleGroupByLabelCommand { get; }
     public ICommand ToggleAttachmentsOnlyCommand { get; }
+    public ICommand ToggleUnreadOnlyCommand { get; }
     public ICommand FileEmailToProjectCommand { get; }
     public ICommand FileEmailToThreadProjectCommand { get; }
     public ICommand UnfileEmailCommand { get; }
@@ -733,6 +753,12 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     {
         _display.ReplaceRowInDisplay(updated);
         _display.RebindSelectedEmail(updated);
+
+        if (string.Equals(SelectedEmailId, updated.Id, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(updated.AccStatusDisplay))
+        {
+            AccStatusPatched?.Invoke(this, updated.AccStatusDisplay);
+        }
     }
 
     private void OnAuthStateChanged(bool isAuthenticated)
@@ -755,6 +781,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         OnPropertyChanged(nameof(ActiveProjectGroup));
         (ToggleGroupByLabelCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (ToggleAttachmentsOnlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ToggleUnreadOnlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ApplyFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 }

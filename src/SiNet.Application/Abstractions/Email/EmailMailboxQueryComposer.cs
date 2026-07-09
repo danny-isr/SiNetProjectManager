@@ -35,6 +35,11 @@ public static class EmailMailboxQueryComposer
             parts.Add("has:attachment");
         }
 
+        if (query.UnreadOnly && query.MailboxScope != EmailMailboxScope.Unread)
+        {
+            parts.Add("is:unread");
+        }
+
         return string.Join(' ', parts);
     }
 
@@ -71,7 +76,8 @@ public static class EmailMailboxQueryComposer
         || !string.IsNullOrWhiteSpace(query.FromOrTo)
         || !string.IsNullOrWhiteSpace(query.FreeText)
         || query.ProjectLinkFilter != EmailProjectLinkFilter.All
-        || query.AttachmentsOnly;
+        || query.AttachmentsOnly
+        || (query.UnreadOnly && query.MailboxScope != EmailMailboxScope.Unread);
 
     public static string DescribeMailboxScope(EmailMailboxQuery query) =>
         query.MailboxScope switch

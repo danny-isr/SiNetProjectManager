@@ -86,6 +86,16 @@ public static class EmailAccStatusMapper
 
         if (cache.Status == EmailInboxStatus.Processing)
         {
+            if (existing > 0 && missing == 0 && (total == 0 || existing >= total))
+            {
+                return EmailAccProcessingStatus.UploadedToAcc;
+            }
+
+            if (missing > 0 && existing > 0)
+            {
+                return EmailAccProcessingStatus.PartiallyUploaded;
+            }
+
             if (lockStatus.IsStaleLease)
             {
                 return EmailAccProcessingStatus.ReconciliationRequired;

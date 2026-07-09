@@ -294,6 +294,7 @@ internal sealed class EmailListPagingCoordinator
         _owner.SelectedMailboxScope = EmailMailboxScope.Inbox;
         _owner.SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
         _owner.SetAttachmentsOnly(false);
+        _owner.SetUnreadOnly(false);
         _grouping.ClearDisplayGroups();
         await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
     }
@@ -301,6 +302,25 @@ internal sealed class EmailListPagingCoordinator
     public async Task ToggleAttachmentsOnlyAsync()
     {
         _owner.SetAttachmentsOnly(!_owner.AttachmentsOnly);
+        _grouping.ClearDisplayGroups();
+        await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
+    }
+
+    public async Task ToggleUnreadOnlyAsync()
+    {
+        if (_owner.UnreadOnly || _owner.SelectedMailboxScope == EmailMailboxScope.Unread)
+        {
+            _owner.SetUnreadOnly(false);
+            if (_owner.SelectedMailboxScope == EmailMailboxScope.Unread)
+            {
+                _owner.SetSelectedMailboxScope(EmailMailboxScope.Inbox);
+            }
+        }
+        else
+        {
+            _owner.SetUnreadOnly(true);
+        }
+
         _grouping.ClearDisplayGroups();
         await LoadMailboxAndProjectAsync(resetStack: true).ConfigureAwait(true);
     }
@@ -322,6 +342,7 @@ internal sealed class EmailListPagingCoordinator
             MailboxScope = scope,
             ProjectLinkFilter = _owner.SelectedProjectLinkFilter,
             AttachmentsOnly = _owner.AttachmentsOnly,
+            UnreadOnly = _owner.UnreadOnly,
             PageSize = EmailListViewModel.PageSize,
         };
     }
@@ -402,7 +423,7 @@ internal sealed class EmailListPagingCoordinator
         resetStack || !string.Equals(_owner.LastUnreadQuerySignature, BuildUnreadQuerySignature(query), StringComparison.Ordinal);
 
     private static string BuildUnreadQuerySignature(EmailMailboxQuery query) =>
-        $"{query.MailboxScope}|{query.LabelName}|{query.Subject}|{query.FromOrTo}|{query.FreeText}|{query.ProjectLinkFilter}|{query.AttachmentsOnly}";
+        $"{query.MailboxScope}|{query.LabelName}|{query.Subject}|{query.FromOrTo}|{query.FreeText}|{query.ProjectLinkFilter}|{query.AttachmentsOnly}|{query.UnreadOnly}";
 
     private void ApplyMailboxUnreadCount(EmailMailboxUnreadCount unreadCount)
     {

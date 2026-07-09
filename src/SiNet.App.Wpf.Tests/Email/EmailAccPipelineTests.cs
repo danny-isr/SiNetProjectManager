@@ -368,6 +368,143 @@ public sealed class EmailAccPipelineTests
     }
 
     [Fact]
+    public void Processing_with_all_attachments_in_acc_maps_to_uploaded()
+    {
+        var reconciliation = new AccInboxReconciliationResult(
+            1,
+            "proj",
+            "folder",
+            [
+                new AccInboxAttachmentReconciliationItem(
+                    1, 0, "a.pdf", "id1", null, null, null, null, true,
+                    AccInboxAttachmentPresenceStatus.ExistsInAcc, "OK", null, null, false, false, false, new Dictionary<string, string?>()),
+            ]);
+
+        var cache = new EmailInboxAccCacheRow(
+            1,
+            "msg@test.com",
+            EmailInboxStatus.Processing,
+            "DOMAIN\\me",
+            DateTime.UtcNow,
+            "folder",
+            1);
+
+        var status = EmailAccStatusMapper.Map("msg@test.com", cache, reconciliation, "DOMAIN\\me");
+
+        Assert.Equal(EmailAccProcessingStatus.UploadedToAcc, status.ProcessingStatus);
+        Assert.Equal("הועלה ל-ACC Inbox", status.StatusDisplay);
+    }
+
+    [Fact]
+    public void ResolveFinalAccStatus_prefers_upload_success_over_stuck_processing()
+    {
+        var upload = new EmailAccUploadResult(
+            EmailAccUploadOutcome.Succeeded,
+            "msg@test.com",
+            1,
+            2,
+            2,
+            null,
+            100);
+
+        var stuckSync = new EmailAccInboxStatus(
+            "msg@test.com",
+            1,
+            EmailAccProcessingStatus.UploadInProgress,
+            null,
+            "העלאה ל-ACC מתבצעת…",
+            null,
+            2,
+            0,
+            0,
+            []);
+
+        var resolved = EmailAccUploadCompletionResolver.ResolveFinalAccStatus(upload, waitStatus: null, stuckSync);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(EmailAccProcessingStatus.UploadedToAcc, resolved!.ProcessingStatus);
+        Assert.Contains("הועלו 2/2", resolved.StatusDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Passive_ingest_clears_busy_when_selection_changes()
+    {
+        var pendingSync = new EmailAccInboxStatus(
+            "msg@test.com",
+            1,
+            EmailAccProcessingStatus.PendingUpload,
+            null,
+            "ממתין להעלאה ל-ACC",
+            null,
+            2,
+            0,
+            0,
+            []);
+
+        var stuckSync = new EmailAccInboxStatus(
+            "msg@test.com",
+            1,
+            EmailAccProcessingStatus.UploadInProgress,
+            null,
+            "העלאה ל-ACC מתבצעת…",
+            null,
+            2,
+            0,
+            0,
+            []);
+
+        var statusService = new Mock<IEmailAccStatusService>();
+        statusService
+            .SetupSequence(s => s.SyncStatusWithRecoveryAsync(
+                It.IsAny<string?>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pendingSync)
+            .ReturnsAsync(stuckSync);
+
+        var uploadCoordinator = new Mock<IEmailAccUploadCoordinator>();
+        uploadCoordinator
+            .Setup(c => c.UploadToAccInboxAsync(It.IsAny<EmailAccUploadCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EmailAccUploadResult(
+                EmailAccUploadOutcome.Succeeded,
+                "msg@test.com",
+                1,
+                2,
+                2,
+                null,
+                50));
+
+        EmailListRow? patchedRow = null;
+        var row = new EmailListRow(
+            "gmail-1",
+            "sender@test.com",
+            "Subject",
+            "Preview",
+            DateTime.UtcNow,
+            "Inbox",
+            false,
+            false,
+            null,
+            AttachmentCount: 2,
+            InternetMessageId: "<msg@test.com>");
+
+        var handler = new EmailAccSelectionHandler(
+            statusService.Object,
+            uploadCoordinator.Object,
+            patch => patchedRow = patch,
+            findRow: _ => patchedRow ?? row);
+
+        var stillSelected = true;
+        await handler.TryPassiveIngestAsync(row, () => stillSelected);
+
+        Assert.NotNull(patchedRow);
+        Assert.False(patchedRow!.IsAccUploadBusy);
+        Assert.Equal(EmailAccProcessingStatus.UploadedToAcc, patchedRow.AccProcessingStatus);
+        Assert.Contains("הועלו 2/2", patchedRow.AccStatusDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Locked_by_other_user_does_not_call_upload_coordinator()
     {
         var lockedStatus = new EmailAccInboxStatus(

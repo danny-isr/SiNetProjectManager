@@ -67,11 +67,42 @@ public sealed class GmailEmailGatewayUnreadTests
     }
 
     [Fact]
-    public void BuildUnreadCountQuery_inbox_uses_primary_unread_query()
+    public void BuildMailboxQuery_unread_only_overlay_on_inbox_appends_is_unread()
     {
-        var query = new EmailMailboxQuery { MailboxScope = EmailMailboxScope.Inbox };
-        var result = GmailEmailGateway.BuildUnreadCountQuery(query, inboxQueryOverride: null);
+        var query = new EmailMailboxQuery
+        {
+            MailboxScope = EmailMailboxScope.Inbox,
+            UnreadOnly = true,
+        };
+        var result = GmailEmailGateway.BuildMailboxQueryString(query);
 
-        Assert.Equal(EmailMailboxQueryComposer.InboxPrimaryUnreadQuery, result);
+        Assert.Contains("label:INBOX", result, StringComparison.Ordinal);
+        Assert.Contains("is:unread", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildMailboxQuery_unread_scope_does_not_duplicate_is_unread()
+    {
+        var query = new EmailMailboxQuery
+        {
+            MailboxScope = EmailMailboxScope.Unread,
+            UnreadOnly = true,
+        };
+        var result = GmailEmailGateway.BuildMailboxQueryString(query);
+        var unreadCount = result.Split("is:unread", StringSplitOptions.None).Length - 1;
+
+        Assert.Equal(1, unreadCount);
+    }
+
+    [Fact]
+    public void HasNonScopeListFilters_includes_unread_only_overlay()
+    {
+        var query = new EmailMailboxQuery
+        {
+            MailboxScope = EmailMailboxScope.Inbox,
+            UnreadOnly = true,
+        };
+
+        Assert.True(GmailEmailGateway.HasNonScopeListFilters(query));
     }
 }

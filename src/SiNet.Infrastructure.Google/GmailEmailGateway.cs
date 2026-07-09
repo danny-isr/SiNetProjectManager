@@ -34,6 +34,12 @@ public sealed class GmailEmailGateway : IEmailGateway
     internal const string SummaryFieldsMask =
         "id,threadId,labelIds,snippet," +
         "payload(mimeType,headers,parts(mimeType,filename,headers,body(attachmentId),parts))";
+    internal const string MetadataSummaryFieldsMask =
+        "id,threadId,labelIds,snippet,internalDate,payload(headers)";
+    private const int SummaryFetchConcurrency = 10;
+
+    private IReadOnlyDictionary<string, Label>? _cachedLabelMap;
+    private GmailService? _cachedLabelMapService;
 
     private readonly GmailClientProvider _provider;
     private readonly IAppLogger _logger;
@@ -174,21 +180,11 @@ public sealed class GmailEmailGateway : IEmailGateway
             return new EmailMailboxPage(Array.Empty<EmailSummary>(), pageSize, listResponse.NextPageToken, false);
         }
 
-        var summaries = new List<EmailSummary>(listResponse.Messages.Count);
-        foreach (var item in listResponse.Messages)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(item.Id))
-            {
-                continue;
-            }
-
-            var summary = await TryGetSummaryAsync(gmail, item.Id, labelMap, cancellationToken).ConfigureAwait(false);
-            if (summary is not null)
-            {
-                summaries.Add(summary);
-            }
-        }
+        var summaries = await FetchSummariesParallelAsync(
+            gmail,
+            listResponse.Messages,
+            labelMap,
+            cancellationToken).ConfigureAwait(false);
 
         var hasNext = !string.IsNullOrEmpty(listResponse.NextPageToken);
         return new EmailMailboxPage(summaries, pageSize, listResponse.NextPageToken, hasNext);
@@ -287,21 +283,21 @@ public sealed class GmailEmailGateway : IEmailGateway
                     break;
                 }
 
-                foreach (var item in listResponse.Messages)
+                var newMessages = listResponse.Messages
+                    .Where(message => !string.IsNullOrWhiteSpace(message.Id) && seenMessageIds.Add(message.Id!))
+                    .ToList();
+                if (newMessages.Count == 0)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (string.IsNullOrWhiteSpace(item.Id) || !seenMessageIds.Add(item.Id))
-                    {
-                        continue;
-                    }
-
-                    var summary = await TryGetSummaryAsync(gmail, item.Id, labelMap, cancellationToken).ConfigureAwait(false);
-                    if (summary != null)
-                    {
-                        summaries.Add(summary);
-                    }
+                    pageToken = listResponse.NextPageToken;
+                    continue;
                 }
+
+                var pageSummaries = await FetchSummariesParallelAsync(
+                    gmail,
+                    newMessages,
+                    labelMap,
+                    cancellationToken).ConfigureAwait(false);
+                summaries.AddRange(pageSummaries);
 
                 pageToken = listResponse.NextPageToken;
             }
@@ -377,8 +373,9 @@ public sealed class GmailEmailGateway : IEmailGateway
         try
         {
             var getRequest = gmail.Users.Messages.Get("me", messageId);
-            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
-            getRequest.Fields = SummaryFieldsMask;
+            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Metadata;
+            getRequest.MetadataHeaders = MetadataHeaders;
+            getRequest.Fields = MetadataSummaryFieldsMask;
 
             var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
             if (labelMap is null)
@@ -393,6 +390,44 @@ public sealed class GmailEmailGateway : IEmailGateway
             _logger.Warn($"[Gmail] Messages.Get failed for id '{messageId}': {ex.Message}");
             return null;
         }
+    }
+
+    private async Task<IReadOnlyList<EmailSummary>> FetchSummariesParallelAsync(
+        GmailService gmail,
+        IList<Message> messages,
+        IReadOnlyDictionary<string, Label> labelMap,
+        CancellationToken cancellationToken)
+    {
+        var messageIds = messages
+            .Select(static message => message.Id)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Select(static id => id!)
+            .ToList();
+
+        if (messageIds.Count == 0)
+        {
+            return Array.Empty<EmailSummary>();
+        }
+
+        using var concurrencyGate = new SemaphoreSlim(SummaryFetchConcurrency, SummaryFetchConcurrency);
+        var fetchTasks = messageIds.Select(async messageId =>
+        {
+            await concurrencyGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await TryGetSummaryAsync(gmail, messageId, labelMap, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                concurrencyGate.Release();
+            }
+        });
+
+        var results = await Task.WhenAll(fetchTasks).ConfigureAwait(false);
+        return results
+            .Where(static summary => summary is not null)
+            .Select(static summary => summary!)
+            .ToList();
     }
 
     internal static string BuildMailboxQueryString(EmailMailboxQuery query, string? inboxQueryOverride = null) =>
@@ -483,11 +518,20 @@ public sealed class GmailEmailGateway : IEmailGateway
         GmailService gmail,
         CancellationToken cancellationToken)
     {
+        if (_cachedLabelMap is not null && ReferenceEquals(_cachedLabelMapService, gmail))
+        {
+            return _cachedLabelMap;
+        }
+
         var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
-        return labels.Labels?
+        var labelMap = labels.Labels?
                    .Where(static label => !string.IsNullOrWhiteSpace(label.Id))
                    .ToDictionary(static label => label.Id!, static label => label, StringComparer.Ordinal)
                ?? new Dictionary<string, Label>(StringComparer.Ordinal);
+
+        _cachedLabelMap = labelMap;
+        _cachedLabelMapService = gmail;
+        return labelMap;
     }
 
     private IReadOnlyList<string> ResolveProjectLabelIds(

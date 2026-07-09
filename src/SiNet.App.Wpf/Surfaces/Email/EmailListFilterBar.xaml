@@ -97,17 +97,16 @@
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
                                Foreground="#333" />
-                    <Border Background="#E3F2FD"
-                            BorderBrush="#64B5F6"
-                            BorderThickness="1"
-                            CornerRadius="3"
-                            Padding="6,1"
-                            Margin="10,0,0,0"
-                            Visibility="{Binding ShowUnreadCount, Converter={StaticResource BoolToVis}}">
+                    <ToggleButton Style="{StaticResource ToggleActionButton}"
+                                  IsChecked="{Binding ShowUnreadFilterActive, Mode=OneWay}"
+                                  Command="{Binding ToggleUnreadOnlyCommand}"
+                                  ToolTip="הצג רק מיילים שלא נקראו"
+                                  Margin="10,0,0,0"
+                                  Visibility="{Binding ShowUnreadCount, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="{Binding UnreadCountDisplay}"
                                    Foreground="#1565C0"
                                    FontSize="{DynamicResource SiTextTinyFontSize}" />
-                    </Border>
+                    </ToggleButton>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Content="חבר Gmail"

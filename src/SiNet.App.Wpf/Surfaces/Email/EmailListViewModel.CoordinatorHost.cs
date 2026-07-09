@@ -69,6 +69,8 @@ public sealed partial class EmailListViewModel
 
     internal void SetGroupByLabel(bool value) => GroupByLabel = value;
     internal void SetAttachmentsOnly(bool value) => AttachmentsOnly = value;
+    internal void SetUnreadOnly(bool value) => UnreadOnly = value;
+    internal void SetSelectedMailboxScope(EmailMailboxScope value) => SelectedMailboxScope = value;
     internal void SetIsBusy(bool value) => IsBusy = value;
     internal void SetLoadState(EmailListLoadState value) => LoadState = value;
     internal void SetLoadWarning(string? value) => LoadWarning = value;
@@ -92,6 +94,7 @@ public sealed partial class EmailListViewModel
         OnPropertyChanged(nameof(UnreadInCurrentPage));
         OnPropertyChanged(nameof(UnreadCountDisplay));
         OnPropertyChanged(nameof(ShowUnreadCount));
+        OnPropertyChanged(nameof(ShowUnreadFilterActive));
         OnPropertyChanged(nameof(MailboxDiagnostics));
     }
 
@@ -131,6 +134,8 @@ public sealed partial class EmailListViewModel
         (RefreshPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ApplyFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ClearFiltersCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ToggleAttachmentsOnlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ToggleUnreadOnlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (FileEmailToProjectCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();

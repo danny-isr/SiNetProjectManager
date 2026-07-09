@@ -14,7 +14,7 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
     private readonly Func<EmailLabelGroupViewModel, Task> _loadAll;
     private readonly HashSet<string> _seenMessageIds = new(StringComparer.Ordinal);
 
-    private bool _isExpanded;
+    private bool _isExpanded = true;
     private bool _isLoading;
     private bool _hasLoadedAll;
     private string? _nextPageToken;
