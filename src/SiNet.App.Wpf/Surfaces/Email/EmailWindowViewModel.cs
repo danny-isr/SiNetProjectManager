@@ -1,46 +1,41 @@
-using System.Collections.ObjectModel;
 using System.Windows.Input;
+using System.Collections.ObjectModel;
 using SiNet.App.Wpf.Infrastructure;
-using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
+using SiNet.Application.Email.Detail;
+using AccBrowserHost = SiNet.Application.Email.Acc.IEmailExternalDownloadBrowserHost;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
+using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 using SiNet.Domain.ValueObjects;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
 
 /// <summary>
-/// View model for <see cref="EmailWindowView"/> — the first real read-only New System slice of the
-/// legacy <c>EmailManagementView</c> (email management window).
+/// Shell view model for <see cref="EmailWindowView"/> — project bar, list, status; detail work is in <see cref="EmailDetailViewModel"/>.
 /// </summary>
 public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IProjectQueryService _projectQuery;
     private readonly ICurrentProjectContext _currentProject;
-    private readonly IEmailGateway _emailGateway;
     private readonly IConnectorAuthService _googleAuthService;
     private readonly IEmailInboxQueryService? _emailInboxQuery;
-    private readonly IEmailMoveToProjectCoordinator? _moveToProjectCoordinator;
-    private readonly EmailWindowSelectionHandler _selectionHandler;
-    private readonly EmailExternalDownloadHandler? _externalDownloadHandler;
     private readonly IEmailAccClosePrompt? _accClosePrompt;
+    private readonly EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private WorkSurfaceContext? _workSurfaceContext;
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
-    private string _selectedEmailBody = string.Empty;
-    private bool _isBusy;
-    private int _selectedEmailLoadVersion;
     private string _activeProjectDisplay = "לא נבחר פרויקט";
     private string _statusMessage = "חבר Gmail ולחץ רענן כדי לטעון את כל המיילים.";
-    private string _selectedAccStatusDisplay = string.Empty;
 
     public EmailWindowViewModel()
         : this(
@@ -56,12 +51,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService filterOptions,
         ICurrentProjectContext currentProject)
-        : this(
-            projectQuery,
-            filterOptions,
-            currentProject,
-            new DesignEmailGateway(),
-            new DesignConnectorAuthService())
+        : this(projectQuery, filterOptions, currentProject, new DesignEmailGateway(), new DesignConnectorAuthService())
     {
     }
 
@@ -96,13 +86,20 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             currentUser: null,
             accStatusService: null,
             accUploadCoordinator: null,
-            moveToProjectCoordinator: null,
+            moveToProjectService: null,
+            moveEligibility: null,
+            workflowContextService: null,
+            suggestedActionService: null,
+            actionExecutionService: null,
+            taskCompletionService: null,
+            bodyRenderer: null,
             externalDownloadCoordinator: null,
             externalDownloadBrowserHost: null,
             accIngestQueue: null,
             ingestSessionEnsurer: null,
             backgroundWorkTracker: null,
-            accClosePrompt: null)
+            accClosePrompt: null,
+            threadMappingSync: null)
     {
     }
 
@@ -119,9 +116,15 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         ICurrentUserContext? currentUser,
         IEmailAccStatusService? accStatusService = null,
         IEmailAccUploadCoordinator? accUploadCoordinator = null,
-        IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null,
+        IEmailMoveToProjectService? moveToProjectService = null,
+        IEmailMoveToProjectEligibilityService? moveEligibility = null,
+        IEmailWorkflowContextService? workflowContextService = null,
+        IEmailSuggestedActionService? suggestedActionService = null,
+        IEmailSuggestedActionExecutionService? actionExecutionService = null,
+        ITaskCompletionService? taskCompletionService = null,
+        IEmailBodyRenderer? bodyRenderer = null,
         IEmailExternalDownloadCoordinator? externalDownloadCoordinator = null,
-        IEmailExternalDownloadBrowserHost? externalDownloadBrowserHost = null,
+        AccBrowserHost? externalDownloadBrowserHost = null,
         IEmailAccIngestQueue? accIngestQueue = null,
         IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
         IEmailAccBackgroundWorkTracker? backgroundWorkTracker = null,
@@ -132,18 +135,15 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(filterOptions);
         _projectQuery = projectQuery;
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
-        _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _googleAuthService = googleAuthService ?? throw new ArgumentNullException(nameof(googleAuthService));
         _emailInboxQuery = emailInboxQuery;
-        _moveToProjectCoordinator = moveToProjectCoordinator;
         _accClosePrompt = accClosePrompt;
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
-        Attachments = [];
 
         EmailList = new EmailListViewModel(
-            _emailGateway,
+            emailGateway,
             threadLinkQuery,
             _googleAuthService,
             filingService,
@@ -152,21 +152,24 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             currentUser,
             accStatusService,
             accUploadCoordinator,
-            moveToProjectCoordinator,
+            moveToProjectCoordinator: null,
             accIngestQueue,
             ingestSessionEnsurer,
             threadMappingSync);
 
-        _selectionHandler = new EmailWindowSelectionHandler(
-            _emailGateway,
+        EmailDetail = new EmailDetailViewModel(
             EmailList,
-            message => StatusMessage = message,
-            body => SelectedEmailBody = body,
-            acc => SelectedAccStatusDisplay = acc,
-            Attachments,
-            () => SelectedEmail,
-            () => _selectedEmailLoadVersion,
-            () => _selectedEmailLoadVersion++);
+            emailGateway,
+            _currentProject,
+            filingService,
+            currentUser,
+            moveToProjectService,
+            moveEligibility,
+            workflowContextService,
+            suggestedActionService,
+            actionExecutionService,
+            taskCompletionService,
+            bodyRenderer);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null
             ? new EmailExternalDownloadHandler(
@@ -174,17 +177,23 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
                 externalDownloadBrowserHost,
                 backgroundWorkTracker,
                 EmailList,
-                _selectionHandler,
+                EmailDetail.SelectionCoordinator,
                 message => StatusMessage = message,
-                () => SelectedEmail,
-                () => _selectedEmailLoadVersion,
-                () => _selectedEmailLoadVersion++)
+                () => EmailList.SelectedEmail,
+                () => EmailDetail.GetLoadVersion(),
+                () => EmailDetail.BumpLoadVersion())
             : null;
+
+        if (_externalDownloadHandler is not null)
+        {
+            EmailDetail.SetExternalDownloadHandler(_externalDownloadHandler);
+        }
 
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
-        EmailList.AccStatusPatched += (_, display) => SelectedAccStatusDisplay = display;
+        EmailList.AccStatusPatched += OnAccStatusPatched;
         EmailList.AccountStatusChanged += (_, _) => RefreshAuthDisplay();
+        EmailDetail.StatusMessageChanged += (_, message) => StatusMessage = message;
 
         _selectedFolder = Folders.FirstOrDefault();
         _selectedStatus = StatusOptions.FirstOrDefault();
@@ -201,34 +210,16 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         SearchCommand = EmailList.ApplyFiltersCommand;
         ClearSearchCommand = EmailList.ClearFiltersCommand;
         OpenEmailCommand = new AsyncRelayCommand(
-            () => _selectionHandler.OpenSelectedEmailAsync(),
-            () => !IsBusy && SelectedEmail is not null);
-        LinkToProjectCommand = DeferredProductionPilotAction("שיוך בפועל לפרויקט — מושהה (production pilot read-only).");
-        CreateTaskFromEmailCommand = DeferredProductionPilotAction("יצירת משימה מהמייל — מושהה (דורש slice Workflow/Tasks).");
-        MarkHandledCommand = _moveToProjectCoordinator?.IsAvailable == true
-            ? new AsyncRelayCommand(MoveSelectedEmailToProjectAsync, () => SelectedEmail?.InboxMessageId is > 0)
-            : DeferredProductionPilotAction("Move-to-project / mark-handled — מושהה (production pilot read-only).");
-        ArchiveCommand = DeferredProductionPilotAction("ארכוב — מושהה (production pilot read-only).");
-        ReplyCommand = DeferredProductionPilotAction("Reply/Send — מושהה (דורש G-Policy).");
-        ForwardCommand = DeferredProductionPilotAction("Forward/Send — מושהה (דורש G-Policy).");
-        OpenAttachmentCommand = DeferredProductionPilotAction("פתיחת attachment — מושהה (metadata-only pilot).");
-        CompleteTaskCommand = DeferredProductionPilotAction("סיום משימה — מושהה (דורש ITaskCompletionCoordinator slice).");
-        OpenExternalDownloadLinkCommand = new RelayCommand(
-            _ => OpenExternalDownloadLink(),
-            _ => HasExternalDownloadLinks && SelectedEmail is not null && _externalDownloadHandler?.IsAvailable == true);
+            () => EmailDetail.OpenSelectedEmailAsync(),
+            () => !EmailList.IsBusy && EmailList.SelectedEmail is not null);
     }
 
     public string Title => "ניהול דואר — Gmail + ACC Inbox";
-    public bool ShowDeferredWriteActions => false;
-    public bool ShowDeferredVisualPlaceholders => false;
-
-    public string ProductionPilotNotice { get; } =
-        "בחירת מייל מעלה אוטומטית ל-ACC Inbox (כמו המערכת הישנה). תיוק Gmail, MoveToProject ושליחה יחוברו בהמשך.";
 
     public string UnreadCountDisplay => EmailList.UnreadCountDisplay;
     public bool ShowUnreadCount => EmailList.ShowUnreadCount;
     public EmailListViewModel EmailList { get; }
-    public ObservableCollection<EmailListRow> Emails => EmailList.Emails;
+    public EmailDetailViewModel EmailDetail { get; }
     public ProjectSelectorViewModel ProjectSelector { get; }
 
     public string ActiveProjectDisplay
@@ -239,7 +230,6 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<EmailFolderRow> Folders { get; }
     public ObservableCollection<string> StatusOptions { get; }
-    public ObservableCollection<EmailAttachmentRow> Attachments { get; }
     public WorkSurfaceContext? WorkSurfaceContext => _workSurfaceContext;
     public bool IsConnected => _googleAuthService.IsAuthenticated;
 
@@ -272,33 +262,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         set => EmailList.SelectedEmail = value;
     }
 
-    public bool HasSelectedEmail => EmailList.SelectedEmail is not null;
+    public bool HasSelectedEmail => EmailDetail.HasSelectedEmail;
 
-    public string SelectedEmailBody
-    {
-        get => _selectedEmailBody;
-        private set
-        {
-            if (SetField(ref _selectedEmailBody, value))
-            {
-                OnPropertyChanged(nameof(HasExternalDownloadLinks));
-                OnPropertyChanged(nameof(ShowExternalDownloadLinkAction));
-                (OpenExternalDownloadLinkCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            }
-        }
-    }
-
-    public bool IsBusy
-    {
-        get => EmailList.IsBusy || _isBusy;
-        private set
-        {
-            if (SetField(ref _isBusy, value))
-            {
-                (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            }
-        }
-    }
+    public bool IsBusy => EmailList.IsBusy;
 
     public string StatusMessage
     {
@@ -306,39 +272,17 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         private set => SetField(ref _statusMessage, value);
     }
 
-    public string SelectedAccStatusDisplay
-    {
-        get => _selectedAccStatusDisplay;
-        private set => SetField(ref _selectedAccStatusDisplay, value);
-    }
-
-    public bool ShowSelectedAccStatus => !string.IsNullOrWhiteSpace(SelectedAccStatusDisplay);
-
-    public bool HasExternalDownloadLinks =>
-        EmailExternalDownloadLinkDetector.HasExternalDownloadLink(SelectedEmailBody);
-
-    public bool ShowExternalDownloadLinkAction =>
-        HasExternalDownloadLinks && _externalDownloadHandler?.IsAvailable == true;
-
     public ICommand RefreshCommand { get; }
     public ICommand SearchCommand { get; }
     public ICommand ClearSearchCommand { get; }
     public ICommand OpenEmailCommand { get; }
-    public ICommand LinkToProjectCommand { get; }
-    public ICommand CreateTaskFromEmailCommand { get; }
-    public ICommand MarkHandledCommand { get; }
-    public ICommand ArchiveCommand { get; }
-    public ICommand ReplyCommand { get; }
-    public ICommand ForwardCommand { get; }
-    public ICommand OpenAttachmentCommand { get; }
-    public ICommand CompleteTaskCommand { get; }
-    public ICommand OpenExternalDownloadLinkCommand { get; }
 
     public void ApplyContext(WorkSurfaceContext? context)
     {
         if (context is null)
         {
             _workSurfaceContext = null;
+            EmailDetail.ApplyWorkSurfaceContext(null);
             return;
         }
 
@@ -349,6 +293,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         }
 
         _workSurfaceContext = context;
+        EmailDetail.ApplyWorkSurfaceContext(context);
         _ = ApplyTaskContextAsync(context);
     }
 
@@ -361,7 +306,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     public Task SearchAsync() => EmailList.ApplyFiltersAsync();
     public Task ClearSearchAsync() => EmailList.ClearFiltersAndReloadAsync();
-    public Task OpenSelectedEmailAsync() => _selectionHandler.OpenSelectedEmailAsync();
+    public Task OpenSelectedEmailAsync() => EmailDetail.OpenSelectedEmailAsync();
 
     public bool TryBlockCloseForBackgroundWork(object? owner) =>
         _accClosePrompt?.ConfirmCloseIfNeeded(owner) == false;
@@ -369,11 +314,25 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         EmailList.SelectedEmailChanged -= OnEmailListSelectionChanged;
+        EmailList.AccStatusPatched -= OnAccStatusPatched;
+        EmailDetail.StatusMessageChanged -= (_, _) => { };
         _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged -= OnAuthStateChanged;
         _externalDownloadHandler?.Dispose();
+        EmailDetail.Dispose();
         ProjectSelector.Dispose();
     }
+
+    private async void OnEmailListSelectionChanged(object? sender, EmailListRow? value)
+    {
+        OnPropertyChanged(nameof(SelectedEmail));
+        OnPropertyChanged(nameof(HasSelectedEmail));
+        (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        await EmailDetail.ApplySelectionAsync(value).ConfigureAwait(true);
+    }
+
+    private void OnAccStatusPatched(object? sender, string display) =>
+        EmailDetail.Viewer.AccStatusDisplay = display;
 
     private async Task ApplyTaskContextAsync(WorkSurfaceContext context)
     {
@@ -446,105 +405,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         StatusMessage = $"מייל \"{inboxMessage.Subject}\" לא נמצא בעמוד Gmail הנוכחי.";
     }
 
-    private async void OnEmailListSelectionChanged(object? sender, EmailListRow? value)
-    {
-        OnPropertyChanged(nameof(SelectedEmail));
-        OnPropertyChanged(nameof(HasSelectedEmail));
-        (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        (OpenExternalDownloadLinkCommand as RelayCommand)?.RaiseCanExecuteChanged();
-
-        if (value is null)
-        {
-            _selectionHandler.ClearSelectedEmailDetails();
-            return;
-        }
-
-        var loadVersion = ++_selectedEmailLoadVersion;
-
-        if (!HasLoadedBodyForCurrentSelection(value.Id))
-        {
-            _selectionHandler.PrepareSelectedEmailDetailsLoading();
-            SelectedAccStatusDisplay = string.Empty;
-        }
-
-        await RunSelectionPipelineAsync(value, loadVersion).ConfigureAwait(true);
-    }
-
-    private async Task RunSelectionPipelineAsync(EmailListRow row, int loadVersion)
-    {
-        await _selectionHandler
-            .LoadSelectedEmailWithAccPipelineAsync(row, loadVersion, HasLoadedBodyForCurrentSelection)
-            .ConfigureAwait(true);
-
-        if (_externalDownloadHandler is not null
-            && HasLoadedBodyForCurrentSelection(row.Id)
-            && string.Equals(SelectedEmail?.Id, row.Id, StringComparison.Ordinal))
-        {
-            await _externalDownloadHandler
-                .MergeExternalDownloadsIntoViewerAsync(row, loadVersion)
-                .ConfigureAwait(true);
-        }
-    }
-
-    private void OpenExternalDownloadLink()
-    {
-        if (SelectedEmail is null || _externalDownloadHandler is null)
-        {
-            return;
-        }
-
-        _externalDownloadHandler.OpenFirstDownloadLink(SelectedEmailBody, SelectedEmail);
-    }
-
-    private bool HasLoadedBodyForCurrentSelection(string messageId) =>
-        string.Equals(SelectedEmail?.Id, messageId, StringComparison.Ordinal)
-        && !string.IsNullOrWhiteSpace(SelectedEmailBody)
-        && !string.Equals(SelectedEmailBody, "טוען תוכן מייל...", StringComparison.Ordinal);
-
-    private async Task MoveSelectedEmailToProjectAsync()
-    {
-        if (_moveToProjectCoordinator is null || SelectedEmail?.InboxMessageId is not int inboxMessageId)
-        {
-            StatusMessage = "MoveToProject אינו זמין.";
-            return;
-        }
-
-        var projectId = _currentProject.CurrentProject?.ProjectId ?? SelectedEmail.ProjectId ?? 0;
-        if (projectId <= 0)
-        {
-            StatusMessage = "בחר פרויקט לפני העברה.";
-            return;
-        }
-
-        IsBusy = true;
-        try
-        {
-            var result = await _moveToProjectCoordinator.MoveAsync(
-                new EmailMoveToProjectCommand(inboxMessageId, projectId)).ConfigureAwait(true);
-            StatusMessage = result.Message;
-            if (SelectedEmail is not null)
-            {
-                await EmailList.LoadAccStatusForRowAsync(SelectedEmail).ConfigureAwait(true);
-            }
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private AsyncRelayCommand DeferredProductionPilotAction(string message) => new(
-        () =>
-        {
-            StatusMessage = message;
-            return Task.CompletedTask;
-        },
-        () => false);
-
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
         UpdateActiveProjectDisplay(e.Project);
-        _selectionHandler.ClearSelectedEmailDetails();
+        EmailDetail.UpdateActiveProjectDisplay(e.Project);
         _ = ApplyProjectContextFromWorkbenchAsync();
 
         if (!IsConnected)
@@ -605,7 +469,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
             if (!isAuthenticated)
             {
-                _selectionHandler.ClearSelectedEmailDetails();
+                EmailDetail.ClearOnDisconnect();
             }
 
             (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

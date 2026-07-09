@@ -1,0 +1,29 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Email.EmailWorkItemWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:detail="clr-namespace:SiNet.App.Wpf.Surfaces.Email.Detail"
+        Title="משימת דואר"
+        Width="960"
+        Height="720"
+        MinWidth="640"
+        MinHeight="480"
+        FlowDirection="RightToLeft"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0"
+                Background="#1976D2"
+                Padding="10,6"
+                Margin="0,0,0,8"
+                CornerRadius="4">
+            <TextBlock Text="{Binding Viewer.Subject, FallbackValue=פרטי מייל}"
+                       Foreground="White"
+                       FontWeight="Bold"
+                       TextWrapping="Wrap" />
+        </Border>
+        <detail:EmailDetailView x:Name="DetailHost" Grid.Row="1" />
+    </Grid>
+</Window>

@@ -38,56 +38,37 @@ public sealed class ProductionPilotBoundaryTests
     }
 
     [Fact]
-    public void Email_window_view_model_hides_and_disables_deferred_production_actions()
+    public void Email_window_exposes_detail_component_with_action_bar()
     {
-        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var detailXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailView.xaml");
+        var actionBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailActionBarView.xaml");
 
-        Assert.Contains("ShowDeferredWriteActions => false", source, StringComparison.Ordinal);
-        Assert.Contains("DeferredProductionPilotAction", source, StringComparison.Ordinal);
-        Assert.Contains("() => false", source, StringComparison.Ordinal);
-        Assert.Contains("G-Policy", source, StringComparison.Ordinal);
-        Assert.Contains("ITaskCompletionCoordinator", source, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailView", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailActionBarView", detailXaml, StringComparison.Ordinal);
+        Assert.Contains("MoveToProjectCommand", actionBarXaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Email_window_view_hides_deferred_action_regions_in_production_pilot()
+    public void Email_window_view_uses_two_column_list_detail_layout()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
 
-        Assert.Contains("ShowDeferredWriteActions", xaml, StringComparison.Ordinal);
-        Assert.Contains("Visibility=\"{Binding ShowDeferredWriteActions", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListView", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailView", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenAttachmentCommand", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("שלד ויזואלי", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Select an email from the list", xaml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Email_window_view_hides_deferred_visual_placeholders_in_production_pilot()
-    {
-        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
-
-        Assert.Contains("ShowDeferredVisualPlaceholders => false", vmSource, StringComparison.Ordinal);
-
-        Assert.DoesNotContain("ShowDeferredVisualPlaceholders", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("1 / 3", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"&#x1F4C5;\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"?\"", xaml, StringComparison.Ordinal);
-
-        Assert.Contains("ProductionPilotNotice", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding ProductionPilotNotice}\"", xaml, StringComparison.Ordinal);
-
+        Assert.DoesNotContain("ShowDeferredWriteActions", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<DatePicker", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Email_window_view_model_exposes_clear_search_and_production_pilot_properties()
+    public void Email_window_view_model_exposes_clear_search_and_detail_shell()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
         Assert.Contains("ClearSearchCommand", source, StringComparison.Ordinal);
         Assert.Contains("ClearSearchAsync", source, StringComparison.Ordinal);
-        Assert.Contains("ProductionPilotNotice", source, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailViewModel", source, StringComparison.Ordinal);
         Assert.Contains("ShowUnreadCount", source, StringComparison.Ordinal);
     }
 

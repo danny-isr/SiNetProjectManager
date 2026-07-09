@@ -90,6 +90,7 @@ public static class ProjectContextServiceCollectionExtensions
 
         // Small factory so hosts open the window through DI instead of constructing an isolated context.
         services.AddSingleton<IEmailWindowFactory, EmailWindowFactory>();
+        services.AddSingleton<IEmailWorkItemWindowFactory, EmailWorkItemWindowFactory>();
 
         services.AddSiNetWorkSurfaces();
     }

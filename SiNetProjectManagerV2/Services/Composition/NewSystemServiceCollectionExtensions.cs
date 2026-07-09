@@ -43,6 +43,7 @@ public static class NewSystemServiceCollectionExtensions
         SiNet.Infrastructure.Sql.EmailReadServiceCollectionExtensions.AddSiNetEmailReadSql(services);
         SiNet.Infrastructure.Sql.EmailWriteServiceCollectionExtensions.AddSiNetEmailWriteSql(services);
         SiNet.Infrastructure.Sql.EmailAccServiceCollectionExtensions.AddSiNetEmailAccSql(services);
+        SiNet.Infrastructure.Sql.EmailDetailServiceCollectionExtensions.AddSiNetEmailDetailSql(services);
         services.AddSiNetNewSystemWpf();
         services.AddSiNetDevTools();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();

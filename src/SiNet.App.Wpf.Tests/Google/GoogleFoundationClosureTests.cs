@@ -114,15 +114,14 @@ public sealed class GoogleFoundationClosureTests
     }
 
     [Fact]
-    public void Email_window_view_model_keeps_send_and_modify_deferred_pending_policy_decision()
+    public void Email_detail_component_hosts_viewer_and_action_bar()
     {
-        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs")
-            + ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowSelectionHandler.cs");
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs")
+            + ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailSelectionCoordinator.cs");
 
-        Assert.Contains("ShowDeferredWriteActions => false", source, StringComparison.Ordinal);
-        Assert.Contains("DeferredProductionPilotAction", source, StringComparison.Ordinal);
-        Assert.Contains("G-Policy", source, StringComparison.Ordinal);
-        Assert.Contains("ITaskCompletionCoordinator", source, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailViewModel", source, StringComparison.Ordinal);
+        Assert.Contains("IEmailMoveToProjectService", source, StringComparison.Ordinal);
+        Assert.Contains("ITaskCompletionService", source, StringComparison.Ordinal);
         Assert.Contains("GetDetailsAsync", source, StringComparison.Ordinal);
     }
 
@@ -146,8 +145,8 @@ public sealed class GoogleFoundationClosureTests
         Assert.Equal(EmailMailboxQuery.DefaultPageSize, gateway.LastPageSize);
         Assert.False(gateway.LastProjectLabelFilterUsed);
         Assert.True(sut.EmailList.IsAllEmailsMode);
-        Assert.Single(sut.Emails);
-        Assert.Equal("msg-42", sut.Emails[0].Id);
+        Assert.Single(sut.EmailList.FlatDisplayEmails);
+        Assert.Equal("msg-42", sut.EmailList.FlatDisplayEmails[0].Id);
     }
 
     [Fact]
@@ -214,9 +213,9 @@ public sealed class GoogleFoundationClosureTests
         await sut.OpenSelectedEmailAsync();
 
         Assert.Equal("msg-42", gateway.LastDetailsMessageId);
-        Assert.Contains("Detailed body for North update", sut.SelectedEmailBody, StringComparison.Ordinal);
-        Assert.Single(sut.Attachments);
-        Assert.Contains("quote.pdf", sut.Attachments[0].DisplayLabel, StringComparison.Ordinal);
+        Assert.Contains("Detailed body for North update", sut.EmailDetail.SelectedEmailBody, StringComparison.Ordinal);
+        Assert.Single(sut.EmailDetail.AttachmentStrip.Attachments);
+        Assert.Contains("quote.pdf", sut.EmailDetail.AttachmentStrip.Attachments[0].DisplayLabel, StringComparison.Ordinal);
     }
 
     [Fact]

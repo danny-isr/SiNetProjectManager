@@ -35,6 +35,7 @@ public static class SiNetCompositionExtensions
         services.AddSiNetEmailReadSql();
         services.AddSiNetEmailWriteSql();
         services.AddSiNetEmailAccSql();
+        services.AddSiNetEmailDetailSql();
         services.AddSiNetUserManagementSql();
         services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();

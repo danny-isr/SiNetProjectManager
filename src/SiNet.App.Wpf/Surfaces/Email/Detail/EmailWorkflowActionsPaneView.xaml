@@ -1,0 +1,29 @@
+<UserControl x:Class="SiNet.App.Wpf.Surfaces.Email.Detail.EmailWorkflowActionsPaneView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft"
+             Padding="10">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+    <StackPanel>
+        <TextBlock Text="הקשר ופעולות" FontWeight="Bold" Margin="0,0,0,8" />
+        <StackPanel Visibility="{Binding HasContext, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="{Binding ProjectDisplay, StringFormat='פרויקט: {0}'}" Margin="0,0,0,4" />
+            <TextBlock Text="{Binding WorkflowFamilyDisplay, StringFormat='משפחת workflow: {0}'}" Margin="0,0,0,4" />
+            <TextBlock Text="{Binding ConfidenceDisplay, StringFormat='ביטחון: {0}'}" Margin="0,0,0,4" />
+            <TextBlock Text="{Binding ActiveWorkflowCount, StringFormat='Workflows פעילים: {0}'}" Margin="0,0,0,8" />
+        </StackPanel>
+        <TextBlock Text="פעולות מוצעות" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,6" />
+        <ComboBox ItemsSource="{Binding SuggestedActions}"
+                  SelectedItem="{Binding SelectedAction}"
+                  DisplayMemberPath="DisplayName"
+                  Margin="0,0,0,6" />
+        <Button Content="▶ בצע"
+                Command="{Binding ExecuteActionCommand}"
+                HorizontalAlignment="Right"
+                Padding="12,6"
+                Margin="0,0,0,6" />
+        <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#555" FontSize="{DynamicResource SiTextSmallFontSize}" />
+    </StackPanel>
+</UserControl>

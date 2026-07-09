@@ -1,0 +1,46 @@
+<UserControl x:Class="SiNet.App.Wpf.Surfaces.Email.Detail.EmailActionBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft"
+             Background="#E8F5E9"
+             Padding="8,6">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="שיוך לפרויקט: " FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ActiveProjectDisplay}" Foreground="#2E7D32" FontWeight="Bold" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding MoveBlockReason}"
+                       Margin="12,0,0,0"
+                       Foreground="#C62828"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowMoveBlockReason}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <Button Content="📁 שייך לפרויקט"
+                    Command="{Binding FileEmailCommand}"
+                    Padding="10,4"
+                    Margin="0,0,6,0"
+                    ToolTip="שייך מייל לפרויקט הנוכחי" />
+            <Button Content="📂 העבר לפרויקט"
+                    Command="{Binding MoveToProjectCommand}"
+                    Padding="10,4"
+                    Background="#C8E6C9"
+                    BorderBrush="#66BB6A"
+                    ToolTip="העבר קבצים מתויקים לתיקיית הפרויקט ב-ACC" />
+        </StackPanel>
+    </Grid>
+</UserControl>

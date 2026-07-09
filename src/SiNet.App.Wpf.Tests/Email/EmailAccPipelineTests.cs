@@ -180,10 +180,11 @@ public sealed class EmailAccPipelineTests
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         var handlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailAccSelectionHandler.cs");
-        var selectionHandlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowSelectionHandler.cs");
+        var selectionHandlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailSelectionCoordinator.cs");
+        var detailVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
 
-        Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", vmSource, StringComparison.Ordinal);
-        Assert.Contains("RunAccPipelineAsync", selectionHandlerSource, StringComparison.Ordinal);
+        Assert.Contains("RunSelectionPipelineAsync", detailVmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", selectionHandlerSource, StringComparison.Ordinal);
         Assert.Contains("LoadBodyIfNeededAsync", selectionHandlerSource, StringComparison.Ordinal);
         Assert.Contains("TryPassiveAccIngestOnSelectionAsync", listVmSource, StringComparison.Ordinal);
         Assert.Contains("TryPassiveIngestAsync", handlerSource, StringComparison.Ordinal);
@@ -193,17 +194,17 @@ public sealed class EmailAccPipelineTests
     [Fact]
     public void Re_select_with_loaded_body_still_runs_acc_pipeline()
     {
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
-        Assert.Contains("RunSelectionPipelineAsync", vmSource, StringComparison.Ordinal);
-        Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", vmSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("HasLoadedBodyForCurrentSelection(value.Id))\n        {\n            return;", vmSource, StringComparison.Ordinal);
+        var detailVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
+        Assert.Contains("RunSelectionPipelineAsync", detailVmSource, StringComparison.Ordinal);
+        Assert.Contains("LoadSelectedEmailWithAccPipelineAsync", ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailSelectionCoordinator.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("HasLoadedBodyForCurrentSelection(value.Id))\n        {\n            return;", detailVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
     public void PatchRowAttachmentCount_updates_has_attachments_before_passive_ingest()
     {
         var listVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
-        var selectionHandlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowSelectionHandler.cs");
+        var selectionHandlerSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailSelectionCoordinator.cs");
 
         Assert.Contains("PatchRowAttachmentCount", listVmSource, StringComparison.Ordinal);
         Assert.Contains("PatchRowAttachmentCount(messageId, details.Attachments.Count)", selectionHandlerSource, StringComparison.Ordinal);
@@ -300,7 +301,8 @@ public sealed class EmailAccPipelineTests
     public void MoveToProject_coordinator_uses_executor_not_parallel_handler_in_vm()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
-        Assert.Contains("IEmailMoveToProjectCoordinator", source, StringComparison.Ordinal);
+        Assert.Contains("IEmailMoveToProjectService", source, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailViewModel", source, StringComparison.Ordinal);
         Assert.DoesNotContain("MoveToProjectProcessActionHandler", source, StringComparison.Ordinal);
     }
 

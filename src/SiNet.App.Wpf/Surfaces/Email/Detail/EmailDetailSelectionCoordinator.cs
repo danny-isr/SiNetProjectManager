@@ -4,9 +4,9 @@ using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 
-namespace SiNet.App.Wpf.Surfaces.Email;
+namespace SiNet.App.Wpf.Surfaces.Email.Detail;
 
-internal sealed class EmailWindowSelectionHandler
+internal sealed class EmailDetailSelectionCoordinator
 {
     private readonly IEmailGateway _emailGateway;
     private readonly EmailListViewModel _emailList;
@@ -18,7 +18,7 @@ internal sealed class EmailWindowSelectionHandler
     private readonly Func<int> _getLoadVersion;
     private readonly Action _bumpLoadVersion;
 
-    public EmailWindowSelectionHandler(
+    public EmailDetailSelectionCoordinator(
         IEmailGateway emailGateway,
         EmailListViewModel emailList,
         Action<string> setStatusMessage,
@@ -243,7 +243,7 @@ internal sealed class EmailWindowSelectionHandler
 
     private static string FormatAttachmentSize(long? sizeBytes)
     {
-        if (sizeBytes is null || sizeBytes <= 0)
+        if (sizeBytes is null or <= 0)
         {
             return "Unknown";
         }

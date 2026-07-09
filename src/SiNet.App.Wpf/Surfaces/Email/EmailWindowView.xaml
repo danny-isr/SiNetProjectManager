@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Email"
+        xmlns:detail="clr-namespace:SiNet.App.Wpf.Surfaces.Email.Detail"
         xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         mc:Ignorable="d"
         Title="{Binding Title}"
@@ -16,52 +17,6 @@
         FlowDirection="RightToLeft"
         Closing="EmailWindowView_OnClosing"
         d:DataContext="{d:DesignInstance Type=local:EmailWindowViewModel, IsDesignTimeCreatable=True}">
-
-    <!--
-        FIRST REAL READ-ONLY SLICE over the legacy SiNetProjectManagerV2/WPFUserControl/EmailManagementView.xaml.
-        Structure (top status + project/Gmail filters strip, selected-project info strip, and the 3-pane
-        content area: email list on the right, email viewer in the center, context/calendar placeholder
-        on the left) is kept for visual parity. The window now loads real Gmail summaries through the
-        clean Application/Infrastructure path, while body details, attachments-open, send/modify, and
-        workflow actions remain deferred. The old EmailManagementView stays the visual reference.
-    -->
-
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-        <!-- Small toolbar/action button chrome (mirrors the legacy filter/action buttons). -->
-        <Style TargetType="Button" x:Key="ActionButton">
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#CCC" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="3"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF" />
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#90CAF9" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
 
     <Border x:Name="ContentBorder" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="8" Margin="8" ClipToBounds="True">
         <Border.Effect>
@@ -77,7 +32,6 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- HEADER CHROME (borderless-window drag strip + close), mirrors the floating clone pattern. -->
             <Grid Grid.Row="0"
                   x:Name="HeaderBar"
                   Background="#1976D2"
@@ -100,10 +54,9 @@
                         Background="Transparent"
                         Cursor="Hand"
                         Click="CloseButton_Click"
-                        ToolTip="&#x05E1;&#x05D2;&#x05D5;&#x05E8;" />
+                        ToolTip="סגור" />
             </Grid>
 
-            <!-- Row 1: Project context bar (full width) -->
             <Border Grid.Row="1"
                     Background="#FAFAFA"
                     BorderBrush="#E0E0E0"
@@ -132,222 +85,35 @@
                 </WrapPanel>
             </Border>
 
-            <!-- Row 2: Filter / paging toolbar (full width) -->
             <local:EmailListFilterBar Grid.Row="2"
                                       DataContext="{Binding EmailList}"
                                       Margin="0,0,0,6" />
 
-            <!-- Row 3: Main content area (RTL: Column 0 = visual Right). -->
             <Grid Grid.Row="3" FlowDirection="RightToLeft">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="420" MinWidth="250" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" MinWidth="380" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="260" MinWidth="180" />
+                    <ColumnDefinition Width="*" MinWidth="480" />
                 </Grid.ColumnDefinitions>
 
-                <!-- EMAIL LIST column: list only -->
                 <local:EmailListView Grid.Column="0"
                                      DataContext="{Binding EmailList}"
                                      VerticalAlignment="Stretch"
                                      MinHeight="0" />
 
-                <!-- SPLITTER: Email list | viewer. -->
                 <GridSplitter Grid.Column="1"
                               Width="4"
                               HorizontalAlignment="Center"
                               Background="Transparent"
                               Cursor="SizeWE" />
 
-                <!-- CENTER: Email viewer (header + attachments + body + action bar). -->
-                <Border Grid.Column="2"
-                        FlowDirection="LeftToRight"
-                        BorderBrush="#E0E0E0"
-                        BorderThickness="1"
-                        CornerRadius="4">
-                    <Grid>
-                        <!-- Empty state (no email selected). -->
-                        <StackPanel VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
-                            <TextBlock Text="&#x2709;" FontSize="{DynamicResource SiTextHugeFontSize}" HorizontalAlignment="Center" Foreground="#CCC" />
-                            <TextBlock Text="בחר מייל מהרשימה לצפייה"
-                                       Opacity="0.7"
-                                       HorizontalAlignment="Center"
-                                       Margin="0,10,0,0" />
-                        </StackPanel>
-
-                        <!-- Selected email content. -->
-                        <Grid Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}}">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <!-- Row 0: Header (subject + sender + date). -->
-                            <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="12,8">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding SelectedEmail.Subject}" FontWeight="Bold" FontSize="{DynamicResource SiTextNormalFontSize}" TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                        <TextBlock Text="{Binding SelectedEmail.Sender}" Foreground="#555" />
-                                        <TextBlock Text="  •  " Foreground="#AAA" />
-                                        <TextBlock Text="{Binding SelectedEmail.ReceivedDisplay}" Foreground="#888" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Row 1: Attachment metadata (read-only in production pilot — open/download deferred). -->
-                            <Border Grid.Row="1" Padding="12,6" BorderBrush="#EEE" BorderThickness="0,0,0,1">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                        <TextBlock Text="&#x1F4CE; \u05E7\u05D1\u05E6\u05D9\u05DD \u05DE\u05E6\u05D5\u05E8\u05E4\u05D9\u05DD" FontWeight="SemiBold" FontSize="{DynamicResource SiTextSmallFontSize}" Foreground="#666" />
-                                        <Button Content="&#x1F310; \u05E4\u05EA\u05D7 \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05D5\u05E8\u05D3\u05D4"
-                                                Command="{Binding OpenExternalDownloadLinkCommand}"
-                                                Style="{StaticResource ActionButton}"
-                                                Margin="12,0,0,0"
-                                                Padding="8,2"
-                                                FontSize="{DynamicResource SiTextSmallFontSize}"
-                                                Visibility="{Binding ShowExternalDownloadLinkAction, Converter={StaticResource BoolToVis}}"
-                                                ToolTip="JumboMail / WeTransfer — הורדה ואז העלאה ל-ACC" />
-                                    </StackPanel>
-                                    <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <WrapPanel Orientation="Horizontal" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Padding="8,3" Margin="0,0,6,6" Background="#EEF2FF" BorderBrush="#C5CAE9" BorderThickness="1" CornerRadius="3">
-                                                    <TextBlock Text="{Binding DisplayLabel}" FontSize="{DynamicResource SiTextSmallFontSize}" />
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Row 2: Body preview. -->
-                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="12,8">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding SelectedAccStatusDisplay}"
-                                               TextWrapping="Wrap"
-                                               Foreground="#4527A0"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,8"
-                                               Visibility="{Binding ShowSelectedAccStatus, Converter={StaticResource BoolToVis}}" />
-                                    <TextBlock Text="{Binding SelectedEmailBody}" TextWrapping="Wrap" Foreground="#333" />
-                                </StackPanel>
-                            </ScrollViewer>
-
-                            <!-- Row 3: Action bar — hidden in production pilot (write/workflow deferred). -->
-                            <Border Grid.Row="3" Background="#E8F5E9" Padding="8,6" BorderBrush="#EEE" BorderThickness="0,1,0,0"
-                                    Visibility="{Binding ShowDeferredWriteActions, Converter={StaticResource BoolToVis}}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="\u05E9\u05D9\u05D5\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8: " FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding ActiveProjectDisplay}"
-                                                   Foreground="#2E7D32"
-                                                   FontWeight="Bold"
-                                                   VerticalAlignment="Center" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="\u05E9\u05D9\u05D9\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8"
-                                                Command="{Binding LinkToProjectCommand}"
-                                                Style="{StaticResource ActionButton}"
-                                                ToolTip="\u05E9\u05D9\u05D9\u05DA \u05DE\u05D9\u05D9\u05DC \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" />
-                                        <Button Content="&#x1F4C2; \u05D4\u05E2\u05D1\u05E8 \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8"
-                                                Command="{Binding MarkHandledCommand}"
-                                                Style="{StaticResource ActionButton}"
-                                                Background="#C8E6C9"
-                                                BorderBrush="#66BB6A"
-                                                ToolTip="\u05D4\u05E2\u05D1\u05E8 \u05DE\u05D9\u05D9\u05DC \u05DC\u05EA\u05D9\u05E7\u05D9\u05D9\u05EA \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8" />
-                                        <Button Content="\u05D4\u05E9\u05D1"
-                                                Command="{Binding ReplyCommand}"
-                                                Style="{StaticResource ActionButton}"
-                                                ToolTip="\u05D4\u05E9\u05D1 \u05DC\u05E9\u05D5\u05DC\u05D7" />
-                                        <Button Content="\u05D4\u05E2\u05D1\u05E8"
-                                                Command="{Binding ForwardCommand}"
-                                                Style="{StaticResource ActionButton}"
-                                                ToolTip="\u05D4\u05E2\u05D1\u05E8 \u05D0\u05EA \u05D4\u05DE\u05D9\u05D9\u05DC" />
-                                        <Button Content="\u05E6\u05D5\u05E8 \u05DE\u05E9\u05D9\u05DE\u05D4"
-                                                Command="{Binding CreateTaskFromEmailCommand}"
-                                                Style="{StaticResource ActionButton}"
-                                                ToolTip="\u05E6\u05D5\u05E8 \u05DE\u05E9\u05D9\u05DE\u05D4 \u05DE\u05D4\u05DE\u05D9\u05D9\u05DC" />
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-
-                            <!-- Production pilot notice (shown when write action bar is hidden). -->
-                            <Border Grid.Row="3"
-                                    Background="#FFF8E1"
-                                    Padding="8,6"
-                                    BorderBrush="#FFE082"
-                                    BorderThickness="0,1,0,0"
-                                    Visibility="{Binding ShowDeferredWriteActions, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
-                                <TextBlock Text="{Binding ProductionPilotNotice}"
-                                           TextWrapping="Wrap"
-                                           Foreground="#8D6E63"
-                                           FontSize="{DynamicResource SiTextSmallFontSize}" />
-                            </Border>
-                        </Grid>
-                    </Grid>
-                </Border>
-
-                <!-- SPLITTER: viewer | context/calendar. -->
-                <GridSplitter Grid.Column="3"
-                              Width="5"
-                              HorizontalAlignment="Center"
-                              Background="Transparent"
-                              Cursor="SizeWE" />
-
-                <!-- LEFT (in RTL): Context / calendar placeholder — write/workflow actions hidden in production pilot. -->
-                <Border Grid.Column="4" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="White">
-                    <StackPanel Margin="10">
-                        <TextBlock Text="\u05D4\u05E7\u05E9\u05E8 / \u05EA\u05D6\u05DE\u05D5\u05DF" FontWeight="Bold" Margin="0,0,0,8" />
-                        <StackPanel Visibility="{Binding ShowDeferredWriteActions, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DE\u05D5\u05E6\u05E2\u05D5\u05EA"
-                                       FontWeight="SemiBold"
-                                       Foreground="#666"
-                                       Margin="0,0,0,6" />
-                            <Button Content="&#x2713; \u05E1\u05DE\u05DF \u05DB\u05D8\u05D5\u05E4\u05DC"
-                                    Command="{Binding MarkHandledCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    Margin="0,0,0,6"
-                                    HorizontalAlignment="Right" />
-                            <Button Content="\u05D0\u05E8\u05DB\u05D9\u05D5\u05DF"
-                                    Command="{Binding ArchiveCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    Margin="0,0,0,6"
-                                    HorizontalAlignment="Right" />
-                            <Button Content="\u05E1\u05D9\u05D9\u05DD \u05DE\u05E9\u05D9\u05DE\u05D4"
-                                    Command="{Binding CompleteTaskCommand}"
-                                    Style="{StaticResource ActionButton}"
-                                    HorizontalAlignment="Right" />
-                        </StackPanel>
-                        <Border Background="#FFF8E1"
-                                BorderBrush="#FFE082"
-                                BorderThickness="1"
-                                CornerRadius="4"
-                                Padding="8"
-                                Margin="0,12,0,0">
-                            <TextBlock Text="{Binding ProductionPilotNotice}"
-                                       TextWrapping="Wrap"
-                                       Foreground="#8D6E63"
-                                       FontSize="{DynamicResource SiTextSmallFontSize}" />
-                        </Border>
-                    </StackPanel>
-                </Border>
+                <detail:EmailDetailView Grid.Column="2"
+                                        x:Name="EmailDetailHost"
+                                        DataContext="{Binding EmailDetail}"
+                                        VerticalAlignment="Stretch"
+                                        MinHeight="0" />
             </Grid>
 
-            <!-- STATUS BAR (bottom). -->
             <Border Grid.Row="4"
                     Background="#ECEFF1"
                     BorderBrush="#E0E0E0"

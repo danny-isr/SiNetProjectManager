@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shared.Projects;
@@ -32,8 +33,10 @@ public sealed class EmailWindowFactory(IServiceProvider services) : IEmailWindow
     /// <inheritdoc />
     public EmailWindowView Create()
     {
-        // Resolve a fresh view model per window; it shares the singleton current-project context.
         var viewModel = _services.GetRequiredService<EmailWindowViewModel>();
-        return new EmailWindowView(viewModel);
+        var view = new EmailWindowView(viewModel);
+        var bodyRenderer = _services.GetService<IEmailBodyRenderer>();
+        view.SetBodyRenderer(bodyRenderer);
+        return view;
     }
 }

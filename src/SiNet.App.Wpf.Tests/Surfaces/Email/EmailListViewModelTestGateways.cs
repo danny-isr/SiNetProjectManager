@@ -572,6 +572,39 @@ internal static partial class EmailListViewModelTestFixtures
             Task.FromResult(_summariesById.TryGetValue(messageId, out var summary) ? summary : null);
     }
 
+    internal sealed class TwoRowActionTestEmailGateway : ActionTestEmailGateway
+    {
+        public override Task<EmailMailboxPage> GetMailboxPageAsync(
+            EmailMailboxQuery query,
+            string? pageToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            MailboxPageCalls++;
+            return Task.FromResult(new EmailMailboxPage(
+            [
+                new EmailSummary(
+                    "msg-1",
+                    "thread-1",
+                    EmailAddress.CreateOrFallback("a@example.com"),
+                    "Hello",
+                    DateTimeOffset.UtcNow,
+                    0,
+                    InternetMessageId: "<abc@mail.com>"),
+                new EmailSummary(
+                    "msg-2",
+                    "thread-1",
+                    EmailAddress.CreateOrFallback("b@example.com"),
+                    "Follow up",
+                    DateTimeOffset.UtcNow,
+                    0,
+                    InternetMessageId: "<def@mail.com>"),
+            ],
+            query.PageSize,
+            null,
+            false));
+        }
+    }
+
     internal sealed class RegroupingActionEmailGateway : ActionTestEmailGateway
     {
         public RegroupingActionEmailGateway(bool loadFiledInitially = true)

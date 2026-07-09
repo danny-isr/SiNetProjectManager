@@ -690,7 +690,7 @@ public sealed class EmailListViewModelFilingTests
     public async Task FileEmailToThreadProject_updates_peer_rows_in_same_thread()
     {
         var filing = new EmailListViewModelTestFixtures.RecordingFilingService();
-        var gateway = new EmailListViewModelTestFixtures.ActionTestEmailGateway();
+        var gateway = new EmailListViewModelTestFixtures.TwoRowActionTestEmailGateway();
         var sut = EmailListViewModelTestFixtures.CreateWriteCapableSut(
             gateway: gateway,
             filing: filing);

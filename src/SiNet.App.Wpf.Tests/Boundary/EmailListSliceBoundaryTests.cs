@@ -248,7 +248,8 @@ public sealed class EmailListSliceBoundaryTests
         Assert.Contains("IEmailStatusService", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("SendAsync", listVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("GoogleService", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("ShowDeferredWriteActions => false", windowVmSource, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailViewModel", windowVmSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailMoveToProjectService", windowVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

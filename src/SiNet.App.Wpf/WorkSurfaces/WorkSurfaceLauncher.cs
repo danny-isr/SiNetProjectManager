@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -46,6 +47,15 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
         {
+            if (context.TaskId is > 0 && context.PrimaryWorkTargetEntityId is > 0
+                && _services.GetService<IEmailWorkItemWindowFactory>() is { } workItemFactory)
+            {
+                var workItemWindow = workItemFactory.Create();
+                workItemWindow.ApplyContext(context);
+                workItemWindow.Show();
+                return ValueTask.FromResult(true);
+            }
+
             var factory = _services.GetRequiredService<IEmailWindowFactory>();
             var window = factory.Create();
             window.ApplyContext(context);

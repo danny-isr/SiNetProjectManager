@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using SiNet.Application.Email.Detail;
 using SiNet.Application.WorkSurfaces;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
@@ -36,6 +37,9 @@ public partial class EmailWindowView : Window
 
     /// <summary>The bound view model for the read-only Gmail slice.</summary>
     public EmailWindowViewModel ViewModel { get; }
+
+    public void SetBodyRenderer(IEmailBodyRenderer? bodyRenderer) =>
+        EmailDetailHost.SetBodyRenderer(bodyRenderer);
 
     /// <summary>
     /// Placeholder workflow-first entry point. A later slice will use this to open the window from a

@@ -68,11 +68,14 @@ public sealed class EmailListMigrationBoundaryTests
     }
 
     [Fact]
-    public void Email_viewer_deferred_write_actions_remain_disabled()
+    public void Email_detail_action_bar_is_hosted_in_detail_component()
     {
-        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        var detailXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailView.xaml");
+        var detailVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
 
-        Assert.Contains("ShowDeferredWriteActions => false", vmSource, StringComparison.Ordinal);
+        Assert.Contains("EmailActionBarView", detailXaml, StringComparison.Ordinal);
+        Assert.Contains("FileSelectedEmailAsync", detailVmSource, StringComparison.Ordinal);
+        Assert.Contains("MoveSelectedEmailToProjectAsync", detailVmSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -119,7 +122,7 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("PrimaryWorkTargetEntityId", vmSource, StringComparison.Ordinal);
         Assert.Contains("IEmailInboxQueryService", vmSource, StringComparison.Ordinal);
         Assert.Contains("WorkSurfaceComponentKeys.IsEmailSurface", launcherSource, StringComparison.Ordinal);
-        Assert.Contains("IEmailWindowFactory", launcherSource, StringComparison.Ordinal);
+        Assert.Contains("IEmailWorkItemWindowFactory", launcherSource, StringComparison.Ordinal);
     }
 
     [Fact]

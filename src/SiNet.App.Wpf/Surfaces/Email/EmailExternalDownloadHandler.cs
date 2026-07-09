@@ -1,3 +1,4 @@
+using SiNet.App.Wpf.Surfaces.Email.Detail;
 using SiNet.Application.Email.Acc;
 
 
@@ -24,7 +25,7 @@ internal sealed class EmailExternalDownloadHandler
 
     private readonly EmailListViewModel _emailList;
 
-    private readonly EmailWindowSelectionHandler _selectionHandler;
+    private readonly EmailDetailSelectionCoordinator _selectionCoordinator;
 
     private readonly Action<string> _setStatusMessage;
 
@@ -46,7 +47,7 @@ internal sealed class EmailExternalDownloadHandler
 
         EmailListViewModel emailList,
 
-        EmailWindowSelectionHandler selectionHandler,
+        EmailDetailSelectionCoordinator selectionHandler,
 
         Action<string> setStatusMessage,
 
@@ -66,7 +67,7 @@ internal sealed class EmailExternalDownloadHandler
 
         _emailList = emailList;
 
-        _selectionHandler = selectionHandler;
+        _selectionCoordinator = selectionHandler;
 
         _setStatusMessage = setStatusMessage;
 
@@ -182,7 +183,7 @@ internal sealed class EmailExternalDownloadHandler
 
 
 
-        _selectionHandler.MergeExternalDownloadAttachments(external);
+        _selectionCoordinator.MergeExternalDownloadAttachments(external);
 
     }
 
@@ -288,7 +289,7 @@ internal sealed class EmailExternalDownloadHandler
 
             var loadVersion = _getLoadVersion();
 
-            await _selectionHandler.RunAccPipelineAsync(selected, loadVersion).ConfigureAwait(true);
+            await _selectionCoordinator.RunAccPipelineAsync(selected, loadVersion).ConfigureAwait(true);
 
             await MergeExternalDownloadsIntoViewerAsync(selected, loadVersion).ConfigureAwait(true);
 

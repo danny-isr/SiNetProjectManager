@@ -35,7 +35,7 @@ public sealed class EmailGmailAuthBoundaryTests
         var windowVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
 
         Assert.Contains("SelectedEmail = null", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("ClearSelectedEmailDetails()", windowVmSource, StringComparison.Ordinal);
+        Assert.Contains("ClearSelectedEmailDetails()", ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailSelectionCoordinator.cs"), StringComparison.Ordinal);
     }
 
     [Fact]
