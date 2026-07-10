@@ -3,20 +3,22 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              FlowDirection="RightToLeft"
              Background="#E8F5E9"
-             Padding="8,6">
+             Padding="6,3">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="שיוך לפרויקט: " FontWeight="SemiBold" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding ActiveProjectDisplay}" Foreground="#2E7D32" FontWeight="Bold" VerticalAlignment="Center" />
+            <TextBlock Text="שיוך: " FontWeight="SemiBold" VerticalAlignment="Center"
+                       FontSize="{DynamicResource SiTextSmallFontSize}" />
+            <TextBlock Text="{Binding ActiveProjectDisplay}" Foreground="#2E7D32" FontWeight="Bold"
+                       VerticalAlignment="Center" FontSize="{DynamicResource SiTextSmallFontSize}" />
             <TextBlock Text="{Binding AssignedHint}"
-                       Margin="12,0,0,0"
+                       Margin="8,0,0,0"
                        Foreground="#1565C0"
-                       TextWrapping="Wrap"
-                       VerticalAlignment="Center">
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource SiTextSmallFontSize}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Visibility" Value="Collapsed" />
@@ -29,10 +31,12 @@
                 </TextBlock.Style>
             </TextBlock>
             <TextBlock Text="{Binding MoveBlockReason}"
-                       Margin="12,0,0,0"
+                       Margin="8,0,0,0"
                        Foreground="#C62828"
-                       TextWrapping="Wrap"
-                       VerticalAlignment="Center">
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       TextTrimming="CharacterEllipsis"
+                       MaxWidth="360">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Visibility" Value="Collapsed" />
@@ -48,9 +52,10 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal">
             <Button Content="שייך לפרויקט"
                     Command="{Binding FileEmailCommand}"
-                    Padding="10,4"
-                    Margin="0,0,6,0"
-                    ToolTip="שייך מייל לפרויקט הנוכחי">
+                    Padding="8,2"
+                    Margin="0,0,4,0"
+                    FontSize="{DynamicResource SiTextSmallFontSize}"
+                    ToolTip="שייך מייל לפרויקט (פותח בחירה אם לא נבחר פרויקט למעלה)">
                 <Button.Style>
                     <Style TargetType="Button">
                         <Setter Property="Visibility" Value="Collapsed" />
@@ -64,9 +69,10 @@
             </Button>
             <Button Content="העבר לפרויקט"
                     Command="{Binding MoveToProjectCommand}"
-                    Padding="10,4"
+                    Padding="8,2"
                     Background="#C8E6C9"
                     BorderBrush="#66BB6A"
+                    FontSize="{DynamicResource SiTextSmallFontSize}"
                     ToolTip="{Binding MoveButtonToolTip}">
                 <Button.Style>
                     <Style TargetType="Button">

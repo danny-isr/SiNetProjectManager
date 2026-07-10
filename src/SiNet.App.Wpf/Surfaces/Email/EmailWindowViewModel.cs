@@ -132,6 +132,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailThreadMappingSyncService? threadMappingSync = null,
         IEmailAttachmentTaggingService? attachmentTaggingService = null,
         IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null,
+        IEmailFilingProjectPickerHost? filingProjectPicker = null,
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
@@ -175,6 +176,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             bodyRenderer,
             attachmentTaggingService,
             attachmentProjectFilePicker,
+            filingProjectPicker,
             alternativeNamePrompt);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null

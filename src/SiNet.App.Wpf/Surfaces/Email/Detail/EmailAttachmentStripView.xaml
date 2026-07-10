@@ -2,22 +2,20 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              FlowDirection="RightToLeft"
-             Padding="12,6">
+             Padding="8,4">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </UserControl.Resources>
     <StackPanel>
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-            <TextBlock Text="📎 קבצים מצורפים" FontWeight="SemiBold" FontSize="{DynamicResource SiTextSmallFontSize}" Foreground="#666" />
-            <Button Content="🌐 פתח קישור הורדה"
-                    Command="{Binding OpenExternalDownloadLinkCommand}"
-                    Margin="12,0,0,0"
-                    Padding="8,2"
-                    FontSize="{DynamicResource SiTextSmallFontSize}"
-                    Visibility="{Binding ShowExternalDownloadLinkAction, Converter={StaticResource BoolToVis}}" />
-        </StackPanel>
+        <TextBlock Text="📎 קבצים מצורפים"
+                   FontWeight="SemiBold"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                   Foreground="#666"
+                   Margin="0,0,0,2" />
 
-        <ItemsControl ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
+        <ItemsControl ItemsSource="{Binding ExternalDownloadLinks}"
+                      Margin="0,0,0,4"
+                      Visibility="{Binding HasExternalDownloadLinks, Converter={StaticResource BoolToVis}}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <WrapPanel Orientation="Horizontal" FlowDirection="RightToLeft" />
@@ -25,24 +23,44 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <Border Padding="8,4" Margin="0,0,6,6" Background="#EEF2FF" BorderBrush="#C5CAE9" BorderThickness="1" CornerRadius="4">
+                    <Button Content="{Binding DisplayLabel}"
+                            Command="{Binding OpenCommand}"
+                            ToolTip="{Binding Url}"
+                            Padding="6,1"
+                            Margin="0,0,4,2"
+                            FontSize="{DynamicResource SiTextSmallFontSize}"
+                            Foreground="#1565C0"
+                            Cursor="Hand" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ItemsControl ItemsSource="{Binding Attachments}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" FlowDirection="RightToLeft" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Padding="6,2" Margin="0,0,4,4" Background="#EEF2FF" BorderBrush="#C5CAE9" BorderThickness="1" CornerRadius="4">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding DisplayLabel}"
                                        FontSize="{DynamicResource SiTextSmallFontSize}"
                                        VerticalAlignment="Center"
-                                       Margin="0,0,8,0" />
+                                       Margin="0,0,6,0" />
                             <Button Content="{Binding TagButtonText}"
                                     Command="{Binding TagCommand}"
-                                    MinWidth="100"
-                                    MaxWidth="220"
-                                    Height="22"
-                                    Padding="6,0"
+                                    MinWidth="80"
+                                    MaxWidth="180"
+                                    Height="20"
+                                    Padding="4,0"
                                     FontSize="10"
-                                    Margin="0,0,6,0"
+                                    Margin="0,0,4,0"
                                     Visibility="{Binding ShowTagSelector, Converter={StaticResource BoolToVis}}" />
-                            <ComboBox MinWidth="80"
-                                      MaxWidth="140"
-                                      Height="22"
+                            <ComboBox MinWidth="70"
+                                      MaxWidth="120"
+                                      Height="20"
                                       ItemsSource="{Binding AvailableAlternatives}"
                                       SelectedValue="{Binding SelectedAlternativeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       SelectedValuePath="Id"

@@ -222,6 +222,8 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNet.Application.Email.Detail.IEmailBodyRenderer, SiNetProjectManagerV2.Services.Email.WebView2EmailBodyRenderer>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailAttachmentProjectFilePickerHost,
                 SiNetProjectManagerV2.Services.Email.EmailAttachmentProjectFilePickerHost>();
+            services.AddTransient<SiNet.Application.Email.Detail.IEmailFilingProjectPickerHost,
+                SiNetProjectManagerV2.Services.Email.EmailFilingProjectPickerHost>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailAlternativeNamePromptHost,
                 SiNetProjectManagerV2.Services.Email.EmailAlternativeNamePromptHost>();
 

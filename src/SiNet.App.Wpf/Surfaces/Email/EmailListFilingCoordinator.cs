@@ -22,11 +22,19 @@ internal sealed class EmailListFilingCoordinator
     }
 
     public bool CanFileEmailToProject(EmailListRow? row) =>
+        CanAttemptFileEmailToProject(row)
+        && _owner.GetCurrentProject() is not null
+        && row is not null
+        && !IsFiledToSameProject(row);
+
+    /// <summary>
+    /// Filing is possible when services/user are ready; target project may come from
+    /// current context or a one-shot picker (does not require current project).
+    /// </summary>
+    public bool CanAttemptFileEmailToProject(EmailListRow? row) =>
         CanExecuteWriteAction(row)
         && _owner.FilingService is not null
-        && row is not null
-        && !IsFiledToSameProject(row)
-        && _owner.GetCurrentProject() is not null
+        && row is { IsFiledToProject: false }
         && (_owner.GetCurrentUserId() ?? 0) > 0;
 
     public bool CanFileEmailToThreadProject(EmailListRow? row) =>
@@ -78,7 +86,10 @@ internal sealed class EmailListFilingCoordinator
         };
     }
 
-    public async Task FileEmailToProjectAsync(EmailListRow? row)
+    public Task FileEmailToProjectAsync(EmailListRow? row) =>
+        FileEmailToProjectAsync(row, targetProject: null);
+
+    public async Task FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject)
     {
         if (row is null)
         {
@@ -92,7 +103,8 @@ internal sealed class EmailListFilingCoordinator
             return;
         }
 
-        if (_owner.GetCurrentProject() is not { } project)
+        var project = targetProject ?? _owner.GetCurrentProject();
+        if (project is null)
         {
             _owner.SetLoadWarning(DescribeFileToProjectDisabledReason(row));
             return;
@@ -105,7 +117,7 @@ internal sealed class EmailListFilingCoordinator
             return;
         }
 
-        if (IsFiledToSameProject(row))
+        if (row.IsFiledToProject && row.ProjectId == project.ProjectId)
         {
             _owner.SetLoadWarning(DescribeFileToProjectDisabledReason(row));
             return;

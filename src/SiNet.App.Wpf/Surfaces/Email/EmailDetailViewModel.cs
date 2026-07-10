@@ -24,6 +24,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private readonly IEmailSuggestedActionExecutionService? _actionExecutionService;
     private readonly IEmailAttachmentTaggingService? _attachmentTaggingService;
     private readonly IEmailAttachmentProjectFilePickerHost? _attachmentProjectFilePicker;
+    private readonly IEmailFilingProjectPickerHost? _filingProjectPicker;
     private readonly IEmailAlternativeNamePromptHost? _alternativeNamePrompt;
     private readonly ITaskCompletionService? _taskCompletionService;
     private readonly IEmailBodyRenderer? _bodyRenderer;
@@ -55,6 +56,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IEmailBodyRenderer? bodyRenderer = null,
         IEmailAttachmentTaggingService? attachmentTaggingService = null,
         IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null,
+        IEmailFilingProjectPickerHost? filingProjectPicker = null,
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null)
     {
         ArgumentNullException.ThrowIfNull(emailList);
@@ -72,6 +74,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _bodyRenderer = bodyRenderer;
         _attachmentTaggingService = attachmentTaggingService;
         _attachmentProjectFilePicker = attachmentProjectFilePicker;
+        _filingProjectPicker = filingProjectPicker;
         _alternativeNamePrompt = alternativeNamePrompt;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
@@ -147,7 +150,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             if (SetField(ref _selectedEmailBody, value))
             {
                 Viewer.SyncFromBody(value, _selectedEmailHtmlBody, _bodyRenderer, _selectedEmail?.Id);
-                RefreshExternalDownloadActionVisibility();
+                RefreshExternalDownloadLinks();
             }
         }
     }
@@ -254,6 +257,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             ? "לא נבחר פרויקט"
             : $"{project.ProjectNumber} — {project.ProjectName}";
         _ = RefreshMoveEligibilityThenActionBarAsync();
+        _ = RefreshWorkflowContextAsync();
     }
 
     private async Task RefreshMoveEligibilityThenActionBarAsync()
@@ -311,20 +315,22 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         loadVersion == _selectedEmailLoadVersion
         && string.Equals(_selectedEmail?.Id, messageId, StringComparison.Ordinal);
 
-    private void RefreshExternalDownloadActionVisibility() =>
-        AttachmentStrip.ShowExternalDownloadLinkAction =
-            EmailExternalDownloadLinkDetector.HasExternalDownloadLink(SelectedEmailBody)
-            && _selectedEmail is not null
-            && _externalDownloadHandler?.IsAvailable == true;
-
-    private void OpenExternalDownloadLink()
+    private void RefreshExternalDownloadLinks()
     {
-        if (_selectedEmail is null || _externalDownloadHandler is null)
+        var urls = _selectedEmail is not null && _externalDownloadHandler?.IsAvailable == true
+            ? EmailExternalDownloadLinkDetector.ExtractUrls(SelectedEmailBody)
+            : Array.Empty<string>();
+        AttachmentStrip.SetExternalDownloadLinks(urls);
+    }
+
+    private void OpenExternalDownloadLink(string url)
+    {
+        if (_selectedEmail is null || _externalDownloadHandler is null || string.IsNullOrWhiteSpace(url))
         {
             return;
         }
 
-        _externalDownloadHandler.OpenFirstDownloadLink(SelectedEmailBody, _selectedEmail);
+        _externalDownloadHandler.OpenDownloadLink(url, _selectedEmail);
     }
 
     private async Task FileSelectedEmailAsync()
@@ -335,20 +341,38 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (!_emailList.CanFileEmailToProject(_selectedEmail))
+        if (!_emailList.CanAttemptFileEmailToProject(_selectedEmail))
         {
             SetStatus("שיוך לפרויקט אינו זמין כרגע.");
             return;
         }
 
+        var project = _currentProject.CurrentProject;
+        if (project is null)
+        {
+            if (_filingProjectPicker is null || !_filingProjectPicker.IsAvailable)
+            {
+                SetStatus("בחר פרויקט לפני שיוך מייל.");
+                return;
+            }
+
+            project = await _filingProjectPicker.PickProjectAsync().ConfigureAwait(true);
+            if (project is null)
+            {
+                SetStatus("שיוך בוטל.");
+                return;
+            }
+        }
+
         var selectedId = _selectedEmail.Id;
-        await _emailList.FileEmailToProjectAsync(_selectedEmail).ConfigureAwait(true);
+        await _emailList.FileEmailToProjectAsync(_selectedEmail, project).ConfigureAwait(true);
 
         _selectedEmail = _emailList.FindRowById(selectedId) ?? _selectedEmail;
         OnPropertyChanged(nameof(HasSelectedEmail));
         SyncViewerHeader();
         await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+        await RefreshWorkflowContextAsync().ConfigureAwait(true);
         RefreshActionBarState();
     }
 
@@ -460,6 +484,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         Workflow.IsLoading = true;
+        Workflow.StatusMessage = "מנתח הקשר...";
         try
         {
             EmailWorkflowContextDto? context;
@@ -477,11 +502,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             }
             else
             {
+                // Do not pass global/current project — association is email ProjectId only.
                 context = await _workflowContextService.AnalyzeAsync(
                     new EmailWorkflowContextQuery(
                         inboxId,
                         _selectedEmail.Id,
-                        _workSurfaceContext?.ProjectId ?? _currentProject.CurrentProject?.ProjectId))
+                        OverrideProjectId: null))
                     .ConfigureAwait(true);
             }
 
@@ -490,6 +516,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 : _suggestedActionService.BuildActions(context);
 
             Workflow.ApplyContext(context, actions);
+            if (string.Equals(Workflow.StatusMessage, "מנתח הקשר...", StringComparison.Ordinal))
+            {
+                Workflow.StatusMessage = string.Empty;
+            }
         }
         finally
         {
@@ -536,7 +566,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         ActionBar.RefreshCommandStates(
             canFile: hasSelection
                      && !isFiled
-                     && _emailList.CanFileEmailToProject(_selectedEmail!),
+                     && _emailList.CanAttemptFileEmailToProject(_selectedEmail!)
+                     && (_currentProject.CurrentProject is not null
+                         || _filingProjectPicker?.IsAvailable == true),
             canMove: hasSelection
                      && isFiled
                      && _moveToProjectService?.IsAvailable == true

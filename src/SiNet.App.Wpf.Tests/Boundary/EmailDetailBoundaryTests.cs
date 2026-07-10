@@ -76,6 +76,57 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("פעולה:", paneXaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Workflow_pane_has_no_idle_placeholder_that_flickers()
+    {
+        var paneXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml");
+        Assert.DoesNotContain("בחר מייל לניתוח הקשר", paneXaml, StringComparison.Ordinal);
+        Assert.Contains("מנתח הקשר...", paneXaml, StringComparison.Ordinal);
+        Assert.Contains("IsLoading", paneXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Filing_uses_project_picker_without_setting_current_project()
+    {
+        var detailVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
+        var host = ReadRepoFile("src/SiNet.Application/Email/Detail/IEmailFilingProjectPickerHost.cs");
+        var v2Host = ReadRepoFile("SiNetProjectManagerV2/Services/Email/EmailFilingProjectPickerHost.cs");
+        var app = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
+
+        Assert.Contains("IEmailFilingProjectPickerHost", host, StringComparison.Ordinal);
+        Assert.Contains("PickProjectAsync", host, StringComparison.Ordinal);
+        Assert.Contains("SetCurrentProjectAsync", host, StringComparison.Ordinal); // documented must-not
+        Assert.Contains("ProjectSelectorDialog", v2Host, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetCurrentProjectAsync", v2Host, StringComparison.Ordinal);
+        Assert.Contains("IEmailFilingProjectPickerHost", app, StringComparison.Ordinal);
+        Assert.Contains("CanAttemptFileEmailToProject", detailVm, StringComparison.Ordinal);
+        Assert.Contains("_filingProjectPicker.PickProjectAsync", detailVm, StringComparison.Ordinal);
+        Assert.Contains("RefreshWorkflowContextAsync", detailVm, StringComparison.Ordinal);
+        Assert.Contains("OverrideProjectId: null", detailVm, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void External_download_links_are_shown_for_click()
+    {
+        var stripXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailAttachmentStripView.xaml");
+        var stripVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailAttachmentStripViewModel.cs");
+        var handler = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailExternalDownloadHandler.cs");
+
+        Assert.DoesNotContain("פתח קישור הורדה", stripXaml, StringComparison.Ordinal);
+        Assert.Contains("ExternalDownloadLinks", stripXaml, StringComparison.Ordinal);
+        Assert.Contains("SetExternalDownloadLinks", stripVm, StringComparison.Ordinal);
+        Assert.Contains("OpenDownloadLink", handler, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Workflow_association_ignores_global_project_override()
+    {
+        var sql = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Detail/SqlEmailWorkflowServices.cs");
+        Assert.DoesNotContain("query.OverrideProjectId ?? message.ProjectId", sql, StringComparison.Ordinal);
+        Assert.Contains("ResolveDefaultOfficeProjectIdAsync", sql, StringComparison.Ordinal);
+        Assert.Contains("defaultOfficeProjectId", sql, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var candidate = Path.Combine(ResolveRepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));

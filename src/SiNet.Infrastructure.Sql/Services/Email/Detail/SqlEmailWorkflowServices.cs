@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Actions;
 using SiNet.Application.Email.Detail;
+using SiNet.Application.Settings;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -40,8 +41,15 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             .CountAsync(a => a.MessageId == inboxMessageId, cancellationToken)
             .ConfigureAwait(false);
 
-        var projectId = query.OverrideProjectId ?? message.ProjectId;
-        if (projectId <= 0)
+        // Inbox rows always have a ProjectId (defaults to office "ניהול משרד").
+        // Associated = filed to a real project, not the office default.
+        var defaultOfficeProjectId = await ResolveDefaultOfficeProjectIdAsync(db, cancellationToken)
+            .ConfigureAwait(false);
+        var projectId = message.ProjectId;
+        var isAssociated = projectId > 0
+                           && (defaultOfficeProjectId <= 0 || projectId != defaultOfficeProjectId);
+
+        if (!isAssociated)
         {
             return new EmailWorkflowContextDto(
                 HasContext: true,
@@ -93,6 +101,30 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             activeWorkflows,
             attachmentCount,
             IsAssociatedToProject: true);
+    }
+
+    private static async Task<int> ResolveDefaultOfficeProjectIdAsync(
+        SiNetSQLDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var defaultTitle = await db.SystemSettings
+            .AsNoTracking()
+            .Where(setting => setting.SettingKey == SystemSettingKeys.DefaultProjectTitle)
+            .Select(setting => setting.SettingValue)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(defaultTitle))
+        {
+            defaultTitle = SystemSettingsDefaults.DefaultProjectTitle;
+        }
+
+        return await db.Projects
+            .AsNoTracking()
+            .Where(project => project.Title == defaultTitle)
+            .Select(project => project.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 }
 

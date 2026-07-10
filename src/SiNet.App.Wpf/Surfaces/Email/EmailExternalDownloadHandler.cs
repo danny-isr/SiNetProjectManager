@@ -95,42 +95,36 @@ internal sealed class EmailExternalDownloadHandler
 
 
 
-    public void OpenFirstDownloadLink(string bodyText, EmailListRow row)
-
+    public void OpenDownloadLink(string url, EmailListRow row)
     {
-
         if (_browserHost is null)
-
         {
-
             _setStatusMessage("פתיחת קישור הורדה אינה זמינה.");
-
             return;
-
         }
 
-
-
-        var urls = EmailExternalDownloadLinkDetector.ExtractUrls(bodyText);
-
-        if (urls.Count == 0)
-
+        if (string.IsNullOrWhiteSpace(url)
+            || !EmailExternalDownloadLinkDetector.IsExternalDownloadUrl(url))
         {
-
-            _setStatusMessage("לא נמצא קישור JumboMail / WeTransfer בתוכן המייל.");
-
+            _setStatusMessage("קישור ההורדה אינו תקין.");
             return;
-
         }
-
-
 
         var context = BuildContext(row);
+        _setStatusMessage($"פותח קישור הורדה… ({url})");
+        _browserHost.OpenDownloadUrl(url, context);
+    }
 
-        _setStatusMessage($"פותח קישור הורדה… ({urls[0]})");
+    public void OpenFirstDownloadLink(string bodyText, EmailListRow row)
+    {
+        var urls = EmailExternalDownloadLinkDetector.ExtractUrls(bodyText);
+        if (urls.Count == 0)
+        {
+            _setStatusMessage("לא נמצא קישור JumboMail / WeTransfer בתוכן המייל.");
+            return;
+        }
 
-        _browserHost.OpenDownloadUrl(urls[0], context);
-
+        OpenDownloadLink(urls[0], row);
     }
 
 

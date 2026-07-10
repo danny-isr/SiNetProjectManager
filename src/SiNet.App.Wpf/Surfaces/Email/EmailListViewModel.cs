@@ -717,7 +717,12 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
     public bool CanFileEmailToProject(EmailListRow? row) => _filing.CanFileEmailToProject(row);
 
+    public bool CanAttemptFileEmailToProject(EmailListRow? row) => _filing.CanAttemptFileEmailToProject(row);
+
     public Task FileEmailToProjectAsync(EmailListRow? row) => _filing.FileEmailToProjectAsync(row);
+
+    public Task FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject) =>
+        _filing.FileEmailToProjectAsync(row, targetProject);
 
     public EmailListRow? PatchRowAttachmentCount(string messageId, int attachmentCount)
     {
