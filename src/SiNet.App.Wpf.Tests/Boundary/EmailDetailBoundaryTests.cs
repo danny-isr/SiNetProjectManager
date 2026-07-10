@@ -62,6 +62,20 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("EmailDetailSelectionCoordinator", ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailSelectionCoordinator.cs"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Email_context_and_actions_sit_in_bottom_row_not_side_panel()
+    {
+        var detailXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailView.xaml");
+        var paneXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml");
+
+        Assert.Contains("EmailWorkflowActionsPaneView Grid.Row=\"3\"", detailXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid.Column=\"2\"", detailXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"280\"", detailXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cursor=\"SizeWE\"", detailXaml, StringComparison.Ordinal);
+        Assert.Contains("WrapPanel", paneXaml, StringComparison.Ordinal);
+        Assert.Contains("פעולה:", paneXaml, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var candidate = Path.Combine(ResolveRepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));
