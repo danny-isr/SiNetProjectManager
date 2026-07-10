@@ -13,7 +13,8 @@ internal sealed class EmailDetailSelectionCoordinator
     private readonly Action<string> _setStatusMessage;
     private readonly Action<string, string?> _setSelectedEmailContent;
     private readonly Action<string> _setSelectedAccStatusDisplay;
-    private readonly ObservableCollection<EmailAttachmentRow> _attachments;
+    private readonly ObservableCollection<EmailDetailAttachmentItem> _attachments;
+    private readonly Func<string, string, string, EmailDetailAttachmentItem> _createAttachmentItem;
     private readonly Func<EmailListRow?> _getSelectedEmail;
     private readonly Func<int> _getLoadVersion;
     private readonly Action _bumpLoadVersion;
@@ -24,7 +25,8 @@ internal sealed class EmailDetailSelectionCoordinator
         Action<string> setStatusMessage,
         Action<string, string?> setSelectedEmailContent,
         Action<string> setSelectedAccStatusDisplay,
-        ObservableCollection<EmailAttachmentRow> attachments,
+        ObservableCollection<EmailDetailAttachmentItem> attachments,
+        Func<string, string, string, EmailDetailAttachmentItem> createAttachmentItem,
         Func<EmailListRow?> getSelectedEmail,
         Func<int> getLoadVersion,
         Action bumpLoadVersion)
@@ -35,6 +37,7 @@ internal sealed class EmailDetailSelectionCoordinator
         _setSelectedEmailContent = setSelectedEmailContent;
         _setSelectedAccStatusDisplay = setSelectedAccStatusDisplay;
         _attachments = attachments;
+        _createAttachmentItem = createAttachmentItem;
         _getSelectedEmail = getSelectedEmail;
         _getLoadVersion = getLoadVersion;
         _bumpLoadVersion = bumpLoadVersion;
@@ -55,10 +58,7 @@ internal sealed class EmailDetailSelectionCoordinator
         var selected = _getSelectedEmail();
         if (selected?.HasAttachments == true)
         {
-            _attachments.Add(new EmailAttachmentRow(
-                "טוען פרטי קבצים...",
-                "Loading",
-                "..."));
+            _attachments.Add(_createAttachmentItem("טוען פרטי קבצים...", "Loading", "..."));
         }
     }
 
@@ -119,15 +119,12 @@ internal sealed class EmailDetailSelectionCoordinator
         {
             if (_attachments.Any(existing =>
                     string.Equals(existing.FileName, item.FileName, StringComparison.OrdinalIgnoreCase)
-                    && existing.Kind == "External"))
+                    && string.Equals(existing.Kind, "External", StringComparison.Ordinal)))
             {
                 continue;
             }
 
-            _attachments.Add(new EmailAttachmentRow(
-                item.FileName,
-                "External",
-                "ACC"));
+            _attachments.Add(_createAttachmentItem(item.FileName, "External", "ACC"));
         }
     }
 
@@ -207,7 +204,7 @@ internal sealed class EmailDetailSelectionCoordinator
         _attachments.Clear();
         foreach (var attachment in details.Attachments)
         {
-            _attachments.Add(new EmailAttachmentRow(
+            _attachments.Add(_createAttachmentItem(
                 attachment.FileName,
                 FormatAttachmentKind(attachment),
                 FormatAttachmentSize(attachment.SizeBytes)));
@@ -225,10 +222,7 @@ internal sealed class EmailDetailSelectionCoordinator
         _attachments.Clear();
         if (selected?.HasAttachments == true)
         {
-            _attachments.Add(new EmailAttachmentRow(
-                "פרטי הקבצים לא זמינים כרגע",
-                "Unavailable",
-                "..."));
+            _attachments.Add(_createAttachmentItem("פרטי הקבצים לא זמינים כרגע", "Unavailable", "..."));
         }
     }
 

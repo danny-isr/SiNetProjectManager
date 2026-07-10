@@ -95,6 +95,92 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
             .ToList();
     }
 
+    public async Task<EmailProjectAlternativeOption?> CreateAlternativeAsync(
+        int projectId,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        if (!TryNormalizeAlternativeName(name, out var canonical, out var normalizedKey))
+        {
+            return null;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        var existing = await db.ProjectAlternatives
+            .Where(a => a.ProjectId == projectId
+                        && a.IsActive
+                        && a.NormalizedName == normalizedKey)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (existing is not null)
+        {
+            return new EmailProjectAlternativeOption(existing.Id, existing.Name, IsDefault: false);
+        }
+
+        var nextSort = await db.ProjectAlternatives
+            .Where(a => a.ProjectId == projectId)
+            .MaxAsync(a => (int?)a.SortOrder, cancellationToken)
+            .ConfigureAwait(false) ?? 0;
+
+        var alt = new ProjectAlternative
+        {
+            ProjectId = projectId,
+            Name = canonical,
+            NormalizedName = normalizedKey,
+            SortOrder = nextSort + 1,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.ProjectAlternatives.Add(alt);
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return new EmailProjectAlternativeOption(alt.Id, alt.Name, IsDefault: false);
+    }
+
+    /// <summary>
+    /// Minimal alternative-name normalization (mirrors SiNetSQL ProjectAlternativeNameRules basics).
+    /// </summary>
+    private static bool TryNormalizeAlternativeName(string raw, out string canonical, out string normalizedKey)
+    {
+        canonical = string.Empty;
+        normalizedKey = string.Empty;
+
+        var input = raw.Trim();
+        if (input.Length is 0 or > 20)
+        {
+            return false;
+        }
+
+        if (input.Contains('-')
+            || input.IndexOfAny(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) >= 0)
+        {
+            return false;
+        }
+
+        var tildeCount = input.Count(c => c == '~');
+        if (tildeCount > 1 || input.StartsWith('~') || input.EndsWith('~'))
+        {
+            return false;
+        }
+
+        if (tildeCount == 1)
+        {
+            var parts = input.Split('~');
+            input = $"{parts[0].Trim()}~{parts[1].Trim()}";
+        }
+
+        canonical = input;
+        normalizedKey = input.ToLowerInvariant();
+        return true;
+    }
+
     public async Task<IReadOnlyList<EmailAttachmentTagTarget>> LoadTagTargetsAsync(
         int projectId,
         CancellationToken cancellationToken = default)
