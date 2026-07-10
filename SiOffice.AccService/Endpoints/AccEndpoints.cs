@@ -418,7 +418,10 @@ internal static class AccEndpoints
                 81920,
                 useAsync: true);
 
-            httpContext.Response.Headers["X-Acc-Downloaded-FileName"] = result.DownloadedFileName;
+            // HTTP headers must be ASCII; percent-encode Hebrew/non-ASCII names.
+            // RemoteAccFileDownloadService decodes with Uri.UnescapeDataString.
+            var encodedFileName = Uri.EscapeDataString(result.DownloadedFileName ?? string.Empty);
+            httpContext.Response.Headers["X-Acc-Downloaded-FileName"] = encodedFileName;
             httpContext.Response.OnCompleted(async () =>
             {
                 await stream.DisposeAsync().ConfigureAwait(false);

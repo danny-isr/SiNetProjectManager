@@ -31,6 +31,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private EmailListRow? _selectedEmail;
     private WorkSurfaceContext? _workSurfaceContext;
     private int _selectedEmailLoadVersion;
+    private string? _loadedBodyMessageId;
+    private CancellationTokenSource? _selectionCts;
     private string _selectedEmailBody = string.Empty;
     private string? _selectedEmailHtmlBody;
     private string _selectedAccStatusDisplay = string.Empty;
@@ -112,6 +114,15 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     {
         _selectedEmailHtmlBody = htmlBody;
         SelectedEmailBody = bodyText;
+        if (string.IsNullOrWhiteSpace(bodyText)
+            || string.Equals(bodyText, "טוען תוכן מייל...", StringComparison.Ordinal))
+        {
+            _loadedBodyMessageId = null;
+        }
+        else
+        {
+            _loadedBodyMessageId = _selectedEmail?.Id;
+        }
     }
 
     public string SelectedEmailBody
@@ -143,13 +154,21 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     public async Task ApplySelectionAsync(EmailListRow? row)
     {
+        _selectionCts?.Cancel();
+        _selectionCts?.Dispose();
+        _selectionCts = new CancellationTokenSource();
+        var ct = _selectionCts.Token;
+
         _selectedEmail = row;
         OnPropertyChanged(nameof(HasSelectedEmail));
         SyncViewerHeader();
 
         if (row is null)
         {
+            _loadedBodyMessageId = null;
             _selectionCoordinator.ClearSelectedEmailDetails();
+            AttachmentStrip.TaggingAttachments.Clear();
+            AttachmentStrip.NotifyTaggingAttachmentsChanged();
             Workflow.Clear();
             RefreshActionBarState();
             return;
@@ -157,17 +176,47 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         var loadVersion = ++_selectedEmailLoadVersion;
 
+        // Always reset viewer details when the loaded body belongs to a different message.
+        // HasLoadedBodyForCurrentSelection must key off _loadedBodyMessageId (not only
+        // _selectedEmail.Id, which is already updated above).
         if (!HasLoadedBodyForCurrentSelection(row.Id))
         {
             _selectionCoordinator.PrepareSelectedEmailDetailsLoading();
             SelectedAccStatusDisplay = string.Empty;
         }
 
-        await RunSelectionPipelineAsync(row, loadVersion).ConfigureAwait(true);
-        await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
-        await RefreshWorkflowContextAsync().ConfigureAwait(true);
-        await RefreshMoveEligibilityAsync().ConfigureAwait(true);
-        RefreshActionBarState();
+        try
+        {
+            await RunSelectionPipelineAsync(row, loadVersion).ConfigureAwait(true);
+            if (ct.IsCancellationRequested || !IsCurrentSelection(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            await RefreshInboxAttachmentsAsync(loadVersion, row.Id).ConfigureAwait(true);
+            if (ct.IsCancellationRequested || !IsCurrentSelection(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            await RefreshWorkflowContextAsync().ConfigureAwait(true);
+            if (ct.IsCancellationRequested || !IsCurrentSelection(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+            if (ct.IsCancellationRequested || !IsCurrentSelection(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            RefreshActionBarState();
+        }
+        catch (OperationCanceledException)
+        {
+            // Newer selection superseded this one.
+        }
     }
 
     public void ApplyWorkSurfaceContext(WorkSurfaceContext? context) =>
@@ -175,7 +224,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     public void ClearOnDisconnect()
     {
+        _selectionCts?.Cancel();
         _selectedEmail = null;
+        _loadedBodyMessageId = null;
         OnPropertyChanged(nameof(HasSelectedEmail));
         _selectionCoordinator.ClearSelectedEmailDetails();
         Viewer.Clear();
@@ -196,6 +247,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _selectionCts?.Cancel();
+        _selectionCts?.Dispose();
+        _selectionCts = null;
         _bodyRenderer?.Clear();
     }
 
@@ -229,9 +283,14 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     }
 
     private bool HasLoadedBodyForCurrentSelection(string messageId) =>
-        string.Equals(_selectedEmail?.Id, messageId, StringComparison.Ordinal)
+        string.Equals(_loadedBodyMessageId, messageId, StringComparison.Ordinal)
+        && string.Equals(_selectedEmail?.Id, messageId, StringComparison.Ordinal)
         && !string.IsNullOrWhiteSpace(SelectedEmailBody)
         && !string.Equals(SelectedEmailBody, "טוען תוכן מייל...", StringComparison.Ordinal);
+
+    private bool IsCurrentSelection(string messageId, int loadVersion) =>
+        loadVersion == _selectedEmailLoadVersion
+        && string.Equals(_selectedEmail?.Id, messageId, StringComparison.Ordinal);
 
     private void RefreshExternalDownloadActionVisibility() =>
         AttachmentStrip.ShowExternalDownloadLinkAction =
@@ -376,11 +435,28 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         Workflow.IsLoading = true;
         try
         {
-            var context = await _workflowContextService.AnalyzeAsync(
-                new EmailWorkflowContextQuery(
-                    _selectedEmail.InboxMessageId,
-                    _selectedEmail.Id,
-                    _workSurfaceContext?.ProjectId ?? _currentProject.CurrentProject?.ProjectId)).ConfigureAwait(true);
+            EmailWorkflowContextDto? context;
+            if (_selectedEmail.InboxMessageId is not int inboxId || inboxId <= 0)
+            {
+                // Gmail row not yet in inbox DB — still offer unassigned actions.
+                context = new EmailWorkflowContextDto(
+                    HasContext: true,
+                    ProjectDisplay: "לא משויך לפרויקט",
+                    WorkflowFamilyDisplay: null,
+                    ConfidenceDisplay: null,
+                    ActiveWorkflowCount: 0,
+                    AttachmentCount: _selectedEmail.AttachmentCount,
+                    IsAssociatedToProject: false);
+            }
+            else
+            {
+                context = await _workflowContextService.AnalyzeAsync(
+                    new EmailWorkflowContextQuery(
+                        inboxId,
+                        _selectedEmail.Id,
+                        _workSurfaceContext?.ProjectId ?? _currentProject.CurrentProject?.ProjectId))
+                    .ConfigureAwait(true);
+            }
 
             var actions = context is null
                 ? Array.Empty<EmailSuggestedActionDto>()
@@ -422,16 +498,31 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private void RefreshActionBarState()
     {
         var hasSelection = _selectedEmail is not null;
-        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail?.ProjectId ?? 0;
+        var isFiled = _selectedEmail?.IsFiledToProject == true;
+
+        ActionBar.ShowUnassignedLayout = hasSelection && !isFiled;
+        ActionBar.ShowAssignedLayout = hasSelection && isFiled;
+        ActionBar.AssignedHint = isFiled
+            ? "משויך לפרויקט — ניתן להעביר קבצים מתויקים ל-ACC"
+            : null;
+
         ActionBar.RefreshCommandStates(
-            canFile: _selectedEmail is not null && _emailList.CanFileEmailToProject(_selectedEmail),
+            canFile: hasSelection
+                     && !isFiled
+                     && _emailList.CanFileEmailToProject(_selectedEmail!),
             canMove: hasSelection
+                     && isFiled
                      && _moveToProjectService?.IsAvailable == true
                      && _selectedEmail?.InboxMessageId is > 0
                      && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason));
     }
 
-    private async Task RefreshInboxAttachmentsAsync()
+    private Task RefreshInboxAttachmentsAsync() =>
+        _selectedEmail is null
+            ? Task.CompletedTask
+            : RefreshInboxAttachmentsAsync(_selectedEmailLoadVersion, _selectedEmail.Id);
+
+    private async Task RefreshInboxAttachmentsAsync(int loadVersion, string messageId)
     {
         AttachmentStrip.TaggingAttachments.Clear();
         AttachmentStrip.NotifyTaggingAttachmentsChanged();
@@ -451,13 +542,19 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             .LoadInboxAttachmentsAsync(inboxMessageId)
             .ConfigureAwait(true);
 
+        if (!IsCurrentSelection(messageId, loadVersion))
+        {
+            return;
+        }
+
         var alternatives = await _attachmentTaggingService
             .LoadAlternativesAsync(projectId)
             .ConfigureAwait(true);
 
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", hypothesisId = "D", location = "EmailDetailViewModel.RefreshInboxAttachmentsAsync", message = "attachment load summary", data = new { inboxMessageId, projectId, totalLoaded = inboxAttachments.Count, taggable = inboxAttachments.Count(a => a.IsTaggable), nonTaggable = inboxAttachments.Where(a => !a.IsTaggable).Select(a => new { a.InboxAttachmentId, a.FileName, a.AttachmentIndex }).ToArray(), altCount = alternatives.Count, altIds = alternatives.Select(a => a.Id).ToArray() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-        // #endregion
+        if (!IsCurrentSelection(messageId, loadVersion))
+        {
+            return;
+        }
 
         foreach (var attachment in inboxAttachments.Where(a => a.IsTaggable))
         {
@@ -510,10 +607,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         var alternativeId = item.SelectedAlternativeId
             ?? item.AvailableAlternatives.FirstOrDefault(a => a.IsDefault)?.Id;
-
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", hypothesisId = "A,B,E", location = "EmailDetailViewModel.TagAttachmentAsync:beforeSet", message = "tag params after picker", data = new { projectId, inboxMessageId, item.InboxAttachmentId, item.FileName, projectFileId, alternativeId, selectedAlt = item.SelectedAlternativeId, availableAltIds = item.AvailableAlternatives.Select(a => a.Id).ToArray(), showAlt = item.ShowAlternativeSelector }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-        // #endregion
 
         var validation = await _attachmentTaggingService.ValidateTagAsync(
             new EmailAttachmentTagValidationQuery(

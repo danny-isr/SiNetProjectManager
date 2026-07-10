@@ -18,7 +18,8 @@ public sealed record EmailWorkflowContextDto(
     string? WorkflowFamilyDisplay,
     string? ConfidenceDisplay,
     int ActiveWorkflowCount,
-    int AttachmentCount);
+    int AttachmentCount,
+    bool IsAssociatedToProject = false);
 
 public interface IEmailSuggestedActionService
 {
@@ -49,3 +50,18 @@ public sealed record EmailSuggestedActionExecutionResult(
     bool Succeeded,
     bool RequiresFollowUp,
     string? Message);
+
+/// <summary>
+/// Suggested-action codes for the email workflow pane (ported from legacy SuggestedActionType).
+/// </summary>
+public static class EmailSuggestedActionCodes
+{
+    public const string AssociateToExistingProject = nameof(AssociateToExistingProject);
+    public const string CreatePriceQuote = nameof(CreatePriceQuote);
+    public const string CreateNewReview = nameof(CreateNewReview);
+    public const string RequestAuthorityInvitation = nameof(RequestAuthorityInvitation);
+    public const string CreateOpinionProject = nameof(CreateOpinionProject);
+    public const string CollectMaterial = nameof(CollectMaterial);
+    public const string ForwardToDecision = nameof(ForwardToDecision);
+    public const string FileOnly = nameof(FileOnly);
+}

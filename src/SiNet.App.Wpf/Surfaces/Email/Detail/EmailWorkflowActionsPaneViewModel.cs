@@ -113,8 +113,12 @@ public sealed class EmailWorkflowActionsPaneViewModel : ObservableObject
             SuggestedActions.Add(action);
         }
 
+        // Always surface suggested actions (including unassigned inbox set).
         SelectedAction = SuggestedActions.FirstOrDefault();
+        OnPropertyChanged(nameof(HasSuggestedActions));
     }
+
+    public bool HasSuggestedActions => SuggestedActions.Count > 0;
 
     public void Clear()
     {

@@ -332,6 +332,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedEmail));
         OnPropertyChanged(nameof(HasSelectedEmail));
         (OpenEmailCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        // ApplySelectionAsync cancels any in-flight prior selection via its own CTS.
         await EmailDetail.ApplySelectionAsync(value).ConfigureAwait(true);
     }
 

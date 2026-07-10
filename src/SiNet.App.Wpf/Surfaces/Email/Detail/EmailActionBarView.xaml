@@ -12,6 +12,22 @@
         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
             <TextBlock Text="שיוך לפרויקט: " FontWeight="SemiBold" VerticalAlignment="Center" />
             <TextBlock Text="{Binding ActiveProjectDisplay}" Foreground="#2E7D32" FontWeight="Bold" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding AssignedHint}"
+                       Margin="12,0,0,0"
+                       Foreground="#1565C0"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowAssignedHint}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <TextBlock Text="{Binding MoveBlockReason}"
                        Margin="12,0,0,0"
                        Foreground="#C62828"
@@ -30,17 +46,39 @@
             </TextBlock>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal">
-            <Button Content="📁 שייך לפרויקט"
+            <Button Content="שייך לפרויקט"
                     Command="{Binding FileEmailCommand}"
                     Padding="10,4"
                     Margin="0,0,6,0"
-                    ToolTip="שייך מייל לפרויקט הנוכחי" />
-            <Button Content="📂 העבר לפרויקט"
+                    ToolTip="שייך מייל לפרויקט הנוכחי">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowUnassignedLayout}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="העבר לפרויקט"
                     Command="{Binding MoveToProjectCommand}"
                     Padding="10,4"
                     Background="#C8E6C9"
                     BorderBrush="#66BB6A"
-                    ToolTip="העבר קבצים מתויקים לתיקיית הפרויקט ב-ACC" />
+                    ToolTip="העבר קבצים מתויקים לתיקיית הפרויקט ב-ACC">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowAssignedLayout}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
         </StackPanel>
     </Grid>
 </UserControl>

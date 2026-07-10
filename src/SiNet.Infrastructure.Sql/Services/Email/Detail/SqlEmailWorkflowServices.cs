@@ -35,16 +35,22 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             return null;
         }
 
+        var attachmentCount = await db.EmailInboxAttachments
+            .AsNoTracking()
+            .CountAsync(a => a.MessageId == inboxMessageId, cancellationToken)
+            .ConfigureAwait(false);
+
         var projectId = query.OverrideProjectId ?? message.ProjectId;
         if (projectId <= 0)
         {
             return new EmailWorkflowContextDto(
-                HasContext: false,
-                null,
-                null,
-                null,
+                HasContext: true,
+                ProjectDisplay: "לא משויך לפרויקט",
+                WorkflowFamilyDisplay: null,
+                ConfidenceDisplay: null,
                 ActiveWorkflowCount: 0,
-                AttachmentCount: 0);
+                AttachmentCount: attachmentCount,
+                IsAssociatedToProject: false);
         }
 
         var project = await db.Projects
@@ -54,7 +60,14 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
 
         if (project is null)
         {
-            return null;
+            return new EmailWorkflowContextDto(
+                HasContext: true,
+                ProjectDisplay: "לא משויך לפרויקט",
+                WorkflowFamilyDisplay: null,
+                ConfidenceDisplay: null,
+                ActiveWorkflowCount: 0,
+                AttachmentCount: attachmentCount,
+                IsAssociatedToProject: false);
         }
 
         var activeWorkflows = await db.WorkflowInstances
@@ -64,11 +77,6 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
                      && w.Status != WorkflowStatus.Completed
                      && w.Status != WorkflowStatus.Cancelled,
                 cancellationToken)
-            .ConfigureAwait(false);
-
-        var attachmentCount = await db.EmailInboxAttachments
-            .AsNoTracking()
-            .CountAsync(a => a.MessageId == inboxMessageId, cancellationToken)
             .ConfigureAwait(false);
 
         var projectDisplay = !string.IsNullOrWhiteSpace(project.NameAndNumber)
@@ -83,49 +91,15 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             WorkflowFamilyDisplay: null,
             activeWorkflows > 0 ? "גבוהה" : "בינונית",
             activeWorkflows,
-            attachmentCount);
+            attachmentCount,
+            IsAssociatedToProject: true);
     }
 }
 
 internal sealed class SqlEmailSuggestedActionService : IEmailSuggestedActionService
 {
-    public IReadOnlyList<EmailSuggestedActionDto> BuildActions(EmailWorkflowContextDto context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        if (!context.HasContext)
-        {
-            return Array.Empty<EmailSuggestedActionDto>();
-        }
-
-        var actions = new List<EmailSuggestedActionDto>();
-
-        if (context.AttachmentCount > 0)
-        {
-            actions.Add(new EmailSuggestedActionDto(
-                ProcessActionCodes.SendNotification,
-                "שלח התראה",
-                "הודעה לצוות על מייל עם קבצים מצורפים",
-                SortOrder: 10));
-        }
-
-        if (context.ActiveWorkflowCount > 0)
-        {
-            actions.Add(new EmailSuggestedActionDto(
-                ProcessActionCodes.RecordTaskResult,
-                "רשום תוצאת משימה",
-                "עדכון סטטוס משימה קשורה",
-                SortOrder: 20));
-        }
-
-        actions.Add(new EmailSuggestedActionDto(
-            ProcessActionCodes.SetProjectStatus,
-            "עדכן סטטוס פרויקט",
-            "שינוי סטטוס פרויקט לאחר טיפול במייל",
-            SortOrder: 30));
-
-        return actions;
-    }
+    public IReadOnlyList<EmailSuggestedActionDto> BuildActions(EmailWorkflowContextDto context) =>
+        EmailSuggestedActionsBuilder.Build(context);
 
     public string? SelectedActionCode => null;
 }
@@ -141,6 +115,11 @@ internal sealed class SqlEmailSuggestedActionExecutionService(IProcessActionServ
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (IsUnassignedInboxAction(command.ActionCode))
+        {
+            return ResolveUnassignedAction(command.ActionCode);
+        }
 
         if (!_processActions.HasHandler(command.ActionCode))
         {
@@ -167,4 +146,30 @@ internal sealed class SqlEmailSuggestedActionExecutionService(IProcessActionServ
             result.Status == ActionExecutionStatus.Deferred,
             result.Message);
     }
+
+    private static bool IsUnassignedInboxAction(string actionCode) =>
+        actionCode is EmailSuggestedActionCodes.AssociateToExistingProject
+            or EmailSuggestedActionCodes.CreatePriceQuote
+            or EmailSuggestedActionCodes.CreateNewReview
+            or EmailSuggestedActionCodes.RequestAuthorityInvitation
+            or EmailSuggestedActionCodes.CreateOpinionProject
+            or EmailSuggestedActionCodes.CollectMaterial
+            or EmailSuggestedActionCodes.ForwardToDecision
+            or EmailSuggestedActionCodes.FileOnly;
+
+    private static EmailSuggestedActionExecutionResult ResolveUnassignedAction(string actionCode) =>
+        actionCode switch
+        {
+            EmailSuggestedActionCodes.AssociateToExistingProject
+                or EmailSuggestedActionCodes.FileOnly =>
+                new EmailSuggestedActionExecutionResult(
+                    Succeeded: true,
+                    RequiresFollowUp: true,
+                    "השתמש בכפתור 'שייך לפרויקט' בסרגל הפעולות למעלה."),
+            _ =>
+                new EmailSuggestedActionExecutionResult(
+                    Succeeded: false,
+                    RequiresFollowUp: true,
+                    "הפעולה עדיין לא מחוברת במערכת החדשה — בקרוב."),
+        };
 }

@@ -90,22 +90,36 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
 
     private async Task TryRenderRichBodyAsync()
     {
+        // Prefer plain text unless we have HTML and a working renderer — avoids blank WebView hiding body.
         if (_bodyRenderer?.IsAvailable != true
             || string.IsNullOrWhiteSpace(_gmailMessageId)
+            || string.IsNullOrWhiteSpace(_htmlBody)
             || string.IsNullOrWhiteSpace(BodyText)
             || BodyText == "טוען תוכן מייל...")
         {
+            if (UseRichBodyRenderer)
+            {
+                UseRichBodyRenderer = false;
+                OnPropertyChanged(nameof(UseRichBodyRenderer));
+            }
+
             return;
         }
 
+        var messageId = _gmailMessageId;
+        var bodySnapshot = BodyText;
         var loaded = await _bodyRenderer.LoadAsync(
             new EmailBodyRenderRequest(BodyText, _htmlBody, _gmailMessageId),
             CancellationToken.None).ConfigureAwait(true);
 
-        if (loaded)
+        if (!loaded
+            || !string.Equals(_gmailMessageId, messageId, StringComparison.Ordinal)
+            || !string.Equals(BodyText, bodySnapshot, StringComparison.Ordinal))
         {
-            UseRichBodyRenderer = true;
-            OnPropertyChanged(nameof(UseRichBodyRenderer));
+            return;
         }
+
+        UseRichBodyRenderer = true;
+        OnPropertyChanged(nameof(UseRichBodyRenderer));
     }
 }

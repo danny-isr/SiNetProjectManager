@@ -101,7 +101,16 @@ internal sealed class RemoteAccFileDownloadService(
             var headerFileName = values.FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(headerFileName))
             {
-                return headerFileName.Trim().Trim('"');
+                var trimmed = headerFileName.Trim().Trim('"');
+                // AccService percent-encodes non-ASCII names so the header stays ASCII-safe.
+                try
+                {
+                    return Uri.UnescapeDataString(trimmed);
+                }
+                catch (UriFormatException)
+                {
+                    return trimmed;
+                }
             }
         }
 

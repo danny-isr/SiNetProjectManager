@@ -305,7 +305,7 @@ public sealed class AccFileTransferTests : IDisposable
                 {
                     FileName = "\"Downloaded.dwg\"",
                 };
-                response.Headers.Add("X-Acc-Downloaded-FileName", "Downloaded.dwg");
+                response.Headers.Add("X-Acc-Downloaded-FileName", Uri.EscapeDataString("Downloaded.dwg"));
                 return Task.FromResult(response);
             })),
             vault,
@@ -319,6 +319,32 @@ public sealed class AccFileTransferTests : IDisposable
         Assert.Equal("Downloaded.dwg", result!.DownloadedFileName);
         Assert.True(File.Exists(result.TempFilePath));
         Assert.Equal("downloaded payload", await File.ReadAllTextAsync(result.TempFilePath));
+        File.Delete(result.TempFilePath);
+    }
+
+    [Fact]
+    public async Task Remote_download_service_decodes_percent_encoded_hebrew_file_name_header()
+    {
+        var hebrewName = "(2445)-תבע_מחוזי.dwg";
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
+        var sut = new RemoteAccFileDownloadService(
+            new HttpClient(new StubHttpMessageHandler((_, _) =>
+            {
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(Encoding.UTF8.GetBytes("x")),
+                };
+                response.Headers.Add("X-Acc-Downloaded-FileName", Uri.EscapeDataString(hebrewName));
+                return Task.FromResult(response);
+            })),
+            vault,
+            new StubAccServiceModeProvider("https://acc.example.com/"));
+
+        var result = await sut.DownloadToTempAsync("b.project-1", "item-1");
+
+        Assert.NotNull(result);
+        Assert.Equal(hebrewName, result!.DownloadedFileName);
         File.Delete(result.TempFilePath);
     }
 
