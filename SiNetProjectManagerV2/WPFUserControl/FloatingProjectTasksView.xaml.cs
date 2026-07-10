@@ -653,6 +653,27 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
             await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
+                // Prefer New System WorkSurfaceLauncher (InspectionWindow + exact report load).
+                if (App.ServiceProvider.GetService<SiNet.App.Wpf.WorkSurfaces.IWorkSurfaceLauncher>() is { } launcher)
+                {
+                    var opened = await launcher.TryOpenFromTaskAsync(request.TaskId).ConfigureAwait(true);
+                    if (opened)
+                    {
+                        mainWindow?.Activate();
+                        return;
+                    }
+
+                    MessageBox.Show(
+                        $"לא ניתן לפתוח את משימה #{request.TaskId} דרך WorkSurfaceLauncher.\n" +
+                        "אין fallback לחלון הביקורת הישן מנתיב משימה כשה-launcher רשום.",
+                        "פתיחת משימת דוח",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                // TEMPORARY — legacy FloatingInspection when launcher is not registered.
+                // REMOVAL WHEN: IWorkSurfaceLauncher is always registered in V2 DI.
                 var window = mainWindow?.ShowFloatingInspectionWindow();
                 mainWindow?.Activate();
                 if (window == null) return;
@@ -667,8 +688,6 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                     CurrentStageId: request.CurrentStageId,
                     AllowedTaskResultCodes: request.AllowedTaskResultCodes,
                     CompletionPolicy: request.CompletionPolicy,
-                    // The task list auto-refreshes via ActiveProjectContext.TaskDataChanged,
-                    // which the VM raises after a successful completion. No extra callback needed.
                     OnTaskRefreshRequested: null);
 
                 var ok = await window.ViewModel.OpenForTaskAsync(context);

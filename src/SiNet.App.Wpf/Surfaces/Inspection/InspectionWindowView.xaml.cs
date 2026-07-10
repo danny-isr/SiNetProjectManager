@@ -39,11 +39,13 @@ public partial class InspectionWindowView : Window
     public InspectionWindowViewModel ViewModel { get; }
 
     /// <summary>
-    /// Placeholder workflow-first entry point. A later slice will use this to open the window from a
-    /// task; for now it only forwards the context to the view model, which records it without
-    /// starting or mutating any workflow.
+    /// Task-mode entry. Prefer <see cref="ApplyContextAsync"/> when the caller can await load completion.
     /// </summary>
     public void ApplyContext(WorkSurfaceContext? context) => ViewModel.ApplyContext(context);
+
+    /// <summary>Task-mode entry that awaits exact report load (no first/last fallback).</summary>
+    public Task<bool> ApplyContextAsync(WorkSurfaceContext? context, CancellationToken cancellationToken = default)
+        => ViewModel.ApplyContextAsync(context, cancellationToken);
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

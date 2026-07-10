@@ -45,37 +45,41 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         return await TryOpenAsync(context, cancellationToken).ConfigureAwait(false);
     }
 
-    public ValueTask<bool> TryOpenAsync(WorkSurfaceContext context, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> TryOpenAsync(WorkSurfaceContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
         {
-            if (context.TaskId is > 0 && context.PrimaryWorkTargetEntityId is not > 0)
+            // Task-driven email opens require an exact primary work target — never browse fallback.
+            if (context.TaskId is > 0)
             {
-                Trace.TraceWarning(
-                    "[WorkSurfaceLauncher] Email task {0} has no primary work target; opening blocked.",
-                    context.TaskId);
-                return ValueTask.FromResult(false);
-            }
+                if (context.PrimaryWorkTargetEntityId is not > 0)
+                {
+                    Trace.TraceWarning(
+                        "[WorkSurfaceLauncher] Email task {0} has no primary work target; opening blocked.",
+                        context.TaskId);
+                    return false;
+                }
 
-            if (context.TaskId is > 0 && context.PrimaryWorkTargetEntityId is > 0
-                && _services.GetService<IEmailWorkItemWindowFactory>() is { } workItemFactory)
-            {
+                if (_services.GetService<IEmailWorkItemWindowFactory>() is not { } workItemFactory)
+                {
+                    Trace.TraceWarning("[WorkSurfaceLauncher] IEmailWorkItemWindowFactory is not registered.");
+                    return false;
+                }
+
                 var workItemWindow = workItemFactory.Create();
                 workItemWindow.ApplyContext(context);
                 workItemWindow.Show();
-                return ValueTask.FromResult(true);
+                return true;
             }
 
-            // TEMPORARY / DEFERRED — non-task email opens fall back to the full inbox window.
-            // WHY: browse mode still uses the list-first shell until work-item-only browse exists.
-            // REMOVAL WHEN: browse vs task-mode entry points are split at every caller.
+            // Browse / project-centric email (no TaskId): full inbox window.
             var factory = _services.GetRequiredService<IEmailWindowFactory>();
             var window = factory.Create();
             window.ApplyContext(context);
             window.Show();
-            return ValueTask.FromResult(true);
+            return true;
         }
 
         if (string.Equals(context.ComponentKey, WorkSurfaceComponentKeys.InspectionReport, StringComparison.OrdinalIgnoreCase))
@@ -85,26 +89,35 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 Trace.TraceWarning(
                     "[WorkSurfaceLauncher] Inspection task {0} has no report target; opening blocked.",
                     context.TaskId);
-                return ValueTask.FromResult(false);
+                return false;
             }
 
             if (_services.GetService<IInspectionWindowFactory>() is not { } inspectionFactory)
             {
                 Trace.TraceWarning("[WorkSurfaceLauncher] IInspectionWindowFactory is not registered.");
-                return ValueTask.FromResult(false);
+                return false;
             }
 
             var inspectionWindow = inspectionFactory.Create();
-            inspectionWindow.ApplyContext(context);
+            var opened = await inspectionWindow.ApplyContextAsync(context, cancellationToken).ConfigureAwait(false);
+            if (!opened)
+            {
+                Trace.TraceWarning(
+                    "[WorkSurfaceLauncher] Inspection task {0} failed to load report #{1}.",
+                    context.TaskId,
+                    context.PrimaryWorkTargetEntityId);
+                return false;
+            }
+
             inspectionWindow.Show();
-            return ValueTask.FromResult(true);
+            return true;
         }
 
         Trace.TraceWarning(
-            "[WorkSurfaceLauncher] No surface registered for component key '{0}' (task {1}).",
+            "[WorkSurfaceLauncher] Unsupported component key '{0}' for task {1}. No surface registered.",
             context.ComponentKey,
             context.TaskId);
-        return ValueTask.FromResult(false);
+        return false;
     }
 }
 

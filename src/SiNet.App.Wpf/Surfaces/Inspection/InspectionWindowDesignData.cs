@@ -23,9 +23,9 @@ internal static class InspectionWindowDesignData
     /// <summary>A small set of fake report cards for the bottom list.</summary>
     public static IReadOnlyList<InspectionReportRow> SampleReports { get; } =
     [
-        new(101, "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", new DateTime(2026, 6, 18)),
-        new(102, "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", new DateTime(2026, 6, 20)),
-        new(103, "\u05E8\u05D5\u05EA \u05DB\u05D4\u05DF", new DateTime(2026, 6, 21)),
+        new(101, 101, "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", new DateTime(2026, 6, 18)),
+        new(102, 102, "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", new DateTime(2026, 6, 20)),
+        new(103, 103, "\u05E8\u05D5\u05EA \u05DB\u05D4\u05DF", new DateTime(2026, 6, 21)),
     ];
 
     /// <summary>Several fake notes for the selected-report notes area (legacy flat list, kept for compatibility).</summary>
@@ -79,8 +79,8 @@ internal static class InspectionWindowDesignData
 /// <summary>Read-only template row for the template picker (fake/design-time data).</summary>
 public sealed record InspectionTemplateRow(string Name);
 
-/// <summary>Read-only report card row for the report list (fake/design-time data).</summary>
-public sealed record InspectionReportRow(int ReportNumber, string InspectorName, DateTime InspectionDate);
+/// <summary>Read-only report card row for the report list.</summary>
+public sealed record InspectionReportRow(int ReportId, int ReportNumber, string InspectorName, DateTime InspectionDate);
 
 /// <summary>Read-only note row for the legacy flat notes area (fake/design-time data).</summary>
 public sealed record InspectionNoteRow(string DisplayLabel, string NoteText, string NoteStatus);

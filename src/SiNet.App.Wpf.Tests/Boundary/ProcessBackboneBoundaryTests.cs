@@ -457,6 +457,18 @@ public sealed class ProcessBackboneBoundaryTests
 
         public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
+
+        public ValueTask PauseAsync(PauseWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
+
+        public ValueTask ResumeAsync(ResumeWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
+
+        public ValueTask CompleteInstanceAsync(CompleteWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
+
+        public ValueTask CancelAsync(CancelWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
     }
 
     private sealed class ThrowingWorkflowCommandService : IWorkflowCommandService
@@ -474,6 +486,18 @@ public sealed class ProcessBackboneBoundaryTests
             => throw new NotSupportedException();
 
         public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask PauseAsync(PauseWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask ResumeAsync(ResumeWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask CompleteInstanceAsync(CompleteWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask CancelAsync(CancelWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
     }
 
@@ -504,5 +528,17 @@ public sealed class ProcessBackboneBoundaryTests
 
         public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
+
+        public ValueTask PauseAsync(PauseWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
+
+        public ValueTask ResumeAsync(ResumeWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
+
+        public ValueTask CompleteInstanceAsync(CompleteWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
+
+        public ValueTask CancelAsync(CancelWorkflowCommand command, CancellationToken ct)
+            => ValueTask.CompletedTask;
     }
 }

@@ -1576,6 +1576,17 @@ through the official services, and both solutions still build.
 | `Tasks/LegacyTaskCompletionService.cs` *(new)* | Implements `ITaskCompletionService`; returns `Unavailable` when the seam is unbound, else projects the legacy result (incl. `StageAdvanceResult`). |
 | `LegacyBridgeServiceCollectionExtensions.cs` | `AddSiNetLegacyBridge()` registers **Inspection only** — task ports are **NOT** registered here; see Process backbone table (line ~1710). Native task services come from `AddSiNetProcessBackbone()` / `AddSiNetTaskServices()`. |
 
+**Inspection task-mode (InspectionWindow vertical slice — 2026-07-10):**
+
+| Artifact | Detail |
+| --- | --- |
+| `Surfaces/Inspection/InspectionWindowViewModel.cs` | Task mode: `ApplyContextAsync` loads exact report via `IInspectionWorkspace` (no first/last fallback); `CompleteFromTaskAsync` via `ITaskCompletionService` + metadata resolver. Heavy write actions remain stubbed. |
+| `WorkSurfaces/WorkSurfaceLauncher.cs` | Opens InspectionWindow after successful load; Email task mode requires work-item factory (no full-inbox fallback from task). |
+| `MainWindow` / `FloatingProjectTasksView` | Task-driven opens prefer `IWorkSurfaceLauncher`; fail closed with dialog when launcher cannot open. |
+| Tests | `InspectionWindowViewModelTaskModeTests` — load / missing target / completion guards. |
+
+**InspectionShell** remains a developer harness only; production target is InspectionWindow.
+
 **Inspection task-mode (navigation half wired; completion pending a bound seam):**
 
 | Artifact | Detail |
@@ -1699,7 +1710,7 @@ MoveToProject belongs outside the screen, in ProjectFileFilingService or equival
 | Area | Application contracts | Infrastructure.Sql | Still in SiNetSQL | Temporary bridge |
 | --- | --- | --- | --- | --- |
 | Workflow reads | `IWorkflowQueryService`, `IProjectWorkflowPolicyService` | `WorkflowQueryService` | — | — |
-| Workflow writes | `IWorkflowCommandService` | — (blocked: orchestrator) | `WorkflowCommandServiceAdapter`, engine/orchestrator | — |
+| Workflow writes | `IWorkflowCommandService` | Unbound fail-fast placeholder; real adapter in SiNetSQL | `WorkflowCommandServiceAdapter` (+ pause/resume/complete/cancel), engine/orchestrator | — |
 | Task navigation | `ITaskNavigationService` | `SqlTaskNavigationService` (blocks ambiguous multi-target tasks) | `TaskNavigationResolver` (legacy UI) | `LegacyTaskNavigationService` (not registered) |
 | Task completion | `ITaskCompletionService` | `SqlTaskCompletionService` (requires `IWorkflowCommandService`; auto-advance failures surface explicitly) | `TaskCompletionCoordinator` (legacy UI) | `LegacyTaskCompletionService` (not registered) |
 | Task query | `ITaskQueryService`, `TaskSummaryDto` | `SqlTaskQueryService` | `TaskService` (legacy UI) | — |
@@ -1716,6 +1727,8 @@ MoveToProject belongs outside the screen, in ProjectFileFilingService or equival
 **Authoritative readiness doc:** [`docs/PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md)
 
 ---
+
+**Gated follow-ups:** see [`PHASE_E_GATED.md`](./PHASE_E_GATED.md) (ProjectWork, ACC write, P5, GoogleService cutover).
 
 ## Recovery points
 

@@ -324,7 +324,24 @@ namespace SiNetProjectManagerV2
         {
             try
             {
-                // Look up email subject and MessageUniqueId for auto-selection
+                // Task-driven opens prefer the New System work-surface launcher (exact target, no browse fallback).
+                if (taskContext is not null
+                    && App.ServiceProvider.GetService<SiNet.App.Wpf.WorkSurfaces.IWorkSurfaceLauncher>() is { } launcher)
+                {
+                    var opened = await launcher.TryOpenFromTaskAsync(taskContext.TaskId).ConfigureAwait(true);
+                    if (opened)
+                        return;
+
+                    MessageBox.Show(
+                        $"לא ניתן לפתוח את משימה #{taskContext.TaskId} דרך WorkSurfaceLauncher.\n" +
+                        "אין fallback למסך המייל המלא מנתיב משימה.",
+                        "פתיחת משימת מייל",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Browse / non-task path: legacy EmailManagementView.
                 string? emailSubject = null;
                 string? messageUniqueId = null;
                 var dbFactory = App.ServiceProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
@@ -333,8 +350,6 @@ namespace SiNetProjectManagerV2
                 emailSubject = email?.Subject;
                 messageUniqueId = email?.MessageUniqueId;
 
-                // Reuse the cached EmailManagementView/VM if available so WebView2 state
-                // and Gmail session are preserved across navigation.
                 if (_cachedEmailManagementView == null)
                 {
                     _cachedEmailManagementView = new EmailManagementView();
@@ -343,47 +358,28 @@ namespace SiNetProjectManagerV2
                 }
 
                 var emailVm = (EmailManagementViewModel)_cachedEmailManagementView.DataContext!;
-
-                // Set the optional task context BEFORE selection so that any
-                // immediate MoveToProject performed by the user is correctly
-                // wired to the centralized TaskCompletionCoordinator. When the
-                // user comes from the normal inbox, taskContext is null and
-                // MoveToProject behavior is unchanged.
                 emailVm.ActiveTaskContext = taskContext;
 
                 if (!string.IsNullOrEmpty(messageUniqueId))
-                {
                     emailVm.RequestEmailSelection(messageUniqueId);
-                }
 
-                // Navigate immediately so the user sees the view while data loads
                 NavigateToView(_cachedEmailManagementView);
 
-                // Title hint as fallback if email is not on current page
                 var hint = !string.IsNullOrWhiteSpace(emailSubject)
                     ? $"{_defaultTitle} — 📧 {emailSubject}"
                     : $"{_defaultTitle} — 📧 מייל #{emailId}";
                 Title = hint;
 
-                // Wait for reference data to load. Pre-selection of the active project
-                // is now handled inside the VM (via ActiveProjectContext sync), so we
-                // only need to await here for callers that rely on Title fallbacks.
                 await emailVm.DataLoadedTask;
-
-                // Task-mode targeted refresh: when opened from a task, reload only
-                // the task's email from the DB (not the entire mailbox) so stale
-                // cached state (e.g. IsFiledInGmail=false right after project
-                // creation + label apply) does not block tagging / MoveToProject.
-                if (taskContext != null)
-                {
-                    await emailVm.EnsureTaskEmailLoadedAsync(emailId);
-                }
             }
             catch (Exception ex)
             {
                 AppLogger.ErrorWithContext(ex, "NavigateToEmail failed", new { EmailId = emailId });
-                // Fallback: just open EmailManagement without guidance
-                OpenEmailManagement_Click(this, new RoutedEventArgs());
+                MessageBox.Show(
+                    $"פתיחת מייל #{emailId} נכשלה: {ex.Message}",
+                    "שגיאת ניווט",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -626,27 +622,14 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// Developer/preview entry point that proves the Workflow-first task-navigation vertical
-        /// slice: it opens the new <see cref="SiNet.App.Wpf.Inspection.InspectionShellView"/> for a
-        /// real <c>taskId</c> through the OFFICIAL path
-        /// (<c>ITaskNavigationService</c> → <c>ILegacyTaskNavigationSource</c> →
-        /// <c>TaskNavigationResolver</c> → <c>WorkSurfaceContext</c> →
-        /// <c>InspectionShellViewModel.OpenFromTaskAsync</c> → exact report selected). The shell binds
-        /// the live <see cref="SiNet.LegacyBridge.Tasks.ILegacyTaskNavigationSource"/> seam through
-        /// this host's DI, so a workflow-created Inspection task opens its EXACT report — never a
-        /// first/last fallback. If the resolver fails or the task has no concrete report target, the
-        /// shell's task-mode banner shows a clear error and selects nothing. This is additive and does
-        /// NOT replace the legacy floating Inspection window or become the primary production
-        /// task-open flow. The shell never mutates workflow here (navigation only — no completion yet).
+        /// Developer/preview entry: opens Inspection via <c>IWorkSurfaceLauncher</c> (canonical
+        /// <c>ITaskNavigationService</c> → <c>WorkSurfaceContext</c> → InspectionWindow).
+        /// No first/last fallback; failure shows a clear dialog.
         /// </summary>
-        private void OpenInspectionFromTask_Click(object sender, RoutedEventArgs e)
+        private async void OpenInspectionFromTask_Click(object sender, RoutedEventArgs e)
         {
             if (!RequireAdminAccess("אין לך הרשאה לתצוגה מקדימה."))
                 return;
-
-            // Resolve the new shell view from DI so its full view-model graph (and the live
-            // ITaskNavigationService backed by the bound legacy seam) is constructed for us.
-            var shellView = App.ServiceProvider.GetRequiredService<SiNet.App.Wpf.Inspection.InspectionShellView>();
 
             var prompt = new Dialogs.TextInputDialog(
                 "Inspection (Task)",
@@ -657,26 +640,31 @@ namespace SiNetProjectManagerV2
 
             if (prompt.ShowDialog() != true
                 || !int.TryParse(prompt.ResponseText?.Trim(), out var taskId)
-                || taskId <= 0
-                || shellView.DataContext is not SiNet.App.Wpf.Inspection.InspectionShellViewModel shellVm)
+                || taskId <= 0)
             {
                 return;
             }
 
-            // Official task-open path. The shell sets its own task-mode status/error banner from the
-            // result, so we do not interpret success/failure here (and never fall back to a guess).
-            _ = shellVm.OpenFromTaskAsync(taskId);
-
-            var taskWindow = new Window
+            var launcher = App.ServiceProvider.GetService<SiNet.App.Wpf.WorkSurfaces.IWorkSurfaceLauncher>();
+            if (launcher is null)
             {
-                Title = "Inspection (Task) — פתיחה ממשימה (קריאה בלבד)",
-                Content = shellView,
-                Owner = this,
-                Width = 1000,
-                Height = 700,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
-            };
-            taskWindow.Show();
+                MessageBox.Show(
+                    "IWorkSurfaceLauncher אינו רשום ב-DI.",
+                    "Inspection (Task)",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            var opened = await launcher.TryOpenFromTaskAsync(taskId).ConfigureAwait(true);
+            if (!opened)
+            {
+                MessageBox.Show(
+                    $"לא ניתן לפתוח משימה #{taskId}. אין fallback.",
+                    "Inspection (Task)",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
 
         private void OpenProjectDecisions_Click(object sender, RoutedEventArgs e)

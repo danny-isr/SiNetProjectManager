@@ -4,11 +4,12 @@ using SiNetSQL.Models;
 namespace SiNet.Infrastructure.Sql.Services.Tasks;
 
 /// <summary>
-/// Static registry of <see cref="TaskInteractionDefinition"/> rows for the
-/// Review (REV.*) workflow task types.
+/// Canonical task-type → interaction mapping for the New System.
 /// <para>
-/// One entry per executable Review TaskType (per architecture rule §1).
-/// Lookup is by <see cref="Constants.TaskTypeCodes"/> string.
+/// SOURCE OF TRUTH for native surfaces. The SiNetSQL copy
+/// (<c>SiNetSQL.Services.Tasks.ReviewTaskInteractionRegistry</c>) is a TEMPORARY duplicate for
+/// legacy UI; keep keys/codes aligned. REMOVAL WHEN: legacy UI consumes this registry (or a shared
+/// Application catalog) and the SiNetSQL copy is deleted.
 /// </para>
 /// </summary>
 public static class ReviewTaskInteractionRegistry

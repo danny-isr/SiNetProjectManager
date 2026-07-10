@@ -20,10 +20,9 @@ public partial class WorkflowInstanceWindow : Window
         _instanceId = instanceId;
 
         var queryService = App.ServiceProvider.GetRequiredService<IWorkflowQueryService>();
-        var engine = App.ServiceProvider.GetRequiredService<WorkflowEngine>();
         var workflowCommands = App.ServiceProvider.GetRequiredService<IWorkflowCommandService>();
 
-        DataContext = new WorkflowInstanceViewModel(queryService, engine, workflowCommands);
+        DataContext = new WorkflowInstanceViewModel(queryService, workflowCommands);
     }
 
     private WorkflowInstanceViewModel ViewModel => (WorkflowInstanceViewModel)DataContext;

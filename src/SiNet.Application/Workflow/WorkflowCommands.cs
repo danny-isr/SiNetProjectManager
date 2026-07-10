@@ -66,3 +66,15 @@ public sealed record TaskClosedCommand(
 public sealed record StalledWorkflowCommand(
     int InstanceId,
     int UserId);
+
+/// <summary>Pauses an active workflow instance (admin lifecycle).</summary>
+public sealed record PauseWorkflowCommand(int InstanceId, int UserId, string? Notes);
+
+/// <summary>Resumes a paused workflow instance (admin lifecycle).</summary>
+public sealed record ResumeWorkflowCommand(int InstanceId, int UserId, string? Notes);
+
+/// <summary>Marks a workflow instance completed (admin lifecycle).</summary>
+public sealed record CompleteWorkflowCommand(int InstanceId, int UserId, string? Notes);
+
+/// <summary>Cancels a workflow instance (admin lifecycle).</summary>
+public sealed record CancelWorkflowCommand(int InstanceId, int UserId, string? Notes);

@@ -40,10 +40,18 @@ public interface IWorkflowCommandService
     /// Re-provisions the current stage's tasks for a stalled workflow that has no open tasks
     /// and could not be auto-advanced (last-resort watchdog recovery). Returns the number of
     /// tasks created.
-    /// <para>
-    /// Exposes only the count — the provisioned EF task entities never cross this boundary —
-    /// because the watchdog only needs to know whether re-provisioning produced any work.
-    /// </para>
     /// </summary>
     ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct);
+
+    /// <summary>Pauses an active workflow instance.</summary>
+    ValueTask PauseAsync(PauseWorkflowCommand command, CancellationToken ct);
+
+    /// <summary>Resumes a paused workflow instance.</summary>
+    ValueTask ResumeAsync(ResumeWorkflowCommand command, CancellationToken ct);
+
+    /// <summary>Completes a workflow instance (admin lifecycle).</summary>
+    ValueTask CompleteInstanceAsync(CompleteWorkflowCommand command, CancellationToken ct);
+
+    /// <summary>Cancels a workflow instance.</summary>
+    ValueTask CancelAsync(CancelWorkflowCommand command, CancellationToken ct);
 }
