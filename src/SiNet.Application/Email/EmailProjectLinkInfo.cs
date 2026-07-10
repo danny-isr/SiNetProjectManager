@@ -26,5 +26,7 @@ public sealed record EmailProjectLinkInfo(
 
     string? ThreadProjectName = null,
 
-    bool HasThreadHistory = false);
+    bool HasThreadHistory = false,
+
+    int? InboxProjectId = null);
 

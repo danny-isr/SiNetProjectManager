@@ -127,6 +127,32 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("defaultOfficeProjectId", sql, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Tag_picker_loads_all_outsidedata_types_with_optional_filter()
+    {
+        var tagging = ReadRepoFile("../SiNetSQL/SiNetSQL/Services/EmailIngestion/AttachmentTaggingService.cs");
+        var picker = ReadRepoFile("SiNetProjectManagerV2/Services/EmailIngestion/AttachmentProjectFilePicker.cs");
+        var windowXaml = ReadRepoFile("SiNetProjectManagerV2/Windows/FileTreePickerWindow.xaml");
+        var windowCs = ReadRepoFile("SiNetProjectManagerV2/Windows/FileTreePickerWindow.xaml.cs");
+        var sqlTargets = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Detail/SqlEmailAttachmentTaggingService.cs");
+
+        Assert.Contains("typeProjIdFilter", tagging, StringComparison.Ordinal);
+        Assert.Contains("LoadExternalMaterialJobTypesAsync", tagging, StringComparison.Ordinal);
+        var strictMethod = tagging.Split("LoadTagTargetsAsync", 2)[0];
+        Assert.DoesNotContain("TypeOfProjectInProject", strictMethod, StringComparison.Ordinal);
+
+        Assert.Contains("ConfigureTypeFilter", picker, StringComparison.Ordinal);
+        Assert.Contains("כל הסוגים", picker, StringComparison.Ordinal);
+        Assert.Contains("includeTypePrefix", picker, StringComparison.Ordinal);
+
+        Assert.Contains("TypeFilterBox", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("סוג פרויקט:", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("ReplaceRoots", windowCs, StringComparison.Ordinal);
+
+        Assert.Contains("pf.OutSidData == true", sqlTargets, StringComparison.Ordinal);
+        Assert.DoesNotContain("TypeOfProjectInProject", sqlTargets, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var candidate = Path.Combine(ResolveRepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));

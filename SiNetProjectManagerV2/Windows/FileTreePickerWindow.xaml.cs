@@ -19,6 +19,11 @@ public partial class FileTreePickerWindow : Window
     private readonly List<PickerNode> _allSelectableLeaves = new();
     private readonly ObservableCollection<PickerNode> _roots = new();
     private bool _suppressCheckSync;
+    private Action<int?>? _onTypeFilterChanged;
+    private bool _suppressTypeFilterEvent;
+
+    /// <summary>One option in the optional project-type filter ComboBox.</summary>
+    public sealed record TypeFilterOption(int? TypeProjId, string Title);
 
     /// <summary>Filter stats produced while building the tree.</summary>
     public sealed record FilterStats(
@@ -29,7 +34,7 @@ public partial class FileTreePickerWindow : Window
         int DisplayedFolders,
         int DisplayedFiles);
 
-    public FilterStats Stats { get; }
+    public FilterStats Stats { get; private set; }
 
     internal FileTreePickerWindow(FileTreePickerRequest request)
     {
@@ -139,6 +144,92 @@ public partial class FileTreePickerWindow : Window
         else
         {
             UpdateOkEnabled();
+        }
+    }
+
+    /// <summary>
+    /// Shows a project-type ComboBox above the text filter. Selecting an option
+    /// invokes <paramref name="onChanged"/> with the JobType id (or null for all).
+    /// </summary>
+    internal void ConfigureTypeFilter(
+        IReadOnlyList<TypeFilterOption> options,
+        Action<int?> onChanged,
+        int? initialTypeProjId = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _onTypeFilterChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
+
+        TypeFilterPanel.Visibility = Visibility.Visible;
+        _suppressTypeFilterEvent = true;
+        try
+        {
+            TypeFilterBox.ItemsSource = options;
+            TypeFilterBox.SelectedItem = options.FirstOrDefault(o => o.TypeProjId == initialTypeProjId)
+                                         ?? options.FirstOrDefault();
+        }
+        finally
+        {
+            _suppressTypeFilterEvent = false;
+        }
+    }
+
+    /// <summary>
+    /// Replaces the displayed tree (e.g. after changing the project-type filter).
+    /// Preserves the text filter query if any.
+    /// </summary>
+    internal void ReplaceRoots(IEnumerable<PickerNode> roots)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+
+        _roots.Clear();
+        _allSelectableLeaves.Clear();
+
+        int displayedFolders = 0, displayedFiles = 0;
+        foreach (var r in roots)
+        {
+            _roots.Add(r);
+            CollectStats(r, ref displayedFolders, ref displayedFiles);
+            CollectSelectableLeaves(r);
+        }
+
+        Stats = new FilterStats(
+            TotalFiles: displayedFiles,
+            AvailableFiles: displayedFiles,
+            SelectableLeafCount: _allSelectableLeaves.Count,
+            HiddenMissingFiles: 0,
+            DisplayedFolders: displayedFolders,
+            DisplayedFiles: displayedFiles);
+
+        var empty = _allSelectableLeaves.Count == 0;
+        Tree.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        EmptyText.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (empty)
+        {
+            OkButton.IsEnabled = false;
+        }
+        else
+        {
+            UpdateOkEnabled();
+        }
+
+        var q = FilterBox.Text?.Trim() ?? string.Empty;
+        if (q.Length > 0)
+        {
+            foreach (var r in _roots)
+                ApplyFilter(r, q);
+        }
+    }
+
+    private void OnTypeFilterChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressTypeFilterEvent || _onTypeFilterChanged is null)
+        {
+            return;
+        }
+
+        if (TypeFilterBox.SelectedItem is TypeFilterOption option)
+        {
+            _onTypeFilterChanged(option.TypeProjId);
         }
     }
 

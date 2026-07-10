@@ -71,6 +71,37 @@ public sealed class EmailListRowMapperThreadTests
         Assert.Equal("#FFFFD54F", row.RowBackgroundColor);
     }
 
+    [Fact]
+    public void ToEmailListRow_hides_thread_link_button_when_sql_inbox_already_on_thread_project()
+    {
+        var summary = CreateSummary(threadId: "thread-3");
+        var messageStates = new Dictionary<string, EmailProjectLinkInfo>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["abc@mail.com"] = new EmailProjectLinkInfo(
+                IsLinked: true,
+                ProjectId: 1042,
+                ProjectNumber: "1042",
+                ProjectName: "North",
+                DisplayName: "1042 — North",
+                InboxMessageId: 10,
+                ThreadProjectId: 1042,
+                ThreadProjectName: "1042 — North",
+                HasThreadHistory: true,
+                GmailThreadId: "thread-3",
+                InboxProjectId: 1042),
+        };
+
+        var row = EmailListRowMapper.ToEmailListRow(
+            summary,
+            messageStates,
+            new Dictionary<string, EmailProjectLinkInfo>(),
+            () => null);
+
+        Assert.True(row.HasThreadHistory);
+        Assert.Equal(1042, row.ThreadProjectId);
+        Assert.False(row.ShowLinkToThreadButton);
+    }
+
     private static EmailSummary CreateSummary(
         string threadId,
         IReadOnlyList<string>? labelNames = null) =>

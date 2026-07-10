@@ -312,7 +312,8 @@ public sealed class SqlEmailThreadLinkQueryService(IDbContextFactory<SiNetSQLDbC
             GmailThreadId: inbox.GmailThreadId,
             ThreadProjectId: hasThreadHistory ? threadProjectId : null,
             ThreadProjectName: threadDisplay,
-            HasThreadHistory: hasThreadHistory);
+            HasThreadHistory: hasThreadHistory,
+            InboxProjectId: inbox.ProjectId > 0 ? inbox.ProjectId : null);
     }
 
     private static void AddKey(

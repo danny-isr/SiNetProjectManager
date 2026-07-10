@@ -192,39 +192,13 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var jobTypeIds = await db.Set<TypeOfProjectInProject>()
+        // All OutSidData catalog slots (all project types) — same scope as the picker.
+        var files = await db.ProjectFiles
             .AsNoTracking()
-            .Where(tp => tp.ProjectId == projectId && tp.ProjectTypeId != null)
-            .Select(tp => tp.ProjectTypeId!.Value)
-            .Distinct()
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        IQueryable<ProjectFile> query = db.ProjectFiles.AsNoTracking();
-
-        if (jobTypeIds.Count > 0)
-        {
-            query = query.Where(pf =>
-                pf.OutSidData == true
-                && pf.TypeProjId != null
-                && jobTypeIds.Contains(pf.TypeProjId.Value));
-
-            var strictCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
-            if (strictCount == 0)
-            {
-                query = db.ProjectFiles.AsNoTracking()
-                    .Where(pf => pf.TypeProjId != null && jobTypeIds.Contains(pf.TypeProjId.Value));
-            }
-        }
-        else
-        {
-            query = query.Where(pf => pf.Folderid != null);
-        }
-
-        var files = await query
+            .Where(pf => pf.OutSidData == true)
             .OrderBy(pf => pf.Title)
             .ThenBy(pf => pf.Number)
-            .Select(pf => new { pf.Id, pf.Title })
+            .Select(pf => new { pf.Id, pf.Title, TypeTitle = pf.TypeProj != null ? pf.TypeProj.Title : null })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -234,10 +208,14 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
             .ConfigureAwait(false);
 
         return files
-            .Select(f => new EmailAttachmentTagTarget(
-                f.Id,
-                f.Title ?? $"ProjectFile #{f.Id}",
-                alternativeCount > 1))
+            .Select(f =>
+            {
+                var title = string.IsNullOrWhiteSpace(f.Title) ? $"#{f.Id}" : f.Title!;
+                var display = string.IsNullOrWhiteSpace(f.TypeTitle)
+                    ? title
+                    : $"[{f.TypeTitle}] {title}";
+                return new EmailAttachmentTagTarget(f.Id, display, alternativeCount > 1);
+            })
             .ToList();
     }
 

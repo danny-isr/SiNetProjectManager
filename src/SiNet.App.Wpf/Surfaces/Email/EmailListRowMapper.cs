@@ -211,11 +211,17 @@ internal static class EmailListRowMapper
 
                                 && labelProjectId != threadProjectId;
 
+        var alreadyOnThreadProject =
+
+            (labelProjectId.HasValue && labelProjectId == threadProjectId)
+
+            || (messageLink?.InboxProjectId is int inboxPid && inboxPid == threadProjectId);
+
         var showLinkToThreadButton = hasThreadHistory
 
                                      && threadProjectId.HasValue
 
-                                     && (!labelProjectId.HasValue || labelProjectId != threadProjectId);
+                                     && !alreadyOnThreadProject;
 
 
 

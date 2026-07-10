@@ -14,6 +14,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -22,12 +23,20 @@
         <TextBlock Grid.Row="0" x:Name="HeaderText"
                    Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-        <TextBox Grid.Row="1" x:Name="FilterBox"
+        <DockPanel Grid.Row="1" x:Name="TypeFilterPanel" Margin="0,0,0,8" Visibility="Collapsed">
+            <TextBlock Text="סוג פרויקט:" VerticalAlignment="Center" Margin="0,0,8,0"
+                       FontWeight="SemiBold"/>
+            <ComboBox x:Name="TypeFilterBox"
+                      DisplayMemberPath="Title"
+                      SelectionChanged="OnTypeFilterChanged"/>
+        </DockPanel>
+
+        <TextBox Grid.Row="2" x:Name="FilterBox"
                  Margin="0,0,0,8"
                  TextChanged="OnFilterChanged"
                  ToolTip="סינון לפי שם תיקייה, קובץ או חלופה"/>
 
-        <TreeView Grid.Row="2" x:Name="Tree">
+        <TreeView Grid.Row="3" x:Name="Tree">
             <TreeView.ItemContainerStyle>
                 <Style TargetType="TreeViewItem">
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -52,13 +61,13 @@
             </TreeView.ItemTemplate>
         </TreeView>
 
-        <TextBlock Grid.Row="3" x:Name="EmptyText"
+        <TextBlock Grid.Row="4" x:Name="EmptyText"
                    Text="לא נמצאו קבצים זמינים לבחירה"
                    Foreground="#888"
                    Margin="0,8,0,0"
                    Visibility="Collapsed"/>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal"
+        <StackPanel Grid.Row="5" Orientation="Horizontal"
                     HorizontalAlignment="Left" Margin="0,8,0,0">
             <Button Content="אישור" Width="90" Margin="0,0,8,0"
                     x:Name="OkButton"
