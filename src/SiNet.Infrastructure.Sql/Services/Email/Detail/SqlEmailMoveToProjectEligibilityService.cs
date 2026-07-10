@@ -42,7 +42,15 @@ internal sealed class SqlEmailMoveToProjectEligibilityService(IDbContextFactory<
         var attachments = await db.EmailInboxAttachments
             .AsNoTracking()
             .Where(a => a.MessageId == query.InboxMessageId)
-            .Select(a => new { a.AttachmentIndex, a.ProjectFileId, a.AccItemId, a.SavedFileName, a.OriginalFileName })
+            .Select(a => new
+            {
+                a.AttachmentIndex,
+                a.ProjectFileId,
+                a.ProjectAlternativeId,
+                a.AccItemId,
+                a.SavedFileName,
+                a.OriginalFileName,
+            })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -63,7 +71,13 @@ internal sealed class SqlEmailMoveToProjectEligibilityService(IDbContextFactory<
         var untagged = taggable.Count(a => a.ProjectFileId is null or <= 0);
         if (untagged > 0)
         {
-            return Block($"נותרו {untagged} צרופות לא מתויגות. בחר קובץ פרויקט (חומר חיצוני) לכל צרופה.");
+            return Block(EmailMoveToProjectEligibilityRules.UntaggedAttachmentsMessage(untagged));
+        }
+
+        if (EmailMoveToProjectEligibilityRules.HasDuplicateFilingTargets(
+                taggable.Select(a => (a.ProjectFileId!.Value, a.ProjectAlternativeId))))
+        {
+            return Block(EmailMoveToProjectEligibilityRules.DuplicateTargetMessage);
         }
 
         var unplaced = taggable.Count(a => string.IsNullOrWhiteSpace(a.AccItemId));

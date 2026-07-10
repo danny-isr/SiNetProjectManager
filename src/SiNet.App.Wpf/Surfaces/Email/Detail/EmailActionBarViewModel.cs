@@ -36,9 +36,15 @@ public sealed class EmailActionBarViewModel : ObservableObject
             if (SetField(ref _moveBlockReason, value))
             {
                 OnPropertyChanged(nameof(ShowMoveBlockReason));
+                OnPropertyChanged(nameof(MoveButtonToolTip));
             }
         }
     }
+
+    public string MoveButtonToolTip =>
+        string.IsNullOrWhiteSpace(MoveBlockReason)
+            ? "העבר קבצים מתויקים לתיקיית הפרויקט ב-ACC"
+            : MoveBlockReason;
 
     public string? AssignedHint
     {

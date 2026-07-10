@@ -253,6 +253,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         ActionBar.ActiveProjectDisplay = project is null
             ? "לא נבחר פרויקט"
             : $"{project.ProjectNumber} — {project.ProjectName}";
+        _ = RefreshMoveEligibilityThenActionBarAsync();
+    }
+
+    private async Task RefreshMoveEligibilityThenActionBarAsync()
+    {
+        await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         RefreshActionBarState();
     }
 
@@ -364,6 +370,14 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IsBusy = true;
         try
         {
+            await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
+            {
+                SetStatus(ActionBar.MoveBlockReason);
+                RefreshActionBarState();
+                return;
+            }
+
             var result = await _moveToProjectService.MoveAsync(
                 new EmailMoveToProjectDetailCommand(
                     inboxMessageId,

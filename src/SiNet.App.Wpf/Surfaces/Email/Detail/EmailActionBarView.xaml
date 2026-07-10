@@ -67,7 +67,7 @@
                     Padding="10,4"
                     Background="#C8E6C9"
                     BorderBrush="#66BB6A"
-                    ToolTip="העבר קבצים מתויקים לתיקיית הפרויקט ב-ACC">
+                    ToolTip="{Binding MoveButtonToolTip}">
                 <Button.Style>
                     <Style TargetType="Button">
                         <Setter Property="Visibility" Value="Collapsed" />
