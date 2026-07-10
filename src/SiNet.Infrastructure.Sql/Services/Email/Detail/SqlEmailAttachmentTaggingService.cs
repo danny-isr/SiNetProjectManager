@@ -61,20 +61,40 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
+        // Match legacy AttachmentTaggingService.EnsureAndLoadAlternativesAsync:
+        // never invent a fake Id — auto-create a real default "1" row when none exist.
         var alternatives = await db.ProjectAlternatives
-            .AsNoTracking()
-            .Where(a => a.ProjectId == projectId)
-            .OrderBy(a => a.Id)
-            .Select(a => new { a.Id, a.Name })
+            .Where(a => a.ProjectId == projectId && a.IsActive)
+            .OrderBy(a => a.SortOrder)
+            .ThenBy(a => a.Name)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
         if (alternatives.Count == 0)
         {
-            return
-            [
-                new EmailProjectAlternativeOption(1, "1", IsDefault: true),
-            ];
+            var defaultAlt = new ProjectAlternative
+            {
+                ProjectId = projectId,
+                Name = "1",
+                NormalizedName = "1",
+                IsPrimary = true,
+                SortOrder = 1,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+            };
+            db.ProjectAlternatives.Add(defaultAlt);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            alternatives = [defaultAlt];
+
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", runId = "post-fix", hypothesisId = "A", location = "SqlEmailAttachmentTaggingService.LoadAlternativesAsync", message = "no DB alternatives — created real default", data = new { projectId, createdId = defaultAlt.Id }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+        }
+        else
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", runId = "post-fix", hypothesisId = "B", location = "SqlEmailAttachmentTaggingService.LoadAlternativesAsync", message = "loaded DB alternatives", data = new { projectId, count = alternatives.Count, ids = alternatives.Select(a => a.Id).ToArray() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
         }
 
         return alternatives
@@ -234,11 +254,47 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
             return new EmailAttachmentTagResult(false, "סוג קובץ פרויקט לא תקין לתיוג.");
         }
 
-        attachment.ProjectFileId = command.ProjectFileId;
-        attachment.ProjectAlternativeId = command.ProjectAlternativeId;
+        int? resolvedAltId = command.ProjectAlternativeId;
+        if (resolvedAltId is int aid && aid > 0)
+        {
+            var altExists = await db.ProjectAlternatives.AsNoTracking()
+                .AnyAsync(a => a.Id == aid, cancellationToken)
+                .ConfigureAwait(false);
+            if (!altExists)
+            {
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", runId = "post-fix", hypothesisId = "E", location = "SqlEmailAttachmentTaggingService.SetTagAsync:invalidAlt", message = "rejecting non-existent alternative id", data = new { command.InboxAttachmentId, command.ProjectFileId, resolvedAltId }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion
+                return new EmailAttachmentTagResult(false, "אלטרנטיבה לא תקינה לפרויקט. רענן את המייל ונסה שוב.");
+            }
+        }
+        else
+        {
+            resolvedAltId = null;
+        }
 
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return new EmailAttachmentTagResult(true, null);
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", runId = "post-fix", hypothesisId = "A,E", location = "SqlEmailAttachmentTaggingService.SetTagAsync:beforeSave", message = "about to save tag", data = new { command.InboxAttachmentId, command.ProjectFileId, ProjectAlternativeId = resolvedAltId, priorProjectFileId = attachment.ProjectFileId, priorAltId = attachment.ProjectAlternativeId }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
+
+        attachment.ProjectFileId = command.ProjectFileId;
+        attachment.ProjectAlternativeId = resolvedAltId;
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", runId = "post-fix", hypothesisId = "C", location = "SqlEmailAttachmentTaggingService.SetTagAsync:afterSave", message = "save succeeded", data = new { command.InboxAttachmentId, command.ProjectFileId, ProjectAlternativeId = resolvedAltId }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            return new EmailAttachmentTagResult(true, null);
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", runId = "post-fix", hypothesisId = "A,C,E", location = "SqlEmailAttachmentTaggingService.SetTagAsync:catch", message = "save failed", data = new { command.InboxAttachmentId, command.ProjectFileId, ProjectAlternativeId = resolvedAltId, exType = ex.GetType().Name, exMsg = ex.Message, inner = ex.InnerException?.Message }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            return new EmailAttachmentTagResult(false, "שמירת התיוג נכשלה. נסה שוב.");
+        }
     }
 
     private static bool IsTaggableAttachment(int attachmentIndex, string fileName) =>

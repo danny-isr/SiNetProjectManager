@@ -455,6 +455,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             .LoadAlternativesAsync(projectId)
             .ConfigureAwait(true);
 
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", hypothesisId = "D", location = "EmailDetailViewModel.RefreshInboxAttachmentsAsync", message = "attachment load summary", data = new { inboxMessageId, projectId, totalLoaded = inboxAttachments.Count, taggable = inboxAttachments.Count(a => a.IsTaggable), nonTaggable = inboxAttachments.Where(a => !a.IsTaggable).Select(a => new { a.InboxAttachmentId, a.FileName, a.AttachmentIndex }).ToArray(), altCount = alternatives.Count, altIds = alternatives.Select(a => a.Id).ToArray() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
+
         foreach (var attachment in inboxAttachments.Where(a => a.IsTaggable))
         {
             var item = new EmailDetailAttachmentItem(
@@ -506,6 +510,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         var alternativeId = item.SelectedAlternativeId
             ?? item.AvailableAlternatives.FirstOrDefault(a => a.IsDefault)?.Id;
+
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"D:\repos2026\debug-487a8a.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "487a8a", hypothesisId = "A,B,E", location = "EmailDetailViewModel.TagAttachmentAsync:beforeSet", message = "tag params after picker", data = new { projectId, inboxMessageId, item.InboxAttachmentId, item.FileName, projectFileId, alternativeId, selectedAlt = item.SelectedAlternativeId, availableAltIds = item.AvailableAlternatives.Select(a => a.Id).ToArray(), showAlt = item.ShowAlternativeSelector }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
 
         var validation = await _attachmentTaggingService.ValidateTagAsync(
             new EmailAttachmentTagValidationQuery(
