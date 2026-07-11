@@ -7,5 +7,6 @@ public interface IEmailExternalDownloadExecutor
 {
     Task<EmailExternalDownloadResult> UploadExternalFileAsync(
         EmailExternalDownloadCommand command,
+        IProgress<EmailExternalDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default);
 }

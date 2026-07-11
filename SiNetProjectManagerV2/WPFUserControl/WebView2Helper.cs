@@ -1051,8 +1051,23 @@ namespace SiNetProjectManagerV2.WPFUserControl
         /// raises <see cref="ProjectFileDownloaded"/> so the ViewModel can upload to ACC.
         /// </summary>
         internal static void TrackDownloadCompletion(
-            CoreWebView2DownloadOperation downloadOp, EmailInfo? emailInfo)
+            CoreWebView2DownloadOperation downloadOp,
+            EmailInfo? emailInfo,
+            Action<long, long?, string>? progressCallback = null)
         {
+            if (progressCallback is not null)
+            {
+                downloadOp.BytesReceivedChanged += (sender, _) =>
+                {
+                    if (sender is not CoreWebView2DownloadOperation op) return;
+                    var name = System.IO.Path.GetFileName(op.ResultFilePath);
+                    long? total = op.TotalBytesToReceive is ulong totalUlong
+                        ? (long)Math.Min(totalUlong, (ulong)long.MaxValue)
+                        : null;
+                    progressCallback(op.BytesReceived, total, name);
+                };
+            }
+
             downloadOp.StateChanged += (sender, _) =>
             {
                 if (sender is not CoreWebView2DownloadOperation op) return;

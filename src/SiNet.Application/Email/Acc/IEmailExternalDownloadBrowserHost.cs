@@ -8,6 +8,8 @@ public interface IEmailExternalDownloadBrowserHost
     event Action<EmailExternalDownloadCompletedEventArgs>? DownloadCompleted;
 
     void OpenDownloadUrl(string url, EmailExternalDownloadContext context);
+
+    void ReportProgress(EmailExternalDownloadProgress progress);
 }
 
 public sealed record EmailExternalDownloadContext(

@@ -2,14 +2,25 @@ using System.Text.RegularExpressions;
 
 namespace SiNet.Application.Email.Acc;
 
-/// <summary>Detects JumboMail / WeTransfer download links in plain-text email bodies (legacy parity).</summary>
+/// <summary>Detects file-transfer download links in plain-text email bodies (JumboMail, WeTransfer, Drive, etc.).</summary>
 public static partial class EmailExternalDownloadLinkDetector
 {
     private static readonly string[] KnownHosts =
     [
         "jumbomail",
+        "jumbo.me",
         "wetransfer",
         "we.tl",
+        "drive.google",
+        "docs.google",
+        "dropbox",
+        "onedrive",
+        "1drv.ms",
+        "sharepoint",
+        "transfernow",
+        "sendspace",
+        "mega.nz",
+        "mediafire",
     ];
 
     [GeneratedRegex(@"https?://[^\s<>""']+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

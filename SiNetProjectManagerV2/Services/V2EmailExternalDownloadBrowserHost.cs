@@ -11,6 +11,7 @@ namespace SiNetProjectManagerV2.Services;
 internal sealed class V2EmailExternalDownloadBrowserHost : IEmailExternalDownloadBrowserHost
 {
     private EmailExternalDownloadContext? _activeContext;
+    private ExternalBrowserWindow? _activeWindow;
 
     public event Action<EmailExternalDownloadCompletedEventArgs>? DownloadCompleted;
 
@@ -29,6 +30,7 @@ internal sealed class V2EmailExternalDownloadBrowserHost : IEmailExternalDownloa
             Width = 1200,
             Height = 800,
         };
+        _activeWindow = window;
 
         window.Closed += (_, _) =>
         {
@@ -37,9 +39,20 @@ internal sealed class V2EmailExternalDownloadBrowserHost : IEmailExternalDownloa
             {
                 _activeContext = null;
             }
+
+            if (ReferenceEquals(_activeWindow, window))
+            {
+                _activeWindow = null;
+            }
         };
 
         window.Show();
+    }
+
+    public void ReportProgress(EmailExternalDownloadProgress progress)
+    {
+        ArgumentNullException.ThrowIfNull(progress);
+        _activeWindow?.ApplyProgress(progress);
     }
 
     private void OnProjectFileDownloaded(string localPath, string fileName, EmailInfo emailInfo)
@@ -53,6 +66,11 @@ internal sealed class V2EmailExternalDownloadBrowserHost : IEmailExternalDownloa
         {
             return;
         }
+
+        ReportProgress(new EmailExternalDownloadProgress(
+            EmailExternalDownloadStage.Uploading,
+            $"ההורדה הסתיימה — מתחיל העלאה ל-ACC: {fileName}",
+            FileName: fileName));
 
         DownloadCompleted?.Invoke(new EmailExternalDownloadCompletedEventArgs(
             localPath,

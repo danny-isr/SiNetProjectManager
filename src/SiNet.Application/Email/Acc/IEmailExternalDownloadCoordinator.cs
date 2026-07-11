@@ -4,6 +4,7 @@ public interface IEmailExternalDownloadCoordinator
 {
     Task<EmailExternalDownloadResult> UploadExternalFileAsync(
         EmailExternalDownloadCommand command,
+        IProgress<EmailExternalDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<EmailExternalDownloadItem>> ListExternalDownloadsAsync(

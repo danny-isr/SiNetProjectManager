@@ -33,6 +33,7 @@ internal sealed class SqlEmailExternalDownloadService(IEmailExternalDownloadExec
                     EmailFrom: null,
                     EmailDate: null,
                     command.ActingUserLogin),
+                progress: null,
                 cancellationToken)
             .ConfigureAwait(false);
 

@@ -221,46 +221,41 @@ internal sealed class EmailExternalDownloadHandler
 
             _setStatusMessage($"מעלה {args.FileName} ל-ACC Inbox…");
 
-
-
             var command = new EmailExternalDownloadCommand(
-
                 args.Context.GmailMessageId,
-
                 args.Context.InternetMessageId,
-
                 args.LocalFilePath,
-
                 args.FileName,
-
                 args.Context.Subject,
-
                 args.Context.From,
-
                 args.Context.ReceivedOn,
-
                 ResolveActingUserLogin());
 
+            var progress = new Progress<EmailExternalDownloadProgress>(p =>
+            {
+                _browserHost?.ReportProgress(p);
+                _setStatusMessage(p.Message);
+            });
 
-
-            var result = await _coordinator.UploadExternalFileAsync(command).ConfigureAwait(true);
-
-
+            var result = await _coordinator.UploadExternalFileAsync(command, progress).ConfigureAwait(true);
 
             if (result.Succeeded)
-
             {
-
                 _setStatusMessage($"הועלה {result.FileName ?? args.FileName} ל-ACC Inbox");
-
+                _browserHost?.ReportProgress(new EmailExternalDownloadProgress(
+                    EmailExternalDownloadStage.Completed,
+                    $"הועלה {result.FileName ?? args.FileName} ל-ACC Inbox",
+                    Percent: 100,
+                    FileName: result.FileName ?? args.FileName));
             }
-
             else
-
             {
-
-                _setStatusMessage(result.ErrorMessage ?? "העלאת הקובץ החיצוני ל-ACC נכשלה");
-
+                var error = result.ErrorMessage ?? "העלאת הקובץ החיצוני ל-ACC נכשלה";
+                _setStatusMessage(error);
+                _browserHost?.ReportProgress(new EmailExternalDownloadProgress(
+                    EmailExternalDownloadStage.Failed,
+                    error,
+                    FileName: args.FileName));
             }
 
 

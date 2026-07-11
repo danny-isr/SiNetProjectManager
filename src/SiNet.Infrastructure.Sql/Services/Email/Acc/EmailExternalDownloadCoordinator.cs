@@ -14,6 +14,7 @@ internal sealed class EmailExternalDownloadCoordinator(
 
     public async Task<EmailExternalDownloadResult> UploadExternalFileAsync(
         EmailExternalDownloadCommand command,
+        IProgress<EmailExternalDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -24,7 +25,7 @@ internal sealed class EmailExternalDownloadCoordinator(
         }
 
         return await _downloadExecutor
-            .UploadExternalFileAsync(command, cancellationToken)
+            .UploadExternalFileAsync(command, progress, cancellationToken)
             .ConfigureAwait(false);
     }
 

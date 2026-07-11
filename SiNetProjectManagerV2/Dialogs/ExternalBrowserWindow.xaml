@@ -12,6 +12,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- URL Bar -->
@@ -30,5 +31,41 @@
 
         <!-- WebView2 (clean — no Gmail/Calendar scripts) -->
         <wv2:WebView2 x:Name="BrowserWebView" Grid.Row="1"/>
+
+        <!-- Download / upload progress -->
+        <Border x:Name="ProgressPanel"
+                Grid.Row="2"
+                Background="#E3F2FD"
+                BorderBrush="#90CAF9"
+                BorderThickness="0,1,0,0"
+                Padding="12,10"
+                Visibility="Collapsed"
+                FlowDirection="RightToLeft">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="ProgressStageText"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="#0D47A1"
+                           TextWrapping="Wrap"/>
+                <TextBlock x:Name="ProgressDetailText"
+                           Grid.Row="1"
+                           Margin="0,4,0,0"
+                           FontSize="12"
+                           Foreground="#1565C0"
+                           TextWrapping="Wrap"/>
+                <ProgressBar x:Name="ProgressBar"
+                             Grid.Row="2"
+                             Height="8"
+                             Margin="0,8,0,0"
+                             Minimum="0"
+                             Maximum="100"
+                             IsIndeterminate="True"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

@@ -1,4 +1,5 @@
 ﻿using Microsoft.Web.WebView2.Core;
+using SiNet.Application.Email.Acc;
 using SiNetProjectManagerV2.WPFUserControl;
 using SiNetSQL.Services.EmailIngestion;
 using SiOffice.GoogleConnector;
@@ -14,14 +15,12 @@ namespace SiNetProjectManagerV2.Dialogs;
 /// so cookies / login state (Gmail, Autodesk, ACC, etc.) are reused across windows.
 /// Downloads are intercepted and routed via the
 /// <see cref="DownloadAssociationDialog"/> for project association.
-/// <para>
-/// The user can close this window manually after browsing/downloading.
-/// </para>
 /// </summary>
 public partial class ExternalBrowserWindow : Window
 {
     private readonly EmailInfo? _emailInfo;
     private readonly string _initialUrl;
+    private bool _hasActiveWork;
 
     public ExternalBrowserWindow(string url, EmailInfo? emailInfo)
     {
@@ -32,15 +31,52 @@ public partial class ExternalBrowserWindow : Window
         UrlText.Text = url;
         Loaded += OnLoaded;
         Closed += OnClosed;
+        Closing += OnClosing;
+    }
+
+    public void ApplyProgress(EmailExternalDownloadProgress progress)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => ApplyProgress(progress));
+            return;
+        }
+
+        ProgressPanel.Visibility = Visibility.Visible;
+        ProgressStageText.Text = progress.Stage switch
+        {
+            EmailExternalDownloadStage.Downloading => "מוריד למחשב…",
+            EmailExternalDownloadStage.Extracting => "מחלץ ZIP…",
+            EmailExternalDownloadStage.Uploading => "מעלה ל-ACC…",
+            EmailExternalDownloadStage.Completed => "הושלם",
+            EmailExternalDownloadStage.Failed => "שגיאה",
+            _ => progress.Stage.ToString(),
+        };
+        ProgressDetailText.Text = progress.Message;
+
+        if (progress.Percent is int percent and >= 0 and <= 100)
+        {
+            ProgressBar.IsIndeterminate = false;
+            ProgressBar.Value = percent;
+        }
+        else if (progress.Stage is EmailExternalDownloadStage.Completed or EmailExternalDownloadStage.Failed)
+        {
+            ProgressBar.IsIndeterminate = false;
+            ProgressBar.Value = progress.Stage == EmailExternalDownloadStage.Completed ? 100 : 0;
+        }
+        else
+        {
+            ProgressBar.IsIndeterminate = true;
+        }
+
+        _hasActiveWork = progress.Stage is not (
+            EmailExternalDownloadStage.Completed or EmailExternalDownloadStage.Failed);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         try
         {
-            // Gap 18F: use the unified shared WebView2 profile so this floating
-            // browser shares cookies / login state (Gmail, Autodesk, ACC, etc.)
-            // with every other WebView2 window in the app.
             var environment = await WebView2Helper.CreateSharedEnvironmentAsync(
                 source: "ExternalBrowserWindow");
             await BrowserWebView.EnsureCoreWebView2Async(environment);
@@ -61,13 +97,9 @@ public partial class ExternalBrowserWindow : Window
 
     private void ConfigureBrowser(CoreWebView2 coreWebView)
     {
-        // Enable scroll wheel by auto-focusing on mouse enter
         WebView2Helper.EnableScrollWheelFocus(BrowserWebView);
-
-        // Spoof UA to look like standalone Chrome (same as main WebView2)
         coreWebView.Settings.UserAgent = WebView2Helper.ChromeUserAgent;
 
-        // Track current URL in the address bar
         coreWebView.SourceChanged += (_, _) =>
         {
             Dispatcher.Invoke(() =>
@@ -77,7 +109,6 @@ public partial class ExternalBrowserWindow : Window
             });
         };
 
-        // Open new-window requests internally (stay in this floating window)
         coreWebView.NewWindowRequested += (sender, args) =>
         {
             args.Handled = true;
@@ -89,7 +120,6 @@ public partial class ExternalBrowserWindow : Window
             }
         };
 
-        // Intercept downloads — show association dialog
         coreWebView.DownloadStarting += (_, args) => HandleDownload(args);
 
         System.Diagnostics.Debug.WriteLine("ExternalBrowser: Browser configured (UA + navigation + download interception)");
@@ -125,7 +155,6 @@ public partial class ExternalBrowserWindow : Window
                     {
                         case DownloadAction.UploadToAcc:
                         case DownloadAction.AssociateToProject:
-                            // Save to ACC-mirrored path + trigger ACC Inbox upload pipeline
                             if (_emailInfo != null && !string.IsNullOrEmpty(_emailInfo.MessageId))
                             {
                                 var accPath = WebView2Helper.BuildAccMirroredPath(
@@ -141,12 +170,17 @@ public partial class ExternalBrowserWindow : Window
                                 e.Handled = true;
                                 System.Diagnostics.Debug.WriteLine(
                                     $"ExternalBrowser: Download → ACC path: {resolvedAccPath}");
+                                ApplyProgress(new EmailExternalDownloadProgress(
+                                    EmailExternalDownloadStage.Downloading,
+                                    $"מוריד למחשב: {sanitizedFileName}",
+                                    FileName: sanitizedFileName));
                                 WebView2Helper.TrackDownloadCompletion(
-                                    e.DownloadOperation, _emailInfo);
+                                    e.DownloadOperation,
+                                    _emailInfo,
+                                    OnDownloadBytesProgress);
                             }
                             else
                             {
-                                // Fallback: save to Downloads if no email context
                                 var fallbackPath = Path.Combine(
                                     Environment.GetFolderPath(
                                         Environment.SpecialFolder.UserProfile),
@@ -166,7 +200,6 @@ public partial class ExternalBrowserWindow : Window
                             break;
 
                         case DownloadAction.SaveToDownloads:
-                            // Local save only — no ACC upload
                             var downloadsPath = Path.Combine(
                                 Environment.GetFolderPath(
                                     Environment.SpecialFolder.UserProfile),
@@ -184,7 +217,7 @@ public partial class ExternalBrowserWindow : Window
                                 $"ExternalBrowser: Download → Downloads (local only): {resolvedDownloadsPath}");
                             break;
 
-                        default: // Cancel
+                        default:
                             e.Cancel = true;
                             e.Handled = true;
                             System.Diagnostics.Debug.WriteLine(
@@ -210,10 +243,28 @@ public partial class ExternalBrowserWindow : Window
         }
     }
 
-    /// <summary>
-    /// Navigates the existing WebView2 instance to a new URL without creating a new window.
-    /// If CoreWebView2 is not yet initialized, updates the initial URL for the next OnLoaded call.
-    /// </summary>
+    private void OnDownloadBytesProgress(long bytesReceived, long? totalBytes, string fileName)
+    {
+        int? percent = null;
+        string message;
+        if (totalBytes is > 0)
+        {
+            percent = (int)Math.Clamp(Math.Round(bytesReceived * 100.0 / totalBytes.Value), 0, 100);
+            message = $"מוריד למחשב: {fileName} ({percent}%)";
+        }
+        else
+        {
+            var mb = bytesReceived / (1024.0 * 1024.0);
+            message = $"מוריד למחשב: {fileName} ({mb:0.0} MB)";
+        }
+
+        ApplyProgress(new EmailExternalDownloadProgress(
+            EmailExternalDownloadStage.Downloading,
+            message,
+            Percent: percent,
+            FileName: fileName));
+    }
+
     public void NavigateTo(string url, string title)
     {
         Title = title;
@@ -224,6 +275,25 @@ public partial class ExternalBrowserWindow : Window
             core.Navigate(url);
             System.Diagnostics.Debug.WriteLine(
                 $"ExternalBrowser: Navigated to {url}");
+        }
+    }
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_hasActiveWork)
+        {
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            this,
+            "הורדה או העלאה ל-ACC עדיין בתהליך.\nלסגור בכל זאת?",
+            "פעולה פעילה",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes)
+        {
+            e.Cancel = true;
         }
     }
 
