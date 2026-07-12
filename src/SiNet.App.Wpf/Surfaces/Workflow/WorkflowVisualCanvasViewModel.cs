@@ -52,19 +52,53 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
         _saveLayoutCommand = new AsyncRelayCommand(SaveLayoutAsync, () => IsDirty && !_isSaving && _selectedDefinition is not null);
         SaveLayoutCommand = _saveLayoutCommand;
         ClearSelectionCommand = new RelayCommand(_ => ClearSelection());
+        ZoomInCommand = new RelayCommand(_ => AdjustZoom(ZoomStepFactor));
+        ZoomOutCommand = new RelayCommand(_ => AdjustZoom(1.0 / ZoomStepFactor));
+        ZoomResetCommand = new RelayCommand(_ => SetZoom(1.0));
     }
+
+    public const double MinZoom = 0.4;
+    public const double MaxZoom = 2.5;
+    public const double ZoomStepFactor = 1.1;
 
     public string Title => "תהליכים — קנבס (צפייה + סידור)";
 
     public string BannerText =>
         "לחץ על שלב או חץ לפירוט (משימות נדרשות / תנאי מעבר). גרור שלבים לסידור · שמור פריסה → CanvasX/Y. " +
-        "לולאה עצמית = נשארים באותו שלב (לא חץ דו-כיווני).";
+        "לולאה עצמית = נשארים באותו שלב (לא חץ דו-כיווני). Ctrl+גלגלת לזום.";
 
     public ICommand RefreshCommand { get; }
 
     public ICommand SaveLayoutCommand { get; }
 
     public ICommand ClearSelectionCommand { get; }
+
+    public ICommand ZoomInCommand { get; }
+
+    public ICommand ZoomOutCommand { get; }
+
+    public ICommand ZoomResetCommand { get; }
+
+    private double _zoomLevel = 1.0;
+
+    public double ZoomLevel
+    {
+        get => _zoomLevel;
+        private set
+        {
+            var clamped = Math.Clamp(value, MinZoom, MaxZoom);
+            if (SetField(ref _zoomLevel, clamped))
+            {
+                OnPropertyChanged(nameof(ZoomPercentText));
+            }
+        }
+    }
+
+    public string ZoomPercentText => $"{(int)Math.Round(ZoomLevel * 100)}%";
+
+    public void SetZoom(double level) => ZoomLevel = level;
+
+    public void AdjustZoom(double factor) => SetZoom(ZoomLevel * factor);
 
     public ObservableCollection<WorkflowDefinitionPickerItem> Definitions { get; } = new();
 
@@ -552,7 +586,10 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         bool isSelfLoop,
         PointCollection? loopPoints,
         Brush normalStroke,
-        Brush selectedStroke)
+        Brush selectedStroke,
+        double labelAngle = 0,
+        double? labelX = null,
+        double? labelY = null)
     {
         TransitionId = transitionId;
         FromStageId = fromStageId;
@@ -564,8 +601,9 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         LabelEn = labelEn;
         LabelHe = labelHe;
         LabelBrush = labelBrush;
-        LabelX = (x1 + x2) / 2 - 36;
-        LabelY = Math.Min(y1, y2) - 34;
+        LabelAngle = labelAngle;
+        LabelX = labelX ?? (x1 + x2) / 2 - 70;
+        LabelY = labelY ?? (y1 + y2) / 2 - 24;
         ArrowPoints = arrowPoints;
         IsSelfLoop = isSelfLoop;
         LoopPoints = loopPoints ?? new PointCollection();
@@ -595,30 +633,74 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
                 labelEn, labelHe, labelBrush, selfLoopIndex, normalStroke, selectedStroke);
         }
 
-        var start = new Point(fromTopLeft.X + nodeWidth, fromTopLeft.Y + nodeHeight / 2);
-        var end = new Point(toTopLeft.X, toTopLeft.Y + nodeHeight / 2);
-
-        var dxCenter = (toTopLeft.X + nodeWidth / 2) - (fromTopLeft.X + nodeWidth / 2);
-        var dyCenter = (toTopLeft.Y + nodeHeight / 2) - (fromTopLeft.Y + nodeHeight / 2);
-        if (Math.Abs(dyCenter) > Math.Abs(dxCenter) * 0.6)
+        // Undirected pair normal (lowerId → higherId) so A→B and B→A get opposite world offsets.
+        var lowerTopLeft = t.FromStageId < t.ToStageId ? fromTopLeft : toTopLeft;
+        var higherTopLeft = t.FromStageId < t.ToStageId ? toTopLeft : fromTopLeft;
+        var udx = (higherTopLeft.X + nodeWidth / 2) - (lowerTopLeft.X + nodeWidth / 2);
+        var udy = (higherTopLeft.Y + nodeHeight / 2) - (lowerTopLeft.Y + nodeHeight / 2);
+        var ulen = Math.Sqrt(udx * udx + udy * udy);
+        if (ulen < 1)
         {
-            if (dyCenter > 0)
-            {
-                start = new Point(fromTopLeft.X + nodeWidth / 2, fromTopLeft.Y + nodeHeight);
-                end = new Point(toTopLeft.X + nodeWidth / 2, toTopLeft.Y);
-            }
-            else
-            {
-                start = new Point(fromTopLeft.X + nodeWidth / 2, fromTopLeft.Y);
-                end = new Point(toTopLeft.X + nodeWidth / 2, toTopLeft.Y + nodeHeight);
-            }
-        }
-        else if (dxCenter < 0)
-        {
-            start = new Point(fromTopLeft.X, fromTopLeft.Y + nodeHeight / 2);
-            end = new Point(toTopLeft.X + nodeWidth, toTopLeft.Y + nodeHeight / 2);
+            ulen = 1;
         }
 
+        var fixedPx = -udy / ulen;
+        var fixedPy = udx / ulen;
+
+        // Center-to-center; line may run under nodes (nodes are higher ZIndex).
+        var start = new Point(
+            fromTopLeft.X + nodeWidth / 2 + fixedPx * lateralOffset,
+            fromTopLeft.Y + nodeHeight / 2 + fixedPy * lateralOffset);
+        var end = new Point(
+            toTopLeft.X + nodeWidth / 2 + fixedPx * lateralOffset,
+            toTopLeft.Y + nodeHeight / 2 + fixedPy * lateralOffset);
+
+        var (tip, baseCenter, ux, uy, px, py) = PlaceArrowOutsideTarget(
+            start, end, toTopLeft, nodeWidth, nodeHeight);
+
+        var arrow = new PointCollection
+        {
+            tip,
+            new Point(baseCenter.X + px * 6, baseCenter.Y + py * 6),
+            new Point(baseCenter.X - px * 6, baseCenter.Y - py * 6),
+        };
+
+        var midX = (start.X + baseCenter.X) / 2;
+        var midY = (start.Y + baseCenter.Y) / 2;
+        var angleDeg = Math.Atan2(uy, ux) * 180.0 / Math.PI;
+        // Keep text roughly upright (avoid reading upside-down).
+        if (angleDeg > 90)
+        {
+            angleDeg -= 180;
+        }
+        else if (angleDeg < -90)
+        {
+            angleDeg += 180;
+        }
+
+        const double labelHalfW = 70;
+        const double labelHalfH = 24;
+
+        return new WorkflowCanvasEdgeVm(
+            t.Id, t.FromStageId, t.ToStageId,
+            start.X, start.Y, tip.X, tip.Y,
+            labelEn, labelHe, labelBrush, arrow, false, null,
+            normalStroke, selectedStroke,
+            labelAngle: angleDeg,
+            labelX: midX - labelHalfW,
+            labelY: midY - labelHalfH);
+    }
+
+    /// <summary>
+    /// Places arrow tip just outside the target node AABB along the start→end ray.
+    /// </summary>
+    internal static (Point Tip, Point Base, double Ux, double Uy, double Px, double Py) PlaceArrowOutsideTarget(
+        Point start,
+        Point end,
+        Point targetTopLeft,
+        double nodeWidth,
+        double nodeHeight)
+    {
         var dx = end.X - start.X;
         var dy = end.Y - start.Y;
         var len = Math.Sqrt(dx * dx + dy * dy);
@@ -632,28 +714,38 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         var px = -uy;
         var py = ux;
 
-        start = new Point(start.X + px * lateralOffset, start.Y + py * lateralOffset);
-        end = new Point(end.X + px * lateralOffset, end.Y + py * lateralOffset);
+        const double margin = 2;
+        const double arrowLen = 12;
+        const double wing = 6;
+        var left = targetTopLeft.X - margin;
+        var top = targetTopLeft.Y - margin;
+        var right = targetTopLeft.X + nodeWidth + margin;
+        var bottom = targetTopLeft.Y + nodeHeight + margin;
 
-        var tip = new Point(end.X - ux * 2, end.Y - uy * 2);
-        var baseCenter = new Point(tip.X - ux * 12, tip.Y - uy * 12);
-        var arrow = new PointCollection
+        double tipDist = arrowLen;
+        for (double d = 0; d <= len; d += 0.25)
         {
-            tip,
-            new Point(baseCenter.X + px * 6, baseCenter.Y + py * 6),
-            new Point(baseCenter.X - px * 6, baseCenter.Y - py * 6),
-        };
+            var candidate = new Point(end.X - ux * d, end.Y - uy * d);
+            var w1 = new Point(candidate.X + px * wing, candidate.Y + py * wing);
+            var w2 = new Point(candidate.X - px * wing, candidate.Y - py * wing);
+            if (!IsInsideAabb(candidate, left, top, right, bottom)
+                && !IsInsideAabb(w1, left, top, right, bottom)
+                && !IsInsideAabb(w2, left, top, right, bottom))
+            {
+                tipDist = d;
+                break;
+            }
 
-        return new WorkflowCanvasEdgeVm(
-            t.Id, t.FromStageId, t.ToStageId,
-            start.X, start.Y, baseCenter.X, baseCenter.Y,
-            labelEn, labelHe, labelBrush, arrow, false, null,
-            normalStroke, selectedStroke)
-        {
-            LabelX = (start.X + baseCenter.X) / 2 - 36 + px * 12,
-            LabelY = (start.Y + baseCenter.Y) / 2 - 28 + py * 12,
-        };
+            tipDist = d;
+        }
+
+        var tip = new Point(end.X - ux * tipDist, end.Y - uy * tipDist);
+        var baseCenter = new Point(tip.X - ux * arrowLen, tip.Y - uy * arrowLen);
+        return (tip, baseCenter, ux, uy, px, py);
     }
+
+    private static bool IsInsideAabb(Point p, double left, double top, double right, double bottom) =>
+        p.X >= left && p.X <= right && p.Y >= top && p.Y <= bottom;
 
     private static (string En, string He, Brush Brush) BuildLabels(WorkflowTransitionGraphDto t)
     {
@@ -705,11 +797,10 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
             transitionId, fromStageId, toStageId,
             cx - 18, top, cx + 18, top,
             labelEn, labelHe, labelBrush, arrow, true, loop,
-            normalStroke, selectedStroke)
-        {
-            LabelX = cx - 48,
-            LabelY = top - 78,
-        };
+            normalStroke, selectedStroke,
+            labelAngle: 0,
+            labelX: cx - 70,
+            labelY: top - 78);
     }
 
     public int TransitionId { get; }
@@ -721,6 +812,7 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
     public double Y2 { get; }
     public double LabelX { get; private init; }
     public double LabelY { get; private init; }
+    public double LabelAngle { get; private init; }
     public string LabelEn { get; }
     public string LabelHe { get; }
     public Brush LabelBrush { get; }

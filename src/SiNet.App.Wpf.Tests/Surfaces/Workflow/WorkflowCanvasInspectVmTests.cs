@@ -59,8 +59,58 @@ public sealed class WorkflowCanvasInspectVmTests
 
         var forward = WorkflowCanvasLabels.ComputeLateral(0, 1, hasReversePair: true, fromLessThanTo: true);
         var backward = WorkflowCanvasLabels.ComputeLateral(0, 1, hasReversePair: true, fromLessThanTo: false);
-        Assert.Equal(-16, forward);
-        Assert.Equal(16, backward);
+        Assert.Equal(-WorkflowCanvasLabels.ReversePairGap, forward);
+        Assert.Equal(WorkflowCanvasLabels.ReversePairGap, backward);
+    }
+
+    [Fact]
+    public void Create_ReverseVerticalPair_SeparatesInWorldX()
+    {
+        const double nodeW = 160;
+        const double nodeH = 72;
+        var upper = new System.Windows.Point(100, 40);
+        var lower = new System.Windows.Point(100, 220);
+        var stroke = System.Windows.Media.Brushes.Gray;
+        var selected = System.Windows.Media.Brushes.Orange;
+
+        var down = MakeTransition(
+            id: 1, from: 10, to: 20, trigger: "TaskStatusChanged", condition: "TaskResultEquals",
+            resultCode: "MissingMaterialRequested", resultName: "נשלחה דרישה");
+        var up = MakeTransition(
+            id: 2, from: 20, to: 10, trigger: "TaskStatusChanged", condition: "TaskResultEquals",
+            resultCode: "MissingMaterialReceived", resultName: "התקבלה השלמה");
+
+        var downLateral = WorkflowCanvasLabels.ComputeLateral(0, 1, hasReversePair: true, fromLessThanTo: true);
+        var upLateral = WorkflowCanvasLabels.ComputeLateral(0, 1, hasReversePair: true, fromLessThanTo: false);
+
+        var downEdge = WorkflowCanvasEdgeVm.Create(down, upper, lower, nodeW, nodeH, downLateral, 0, stroke, selected);
+        var upEdge = WorkflowCanvasEdgeVm.Create(up, lower, upper, nodeW, nodeH, upLateral, 0, stroke, selected);
+
+        Assert.NotEqual(downEdge.X1, upEdge.X1);
+        Assert.True(Math.Abs(downEdge.X1 - upEdge.X1) >= WorkflowCanvasLabels.ReversePairGap * 2 - 0.5);
+        Assert.NotEqual(downEdge.LabelX, upEdge.LabelX);
+    }
+
+    [Fact]
+    public void Create_VerticalEdge_TipOutsideTargetAabb_AndLabelAngleNearNinety()
+    {
+        const double nodeW = 140;
+        const double nodeH = 56;
+        var upper = new System.Windows.Point(100, 40);
+        var lower = new System.Windows.Point(100, 200);
+        var stroke = System.Windows.Media.Brushes.Gray;
+        var selected = System.Windows.Media.Brushes.Orange;
+
+        var down = MakeTransition(
+            id: 1, from: 10, to: 20, trigger: "TaskStatusChanged", condition: "Always",
+            resultCode: null, resultName: null);
+
+        var edge = WorkflowCanvasEdgeVm.Create(down, upper, lower, nodeW, nodeH, 0, 0, stroke, selected);
+        var tip = edge.ArrowPoints[0];
+
+        Assert.True(tip.Y <= lower.Y - 1.5, $"Tip Y={tip.Y} should be above target top {lower.Y}");
+        Assert.False(tip.X >= lower.X && tip.X <= lower.X + nodeW && tip.Y >= lower.Y && tip.Y <= lower.Y + nodeH);
+        Assert.InRange(Math.Abs(edge.LabelAngle), 80, 100);
     }
 
     [Fact]

@@ -68,9 +68,13 @@ public static class WorkflowCanvasLabels
     public static Brush EmphasizedLabelBrush { get; } = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32));
     public static Brush NormalLabelBrush { get; } = new SolidColorBrush(Color.FromRgb(0x26, 0x32, 0x38));
 
+    /// <summary>World-space half-gap (px) for A↔B reverse pairs; applied along an undirected pair normal.</summary>
+    public const double ReversePairGap = 22;
+
     /// <summary>
     /// Perpendicular offset for parallel edges on the same directed pair,
     /// plus reverse-pair bias when A↔B both exist.
+    /// Must be applied along an undirected (lowerId→higherId) normal so reverse directions do not cancel.
     /// </summary>
     public static double ComputeLateral(int indexInGroup, int groupCount, bool hasReversePair, bool fromLessThanTo)
     {
@@ -78,7 +82,7 @@ public static class WorkflowCanvasLabels
         var reverse = 0.0;
         if (hasReversePair)
         {
-            reverse = fromLessThanTo ? -16 : 16;
+            reverse = fromLessThanTo ? -ReversePairGap : ReversePairGap;
         }
 
         return fan + reverse;

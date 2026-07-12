@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using SiNet.App.Wpf.Infrastructure;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Surfaces.Workflow;
 
@@ -25,6 +26,7 @@ public partial class WorkflowVisualCanvasWindow : Window
         InitializeComponent();
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = ViewModel;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Loaded += OnLoaded;
         UpdateMaximizeButtonGlyph();
     }
@@ -42,6 +44,19 @@ public partial class WorkflowVisualCanvasWindow : Window
         {
             AppErrorReporter.Report(ex, "WorkflowVisualCanvasWindow.OnLoaded");
         }
+    }
+
+    private void CanvasScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        ViewModel.AdjustZoom(e.Delta > 0
+            ? WorkflowVisualCanvasViewModel.ZoomStepFactor
+            : 1.0 / WorkflowVisualCanvasViewModel.ZoomStepFactor);
+        e.Handled = true;
     }
 
     private void Node_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

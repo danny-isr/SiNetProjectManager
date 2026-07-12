@@ -34,12 +34,14 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" Background="#1565C0" MouseLeftButtonDown="Header_MouseLeftButtonDown" Margin="0,0,0,8">
+            <Grid Grid.Row="0" Background="{DynamicResource SiPrimaryBrush}"
+                  MouseLeftButtonDown="Header_MouseLeftButtonDown" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{Binding Title}" Foreground="White" FontWeight="Bold"
+                           Style="{DynamicResource SiTextLargeStyle}"
                            Margin="10,6" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Content="&#x2715;" Foreground="White" Width="34" Height="28" BorderThickness="0"
@@ -51,9 +53,11 @@
                 </StackPanel>
             </Grid>
 
-            <Border Grid.Row="1" Background="#E3F2FD" BorderBrush="#90CAF9" BorderThickness="1"
+            <Border Grid.Row="1" Background="{DynamicResource SiBackgroundBrush}"
+                    BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1"
                     CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                <TextBlock Text="{Binding BannerText}" TextWrapping="Wrap" Foreground="#0D47A1" FontSize="12"/>
+                <TextBlock Text="{Binding BannerText}" TextWrapping="Wrap"
+                           Style="{DynamicResource SiTextSmallStyle}"/>
             </Border>
 
             <Grid Grid.Row="2" Margin="0,0,0,8">
@@ -62,19 +66,35 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="תבנית:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                    <TextBlock Text="תבנית:" VerticalAlignment="Center" Margin="0,0,8,0"
+                               Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold"/>
                     <ComboBox Width="360"
+                              Style="{DynamicResource SiComboBoxStyle}"
                               ItemsSource="{Binding Definitions}"
                               SelectedItem="{Binding SelectedPickerItem}"
                               DisplayMemberPath="Display"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="נקה בחירה" Padding="12,4" Margin="0,0,8,0"
+                    <Button Content="זום −" Style="{DynamicResource SiSecondaryButtonStyle}"
+                            Padding="10,4" Margin="0,0,4,0"
+                            Command="{Binding ZoomOutCommand}" ToolTip="הקטן (Ctrl+גלגלת)"/>
+                    <TextBlock Text="{Binding ZoomPercentText}" VerticalAlignment="Center" MinWidth="44"
+                               TextAlignment="Center" Style="{DynamicResource SiTextSmallStyle}" Margin="0,0,4,0"/>
+                    <Button Content="זום +" Style="{DynamicResource SiSecondaryButtonStyle}"
+                            Padding="10,4" Margin="0,0,4,0"
+                            Command="{Binding ZoomInCommand}" ToolTip="הגדל (Ctrl+גלגלת)"/>
+                    <Button Content="100%" Style="{DynamicResource SiSecondaryButtonStyle}"
+                            Padding="10,4" Margin="0,0,12,0"
+                            Command="{Binding ZoomResetCommand}" ToolTip="איפוס זום"/>
+                    <Button Content="נקה בחירה" Style="{DynamicResource SiSecondaryButtonStyle}"
+                            Padding="12,4" Margin="0,0,8,0"
                             Command="{Binding ClearSelectionCommand}"/>
-                    <Button Content="שמור פריסה" Padding="12,4" Margin="0,0,8,0"
+                    <Button Content="שמור פריסה" Style="{DynamicResource SiPrimaryButtonStyle}"
+                            Padding="12,4" Margin="0,0,8,0"
                             Command="{Binding SaveLayoutCommand}"
                             ToolTip="שומר רק מיקומי CanvasX/Y — לא משנה תוכן תהליך"/>
-                    <Button Content="רענן" Padding="12,4" Command="{Binding RefreshCommand}"/>
+                    <Button Content="רענן" Style="{DynamicResource SiSecondaryButtonStyle}"
+                            Padding="12,4" Command="{Binding RefreshCommand}"/>
                 </StackPanel>
             </Grid>
 
@@ -86,69 +106,77 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Legend + inspect panel -->
-                <Border Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Padding="10">
+                <Border Grid.Column="0" BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1"
+                        CornerRadius="4" Padding="10">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <TextBlock Text="מקרא" FontWeight="Bold" Margin="0,0,0,8"/>
+                            <TextBlock Text="מקרא" Style="{DynamicResource SiSectionHeaderStyle}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Ellipse Width="14" Height="14" Fill="#43A047" Margin="0,0,6,0"/>
-                                <TextBlock Text="התחלה" FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock Text="התחלה" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Border Width="18" Height="12" Background="#1E88E5" CornerRadius="3" Margin="0,0,6,0"/>
-                                <TextBlock Text="שלב" FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock Text="שלב" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Ellipse Width="14" Height="14" Fill="#E53935" Margin="0,0,6,0"/>
-                                <TextBlock Text="סיום" FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock Text="סיום" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="↻" Margin="0,0,6,0"/>
-                                <TextBlock Text="לולאה עצמית" FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock Text="↻" Margin="0,0,6,0" Style="{DynamicResource SiTextSmallStyle}"/>
+                                <TextBlock Text="לולאה עצמית" Style="{DynamicResource SiTextSmallStyle}" VerticalAlignment="Center"/>
                             </StackPanel>
 
-                            <Border BorderBrush="#EEE" BorderThickness="0,1,0,0" Margin="0,4,0,8"/>
+                            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,8"/>
 
-                            <TextBlock Text="פירוט" FontWeight="Bold" Margin="0,0,0,8"/>
+                            <TextBlock Text="פירוט" Style="{DynamicResource SiSectionHeaderStyle}"/>
 
                             <TextBlock Text="לחץ על שלב או על חץ בתרשים כדי לראות משימות נדרשות, תנאים ופעולות."
-                                       TextWrapping="Wrap" Foreground="#666" FontSize="11"
+                                       TextWrapping="Wrap" Style="{DynamicResource SiTextSmallStyle}"
                                        Visibility="{Binding ShowEmptyInspectHint, Converter={StaticResource BoolToVis}}"/>
 
                             <!-- Stage inspect -->
                             <StackPanel Visibility="{Binding IsStageSelected, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="שלב" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
-                                <TextBlock Text="{Binding SelectedStage.Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding SelectedStage.Code, StringFormat=קוד: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedStage.NodeType, StringFormat=NodeType: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Margin="0,2" FontSize="11">
+                                <TextBlock Text="שלב" Style="{DynamicResource SiTextMediumStyle}" FontWeight="Bold" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding SelectedStage.Name}" Style="{DynamicResource SiTextNormalStyle}"
+                                           FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding SelectedStage.Code, StringFormat=קוד: {0}}" Margin="0,2"
+                                           Style="{DynamicResource SiTextSmallStyle}"/>
+                                <TextBlock Text="{Binding SelectedStage.NodeType, StringFormat=NodeType: {0}}" Margin="0,2"
+                                           Style="{DynamicResource SiTextSmallStyle}"/>
+                                <TextBlock Margin="0,2" Style="{DynamicResource SiTextSmallStyle}">
                                     <Run Text="התחלה: "/><Run Text="{Binding SelectedStage.IsInitial, Mode=OneWay}"/>
                                     <Run Text=" · סיום: "/><Run Text="{Binding SelectedStage.IsFinal, Mode=OneWay}"/>
                                 </TextBlock>
                                 <TextBlock Text="{Binding SelectedStage.AssignedGroup, StringFormat=קבוצה: {0}}"
-                                           Margin="0,2" FontSize="11" TextWrapping="Wrap"/>
+                                           Margin="0,2" Style="{DynamicResource SiTextSmallStyle}" TextWrapping="Wrap"/>
                                 <TextBlock Text="{Binding SelectedStage.SubWorkflow, StringFormat=תת-תהליך: {0}}"
-                                           Margin="0,2" FontSize="11" TextWrapping="Wrap"/>
+                                           Margin="0,2" Style="{DynamicResource SiTextSmallStyle}" TextWrapping="Wrap"/>
                                 <TextBlock Text="{Binding SelectedStage.Description}" TextWrapping="Wrap"
-                                           Margin="0,4,0,0" FontSize="11" Foreground="#555"/>
+                                           Margin="0,4,0,0" Style="{DynamicResource SiTextSmallStyle}"/>
 
-                                <TextBlock Text="משימות נדרשות" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <TextBlock Text="משימות נדרשות" Style="{DynamicResource SiTextNormalStyle}"
+                                           FontWeight="SemiBold" Margin="0,12,0,4"/>
                                 <ItemsControl ItemsSource="{Binding SelectedStage.Tasks}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="0,4" Margin="0,0,0,2">
+                                            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="0,0,0,1"
+                                                    Padding="0,4" Margin="0,0,0,2">
                                                 <StackPanel>
-                                                    <TextBlock FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"
+                                                    <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"
+                                                               Style="{DynamicResource SiTextSmallStyle}"
                                                                Text="{Binding TaskTypeName}"/>
-                                                    <TextBlock FontSize="10" Foreground="#555"
+                                                    <TextBlock Style="{DynamicResource SiTextTinyStyle}"
                                                                Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
-                                                    <TextBlock FontSize="10">
+                                                    <TextBlock Style="{DynamicResource SiTextTinyStyle}">
                                                         <Run Text="{Binding RequiredLabel, Mode=OneWay}"/>
                                                         <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
                                                     </TextBlock>
-                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#37474F"
+                                                    <TextBlock Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
                                                                Text="{Binding AllowedResultsEn}"/>
-                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#2E7D32"
+                                                    <TextBlock Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                               Foreground="#2E7D32"
                                                                Text="{Binding AllowedResultsHe}"/>
                                                 </StackPanel>
                                             </Border>
@@ -156,13 +184,16 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="מעברים יוצאים" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <TextBlock Text="מעברים יוצאים" Style="{DynamicResource SiTextNormalStyle}"
+                                           FontWeight="SemiBold" Margin="0,12,0,4"/>
                                 <ItemsControl ItemsSource="{Binding SelectedStage.OutgoingTransitions}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <StackPanel Margin="0,0,0,6">
-                                                <TextBlock Text="{Binding DisplayEn}" FontSize="11" TextWrapping="Wrap"/>
-                                                <TextBlock Text="{Binding DisplayHe}" FontSize="10" Foreground="#2E7D32" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding DisplayEn}" Style="{DynamicResource SiTextSmallStyle}"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding DisplayHe}" Style="{DynamicResource SiTextTinyStyle}"
+                                                           Foreground="#2E7D32" TextWrapping="Wrap"/>
                                             </StackPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -171,31 +202,38 @@
 
                             <!-- Transition inspect -->
                             <StackPanel Visibility="{Binding IsTransitionSelected, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="מעבר" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
-                                <TextBlock Text="{Binding SelectedTransition.Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="מעבר" Style="{DynamicResource SiTextMediumStyle}" FontWeight="Bold" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding SelectedTransition.Title}" Style="{DynamicResource SiTextNormalStyle}"
+                                           FontWeight="SemiBold" TextWrapping="Wrap"/>
                                 <Border Background="#FFF3E0" BorderBrush="#FFB74D" BorderThickness="1" CornerRadius="4"
                                         Padding="8" Margin="0,8,0,8"
                                         Visibility="{Binding SelectedTransition.IsSelfLoop, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="{Binding SelectedTransition.SelfLoopExplanation}"
-                                               TextWrapping="Wrap" FontSize="11" Foreground="#E65100"/>
+                                               TextWrapping="Wrap" Style="{DynamicResource SiTextSmallStyle}" Foreground="#E65100"/>
                                 </Border>
-                                <TextBlock Text="{Binding SelectedTransition.FromName, StringFormat=מ: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedTransition.ToName, StringFormat=אל: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.FromName, StringFormat=מ: {0}}" Margin="0,2"
+                                           Style="{DynamicResource SiTextSmallStyle}"/>
+                                <TextBlock Text="{Binding SelectedTransition.ToName, StringFormat=אל: {0}}" Margin="0,2"
+                                           Style="{DynamicResource SiTextSmallStyle}"/>
 
                                 <!-- Trigger frame -->
                                 <Border Background="#E8F5E9" BorderBrush="#66BB6A" BorderThickness="1" CornerRadius="4"
                                         Padding="8" Margin="0,10,0,6">
                                     <StackPanel>
-                                        <TextBlock Text="טריגר" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,4"/>
-                                        <TextBlock Text="{Binding SelectedTransition.TriggerType}" FontWeight="SemiBold" FontSize="11"/>
-                                        <TextBlock Text="{Binding SelectedTransition.TriggerHe}" FontSize="11" Foreground="#1B5E20"/>
+                                        <TextBlock Text="טריגר" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,4"
+                                                   FontFamily="{DynamicResource SiFontFamily}"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TriggerType}" FontWeight="SemiBold"
+                                                   Style="{DynamicResource SiTextSmallStyle}"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TriggerHe}"
+                                                   Style="{DynamicResource SiTextSmallStyle}" Foreground="#1B5E20"/>
                                         <TextBlock Text="{Binding SelectedTransition.TriggerExplanation}" TextWrapping="Wrap"
-                                                   FontSize="10" Foreground="#455A64" Margin="0,4,0,0"/>
-                                        <TextBlock Margin="0,4,0,0" FontSize="10">
+                                                   Style="{DynamicResource SiTextTinyStyle}" Foreground="#455A64" Margin="0,4,0,0"/>
+                                        <TextBlock Margin="0,4,0,0" Style="{DynamicResource SiTextTinyStyle}">
                                             <Run Text="Evaluation: "/><Run Text="{Binding SelectedTransition.EvaluationMode, Mode=OneWay}"/>
                                             <Run Text=" ("/><Run Text="{Binding SelectedTransition.EvaluationHe, Mode=OneWay}"/><Run Text=")"/>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding SelectedTransition.Priority, StringFormat=Priority: {0}}" FontSize="10"/>
+                                        <TextBlock Text="{Binding SelectedTransition.Priority, StringFormat=Priority: {0}}"
+                                                   Style="{DynamicResource SiTextTinyStyle}"/>
                                     </StackPanel>
                                 </Border>
 
@@ -203,12 +241,16 @@
                                 <Border Background="#E3F2FD" BorderBrush="#42A5F5" BorderThickness="1" CornerRadius="4"
                                         Padding="8" Margin="0,0,0,6">
                                     <StackPanel>
-                                        <TextBlock Text="תנאי" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,0,4"/>
-                                        <TextBlock Text="{Binding SelectedTransition.ConditionType}" FontWeight="SemiBold" FontSize="11"/>
-                                        <TextBlock Text="{Binding SelectedTransition.ConditionHe}" FontSize="11" Foreground="#0D47A1"/>
-                                        <TextBlock Text="{Binding SelectedTransition.TaskResultCode}" FontSize="11" Margin="0,6,0,0"
-                                                   FontWeight="SemiBold"/>
-                                        <TextBlock Text="{Binding SelectedTransition.TaskResultName}" FontSize="11" Foreground="#0D47A1"/>
+                                        <TextBlock Text="תנאי" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,0,4"
+                                                   FontFamily="{DynamicResource SiFontFamily}"/>
+                                        <TextBlock Text="{Binding SelectedTransition.ConditionType}" FontWeight="SemiBold"
+                                                   Style="{DynamicResource SiTextSmallStyle}"/>
+                                        <TextBlock Text="{Binding SelectedTransition.ConditionHe}"
+                                                   Style="{DynamicResource SiTextSmallStyle}" Foreground="#0D47A1"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TaskResultCode}" Margin="0,6,0,0"
+                                                   FontWeight="SemiBold" Style="{DynamicResource SiTextSmallStyle}"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TaskResultName}"
+                                                   Style="{DynamicResource SiTextSmallStyle}" Foreground="#0D47A1"/>
                                     </StackPanel>
                                 </Border>
 
@@ -216,16 +258,19 @@
                                 <Border Background="#F3E5F5" BorderBrush="#AB47BC" BorderThickness="1" CornerRadius="4"
                                         Padding="8" Margin="0,0,0,6">
                                     <StackPanel>
-                                        <TextBlock Text="פעולות" FontWeight="Bold" Foreground="#6A1B9A" Margin="0,0,0,4"/>
+                                        <TextBlock Text="פעולות" FontWeight="Bold" Foreground="#6A1B9A" Margin="0,0,0,4"
+                                                   FontFamily="{DynamicResource SiFontFamily}"/>
                                         <TextBlock Text="אין פעולות במעבר זה"
-                                                   FontSize="11" Foreground="#7B1FA2"
+                                                   Style="{DynamicResource SiTextSmallStyle}" Foreground="#7B1FA2"
                                                    Visibility="{Binding SelectedTransition.HasNoActions, Converter={StaticResource BoolToVis}}"/>
                                         <ItemsControl ItemsSource="{Binding SelectedTransition.Actions}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Margin="0,0,0,6">
-                                                        <TextBlock Text="{Binding DisplayEn}" FontSize="11" TextWrapping="Wrap"/>
-                                                        <TextBlock Text="{Binding DisplayHe}" FontSize="10" Foreground="#4A148C" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding DisplayEn}" Style="{DynamicResource SiTextSmallStyle}"
+                                                                   TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding DisplayHe}" Style="{DynamicResource SiTextTinyStyle}"
+                                                                   Foreground="#4A148C" TextWrapping="Wrap"/>
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
@@ -233,25 +278,31 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Background="#FAFAFA" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4"
+                                <Border Background="{DynamicResource SiBackgroundBrush}"
+                                        BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" CornerRadius="4"
                                         Padding="8" Margin="0,4,0,0">
                                     <StackPanel>
-                                        <TextBlock Text="משימות נדרשות בשלב המקור" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                        <TextBlock Text="משימות נדרשות בשלב המקור"
+                                                   Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
                                         <ItemsControl ItemsSource="{Binding SelectedTransition.RequiredTasks}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="0,4" Margin="0,0,0,2">
+                                                    <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="0,0,0,1"
+                                                            Padding="0,4" Margin="0,0,0,2">
                                                         <StackPanel>
-                                                            <TextBlock FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"
+                                                            <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"
+                                                                       Style="{DynamicResource SiTextSmallStyle}"
                                                                        Text="{Binding TaskTypeName}"/>
-                                                            <TextBlock FontSize="10" Foreground="#555"
+                                                            <TextBlock Style="{DynamicResource SiTextTinyStyle}"
                                                                        Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
-                                                            <TextBlock FontSize="10">
+                                                            <TextBlock Style="{DynamicResource SiTextTinyStyle}">
                                                                 <Run Text="{Binding RequiredLabel, Mode=OneWay}"/>
                                                                 <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
                                                             </TextBlock>
-                                                            <TextBlock FontSize="10" TextWrapping="Wrap" Text="{Binding AllowedResultsEn}"/>
-                                                            <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#2E7D32"
+                                                            <TextBlock Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                                       Text="{Binding AllowedResultsEn}"/>
+                                                            <TextBlock Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                                       Foreground="#2E7D32"
                                                                        Text="{Binding AllowedResultsHe}"/>
                                                         </StackPanel>
                                                     </Border>
@@ -265,11 +316,15 @@
                     </ScrollViewer>
                 </Border>
 
-                <Border Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
-                    <ScrollViewer x:Name="CanvasScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <Border Grid.Column="2" BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" CornerRadius="4">
+                    <ScrollViewer x:Name="CanvasScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  PreviewMouseWheel="CanvasScroll_PreviewMouseWheel">
                         <Canvas x:Name="GraphCanvas" Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}"
-                                Background="#FAFAFA" FlowDirection="LeftToRight"
+                                Background="{DynamicResource SiBackgroundBrush}" FlowDirection="LeftToRight"
                                 MouseLeftButtonDown="GraphCanvas_MouseLeftButtonDown">
+                            <Canvas.LayoutTransform>
+                                <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
+                            </Canvas.LayoutTransform>
                             <ItemsControl ItemsSource="{Binding Nodes}" Panel.ZIndex="3">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -301,7 +356,9 @@
                                                      Stroke="{Binding StrokeBrush}" StrokeThickness="{Binding StrokeThickness}"
                                                      Visibility="{Binding IsDiamond, Converter={StaticResource BoolToVis}}"/>
                                             <TextBlock Text="{Binding Caption}" Foreground="White" FontWeight="SemiBold"
-                                                       FontSize="11" TextAlignment="Center" TextWrapping="Wrap"
+                                                       FontFamily="{DynamicResource SiFontFamily}"
+                                                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                       TextAlignment="Center" TextWrapping="Wrap"
                                                        VerticalAlignment="Center" Margin="6"
                                                        IsHitTestVisible="False"/>
                                         </Grid>
@@ -337,13 +394,29 @@
                                                       Visibility="{Binding IsSelfLoop, Converter={StaticResource BoolToVis}}"/>
                                             <Polygon Points="{Binding ArrowPoints}" Fill="{Binding Stroke}" Stroke="{Binding Stroke}"
                                                      IsHitTestVisible="False"/>
-                                            <TextBlock Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
-                                                       FontSize="10" Background="#F5FFFFFF" Padding="3,1"
-                                                       IsHitTestVisible="False">
-                                                <Run Text="{Binding LabelEn}" FontWeight="SemiBold" Foreground="{Binding LabelBrush}"/>
-                                                <LineBreak/>
-                                                <Run Text="{Binding LabelHe}" Foreground="{Binding LabelBrush}"/>
-                                            </TextBlock>
+                                            <StackPanel Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
+                                                        Width="140" HorizontalAlignment="Center"
+                                                        RenderTransformOrigin="0.5,0.5"
+                                                        IsHitTestVisible="False">
+                                                <StackPanel.RenderTransform>
+                                                    <RotateTransform Angle="{Binding LabelAngle}"/>
+                                                </StackPanel.RenderTransform>
+                                                <Border Background="#E8FFFFFF" CornerRadius="2" Padding="4,1" HorizontalAlignment="Center">
+                                                    <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                                                               FontSize="{DynamicResource SiTextTinyFontSize}"
+                                                               FontWeight="SemiBold" TextAlignment="Center"
+                                                               Text="{Binding LabelEn, Mode=OneWay}"
+                                                               Foreground="{Binding LabelBrush, Mode=OneWay}"/>
+                                                </Border>
+                                                <Grid Height="12" Background="Transparent"/>
+                                                <Border Background="#E8FFFFFF" CornerRadius="2" Padding="4,1" HorizontalAlignment="Center">
+                                                    <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                                                               FontSize="{DynamicResource SiTextTinyFontSize}"
+                                                               TextAlignment="Center"
+                                                               Text="{Binding LabelHe, Mode=OneWay}"
+                                                               Foreground="{Binding LabelBrush, Mode=OneWay}"/>
+                                                </Border>
+                                            </StackPanel>
                                         </Canvas>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -353,7 +426,7 @@
                 </Border>
             </Grid>
 
-            <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Foreground="#666" FontSize="11" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{DynamicResource SiTextSmallStyle}" Margin="0,8,0,0"/>
         </Grid>
     </Border>
 </Window>
