@@ -147,7 +147,7 @@ namespace SiNetProjectManagerV2
         {
             if (AccBackgroundWorkMonitor.HasActiveUploads)
             {
-                var dialog = new BackgroundUploadsDialog { Owner = this };
+                var dialog = new BackgroundUploadsDialog(BackgroundCloseScope.Application) { Owner = this };
                 if (dialog.ShowDialog() != true)
                 {
                     e.Cancel = true;

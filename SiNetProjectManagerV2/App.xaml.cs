@@ -914,6 +914,7 @@ namespace SiNetProjectManagerV2
             services.AddTransient<WorkflowDashboardViewModel>();
             services.AddTransient<WorkflowInstanceViewModel>();
             services.AddTransient<WorkflowDesignerViewModel>();
+            services.AddTransient<WorkflowClosedViewerViewModel>();
             services.AddTransient<SiNetSQL.Services.IProjectDecisionService, SiNetSQL.Services.ProjectDecisionService>();
             services.AddTransient<ProjectDecisionsViewModel>();
 

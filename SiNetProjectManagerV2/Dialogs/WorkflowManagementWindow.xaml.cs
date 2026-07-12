@@ -265,11 +265,11 @@ public partial class WorkflowManagementWindow : Window
 
     private void LoadBuilderTab()
     {
+        // Builder tab hosts WorkflowClosedViewerView (view-only). Legacy tree CRUD is unused.
         _builderLoaded = true;
-        LoadBuilderReferenceData();
-        BuildTree();
     }
 
+#if false // Legacy builder CRUD — replaced by WorkflowClosedViewerView (closed-world viewer)
     private void LoadBuilderReferenceData()
     {
         var factory = GetFactory();
@@ -1743,6 +1743,8 @@ public partial class WorkflowManagementWindow : Window
     }
 
     private void BuilderRefresh_Click(object sender, RoutedEventArgs e) => BuildTree();
+
+#endif // Legacy builder CRUD
 
     #endregion
 

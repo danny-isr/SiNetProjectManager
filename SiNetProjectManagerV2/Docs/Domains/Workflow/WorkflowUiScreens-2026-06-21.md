@@ -20,7 +20,7 @@ Document the current Workflow UI screens and how they relate to Workflow definit
 |---|---|---|---|---|
 | WorkflowDashboardView | UserControl | `WPFUserControl/` | Active | Project-scoped instance list + start |
 | WorkflowDesignerView | UserControl | `WPFUserControl/` | Active / Admin | Visual definition editor (drag-and-drop canvas) |
-| WorkflowManagementWindow | Dialog | `Dialogs/` | Active / Admin | 5-tab admin hub |
+| WorkflowManagementWindow | Dialog | `Dialogs/` | Active / Admin | 6-tab admin hub (see inventory 2026-07-12) |
 | WorkflowCreateProjectWindow | Dialog | `Dialogs/` | Active | Email → Project + Workflow start |
 | WorkflowStatusMonitorWindow | Floating Window | `WPF Window/` | Active | System-wide floating monitor (auto-refresh) |
 | WorkflowInstanceWindow | Dialog | `WPF Window/` | Active | Single instance detail + advance/pause/complete |
@@ -94,17 +94,20 @@ Add nodes (Stage/Decision/Fork/Join/SubWorkflow/Start/End), Connect/Delete, Save
 
 ### 3.3. WorkflowManagementWindow
 
+**Detailed inventory (tree, actions, seed mutability):** `WorkflowManagementWindow-Inventory-2026-07-12.md`  
+**Refactor outline (next):** `WorkflowManagementWindow-RefactorOutline-2026-07-12.md`
+
 **Files:**
-- XAML: `SiNetProjectManagerV2\Dialogs\WorkflowManagementWindow.xaml` (586 lines)
-- Code-behind: `WorkflowManagementWindow.xaml.cs` (3548 lines — no ViewModel, code-behind-heavy)
+- XAML: `SiNetProjectManagerV2\Dialogs\WorkflowManagementWindow.xaml`
+- Code-behind: `WorkflowManagementWindow.xaml.cs` (large, no ViewModel for builder — code-behind-heavy)
 
 **What it does:**
-Unified admin window with 5 tabs for complete workflow administration. Title: "ניהול תהליכי עבודה".
+Unified admin window with **6 tabs** for complete workflow administration. Title: "ניהול תהליכי עבודה".
 
-**5 tabs:**
+**6 tabs:**
 
 1. **🏗️ בונה תהליכים ומשימות (Builder):**
-   TreeView of Workflow → Stage → Task hierarchy with detail panel. Tree nodes: workflow, stage, task, transition groups (forward/backward), individual transitions, task groups. Full CRUD for creating workflows, stages, tasks, and transitions.
+   TreeView of Workflow → Stage → (forward/backward transitions | tasks) hierarchy with detail panel. Tree nodes: workflow, stage, task, transition groups (forward/backward), individual transitions, task groups. Full CRUD for creating workflows, stages, tasks, and transitions.
 
 2. **🎨 עורך ויזואלי (Visual Designer):**
    Embeds `WorkflowDesignerView` UserControl directly.
