@@ -29,13 +29,17 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     private readonly IConnectorAuthService _googleAuthService;
     private readonly IEmailInboxQueryService? _emailInboxQuery;
     private readonly IEmailAccClosePrompt? _accClosePrompt;
+    private readonly IEmailAccBackgroundWorkTracker? _backgroundWorkTracker;
     private readonly EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private WorkSurfaceContext? _workSurfaceContext;
     private EmailFolderRow? _selectedFolder;
     private string? _selectedStatus;
     private string _activeProjectDisplay = "לא נבחר פרויקט";
-    private string _statusMessage = "חבר Gmail ולחץ רענן כדי לטעון את כל המיילים.";
+    private string _statusMessage = "מתחבר ומטען מיילים…";
+    private int _backgroundWorkActiveCount;
+    private int _lastBackgroundWorkCount;
+    private int _autoRefreshGate;
 
     public EmailWindowViewModel()
         : this(
@@ -142,6 +146,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         _googleAuthService = googleAuthService ?? throw new ArgumentNullException(nameof(googleAuthService));
         _emailInboxQuery = emailInboxQuery;
         _accClosePrompt = accClosePrompt;
+        _backgroundWorkTracker = backgroundWorkTracker;
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
@@ -210,9 +215,20 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
-        _ = ApplyProjectContextFromWorkbenchAsync();
+
+        if (_backgroundWorkTracker is not null)
+        {
+            _backgroundWorkActiveCount = _backgroundWorkTracker.ActiveCount;
+            _lastBackgroundWorkCount = _backgroundWorkActiveCount;
+            _backgroundWorkTracker.ActiveCountChanged += OnBackgroundWorkActiveCountChanged;
+            if (_backgroundWorkActiveCount > 0)
+            {
+                StatusMessage = $"תהליכי רקע פעילים: {_backgroundWorkActiveCount}";
+            }
+        }
+
         _ = ProjectSelector.InitializeAsync();
-        _ = EmailList.InitializeAsync();
+        _ = AutoRefreshOnOpenAsync();
 
         RefreshCommand = EmailList.RefreshPageCommand;
         SearchCommand = EmailList.ApplyFiltersCommand;
@@ -280,6 +296,25 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         private set => SetField(ref _statusMessage, value);
     }
 
+    public int BackgroundWorkActiveCount
+    {
+        get => _backgroundWorkActiveCount;
+        private set
+        {
+            if (SetField(ref _backgroundWorkActiveCount, value))
+            {
+                OnPropertyChanged(nameof(HasBackgroundWork));
+                OnPropertyChanged(nameof(BackgroundWorkDisplay));
+            }
+        }
+    }
+
+    public bool HasBackgroundWork => BackgroundWorkActiveCount > 0;
+
+    public string BackgroundWorkDisplay => HasBackgroundWork
+        ? $"תהליכי רקע פעילים: {BackgroundWorkActiveCount}"
+        : string.Empty;
+
     public ICommand RefreshCommand { get; }
     public ICommand SearchCommand { get; }
     public ICommand ClearSearchCommand { get; }
@@ -309,7 +344,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     {
         await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
         await EmailList.InitializeAsync().ConfigureAwait(true);
-        await EmailList.RefreshPageAsync().ConfigureAwait(true);
+        if (IsConnected)
+        {
+            await EmailList.RefreshPageAsync().ConfigureAwait(true);
+        }
     }
 
     public Task SearchAsync() => EmailList.ApplyFiltersAsync();
@@ -326,9 +364,63 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         EmailDetail.StatusMessageChanged -= (_, _) => { };
         _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged -= OnAuthStateChanged;
+        if (_backgroundWorkTracker is not null)
+        {
+            _backgroundWorkTracker.ActiveCountChanged -= OnBackgroundWorkActiveCountChanged;
+        }
+
         _externalDownloadHandler?.Dispose();
         EmailDetail.Dispose();
         ProjectSelector.Dispose();
+    }
+
+    private async Task AutoRefreshOnOpenAsync()
+    {
+        if (Interlocked.CompareExchange(ref _autoRefreshGate, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!IsConnected)
+            {
+                await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+                await EmailList.InitializeAsync().ConfigureAwait(true);
+                StatusMessage = "חבר Gmail כדי לטעון מיילים.";
+                return;
+            }
+
+            StatusMessage = "טוען מיילים…";
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _autoRefreshGate, 0);
+        }
+    }
+
+    private void OnBackgroundWorkActiveCountChanged(int count)
+    {
+        UiThread.Run(() =>
+        {
+            var previous = _lastBackgroundWorkCount;
+            BackgroundWorkActiveCount = count;
+            _lastBackgroundWorkCount = count;
+
+            if (count > previous)
+            {
+                StatusMessage = $"תהליכי רקע פעילים: {count}";
+            }
+            else if (count > 0 && count < previous)
+            {
+                StatusMessage = $"תהליך הסתיים — נותרו {count}";
+            }
+            else if (count == 0 && previous > 0)
+            {
+                StatusMessage = "כל תהליכי הרקע הסתיימו";
+            }
+        });
     }
 
     private async void OnEmailListSelectionChanged(object? sender, EmailListRow? value)
@@ -364,7 +456,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (!IsConnected)
         {
-            StatusMessage = $"נפתח מתוך משימה #{context.TaskId}. התחבר ל-Google ורענן כדי לטעון מיילים.";
+            StatusMessage = $"נפתח מתוך משימה #{context.TaskId}. התחבר ל-Google כדי לטעון מיילים.";
             return;
         }
 
@@ -469,16 +561,16 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         UiThread.Run(() =>
         {
             RefreshAuthDisplay();
-            if (!IsBusy)
-            {
-                StatusMessage = isAuthenticated
-                    ? "החיבור ל-Google זמין. ניתן לרענן כדי לטעון מיילים."
-                    : "החיבור ל-Google נותק.";
-            }
 
             if (!isAuthenticated)
             {
+                StatusMessage = "החיבור ל-Google נותק.";
                 EmailDetail.ClearOnDisconnect();
+            }
+            else
+            {
+                StatusMessage = "החיבור ל-Google זמין — טוען מיילים…";
+                _ = AutoRefreshOnOpenAsync();
             }
 
             (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

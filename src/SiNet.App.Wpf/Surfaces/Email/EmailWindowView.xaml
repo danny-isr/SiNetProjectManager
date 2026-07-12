@@ -18,6 +18,10 @@
         Closing="EmailWindowView_OnClosing"
         d:DataContext="{d:DesignInstance Type=local:EmailWindowViewModel, IsDesignTimeCreatable=True}">
 
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
+
     <Border x:Name="ContentBorder" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="8" Margin="8" ClipToBounds="True">
         <Border.Effect>
             <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black" />
@@ -45,16 +49,39 @@
                     <TextBlock Text="&#x2709;" FontSize="{DynamicResource SiTextMediumFontSize}" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" />
                 </StackPanel>
-                <Button Grid.Column="1"
-                        Content="&#x2715;"
-                        Foreground="White"
-                        FontSize="{DynamicResource SiTextNormalFontSize}"
-                        Width="34"
-                        BorderThickness="0"
-                        Background="Transparent"
-                        Cursor="Hand"
-                        Click="CloseButton_Click"
-                        ToolTip="סגור" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="&#x2715;"
+                            Foreground="White"
+                            FontSize="{DynamicResource SiTextNormalFontSize}"
+                            Width="34"
+                            Height="28"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            Cursor="Hand"
+                            Click="CloseButton_Click"
+                            ToolTip="סגור" />
+                    <Button x:Name="MaximizeButton"
+                            Content="&#x25A1;"
+                            Foreground="White"
+                            FontSize="14"
+                            Width="34"
+                            Height="28"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            Cursor="Hand"
+                            Click="MaximizeButton_Click"
+                            ToolTip="הגדל" />
+                    <Button Content="&#x2500;"
+                            Foreground="White"
+                            FontSize="14"
+                            Width="34"
+                            Height="28"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            Cursor="Hand"
+                            Click="MinimizeButton_Click"
+                            ToolTip="מזער" />
+                </StackPanel>
             </Grid>
 
             <Border Grid.Row="1"
@@ -121,16 +148,42 @@
                     Padding="10,5"
                     Margin="0,8,0,0">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Foreground="#555" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding RuntimeSummary}"
-                               Foreground="#999"
-                               FontSize="{DynamicResource SiTextSmallFontSize}"
-                               VerticalAlignment="Center" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ProgressBar Grid.Row="0"
+                                 Height="3"
+                                 Margin="0,0,0,4"
+                                 IsIndeterminate="True"
+                                 Foreground="#FB8C00"
+                                 Visibility="{Binding HasBackgroundWork, Converter={StaticResource BoolToVisibility}}" />
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding StatusMessage}"
+                                   Foreground="#555"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding BackgroundWorkDisplay}"
+                                   Foreground="#E65100"
+                                   FontWeight="SemiBold"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0,0,0"
+                                   Visibility="{Binding HasBackgroundWork, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding RuntimeSummary}"
+                                   Foreground="#999"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0,0,0" />
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>

@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using SiNet.Application.Email.Detail;
@@ -9,10 +9,11 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// <summary>
 /// Window code-behind for the first read-only New System slice of the legacy <c>EmailManagementView</c>.
 /// <para>
-/// The code-behind still contains <i>view-level chrome only</i> — header drag-to-move and close —
-/// matching the borderless window shell used by the other new surfaces. It deliberately carries no
-/// business logic: no DB, no Gmail SDK calls, no file-system access, no project linking, no task
-/// creation, and no workflow mutation. All behavior is exposed through <see cref="EmailWindowViewModel"/>.
+/// The code-behind still contains <i>view-level chrome only</i> — header drag-to-move, minimize,
+/// maximize/restore, and close — matching the borderless window shell used by the other new surfaces.
+/// It deliberately carries no business logic: no DB, no Gmail SDK calls, no file-system access, no
+/// project linking, no task creation, and no workflow mutation. All behavior is exposed through
+/// <see cref="EmailWindowViewModel"/>.
 /// </para>
 /// <para>
 /// The parameterless constructor exists so the window can still be shown with fake design-time data;
@@ -21,6 +22,9 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// </summary>
 public partial class EmailWindowView : Window
 {
+    private Rect _restoreBounds;
+    private bool _isCustomMaximized;
+
     /// <summary>Design/standalone constructor: shows the window with fake in-memory data.</summary>
     public EmailWindowView()
         : this(new EmailWindowViewModel())
@@ -33,6 +37,7 @@ public partial class EmailWindowView : Window
         InitializeComponent();
         ViewModel = viewModel;
         DataContext = viewModel;
+        UpdateMaximizeButtonGlyph();
     }
 
     /// <summary>The bound view model for the read-only Gmail slice.</summary>
@@ -50,11 +55,45 @@ public partial class EmailWindowView : Window
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left)
+        if (e.ChangedButton != MouseButton.Left || IsUnderChromeButton(e.OriginalSource))
         {
-            DragMove();
+            return;
         }
+
+        if (e.ClickCount == 2)
+        {
+            ToggleMaximize();
+            e.Handled = true;
+            return;
+        }
+
+        if (_isCustomMaximized)
+        {
+            return;
+        }
+
+        DragMove();
     }
+
+    private static bool IsUnderChromeButton(object? originalSource)
+    {
+        for (var current = originalSource as DependencyObject;
+             current is not null;
+             current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+        {
+            if (current is System.Windows.Controls.Button)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
@@ -64,5 +103,56 @@ public partial class EmailWindowView : Window
         {
             e.Cancel = true;
         }
+    }
+
+    private void ToggleMaximize()
+    {
+        if (_isCustomMaximized)
+        {
+            RestoreFromCustomMaximize();
+        }
+        else
+        {
+            MaximizeToWorkArea();
+        }
+    }
+
+    private void MaximizeToWorkArea()
+    {
+        _restoreBounds = new Rect(Left, Top, Width, Height);
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Left;
+        Top = workArea.Top;
+        Width = workArea.Width;
+        Height = workArea.Height;
+        ContentBorder.Margin = new Thickness(0);
+        ContentBorder.CornerRadius = new CornerRadius(0);
+        _isCustomMaximized = true;
+        ResizeMode = ResizeMode.NoResize;
+        UpdateMaximizeButtonGlyph();
+    }
+
+    private void RestoreFromCustomMaximize()
+    {
+        Left = _restoreBounds.Left;
+        Top = _restoreBounds.Top;
+        Width = _restoreBounds.Width;
+        Height = _restoreBounds.Height;
+        ContentBorder.Margin = new Thickness(8);
+        ContentBorder.CornerRadius = new CornerRadius(8);
+        _isCustomMaximized = false;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
+        UpdateMaximizeButtonGlyph();
+    }
+
+    private void UpdateMaximizeButtonGlyph()
+    {
+        if (MaximizeButton is null)
+        {
+            return;
+        }
+
+        MaximizeButton.Content = _isCustomMaximized ? "\u29C9" : "\u25A1";
+        MaximizeButton.ToolTip = _isCustomMaximized ? "שחזר" : "הגדל";
     }
 }
