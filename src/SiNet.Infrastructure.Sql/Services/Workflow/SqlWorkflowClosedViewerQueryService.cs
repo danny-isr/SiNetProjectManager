@@ -64,7 +64,13 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return definitions.Select(MapDefinition).ToList();
+        var taskResultNames = await db.TaskResultDefinitions
+            .AsNoTracking()
+            .Select(r => new { r.Code, r.Name })
+            .ToDictionaryAsync(r => r.Code, r => r.Name, StringComparer.Ordinal, cancellationToken)
+            .ConfigureAwait(false);
+
+        return definitions.Select(d => MapDefinition(d, taskResultNames)).ToList();
     }
 
     /// <inheritdoc />
@@ -87,7 +93,9 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
         return Task.FromResult(catalog);
     }
 
-    private static WorkflowDefinitionGraphDto MapDefinition(WorkflowDefinition def)
+    private static WorkflowDefinitionGraphDto MapDefinition(
+        WorkflowDefinition def,
+        IReadOnlyDictionary<string, string> taskResultNames)
     {
         var stages = def.Stages.OrderBy(s => s.SortOrder).ToList();
         var stageById = stages.ToDictionary(s => s.Id);
@@ -109,12 +117,12 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
             s.SubWorkflowDefinition?.Code,
             s.CanvasX,
             s.CanvasY,
-            s.StageTasks.OrderBy(t => t.SortOrder).Select(MapStageTask).ToList())).ToList();
+            s.StageTasks.OrderBy(t => t.SortOrder).Select(st => MapStageTask(st, taskResultNames)).ToList())).ToList();
 
         var transitionDtos = def.TransitionRules
             .OrderBy(r => r.Priority)
             .ThenBy(r => r.Id)
-            .Select(r => MapTransition(r, stageById))
+            .Select(r => MapTransition(r, stageById, taskResultNames))
             .ToList();
 
         return new WorkflowDefinitionGraphDto(
@@ -130,7 +138,8 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
 
     private static WorkflowTransitionGraphDto MapTransition(
         WorkflowTransitionRule rule,
-        IReadOnlyDictionary<int, WorkflowStageDefinition> stageById)
+        IReadOnlyDictionary<int, WorkflowStageDefinition> stageById,
+        IReadOnlyDictionary<string, string> taskResultNames)
     {
         stageById.TryGetValue(rule.FromStageId, out var from);
         stageById.TryGetValue(rule.ToStageId, out var to);
@@ -143,6 +152,7 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
                     ?? TryReadJsonString(a.ConfigJson, "StatusCode");
                 var configResult = TryReadJsonString(a.ConfigJson, "TaskResultCode")
                     ?? TryReadJsonString(a.ConfigJson, "ResultCode");
+                taskResultNames.TryGetValue(configResult ?? string.Empty, out var configResultName);
                 return new WorkflowTransitionActionGraphDto(
                     a.ActionType.ToString(),
                     Enum.IsDefined(a.ActionType),
@@ -151,6 +161,7 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
                     configStatus,
                     configStatus is null || ProjectStatusCodeSet.Contains(configStatus),
                     configResult,
+                    string.IsNullOrEmpty(configResult) ? null : configResultName,
                     configResult is null || TaskResultCodeSet.Contains(configResult),
                     a.SortOrder);
             })
@@ -158,6 +169,7 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
 
         var conditionResult = TryReadJsonString(rule.ConditionJson, "TaskResultCode")
             ?? TryReadJsonString(rule.ConditionJson, "ResultCode");
+        taskResultNames.TryGetValue(conditionResult ?? string.Empty, out var conditionResultName);
 
         return new WorkflowTransitionGraphDto(
             rule.Id,
@@ -175,15 +187,25 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
             rule.Priority,
             rule.ConditionJson,
             conditionResult,
+            string.IsNullOrEmpty(conditionResult) ? null : conditionResultName,
             conditionResult is null || TaskResultCodeSet.Contains(conditionResult),
             actions);
     }
 
-    private static WorkflowStageTaskGraphDto MapStageTask(WorkflowStageTask st)
+    private static WorkflowStageTaskGraphDto MapStageTask(
+        WorkflowStageTask st,
+        IReadOnlyDictionary<string, string> taskResultNames)
     {
         var code = st.TaskType?.Code ?? string.Empty;
         var interaction = string.IsNullOrEmpty(code) ? null : ReviewTaskInteractionRegistry.TryGet(code);
-        var allowed = interaction?.AllowedTaskResultCodes?.ToList() ?? new List<string>();
+        var allowedCodes = interaction?.AllowedTaskResultCodes?.ToList() ?? new List<string>();
+        var allowed = allowedCodes
+            .Select(c =>
+            {
+                taskResultNames.TryGetValue(c, out var name);
+                return new WorkflowLabeledCodeDto(c, name);
+            })
+            .ToList();
         return new WorkflowStageTaskGraphDto(
             st.Id,
             st.StageDefinitionId,

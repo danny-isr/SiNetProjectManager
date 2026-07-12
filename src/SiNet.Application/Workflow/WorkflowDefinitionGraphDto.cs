@@ -50,6 +50,7 @@ public sealed record WorkflowTransitionGraphDto(
     int Priority,
     string? ConditionJson,
     string? ConditionTaskResultCode,
+    string? ConditionTaskResultName,
     bool ConditionTaskResultOk,
     IReadOnlyList<WorkflowTransitionActionGraphDto> Actions);
 
@@ -62,6 +63,7 @@ public sealed record WorkflowTransitionActionGraphDto(
     string? ConfigProjectStatusCode,
     bool ConfigProjectStatusOk,
     string? ConfigTaskResultCode,
+    string? ConfigTaskResultName,
     bool ConfigTaskResultOk,
     int SortOrder);
 
@@ -78,4 +80,11 @@ public sealed record WorkflowStageTaskGraphDto(
     bool HasInteraction,
     string? OpenMode,
     string? ComponentKey,
-    IReadOnlyList<string> AllowedTaskResultCodes);
+    IReadOnlyList<WorkflowLabeledCodeDto> AllowedTaskResults)
+{
+    public IReadOnlyList<string> AllowedTaskResultCodes =>
+        AllowedTaskResults.Select(x => x.Code).ToList();
+}
+
+/// <summary>Machine code with optional Hebrew (or localized) display name.</summary>
+public sealed record WorkflowLabeledCodeDto(string Code, string? DisplayName);

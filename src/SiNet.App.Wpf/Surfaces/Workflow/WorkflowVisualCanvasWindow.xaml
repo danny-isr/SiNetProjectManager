@@ -147,7 +147,9 @@
                                                         <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
                                                     </TextBlock>
                                                     <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#37474F"
-                                                               Text="{Binding AllowedResults, StringFormat=תוצאות: {0}}"/>
+                                                               Text="{Binding AllowedResultsEn}"/>
+                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#2E7D32"
+                                                               Text="{Binding AllowedResultsHe}"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
@@ -158,7 +160,10 @@
                                 <ItemsControl ItemsSource="{Binding SelectedStage.OutgoingTransitions}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Display}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                            <StackPanel Margin="0,0,0,6">
+                                                <TextBlock Text="{Binding DisplayEn}" FontSize="11" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding DisplayHe}" FontSize="10" Foreground="#2E7D32" TextWrapping="Wrap"/>
+                                            </StackPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -176,44 +181,85 @@
                                 </Border>
                                 <TextBlock Text="{Binding SelectedTransition.FromName, StringFormat=מ: {0}}" Margin="0,2" FontSize="11"/>
                                 <TextBlock Text="{Binding SelectedTransition.ToName, StringFormat=אל: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedTransition.TriggerType, StringFormat=Trigger: {0}}" Margin="0,6,0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedTransition.TriggerExplanation}" TextWrapping="Wrap"
-                                           FontSize="11" Foreground="#455A64" Margin="0,0,0,6"/>
-                                <TextBlock Text="{Binding SelectedTransition.ConditionType, StringFormat=Condition: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedTransition.TaskResult, StringFormat=TaskResult: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedTransition.EvaluationMode, StringFormat=Evaluation: {0}}" Margin="0,2" FontSize="11"/>
-                                <TextBlock Text="{Binding SelectedTransition.Priority, StringFormat=Priority: {0}}" Margin="0,2" FontSize="11"/>
 
-                                <TextBlock Text="משימות נדרשות בשלב המקור" FontWeight="SemiBold" Margin="0,12,0,4"/>
-                                <ItemsControl ItemsSource="{Binding SelectedTransition.RequiredTasks}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="0,4" Margin="0,0,0,2">
-                                                <StackPanel>
-                                                    <TextBlock FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"
-                                                               Text="{Binding TaskTypeName}"/>
-                                                    <TextBlock FontSize="10" Foreground="#555"
-                                                               Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
-                                                    <TextBlock FontSize="10">
-                                                        <Run Text="{Binding RequiredLabel, Mode=OneWay}"/>
-                                                        <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock FontSize="10" TextWrapping="Wrap"
-                                                               Text="{Binding AllowedResults, StringFormat=תוצאות: {0}}"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <!-- Trigger frame -->
+                                <Border Background="#E8F5E9" BorderBrush="#66BB6A" BorderThickness="1" CornerRadius="4"
+                                        Padding="8" Margin="0,10,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="טריגר" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,4"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TriggerType}" FontWeight="SemiBold" FontSize="11"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TriggerHe}" FontSize="11" Foreground="#1B5E20"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TriggerExplanation}" TextWrapping="Wrap"
+                                                   FontSize="10" Foreground="#455A64" Margin="0,4,0,0"/>
+                                        <TextBlock Margin="0,4,0,0" FontSize="10">
+                                            <Run Text="Evaluation: "/><Run Text="{Binding SelectedTransition.EvaluationMode, Mode=OneWay}"/>
+                                            <Run Text=" ("/><Run Text="{Binding SelectedTransition.EvaluationHe, Mode=OneWay}"/><Run Text=")"/>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding SelectedTransition.Priority, StringFormat=Priority: {0}}" FontSize="10"/>
+                                    </StackPanel>
+                                </Border>
 
-                                <TextBlock Text="פעולות" FontWeight="SemiBold" Margin="0,12,0,4"/>
-                                <ItemsControl ItemsSource="{Binding SelectedTransition.Actions}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Display}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <!-- Condition frame -->
+                                <Border Background="#E3F2FD" BorderBrush="#42A5F5" BorderThickness="1" CornerRadius="4"
+                                        Padding="8" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="תנאי" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,0,4"/>
+                                        <TextBlock Text="{Binding SelectedTransition.ConditionType}" FontWeight="SemiBold" FontSize="11"/>
+                                        <TextBlock Text="{Binding SelectedTransition.ConditionHe}" FontSize="11" Foreground="#0D47A1"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TaskResultCode}" FontSize="11" Margin="0,6,0,0"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding SelectedTransition.TaskResultName}" FontSize="11" Foreground="#0D47A1"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Actions frame -->
+                                <Border Background="#F3E5F5" BorderBrush="#AB47BC" BorderThickness="1" CornerRadius="4"
+                                        Padding="8" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="פעולות" FontWeight="Bold" Foreground="#6A1B9A" Margin="0,0,0,4"/>
+                                        <TextBlock Text="אין פעולות במעבר זה"
+                                                   FontSize="11" Foreground="#7B1FA2"
+                                                   Visibility="{Binding SelectedTransition.HasNoActions, Converter={StaticResource BoolToVis}}"/>
+                                        <ItemsControl ItemsSource="{Binding SelectedTransition.Actions}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,0,0,6">
+                                                        <TextBlock Text="{Binding DisplayEn}" FontSize="11" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding DisplayHe}" FontSize="10" Foreground="#4A148C" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#FAFAFA" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4"
+                                        Padding="8" Margin="0,4,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="משימות נדרשות בשלב המקור" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                        <ItemsControl ItemsSource="{Binding SelectedTransition.RequiredTasks}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="0,4" Margin="0,0,0,2">
+                                                        <StackPanel>
+                                                            <TextBlock FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"
+                                                                       Text="{Binding TaskTypeName}"/>
+                                                            <TextBlock FontSize="10" Foreground="#555"
+                                                                       Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
+                                                            <TextBlock FontSize="10">
+                                                                <Run Text="{Binding RequiredLabel, Mode=OneWay}"/>
+                                                                <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
+                                                            </TextBlock>
+                                                            <TextBlock FontSize="10" TextWrapping="Wrap" Text="{Binding AllowedResultsEn}"/>
+                                                            <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#2E7D32"
+                                                                       Text="{Binding AllowedResultsHe}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -292,8 +338,12 @@
                                             <Polygon Points="{Binding ArrowPoints}" Fill="{Binding Stroke}" Stroke="{Binding Stroke}"
                                                      IsHitTestVisible="False"/>
                                             <TextBlock Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
-                                                       Text="{Binding Label}" FontSize="10" Foreground="#263238"
-                                                       Background="#F5FFFFFF" Padding="3,1" IsHitTestVisible="False"/>
+                                                       FontSize="10" Background="#F5FFFFFF" Padding="3,1"
+                                                       IsHitTestVisible="False">
+                                                <Run Text="{Binding LabelEn}" FontWeight="SemiBold" Foreground="{Binding LabelBrush}"/>
+                                                <LineBreak/>
+                                                <Run Text="{Binding LabelHe}" Foreground="{Binding LabelBrush}"/>
+                                            </TextBlock>
                                         </Canvas>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

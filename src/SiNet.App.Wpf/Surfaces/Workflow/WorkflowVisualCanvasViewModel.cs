@@ -357,54 +357,45 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
         var reverseKeys = new HashSet<(int, int)>();
         foreach (var t in transitions)
         {
-            if (transitions.Any(o => o.FromStageId == t.ToStageId && o.ToStageId == t.FromStageId
-                                     && t.FromStageId != t.ToStageId))
+            if (t.FromStageId != t.ToStageId
+                && transitions.Any(o => o.FromStageId == t.ToStageId && o.ToStageId == t.FromStageId))
             {
                 reverseKeys.Add((Math.Min(t.FromStageId, t.ToStageId), Math.Max(t.FromStageId, t.ToStageId)));
             }
         }
 
-        foreach (var t in transitions)
+        foreach (var group in transitions.GroupBy(t => (t.FromStageId, t.ToStageId)))
         {
-            if (!positions.TryGetValue(t.FromStageId, out var from)
-                || !positions.TryGetValue(t.ToStageId, out var to))
+            var list = group.OrderBy(t => t.Priority).ThenBy(t => t.Id).ToList();
+            for (var i = 0; i < list.Count; i++)
             {
-                continue;
-            }
+                var t = list[i];
+                if (!positions.TryGetValue(t.FromStageId, out var from)
+                    || !positions.TryGetValue(t.ToStageId, out var to))
+                {
+                    continue;
+                }
 
-            double lateral = 0;
-            if (t.FromStageId != t.ToStageId
-                && reverseKeys.Contains((Math.Min(t.FromStageId, t.ToStageId), Math.Max(t.FromStageId, t.ToStageId))))
-            {
-                lateral = t.FromStageId < t.ToStageId ? -14 : 14;
-            }
+                var hasReverse = t.FromStageId != t.ToStageId
+                    && reverseKeys.Contains((Math.Min(t.FromStageId, t.ToStageId), Math.Max(t.FromStageId, t.ToStageId)));
+                var lateral = WorkflowCanvasLabels.ComputeLateral(
+                    i, list.Count, hasReverse, t.FromStageId < t.ToStageId);
+                var selfLoopIndex = t.FromStageId == t.ToStageId ? i : 0;
 
-            var label = FormatEdgeLabel(t);
-            Edges.Add(WorkflowCanvasEdgeVm.Create(
-                t.Id,
-                t.FromStageId,
-                t.ToStageId,
-                from,
-                to,
-                NodeWidth,
-                NodeHeight,
-                label,
-                lateral,
-                EdgeStroke,
-                EdgeSelectedStroke));
+                Edges.Add(WorkflowCanvasEdgeVm.Create(
+                    t,
+                    from,
+                    to,
+                    NodeWidth,
+                    NodeHeight,
+                    lateral,
+                    selfLoopIndex,
+                    EdgeStroke,
+                    EdgeSelectedStroke));
+            }
         }
 
         ApplySelectionHighlight();
-    }
-
-    private static string FormatEdgeLabel(WorkflowTransitionGraphDto t)
-    {
-        if (!string.IsNullOrWhiteSpace(t.ConditionTaskResultCode))
-        {
-            return $"{t.TriggerType} · {t.ConditionTaskResultCode}";
-        }
-
-        return t.TriggerType;
     }
 
     private void UpdateCanvasExtent()
@@ -554,7 +545,9 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         double y1,
         double x2,
         double y2,
-        string label,
+        string labelEn,
+        string labelHe,
+        Brush labelBrush,
         PointCollection arrowPoints,
         bool isSelfLoop,
         PointCollection? loopPoints,
@@ -568,9 +561,11 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         Y1 = y1;
         X2 = x2;
         Y2 = y2;
-        Label = label;
-        LabelX = (x1 + x2) / 2 - 28;
-        LabelY = Math.Min(y1, y2) - 22;
+        LabelEn = labelEn;
+        LabelHe = labelHe;
+        LabelBrush = labelBrush;
+        LabelX = (x1 + x2) / 2 - 36;
+        LabelY = Math.Min(y1, y2) - 34;
         ArrowPoints = arrowPoints;
         IsSelfLoop = isSelfLoop;
         LoopPoints = loopPoints ?? new PointCollection();
@@ -580,24 +575,24 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
     }
 
     public static WorkflowCanvasEdgeVm Create(
-        int transitionId,
-        int fromStageId,
-        int toStageId,
+        WorkflowTransitionGraphDto t,
         Point fromTopLeft,
         Point toTopLeft,
         double nodeWidth,
         double nodeHeight,
-        string label,
         double lateralOffset,
+        int selfLoopIndex,
         Brush normalStroke,
         Brush selectedStroke)
     {
-        if (fromStageId == toStageId
+        var (labelEn, labelHe, labelBrush) = BuildLabels(t);
+
+        if (t.FromStageId == t.ToStageId
             || (Math.Abs(fromTopLeft.X - toTopLeft.X) < 0.5 && Math.Abs(fromTopLeft.Y - toTopLeft.Y) < 0.5))
         {
             return CreateSelfLoop(
-                transitionId, fromStageId, toStageId, fromTopLeft, nodeWidth, nodeHeight, label,
-                normalStroke, selectedStroke);
+                t.Id, t.FromStageId, t.ToStageId, fromTopLeft, nodeWidth, nodeHeight,
+                labelEn, labelHe, labelBrush, selfLoopIndex, normalStroke, selectedStroke);
         }
 
         var start = new Point(fromTopLeft.X + nodeWidth, fromTopLeft.Y + nodeHeight / 2);
@@ -650,13 +645,28 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         };
 
         return new WorkflowCanvasEdgeVm(
-            transitionId, fromStageId, toStageId,
-            start.X, start.Y, baseCenter.X, baseCenter.Y, label, arrow, false, null,
+            t.Id, t.FromStageId, t.ToStageId,
+            start.X, start.Y, baseCenter.X, baseCenter.Y,
+            labelEn, labelHe, labelBrush, arrow, false, null,
             normalStroke, selectedStroke)
         {
-            LabelX = (start.X + baseCenter.X) / 2 - 28 + px * 10,
-            LabelY = (start.Y + baseCenter.Y) / 2 - 18 + py * 10,
+            LabelX = (start.X + baseCenter.X) / 2 - 36 + px * 12,
+            LabelY = (start.Y + baseCenter.Y) / 2 - 28 + py * 12,
         };
+    }
+
+    private static (string En, string He, Brush Brush) BuildLabels(WorkflowTransitionGraphDto t)
+    {
+        var en = string.IsNullOrWhiteSpace(t.ConditionTaskResultCode)
+            ? t.TriggerType
+            : $"{t.TriggerType} · {t.ConditionTaskResultCode}";
+        var he = !string.IsNullOrWhiteSpace(t.ConditionTaskResultName)
+            ? t.ConditionTaskResultName!
+            : WorkflowCanvasLabels.TriggerHe(t.TriggerType);
+        var brush = WorkflowCanvasLabels.IsEmphasizedTrigger(t.TriggerType)
+            ? WorkflowCanvasLabels.EmphasizedLabelBrush
+            : WorkflowCanvasLabels.NormalLabelBrush;
+        return (en, he, brush);
     }
 
     private static WorkflowCanvasEdgeVm CreateSelfLoop(
@@ -666,12 +676,15 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
         Point topLeft,
         double nodeWidth,
         double nodeHeight,
-        string label,
+        string labelEn,
+        string labelHe,
+        Brush labelBrush,
+        int selfLoopIndex,
         Brush normalStroke,
         Brush selectedStroke)
     {
-        var cx = topLeft.X + nodeWidth / 2;
-        var top = topLeft.Y;
+        var cx = topLeft.X + nodeWidth / 2 + selfLoopIndex * 36;
+        var top = topLeft.Y - selfLoopIndex * 8;
         var loop = new PointCollection
         {
             new Point(cx - 18, top),
@@ -690,11 +703,12 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
 
         return new WorkflowCanvasEdgeVm(
             transitionId, fromStageId, toStageId,
-            cx - 18, top, cx + 18, top, label, arrow, true, loop,
+            cx - 18, top, cx + 18, top,
+            labelEn, labelHe, labelBrush, arrow, true, loop,
             normalStroke, selectedStroke)
         {
-            LabelX = cx - 40,
-            LabelY = top - 66,
+            LabelX = cx - 48,
+            LabelY = top - 78,
         };
     }
 
@@ -707,7 +721,9 @@ public sealed class WorkflowCanvasEdgeVm : ObservableObject
     public double Y2 { get; }
     public double LabelX { get; private init; }
     public double LabelY { get; private init; }
-    public string Label { get; }
+    public string LabelEn { get; }
+    public string LabelHe { get; }
+    public Brush LabelBrush { get; }
     public PointCollection ArrowPoints { get; }
     public bool IsSelfLoop { get; }
     public bool IsStraight { get; }
@@ -796,44 +812,59 @@ public sealed class WorkflowCanvasTaskInspectVm
         string taskTypeCode,
         bool isRequired,
         string? assignee,
-        string allowedResults)
+        string allowedResultsEn,
+        string allowedResultsHe)
     {
         TaskTypeName = taskTypeName;
         TaskTypeCode = taskTypeCode;
         IsRequired = isRequired;
         Assignee = assignee;
-        AllowedResults = allowedResults;
+        AllowedResultsEn = allowedResultsEn;
+        AllowedResultsHe = allowedResultsHe;
     }
 
-    public static WorkflowCanvasTaskInspectVm From(WorkflowStageTaskGraphDto t) =>
-        new(
+    public static WorkflowCanvasTaskInspectVm From(WorkflowStageTaskGraphDto t)
+    {
+        if (t.AllowedTaskResults.Count == 0)
+        {
+            return new WorkflowCanvasTaskInspectVm(
+                t.TaskTypeName, t.TaskTypeCode, t.IsRequired, t.AssigneeDisplay,
+                "(אין תוצאות מוגדרות)", string.Empty);
+        }
+
+        return new WorkflowCanvasTaskInspectVm(
             t.TaskTypeName,
             t.TaskTypeCode,
             t.IsRequired,
             t.AssigneeDisplay,
-            t.AllowedTaskResultCodes.Count == 0
-                ? "(אין תוצאות מוגדרות)"
-                : string.Join(", ", t.AllowedTaskResultCodes));
+            string.Join(", ", t.AllowedTaskResults.Select(x => x.Code)),
+            string.Join(", ", t.AllowedTaskResults.Select(x => x.DisplayName ?? x.Code)));
+    }
 
     public string TaskTypeName { get; }
     public string TaskTypeCode { get; }
     public bool IsRequired { get; }
     public string RequiredLabel => IsRequired ? "חובה" : "אופציונלי";
     public string? Assignee { get; }
-    public string AllowedResults { get; }
+    public string AllowedResultsEn { get; }
+    public string AllowedResultsHe { get; }
 }
 
 public sealed class WorkflowCanvasOutgoingTransitionVm
 {
     private WorkflowCanvasOutgoingTransitionVm(
         string targetLabel,
-        string trigger,
-        string condition,
+        string triggerEn,
+        string triggerHe,
+        string conditionEn,
+        string conditionHe,
         bool isSelfLoop)
     {
         TargetLabel = targetLabel;
-        Trigger = trigger;
-        Condition = condition;
+        TriggerEn = triggerEn;
+        TriggerHe = triggerHe;
+        ConditionEn = conditionEn;
+        ConditionHe = conditionHe;
         IsSelfLoop = isSelfLoop;
         LoopTag = isSelfLoop ? "לולאה" : null;
     }
@@ -842,20 +873,34 @@ public sealed class WorkflowCanvasOutgoingTransitionVm
     {
         var isLoop = t.FromStageId == t.ToStageId;
         var target = isLoop ? t.FromStageName : t.ToStageName;
-        var condition = string.IsNullOrWhiteSpace(t.ConditionTaskResultCode)
+        var conditionEn = string.IsNullOrWhiteSpace(t.ConditionTaskResultCode)
             ? t.ConditionType
             : $"{t.ConditionType} = {t.ConditionTaskResultCode}";
-        return new WorkflowCanvasOutgoingTransitionVm(target, t.TriggerType, condition, isLoop);
+        var conditionHe = string.IsNullOrWhiteSpace(t.ConditionTaskResultCode)
+            ? WorkflowCanvasLabels.ConditionHe(t.ConditionType)
+            : $"{WorkflowCanvasLabels.ConditionHe(t.ConditionType)} {t.ConditionTaskResultName ?? t.ConditionTaskResultCode}";
+        return new WorkflowCanvasOutgoingTransitionVm(
+            target,
+            t.TriggerType,
+            WorkflowCanvasLabels.TriggerHe(t.TriggerType),
+            conditionEn,
+            conditionHe,
+            isLoop);
     }
 
     public string TargetLabel { get; }
-    public string Trigger { get; }
-    public string Condition { get; }
+    public string TriggerEn { get; }
+    public string TriggerHe { get; }
+    public string ConditionEn { get; }
+    public string ConditionHe { get; }
     public bool IsSelfLoop { get; }
     public string? LoopTag { get; }
-    public string Display => IsSelfLoop
-        ? $"↻ {TargetLabel} · {Trigger} · {Condition}"
-        : $"→ {TargetLabel} · {Trigger} · {Condition}";
+    public string DisplayEn => IsSelfLoop
+        ? $"↻ {TargetLabel} · {TriggerEn} · {ConditionEn}"
+        : $"→ {TargetLabel} · {TriggerEn} · {ConditionEn}";
+    public string DisplayHe => IsSelfLoop
+        ? $"↻ {TargetLabel} · {TriggerHe} · {ConditionHe}"
+        : $"→ {TargetLabel} · {TriggerHe} · {ConditionHe}";
 }
 
 public sealed class WorkflowCanvasTransitionInspectVm
@@ -866,10 +911,14 @@ public sealed class WorkflowCanvasTransitionInspectVm
         string toName,
         bool isSelfLoop,
         string triggerType,
+        string triggerHe,
         string triggerExplanation,
         string conditionType,
-        string? taskResult,
+        string conditionHe,
+        string? taskResultCode,
+        string? taskResultName,
         string evaluationMode,
+        string evaluationHe,
         int priority,
         IReadOnlyList<WorkflowCanvasActionInspectVm> actions,
         IReadOnlyList<WorkflowCanvasTaskInspectVm> requiredTasks)
@@ -879,10 +928,14 @@ public sealed class WorkflowCanvasTransitionInspectVm
         ToName = toName;
         IsSelfLoop = isSelfLoop;
         TriggerType = triggerType;
+        TriggerHe = triggerHe;
         TriggerExplanation = triggerExplanation;
         ConditionType = conditionType;
-        TaskResult = taskResult;
+        ConditionHe = conditionHe;
+        TaskResultCode = taskResultCode;
+        TaskResultName = taskResultName;
         EvaluationMode = evaluationMode;
+        EvaluationHe = evaluationHe;
         Priority = priority;
         Actions = actions;
         RequiredTasks = requiredTasks;
@@ -906,38 +959,37 @@ public sealed class WorkflowCanvasTransitionInspectVm
             t.ToStageName,
             isLoop,
             t.TriggerType,
-            ExplainTrigger(t.TriggerType),
+            WorkflowCanvasLabels.TriggerHe(t.TriggerType),
+            WorkflowCanvasLabels.ExplainTrigger(t.TriggerType),
             t.ConditionType,
+            WorkflowCanvasLabels.ConditionHe(t.ConditionType),
             t.ConditionTaskResultCode,
+            t.ConditionTaskResultName,
             t.EvaluationMode,
+            WorkflowCanvasLabels.EvaluationHe(t.EvaluationMode),
             t.Priority,
             t.Actions.Select(WorkflowCanvasActionInspectVm.From).ToList(),
             tasks);
     }
-
-    private static string ExplainTrigger(string trigger) => trigger switch
-    {
-        "Manual" => "מופעל רק כשמשתמש מקדם את התהליך ידנית (לא ב-auto-advance).",
-        "AllRequiredTasksClosed" => "מופעל אחרי שכל המשימות הנדרשות בשלב המקור נסגרו.",
-        "TaskStatusChanged" => "מופעל אחרי שינוי סטטוס/תוצאת משימה (לרוב עם TaskResultEquals).",
-        "SubWorkflowCompleted" => "מופעל כשתת-התהליך הילד מסתיים.",
-        "ActionCompleted" => "מופעל אחרי השלמת פעולת תהליך.",
-        _ => "טריגר מעבר כפי שמוגדר בכלל.",
-    };
 
     public string Title { get; }
     public string FromName { get; }
     public string ToName { get; }
     public bool IsSelfLoop { get; }
     public string TriggerType { get; }
+    public string TriggerHe { get; }
     public string TriggerExplanation { get; }
     public string ConditionType { get; }
-    public string? TaskResult { get; }
+    public string ConditionHe { get; }
+    public string? TaskResultCode { get; }
+    public string? TaskResultName { get; }
     public string EvaluationMode { get; }
+    public string EvaluationHe { get; }
     public int Priority { get; }
     public IReadOnlyList<WorkflowCanvasActionInspectVm> Actions { get; }
     public IReadOnlyList<WorkflowCanvasTaskInspectVm> RequiredTasks { get; }
     public bool HasActions => Actions.Count > 0;
+    public bool HasNoActions => Actions.Count == 0;
     public bool HasRequiredTasks => RequiredTasks.Count > 0;
     public string SelfLoopExplanation =>
         "זה לא חץ דו-כיווני: המעבר חוזר לאותו שלב (למשל חומר חסר) עד שתוצאה אחרת מוציאה החוצה.";
@@ -945,22 +997,38 @@ public sealed class WorkflowCanvasTransitionInspectVm
 
 public sealed class WorkflowCanvasActionInspectVm
 {
-    private WorkflowCanvasActionInspectVm(string actionType, string? actionCode, string? projectStatus, string? taskResult)
+    private WorkflowCanvasActionInspectVm(
+        string actionType,
+        string actionHe,
+        string? actionCode,
+        string? projectStatus,
+        string? taskResultCode,
+        string? taskResultName)
     {
         ActionType = actionType;
+        ActionHe = actionHe;
         ActionCode = actionCode;
         ProjectStatus = projectStatus;
-        TaskResult = taskResult;
+        TaskResultCode = taskResultCode;
+        TaskResultName = taskResultName;
     }
 
     public static WorkflowCanvasActionInspectVm From(WorkflowTransitionActionGraphDto a) =>
-        new(a.ActionType, a.ActionCode, a.ConfigProjectStatusCode, a.ConfigTaskResultCode);
+        new(
+            a.ActionType,
+            WorkflowCanvasLabels.ActionHe(a.ActionType),
+            a.ActionCode,
+            a.ConfigProjectStatusCode,
+            a.ConfigTaskResultCode,
+            a.ConfigTaskResultName);
 
     public string ActionType { get; }
+    public string ActionHe { get; }
     public string? ActionCode { get; }
     public string? ProjectStatus { get; }
-    public string? TaskResult { get; }
-    public string Display
+    public string? TaskResultCode { get; }
+    public string? TaskResultName { get; }
+    public string DisplayEn
     {
         get
         {
@@ -975,9 +1043,28 @@ public sealed class WorkflowCanvasActionInspectVm
                 parts.Add($"Status={ProjectStatus}");
             }
 
-            if (!string.IsNullOrWhiteSpace(TaskResult))
+            if (!string.IsNullOrWhiteSpace(TaskResultCode))
             {
-                parts.Add($"Result={TaskResult}");
+                parts.Add($"Result={TaskResultCode}");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    public string DisplayHe
+    {
+        get
+        {
+            var parts = new List<string> { ActionHe };
+            if (!string.IsNullOrWhiteSpace(ProjectStatus))
+            {
+                parts.Add($"סטטוס={ProjectStatus}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(TaskResultName) || !string.IsNullOrWhiteSpace(TaskResultCode))
+            {
+                parts.Add($"תוצאה={TaskResultName ?? TaskResultCode}");
             }
 
             return string.Join(" · ", parts);
