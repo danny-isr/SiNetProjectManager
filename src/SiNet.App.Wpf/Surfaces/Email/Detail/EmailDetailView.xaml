@@ -1,55 +1,110 @@
-<UserControl x:Class="SiNet.App.Wpf.Surfaces.Email.Detail.EmailDetailView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:detail="clr-namespace:SiNet.App.Wpf.Surfaces.Email.Detail"
-             FlowDirection="RightToLeft">
-    <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-    </UserControl.Resources>
-    <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="White">
-        <Grid>
-            <!-- Empty state -->
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <StackPanel.Style>
-                    <Style TargetType="StackPanel">
-                        <Setter Property="Visibility" Value="Visible" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding HasSelectedEmail}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </StackPanel.Style>
-                <TextBlock Text="✉" FontSize="{DynamicResource SiTextHugeFontSize}" HorizontalAlignment="Center" Foreground="#CCC" />
-                <TextBlock Text="בחר מייל מהרשימה לצפייה"
-                           Opacity="0.7"
-                           HorizontalAlignment="Center"
-                           Margin="0,10,0,0" />
-            </StackPanel>
-
-            <!-- Detail content: viewer stack + bottom context/actions strip -->
-            <Grid Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <detail:EmailViewerPaneView Grid.Row="0" DataContext="{Binding Viewer}" x:Name="ViewerPane" />
-                <detail:EmailAttachmentStripView Grid.Row="1"
-                                                 DataContext="{Binding AttachmentStrip}"
-                                                 BorderBrush="#EEE"
-                                                 BorderThickness="0,1,0,0" />
-                <detail:EmailActionBarView Grid.Row="2"
-                                           DataContext="{Binding ActionBar}"
-                                           BorderBrush="#EEE"
-                                           BorderThickness="0,1,0,0" />
-                <detail:EmailWorkflowActionsPaneView Grid.Row="3"
-                                                     DataContext="{Binding Workflow}"
-                                                     BorderBrush="#E0E0E0"
-                                                     BorderThickness="0,1,0,0" />
-            </Grid>
-        </Grid>
-    </Border>
-</UserControl>
+<UserControl x:Class="SiNet.App.Wpf.Surfaces.Email.Detail.EmailDetailView"
+
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+
+             xmlns:detail="clr-namespace:SiNet.App.Wpf.Surfaces.Email.Detail"
+
+             FlowDirection="RightToLeft">
+
+    <UserControl.Resources>
+
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+    </UserControl.Resources>
+
+    <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="White">
+
+        <Grid>
+
+            <!-- Empty state -->
+
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+
+                <StackPanel.Style>
+
+                    <Style TargetType="StackPanel">
+
+                        <Setter Property="Visibility" Value="Visible" />
+
+                        <Style.Triggers>
+
+                            <DataTrigger Binding="{Binding HasSelectedEmail}" Value="True">
+
+                                <Setter Property="Visibility" Value="Collapsed" />
+
+                            </DataTrigger>
+
+                        </Style.Triggers>
+
+                    </Style>
+
+                </StackPanel.Style>
+
+                <TextBlock Text="✉" FontSize="{DynamicResource SiTextHugeFontSize}" HorizontalAlignment="Center" Foreground="#CCC" />
+
+                <TextBlock Text="בחר מייל מהרשימה לצפייה"
+
+                           Opacity="0.7"
+
+                           HorizontalAlignment="Center"
+
+                           Margin="0,10,0,0" />
+
+            </StackPanel>
+
+
+
+            <!-- Detail content: viewer stack + bottom context/actions strip -->
+
+            <Grid Visibility="{Binding HasSelectedEmail, Converter={StaticResource BoolToVis}}">
+
+                <Grid.RowDefinitions>
+
+                    <RowDefinition Height="*" />
+
+                    <RowDefinition Height="Auto" />
+
+                    <RowDefinition Height="Auto" />
+
+                    <RowDefinition Height="Auto" />
+
+                </Grid.RowDefinitions>
+
+
+
+                <detail:EmailViewerPaneView Grid.Row="0" DataContext="{Binding Viewer}" x:Name="ViewerPane" />
+
+                <detail:EmailAttachmentStripView Grid.Row="1"
+
+                                                 DataContext="{Binding AttachmentStrip}"
+
+                                                 BorderBrush="#EEE"
+
+                                                 BorderThickness="0,1,0,0" />
+
+                <detail:EmailActionBarView Grid.Row="2"
+
+                                           DataContext="{Binding ActionBar}"
+
+                                           BorderBrush="#EEE"
+
+                                           BorderThickness="0,1,0,0" />
+
+                <detail:EmailWorkflowActionsPaneView Grid.Row="3"
+
+                                                     DataContext="{Binding Workflow}"
+
+                                                     BorderBrush="#E0E0E0"
+
+                                                     BorderThickness="0,1,0,0" />
+
+            </Grid>
+
+        </Grid>
+
+    </Border>
+
+</UserControl>
+
