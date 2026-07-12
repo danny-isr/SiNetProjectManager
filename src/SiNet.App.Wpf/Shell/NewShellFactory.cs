@@ -9,6 +9,7 @@ using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
 using SiNet.Application.DevTools;
@@ -85,13 +86,13 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "תורים אישיים Quick / Medium / Long — צפייה, הוספה ומחיקה בסיסית"));
         }
 
-        // Workflow closed-world viewer (definitions tree — catalog-bound, no save).
+        // Workflow closed-world viewer — native App.Wpf surface (catalog-bound, no save).
         if (_services.GetService<IWorkflowClosedViewerWindowFactory>() is { } workflowViewerFactory
             && CanAccessFeature(AppFeatureCodes.ShellOpenWorkflowClosedViewer))
         {
             items.Add(new NewShellMenuItem(
                 "צפייה בתהליכים (סגור)",
-                () => ShowDialog(workflowViewerFactory.Create()),
+                () => ShowWindow(workflowViewerFactory.Create()),
                 "עץ תהליכים לקריאה בלבד — קטלוגים סגורים, ללא שמירה"));
         }
 

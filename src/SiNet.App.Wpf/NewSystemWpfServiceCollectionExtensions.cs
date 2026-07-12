@@ -7,6 +7,7 @@ using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Surfaces.Workflow;
 
 namespace SiNet.App.Wpf;
 
@@ -28,6 +29,7 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetSettingsAdminWpf();
         services.AddSiNetShell();
         services.AddSiNetTaskPanelReadOnly();
+        services.AddSiNetWorkflowClosedViewer();
 
         return services;
     }

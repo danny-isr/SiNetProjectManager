@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Workflow;
+using SiNet.Infrastructure.Sql.Services.Workflow;
 using SiNetSQL.Services.Workflow;
 
 namespace SiNet.Infrastructure.Sql;
@@ -31,6 +32,10 @@ public static class WorkflowServiceCollectionExtensions
 
         services.AddTransient<ProjectWorkflowPolicyService>();
         services.AddTransient<IProjectWorkflowPolicyService>(sp => sp.GetRequiredService<ProjectWorkflowPolicyService>());
+
+        services.AddTransient<SqlWorkflowClosedViewerQueryService>();
+        services.AddTransient<IWorkflowClosedViewerQueryService>(
+            sp => sp.GetRequiredService<SqlWorkflowClosedViewerQueryService>());
 
         return services;
     }

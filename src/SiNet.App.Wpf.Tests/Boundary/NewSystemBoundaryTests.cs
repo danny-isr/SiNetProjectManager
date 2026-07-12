@@ -24,6 +24,7 @@ public sealed class NewSystemBoundaryTests
         "ProjectFolderTreeViewModel",
         "WorkflowTaskOrchestrator",
         "WorkflowEngine",
+        "WorkflowManagementWindow",
         "MyOffice.AutodeskConnector",
         "Bim360Service",
     ];
