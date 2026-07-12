@@ -256,7 +256,32 @@ public static class PlanningWorkflowSeedData
         string Name,
         int SortOrder,
         bool IsInitial = false,
-        bool IsFinal = false);
+        bool IsFinal = false)
+    {
+        /// <summary>
+        /// Optional visual/runtime node type (Stage, Start, End, SubWorkflow, …).
+        /// When null, the seeder does not overwrite an existing NodeType (inserts default to Stage).
+        /// Never used to downgrade an existing SubWorkflow node.
+        /// </summary>
+        public string? NodeType { get; init; }
+
+        /// <summary>Optional canvas X. When null, seeder leaves existing / 0 on insert.</summary>
+        public double? CanvasX { get; init; }
+
+        /// <summary>Optional canvas Y. When null, seeder leaves existing / 0 on insert.</summary>
+        public double? CanvasY { get; init; }
+    }
+
+    /// <summary>Shared linear canvas spacing for seeded chain workflows (matches New System viewer fallback).</summary>
+    public static class LinearCanvasLayout
+    {
+        public const double StartX = 40;
+        public const double RowY = 120;
+        public const double HorizontalGap = 220;
+
+        public static (double X, double Y) At(int indexInSortOrder) =>
+            (StartX + indexInSortOrder * HorizontalGap, RowY);
+    }
 
     public record StageTransitionDefinition(
         string FromStageCode,

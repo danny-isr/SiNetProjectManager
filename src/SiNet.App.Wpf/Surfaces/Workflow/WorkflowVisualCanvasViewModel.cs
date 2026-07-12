@@ -13,10 +13,16 @@ namespace SiNet.App.Wpf.Surfaces.Workflow;
 /// </summary>
 public sealed class WorkflowVisualCanvasViewModel : ObservableObject
 {
+    private const double NodeWidth = 140;
+    private const double NodeHeight = 56;
+    private const double HorizontalGap = 220;
+    private const double RowY = 120;
+
     private readonly IWorkflowClosedViewerQueryService _query;
     private IReadOnlyList<WorkflowDefinitionGraphDto> _graphs = Array.Empty<WorkflowDefinitionGraphDto>();
     private WorkflowDefinitionGraphDto? _selectedDefinition;
     private string _statusMessage = "טוען…";
+    private WorkflowDefinitionPickerItem? _selectedPickerItem;
 
     public WorkflowVisualCanvasViewModel()
         : this(new DesignWorkflowClosedViewerQueryService())
@@ -32,7 +38,7 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
     public string Title => "תהליכים — קנבס (צפייה)";
 
     public string BannerText =>
-        "צפייה ויזואלית בלבד. מקביליות = מופעים נפרדים (מכסת תת-תהליך בהגדרות מערכת). עריכה מקטלוגים — בשלב הבא.";
+        "צפייה ויזואלית בלבד. התחלה/סיום מסומנים לפי IsInitial/IsFinal. מקביליות = מופעים נפרדים (מכסה בהגדרות).";
 
     public ICommand RefreshCommand { get; }
 
@@ -45,8 +51,6 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
     public double CanvasWidth { get; private set; } = 1200;
 
     public double CanvasHeight { get; private set; } = 800;
-
-    private WorkflowDefinitionPickerItem? _selectedPickerItem;
 
     public WorkflowDefinitionPickerItem? SelectedPickerItem
     {
@@ -115,20 +119,22 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
             }
             else
             {
-                x = 40 + (i % 4) * 220;
-                y = 40 + (i / 4) * 140;
+                // Horizontal chain by SortOrder (not a 4-column grid).
+                x = 40 + i * HorizontalGap;
+                y = RowY;
             }
 
             positions[s.Id] = new Point(x, y);
+            var visualKind = ResolveVisualKind(s);
             Nodes.Add(new WorkflowCanvasNodeVm(
                 s.Id,
                 s.Name,
                 s.Code,
-                s.NodeType,
+                visualKind,
                 x,
                 y,
-                ResolveBrush(s.NodeType),
-                ResolveShape(s.NodeType)));
+                ResolveBrush(visualKind),
+                ResolveShape(visualKind)));
         }
 
         foreach (var t in _selectedDefinition.Transitions)
@@ -139,21 +145,40 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
                 continue;
             }
 
-            Edges.Add(new WorkflowCanvasEdgeVm(
-                from.X + 70,
-                from.Y + 28,
-                to.X + 70,
-                to.Y + 28,
-                t.TriggerType));
+            Edges.Add(WorkflowCanvasEdgeVm.CreateBetweenNodes(
+                from, to, NodeWidth, NodeHeight, t.TriggerType));
         }
 
-        CanvasWidth = Math.Max(800, Nodes.Count == 0 ? 800 : Nodes.Max(n => n.X) + 200);
-        CanvasHeight = Math.Max(500, Nodes.Count == 0 ? 500 : Nodes.Max(n => n.Y) + 160);
+        CanvasWidth = Math.Max(800, Nodes.Count == 0 ? 800 : Nodes.Max(n => n.X) + NodeWidth + 80);
+        CanvasHeight = Math.Max(420, Nodes.Count == 0 ? 420 : Nodes.Max(n => n.Y) + NodeHeight + 120);
         OnPropertyChanged(nameof(CanvasWidth));
         OnPropertyChanged(nameof(CanvasHeight));
     }
 
-    private static Brush ResolveBrush(string nodeType) => nodeType switch
+    /// <summary>
+    /// Prefer SubWorkflow NodeType; otherwise paint Initial/Final as Start/End for legend clarity.
+    /// </summary>
+    private static string ResolveVisualKind(WorkflowStageGraphDto stage)
+    {
+        if (string.Equals(stage.NodeType, "SubWorkflow", StringComparison.OrdinalIgnoreCase))
+        {
+            return "SubWorkflow";
+        }
+
+        if (stage.IsInitial)
+        {
+            return "Start";
+        }
+
+        if (stage.IsFinal)
+        {
+            return "End";
+        }
+
+        return string.IsNullOrWhiteSpace(stage.NodeType) ? "Stage" : stage.NodeType;
+    }
+
+    private static Brush ResolveBrush(string visualKind) => visualKind switch
     {
         "Start" => new SolidColorBrush(Color.FromRgb(0x43, 0xA0, 0x47)),
         "End" => new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35)),
@@ -164,7 +189,7 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
         _ => new SolidColorBrush(Color.FromRgb(0x1E, 0x88, 0xE5)),
     };
 
-    private static WorkflowCanvasNodeShape ResolveShape(string nodeType) => nodeType switch
+    private static WorkflowCanvasNodeShape ResolveShape(string visualKind) => visualKind switch
     {
         "Start" or "End" => WorkflowCanvasNodeShape.Ellipse,
         "Decision" => WorkflowCanvasNodeShape.Diamond,
@@ -188,12 +213,12 @@ public enum WorkflowCanvasNodeShape
 public sealed class WorkflowCanvasNodeVm
 {
     public WorkflowCanvasNodeVm(
-        int id, string name, string code, string nodeType, double x, double y, Brush fill, WorkflowCanvasNodeShape shape)
+        int id, string name, string code, string visualKind, double x, double y, Brush fill, WorkflowCanvasNodeShape shape)
     {
         Id = id;
         Name = name;
         Code = code;
-        NodeType = nodeType;
+        VisualKind = visualKind;
         X = x;
         Y = y;
         Fill = fill;
@@ -206,7 +231,7 @@ public sealed class WorkflowCanvasNodeVm
     public int Id { get; }
     public string Name { get; }
     public string Code { get; }
-    public string NodeType { get; }
+    public string VisualKind { get; }
     public double X { get; }
     public double Y { get; }
     public Brush Fill { get; }
@@ -214,20 +239,56 @@ public sealed class WorkflowCanvasNodeVm
     public bool IsEllipse { get; }
     public bool IsDiamond { get; }
     public bool IsRoundedRect { get; }
-    public string Caption => $"{Name}\n({NodeType})";
+    public string Caption => $"{Name}\n({VisualKind})";
 }
 
 public sealed class WorkflowCanvasEdgeVm
 {
-    public WorkflowCanvasEdgeVm(double x1, double y1, double x2, double y2, string label)
+    private WorkflowCanvasEdgeVm(
+        double x1, double y1, double x2, double y2, string label, PointCollection arrowPoints)
     {
         X1 = x1;
         Y1 = y1;
         X2 = x2;
         Y2 = y2;
         Label = label;
-        LabelX = (x1 + x2) / 2;
-        LabelY = (y1 + y2) / 2 - 10;
+        LabelX = (x1 + x2) / 2 - 20;
+        LabelY = (y1 + y2) / 2 - 14;
+        ArrowPoints = arrowPoints;
+    }
+
+    public static WorkflowCanvasEdgeVm CreateBetweenNodes(
+        Point fromTopLeft, Point toTopLeft, double nodeWidth, double nodeHeight, string label)
+    {
+        // Attach to node edges so the line is not buried under the rectangles.
+        var start = new Point(fromTopLeft.X + nodeWidth, fromTopLeft.Y + nodeHeight / 2);
+        var end = new Point(toTopLeft.X, toTopLeft.Y + nodeHeight / 2);
+
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1)
+        {
+            len = 1;
+        }
+
+        var ux = dx / len;
+        var uy = dy / len;
+
+        // Pull tip slightly off the target edge.
+        var tip = new Point(end.X - ux * 2, end.Y - uy * 2);
+        var baseCenter = new Point(tip.X - ux * 12, tip.Y - uy * 12);
+        var px = -uy;
+        var py = ux;
+        var arrow = new PointCollection
+        {
+            tip,
+            new Point(baseCenter.X + px * 6, baseCenter.Y + py * 6),
+            new Point(baseCenter.X - px * 6, baseCenter.Y - py * 6),
+        };
+
+        var lineEnd = baseCenter;
+        return new WorkflowCanvasEdgeVm(start.X, start.Y, lineEnd.X, lineEnd.Y, label, arrow);
     }
 
     public double X1 { get; }
@@ -237,4 +298,5 @@ public sealed class WorkflowCanvasEdgeVm
     public double LabelX { get; }
     public double LabelY { get; }
     public string Label { get; }
+    public PointCollection ArrowPoints { get; }
 }

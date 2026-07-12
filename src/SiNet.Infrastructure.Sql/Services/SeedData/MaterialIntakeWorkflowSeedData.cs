@@ -14,12 +14,28 @@ public static class MaterialIntakeWorkflowSeedData
 
     public static readonly PlanningWorkflowSeedData.StageDefinition[] Stages = new[]
     {
-        new PlanningWorkflowSeedData.StageDefinition(MaterialStageCodes.Receive,            "קבלת חומר",              SortOrder: 10,  IsInitial: true,  IsFinal: false),
-        new PlanningWorkflowSeedData.StageDefinition(MaterialStageCodes.File,               "תיוק חומר",              SortOrder: 20),
-        new PlanningWorkflowSeedData.StageDefinition(MaterialStageCodes.Check,              "בדיקת שלמות חומר",       SortOrder: 30),
-        new PlanningWorkflowSeedData.StageDefinition(MaterialStageCodes.AwaitingCompletion, "ממתין להשלמת חומר חסר",  SortOrder: 40),
-        new PlanningWorkflowSeedData.StageDefinition(MaterialStageCodes.Complete,           "חומר הושלם",             SortOrder: 50, IsInitial: false, IsFinal: true),
+        Stage(MaterialStageCodes.Receive,            "קבלת חומר",              SortOrder: 10, index: 0, IsInitial: true),
+        Stage(MaterialStageCodes.File,               "תיוק חומר",              SortOrder: 20, index: 1),
+        Stage(MaterialStageCodes.Check,              "בדיקת שלמות חומר",       SortOrder: 30, index: 2),
+        Stage(MaterialStageCodes.AwaitingCompletion, "ממתין להשלמת חומר חסר",  SortOrder: 40, index: 3),
+        Stage(MaterialStageCodes.Complete,           "חומר הושלם",             SortOrder: 50, index: 4, IsFinal: true),
     };
+
+    /// <summary>
+    /// Explicit Stage + linear canvas. No empty Start node — Receive keeps IsInitial + tasks
+    /// so StartAsync / AutoAdvance stay aligned with runtime.
+    /// </summary>
+    private static PlanningWorkflowSeedData.StageDefinition Stage(
+        string code, string name, int SortOrder, int index, bool IsInitial = false, bool IsFinal = false)
+    {
+        var (x, y) = PlanningWorkflowSeedData.LinearCanvasLayout.At(index);
+        return new PlanningWorkflowSeedData.StageDefinition(code, name, SortOrder, IsInitial, IsFinal)
+        {
+            NodeType = "Stage",
+            CanvasX = x,
+            CanvasY = y,
+        };
+    }
 
     /// <summary>
     /// Stage-task templates so the orchestrator creates real tasks (with a valid

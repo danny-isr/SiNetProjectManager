@@ -83,7 +83,7 @@
                         <TextBlock Text="מקרא" FontWeight="Bold" Margin="0,0,0,10"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Ellipse Width="18" Height="18" Fill="#43A047" Margin="0,0,8,0"/>
-                            <TextBlock Text="התחלה (Start)" VerticalAlignment="Center"/>
+                            <TextBlock Text="התחלה (IsInitial)" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Border Width="22" Height="16" Background="#1E88E5" CornerRadius="4" Margin="0,0,8,0"/>
@@ -100,7 +100,7 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Ellipse Width="18" Height="18" Fill="#E53935" Margin="0,0,8,0"/>
-                            <TextBlock Text="סיום (End)" VerticalAlignment="Center"/>
+                            <TextBlock Text="סיום (IsFinal)" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <TextBlock Text="→" FontSize="16" Margin="0,0,8,0"/>
@@ -112,27 +112,8 @@
                 <Border Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                         <Canvas Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" Background="#FAFAFA">
-                            <ItemsControl ItemsSource="{Binding Edges}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Canvas>
-                                            <Line X1="{Binding X1}" Y1="{Binding Y1}"
-                                                  X2="{Binding X2}" Y2="{Binding Y2}"
-                                                  Stroke="#607D8B" StrokeThickness="2"/>
-                                            <TextBlock Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
-                                                       Text="{Binding Label}" FontSize="10" Foreground="#455A64"
-                                                       Background="#EEFFFFFF" Padding="2"/>
-                                        </Canvas>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <ItemsControl ItemsSource="{Binding Nodes}">
+                            <!-- Nodes first (under), edges with arrowheads on top -->
+                            <ItemsControl ItemsSource="{Binding Nodes}" Panel.ZIndex="1">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas/>
@@ -159,6 +140,27 @@
                                                        FontSize="11" TextAlignment="Center" TextWrapping="Wrap"
                                                        VerticalAlignment="Center" Margin="6"/>
                                         </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding Edges}" Panel.ZIndex="2" IsHitTestVisible="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Canvas>
+                                            <Line X1="{Binding X1}" Y1="{Binding Y1}"
+                                                  X2="{Binding X2}" Y2="{Binding Y2}"
+                                                  Stroke="#37474F" StrokeThickness="2.5"/>
+                                            <Polygon Points="{Binding ArrowPoints}" Fill="#37474F" Stroke="#37474F"/>
+                                            <TextBlock Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
+                                                       Text="{Binding Label}" FontSize="10" Foreground="#263238"
+                                                       Background="#F5FFFFFF" Padding="3,1"/>
+                                        </Canvas>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

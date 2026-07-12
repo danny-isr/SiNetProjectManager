@@ -810,6 +810,28 @@ public class SqlWorkflowSeedService
                 if (existing.SortOrder != stageDef.SortOrder) { existing.SortOrder = stageDef.SortOrder; stagesChanged = true; }
                 if (existing.IsInitial != stageDef.IsInitial) { existing.IsInitial = stageDef.IsInitial; stagesChanged = true; }
                 if (existing.IsFinal != stageDef.IsFinal) { existing.IsFinal = stageDef.IsFinal; stagesChanged = true; }
+
+                // NodeType: apply when seed specifies; never downgrade SubWorkflow → Stage/etc.
+                if (stageDef.NodeType is { Length: > 0 } desiredNodeType
+                    && !string.Equals(existing.NodeType, desiredNodeType, StringComparison.Ordinal)
+                    && (!string.Equals(existing.NodeType, "SubWorkflow", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(desiredNodeType, "SubWorkflow", StringComparison.OrdinalIgnoreCase)))
+                {
+                    existing.NodeType = desiredNodeType;
+                    stagesChanged = true;
+                }
+
+                if (stageDef.CanvasX is double cx && existing.CanvasX != cx)
+                {
+                    existing.CanvasX = cx;
+                    stagesChanged = true;
+                }
+
+                if (stageDef.CanvasY is double cy && existing.CanvasY != cy)
+                {
+                    existing.CanvasY = cy;
+                    stagesChanged = true;
+                }
             }
             else
             {
@@ -821,6 +843,9 @@ public class SqlWorkflowSeedService
                     SortOrder = stageDef.SortOrder,
                     IsInitial = stageDef.IsInitial,
                     IsFinal = stageDef.IsFinal,
+                    NodeType = stageDef.NodeType ?? "Stage",
+                    CanvasX = stageDef.CanvasX ?? 0,
+                    CanvasY = stageDef.CanvasY ?? 0,
                 };
                 db.WorkflowStageDefinitions.Add(stage);
                 stagesByCode[stageDef.Code] = stage;
