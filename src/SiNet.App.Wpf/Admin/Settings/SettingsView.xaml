@@ -181,6 +181,10 @@
                         <TextBox Text="{Binding InboxProjectName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                         <TextBlock Text="מגבלת טאבים ACC"/>
                         <TextBox Text="{Binding AccViewerMaxTabs, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
+                        <TextBlock Text="מכסת מופעי תת-תהליך פתוחים במקביל (למשל קליטת חומר)"/>
+                        <TextBox Text="{Binding WorkflowMaxOpenChildInstances, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
+                        <TextBlock Text="ברירת מחדל: 2. לא ניתן לפתוח מופע נוסף מעבר למכסה לפני הכרעה/סיום של מופע קיים."
+                                   Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

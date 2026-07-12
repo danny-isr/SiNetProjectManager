@@ -139,7 +139,12 @@ public sealed class SqlSystemSettingsService
                 ReadAiLevel(map, SystemSettingKeys.AiModelWriting, SystemSettingKeys.AiProviderWriting),
                 ReadAiLevel(map, SystemSettingKeys.AiModelDeepAnalysis, SystemSettingKeys.AiProviderDeepAnalysis),
                 Get(SystemSettingKeys.AiConfiguredCloudModels, string.Empty)),
-            MapLoggingDto(rows));
+            MapLoggingDto(rows),
+            new WorkflowSystemSettingsDto(
+                Math.Max(1, ParseInt(
+                    Get(SystemSettingKeys.WorkflowMaxOpenChildInstances,
+                        SystemSettingsDefaults.WorkflowMaxOpenChildInstances.ToString()),
+                    SystemSettingsDefaults.WorkflowMaxOpenChildInstances))));
     }
 
     internal static CentralLoggingSettingsDto MapLoggingDto(IReadOnlyList<SystemSetting> rows)
@@ -196,6 +201,8 @@ public sealed class SqlSystemSettingsService
             (SystemSettingKeys.AiModelDeepAnalysis, settings.Ai.DeepAnalysis.Model.Trim()),
             (SystemSettingKeys.AiProviderDeepAnalysis, settings.Ai.DeepAnalysis.Provider.Trim()),
             (SystemSettingKeys.AiConfiguredCloudModels, settings.Ai.ConfiguredCloudModelsCsv.Trim()),
+            (SystemSettingKeys.WorkflowMaxOpenChildInstances,
+                Math.Max(1, settings.Workflow.MaxOpenChildInstances).ToString()),
         };
 
         if (!string.IsNullOrWhiteSpace(settings.EmailOffice.InboxProjectName))

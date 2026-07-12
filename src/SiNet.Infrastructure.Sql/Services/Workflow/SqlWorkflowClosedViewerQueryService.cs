@@ -107,6 +107,8 @@ public sealed class SqlWorkflowClosedViewerQueryService : IWorkflowClosedViewerQ
             s.AssignedGroup?.Code,
             s.SubWorkflowDefinition?.Name,
             s.SubWorkflowDefinition?.Code,
+            s.CanvasX,
+            s.CanvasY,
             s.StageTasks.OrderBy(t => t.SortOrder).Select(MapStageTask).ToList())).ToList();
 
         var transitionDtos = def.TransitionRules

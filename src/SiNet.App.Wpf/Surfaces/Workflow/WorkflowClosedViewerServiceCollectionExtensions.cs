@@ -12,6 +12,7 @@ public static class WorkflowClosedViewerServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddTransient<WorkflowClosedViewerViewModel>();
+        services.AddTransient<WorkflowVisualCanvasViewModel>();
         services.AddSingleton<IWorkflowClosedViewerWindowFactory, WorkflowClosedViewerWindowFactory>();
 
         return services;

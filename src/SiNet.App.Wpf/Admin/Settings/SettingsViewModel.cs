@@ -204,6 +204,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string _inboxFolderName = SystemSettingsDefaults.InboxFolderNameFallback;
     private string? _inboxProjectName;
     private int _accViewerMaxTabs = 10;
+    private int _workflowMaxOpenChildInstances = SystemSettingsDefaults.WorkflowMaxOpenChildInstances;
     private string _accServiceBaseUrl = string.Empty;
     private string _accBootstrapAdminEmail = string.Empty;
     private string _accProjectTemplateName = string.Empty;
@@ -486,6 +487,12 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _accViewerMaxTabs;
         set => SetField(ref _accViewerMaxTabs, value);
+    }
+
+    public int WorkflowMaxOpenChildInstances
+    {
+        get => _workflowMaxOpenChildInstances;
+        set => SetField(ref _workflowMaxOpenChildInstances, value);
     }
 
     public string AccServiceBaseUrl
@@ -1058,6 +1065,12 @@ public sealed class SettingsViewModel : ObservableObject
             return false;
         }
 
+        if (WorkflowMaxOpenChildInstances <= 0)
+        {
+            error = "מכסת מופעי תת-תהליך פתוחים חייבת להיות מספר חיובי.";
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(AccServiceBaseUrl)
             && (!Uri.TryCreate(AccServiceBaseUrl.Trim(), UriKind.Absolute, out var uri)
                 || string.IsNullOrWhiteSpace(uri.Host)
@@ -1148,7 +1161,8 @@ public sealed class SettingsViewModel : ObservableObject
             new AppLogLevelsDto(ParseLevel(ClientFileLevel), ParseLevel(ClientCentralLevel)),
             new AppLogLevelsDto(ParseLevel(AccServiceFileLevel), ParseLevel(AccServiceCentralLevel)),
             new AppLogLevelsDto(ParseLevel(SyncEngineFileLevel), ParseLevel(SyncEngineCentralLevel)),
-            !string.IsNullOrWhiteSpace(CentralLogPath)));
+            !string.IsNullOrWhiteSpace(CentralLogPath)),
+        new WorkflowSystemSettingsDto(Math.Max(1, WorkflowMaxOpenChildInstances)));
 
     private void ApplyUserSettings(UserAppSettingsDto user)
     {
@@ -1180,6 +1194,7 @@ public sealed class SettingsViewModel : ObservableObject
         InboxFolderName = system.EmailOffice.InboxFolderName;
         InboxProjectName = system.EmailOffice.InboxProjectName;
         AccViewerMaxTabs = system.EmailOffice.AccViewerMaxTabs;
+        WorkflowMaxOpenChildInstances = system.Workflow.MaxOpenChildInstances;
         AccServiceBaseUrl = system.Acc.AccServiceBaseUrl;
         AccBootstrapAdminEmail = system.Acc.AccBootstrapAdminEmail;
         AccProjectTemplateName = system.Acc.AccProjectTemplateName;

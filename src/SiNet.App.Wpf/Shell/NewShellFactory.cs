@@ -91,9 +91,9 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             && CanAccessFeature(AppFeatureCodes.ShellOpenWorkflowClosedViewer))
         {
             items.Add(new NewShellMenuItem(
-                "צפייה בתהליכים (סגור)",
+                "תהליכים — קנבס (צפייה)",
                 () => ShowWindow(workflowViewerFactory.Create()),
-                "עץ תהליכים לקריאה בלבד — קטלוגים סגורים, ללא שמירה"));
+                "קנבס ויזואלי לקריאה בלבד — מקרא + תבניות, ללא שמירה"));
         }
 
 #if DEBUG

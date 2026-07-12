@@ -497,7 +497,8 @@ public sealed class NativeSettingsSurfaceTests
                 new AiModelLevelSelectionDto("write-model", "openai"),
                 new AiModelLevelSelectionDto("deep-model", "openai"),
                 "model-a,model-b"),
-            log);
+            log,
+            new WorkflowSystemSettingsDto(3));
     }
 
     private static SettingsViewModel CreateViewModel(
@@ -700,7 +701,8 @@ public sealed class NativeSettingsSurfaceTests
                 new AiModelLevelSelectionDto(string.Empty, string.Empty),
                 new AiModelLevelSelectionDto(string.Empty, string.Empty),
                 string.Empty),
-            log);
+            log,
+            new WorkflowSystemSettingsDto(SystemSettingsDefaults.WorkflowMaxOpenChildInstances));
     }
 
     private static string NewShellFactoryPath => Path.Combine(

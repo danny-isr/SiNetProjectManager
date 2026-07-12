@@ -43,6 +43,10 @@ public sealed record AiSystemSettingsDto(
     AiModelLevelSelectionDto DeepAnalysis,
     string ConfiguredCloudModelsCsv);
 
+/// <summary>Workflow runtime policy globals.</summary>
+public sealed record WorkflowSystemSettingsDto(
+    int MaxOpenChildInstances);
+
 /// <summary>
 /// All global/admin settings from <c>dbo.SystemSettings</c>. Includes centralized logging.
 /// </summary>
@@ -52,7 +56,8 @@ public sealed record SystemSettingsDto(
     InspectionSystemSettingsDto Inspection,
     InspectionStatusLabelsDto StatusLabels,
     AiSystemSettingsDto Ai,
-    CentralLoggingSettingsDto Logging);
+    CentralLoggingSettingsDto Logging,
+    WorkflowSystemSettingsDto Workflow);
 
 /// <summary>Legacy defaults when DB rows are missing (from ManagementSettingsWindow / catalog).</summary>
 public static class SystemSettingsDefaults
@@ -69,4 +74,5 @@ public static class SystemSettingsDefaults
     public const string StatusLabelFailed = "הערה";
     public const string StatusLabelRecurringFailed = "הערה חוזרת";
     public const string StatusLabelNotApplicable = "לא רלוונטי";
+    public const int WorkflowMaxOpenChildInstances = 2;
 }

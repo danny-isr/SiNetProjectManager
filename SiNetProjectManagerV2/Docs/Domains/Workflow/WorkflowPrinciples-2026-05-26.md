@@ -275,3 +275,13 @@ Parent workflows (Planning, Review) delegate work to reusable child workflows (s
 2. **Auto-Advance on Child Completion**: When a child workflow reaches a completed state, `WorkflowTaskOrchestrator.AdvanceWithTasksAsync` automatically triggers `NotifyParentOfSubWorkflowCompletionAsync` to find the parent, evaluate transition rules (trigger type `SubWorkflowCompleted`), and auto-advance the parent.
 3. **Task Provisioning Avoidance**: `WorkflowTaskOrchestrator.CreateStageTasksAsync` returns an empty list when the stage's `NodeType == "SubWorkflow"`. The child workflow owns the active tasks; the parent stage must not materialize its own tasks.
 
+---
+
+## Concurrent child instances + New System UI (added 12.07.2026)
+
+1. **Definition vs instance:** Template (`WorkflowDefinition`) vs running copy (`WorkflowInstance`). One `CurrentStageId` per instance.
+2. **Parallelism:** Separate instances (parent/child or multiple children), not multi-token stages on one instance.
+3. **Start vs StartSubWorkflow:** Start = template entry (email/project/manual metadata). StartSubWorkflow = explicit mid-process action that opens a **new** child instance.
+4. **Open-child cap:** Admin system setting `Workflow.MaxOpenChildInstances`, default/current **2**. Block further starts until an open child is completed/decided.
+5. **Authoring UI (New System):** Visual canvas with on-canvas legend; closed catalogs except free-text names/descriptions. Tree viewer is not the target surface.
+

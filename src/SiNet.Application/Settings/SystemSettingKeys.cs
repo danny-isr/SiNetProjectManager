@@ -35,6 +35,7 @@ public static class SystemSettingKeys
     public const string OfficeManagementProjectId = "OfficeManagementProjectId";
     public const string AccViewerMaxTabs = "AccViewerMaxTabs";
     public const string AccManualUploadAllowedExtensions = "AccManualUploadAllowedExtensions";
+    public const string WorkflowMaxOpenChildInstances = "Workflow.MaxOpenChildInstances";
 
     public static IReadOnlyList<string> AllManaged { get; } =
     [
@@ -67,6 +68,7 @@ public static class SystemSettingKeys
         OfficeManagementProjectId,
         AccViewerMaxTabs,
         AccManualUploadAllowedExtensions,
+        WorkflowMaxOpenChildInstances,
         .. LoggingSettingKeys.All,
     ];
 }

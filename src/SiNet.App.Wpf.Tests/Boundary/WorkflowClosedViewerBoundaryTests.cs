@@ -40,6 +40,7 @@ public sealed class WorkflowClosedViewerBoundaryTests
         Assert.Contains("AppFeatureCodes.ShellOpenWorkflowClosedViewer", source, StringComparison.Ordinal);
         Assert.Contains("workflowViewerFactory.Create()", source, StringComparison.Ordinal);
         Assert.Contains("ShowWindow(workflowViewerFactory.Create())", source, StringComparison.Ordinal);
+        Assert.Contains("תהליכים — קנבס", source, StringComparison.Ordinal);
         Assert.DoesNotContain("WorkflowManagementWindow", source, StringComparison.Ordinal);
         Assert.DoesNotContain("LegacyWorkflowClosedViewerWindowFactory", source, StringComparison.Ordinal);
     }
@@ -52,10 +53,10 @@ public sealed class WorkflowClosedViewerBoundaryTests
     }
 
     [Fact]
-    public void Factory_creates_WorkflowClosedViewerWindow()
+    public void Factory_creates_WorkflowVisualCanvasWindow()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Workflow/WorkflowClosedViewerWindowFactory.cs");
-        Assert.Contains("WorkflowClosedViewerWindow", source, StringComparison.Ordinal);
+        Assert.Contains("WorkflowVisualCanvasWindow", source, StringComparison.Ordinal);
         Assert.DoesNotContain("WorkflowManagementWindow", source, StringComparison.Ordinal);
     }
 
@@ -143,7 +144,7 @@ public sealed class WorkflowClosedViewerBoundaryTests
         {
             var stage = new WorkflowStageGraphDto(
                 1, "S1", "Stage One", null, 1, true, false, "Stage", true, true,
-                null, null, null, null,
+                null, null, null, null, 40, 40,
                 Array.Empty<WorkflowStageTaskGraphDto>());
 
             var graph = new WorkflowDefinitionGraphDto(

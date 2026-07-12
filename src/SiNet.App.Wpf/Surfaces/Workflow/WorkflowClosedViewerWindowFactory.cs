@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace SiNet.App.Wpf.Surfaces.Workflow;
 
 /// <summary>
-/// Opens the native closed-world workflow viewer (App.Wpf surface — no V2 Dialogs).
+/// Opens the native closed-world workflow visual canvas (App.Wpf — no V2 Dialogs).
 /// </summary>
 public interface IWorkflowClosedViewerWindowFactory
 {
@@ -12,8 +12,7 @@ public interface IWorkflowClosedViewerWindowFactory
 }
 
 /// <summary>
-/// Default factory: resolves a transient <see cref="WorkflowClosedViewerViewModel"/> and binds
-/// a new <see cref="WorkflowClosedViewerWindow"/>.
+/// Default factory: visual canvas V1 (replaces tree viewer entry in New Shell).
 /// </summary>
 public sealed class WorkflowClosedViewerWindowFactory(IServiceProvider services) : IWorkflowClosedViewerWindowFactory
 {
@@ -21,7 +20,7 @@ public sealed class WorkflowClosedViewerWindowFactory(IServiceProvider services)
 
     public Window Create()
     {
-        var viewModel = _services.GetRequiredService<WorkflowClosedViewerViewModel>();
-        return new WorkflowClosedViewerWindow(viewModel);
+        var viewModel = _services.GetRequiredService<WorkflowVisualCanvasViewModel>();
+        return new WorkflowVisualCanvasWindow(viewModel);
     }
 }

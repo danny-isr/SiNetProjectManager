@@ -29,6 +29,8 @@ public sealed record WorkflowStageGraphDto(
     string? AssignedGroupCode,
     string? SubWorkflowName,
     string? SubWorkflowCode,
+    double CanvasX,
+    double CanvasY,
     IReadOnlyList<WorkflowStageTaskGraphDto> StageTasks);
 
 /// <summary>Transition rule within a definition graph.</summary>
