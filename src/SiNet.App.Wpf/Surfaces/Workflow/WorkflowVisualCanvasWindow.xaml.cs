@@ -6,8 +6,14 @@ namespace SiNet.App.Wpf.Surfaces.Workflow;
 
 public partial class WorkflowVisualCanvasWindow : Window
 {
+    private const double DragThresholdPx = 4;
+
     private Rect _restoreBounds;
     private bool _isCustomMaximized;
+    private WorkflowCanvasNodeVm? _dragNode;
+    private Point _dragStartOnCanvas;
+    private Point _nodeOrigin;
+    private bool _dragMoved;
 
     public WorkflowVisualCanvasWindow()
         : this(new WorkflowVisualCanvasViewModel())
@@ -35,6 +41,94 @@ public partial class WorkflowVisualCanvasWindow : Window
         catch (Exception ex)
         {
             AppErrorReporter.Report(ex, "WorkflowVisualCanvasWindow.OnLoaded");
+        }
+    }
+
+    private void Node_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not WorkflowCanvasNodeVm node)
+        {
+            return;
+        }
+
+        _dragNode = node;
+        _dragStartOnCanvas = e.GetPosition(GraphCanvas);
+        _nodeOrigin = new Point(node.X, node.Y);
+        _dragMoved = false;
+        element.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Node_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragNode is null || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var pos = e.GetPosition(GraphCanvas);
+        var dx = pos.X - _dragStartOnCanvas.X;
+        var dy = pos.Y - _dragStartOnCanvas.Y;
+        if (!_dragMoved && (Math.Abs(dx) > DragThresholdPx || Math.Abs(dy) > DragThresholdPx))
+        {
+            _dragMoved = true;
+        }
+
+        if (_dragMoved)
+        {
+            ViewModel.MoveNode(_dragNode, _nodeOrigin.X + dx, _nodeOrigin.Y + dy);
+        }
+
+        e.Handled = true;
+    }
+
+    private void Node_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_dragNode is not null && !_dragMoved)
+        {
+            ViewModel.SelectStage(_dragNode.Id);
+        }
+
+        if (sender is FrameworkElement element && element.IsMouseCaptured)
+        {
+            element.ReleaseMouseCapture();
+        }
+
+        _dragNode = null;
+        _dragMoved = false;
+        e.Handled = true;
+    }
+
+    private void Node_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        _dragNode = null;
+        _dragMoved = false;
+    }
+
+    private void Edge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is WorkflowCanvasEdgeVm edge)
+        {
+            ViewModel.SelectTransition(edge.TransitionId);
+            e.Handled = true;
+        }
+    }
+
+    private void GraphCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Background click clears selection (child handlers mark Handled for nodes/edges).
+        if (e.OriginalSource == GraphCanvas)
+        {
+            ViewModel.ClearSelection();
+        }
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            ViewModel.ClearSelection();
+            e.Handled = true;
         }
     }
 

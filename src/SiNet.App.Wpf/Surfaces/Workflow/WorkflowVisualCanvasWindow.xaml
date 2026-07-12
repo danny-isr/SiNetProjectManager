@@ -10,9 +10,10 @@
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="CanResizeWithGrip"
-        Width="1200" Height="760"
-        MinWidth="900" MinHeight="560"
+        Width="1280" Height="780"
+        MinWidth="960" MinHeight="560"
         FlowDirection="RightToLeft"
+        PreviewKeyDown="Window_PreviewKeyDown"
         d:DataContext="{d:DesignInstance Type=local:WorkflowVisualCanvasViewModel, IsDesignTimeCreatable=True}">
 
     <Window.Resources>
@@ -67,53 +68,163 @@
                               SelectedItem="{Binding SelectedPickerItem}"
                               DisplayMemberPath="Display"/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="רענן" Padding="12,4" Command="{Binding RefreshCommand}"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="נקה בחירה" Padding="12,4" Margin="0,0,8,0"
+                            Command="{Binding ClearSelectionCommand}"/>
+                    <Button Content="שמור פריסה" Padding="12,4" Margin="0,0,8,0"
+                            Command="{Binding SaveLayoutCommand}"
+                            ToolTip="שומר רק מיקומי CanvasX/Y — לא משנה תוכן תהליך"/>
+                    <Button Content="רענן" Padding="12,4" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
             </Grid>
 
             <Grid Grid.Row="3">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="300"/>
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Legend -->
+                <!-- Legend + inspect panel -->
                 <Border Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Padding="10">
-                    <StackPanel>
-                        <TextBlock Text="מקרא" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Ellipse Width="18" Height="18" Fill="#43A047" Margin="0,0,8,0"/>
-                            <TextBlock Text="התחלה (IsInitial)" VerticalAlignment="Center"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="מקרא" FontWeight="Bold" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <Ellipse Width="14" Height="14" Fill="#43A047" Margin="0,0,6,0"/>
+                                <TextBlock Text="התחלה" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <Border Width="18" Height="12" Background="#1E88E5" CornerRadius="3" Margin="0,0,6,0"/>
+                                <TextBlock Text="שלב" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <Ellipse Width="14" Height="14" Fill="#E53935" Margin="0,0,6,0"/>
+                                <TextBlock Text="סיום" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="↻" Margin="0,0,6,0"/>
+                                <TextBlock Text="לולאה עצמית" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <Border BorderBrush="#EEE" BorderThickness="0,1,0,0" Margin="0,4,0,8"/>
+
+                            <TextBlock Text="פירוט" FontWeight="Bold" Margin="0,0,0,8"/>
+
+                            <TextBlock Text="לחץ על שלב או על חץ בתרשים כדי לראות משימות נדרשות, תנאים ופעולות."
+                                       TextWrapping="Wrap" Foreground="#666" FontSize="11"
+                                       Visibility="{Binding ShowEmptyInspectHint, Converter={StaticResource BoolToVis}}"/>
+
+                            <!-- Stage inspect -->
+                            <StackPanel Visibility="{Binding IsStageSelected, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="שלב" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding SelectedStage.Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding SelectedStage.Code, StringFormat=קוד: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedStage.NodeType, StringFormat=NodeType: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Margin="0,2" FontSize="11">
+                                    <Run Text="התחלה: "/><Run Text="{Binding SelectedStage.IsInitial, Mode=OneWay}"/>
+                                    <Run Text=" · סיום: "/><Run Text="{Binding SelectedStage.IsFinal, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock Text="{Binding SelectedStage.AssignedGroup, StringFormat=קבוצה: {0}}"
+                                           Margin="0,2" FontSize="11" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding SelectedStage.SubWorkflow, StringFormat=תת-תהליך: {0}}"
+                                           Margin="0,2" FontSize="11" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding SelectedStage.Description}" TextWrapping="Wrap"
+                                           Margin="0,4,0,0" FontSize="11" Foreground="#555"/>
+
+                                <TextBlock Text="משימות נדרשות" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <ItemsControl ItemsSource="{Binding SelectedStage.Tasks}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="0,4" Margin="0,0,0,2">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"
+                                                               Text="{Binding TaskTypeName}"/>
+                                                    <TextBlock FontSize="10" Foreground="#555"
+                                                               Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
+                                                    <TextBlock FontSize="10">
+                                                        <Run Text="{Binding RequiredLabel, Mode=OneWay}"/>
+                                                        <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="#37474F"
+                                                               Text="{Binding AllowedResults, StringFormat=תוצאות: {0}}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="מעברים יוצאים" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <ItemsControl ItemsSource="{Binding SelectedStage.OutgoingTransitions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Display}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Transition inspect -->
+                            <StackPanel Visibility="{Binding IsTransitionSelected, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="מעבר" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding SelectedTransition.Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <Border Background="#FFF3E0" BorderBrush="#FFB74D" BorderThickness="1" CornerRadius="4"
+                                        Padding="8" Margin="0,8,0,8"
+                                        Visibility="{Binding SelectedTransition.IsSelfLoop, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding SelectedTransition.SelfLoopExplanation}"
+                                               TextWrapping="Wrap" FontSize="11" Foreground="#E65100"/>
+                                </Border>
+                                <TextBlock Text="{Binding SelectedTransition.FromName, StringFormat=מ: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.ToName, StringFormat=אל: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.TriggerType, StringFormat=Trigger: {0}}" Margin="0,6,0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.TriggerExplanation}" TextWrapping="Wrap"
+                                           FontSize="11" Foreground="#455A64" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding SelectedTransition.ConditionType, StringFormat=Condition: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.TaskResult, StringFormat=TaskResult: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.EvaluationMode, StringFormat=Evaluation: {0}}" Margin="0,2" FontSize="11"/>
+                                <TextBlock Text="{Binding SelectedTransition.Priority, StringFormat=Priority: {0}}" Margin="0,2" FontSize="11"/>
+
+                                <TextBlock Text="משימות נדרשות בשלב המקור" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <ItemsControl ItemsSource="{Binding SelectedTransition.RequiredTasks}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="0,4" Margin="0,0,0,2">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"
+                                                               Text="{Binding TaskTypeName}"/>
+                                                    <TextBlock FontSize="10" Foreground="#555"
+                                                               Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
+                                                    <TextBlock FontSize="10">
+                                                        <Run Text="{Binding RequiredLabel, Mode=OneWay}"/>
+                                                        <Run Text=" · "/><Run Text="{Binding Assignee, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock FontSize="10" TextWrapping="Wrap"
+                                                               Text="{Binding AllowedResults, StringFormat=תוצאות: {0}}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="פעולות" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <ItemsControl ItemsSource="{Binding SelectedTransition.Actions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Display}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Border Width="22" Height="16" Background="#1E88E5" CornerRadius="4" Margin="0,0,8,0"/>
-                            <TextBlock Text="שלב (Stage)" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Polygon Points="9,0 18,9 9,18 0,9" Fill="#FB8C00" Margin="0,0,8,0"/>
-                            <TextBlock Text="החלטה (Decision)" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Border Width="22" Height="16" Background="#6D4C41" CornerRadius="2" BorderBrush="#3E2723"
-                                    BorderThickness="2" Margin="0,0,8,0"/>
-                            <TextBlock Text="תת-תהליך" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Ellipse Width="18" Height="18" Fill="#E53935" Margin="0,0,8,0"/>
-                            <TextBlock Text="סיום (IsFinal)" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <TextBlock Text="→" FontSize="16" Margin="0,0,8,0"/>
-                            <TextBlock Text="מעבר (Trigger על החץ)" VerticalAlignment="Center" TextWrapping="Wrap" Width="140"/>
-                        </StackPanel>
-                    </StackPanel>
+                    </ScrollViewer>
                 </Border>
 
                 <Border Grid.Column="2" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                        <Canvas Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" Background="#FAFAFA">
-                            <!-- Nodes first (under), edges with arrowheads on top -->
-                            <ItemsControl ItemsSource="{Binding Nodes}" Panel.ZIndex="1">
+                    <ScrollViewer x:Name="CanvasScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <Canvas x:Name="GraphCanvas" Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}"
+                                Background="#FAFAFA" FlowDirection="LeftToRight"
+                                MouseLeftButtonDown="GraphCanvas_MouseLeftButtonDown">
+                            <ItemsControl ItemsSource="{Binding Nodes}" Panel.ZIndex="3">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas/>
@@ -127,24 +238,32 @@
                                 </ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Width="140" Height="56">
-                                            <Ellipse Fill="{Binding Fill}" Stroke="#333" StrokeThickness="1"
+                                        <Grid Width="140" Height="56" Cursor="SizeAll"
+                                              Background="Transparent"
+                                              MouseLeftButtonDown="Node_MouseLeftButtonDown"
+                                              MouseMove="Node_MouseMove"
+                                              MouseLeftButtonUp="Node_MouseLeftButtonUp"
+                                              LostMouseCapture="Node_LostMouseCapture">
+                                            <Ellipse Fill="{Binding Fill}" Stroke="{Binding StrokeBrush}"
+                                                     StrokeThickness="{Binding StrokeThickness}"
                                                      Visibility="{Binding IsEllipse, Converter={StaticResource BoolToVis}}"/>
                                             <Border Background="{Binding Fill}" CornerRadius="8"
-                                                    BorderBrush="#333" BorderThickness="1"
+                                                    BorderBrush="{Binding StrokeBrush}"
+                                                    BorderThickness="{Binding BorderThicknessValue}"
                                                     Visibility="{Binding IsRoundedRect, Converter={StaticResource BoolToVis}}"/>
                                             <Polygon Points="70,2 138,28 70,54 2,28" Fill="{Binding Fill}"
-                                                     Stroke="#333" StrokeThickness="1"
+                                                     Stroke="{Binding StrokeBrush}" StrokeThickness="{Binding StrokeThickness}"
                                                      Visibility="{Binding IsDiamond, Converter={StaticResource BoolToVis}}"/>
                                             <TextBlock Text="{Binding Caption}" Foreground="White" FontWeight="SemiBold"
                                                        FontSize="11" TextAlignment="Center" TextWrapping="Wrap"
-                                                       VerticalAlignment="Center" Margin="6"/>
+                                                       VerticalAlignment="Center" Margin="6"
+                                                       IsHitTestVisible="False"/>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <ItemsControl ItemsSource="{Binding Edges}" Panel.ZIndex="2" IsHitTestVisible="False">
+                            <ItemsControl ItemsSource="{Binding Edges}" Panel.ZIndex="2">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas/>
@@ -152,14 +271,29 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Canvas>
+                                        <Canvas Cursor="Hand"
+                                                MouseLeftButtonDown="Edge_MouseLeftButtonDown">
+                                            <!-- Wide invisible hit target -->
                                             <Line X1="{Binding X1}" Y1="{Binding Y1}"
                                                   X2="{Binding X2}" Y2="{Binding Y2}"
-                                                  Stroke="#37474F" StrokeThickness="2.5"/>
-                                            <Polygon Points="{Binding ArrowPoints}" Fill="#37474F" Stroke="#37474F"/>
+                                                  Stroke="Transparent" StrokeThickness="14"
+                                                  Visibility="{Binding IsStraight, Converter={StaticResource BoolToVis}}"/>
+                                            <Polyline Points="{Binding LoopPoints}" Stroke="Transparent" StrokeThickness="14"
+                                                      Visibility="{Binding IsSelfLoop, Converter={StaticResource BoolToVis}}"/>
+                                            <Line X1="{Binding X1}" Y1="{Binding Y1}"
+                                                  X2="{Binding X2}" Y2="{Binding Y2}"
+                                                  Stroke="{Binding Stroke}" StrokeThickness="{Binding StrokeThickness}"
+                                                  IsHitTestVisible="False"
+                                                  Visibility="{Binding IsStraight, Converter={StaticResource BoolToVis}}"/>
+                                            <Polyline Points="{Binding LoopPoints}"
+                                                      Stroke="{Binding Stroke}" StrokeThickness="{Binding StrokeThickness}"
+                                                      IsHitTestVisible="False"
+                                                      Visibility="{Binding IsSelfLoop, Converter={StaticResource BoolToVis}}"/>
+                                            <Polygon Points="{Binding ArrowPoints}" Fill="{Binding Stroke}" Stroke="{Binding Stroke}"
+                                                     IsHitTestVisible="False"/>
                                             <TextBlock Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
                                                        Text="{Binding Label}" FontSize="10" Foreground="#263238"
-                                                       Background="#F5FFFFFF" Padding="3,1"/>
+                                                       Background="#F5FFFFFF" Padding="3,1" IsHitTestVisible="False"/>
                                         </Canvas>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

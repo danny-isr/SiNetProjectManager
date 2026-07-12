@@ -37,6 +37,10 @@ public static class WorkflowServiceCollectionExtensions
         services.AddTransient<IWorkflowClosedViewerQueryService>(
             sp => sp.GetRequiredService<SqlWorkflowClosedViewerQueryService>());
 
+        services.AddTransient<SqlWorkflowCanvasLayoutService>();
+        services.AddTransient<IWorkflowCanvasLayoutService>(
+            sp => sp.GetRequiredService<SqlWorkflowCanvasLayoutService>());
+
         return services;
     }
 }

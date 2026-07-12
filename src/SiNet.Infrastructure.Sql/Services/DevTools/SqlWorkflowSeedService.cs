@@ -821,13 +821,16 @@ public class SqlWorkflowSeedService
                     stagesChanged = true;
                 }
 
-                if (stageDef.CanvasX is double cx && existing.CanvasX != cx)
+                // Canvas: seed only fills empty layout so manual/designer positions survive re-seed.
+                var existingBlank =
+                    Math.Abs(existing.CanvasX) < 0.1 && Math.Abs(existing.CanvasY) < 0.1;
+                if (existingBlank && stageDef.CanvasX is double cx && existing.CanvasX != cx)
                 {
                     existing.CanvasX = cx;
                     stagesChanged = true;
                 }
 
-                if (stageDef.CanvasY is double cy && existing.CanvasY != cy)
+                if (existingBlank && stageDef.CanvasY is double cy && existing.CanvasY != cy)
                 {
                     existing.CanvasY = cy;
                     stagesChanged = true;
