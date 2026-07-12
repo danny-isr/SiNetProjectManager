@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf;
+using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
@@ -50,6 +51,7 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();
         services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
+        services.AddSingleton<IWorkflowClosedViewerWindowFactory, LegacyWorkflowClosedViewerWindowFactory>();
 
         return services;
     }

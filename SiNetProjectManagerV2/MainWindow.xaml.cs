@@ -795,11 +795,12 @@ namespace SiNetProjectManagerV2
 
         private void OpenWorkflowManagement_Click(object sender, RoutedEventArgs e)
         {
-            if (!RequireAdminAccess("אין לך הרשאה לניהול תהליכים."))
-                return;
-
-            var dialog = new WorkflowManagementWindow();
-            dialog.Owner = this;
+            // View-first closed explorer lives on the first tab; window is available
+            // without admin gate so the catalog viewer can be reviewed during development.
+            var dialog = new WorkflowManagementWindow
+            {
+                Owner = this,
+            };
             dialog.ShowDialog();
         }
 

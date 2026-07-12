@@ -9,6 +9,7 @@ public static class AppFeatureCodes
     public const string ShellOpenEmailSurface = "Shell.OpenEmailSurface";
     public const string ShellOpenInspectionSurface = "Shell.OpenInspectionSurface";
     public const string ShellOpenTaskPanelReadOnly = "Shell.OpenTaskPanelReadOnly";
+    public const string ShellOpenWorkflowClosedViewer = "Shell.OpenWorkflowClosedViewer";
     public const string DevToolsReset = "DevTools.Reset";
     public const string DevToolsSeed = "DevTools.Seed";
     public const string ProjectCreate = "Project.Create";

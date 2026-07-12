@@ -15,6 +15,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.ShellOpenEmailSurface,
             AppFeatureCodes.ShellOpenInspectionSurface,
             AppFeatureCodes.ShellOpenTaskPanelReadOnly,
+            AppFeatureCodes.ShellOpenWorkflowClosedViewer,
             AppFeatureCodes.DevToolsReset,
             AppFeatureCodes.DevToolsSeed,
             AppFeatureCodes.ProjectCreate,

@@ -85,6 +85,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "תורים אישיים Quick / Medium / Long — צפייה, הוספה ומחיקה בסיסית"));
         }
 
+        // Workflow closed-world viewer (definitions tree — catalog-bound, no save).
+        if (_services.GetService<IWorkflowClosedViewerWindowFactory>() is { } workflowViewerFactory
+            && CanAccessFeature(AppFeatureCodes.ShellOpenWorkflowClosedViewer))
+        {
+            items.Add(new NewShellMenuItem(
+                "צפייה בתהליכים (סגור)",
+                () => ShowDialog(workflowViewerFactory.Create()),
+                "עץ תהליכים לקריאה בלבד — קטלוגים סגורים, ללא שמירה"));
+        }
+
 #if DEBUG
         // InspectionShellView is a developer harness only — NOT part of the limited production pilot.
         // Release builds must not expose it in the shell menu. Dev entry points remain in V2 legacy

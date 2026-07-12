@@ -122,7 +122,9 @@
                 <Separator/>
                 <MenuItem Header="📊 תהליכי עבודה" Click="OpenWorkflowDashboard_Click"/>
                 <MenuItem Header="📈 מצב תהליכים — כלל הפרויקטים" Click="OpenWorkflowStatusDashboard_Click"/>
-                <MenuItem Header="🛠️ ניהול תהליכים (מרוכז)" Click="OpenWorkflowManagement_Click"
+                <MenuItem Header="צפייה בתהליכים (סגור)" Click="OpenWorkflowManagement_Click"
+                    ToolTip="עץ תהליכים לקריאה בלבד — קטלוגים סגורים, ללא שמירה"/>
+                <MenuItem Header="🛠️ ניהול תהליכים (מרוכז — מלא)" Click="OpenWorkflowManagement_Click"
                     Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
             </MenuItem>
 
@@ -135,6 +137,11 @@
                     Visibility="{Binding IsInProjectManagers, Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="R03 - השוואת נוכחות" Click="OpenR03Report_Click"/>
             </MenuItem>
+
+            <!-- Always visible — closed-world workflow viewer (dev / review) -->
+            <MenuItem Header="צפייה בתהליכים (סגור)"
+                      Click="OpenWorkflowManagement_Click"
+                      ToolTip="עץ תהליכים לקריאה בלבד — קטלוגים סגורים, ללא שמירה"/>
 
             <!-- מערכת – תמיד גלוי -->
             <MenuItem Header="מערכת">

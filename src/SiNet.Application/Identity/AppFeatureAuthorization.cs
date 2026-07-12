@@ -12,6 +12,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.ShellOpenEmailSurface] = AppRole.Employee,
             [AppFeatureCodes.ShellOpenInspectionSurface] = AppRole.Employee,
             [AppFeatureCodes.ShellOpenTaskPanelReadOnly] = AppRole.Employee,
+            [AppFeatureCodes.ShellOpenWorkflowClosedViewer] = AppRole.Employee,
             [AppFeatureCodes.DevToolsReset] = AppRole.Management,
             [AppFeatureCodes.DevToolsSeed] = AppRole.Management,
             [AppFeatureCodes.ProjectCreate] = AppRole.Management,
