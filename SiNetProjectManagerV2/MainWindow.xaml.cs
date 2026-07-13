@@ -241,7 +241,40 @@ namespace SiNetProjectManagerV2
         {
             if (!RequireManagementAccess("אין לך הרשאה ליצירת פרויקט חדש."))
                 return;
-            NavigateToView(new CreateProjectUserControl());
+
+            var factory = App.ServiceProvider.GetRequiredService<IProjectCreateDialogFactory>();
+            var result = factory.ShowDialog(this);
+            if (!result.Confirmed || result.ProjectId is not int projectId)
+                return;
+
+            if (_currentProjectContext is null)
+                return;
+
+            var query = App.ServiceProvider.GetService<IProjectQueryService>();
+            if (query is null)
+                return;
+
+            _ = SetCurrentProjectAfterCreateAsync(query, projectId);
+        }
+
+        private async Task SetCurrentProjectAfterCreateAsync(IProjectQueryService query, int projectId)
+        {
+            try
+            {
+                var summary = await query.GetProjectAsync(projectId).ConfigureAwait(true);
+                if (summary is not null && _currentProjectContext is not null)
+                {
+                    await _currentProjectContext.SetCurrentProjectAsync(summary).ConfigureAwait(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"הפרויקט נוצר, אך לא ניתן לטעון אותו לכותרת: {ex.Message}",
+                    "פתיחת פרויקט",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
 
         private void OpenTemplate_Click(object sender, RoutedEventArgs e)

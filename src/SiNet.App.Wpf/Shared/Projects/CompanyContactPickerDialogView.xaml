@@ -1,0 +1,53 @@
+<UserControl x:Class="SiNet.App.Wpf.Shared.Projects.CompanyContactPickerDialogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="חברות" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,8,4"/>
+        <TextBlock Grid.Row="0" Grid.Column="1" Text="אנשי קשר" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="8,0,0,4"/>
+
+        <DockPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
+            <TextBox DockPanel.Dock="Top" Text="{Binding CompanyFilter, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}" Margin="0,0,0,6"/>
+            <ListBox ItemsSource="{Binding Companies}" SelectedItem="{Binding SelectedCompany}" DisplayMemberPath="Title"/>
+        </DockPanel>
+
+        <DockPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8">
+            <TextBox DockPanel.Dock="Top" Text="{Binding ContactFilter, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}" Margin="0,0,0,6"/>
+            <ListBox ItemsSource="{Binding Contacts}" SelectedItem="{Binding SelectedContact}" DisplayMemberPath="DisplayName"/>
+        </DockPanel>
+
+        <DockPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,8">
+            <Button DockPanel.Dock="Right" Content="הוסף" Width="70" Margin="8,0,0,0"
+                    Command="{Binding AddCompanyCommand}" Style="{DynamicResource SiPrimaryButtonStyle}"/>
+            <TextBox Text="{Binding NewCompanyTitle, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource SiTextBoxStyle}"/>
+        </DockPanel>
+
+        <DockPanel Grid.Row="2" Grid.Column="1" Margin="8,0,0,8">
+            <Button DockPanel.Dock="Right" Content="הוסף" Width="70" Margin="8,0,0,0"
+                    Command="{Binding AddContactCommand}" Style="{DynamicResource SiPrimaryButtonStyle}"/>
+            <TextBox Text="{Binding NewContactName, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource SiTextBoxStyle}"/>
+        </DockPanel>
+
+        <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding StatusMessage}" Style="{DynamicResource SiTextSmallStyle}" Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal">
+            <Button Content="אישור" Command="{Binding SelectCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" MinWidth="90" Margin="0,0,8,0" IsDefault="True"/>
+            <Button Content="ביטול" Command="{Binding CancelCommand}" MinWidth="70" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

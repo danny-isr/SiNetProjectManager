@@ -94,4 +94,4 @@ Answer these in the next planning session (implementation plan), then implement:
 - UI map: `WorkflowUiScreens-2026-06-21.md`
 - Codes: `SiNet.Infrastructure.Sql/Constants/WorkflowCodes.cs`, `*StageCodes.cs`
 - Seed: `SqlWorkflowSeedService.cs`
-
+

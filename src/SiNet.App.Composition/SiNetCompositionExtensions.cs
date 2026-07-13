@@ -32,6 +32,7 @@ public static class SiNetCompositionExtensions
         services.AddSiNetSql();
         services.AddSiNetProcessBackbone();
         services.AddSiNetProjectQuerySql();
+        services.AddSiNetProjectCreateSql();
         services.AddSiNetEmailReadSql();
         services.AddSiNetEmailWriteSql();
         services.AddSiNetEmailAccSql();

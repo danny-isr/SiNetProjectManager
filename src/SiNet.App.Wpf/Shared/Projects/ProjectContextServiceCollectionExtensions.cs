@@ -92,6 +92,9 @@ public static class ProjectContextServiceCollectionExtensions
         services.AddSingleton<IEmailWindowFactory, EmailWindowFactory>();
         services.AddSingleton<IEmailWorkItemWindowFactory, EmailWorkItemWindowFactory>();
 
+        services.AddTransient<ProjectCreateDialogViewModel>();
+        services.AddTransient<IProjectCreateDialogFactory, ProjectCreateDialogFactory>();
+
         services.AddSiNetWorkSurfaces();
     }
 }

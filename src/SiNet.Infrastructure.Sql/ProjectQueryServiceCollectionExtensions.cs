@@ -1,9 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Projects;
+using SiNet.Infrastructure.Sql.Services.Projects;
+using SiNetSQL.Data;
 using SiNetSQL.Services.Projects;
 
 namespace SiNet.Infrastructure.Sql;
-
 /// <summary>
 /// Modular DI registration for the real, read-only Project query slice
 /// (see <c>docs/PROJECTS.md</c> §5 and <c>docs/PROJECT_CONTEXT_MIGRATION.md</c>).
@@ -22,19 +24,34 @@ public static class ProjectQueryServiceCollectionExtensions
     /// <c>IDbContextFactory&lt;SiNetSQLDbContext&gt;</c> to be registered separately (for example via
     /// <see cref="SqlServiceCollectionExtensions.AddSiNetSql(IServiceCollection, string)"/>).
     /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The same <paramref name="services"/> for chaining.</returns>
     public static IServiceCollection AddSiNetProjectQuerySql(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // Register the concrete type once, then forward the port to the same instance so each request
-        // resolves a single service object (mirrors AddSiNetWorkflowReads).
         services.AddTransient<ProjectQueryService>();
         services.AddTransient<IProjectQueryService>(sp => sp.GetRequiredService<ProjectQueryService>());
 
         services.AddTransient<ProjectFilterOptionsService>();
         services.AddTransient<IProjectFilterOptionsService>(sp => sp.GetRequiredService<ProjectFilterOptionsService>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers project create + place/company/job-type catalog write/read ports.
+    /// </summary>
+    public static IServiceCollection AddSiNetProjectCreateSql(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddTransient<IProjectCreateService>(sp =>
+            new SqlProjectCreateService(
+                sp.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>(),
+                sp.GetService<IProjectFolderBootstrapper>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SqlProjectCreateService>>()));
+        services.AddTransient<IPlaceCatalogService, SqlPlaceCatalogService>();
+        services.AddTransient<ICompanyCatalogService, SqlCompanyCatalogService>();
+        services.AddTransient<IJobTypeQueryService, SqlJobTypeQueryService>();
 
         return services;
     }

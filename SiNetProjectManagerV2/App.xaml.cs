@@ -925,6 +925,7 @@ namespace SiNetProjectManagerV2
             // so the Email selector loads real projects while every surface observes the SAME Current
             // Project. Read-only: no DB writes, no EF entities in WPF, no email filtering, no workflow mutation.
             services.AddSiNetNewSystemGraph();
+        services.AddSingleton<SiNet.Application.Projects.IProjectFolderBootstrapper, LegacyProjectFolderBootstrapper>();
 
             return services.BuildServiceProvider();
         }

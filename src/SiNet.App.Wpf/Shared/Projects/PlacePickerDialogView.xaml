@@ -1,0 +1,40 @@
+<UserControl x:Class="SiNet.App.Wpf.Shared.Projects.PlacePickerDialogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                 Style="{DynamicResource SiTextBoxStyle}"
+                 Margin="0,0,0,8"/>
+
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding Places}"
+                 SelectedItem="{Binding SelectedPlace}"
+                 DisplayMemberPath="Title"
+                 Margin="0,0,0,8"/>
+
+        <DockPanel Grid.Row="2" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right" Content="הוסף" Width="70" Margin="8,0,0,0"
+                    Command="{Binding AddPlaceCommand}"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"/>
+            <TextBox Text="{Binding NewPlaceTitle, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}"/>
+        </DockPanel>
+
+        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Style="{DynamicResource SiTextSmallStyle}" Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal">
+            <Button Content="אישור" Command="{Binding SelectCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" MinWidth="90" Margin="0,0,8,0" IsDefault="True"/>
+            <Button Content="ביטול" Command="{Binding CancelCommand}" MinWidth="70" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

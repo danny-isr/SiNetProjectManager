@@ -45,4 +45,4 @@ public partial class WorkflowClosedViewerView : UserControl
         ViewModel.SelectedNode = e.NewValue as WorkflowViewerNode;
     }
 }
-
+

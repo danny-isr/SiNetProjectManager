@@ -29,6 +29,7 @@ public static class NewSystemServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
+        SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectCreateSql(services);
         SiNet.Infrastructure.Sql.UserManagementServiceCollectionExtensions.AddSiNetUserManagementSql(services);
         services.AddSiNetSecrets();
         services.AddSiNetSerilogLogging();
