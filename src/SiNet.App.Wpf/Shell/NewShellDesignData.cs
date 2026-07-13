@@ -11,7 +11,11 @@ namespace SiNet.App.Wpf.Shell;
 public sealed class NewShellDesignData : NewShellViewModel
 {
     public NewShellDesignData()
-        : base(CreateSampleMenu(), currentUserDisplay: "דני ישראל", currentProjectContext: CreateDesignProjectContext())
+        : base(
+            CreateSampleMenu(),
+            currentUserDisplay: "דני ישראל",
+            currentProjectContext: CreateDesignProjectContext(),
+            openNewProject: static () => { })
     {
         StatusText = "מוכן — מצב עיצוב";
     }
@@ -36,8 +40,9 @@ public sealed class NewShellDesignData : NewShellViewModel
     [
         // Design-time labels mirror production pilot menu text (see NewShellFactory); Inspection harness is DEBUG-only at runtime.
         new NewShellMenuItem("דוא\"ל — קריאה בלבד", static () => { }, "Gmail read-only production pilot"),
+        new NewShellMenuItem("משימות — Task Workbench", static () => { }, "תורים אישיים"),
+        new NewShellMenuItem("פתיחת פרויקט חדש", static () => { }, "יצירת פרויקט חדש"),
         new NewShellMenuItem("ביקורת (מעטפת — DEBUG)", static () => { }, "Developer harness — not in Release shell menu"),
-        new NewShellMenuItem("בחירת פרויקט", static () => { }, "בדיקת הקשר הפרויקט"),
         new NewShellMenuItem("הגדרות", static () => { }, "בקרוב", isAvailable: false),
     ];
 }

@@ -49,7 +49,18 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
         var menu = BuildMigratedOnlyMenu();
-        var viewModel = new NewShellViewModel(menu, currentUserDisplay, currentProject);
+        Action? openNewProject = null;
+        if (_services.GetService<IProjectCreateDialogFactory>() is { } projectCreateFactory
+            && CanAccessFeature(AppFeatureCodes.ProjectCreate))
+        {
+            openNewProject = () => OpenNewProject(projectCreateFactory);
+        }
+
+        var viewModel = new NewShellViewModel(
+            menu,
+            currentUserDisplay,
+            currentProject,
+            openNewProject: openNewProject);
 
         var selectorView = TryCreateProjectSelector();
 
@@ -84,6 +95,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "משימות — Task Workbench",
                 () => ShowWindow(taskPanelFactory.Create()),
                 "תורים אישיים Quick / Medium / Long — צפייה, הוספה ומחיקה בסיסית"));
+        }
+
+        // New Project — native create dialog (place / company / job types).
+        if (_services.GetService<IProjectCreateDialogFactory>() is { } projectCreateFactory
+            && CanAccessFeature(AppFeatureCodes.ProjectCreate))
+        {
+            items.Add(new NewShellMenuItem(
+                "פתיחת פרויקט חדש",
+                () => OpenNewProject(projectCreateFactory),
+                "יצירת פרויקט חדש עם מקום, חברה, איש קשר וסוגי פרויקט"));
         }
 
         // Workflow closed-world viewer — native App.Wpf surface (catalog-bound, no save).
@@ -188,6 +209,41 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         catch (ArgumentException)
         {
             return false;
+        }
+    }
+
+    private void OpenNewProject(IProjectCreateDialogFactory factory)
+    {
+        try
+        {
+            var owner = System.Windows.Application.Current?.MainWindow;
+            var result = factory.ShowDialog(owner);
+            if (!result.Confirmed || result.ProjectId is not int projectId)
+            {
+                return;
+            }
+
+            var context = _services.GetService<ICurrentProjectContext>();
+            var query = _services.GetService<IProjectQueryService>();
+            if (context is null || query is null)
+            {
+                return;
+            }
+
+            var summary = query.GetProjectAsync(projectId).GetAwaiter().GetResult();
+            if (summary is not null)
+            {
+                context.SetCurrentProjectAsync(summary).GetAwaiter().GetResult();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת פרויקט חדש: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

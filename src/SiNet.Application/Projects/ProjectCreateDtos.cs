@@ -1,6 +1,11 @@
 namespace SiNet.Application.Projects;
 
-public sealed record PlaceDto(int Id, string Title, string? CityIcon = null, bool InUse = true);
+public sealed record PlaceDto(int Id, string Title, string? CityIcon = null, bool InUse = true)
+{
+    /// <summary>Combo/list label: title with optional place number.</summary>
+    public string DisplayLabel =>
+        string.IsNullOrWhiteSpace(CityIcon) ? Title : $"{Title} ({CityIcon})";
+}
 
 public sealed record CompanyDto(int Id, string Title, bool IsActive = true);
 

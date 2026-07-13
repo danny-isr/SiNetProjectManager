@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using SiNet.Application.Projects;
 
@@ -47,11 +48,15 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
     /// <param name="currentProjectDisplay">
     /// Initial current-project header text when no context is supplied (design-time only).
     /// </param>
+    /// <param name="openNewProject">
+    /// Optional host action that opens the native New Project dialog. When null, the header button is hidden.
+    /// </param>
     public NewShellViewModel(
         IEnumerable<NewShellMenuItem> menuItems,
         string? currentUserDisplay,
         ICurrentProjectContext? currentProjectContext = null,
-        string? currentProjectDisplay = null)
+        string? currentProjectDisplay = null,
+        Action? openNewProject = null)
     {
         ArgumentNullException.ThrowIfNull(menuItems);
 
@@ -65,6 +70,9 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
             ? NoProjectText
             : currentProjectDisplay!;
         _statusText = DefaultStatusText;
+
+        CanOpenNewProject = openNewProject is not null;
+        OpenNewProjectCommand = new RelayCommand(_ => openNewProject?.Invoke(), _ => CanOpenNewProject);
 
         if (_currentProjectContext is not null)
         {
@@ -109,6 +117,12 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
         get => _statusText;
         set => SetField(ref _statusText, value);
     }
+
+    /// <summary>True when the header New Project button should be shown.</summary>
+    public bool CanOpenNewProject { get; }
+
+    /// <summary>Opens the native New Project dialog when available.</summary>
+    public ICommand OpenNewProjectCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

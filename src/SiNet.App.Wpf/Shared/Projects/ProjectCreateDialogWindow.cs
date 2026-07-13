@@ -72,8 +72,8 @@ public sealed class ProjectCreateDialogWindow : Window
         {
             Title = "בחר מקום",
             Owner = this,
-            Width = 420,
-            Height = 520,
+            Width = 560,
+            Height = 560,
             FlowDirection = FlowDirection.RightToLeft,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = new PlacePickerDialogView { DataContext = pickerVm },
@@ -85,7 +85,7 @@ public sealed class ProjectCreateDialogWindow : Window
             window.Close();
         };
         await pickerVm.InitializeAsync().ConfigureAwait(true);
-        return window.ShowDialog() == true ? pickerVm.SelectedPlace : null;
+        return window.ShowDialog() == true ? pickerVm.SelectedPlaceDto : null;
     }
 
     private async Task<(CompanyDto? Company, ContactDto? Contact)> OnRequestCompanyPickerAsync()

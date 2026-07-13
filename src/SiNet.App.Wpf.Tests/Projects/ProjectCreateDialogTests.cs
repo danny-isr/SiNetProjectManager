@@ -231,11 +231,30 @@ public sealed class ProjectCreateDialogViewModelTests
 
     private sealed class StubPlaceCatalog(IReadOnlyList<PlaceDto> places) : IPlaceCatalogService
     {
-        public Task<IReadOnlyList<PlaceDto>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(places);
+        private readonly List<PlaceDto> _places = places.ToList();
+        public List<PlaceDto> Saved { get; } = [];
 
-        public Task<PlaceDto> SaveAsync(PlaceDto place, CancellationToken cancellationToken = default) =>
-            Task.FromResult(place);
+        public Task<IReadOnlyList<PlaceDto>> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<PlaceDto>>(_places);
+
+        public Task<PlaceDto> SaveAsync(PlaceDto place, CancellationToken cancellationToken = default)
+        {
+            var saved = place.Id > 0
+                ? place
+                : place with { Id = _places.Count == 0 ? 1 : _places.Max(p => p.Id) + 1 };
+            Saved.Add(saved);
+            var existing = _places.FindIndex(p => p.Id == saved.Id);
+            if (existing >= 0)
+            {
+                _places[existing] = saved;
+            }
+            else
+            {
+                _places.Add(saved);
+            }
+
+            return Task.FromResult(saved);
+        }
     }
 
     private sealed class StubCompanyCatalog(
@@ -270,6 +289,100 @@ public sealed class ProjectCreateDialogViewModelTests
     }
 }
 
+public sealed class PlacePickerDialogViewModelTests
+{
+    [Fact]
+    public async Task Place_picker_hides_inactive_by_default_and_can_toggle()
+    {
+        var catalog = new RecordingPlaceCatalog(
+        [
+            new PlaceDto(1, "פעיל", "10", InUse: true),
+            new PlaceDto(2, "לא פעיל", "20", InUse: false),
+        ]);
+        var vm = new PlacePickerDialogViewModel(catalog);
+        await vm.InitializeAsync();
+
+        Assert.False(vm.ShowInactive);
+        Assert.Single(vm.Places);
+        Assert.Equal(1, vm.Places[0].Id);
+
+        vm.ShowInactive = true;
+        Assert.Equal(2, vm.Places.Count);
+        Assert.Contains(vm.Places, p => p.Id == 2);
+    }
+
+    [Fact]
+    public async Task Place_picker_add_includes_number()
+    {
+        var catalog = new RecordingPlaceCatalog([]);
+        var vm = new PlacePickerDialogViewModel(catalog);
+        await vm.InitializeAsync();
+
+        vm.NewPlaceTitle = "אשדוד";
+        vm.NewPlaceNumber = "77";
+        Assert.True(vm.AddPlaceCommand.CanExecute(null));
+        vm.AddPlaceCommand.Execute(null);
+        await WaitUntilAsync(() => catalog.Saved.Count > 0);
+
+        Assert.Single(catalog.Saved);
+        Assert.Equal("אשדוד", catalog.Saved[0].Title);
+        Assert.Equal("77", catalog.Saved[0].CityIcon);
+        Assert.True(catalog.Saved[0].InUse);
+    }
+
+    [Fact]
+    public async Task Place_picker_select_requires_active_place()
+    {
+        var catalog = new RecordingPlaceCatalog(
+        [
+            new PlaceDto(2, "לא פעיל", "20", InUse: false),
+        ]);
+        var vm = new PlacePickerDialogViewModel(catalog) { ShowInactive = true };
+        await vm.InitializeAsync();
+
+        vm.SelectedPlace = vm.Places[0];
+        Assert.False(vm.SelectCommand.CanExecute(null));
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, int attempts = 40)
+    {
+        for (var i = 0; i < attempts && !condition(); i++)
+        {
+            await Task.Delay(25);
+        }
+
+        Assert.True(condition());
+    }
+
+    private sealed class RecordingPlaceCatalog(IReadOnlyList<PlaceDto> places) : IPlaceCatalogService
+    {
+        private readonly List<PlaceDto> _places = places.ToList();
+        public List<PlaceDto> Saved { get; } = [];
+
+        public Task<IReadOnlyList<PlaceDto>> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<PlaceDto>>(_places);
+
+        public Task<PlaceDto> SaveAsync(PlaceDto place, CancellationToken cancellationToken = default)
+        {
+            var saved = place.Id > 0
+                ? place
+                : place with { Id = _places.Count == 0 ? 1 : _places.Max(p => p.Id) + 1 };
+            Saved.Add(saved);
+            var existing = _places.FindIndex(p => p.Id == saved.Id);
+            if (existing >= 0)
+            {
+                _places[existing] = saved;
+            }
+            else
+            {
+                _places.Add(saved);
+            }
+
+            return Task.FromResult(saved);
+        }
+    }
+}
+
 public sealed class ProjectCreateDialogBoundaryTests
 {
     [Fact]
@@ -295,6 +408,19 @@ public sealed class ProjectCreateDialogBoundaryTests
     }
 
     [Fact]
+    public void New_shell_exposes_project_create_entry()
+    {
+        var shellSource = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
+        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellWindow.xaml");
+
+        Assert.Contains("IProjectCreateDialogFactory", shellSource, StringComparison.Ordinal);
+        Assert.Contains("פתיחת פרויקט חדש", shellSource, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.ProjectCreate", shellSource, StringComparison.Ordinal);
+        Assert.Contains("OpenNewProjectCommand", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("פרויקט חדש", windowXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Factory_and_window_exist()
     {
         Assert.NotNull(typeof(IProjectCreateDialogFactory));
@@ -302,6 +428,16 @@ public sealed class ProjectCreateDialogBoundaryTests
         Assert.NotNull(typeof(ProjectCreateDialogWindow));
         Assert.NotNull(typeof(PlacePickerDialogViewModel));
         Assert.NotNull(typeof(CompanyContactPickerDialogViewModel));
+    }
+
+    [Fact]
+    public void Place_picker_xaml_has_number_and_inactive_filter()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Shared/Projects/PlacePickerDialogView.xaml");
+        Assert.Contains("ShowInactive", xaml, StringComparison.Ordinal);
+        Assert.Contains("CityIcon", xaml, StringComparison.Ordinal);
+        Assert.Contains("NewPlaceNumber", xaml, StringComparison.Ordinal);
+        Assert.Contains("פעיל", xaml, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)

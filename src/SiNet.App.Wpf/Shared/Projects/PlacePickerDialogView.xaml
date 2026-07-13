@@ -6,35 +6,89 @@
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+        <CheckBox Grid.Row="0"
+                  Content="הצג מקומות לא פעילים"
+                  IsChecked="{Binding ShowInactive}"
+                  Margin="0,0,0,8"/>
+
+        <TextBox Grid.Row="1"
+                 Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
                  Style="{DynamicResource SiTextBoxStyle}"
-                 Margin="0,0,0,8"/>
+                 Margin="0,0,0,8"
+                 ToolTip="חיפוש לפי שם או מספר"/>
 
-        <ListBox Grid.Row="1"
-                 ItemsSource="{Binding Places}"
-                 SelectedItem="{Binding SelectedPlace}"
-                 DisplayMemberPath="Title"
-                 Margin="0,0,0,8"/>
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding Places}"
+                  SelectedItem="{Binding SelectedPlace}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column"
+                  SelectionMode="Single"
+                  SelectionUnit="FullRow"
+                  IsReadOnly="False"
+                  Margin="0,0,0,8">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="שם"
+                                    Binding="{Binding Title}"
+                                    IsReadOnly="True"
+                                    Width="*"/>
+                <DataGridTextColumn Header="מספר"
+                                    Binding="{Binding CityIcon}"
+                                    IsReadOnly="True"
+                                    Width="100"/>
+                <DataGridCheckBoxColumn Header="פעיל"
+                                        Binding="{Binding InUse, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="70"/>
+            </DataGrid.Columns>
+        </DataGrid>
 
-        <DockPanel Grid.Row="2" Margin="0,0,0,8">
-            <Button DockPanel.Dock="Right" Content="הוסף" Width="70" Margin="8,0,0,0"
+        <Grid Grid.Row="3" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Text="{Binding NewPlaceTitle, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}"
+                     Margin="0,0,8,0"
+                     ToolTip="שם מקום חדש"/>
+            <TextBox Grid.Column="1"
+                     Text="{Binding NewPlaceNumber, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}"
+                     Margin="0,0,8,0"
+                     ToolTip="מספר מקום"/>
+            <Button Grid.Column="2"
+                    Content="הוסף"
+                    Width="70"
                     Command="{Binding AddPlaceCommand}"
                     Style="{DynamicResource SiPrimaryButtonStyle}"/>
-            <TextBox Text="{Binding NewPlaceTitle, UpdateSourceTrigger=PropertyChanged}"
-                     Style="{DynamicResource SiTextBoxStyle}"/>
-        </DockPanel>
+        </Grid>
 
-        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Style="{DynamicResource SiTextSmallStyle}" Margin="0,0,0,8"/>
+        <TextBlock Grid.Row="4"
+                   Text="{Binding StatusMessage}"
+                   Style="{DynamicResource SiTextSmallStyle}"
+                   Margin="0,0,0,8"/>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal">
-            <Button Content="אישור" Command="{Binding SelectCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" MinWidth="90" Margin="0,0,8,0" IsDefault="True"/>
-            <Button Content="ביטול" Command="{Binding CancelCommand}" MinWidth="70" IsCancel="True"/>
+        <StackPanel Grid.Row="5" Orientation="Horizontal">
+            <Button Content="אישור"
+                    Command="{Binding SelectCommand}"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"
+                    MinWidth="90"
+                    Margin="0,0,8,0"
+                    IsDefault="True"/>
+            <Button Content="ביטול"
+                    Command="{Binding CancelCommand}"
+                    MinWidth="70"
+                    IsCancel="True"/>
         </StackPanel>
     </Grid>
 </UserControl>

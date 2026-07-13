@@ -184,7 +184,10 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
         Places.Clear();
         foreach (var place in await _places.ListAsync(cancellationToken).ConfigureAwait(true))
         {
-            Places.Add(place);
+            if (place.InUse)
+            {
+                Places.Add(place);
+            }
         }
 
         Companies.Clear();

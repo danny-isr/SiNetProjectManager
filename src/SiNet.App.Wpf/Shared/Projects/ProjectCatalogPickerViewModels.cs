@@ -7,26 +7,102 @@ using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shared.Projects;
 
+/// <summary>Editable place row for the place picker grid.</summary>
+public sealed class PlacePickerRowViewModel : ObservableObject
+{
+    private string _title;
+    private string _cityIcon;
+    private bool _inUse;
+    private bool _isSaving;
+
+    public PlacePickerRowViewModel(PlaceDto place)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        Id = place.Id;
+        _title = place.Title;
+        _cityIcon = place.CityIcon ?? string.Empty;
+        _inUse = place.InUse;
+    }
+
+    public int Id { get; private set; }
+
+    public string Title
+    {
+        get => _title;
+        set => SetField(ref _title, value);
+    }
+
+    /// <summary>Place number / city icon shown in the grid and used when creating projects.</summary>
+    public string CityIcon
+    {
+        get => _cityIcon;
+        set => SetField(ref _cityIcon, value ?? string.Empty);
+    }
+
+    public bool InUse
+    {
+        get => _inUse;
+        set
+        {
+            if (SetField(ref _inUse, value))
+            {
+                InUseChanged?.Invoke(this);
+            }
+        }
+    }
+
+    public bool IsSaving
+    {
+        get => _isSaving;
+        set => SetField(ref _isSaving, value);
+    }
+
+    public event Action<PlacePickerRowViewModel>? InUseChanged;
+
+    public PlaceDto ToDto() =>
+        new(Id, Title.Trim(), string.IsNullOrWhiteSpace(CityIcon) ? null : CityIcon.Trim(), InUse);
+
+    public void ApplySaved(PlaceDto saved)
+    {
+        Id = saved.Id;
+        Title = saved.Title;
+        CityIcon = saved.CityIcon ?? string.Empty;
+        // Avoid re-entrant save when syncing from server.
+        if (_inUse != saved.InUse)
+        {
+            _inUse = saved.InUse;
+            OnPropertyChanged(nameof(InUse));
+        }
+    }
+}
+
 public sealed class PlacePickerDialogViewModel : ObservableObject
 {
     private readonly IPlaceCatalogService _places;
     private string _filter = string.Empty;
-    private PlaceDto? _selectedPlace;
+    private PlacePickerRowViewModel? _selectedPlace;
     private string _newPlaceTitle = string.Empty;
+    private string _newPlaceNumber = string.Empty;
+    private bool _showInactive;
     private string _statusMessage = string.Empty;
+    private bool _suppressInUseSave;
 
     public PlacePickerDialogViewModel(IPlaceCatalogService places)
     {
         _places = places ?? throw new ArgumentNullException(nameof(places));
         Places = [];
-        SelectCommand = new RelayCommand(_ => RequestClose?.Invoke(true), _ => SelectedPlace is not null);
+        SelectCommand = new RelayCommand(
+            _ => RequestClose?.Invoke(true),
+            _ => SelectedPlace is { InUse: true });
         CancelCommand = new RelayCommand(_ => RequestClose?.Invoke(false));
-        AddPlaceCommand = new AsyncRelayCommand(AddPlaceAsync, () => !string.IsNullOrWhiteSpace(NewPlaceTitle));
+        AddPlaceCommand = new AsyncRelayCommand(
+            AddPlaceAsync,
+            () => !string.IsNullOrWhiteSpace(NewPlaceTitle));
     }
 
     public event Action<bool>? RequestClose;
 
-    public ObservableCollection<PlaceDto> Places { get; }
+    public ObservableCollection<PlacePickerRowViewModel> Places { get; }
 
     public string Filter
     {
@@ -40,7 +116,20 @@ public sealed class PlacePickerDialogViewModel : ObservableObject
         }
     }
 
-    public PlaceDto? SelectedPlace
+    /// <summary>When false (default), only active places are listed.</summary>
+    public bool ShowInactive
+    {
+        get => _showInactive;
+        set
+        {
+            if (SetField(ref _showInactive, value))
+            {
+                ApplyFilter();
+            }
+        }
+    }
+
+    public PlacePickerRowViewModel? SelectedPlace
     {
         get => _selectedPlace;
         set
@@ -52,6 +141,9 @@ public sealed class PlacePickerDialogViewModel : ObservableObject
         }
     }
 
+    /// <summary>Selected place as DTO for the create-project form.</summary>
+    public PlaceDto? SelectedPlaceDto => SelectedPlace?.ToDto();
+
     public string NewPlaceTitle
     {
         get => _newPlaceTitle;
@@ -62,6 +154,12 @@ public sealed class PlacePickerDialogViewModel : ObservableObject
                 (AddPlaceCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
+    }
+
+    public string NewPlaceNumber
+    {
+        get => _newPlaceNumber;
+        set => SetField(ref _newPlaceNumber, value);
     }
 
     public string StatusMessage
@@ -76,25 +174,93 @@ public sealed class PlacePickerDialogViewModel : ObservableObject
 
     public ICommand AddPlaceCommand { get; }
 
-    private List<PlaceDto> _all = [];
+    private List<PlacePickerRowViewModel> _all = [];
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        _all = (await _places.ListAsync(cancellationToken).ConfigureAwait(true)).ToList();
+        var places = await _places.ListAsync(cancellationToken).ConfigureAwait(true);
+        _all = places.Select(CreateRow).ToList();
         ApplyFilter();
+    }
+
+    private PlacePickerRowViewModel CreateRow(PlaceDto place)
+    {
+        var row = new PlacePickerRowViewModel(place);
+        row.InUseChanged += OnRowInUseChanged;
+        return row;
     }
 
     private void ApplyFilter()
     {
+        var selectedId = SelectedPlace?.Id;
         Places.Clear();
         var term = Filter.Trim();
         foreach (var place in _all)
         {
-            if (string.IsNullOrEmpty(term)
-                || place.Title.Contains(term, StringComparison.OrdinalIgnoreCase))
+            if (!ShowInactive && !place.InUse)
             {
-                Places.Add(place);
+                continue;
             }
+
+            if (!string.IsNullOrEmpty(term)
+                && !place.Title.Contains(term, StringComparison.OrdinalIgnoreCase)
+                && !place.CityIcon.Contains(term, StringComparison.OrdinalIgnoreCase)
+                && !place.Id.ToString().Contains(term, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            Places.Add(place);
+        }
+
+        SelectedPlace = selectedId is int id
+            ? Places.FirstOrDefault(p => p.Id == id)
+            : null;
+    }
+
+    private async void OnRowInUseChanged(PlacePickerRowViewModel row)
+    {
+        if (_suppressInUseSave || row.Id <= 0 || row.IsSaving)
+        {
+            return;
+        }
+
+        try
+        {
+            row.IsSaving = true;
+            StatusMessage = string.Empty;
+            var saved = await _places.SaveAsync(row.ToDto()).ConfigureAwait(true);
+            _suppressInUseSave = true;
+            try
+            {
+                row.ApplySaved(saved);
+            }
+            finally
+            {
+                _suppressInUseSave = false;
+            }
+
+            StatusMessage = saved.InUse ? "המקום סומן כפעיל." : "המקום סומן כלא פעיל.";
+            ApplyFilter();
+            (SelectCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+            // Revert UI toggle on failure.
+            _suppressInUseSave = true;
+            try
+            {
+                row.InUse = !row.InUse;
+            }
+            finally
+            {
+                _suppressInUseSave = false;
+            }
+        }
+        finally
+        {
+            row.IsSaving = false;
         }
     }
 
@@ -102,9 +268,16 @@ public sealed class PlacePickerDialogViewModel : ObservableObject
     {
         try
         {
-            var created = await _places.SaveAsync(new PlaceDto(0, NewPlaceTitle.Trim())).ConfigureAwait(true);
-            _all.Add(created);
+            var created = await _places.SaveAsync(new PlaceDto(
+                    0,
+                    NewPlaceTitle.Trim(),
+                    string.IsNullOrWhiteSpace(NewPlaceNumber) ? null : NewPlaceNumber.Trim(),
+                    InUse: true))
+                .ConfigureAwait(true);
+            var row = CreateRow(created);
+            _all.Add(row);
             NewPlaceTitle = string.Empty;
+            NewPlaceNumber = string.Empty;
             ApplyFilter();
             SelectedPlace = Places.FirstOrDefault(p => p.Id == created.Id);
             StatusMessage = "המקום נוסף.";
