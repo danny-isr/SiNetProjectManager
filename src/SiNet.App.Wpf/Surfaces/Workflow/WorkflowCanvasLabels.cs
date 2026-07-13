@@ -53,12 +53,15 @@ public static class WorkflowCanvasLabels
     public static string ExplainTrigger(string trigger) => trigger switch
     {
         "Manual" => "מופעל רק כשמשתמש מקדם את התהליך ידנית (לא ב-auto-advance).",
-        "AllRequiredTasksClosed" => "מופעל אחרי שכל המשימות הנדרשות בשלב המקור נסגרו.",
+        "AllRequiredTasksClosed" => "מופעל אחרי שכל המשימות הנדרשות בשלב המקור נסגרו — הרשימה מופיעה מיד מתחת.",
         "TaskStatusChanged" => "מופעל אחרי שינוי סטטוס/תוצאת משימה (לרוב עם TaskResultEquals).",
         "SubWorkflowCompleted" => "מופעל כשתת-התהליך הילד מסתיים.",
         "ActionCompleted" => "מופעל אחרי השלמת פעולת תהליך.",
         _ => "טריגר מעבר כפי שמוגדר בכלל.",
     };
+
+    public static bool TriggerDependsOnRequiredTasks(string? trigger) =>
+        string.Equals(trigger, "AllRequiredTasksClosed", StringComparison.Ordinal);
 
     public static bool IsEmphasizedTrigger(string? trigger) =>
         string.Equals(trigger, "TaskStatusChanged", StringComparison.Ordinal)

@@ -229,10 +229,18 @@ public sealed class WorkflowVisualCanvasViewModel : ObservableObject
             .Where(t => t.FromStageId == stageId)
             .OrderBy(t => t.Priority)
             .ThenBy(t => t.Id)
-            .Select(t => WorkflowCanvasOutgoingTransitionVm.From(t))
+            .Select(WorkflowCanvasPathSummaryVm.ForOutgoing)
             .ToList();
 
-        SelectedStage = WorkflowCanvasStageInspectVm.From(stage, outgoing);
+        // Self-loops already appear under outgoing; do not duplicate under incoming.
+        var incoming = _selectedDefinition.Transitions
+            .Where(t => t.ToStageId == stageId && t.FromStageId != stageId)
+            .OrderBy(t => t.Priority)
+            .ThenBy(t => t.Id)
+            .Select(WorkflowCanvasPathSummaryVm.ForIncoming)
+            .ToList();
+
+        SelectedStage = WorkflowCanvasStageInspectVm.From(stage, incoming, outgoing);
         SelectedTransition = null;
         ApplySelectionHighlight();
         NotifyInspectChanged();
@@ -850,7 +858,8 @@ public sealed class WorkflowCanvasStageInspectVm
         string? subWorkflow,
         string? description,
         IReadOnlyList<WorkflowCanvasTaskInspectVm> tasks,
-        IReadOnlyList<WorkflowCanvasOutgoingTransitionVm> outgoing)
+        IReadOnlyList<WorkflowCanvasPathSummaryVm> incoming,
+        IReadOnlyList<WorkflowCanvasPathSummaryVm> outgoing)
     {
         Name = name;
         Code = code;
@@ -861,12 +870,14 @@ public sealed class WorkflowCanvasStageInspectVm
         SubWorkflow = subWorkflow;
         Description = description;
         Tasks = tasks;
+        IncomingTransitions = incoming;
         OutgoingTransitions = outgoing;
     }
 
     public static WorkflowCanvasStageInspectVm From(
         WorkflowStageGraphDto stage,
-        IReadOnlyList<WorkflowCanvasOutgoingTransitionVm> outgoing) =>
+        IReadOnlyList<WorkflowCanvasPathSummaryVm> incoming,
+        IReadOnlyList<WorkflowCanvasPathSummaryVm> outgoing) =>
         new(
             stage.Name,
             stage.Code,
@@ -881,6 +892,7 @@ public sealed class WorkflowCanvasStageInspectVm
                 : $"{stage.SubWorkflowName} ({stage.SubWorkflowCode})",
             stage.Description,
             stage.StageTasks.Select(WorkflowCanvasTaskInspectVm.From).ToList(),
+            incoming,
             outgoing);
 
     public string Name { get; }
@@ -892,9 +904,16 @@ public sealed class WorkflowCanvasStageInspectVm
     public string? SubWorkflow { get; }
     public string? Description { get; }
     public IReadOnlyList<WorkflowCanvasTaskInspectVm> Tasks { get; }
-    public IReadOnlyList<WorkflowCanvasOutgoingTransitionVm> OutgoingTransitions { get; }
+    public IReadOnlyList<WorkflowCanvasPathSummaryVm> IncomingTransitions { get; }
+    public IReadOnlyList<WorkflowCanvasPathSummaryVm> OutgoingTransitions { get; }
     public bool HasTasks => Tasks.Count > 0;
+    public bool HasIncoming => IncomingTransitions.Count > 0;
+    public bool HasNoIncoming => IncomingTransitions.Count == 0;
     public bool HasOutgoing => OutgoingTransitions.Count > 0;
+    public string? InitialEntryHint => IsInitial
+        ? "שלב התחלה — כניסה ב־StartWorkflow / הבטחת משימות ראשוניות (לא דרך חץ נכנס)."
+        : null;
+    public bool HasInitialEntryHint => InitialEntryHint is not null;
 }
 
 public sealed class WorkflowCanvasTaskInspectVm
@@ -942,57 +961,118 @@ public sealed class WorkflowCanvasTaskInspectVm
     public string AllowedResultsHe { get; }
 }
 
-public sealed class WorkflowCanvasOutgoingTransitionVm
+/// <summary>Compact stage-panel row for an incoming or outgoing transition path.</summary>
+public sealed class WorkflowCanvasPathSummaryVm
 {
-    private WorkflowCanvasOutgoingTransitionVm(
-        string targetLabel,
+    private WorkflowCanvasPathSummaryVm(
+        int transitionId,
+        bool isIncoming,
+        string peerLabel,
         string triggerEn,
         string triggerHe,
         string conditionEn,
         string conditionHe,
-        bool isSelfLoop)
+        bool isSelfLoop,
+        string actionsEn,
+        string actionsHe)
     {
-        TargetLabel = targetLabel;
+        TransitionId = transitionId;
+        IsIncoming = isIncoming;
+        PeerLabel = peerLabel;
         TriggerEn = triggerEn;
         TriggerHe = triggerHe;
         ConditionEn = conditionEn;
         ConditionHe = conditionHe;
         IsSelfLoop = isSelfLoop;
         LoopTag = isSelfLoop ? "לולאה" : null;
+        ActionsSummaryEn = actionsEn;
+        ActionsSummaryHe = actionsHe;
     }
 
-    public static WorkflowCanvasOutgoingTransitionVm From(WorkflowTransitionGraphDto t)
+    public static WorkflowCanvasPathSummaryVm ForOutgoing(WorkflowTransitionGraphDto t) =>
+        From(t, isIncoming: false);
+
+    public static WorkflowCanvasPathSummaryVm ForIncoming(WorkflowTransitionGraphDto t) =>
+        From(t, isIncoming: true);
+
+    private static WorkflowCanvasPathSummaryVm From(WorkflowTransitionGraphDto t, bool isIncoming)
     {
         var isLoop = t.FromStageId == t.ToStageId;
-        var target = isLoop ? t.FromStageName : t.ToStageName;
+        var peer = isIncoming
+            ? t.FromStageName
+            : isLoop
+                ? t.FromStageName
+                : t.ToStageName;
         var conditionEn = string.IsNullOrWhiteSpace(t.ConditionTaskResultCode)
             ? t.ConditionType
             : $"{t.ConditionType} = {t.ConditionTaskResultCode}";
         var conditionHe = string.IsNullOrWhiteSpace(t.ConditionTaskResultCode)
             ? WorkflowCanvasLabels.ConditionHe(t.ConditionType)
             : $"{WorkflowCanvasLabels.ConditionHe(t.ConditionType)} {t.ConditionTaskResultName ?? t.ConditionTaskResultCode}";
-        return new WorkflowCanvasOutgoingTransitionVm(
-            target,
+
+        var orderedActions = t.Actions.OrderBy(a => a.SortOrder).ToList();
+        var actionsEn = orderedActions.Count == 0
+            ? string.Empty
+            : string.Join(", ", orderedActions.Select(a => a.ActionType));
+        var actionsHe = orderedActions.Count == 0
+            ? string.Empty
+            : string.Join(", ", orderedActions.Select(a => WorkflowCanvasLabels.ActionHe(a.ActionType)));
+
+        return new WorkflowCanvasPathSummaryVm(
+            t.Id,
+            isIncoming,
+            peer,
             t.TriggerType,
             WorkflowCanvasLabels.TriggerHe(t.TriggerType),
             conditionEn,
             conditionHe,
-            isLoop);
+            isLoop,
+            actionsEn,
+            actionsHe);
     }
 
-    public string TargetLabel { get; }
+    public int TransitionId { get; }
+    public bool IsIncoming { get; }
+    public string PeerLabel { get; }
     public string TriggerEn { get; }
     public string TriggerHe { get; }
     public string ConditionEn { get; }
     public string ConditionHe { get; }
     public bool IsSelfLoop { get; }
     public string? LoopTag { get; }
-    public string DisplayEn => IsSelfLoop
-        ? $"↻ {TargetLabel} · {TriggerEn} · {ConditionEn}"
-        : $"→ {TargetLabel} · {TriggerEn} · {ConditionEn}";
-    public string DisplayHe => IsSelfLoop
-        ? $"↻ {TargetLabel} · {TriggerHe} · {ConditionHe}"
-        : $"→ {TargetLabel} · {TriggerHe} · {ConditionHe}";
+    public string ActionsSummaryEn { get; }
+    public string ActionsSummaryHe { get; }
+    public bool HasActions => ActionsSummaryEn.Length > 0;
+
+    public string DisplayEn
+    {
+        get
+        {
+            if (IsSelfLoop)
+            {
+                return $"↻ {PeerLabel} · {TriggerEn} · {ConditionEn}";
+            }
+
+            return IsIncoming
+                ? $"← {PeerLabel} · {TriggerEn} · {ConditionEn}"
+                : $"→ {PeerLabel} · {TriggerEn} · {ConditionEn}";
+        }
+    }
+
+    public string DisplayHe
+    {
+        get
+        {
+            if (IsSelfLoop)
+            {
+                return $"↻ {PeerLabel} · {TriggerHe} · {ConditionHe}";
+            }
+
+            return IsIncoming
+                ? $"← {PeerLabel} · {TriggerHe} · {ConditionHe}"
+                : $"→ {PeerLabel} · {TriggerHe} · {ConditionHe}";
+        }
+    }
 }
 
 public sealed class WorkflowCanvasTransitionInspectVm
@@ -1013,7 +1093,9 @@ public sealed class WorkflowCanvasTransitionInspectVm
         string evaluationHe,
         int priority,
         IReadOnlyList<WorkflowCanvasActionInspectVm> actions,
-        IReadOnlyList<WorkflowCanvasTaskInspectVm> requiredTasks)
+        IReadOnlyList<WorkflowCanvasTaskInspectVm> requiredTasks,
+        bool showTriggerGateTasks,
+        IReadOnlyList<WorkflowCanvasTaskInspectVm> triggerGateTasks)
     {
         Title = title;
         FromName = fromName;
@@ -1031,6 +1113,8 @@ public sealed class WorkflowCanvasTransitionInspectVm
         Priority = priority;
         Actions = actions;
         RequiredTasks = requiredTasks;
+        ShowTriggerGateTasks = showTriggerGateTasks;
+        TriggerGateTasks = triggerGateTasks;
     }
 
     public static WorkflowCanvasTransitionInspectVm From(
@@ -1044,6 +1128,12 @@ public sealed class WorkflowCanvasTransitionInspectVm
 
         var tasks = fromStage?.StageTasks.Select(WorkflowCanvasTaskInspectVm.From).ToList()
             ?? new List<WorkflowCanvasTaskInspectVm>();
+
+        var showGate = WorkflowCanvasLabels.TriggerDependsOnRequiredTasks(t.TriggerType)
+            || string.Equals(t.ConditionType, "AllTasksComplete", StringComparison.Ordinal);
+        var gateTasks = showGate
+            ? tasks.Where(x => x.IsRequired).ToList()
+            : (IReadOnlyList<WorkflowCanvasTaskInspectVm>)Array.Empty<WorkflowCanvasTaskInspectVm>();
 
         return new WorkflowCanvasTransitionInspectVm(
             title,
@@ -1061,7 +1151,9 @@ public sealed class WorkflowCanvasTransitionInspectVm
             WorkflowCanvasLabels.EvaluationHe(t.EvaluationMode),
             t.Priority,
             t.Actions.Select(WorkflowCanvasActionInspectVm.From).ToList(),
-            tasks);
+            tasks,
+            showGate,
+            gateTasks);
     }
 
     public string Title { get; }
@@ -1080,6 +1172,12 @@ public sealed class WorkflowCanvasTransitionInspectVm
     public int Priority { get; }
     public IReadOnlyList<WorkflowCanvasActionInspectVm> Actions { get; }
     public IReadOnlyList<WorkflowCanvasTaskInspectVm> RequiredTasks { get; }
+    /// <summary>Required source-stage tasks that gate AllRequiredTasksClosed / AllTasksComplete.</summary>
+    public bool ShowTriggerGateTasks { get; }
+    public IReadOnlyList<WorkflowCanvasTaskInspectVm> TriggerGateTasks { get; }
+    public bool HasTriggerGateTasks => TriggerGateTasks.Count > 0;
+    public bool HasNoTriggerGateTasks => ShowTriggerGateTasks && TriggerGateTasks.Count == 0;
+    public string TriggerGateHeading => "משימות שצריכות להיסגר (שלב המקור):";
     public bool HasActions => Actions.Count > 0;
     public bool HasNoActions => Actions.Count == 0;
     public bool HasRequiredTasks => RequiredTasks.Count > 0;

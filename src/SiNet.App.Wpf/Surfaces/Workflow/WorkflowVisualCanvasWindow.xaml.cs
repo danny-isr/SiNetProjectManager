@@ -129,6 +129,15 @@ public partial class WorkflowVisualCanvasWindow : Window
         }
     }
 
+    private void PathSummary_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is WorkflowCanvasPathSummaryVm path)
+        {
+            ViewModel.SelectTransition(path.TransitionId);
+            e.Handled = true;
+        }
+    }
+
     private void GraphCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         // Background click clears selection (child handlers mark Handled for nodes/edges).

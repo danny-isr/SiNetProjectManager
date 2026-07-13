@@ -156,6 +156,13 @@
                                 <TextBlock Text="{Binding SelectedStage.Description}" TextWrapping="Wrap"
                                            Margin="0,4,0,0" Style="{DynamicResource SiTextSmallStyle}"/>
 
+                                <Border Background="#E3F2FD" BorderBrush="#64B5F6" BorderThickness="1" CornerRadius="4"
+                                        Padding="8" Margin="0,8,0,0"
+                                        Visibility="{Binding SelectedStage.HasInitialEntryHint, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding SelectedStage.InitialEntryHint}" TextWrapping="Wrap"
+                                               Style="{DynamicResource SiTextSmallStyle}" Foreground="#1565C0"/>
+                                </Border>
+
                                 <TextBlock Text="משימות נדרשות" Style="{DynamicResource SiTextNormalStyle}"
                                            FontWeight="SemiBold" Margin="0,12,0,4"/>
                                 <ItemsControl ItemsSource="{Binding SelectedStage.Tasks}">
@@ -184,17 +191,61 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="מעברים יוצאים" Style="{DynamicResource SiTextNormalStyle}"
+                                <TextBlock Text="כניסות לשלב" Style="{DynamicResource SiTextNormalStyle}"
+                                           FontWeight="SemiBold" Margin="0,12,0,4"/>
+                                <TextBlock Text="אין חצים נכנסים (מלבד שלב התחלה / לולאות ביציאות)."
+                                           TextWrapping="Wrap" Style="{DynamicResource SiTextTinyStyle}" Margin="0,0,0,4"
+                                           Visibility="{Binding SelectedStage.HasNoIncoming, Converter={StaticResource BoolToVis}}"/>
+                                <ItemsControl ItemsSource="{Binding SelectedStage.IncomingTransitions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1"
+                                                    CornerRadius="3" Padding="6,4" Margin="0,0,0,6" Cursor="Hand"
+                                                    Background="#FAFAFA"
+                                                    MouseLeftButtonDown="PathSummary_MouseLeftButtonDown"
+                                                    ToolTip="לחץ לפירוט מלא של המעבר">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayEn}" Style="{DynamicResource SiTextSmallStyle}"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding DisplayHe}" Style="{DynamicResource SiTextTinyStyle}"
+                                                               Foreground="#2E7D32" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding ActionsSummaryEn, StringFormat=פעולות: {0}}"
+                                                               Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                               Visibility="{Binding HasActions, Converter={StaticResource BoolToVis}}"/>
+                                                    <TextBlock Text="{Binding ActionsSummaryHe}"
+                                                               Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                               Foreground="#1565C0"
+                                                               Visibility="{Binding HasActions, Converter={StaticResource BoolToVis}}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="יציאות מהשלב" Style="{DynamicResource SiTextNormalStyle}"
                                            FontWeight="SemiBold" Margin="0,12,0,4"/>
                                 <ItemsControl ItemsSource="{Binding SelectedStage.OutgoingTransitions}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <StackPanel Margin="0,0,0,6">
-                                                <TextBlock Text="{Binding DisplayEn}" Style="{DynamicResource SiTextSmallStyle}"
-                                                           TextWrapping="Wrap"/>
-                                                <TextBlock Text="{Binding DisplayHe}" Style="{DynamicResource SiTextTinyStyle}"
-                                                           Foreground="#2E7D32" TextWrapping="Wrap"/>
-                                            </StackPanel>
+                                            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1"
+                                                    CornerRadius="3" Padding="6,4" Margin="0,0,0,6" Cursor="Hand"
+                                                    Background="#FAFAFA"
+                                                    MouseLeftButtonDown="PathSummary_MouseLeftButtonDown"
+                                                    ToolTip="לחץ לפירוט מלא של המעבר">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayEn}" Style="{DynamicResource SiTextSmallStyle}"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding DisplayHe}" Style="{DynamicResource SiTextTinyStyle}"
+                                                               Foreground="#2E7D32" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding ActionsSummaryEn, StringFormat=פעולות: {0}}"
+                                                               Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                               Visibility="{Binding HasActions, Converter={StaticResource BoolToVis}}"/>
+                                                    <TextBlock Text="{Binding ActionsSummaryHe}"
+                                                               Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap"
+                                                               Foreground="#1565C0"
+                                                               Visibility="{Binding HasActions, Converter={StaticResource BoolToVis}}"/>
+                                                </StackPanel>
+                                            </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -228,6 +279,28 @@
                                                    Style="{DynamicResource SiTextSmallStyle}" Foreground="#1B5E20"/>
                                         <TextBlock Text="{Binding SelectedTransition.TriggerExplanation}" TextWrapping="Wrap"
                                                    Style="{DynamicResource SiTextTinyStyle}" Foreground="#455A64" Margin="0,4,0,0"/>
+                                        <StackPanel Margin="0,8,0,0"
+                                                    Visibility="{Binding SelectedTransition.ShowTriggerGateTasks, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding SelectedTransition.TriggerGateHeading}"
+                                                       FontWeight="SemiBold" Style="{DynamicResource SiTextSmallStyle}"
+                                                       Foreground="#1B5E20" Margin="0,0,0,4"/>
+                                            <TextBlock Text="אין משימות חובה בשלב המקור."
+                                                       Style="{DynamicResource SiTextTinyStyle}" Foreground="#C62828"
+                                                       Visibility="{Binding SelectedTransition.HasNoTriggerGateTasks, Converter={StaticResource BoolToVis}}"/>
+                                            <ItemsControl ItemsSource="{Binding SelectedTransition.TriggerGateTasks}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Margin="0,0,0,4">
+                                                            <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"
+                                                                       Style="{DynamicResource SiTextSmallStyle}"
+                                                                       Text="{Binding TaskTypeName}"/>
+                                                            <TextBlock Style="{DynamicResource SiTextTinyStyle}"
+                                                                       Text="{Binding TaskTypeCode, StringFormat=קוד: {0}}"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
                                         <TextBlock Margin="0,4,0,0" Style="{DynamicResource SiTextTinyStyle}">
                                             <Run Text="Evaluation: "/><Run Text="{Binding SelectedTransition.EvaluationMode, Mode=OneWay}"/>
                                             <Run Text=" ("/><Run Text="{Binding SelectedTransition.EvaluationHe, Mode=OneWay}"/><Run Text=")"/>
