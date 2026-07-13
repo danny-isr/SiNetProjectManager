@@ -32,12 +32,19 @@ public sealed class SqlInspectionWorkspaceTests
         Assert.Equal("1", detail!.ReviewedVersion);
 
         var notes = await sut.GetNotesAsync(reports[0].ReportId);
-        Assert.Single(notes);
+        Assert.Equal(3, notes.Count);
 
         var tree = await sut.GetQuestionnaireTreeAsync(reports[0].ReportId);
         Assert.Single(tree);
+        Assert.Equal(1, tree[0].ChapterNumber);
         Assert.Single(tree[0].Sections);
         Assert.Single(tree[0].Sections[0].Notes);
+        Assert.Equal("1.1.1", tree[0].Sections[0].Notes[0].Number);
+
+        var general = await sut.GetGeneralFieldsAsync(reports[0].ReportId);
+        Assert.Single(general);
+        Assert.Equal("שם פרויקט", general[0].Label);
+        Assert.False(general[0].IsManualOverride);
 
         var drawings = await sut.GetDrawingsAsync(reports[0].ReportId);
         Assert.Single(drawings);
@@ -151,9 +158,60 @@ public sealed class SqlInspectionWorkspaceTests
             NoteId = 1,
             ReportId = 1,
             SectionId = 1,
-            NoteSubIndex = "1",
+            NoteSubIndex = "1.1.1",
             NoteText = "הערה ראשונה",
-            NoteStatus = "פתוחה",
+            NoteStatus = "Failed",
+            Section = section,
+        });
+
+        // Chapter 0 general field
+        var generalChapterName = new ChapterName { Id = 2, Name = "נתונים כלליים" };
+        var generalSectionName = new SectionName { Id = 2, Name = "שם פרויקט" };
+        db.ChapterNames.Add(generalChapterName);
+        db.SectionNames.Add(generalSectionName);
+
+        var generalChapter = new Chapter
+        {
+            ChapterId = 2,
+            SeriesId = 1,
+            ChapterNumber = 0,
+            ChapterNameId = 2,
+            ChapterName = generalChapterName,
+        };
+        db.Chapters.Add(generalChapter);
+
+        var generalSection = new Section
+        {
+            SectionId = 2,
+            ChapterId = 2,
+            SectionCode = 1,
+            SectionNameId = 2,
+            SectionName = generalSectionName,
+            Chapter = generalChapter,
+            IsActive = true,
+        };
+        db.Sections.Add(generalSection);
+
+        db.InspectionNotes.Add(new InspectionNote
+        {
+            NoteId = 2,
+            ReportId = 1,
+            SectionId = 2,
+            NoteSubIndex = "1",
+            NoteText = null,
+            NoteStatus = null,
+            Section = generalSection,
+        });
+
+        // Section-level placeholder (should be filtered from numbered tree)
+        db.InspectionNotes.Add(new InspectionNote
+        {
+            NoteId = 3,
+            ReportId = 1,
+            SectionId = 1,
+            NoteSubIndex = "1.1",
+            NoteText = "placeholder",
+            NoteStatus = null,
             Section = section,
         });
 

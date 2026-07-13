@@ -18,8 +18,15 @@ public interface IInspectionWorkspace
     Task<InspectionReportDetail?> GetReportDetailAsync(
         int reportId, CancellationToken cancellationToken = default);
 
-    /// <summary>Chapter → section → note tree for a report.</summary>
+    /// <summary>
+    /// Numbered questionnaire tree (Chapter → section → sub-note) for a report.
+    /// Excludes Chapter 0 (general fields) and section-level placeholders (fewer than two dots in NoteSubIndex).
+    /// </summary>
     Task<IReadOnlyList<InspectionChapterNode>> GetQuestionnaireTreeAsync(
+        int reportId, CancellationToken cancellationToken = default);
+
+    /// <summary>Chapter 0 general template fields (label + text + Manual override flag).</summary>
+    Task<IReadOnlyList<InspectionGeneralFieldRow>> GetGeneralFieldsAsync(
         int reportId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<InspectionDrawingRow>> GetDrawingsAsync(
@@ -74,6 +81,14 @@ public sealed record InspectionNoteTreeRow(
     string? LinkedAlternative,
     string? LinkedVersion,
     int AttachmentCount);
+
+/// <summary>One Chapter-0 general field row (backed by an InspectionNote without dotted sub-index).</summary>
+public sealed record InspectionGeneralFieldRow(
+    long NoteId,
+    int SectionId,
+    string Label,
+    string? Text,
+    bool IsManualOverride);
 
 public sealed record InspectionDrawingRow(
     int Id,

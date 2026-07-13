@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using SiNet.Application.WorkSurfaces;
@@ -56,6 +55,24 @@ public partial class InspectionWindowView : Window
 
     private void InspectionTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e) =>
         ViewModel.OnTreeSelectionChanged(e.NewValue);
+
+    private async void GeneralField_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: InspectionGeneralFieldItem field })
+            await ViewModel.SaveGeneralFieldAsync(field).ConfigureAwait(true);
+    }
+
+    private async void AutoManualToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: InspectionGeneralFieldItem field })
+            await ViewModel.SaveGeneralFieldAsync(field).ConfigureAwait(true);
+    }
+
+    private async void NoteEditor_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: InspectionNoteItem note })
+            await ViewModel.SaveNoteTextAsync(note).ConfigureAwait(true);
+    }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

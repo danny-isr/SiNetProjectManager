@@ -47,10 +47,7 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
         }
 
         note.NoteStatusId = statusId;
-        if (!string.IsNullOrWhiteSpace(statusText))
-        {
-            note.NoteStatus = statusText.Trim();
-        }
+        note.NoteStatus = string.IsNullOrWhiteSpace(statusText) ? null : statusText.Trim();
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return InspectionNoteCommandResult.Ok(noteId);
@@ -70,23 +67,40 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
             return InspectionNoteCommandResult.Fail("הדוח נעול לאחר שליחה.");
         }
 
-        var sectionExists = await db.Sections.AnyAsync(s => s.SectionId == sectionId, cancellationToken)
+        var section = await db.Sections
+            .AsNoTracking()
+            .Where(s => s.SectionId == sectionId)
+            .Select(s => new
+            {
+                s.SectionId,
+                s.SectionCode,
+                ChapterNumber = s.Chapter.ChapterNumber,
+            })
+            .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-        if (!sectionExists)
+        if (section is null)
         {
             return InspectionNoteCommandResult.Fail($"סעיף {sectionId} לא נמצא.");
         }
 
-        var existingCount = await db.InspectionNotes
-            .CountAsync(n => n.ReportId == reportId && n.SectionId == sectionId, cancellationToken)
+        // Legacy parity: Level-3 index "Chapter.Section.Ordinal" (e.g. 1.1.2).
+        var prefix = $"{section.ChapterNumber}.{section.SectionCode}.";
+        var existingSubNotes = await db.InspectionNotes
+            .AsNoTracking()
+            .Where(n => n.ReportId == reportId && n.SectionId == sectionId)
+            .Select(n => n.NoteSubIndex)
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+        var subNoteCount = existingSubNotes.Count(idx =>
+            idx != null && idx.StartsWith(prefix, StringComparison.Ordinal));
+        var noteSubIndex = $"{prefix}{subNoteCount + 1}";
 
         var note = new InspectionNote
         {
             ReportId = reportId,
             SectionId = sectionId,
             NoteText = text,
-            NoteSubIndex = (existingCount + 1).ToString(),
+            NoteSubIndex = noteSubIndex,
         };
         db.InspectionNotes.Add(note);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using SiNet.App.Wpf.Inspection;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Inspection;
 
 namespace SiNet.App.Wpf.Surfaces.Inspection;
 
@@ -23,7 +24,8 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
 {
     private InspectionNoteItem? _selectedNote;
 
-    public ObservableCollection<InspectionChapterItem> Chapters { get; } = [];
+    /// <summary>Mixed roots: optional <see cref="InspectionGeneralChapterItem"/> then numbered chapters.</summary>
+    public ObservableCollection<object> RootItems { get; } = [];
 
     public InspectionNoteItem? SelectedNote
     {
@@ -31,38 +33,113 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
         set => SetField(ref _selectedNote, value);
     }
 
-    public void ReplaceTree(IEnumerable<InspectionChapterItem> chapters)
+    public void ReplaceTree(
+        InspectionGeneralChapterItem? general,
+        IEnumerable<InspectionChapterItem> chapters)
     {
-        Chapters.Clear();
+        RootItems.Clear();
+        if (general is not null && general.Fields.Count > 0)
+            RootItems.Add(general);
+
         foreach (var chapter in chapters)
-        {
-            Chapters.Add(chapter);
-        }
+            RootItems.Add(chapter);
 
         SelectedNote = null;
     }
 
+    public void ReplaceTree(IEnumerable<object> roots)
+    {
+        RootItems.Clear();
+        foreach (var root in roots)
+            RootItems.Add(root);
+        SelectedNote = null;
+    }
+
+    public IEnumerable<InspectionNoteItem> EnumerateNotes()
+    {
+        foreach (var root in RootItems)
+        {
+            if (root is not InspectionChapterItem chapter)
+                continue;
+
+            foreach (var section in chapter.Sections)
+            {
+                foreach (var note in section.Notes)
+                    yield return note;
+            }
+        }
+    }
+
+    public bool CanExport =>
+        InspectionQuestionnaireRules.CanExportNotes(
+            EnumerateNotes().Select(n => (n.StatusText, (string?)n.NoteText)));
+
+    public static InspectionGeneralChapterItem? MapGeneralFields(
+        IReadOnlyList<InspectionGeneralFieldRow> fields,
+        IReadOnlyDictionary<string, string> autoValues)
+    {
+        if (fields.Count == 0)
+            return null;
+
+        var chapter = new InspectionGeneralChapterItem();
+        foreach (var row in fields)
+        {
+            var isAuto = InspectionQuestionnaireRules.AutoFieldLabels.Contains(row.Label);
+            autoValues.TryGetValue(row.Label, out var autoValue);
+            var field = new InspectionGeneralFieldItem
+            {
+                NoteId = row.NoteId,
+                SectionId = row.SectionId,
+                Label = row.Label,
+                IsAutomatic = isAuto,
+                AutoValue = autoValue,
+                IsManualOverride = row.IsManualOverride,
+                Value = isAuto && !row.IsManualOverride ? autoValue : row.Text,
+            };
+            field.ClearDirty();
+            chapter.Fields.Add(field);
+        }
+
+        return chapter;
+    }
+
     public static IReadOnlyList<InspectionChapterItem> MapFromWorkspace(
         IReadOnlyList<InspectionChapterNode> nodes) =>
-        nodes.Select(ch => new InspectionChapterItem(
-                ch.ChapterNumber.ToString(),
-                ch.Title,
-                ch.Sections.Select(sec => new InspectionSectionItem(
+        nodes.Select(ch =>
+            {
+                var chapter = new InspectionChapterItem(ch.ChapterNumber.ToString(), ch.Title);
+                foreach (var sec in ch.Sections)
+                {
+                    var section = new InspectionSectionItem(
+                        sec.SectionId,
                         $"{ch.ChapterNumber}.{sec.SectionCode}",
-                        sec.Title,
-                        sec.Notes.Select(n => new InspectionNoteItem(
-                                n.Number ?? n.NoteId.ToString(),
-                                n.Text ?? string.Empty,
-                                n.Status ?? string.Empty,
-                                HasLinkedFile: !string.IsNullOrWhiteSpace(n.LinkedFileName),
-                                HasPlannerResponse: !string.IsNullOrWhiteSpace(n.PlannerResponseText),
-                                NoteId: n.NoteId))
-                            .ToList()))
-                    .ToList()))
+                        sec.Title);
+                    foreach (var n in sec.Notes)
+                    {
+                        var note = new InspectionNoteItem
+                        {
+                            NoteNumber = n.Number ?? n.NoteId.ToString(),
+                            StatusText = n.Status ?? string.Empty,
+                            StatusId = n.StatusId,
+                            HasLinkedFile = !string.IsNullOrWhiteSpace(n.LinkedFileName),
+                            HasPlannerResponse = !string.IsNullOrWhiteSpace(n.PlannerResponseText),
+                            NoteId = n.NoteId,
+                            SectionId = sec.SectionId,
+                        };
+                        note.SetNoteTextWithoutStatusSync(n.Text ?? string.Empty);
+                        note.ClearDirty();
+                        section.Notes.Add(note);
+                    }
+
+                    chapter.Sections.Add(section);
+                }
+
+                return chapter;
+            })
             .ToList();
 }
 
-/// <summary>Note editor state including optional AI suggestions.</summary>
+/// <summary>Note editor state including optional AI suggestions (kept for AI review on selected note).</summary>
 public sealed class InspectionNoteEditorViewModel : ObservableObject
 {
     private string _noteText = string.Empty;
@@ -124,9 +201,7 @@ public sealed class InspectionDrawingsPanelViewModel : ObservableObject
     {
         Drawings.Clear();
         foreach (var row in rows)
-        {
             Drawings.Add(row);
-        }
     }
 }
 
@@ -147,9 +222,7 @@ public sealed class InspectionReportCardsViewModel : ObservableObject
     {
         Reports.Clear();
         foreach (var row in rows)
-        {
             Reports.Add(row);
-        }
 
         SelectedReport = selectReportId is int id
             ? Reports.FirstOrDefault(r => r.ReportId == id)
@@ -195,8 +268,6 @@ public sealed class InspectionMetadataViewModel : ObservableObject
     {
         ReviewedFiles.Clear();
         foreach (var file in files)
-        {
             ReviewedFiles.Add(file);
-        }
     }
 }

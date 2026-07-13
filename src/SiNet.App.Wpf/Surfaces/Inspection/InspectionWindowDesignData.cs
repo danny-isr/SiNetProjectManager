@@ -1,79 +1,116 @@
+using System.Collections.ObjectModel;
+using SiNet.App.Wpf.Inspection;
+using SiNet.Application.Inspection;
+
 namespace SiNet.App.Wpf.Surfaces.Inspection;
 
 /// <summary>
-/// Lightweight, read-only row types used by <see cref="InspectionWindowViewModel"/> to populate the
-/// visual clone of the legacy <c>FloatingInspectionView</c> with fake/design-time data ONLY.
-/// <para>
-/// These are deliberately simple presentation records — they are NOT domain entities, NOT EF models,
-/// and carry no behavior. The visual-clone slice uses them so the window can render the same panels
-/// (templates, report cards, notes) without touching the real database, report services, Gmail, or
-/// ACC. Real data will replace them later via clean read-only Application ports.
-/// </para>
+/// Lightweight row types used by <see cref="InspectionWindowViewModel"/> for the
+/// visual clone of the legacy <c>FloatingInspectionView</c>.
 /// </summary>
 internal static class InspectionWindowDesignData
 {
-    /// <summary>A few fake inspection-report templates for the create-report strip.</summary>
     public static IReadOnlyList<InspectionTemplateRow> SampleTemplates { get; } =
     [
-        new("\u05EA\u05D1\u05E0\u05D9\u05EA \u05D1\u05D9\u05E7\u05D5\u05E8\u05EA \u05E1\u05D8\u05E0\u05D3\u05E8\u05D8\u05D9\u05EA"),
-        new("\u05EA\u05D1\u05E0\u05D9\u05EA \u05D1\u05D9\u05E7\u05D5\u05E8\u05EA \u05E7\u05D5\u05E0\u05E1\u05D8\u05E8\u05D5\u05E7\u05E6\u05D9\u05D4"),
-        new("\u05EA\u05D1\u05E0\u05D9\u05EA \u05D1\u05D9\u05E7\u05D5\u05E8\u05EA \u05D0\u05D9\u05E0\u05E1\u05D8\u05DC\u05E6\u05D9\u05D4"),
+        new("תבנית ביקורת סטנדרטית"),
+        new("תבנית ביקורת קונסטרוקציה"),
+        new("תבנית ביקורת אינסטלציה"),
     ];
 
-    /// <summary>A small set of fake report cards for the bottom list.</summary>
     public static IReadOnlyList<InspectionReportRow> SampleReports { get; } =
     [
-        new(101, 101, "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", new DateTime(2026, 6, 18)),
-        new(102, 102, "\u05D3\u05E0\u05D9 \u05D9\u05E9\u05E8\u05D0\u05DC", new DateTime(2026, 6, 20)),
-        new(103, 103, "\u05E8\u05D5\u05EA \u05DB\u05D4\u05DF", new DateTime(2026, 6, 21)),
+        new(101, 101, "דני ישראל", new DateTime(2026, 6, 18)),
+        new(102, 102, "דני ישראל", new DateTime(2026, 6, 20)),
+        new(103, 103, "רות כהן", new DateTime(2026, 6, 21)),
     ];
 
-    /// <summary>Several fake notes for the selected-report notes area (legacy flat list, kept for compatibility).</summary>
     public static IReadOnlyList<InspectionNoteRow> SampleNotes { get; } =
     [
-        new("1.1", "\u05D9\u05E9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9 \u05D7\u05D9\u05D1\u05D5\u05E8 \u05D1\u05DE\u05E4\u05DC\u05E1 \u05D4\u05E7\u05E8\u05E7\u05E2", "\u05E4\u05EA\u05D5\u05D7\u05D4"),
-        new("1.2", "\u05D7\u05D5\u05E1\u05E8 \u05E1\u05D9\u05DE\u05D5\u05DF \u05DE\u05D9\u05D3\u05D5\u05EA \u05D1\u05EA\u05D5\u05DB\u05E0\u05D9\u05EA", "\u05E4\u05EA\u05D5\u05D7\u05D4"),
-        new("2.1", "\u05D4\u05E2\u05E8\u05D4 \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4 \u2014 \u05EA\u05D2\u05D5\u05D1\u05EA \u05DE\u05EA\u05DB\u05E0\u05DF \u05E0\u05EA\u05E7\u05D1\u05DC\u05D4", "\u05D8\u05D5\u05E4\u05DC"),
+        new("1.1.1", "יש להשלים פרטי חיבור במפלס הקרקע", "Failed"),
+        new("1.1.2", "חוסר סימון מידות בתוכנית", "Failed"),
+        new("2.1.1", "הערה לדוגמה — תגובת מתכנן נתקבלה", "Passed"),
     ];
 
-    /// <summary>
-    /// Fake hierarchical questionnaire tree (Chapter -> Section -> Note) mirroring the visual shape of
-    /// the legacy <c>InspectionTree</c> (<c>ChapterTreeItem</c> -> <c>SectionTreeItem</c> -> <c>NoteTreeItem</c>).
-    /// Design/visual data only; no EF entities, no DB mapping.
-    /// </summary>
-    public static IReadOnlyList<InspectionChapterItem> BuildSampleTree() =>
+    public static IReadOnlyList<InspectionStatusOption> DefaultStatusOptions { get; } =
     [
-        new InspectionChapterItem(
-            "1",
-            "\u05DE\u05D9\u05D3\u05E2 \u05DB\u05DC\u05DC\u05D9", // "General data"
-            [
-                new InspectionSectionItem(
-                    "1.1",
-                    "\u05E4\u05E8\u05D8\u05D9 \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 \u05D5\u05D4\u05DE\u05D2\u05E8\u05E9", // "Project & lot details"
-                    [
-                        new InspectionNoteItem("1.1.1", "\u05D9\u05E9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9 \u05D7\u05D9\u05D1\u05D5\u05E8 \u05D1\u05DE\u05E4\u05DC\u05E1 \u05D4\u05E7\u05E8\u05E7\u05E2", "\u05E4\u05EA\u05D5\u05D7\u05D4", HasLinkedFile: true, HasPlannerResponse: false),
-                        new InspectionNoteItem("1.1.2", "\u05D7\u05D5\u05E1\u05E8 \u05E1\u05D9\u05DE\u05D5\u05DF \u05DE\u05D9\u05D3\u05D5\u05EA \u05D1\u05EA\u05D5\u05DB\u05E0\u05D9\u05EA", "\u05E4\u05EA\u05D5\u05D7\u05D4", HasLinkedFile: false, HasPlannerResponse: true),
-                    ]),
-                new InspectionSectionItem(
-                    "1.2",
-                    "\u05D2\u05D1\u05D5\u05DC\u05D5\u05EA \u05D5\u05E7\u05D5\u05D5\u05D9 \u05D1\u05E0\u05D9\u05DF", // "Borders & building lines"
-                    [
-                        new InspectionNoteItem("1.2.1", "\u05E7\u05D5 \u05D1\u05E0\u05D9\u05DF \u05E7\u05D9\u05D3\u05DE\u05D9 \u05D0\u05D9\u05E0\u05D5 \u05EA\u05D5\u05D0\u05DD \u05EA\u05D1\u05E2", "\u05D3\u05D5\u05E8\u05E9 \u05EA\u05D9\u05E7\u05D5\u05DF", HasLinkedFile: true, HasPlannerResponse: true),
-                    ]),
-            ]),
-        new InspectionChapterItem(
-            "2",
-            "\u05E7\u05D5\u05E0\u05E1\u05D8\u05E8\u05D5\u05E7\u05E6\u05D9\u05D4", // "Structure"
-            [
-                new InspectionSectionItem(
-                    "2.1",
-                    "\u05D9\u05E1\u05D5\u05D3\u05D5\u05EA \u05D5\u05E2\u05DE\u05D5\u05D3\u05D9\u05DD", // "Foundations & columns"
-                    [
-                        new InspectionNoteItem("2.1.1", "\u05D4\u05E2\u05E8\u05D4 \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4 \u2014 \u05EA\u05D2\u05D5\u05D1\u05EA \u05DE\u05EA\u05DB\u05E0\u05DF \u05E0\u05EA\u05E7\u05D1\u05DC\u05D4", "\u05D8\u05D5\u05E4\u05DC", HasLinkedFile: false, HasPlannerResponse: true),
-                        new InspectionNoteItem("2.1.2", "\u05D7\u05EA\u05DA \u05E2\u05DE\u05D5\u05D3 P3 \u05D8\u05E2\u05D5\u05DF \u05D4\u05D1\u05D4\u05E8\u05D4", "\u05E4\u05EA\u05D5\u05D7\u05D4", HasLinkedFile: false, HasPlannerResponse: false),
-                    ]),
-            ]),
+        new(InspectionQuestionnaireRules.Failed, "הערה"),
+        new("Passed", "מקובל"),
+        new("RecurringFailed", "הערה חוזרת"),
+        new(InspectionQuestionnaireRules.NotApplicable, "לא רלוונטי"),
+        new(InspectionQuestionnaireRules.ManagerReview, "הערה לבדיקת המנהל"),
     ];
+
+    /// <summary>Fake tree: General chapter + numbered chapters (design-time only).</summary>
+    public static IReadOnlyList<object> BuildSampleTree()
+    {
+        var general = new InspectionGeneralChapterItem();
+        general.Fields.Add(new InspectionGeneralFieldItem
+        {
+            NoteId = 9001,
+            SectionId = 90,
+            Label = "שם פרויקט",
+            IsAutomatic = true,
+            AutoValue = "פרויקט לדוגמה",
+            Value = "פרויקט לדוגמה",
+            IsManualOverride = false,
+        });
+        general.Fields.Add(new InspectionGeneralFieldItem
+        {
+            NoteId = 9002,
+            SectionId = 91,
+            Label = "הערות כלליות",
+            IsAutomatic = false,
+            Value = "",
+            IsManualOverride = false,
+        });
+        general.Fields[0].ClearDirty();
+        general.Fields[1].ClearDirty();
+
+        var chapters = new List<object> { general };
+
+        var chapter1 = new InspectionChapterItem("1", "מידע כללי");
+        var section11 = new InspectionSectionItem(11, "1.1", "פרטי הפרויקט והמגרש");
+        section11.Notes.Add(CreateSampleNote("1.1.1", "יש להשלים פרטי חיבור במפלס הקרקע", "Failed", true, false, 1, 11));
+        section11.Notes.Add(CreateSampleNote("1.1.2", "חוסר סימון מידות בתוכנית", "Failed", false, true, 2, 11));
+        chapter1.Sections.Add(section11);
+
+        var section12 = new InspectionSectionItem(12, "1.2", "גבולות וקווי בניין");
+        section12.Notes.Add(CreateSampleNote("1.2.1", "קו בניין קידמי אינו תואם תבע", "RecurringFailed", true, true, 3, 12));
+        chapter1.Sections.Add(section12);
+        chapters.Add(chapter1);
+
+        var chapter2 = new InspectionChapterItem("2", "קונסטרוקציה");
+        var section21 = new InspectionSectionItem(21, "2.1", "יסודות ועמודים");
+        section21.Notes.Add(CreateSampleNote("2.1.1", "הערה לדוגמה — תגובת מתכנן נתקבלה", "Passed", false, true, 4, 21));
+        section21.Notes.Add(CreateSampleNote("2.1.2", "חתך עמוד P3 טעון הבהרה", "Failed", false, false, 5, 21));
+        chapter2.Sections.Add(section21);
+        chapters.Add(chapter2);
+
+        return chapters;
+    }
+
+    private static InspectionNoteItem CreateSampleNote(
+        string number,
+        string text,
+        string status,
+        bool hasLinkedFile,
+        bool hasPlannerResponse,
+        long noteId,
+        int sectionId)
+    {
+        var note = new InspectionNoteItem
+        {
+            NoteNumber = number,
+            StatusText = status,
+            HasLinkedFile = hasLinkedFile,
+            HasPlannerResponse = hasPlannerResponse,
+            NoteId = noteId,
+            SectionId = sectionId,
+        };
+        note.SetNoteTextWithoutStatusSync(text);
+        note.ClearDirty();
+        return note;
+    }
 }
 
 /// <summary>Read-only template row for the template picker.</summary>
@@ -85,45 +122,203 @@ public sealed record InspectionReportRow(int ReportId, int ReportNumber, string 
 /// <summary>Read-only note row for the legacy flat notes area (fake/design-time data).</summary>
 public sealed record InspectionNoteRow(string DisplayLabel, string NoteText, string NoteStatus);
 
-/// <summary>
-/// Fake/design-time questionnaire <b>chapter</b> (tree level 1). Mirrors the legacy
-/// <c>ChapterTreeItem</c> visual shape (<c>DisplayTitle</c> + child <c>Sections</c>). Not an EF entity.
-/// </summary>
-public sealed record InspectionChapterItem(
-    string ChapterNumber,
-    string ChapterTitle,
-    IReadOnlyList<InspectionSectionItem> Sections)
+/// <summary>Status ComboBox option (DbKey = persisted NoteStatus key).</summary>
+public sealed record InspectionStatusOption(string DbKey, string Label, int? StatusId = null);
+
+/// <summary>Questionnaire chapter (tree level 1).</summary>
+public sealed class InspectionChapterItem
 {
-    /// <summary>Header shown on the chapter row, e.g. "1 \u2014 \u05DE\u05D9\u05D3\u05E2 \u05DB\u05DC\u05DC\u05D9".</summary>
-    public string DisplayTitle => $"{ChapterNumber} \u2014 {ChapterTitle}";
+    public InspectionChapterItem(string chapterNumber, string chapterTitle)
+    {
+        ChapterNumber = chapterNumber;
+        ChapterTitle = chapterTitle;
+    }
+
+    public string ChapterNumber { get; }
+    public string ChapterTitle { get; }
+    public ObservableCollection<InspectionSectionItem> Sections { get; } = [];
+    public string DisplayTitle => $"{ChapterNumber} — {ChapterTitle}";
 }
 
-/// <summary>
-/// Fake/design-time questionnaire <b>section</b> (tree level 2). Mirrors the legacy
-/// <c>SectionTreeItem</c> visual shape (<c>SectionHeaderText</c> + child <c>Notes</c>). Not an EF entity.
-/// </summary>
-public sealed record InspectionSectionItem(
-    string SectionNumber,
-    string SectionTitle,
-    IReadOnlyList<InspectionNoteItem> Notes)
+/// <summary>Questionnaire section (tree level 2).</summary>
+public sealed class InspectionSectionItem
 {
-    /// <summary>Header shown on the section row, e.g. "1.1 \u05E4\u05E8\u05D8\u05D9 \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8".</summary>
+    public InspectionSectionItem(int sectionId, string sectionNumber, string sectionTitle)
+    {
+        SectionId = sectionId;
+        SectionNumber = sectionNumber;
+        SectionTitle = sectionTitle;
+    }
+
+    public int SectionId { get; }
+    public string SectionNumber { get; }
+    public string SectionTitle { get; }
+    public ObservableCollection<InspectionNoteItem> Notes { get; } = [];
     public string SectionHeaderText => $"{SectionNumber}  {SectionTitle}";
 }
 
-/// <summary>
-/// Fake/design-time questionnaire <b>note/finding</b> (tree level 3). Mirrors the legacy
-/// <c>NoteTreeItem</c> visual shape (index label, status, text, linked-file and planner-response
-/// indicators). Not an EF entity; carries no behavior.
-/// </summary>
-public sealed record InspectionNoteItem(
-    string NoteNumber,
-    string NoteText,
-    string StatusText,
-    bool HasLinkedFile,
-    bool HasPlannerResponse,
-    long? NoteId = null)
+/// <summary>Numbered note / finding (tree level 3) — editable inline.</summary>
+public sealed class InspectionNoteItem : ObservableObject
 {
-    /// <summary>Index label shown on the note row (matches legacy <c>DisplayLabel</c>).</summary>
+    private string _noteText = string.Empty;
+    private string _statusText = string.Empty;
+    private bool _isDirty;
+    private bool _suppressStatusSync;
+
+    public long? NoteId { get; init; }
+    public int SectionId { get; init; }
+    public int? StatusId { get; set; }
+    public string NoteNumber { get; init; } = string.Empty;
+    public bool HasLinkedFile { get; init; }
+    public bool HasPlannerResponse { get; init; }
+
     public string DisplayLabel => NoteNumber;
+
+    public string NoteText
+    {
+        get => _noteText;
+        set
+        {
+            if (_noteText == value)
+                return;
+
+            _noteText = value;
+            _isDirty = true;
+            OnPropertyChanged(nameof(NoteText));
+            OnPropertyChanged(nameof(HasValidationError));
+            OnPropertyChanged(nameof(IsDirty));
+
+            if (!_suppressStatusSync)
+            {
+                _suppressStatusSync = true;
+                try
+                {
+                    var synced = InspectionQuestionnaireRules.SyncStatusAfterTextChange(_statusText, value);
+                    if (synced != _statusText)
+                        StatusText = synced ?? string.Empty;
+                }
+                finally
+                {
+                    _suppressStatusSync = false;
+                }
+            }
+        }
+    }
+
+    public string StatusText
+    {
+        get => _statusText;
+        set
+        {
+            if (_statusText == value)
+                return;
+
+            _statusText = value ?? string.Empty;
+            _isDirty = true;
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(HasValidationError));
+            OnPropertyChanged(nameof(IsDirty));
+        }
+    }
+
+    public bool HasValidationError =>
+        InspectionQuestionnaireRules.HasValidationError(_statusText, _noteText);
+
+    public bool IsDirty
+    {
+        get => _isDirty;
+        private set
+        {
+            if (_isDirty == value)
+                return;
+            _isDirty = value;
+            OnPropertyChanged(nameof(IsDirty));
+        }
+    }
+
+    public void ClearDirty() => IsDirty = false;
+
+    public void SetNoteTextWithoutStatusSync(string text)
+    {
+        _suppressStatusSync = true;
+        try
+        {
+            NoteText = text;
+        }
+        finally
+        {
+            _suppressStatusSync = false;
+        }
+    }
+}
+
+/// <summary>Top-level General (Chapter 0) branch.</summary>
+public sealed class InspectionGeneralChapterItem
+{
+    public string DisplayTitle => "נתונים כלליים";
+    public ObservableCollection<InspectionGeneralFieldItem> Fields { get; } = [];
+}
+
+/// <summary>General field: label + TextBox + auto/manual toggle (no status combo).</summary>
+public sealed class InspectionGeneralFieldItem : ObservableObject
+{
+    private string? _value;
+    private bool _isManualOverride;
+    private bool _isDirty;
+
+    public long NoteId { get; init; }
+    public int SectionId { get; init; }
+    public string Label { get; init; } = string.Empty;
+    public bool IsAutomatic { get; init; }
+    public string? AutoValue { get; init; }
+
+    public bool IsManualOverride
+    {
+        get => _isManualOverride;
+        set
+        {
+            if (_isManualOverride == value)
+                return;
+
+            _isManualOverride = value;
+            _isDirty = true;
+            OnPropertyChanged(nameof(IsManualOverride));
+            OnPropertyChanged(nameof(IsEditable));
+            OnPropertyChanged(nameof(IsDirty));
+
+            if (!value && IsAutomatic)
+                Value = AutoValue;
+        }
+    }
+
+    public bool IsEditable => !IsAutomatic || IsManualOverride;
+
+    public string? Value
+    {
+        get => _value;
+        set
+        {
+            if (_value == value)
+                return;
+
+            _value = value;
+            _isDirty = true;
+            OnPropertyChanged(nameof(Value));
+            OnPropertyChanged(nameof(IsDirty));
+        }
+    }
+
+    public bool IsDirty
+    {
+        get => _isDirty;
+        private set
+        {
+            if (_isDirty == value)
+                return;
+            _isDirty = value;
+            OnPropertyChanged(nameof(IsDirty));
+        }
+    }
+
+    public void ClearDirty() => IsDirty = false;
 }

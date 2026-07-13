@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Inspection;
 using SiNetSQL.Data;
 
 namespace SiNet.Infrastructure.Sql.Services.Inspection;
@@ -39,17 +40,29 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        return await db.InspectionReports
+        // Avoid SQL COALESCE across InspectorName (Hebrew_100) and SIUser.Name (Hebrew_CI_AS).
+        var raw = await db.InspectionReports
             .AsNoTracking()
             .Where(r => r.ProjectId == projectId && r.SeriesId == seriesId)
             .OrderByDescending(r => r.ReportNumber)
+            .Select(r => new
+            {
+                r.ReportId,
+                r.ReportNumber,
+                r.InspectionDate,
+                r.InspectorName,
+                InspectorUserName = r.Inspector != null ? r.Inspector.Name : null,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return raw
             .Select(r => new InspectionReportRow(
                 r.ReportId,
                 r.ReportNumber,
                 r.InspectionDate,
-                r.InspectorName ?? (r.Inspector != null ? r.Inspector.Name : null)))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+                r.InspectorName ?? r.InspectorUserName))
+            .ToList();
     }
 
     public async Task<IReadOnlyList<InspectionNoteRow>> GetNotesAsync(
@@ -61,19 +74,30 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        return await db.InspectionNotes
+        var raw = await db.InspectionNotes
             .AsNoTracking()
             .Where(n => n.ReportId == reportId)
             .OrderBy(n => n.Section.Chapter.ChapterNumber)
             .ThenBy(n => n.Section.SectionCode)
             .ThenBy(n => n.NoteSubIndex)
+            .Select(n => new
+            {
+                n.NoteId,
+                n.NoteSubIndex,
+                n.NoteText,
+                StatusLabel = n.NoteStatusLookup != null ? n.NoteStatusLookup.HebrewLabel : null,
+                n.NoteStatus,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return raw
             .Select(n => new InspectionNoteRow(
                 n.NoteId,
                 n.NoteSubIndex,
                 n.NoteText,
-                n.NoteStatusLookup != null ? n.NoteStatusLookup.HebrewLabel : n.NoteStatus))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+                n.StatusLabel ?? n.NoteStatus))
+            .ToList();
     }
 
     public async Task<InspectionReportDetail?> GetReportDetailAsync(
@@ -85,24 +109,46 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        return await db.InspectionReports
+        var raw = await db.InspectionReports
             .AsNoTracking()
             .Where(r => r.ReportId == reportId)
-            .Select(r => new InspectionReportDetail(
+            .Select(r => new
+            {
                 r.ReportId,
                 r.ProjectId,
                 r.SeriesId,
                 r.ReportNumber,
                 r.InspectionDate,
-                r.InspectorName ?? (r.Inspector != null ? r.Inspector.Name : null),
+                r.InspectorName,
+                InspectorUserName = r.Inspector != null ? r.Inspector.Name : null,
                 r.ReviewedVersion,
                 r.IsLockedAfterSend,
                 r.SentAt,
                 r.SentSpreadsheetUrl,
                 r.SourceFileUrn,
-                r.SourceFileVersion))
+                r.SourceFileVersion,
+            })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        if (raw is null)
+        {
+            return null;
+        }
+
+        return new InspectionReportDetail(
+            raw.ReportId,
+            raw.ProjectId,
+            raw.SeriesId,
+            raw.ReportNumber,
+            raw.InspectionDate,
+            raw.InspectorName ?? raw.InspectorUserName,
+            raw.ReviewedVersion,
+            raw.IsLockedAfterSend,
+            raw.SentAt,
+            raw.SentSpreadsheetUrl,
+            raw.SourceFileUrn,
+            raw.SourceFileVersion);
     }
 
     public async Task<IReadOnlyList<InspectionChapterNode>> GetQuestionnaireTreeAsync(
@@ -122,7 +168,7 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                 n.NoteId,
                 n.NoteSubIndex,
                 n.NoteText,
-                Status = n.NoteStatusLookup != null ? n.NoteStatusLookup.HebrewLabel : n.NoteStatus,
+                n.NoteStatus,
                 n.NoteStatusId,
                 n.PlannerResponseText,
                 n.LinkedFileName,
@@ -133,25 +179,39 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                 SectionCode = n.Section.SectionCode,
                 SectionTitle = n.Section.SectionName != null
                     ? n.Section.SectionName.Name
-                    : $"סעיף {n.Section.SectionCode}",
+                    : null,
+                SectionCodeFallback = n.Section.SectionCode,
                 ChapterId = n.Section.Chapter.ChapterId,
                 ChapterNumber = n.Section.Chapter.ChapterNumber,
                 ChapterTitle = n.Section.Chapter.ChapterName != null
                     ? n.Section.Chapter.ChapterName.Name
-                    : $"פרק {n.Section.Chapter.ChapterNumber}",
+                    : null,
+                ChapterNumberFallback = n.Section.Chapter.ChapterNumber,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        // Numbered chapters only; sub-notes with 2+ dots (legacy parity).
         return notes
-            .GroupBy(n => new { n.ChapterId, n.ChapterNumber, n.ChapterTitle })
+            .Where(n => n.ChapterNumber > 0 && InspectionQuestionnaireRules.IsNumberedSubNote(n.NoteSubIndex))
+            .GroupBy(n => new
+            {
+                n.ChapterId,
+                n.ChapterNumber,
+                ChapterTitle = n.ChapterTitle ?? $"פרק {n.ChapterNumberFallback}",
+            })
             .OrderBy(g => g.Key.ChapterNumber)
             .Select(chapterGroup => new InspectionChapterNode(
                 chapterGroup.Key.ChapterId,
                 chapterGroup.Key.ChapterNumber,
                 chapterGroup.Key.ChapterTitle ?? string.Empty,
                 chapterGroup
-                    .GroupBy(n => new { n.SectionId, n.SectionCode, n.SectionTitle })
+                    .GroupBy(n => new
+                    {
+                        n.SectionId,
+                        n.SectionCode,
+                        SectionTitle = n.SectionTitle ?? $"סעיף {n.SectionCodeFallback}",
+                    })
                     .OrderBy(g => g.Key.SectionCode)
                     .Select(sectionGroup => new InspectionSectionNode(
                         sectionGroup.Key.SectionId,
@@ -163,7 +223,7 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                                 n.NoteId,
                                 n.NoteSubIndex,
                                 n.NoteText,
-                                n.Status,
+                                n.NoteStatus,
                                 n.NoteStatusId,
                                 n.PlannerResponseText,
                                 n.LinkedFileName,
@@ -172,6 +232,45 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                                 n.AttachmentCount))
                             .ToList()))
                     .ToList()))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<InspectionGeneralFieldRow>> GetGeneralFieldsAsync(
+        int reportId, CancellationToken cancellationToken = default)
+    {
+        if (reportId <= 0)
+        {
+            return [];
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var raw = await db.InspectionNotes
+            .AsNoTracking()
+            .Where(n => n.ReportId == reportId && n.Section.Chapter.ChapterNumber == 0)
+            .OrderBy(n => n.Section.SectionCode)
+            .ThenBy(n => n.NoteSubIndex)
+            .Select(n => new
+            {
+                n.NoteId,
+                n.SectionId,
+                Label = n.Section.SectionName != null
+                    ? n.Section.SectionName.Name
+                    : $"סעיף {n.Section.SectionCode}",
+                n.NoteText,
+                n.NoteStatus,
+                n.NoteSubIndex,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return raw
+            .Where(n => InspectionQuestionnaireRules.IsGeneralBaseNote(n.NoteSubIndex))
+            .Select(n => new InspectionGeneralFieldRow(
+                n.NoteId,
+                n.SectionId,
+                n.Label ?? string.Empty,
+                n.NoteText,
+                string.Equals(n.NoteStatus, InspectionQuestionnaireRules.ManualStatus, StringComparison.Ordinal)))
             .ToList();
     }
 

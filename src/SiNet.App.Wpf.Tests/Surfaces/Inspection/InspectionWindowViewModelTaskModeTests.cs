@@ -164,6 +164,10 @@ public sealed class InspectionWindowViewModelTaskModeTests
             int reportId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<InspectionChapterNode>>([]);
 
+        public Task<IReadOnlyList<InspectionGeneralFieldRow>> GetGeneralFieldsAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionGeneralFieldRow>>([]);
+
         public Task<IReadOnlyList<InspectionDrawingRow>> GetDrawingsAsync(
             int reportId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<InspectionDrawingRow>>([]);

@@ -7,6 +7,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Identity;
+using SiNet.Application.Inspection;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
@@ -91,17 +92,21 @@ public sealed class InspectionWindowViewModel : ObservableObject
         AvailableTemplates = CreateStrip.AvailableTemplates;
         Reports = ReportCards.Reports;
         Notes = new ObservableCollection<InspectionNoteRow>();
-        InspectionTree = Questionnaire.Chapters;
-        StatusOptions = new ObservableCollection<string>(
-        [
-            "\u05E4\u05EA\u05D5\u05D7\u05D4",
-            "\u05D3\u05D5\u05E8\u05E9 \u05EA\u05D9\u05E7\u05D5\u05DF",
-            "\u05D8\u05D5\u05E4\u05DC",
-            "\u05DC\u05D0 \u05E8\u05DC\u05D5\u05D5\u05E0\u05D8\u05D9",
-        ]);
+        InspectionTree = Questionnaire.RootItems;
+        StatusOptions = new ObservableCollection<InspectionStatusOption>(
+            InspectionWindowDesignData.DefaultStatusOptions);
         AllowedResultCodes = new ObservableCollection<string>();
 
         Questionnaire.PropertyChanged += OnQuestionnairePropertyChanged;
+        Metadata.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(InspectionMetadataViewModel.IsLocked))
+            {
+                OnPropertyChanged(nameof(IsReportEditable));
+                OnPropertyChanged(nameof(IsSelectedReportLocked));
+                RaiseCommandStates();
+            }
+        };
 
         if (_workspace is null)
         {
@@ -111,8 +116,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 Reports.Add(report);
             foreach (var note in InspectionWindowDesignData.SampleNotes)
                 Notes.Add(note);
-            foreach (var chapter in InspectionWindowDesignData.BuildSampleTree())
-                InspectionTree.Add(chapter);
+            Questionnaire.ReplaceTree(InspectionWindowDesignData.BuildSampleTree());
+            AttachNoteHandlers();
             SelectedTemplate = AvailableTemplates.FirstOrDefault();
             SelectedReport = Reports.FirstOrDefault();
             _reportLoaded = true;
@@ -138,15 +143,32 @@ public sealed class InspectionWindowViewModel : ObservableObject
         OpenSourceReportCommand = new AsyncRelayCommand(OpenSourceReportAsync, () => !string.IsNullOrWhiteSpace(_cachedSourceFileUrn));
         UnlockReportCommand = new AsyncRelayCommand(UnlockReportAsync, () => SelectedReport is not null && _reportCommands is not null && !IsBusy);
         ShareReportCommand = new AsyncRelayCommand(ShareReportAsync, () => SelectedReport is not null && _exportPort is not null && !IsBusy);
-        ExportReportCommand = new AsyncRelayCommand(ExportReportAsync, () => SelectedReport is not null && _exportPort is not null && !IsBusy);
+        ExportReportCommand = new AsyncRelayCommand(
+            ExportReportAsync,
+            () => SelectedReport is not null
+                && _exportPort is not null
+                && !IsBusy
+                && Questionnaire.CanExport);
         SelectReviewedPlanCommand = Stub();
-        AddNoteCommand = Stub();
+        AddNoteCommand = new AsyncRelayCommand<InspectionSectionItem>(
+            AddNoteToSectionAsync,
+            section => section is not null
+                && SelectedReport is not null
+                && _noteCommands is not null
+                && IsReportEditable
+                && !IsBusy);
         MoveNoteUpCommand = Stub();
         MoveNoteDownCommand = Stub();
         ScreenshotPrimaryCommand = Stub();
         OpenNoteLinkedFileCommand = Stub();
-        SaveNoteCommand = new AsyncRelayCommand(SaveSelectedNoteAsync, () => NoteEditor.NoteId is > 0 && _noteCommands is not null);
-        ReviewNoteAiCommand = new AsyncRelayCommand(ReviewSelectedNoteAiAsync, () => _aiReviewer is not null && !string.IsNullOrWhiteSpace(NoteEditor.NoteText));
+        SaveNoteCommand = new AsyncRelayCommand(
+            SaveSelectedNoteAsync,
+            () => Questionnaire.SelectedNote?.NoteId is > 0 && _noteCommands is not null && IsReportEditable);
+        ReviewNoteAiCommand = new AsyncRelayCommand(
+            ReviewSelectedNoteAiAsync,
+            () => _aiReviewer is not null
+                && Questionnaire.SelectedNote is not null
+                && !string.IsNullOrWhiteSpace(Questionnaire.SelectedNote.NoteText));
     }
 
     public InspectionCreateReportStripViewModel CreateStrip { get; }
@@ -208,9 +230,15 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public ObservableCollection<InspectionTemplateRow> AvailableTemplates { get; }
     public ObservableCollection<InspectionReportRow> Reports { get; }
     public ObservableCollection<InspectionNoteRow> Notes { get; }
-    public ObservableCollection<InspectionChapterItem> InspectionTree { get; }
-    public ObservableCollection<string> StatusOptions { get; }
+    public ObservableCollection<object> InspectionTree { get; }
+    public ObservableCollection<InspectionStatusOption> StatusOptions { get; }
     public ObservableCollection<string> AllowedResultCodes { get; }
+
+    /// <summary>True when a report is selected and not locked after send.</summary>
+    public bool IsReportEditable => HasSelectedReport && !Metadata.IsLocked;
+
+    /// <summary>True when the selected report is locked after send (read-only fill).</summary>
+    public bool IsSelectedReportLocked => Metadata.IsLocked;
 
     public InspectionTemplateRow? SelectedTemplate
     {
@@ -249,7 +277,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
     public bool HasSelectedReport => _selectedReport is not null;
 
-    public bool HasNoteEditor => NoteEditor.NoteId is > 0;
+    public bool HasSelectedNote => Questionnaire.SelectedNote is not null;
 
     public string? SelectedResultCode
     {
@@ -479,15 +507,131 @@ public sealed class InspectionWindowViewModel : ObservableObject
         Questionnaire.SelectedNote = null;
     }
 
+    /// <summary>Persists a general field after LostFocus / auto-manual toggle.</summary>
+    public async Task SaveGeneralFieldAsync(InspectionGeneralFieldItem? field)
+    {
+        if (field is null || _noteCommands is null || !IsReportEditable || !field.IsDirty)
+            return;
+
+        var text = field.IsAutomatic && !field.IsManualOverride ? null : field.Value;
+        var status = field.IsManualOverride ? InspectionQuestionnaireRules.ManualStatus : null;
+
+        var textResult = await _noteCommands
+            .SaveNoteTextAsync(field.NoteId, text)
+            .ConfigureAwait(true);
+        if (!textResult.Succeeded)
+        {
+            StatusMessage = textResult.ErrorMessage ?? "שמירת שדה כללי נכשלה.";
+            return;
+        }
+
+        var statusResult = await _noteCommands
+            .SaveNoteStatusAsync(field.NoteId, statusId: null, statusText: status)
+            .ConfigureAwait(true);
+        if (!statusResult.Succeeded)
+        {
+            StatusMessage = statusResult.ErrorMessage ?? "שמירת מצב שדה כללי נכשלה.";
+            return;
+        }
+
+        field.ClearDirty();
+        StatusMessage = "שדה כללי נשמר.";
+    }
+
+    /// <summary>Persists note text after LostFocus on the inline editor.</summary>
+    public async Task SaveNoteTextAsync(InspectionNoteItem? note)
+    {
+        if (note?.NoteId is not long noteId || _noteCommands is null || !IsReportEditable)
+            return;
+
+        if (!note.IsDirty)
+            return;
+
+        var textResult = await _noteCommands
+            .SaveNoteTextAsync(noteId, note.NoteText)
+            .ConfigureAwait(true);
+        if (!textResult.Succeeded)
+        {
+            StatusMessage = textResult.ErrorMessage ?? "שמירת ההערה נכשלה.";
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(note.StatusText))
+        {
+            await _noteCommands
+                .SaveNoteStatusAsync(noteId, note.StatusId, note.StatusText)
+                .ConfigureAwait(true);
+        }
+
+        note.ClearDirty();
+        NoteEditor.ApplyNote(note);
+        StatusMessage = "ההערה נשמרה.";
+        RaiseCommandStates();
+    }
+
     private void OnQuestionnairePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(InspectionQuestionnaireViewModel.SelectedNote))
             return;
 
         NoteEditor.ApplyNote(Questionnaire.SelectedNote);
-        OnPropertyChanged(nameof(HasNoteEditor));
+        OnPropertyChanged(nameof(HasSelectedNote));
         (SaveNoteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ReviewNoteAiCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    private void AttachNoteHandlers()
+    {
+        foreach (var note in Questionnaire.EnumerateNotes())
+            note.PropertyChanged += OnNoteItemPropertyChanged;
+    }
+
+    private void DetachNoteHandlers()
+    {
+        foreach (var note in Questionnaire.EnumerateNotes())
+            note.PropertyChanged -= OnNoteItemPropertyChanged;
+    }
+
+    private async void OnNoteItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not InspectionNoteItem note || !IsReportEditable || _noteCommands is null)
+            return;
+
+        if (e.PropertyName == nameof(InspectionNoteItem.HasValidationError)
+            || e.PropertyName == nameof(InspectionNoteItem.StatusText))
+        {
+            RaiseCommandStates();
+        }
+
+        if (e.PropertyName != nameof(InspectionNoteItem.StatusText) || note.NoteId is not long noteId)
+            return;
+
+        var result = await _noteCommands
+            .SaveNoteStatusAsync(noteId, note.StatusId, note.StatusText)
+            .ConfigureAwait(true);
+        if (!result.Succeeded)
+            StatusMessage = result.ErrorMessage ?? "שמירת סטטוס נכשלה.";
+    }
+
+    private async Task AddNoteToSectionAsync(InspectionSectionItem? section)
+    {
+        if (section is null || SelectedReport is null || _noteCommands is null || !IsReportEditable)
+            return;
+
+        var result = await _noteCommands
+            .AddNoteAsync(SelectedReport.ReportId, section.SectionId, text: null)
+            .ConfigureAwait(true);
+        if (!result.Succeeded || result.NoteId is not long newNoteId)
+        {
+            StatusMessage = result.ErrorMessage ?? "הוספת הערה נכשלה.";
+            return;
+        }
+
+        // Reload tree so NoteSubIndex / ordering match SQL.
+        if (ResolveActiveProjectId() is int projectId)
+            await LoadReportContentAsync(projectId, SelectedReport.ReportId).ConfigureAwait(true);
+        else
+            StatusMessage = $"הערה #{newNoteId} נוספה.";
     }
 
     private async Task RefreshAsync()
@@ -882,9 +1026,10 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
     private async Task LoadReportContentCoreAsync(int reportId, CancellationToken ct)
     {
+        DetachNoteHandlers();
         Notes.Clear();
         NoteEditor.ApplyNote(null);
-        OnPropertyChanged(nameof(HasNoteEditor));
+        OnPropertyChanged(nameof(HasSelectedNote));
 
         var notes = await _workspace!.GetNotesAsync(reportId, ct).ConfigureAwait(true);
         foreach (var note in notes)
@@ -895,25 +1040,64 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 note.Status ?? string.Empty));
         }
 
-        var tree = await _workspace.GetQuestionnaireTreeAsync(reportId, ct).ConfigureAwait(true);
-        Questionnaire.ReplaceTree(InspectionQuestionnaireViewModel.MapFromWorkspace(tree));
-
         var detail = await _workspace.GetReportDetailAsync(reportId, ct).ConfigureAwait(true);
         Metadata.ApplyDetail(detail);
         _cachedSourceFileUrn = detail?.SourceFileUrn;
         if (detail?.SeriesId is int sid)
             _preferredSeriesId = sid;
 
+        var autoValues = BuildAutoFieldValues(detail);
+        var generalRows = await _workspace.GetGeneralFieldsAsync(reportId, ct).ConfigureAwait(true);
+        var general = InspectionQuestionnaireViewModel.MapGeneralFields(generalRows, autoValues);
+
+        var tree = await _workspace.GetQuestionnaireTreeAsync(reportId, ct).ConfigureAwait(true);
+        var chapters = InspectionQuestionnaireViewModel.MapFromWorkspace(tree);
+        Questionnaire.ReplaceTree(general, chapters);
+        AttachNoteHandlers();
+
         var reviewed = await _workspace.GetReviewedFilesAsync(reportId, ct).ConfigureAwait(true);
         Metadata.ReplaceReviewedFiles(reviewed);
         var drawings = await _workspace.GetDrawingsAsync(reportId, ct).ConfigureAwait(true);
         DrawingsPanel.Replace(drawings);
 
+        OnPropertyChanged(nameof(IsReportEditable));
+        OnPropertyChanged(nameof(IsSelectedReportLocked));
         (OpenSourceReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        RaiseCommandStates();
+    }
+
+    private Dictionary<string, string> BuildAutoFieldValues(InspectionReportDetail? detail)
+    {
+        var auto = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var project = _currentProject?.CurrentProject;
+        if (project is not null)
+        {
+            auto["שם פרויקט"] = project.ProjectName ?? string.Empty;
+            auto["מספר פרויקט"] = project.ProjectNumber ?? string.Empty;
+            auto["ישוב"] = project.PlaceName ?? string.Empty;
+            auto["רשות מקומית"] = project.PlaceName ?? string.Empty;
+        }
+
+        if (detail is not null)
+        {
+            var dateStr = detail.InspectionDate.ToString("dd/MM/yyyy");
+            var userName = detail.InspectorName ?? string.Empty;
+            var reportNum = detail.ReportNumber.ToString();
+            auto["תאריך"] = dateStr;
+            auto["Today"] = dateStr;
+            auto["ממלא דוח"] = userName;
+            auto["User"] = userName;
+            auto["מספר דוח"] = reportNum;
+            auto["כתובת מייל"] = string.Empty;
+            auto["Email"] = string.Empty;
+        }
+
+        return auto;
     }
 
     private void ClearReportContent()
     {
+        DetachNoteHandlers();
         Notes.Clear();
         Questionnaire.ReplaceTree([]);
         NoteEditor.ApplyNote(null);
@@ -922,7 +1106,9 @@ public sealed class InspectionWindowViewModel : ObservableObject
         DrawingsPanel.Replace([]);
         _cachedSourceFileUrn = null;
         _reportLoaded = false;
-        OnPropertyChanged(nameof(HasNoteEditor));
+        OnPropertyChanged(nameof(HasSelectedNote));
+        OnPropertyChanged(nameof(IsReportEditable));
+        OnPropertyChanged(nameof(IsSelectedReportLocked));
     }
 
     private int? ResolveActiveProjectId()
@@ -953,6 +1139,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         (ShareReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ExportReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (OpenSourceReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (AddNoteCommand as AsyncRelayCommand<InspectionSectionItem>)?.RaiseCanExecuteChanged();
+        (SaveNoteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(CanCompleteTask));
     }
 
@@ -1032,29 +1220,22 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
     private async Task SaveSelectedNoteAsync()
     {
-        if (_noteCommands is null || NoteEditor.NoteId is not long noteId)
-        {
-            return;
-        }
-
-        var result = await _noteCommands
-            .SaveNoteTextAsync(noteId, NoteEditor.NoteText)
-            .ConfigureAwait(true);
-        StatusMessage = result.Succeeded ? "ההערה נשמרה." : (result.ErrorMessage ?? "שמירת ההערה נכשלה.");
+        await SaveNoteTextAsync(Questionnaire.SelectedNote).ConfigureAwait(true);
     }
 
     private async Task ReviewSelectedNoteAiAsync()
     {
-        if (_aiReviewer is null)
+        if (_aiReviewer is null || Questionnaire.SelectedNote is null)
         {
             StatusMessage = "בדיקת AI אינה זמינה.";
             return;
         }
 
+        var note = Questionnaire.SelectedNote;
         NoteEditor.IsAiBusy = true;
         try
         {
-            var result = await _aiReviewer.ReviewAsync(NoteEditor.NoteText).ConfigureAwait(true);
+            var result = await _aiReviewer.ReviewAsync(note.NoteText).ConfigureAwait(true);
             if (result.HasError)
             {
                 StatusMessage = result.ErrorMessage ?? "בדיקת AI נכשלה.";
@@ -1064,6 +1245,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
             NoteEditor.GrammarSuggestion = result.GrammarCorrected;
             NoteEditor.RephraseSuggestion = result.Rephrased;
+            if (!string.IsNullOrWhiteSpace(result.GrammarCorrected))
+                note.NoteText = result.GrammarCorrected;
             StatusMessage = "בדיקת AI הושלמה.";
         }
         finally
