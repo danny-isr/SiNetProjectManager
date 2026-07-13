@@ -36,6 +36,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionNoteAiReviewer? _aiReviewer;
     private readonly IInspectionTemplateCatalog? _templateCatalog;
     private readonly IInspectionReportExportPort? _exportPort;
+    private readonly IInspectionNoteScreenshotHost? _screenshotHost;
+    private readonly IInspectionNoteLinkedFileHost? _linkedFileHost;
 
     private WorkSurfaceContext? _taskContext;
     private int? _browseProjectId;
@@ -69,7 +71,9 @@ public sealed class InspectionWindowViewModel : ObservableObject
         ICurrentProjectContext? currentProject = null,
         IInspectionTemplateCatalog? templateCatalog = null,
         IInspectionReportCommandService? reportCommands = null,
-        IInspectionReportExportPort? exportPort = null)
+        IInspectionReportExportPort? exportPort = null,
+        IInspectionNoteScreenshotHost? screenshotHost = null,
+        IInspectionNoteLinkedFileHost? linkedFileHost = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -81,6 +85,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _templateCatalog = templateCatalog;
         _reportCommands = reportCommands;
         _exportPort = exportPort;
+        _screenshotHost = screenshotHost;
+        _linkedFileHost = linkedFileHost;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -118,6 +124,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 Notes.Add(note);
             Questionnaire.ReplaceTree(InspectionWindowDesignData.BuildSampleTree());
             AttachNoteHandlers();
+            AttachGeneralFieldHandlers();
             SelectedTemplate = AvailableTemplates.FirstOrDefault();
             SelectedReport = Reports.FirstOrDefault();
             _reportLoaded = true;
@@ -145,10 +152,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         ShareReportCommand = new AsyncRelayCommand(ShareReportAsync, () => SelectedReport is not null && _exportPort is not null && !IsBusy);
         ExportReportCommand = new AsyncRelayCommand(
             ExportReportAsync,
-            () => SelectedReport is not null
-                && _exportPort is not null
-                && !IsBusy
-                && Questionnaire.CanExport);
+            () => SelectedReport is not null && _exportPort is not null && !IsBusy);
         SelectReviewedPlanCommand = Stub();
         AddNoteCommand = new AsyncRelayCommand<InspectionSectionItem>(
             AddNoteToSectionAsync,
@@ -157,10 +161,18 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 && _noteCommands is not null
                 && IsReportEditable
                 && !IsBusy);
-        MoveNoteUpCommand = Stub();
-        MoveNoteDownCommand = Stub();
-        ScreenshotPrimaryCommand = Stub();
-        OpenNoteLinkedFileCommand = Stub();
+        MoveNoteUpCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            note => MoveNoteAsync(note, direction: -1),
+            note => CanMoveNote(note, direction: -1));
+        MoveNoteDownCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            note => MoveNoteAsync(note, direction: 1),
+            note => CanMoveNote(note, direction: 1));
+        ScreenshotPrimaryCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            UploadScreenshotAsync,
+            note => note?.NoteId is > 0 && _screenshotHost is not null && IsReportEditable && !IsBusy);
+        OpenNoteLinkedFileCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            OpenLinkedFileAsync,
+            note => note is not null && SelectedReport is not null && _linkedFileHost is not null && !IsBusy);
         SaveNoteCommand = new AsyncRelayCommand(
             SaveSelectedNoteAsync,
             () => Questionnaire.SelectedNote?.NoteId is > 0 && _noteCommands is not null && IsReportEditable);
@@ -278,6 +290,15 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public bool HasSelectedReport => _selectedReport is not null;
 
     public bool HasSelectedNote => Questionnaire.SelectedNote is not null;
+
+    public string ValidationSummary => Questionnaire.ValidationSummary;
+
+    public bool HasValidationBlockingExport => HasSelectedReport && !Questionnaire.CanExport;
+
+    public string ExportTooltip => HasValidationBlockingExport
+        ? ValidationSummary
+        : "ייצא דוח ל-Google Sheets";
+
 
     public string? SelectedResultCode
     {
@@ -536,6 +557,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
         field.ClearDirty();
         StatusMessage = "שדה כללי נשמר.";
+        RaiseCommandStates();
     }
 
     /// <summary>Persists note text after LostFocus on the inline editor.</summary>
@@ -592,16 +614,42 @@ public sealed class InspectionWindowViewModel : ObservableObject
             note.PropertyChanged -= OnNoteItemPropertyChanged;
     }
 
-    private async void OnNoteItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void AttachGeneralFieldHandlers()
     {
-        if (sender is not InspectionNoteItem note || !IsReportEditable || _noteCommands is null)
-            return;
+        foreach (var field in Questionnaire.EnumerateGeneralFields())
+            field.PropertyChanged += OnGeneralFieldPropertyChanged;
+    }
 
-        if (e.PropertyName == nameof(InspectionNoteItem.HasValidationError)
-            || e.PropertyName == nameof(InspectionNoteItem.StatusText))
+    private void DetachGeneralFieldHandlers()
+    {
+        foreach (var field in Questionnaire.EnumerateGeneralFields())
+            field.PropertyChanged -= OnGeneralFieldPropertyChanged;
+    }
+
+    private void OnGeneralFieldPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(InspectionGeneralFieldItem.Value)
+            or nameof(InspectionGeneralFieldItem.HasValidationError)
+            or nameof(InspectionGeneralFieldItem.IsManualOverride))
         {
             RaiseCommandStates();
         }
+    }
+
+    private async void OnNoteItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not InspectionNoteItem note)
+            return;
+
+        if (e.PropertyName is nameof(InspectionNoteItem.HasValidationError)
+            or nameof(InspectionNoteItem.StatusText)
+            or nameof(InspectionNoteItem.NoteText))
+        {
+            RaiseCommandStates();
+        }
+
+        if (!IsReportEditable || _noteCommands is null)
+            return;
 
         if (e.PropertyName != nameof(InspectionNoteItem.StatusText) || note.NoteId is not long noteId)
             return;
@@ -611,6 +659,104 @@ public sealed class InspectionWindowViewModel : ObservableObject
             .ConfigureAwait(true);
         if (!result.Succeeded)
             StatusMessage = result.ErrorMessage ?? "שמירת סטטוס נכשלה.";
+    }
+
+    private bool CanMoveNote(InspectionNoteItem? note, int direction)
+    {
+        if (note is null || !IsReportEditable || _noteCommands is null || IsBusy)
+            return false;
+        if (!InspectionQuestionnaireRules.IsNumberedSubNote(note.NoteNumber))
+            return false;
+
+        var section = Questionnaire.FindSectionContaining(note);
+        if (section is null)
+            return false;
+
+        var idx = section.Notes.IndexOf(note);
+        var targetIdx = idx + direction;
+        if (idx < 0 || targetIdx < 0 || targetIdx >= section.Notes.Count)
+            return false;
+
+        return InspectionQuestionnaireRules.IsNumberedSubNote(section.Notes[targetIdx].NoteNumber);
+    }
+
+    private async Task MoveNoteAsync(InspectionNoteItem? note, int direction)
+    {
+        if (note is null || !CanMoveNote(note, direction) || _noteCommands is null)
+            return;
+
+        var section = Questionnaire.FindSectionContaining(note);
+        if (section is null)
+            return;
+
+        var idx = section.Notes.IndexOf(note);
+        var targetIdx = idx + direction;
+        section.Notes.Move(idx, targetIdx);
+
+        var renumberings = new List<(long NoteId, string SubIndex)>();
+        var ordinal = 1;
+        foreach (var n in section.Notes)
+        {
+            if (!InspectionQuestionnaireRules.IsNumberedSubNote(n.NoteNumber) || n.NoteId is not long noteId)
+                continue;
+
+            var newIndex = $"{section.SectionNumber}.{ordinal}";
+            if (!string.Equals(n.NoteNumber, newIndex, StringComparison.Ordinal))
+            {
+                n.NoteNumber = newIndex;
+                renumberings.Add((noteId, newIndex));
+            }
+
+            ordinal++;
+        }
+
+        if (renumberings.Count > 0)
+        {
+            var result = await _noteCommands.RenumberNotesAsync(renumberings).ConfigureAwait(true);
+            StatusMessage = result.Succeeded
+                ? "סדר ההערות עודכן."
+                : (result.ErrorMessage ?? "עדכון סדר ההערות נכשל.");
+        }
+
+        RaiseCommandStates();
+    }
+
+    private async Task UploadScreenshotAsync(InspectionNoteItem? note)
+    {
+        if (note?.NoteId is not long noteId || _screenshotHost is null)
+            return;
+
+        StatusMessage = "מעלה צילום מסך...";
+        var result = await _screenshotHost.UploadFromClipboardAsync(noteId).ConfigureAwait(true);
+        StatusMessage = result.Succeeded
+            ? (string.IsNullOrWhiteSpace(result.AttachmentUrl)
+                ? "צילום המסך הועלה."
+                : $"צילום הועלה: {result.AttachmentUrl}")
+            : (result.ErrorMessage ?? "העלאת צילום מסך נכשלה.");
+    }
+
+    private async Task OpenLinkedFileAsync(InspectionNoteItem? note)
+    {
+        if (note is null || SelectedReport is null || _linkedFileHost is null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(note.LinkedFileName) && Metadata.ReviewedFiles.Count == 0)
+        {
+            StatusMessage = "אין קובץ מקושר להערה זו.";
+            return;
+        }
+
+        var result = await _linkedFileHost.OpenAsync(
+            new InspectionLinkedFileOpenRequest(
+                note.NoteId ?? 0,
+                note.LinkedFileName,
+                note.LinkedAlternative,
+                note.LinkedVersion,
+                SelectedReport.ReportId,
+                Metadata.ReviewedVersion,
+                Metadata.ReviewedFiles.ToList()))
+            .ConfigureAwait(true);
+        StatusMessage = result.Message;
     }
 
     private async Task AddNoteToSectionAsync(InspectionSectionItem? section)
@@ -773,6 +919,16 @@ public sealed class InspectionWindowViewModel : ObservableObject
     {
         if (_exportPort is null || SelectedReport is null)
             return;
+
+        if (!Questionnaire.CanExport)
+        {
+            var summary = Questionnaire.ValidationSummary;
+            StatusMessage = string.IsNullOrWhiteSpace(summary)
+                ? "לא ניתן לייצא — יש למלא את כל השדות וההערות."
+                : summary;
+            NotifyValidationUi();
+            return;
+        }
 
         IsBusy = true;
         try
@@ -1027,6 +1183,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private async Task LoadReportContentCoreAsync(int reportId, CancellationToken ct)
     {
         DetachNoteHandlers();
+        DetachGeneralFieldHandlers();
         Notes.Clear();
         NoteEditor.ApplyNote(null);
         OnPropertyChanged(nameof(HasSelectedNote));
@@ -1054,6 +1211,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         var chapters = InspectionQuestionnaireViewModel.MapFromWorkspace(tree);
         Questionnaire.ReplaceTree(general, chapters);
         AttachNoteHandlers();
+        AttachGeneralFieldHandlers();
 
         var reviewed = await _workspace.GetReviewedFilesAsync(reportId, ct).ConfigureAwait(true);
         Metadata.ReplaceReviewedFiles(reviewed);
@@ -1098,6 +1256,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private void ClearReportContent()
     {
         DetachNoteHandlers();
+        DetachGeneralFieldHandlers();
         Notes.Clear();
         Questionnaire.ReplaceTree([]);
         NoteEditor.ApplyNote(null);
@@ -1141,7 +1300,19 @@ public sealed class InspectionWindowViewModel : ObservableObject
         (OpenSourceReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (AddNoteCommand as AsyncRelayCommand<InspectionSectionItem>)?.RaiseCanExecuteChanged();
         (SaveNoteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (MoveNoteUpCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (MoveNoteDownCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (ScreenshotPrimaryCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (OpenNoteLinkedFileCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(CanCompleteTask));
+        NotifyValidationUi();
+    }
+
+    private void NotifyValidationUi()
+    {
+        OnPropertyChanged(nameof(ValidationSummary));
+        OnPropertyChanged(nameof(HasValidationBlockingExport));
+        OnPropertyChanged(nameof(ExportTooltip));
     }
 
     private bool TryResolveEffectiveCompletionEventCode(

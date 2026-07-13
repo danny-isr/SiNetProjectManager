@@ -70,8 +70,51 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
         }
     }
 
+    public IEnumerable<InspectionGeneralFieldItem> EnumerateGeneralFields()
+    {
+        foreach (var root in RootItems)
+        {
+            if (root is InspectionGeneralChapterItem general)
+            {
+                foreach (var field in general.Fields)
+                    yield return field;
+            }
+        }
+    }
+
+    public InspectionSectionItem? FindSectionContaining(InspectionNoteItem note)
+    {
+        foreach (var root in RootItems)
+        {
+            if (root is not InspectionChapterItem chapter)
+                continue;
+
+            foreach (var section in chapter.Sections)
+            {
+                if (section.Notes.Contains(note))
+                    return section;
+            }
+        }
+
+        return null;
+    }
+
+    public int CountEmptyGeneralFields() =>
+        EnumerateGeneralFields().Count(f => f.HasValidationError);
+
+    public int CountInvalidNotes() =>
+        EnumerateNotes().Count(n =>
+            n.HasValidationError
+            || string.Equals(n.StatusText, InspectionQuestionnaireRules.ManagerReview, StringComparison.Ordinal));
+
+    public string ValidationSummary =>
+        InspectionQuestionnaireRules.BuildValidationSummary(
+            CountEmptyGeneralFields(),
+            CountInvalidNotes());
+
     public bool CanExport =>
-        InspectionQuestionnaireRules.CanExportNotes(
+        InspectionQuestionnaireRules.CanExport(
+            EnumerateGeneralFields().Select(f => f.Value),
             EnumerateNotes().Select(n => (n.StatusText, (string?)n.NoteText)));
 
     public static InspectionGeneralChapterItem? MapGeneralFields(
@@ -125,6 +168,9 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
                             HasPlannerResponse = !string.IsNullOrWhiteSpace(n.PlannerResponseText),
                             NoteId = n.NoteId,
                             SectionId = sec.SectionId,
+                            LinkedFileName = n.LinkedFileName,
+                            LinkedAlternative = n.LinkedAlternative,
+                            LinkedVersion = n.LinkedVersion,
                         };
                         note.SetNoteTextWithoutStatusSync(n.Text ?? string.Empty);
                         note.ClearDirty();

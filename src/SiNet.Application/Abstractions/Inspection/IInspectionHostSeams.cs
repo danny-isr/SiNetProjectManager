@@ -58,3 +58,28 @@ public sealed record InspectionScreenshotUploadResult(
     public static InspectionScreenshotUploadResult Ok(string? url = null) => new(true, AttachmentUrl: url);
     public static InspectionScreenshotUploadResult Fail(string message) => new(false, message);
 }
+
+/// <summary>Host opens a note-linked project file (or reviewed-plan fallback).</summary>
+public interface IInspectionNoteLinkedFileHost
+{
+    Task<InspectionLinkedFileOpenResult> OpenAsync(
+        InspectionLinkedFileOpenRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record InspectionLinkedFileOpenRequest(
+    long NoteId,
+    string? LinkedFileName,
+    string? LinkedAlternative,
+    string? LinkedVersion,
+    int ReportId,
+    string? ReviewedVersion,
+    IReadOnlyList<InspectionReviewedFileRow> ReviewedFiles);
+
+public sealed record InspectionLinkedFileOpenResult(
+    bool Succeeded,
+    string Message)
+{
+    public static InspectionLinkedFileOpenResult Ok(string message) => new(true, message);
+    public static InspectionLinkedFileOpenResult Fail(string message) => new(false, message);
+}

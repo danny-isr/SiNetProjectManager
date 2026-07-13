@@ -30,12 +30,15 @@ public static class InspectionQuestionnaireRules
 
     /// <summary>
     /// Regular note validation: missing status, or status ≠ N/A with empty text.
-    /// General fields are never validated by this rule.
     /// </summary>
     public static bool HasValidationError(string? status, string? text) =>
         string.IsNullOrWhiteSpace(status)
         || (!string.Equals(status, NotApplicable, StringComparison.Ordinal)
             && string.IsNullOrWhiteSpace(text));
+
+    /// <summary>General field is incomplete when the displayed value is blank.</summary>
+    public static bool HasGeneralFieldValidationError(string? value) =>
+        string.IsNullOrWhiteSpace(value);
 
     /// <summary>Export is blocked when any numbered note fails validation or is ManagerReview.</summary>
     public static bool CanExportNotes(IEnumerable<(string? Status, string? Text)> notes)
@@ -49,6 +52,34 @@ public static class InspectionQuestionnaireRules
         }
 
         return true;
+    }
+
+    /// <summary>Export requires filled general fields and valid numbered notes.</summary>
+    public static bool CanExport(
+        IEnumerable<string?> generalValues,
+        IEnumerable<(string? Status, string? Text)> notes)
+    {
+        foreach (var value in generalValues)
+        {
+            if (HasGeneralFieldValidationError(value))
+                return false;
+        }
+
+        return CanExportNotes(notes);
+    }
+
+    public static string BuildValidationSummary(int emptyGeneralCount, int invalidNoteCount)
+    {
+        if (emptyGeneralCount <= 0 && invalidNoteCount <= 0)
+            return string.Empty;
+
+        var parts = new List<string>();
+        if (emptyGeneralCount > 0)
+            parts.Add($"{emptyGeneralCount} שדות כלליים ריקים");
+        if (invalidNoteCount > 0)
+            parts.Add($"{invalidNoteCount} הערות לא תקינות");
+
+        return $"יש {string.Join(" ו-", parts)} — יש למלא לפני ייצוא.";
     }
 
     /// <summary>Legacy auto-sync: typing text sets Failed; clearing text clears status.</summary>

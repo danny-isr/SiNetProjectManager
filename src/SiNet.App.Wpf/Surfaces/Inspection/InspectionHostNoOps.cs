@@ -27,6 +27,15 @@ internal sealed class NoOpInspectionNoteScreenshotHost : IInspectionNoteScreensh
         Task.FromResult(InspectionScreenshotUploadResult.Fail("העלאת צילום מסך עדיין לא מחוברת."));
 }
 
+internal sealed class NoOpInspectionNoteLinkedFileHost : IInspectionNoteLinkedFileHost
+{
+    public Task<InspectionLinkedFileOpenResult> OpenAsync(
+        InspectionLinkedFileOpenRequest request,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(InspectionLinkedFileOpenResult.Fail(
+            "פתיחת קובץ מקושר דורשת Host (חלון עבודה / V2)."));
+}
+
 /// <summary>Empty template catalog when Google Drive is not wired.</summary>
 internal sealed class EmptyInspectionTemplateCatalog : IInspectionTemplateCatalog
 {

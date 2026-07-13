@@ -168,9 +168,12 @@ public sealed class InspectionNoteItem : ObservableObject
     public long? NoteId { get; init; }
     public int SectionId { get; init; }
     public int? StatusId { get; set; }
-    public string NoteNumber { get; init; } = string.Empty;
-    public bool HasLinkedFile { get; init; }
+    public string NoteNumber { get; set; } = string.Empty;
+    public bool HasLinkedFile { get; set; }
     public bool HasPlannerResponse { get; init; }
+    public string? LinkedFileName { get; set; }
+    public string? LinkedAlternative { get; set; }
+    public string? LinkedVersion { get; set; }
 
     public string DisplayLabel => NoteNumber;
 
@@ -304,9 +307,14 @@ public sealed class InspectionGeneralFieldItem : ObservableObject
             _value = value;
             _isDirty = true;
             OnPropertyChanged(nameof(Value));
+            OnPropertyChanged(nameof(HasValidationError));
             OnPropertyChanged(nameof(IsDirty));
         }
     }
+
+    /// <summary>Empty displayed value — mark as unfilled (red).</summary>
+    public bool HasValidationError =>
+        InspectionQuestionnaireRules.HasGeneralFieldValidationError(_value);
 
     public bool IsDirty
     {

@@ -17,6 +17,11 @@ public interface IInspectionNoteCommandService
         string? alternative,
         string? version,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Persists NoteSubIndex changes after reordering notes in a section.</summary>
+    Task<InspectionNoteCommandResult> RenumberNotesAsync(
+        IReadOnlyList<(long NoteId, string SubIndex)> renumberings,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IInspectionReportCommandService

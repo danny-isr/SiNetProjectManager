@@ -313,7 +313,8 @@
                                         Background="Transparent" Foreground="#1565C0"
                                         BorderBrush="#1565C0" BorderThickness="1"
                                         Cursor="Hand"
-                                        ToolTip="ייצא דוח ל-Google Sheets" />
+                                        ToolTip="{Binding ExportTooltip}"
+                                        ToolTipService.ShowOnDisabled="True" />
                                 <Button Content="השלם משימה"
                                         Command="{Binding CompleteTaskCommand}"
                                         Style="{StaticResource CardActionButton}"
@@ -323,6 +324,13 @@
                                         Visibility="{Binding CanCompleteTask, Converter={StaticResource BoolToVisibility}}"
                                         ToolTip="השלם את המשימה הנוכחית" />
                             </StackPanel>
+
+                            <TextBlock Text="{Binding ValidationSummary}"
+                                       Foreground="#C62828"
+                                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,4"
+                                       Visibility="{Binding HasValidationBlockingExport, Converter={StaticResource BoolToVisibility}}" />
 
                             <!-- Metadata + reviewed-plan selection -->
                             <Grid>
@@ -413,8 +421,22 @@
                                 <!-- General field: label + TextBox + auto/manual -->
                                 <DataTemplate DataType="{x:Type local:InspectionGeneralFieldItem}">
                                     <Border Padding="1,1" Margin="0"
-                                            Background="White" CornerRadius="2"
-                                            BorderBrush="#D0D0D0" BorderThickness="0,0,0,1">
+                                            CornerRadius="2"
+                                            BorderThickness="0,0,0,1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="White" />
+                                                <Setter Property="BorderBrush" Value="#D0D0D0" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasValidationError}" Value="True">
+                                                        <Setter Property="Background" Value="#FDECEA" />
+                                                        <Setter Property="BorderBrush" Value="#C62828" />
+                                                        <Setter Property="BorderThickness" Value="1" />
+                                                        <Setter Property="ToolTip" Value="שדה חובה — יש למלא לפני ייצוא" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" MinWidth="80" />
@@ -430,9 +452,13 @@
                                                        Margin="0,0,6,0" />
                                             <TextBox Grid.Column="1"
                                                      Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="True"
+                                                     MinHeight="28"
                                                      FontSize="{DynamicResource SiTextSmallFontSize}"
                                                      Padding="3,2"
-                                                     VerticalAlignment="Center"
+                                                     VerticalAlignment="Top"
+                                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                                      LostFocus="GeneralField_LostFocus">
                                                 <TextBox.Style>
                                                     <Style TargetType="TextBox">
@@ -457,7 +483,7 @@
                                                           FontSize="10"
                                                           Padding="4,1"
                                                           Margin="4,0,0,0"
-                                                          VerticalAlignment="Center"
+                                                          VerticalAlignment="Top"
                                                           ToolTip="לחץ כדי לעבור בין מילוי אוטומטי לידני"
                                                           Click="AutoManualToggle_Click">
                                                 <ToggleButton.Style>
@@ -619,27 +645,35 @@
                                                       IsEnabled="{Binding DataContext.IsReportEditable, RelativeSource={RelativeSource AncestorType=Window}}"
                                                       ToolTip="סטטוס ההערה" />
 
-                                            <local:InspectionRichTextNoteEditor Grid.Column="5"
-                                                    PlainText="{Binding NoteText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    MinHeight="36"
-                                                    MaxHeight="120"
-                                                    BorderBrush="#CCC"
-                                                    BorderThickness="1"
-                                                    Padding="3"
-                                                    FontSize="{DynamicResource SiTextSmallFontSize}"
-                                                    VerticalScrollBarVisibility="Auto"
-                                                    LostFocus="NoteEditor_LostFocus">
-                                                <local:InspectionRichTextNoteEditor.Style>
-                                                    <Style TargetType="local:InspectionRichTextNoteEditor">
+                                            <TextBox Grid.Column="5"
+                                                     Text="{Binding NoteText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="True"
+                                                     MinHeight="40"
+                                                     BorderBrush="#CCC"
+                                                     BorderThickness="1"
+                                                     Padding="3"
+                                                     FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                     VerticalAlignment="Top"
+                                                     VerticalContentAlignment="Top"
+                                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                     LostFocus="NoteEditor_LostFocus">
+                                                <TextBox.Style>
+                                                    <Style TargetType="TextBox">
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding DataContext.IsSelectedReportLocked, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                                                 <Setter Property="IsReadOnly" Value="True" />
                                                                 <Setter Property="Background" Value="#F0F0F0" />
                                                             </DataTrigger>
+                                                            <DataTrigger Binding="{Binding HasValidationError}" Value="True">
+                                                                <Setter Property="BorderBrush" Value="#C62828" />
+                                                                <Setter Property="Background" Value="#FFF8F7" />
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
-                                                </local:InspectionRichTextNoteEditor.Style>
-                                            </local:InspectionRichTextNoteEditor>
+                                                </TextBox.Style>
+                                            </TextBox>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

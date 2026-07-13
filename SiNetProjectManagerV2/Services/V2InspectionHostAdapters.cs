@@ -206,6 +206,90 @@ internal sealed class V2InspectionNoteScreenshotHost : IInspectionNoteScreenshot
         Task.FromResult(InspectionScreenshotUploadResult.Fail("העלאת צילום מסך תחובר בסלייס הבא."));
 }
 
+/// <summary>Opens a note-linked file via the live Work Window registries (legacy parity).</summary>
+internal sealed class V2InspectionNoteLinkedFileHost : IInspectionNoteLinkedFileHost
+{
+    public async Task<InspectionLinkedFileOpenResult> OpenAsync(
+        InspectionLinkedFileOpenRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var note = new SiNetSQL.Models.InspectionNote
+        {
+            NoteId = request.NoteId,
+            LinkedFileName = request.LinkedFileName,
+            LinkedAlternative = request.LinkedAlternative,
+            LinkedVersion = request.LinkedVersion,
+        };
+        var report = new SiNetSQL.Models.InspectionReport
+        {
+            ReportId = request.ReportId,
+            ReviewedVersion = request.ReviewedVersion,
+            ReviewedFiles = request.ReviewedFiles
+                .Select(f => new SiNetSQL.Models.InspectionReportReviewedFile
+                {
+                    FileName = f.FileName,
+                    Alternative = f.Alternative,
+                    SortOrder = f.SortOrder,
+                })
+                .ToList(),
+        };
+
+        var available = SiNetSQL.Services.FileOpen.FileOpenServiceRegistry.Instance.IsAvailable;
+        var decision = InspectionFileLinkHelper.DecideOpen(note, report, fileOpenServiceAvailable: available);
+        if (!decision.IsEnabled || string.IsNullOrWhiteSpace(decision.FileName))
+        {
+            return InspectionLinkedFileOpenResult.Fail(
+                string.IsNullOrWhiteSpace(decision.Tooltip)
+                    ? "אין קובץ מקושר לפתיחה."
+                    : decision.Tooltip);
+        }
+
+        var match = SiNetSQL.Services.ActiveFileQuery.ActiveFileQueryRegistry.Instance
+            .FindActiveFileByName(decision.FileName!);
+        int? versionNumber = int.TryParse(decision.Version, out var parsed) ? parsed : null;
+
+        var openRequest = match?.FileId != null
+            ? new SiNetSQL.Services.FileOpen.FileOpenRequest(
+                FileId: match.FileId,
+                AlternativeName: string.IsNullOrWhiteSpace(decision.Alternative) ? null : decision.Alternative,
+                VersionNumber: versionNumber)
+            : new SiNetSQL.Services.FileOpen.FileOpenRequest(
+                AlternativeName: string.IsNullOrWhiteSpace(decision.Alternative) ? null : decision.Alternative,
+                VersionNumber: versionNumber);
+
+        try
+        {
+            var result = await SiNetSQL.Services.FileOpen.FileOpenServiceRegistry.Instance
+                .OpenAsync(openRequest, cancellationToken)
+                .ConfigureAwait(false);
+
+            var message = result.Outcome switch
+            {
+                SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedInAcc => $"נפתח ב-ACC: {decision.FileName}",
+                SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedLocally => $"נפתח מקומית: {decision.FileName}",
+                SiNetSQL.Services.FileOpen.FileOpenOutcome.NotFound => $"הקובץ לא נמצא: {decision.FileName}",
+                SiNetSQL.Services.FileOpen.FileOpenOutcome.Unavailable =>
+                    InspectionFileLinkHelper.MessageWorkWindowRequiredForOpen,
+                SiNetSQL.Services.FileOpen.FileOpenOutcome.Failed =>
+                    $"שגיאה בפתיחת קובץ: {result.Error}",
+                _ => decision.Tooltip ?? string.Empty,
+            };
+
+            var ok = result.Outcome is SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedInAcc
+                or SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedLocally;
+            return ok
+                ? InspectionLinkedFileOpenResult.Ok(message)
+                : InspectionLinkedFileOpenResult.Fail(message);
+        }
+        catch (Exception ex)
+        {
+            return InspectionLinkedFileOpenResult.Fail($"שגיאה בפתיחת קובץ: {ex.Message}");
+        }
+    }
+}
+
 internal sealed class V2InspectionReportExportPort(
     GoogleAuthService authService,
     IDbContextFactory<SiNetSQLDbContext> dbContextFactory,

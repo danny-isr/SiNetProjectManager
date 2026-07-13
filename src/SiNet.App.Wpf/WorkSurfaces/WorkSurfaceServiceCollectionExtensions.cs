@@ -18,6 +18,7 @@ public static class WorkSurfaceServiceCollectionExtensions
         services.AddSingleton<IInspectionFileTreePickerHost, NoOpInspectionFileTreePickerHost>();
         services.AddSingleton<IInspectionReportEmailHost, NoOpInspectionReportEmailHost>();
         services.AddSingleton<IInspectionNoteScreenshotHost, NoOpInspectionNoteScreenshotHost>();
+        services.AddSingleton<IInspectionNoteLinkedFileHost, NoOpInspectionNoteLinkedFileHost>();
         services.AddSingleton<IInspectionTemplateCatalog, EmptyInspectionTemplateCatalog>();
 
         return services;

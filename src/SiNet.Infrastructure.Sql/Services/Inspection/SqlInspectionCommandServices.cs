@@ -133,6 +133,30 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
         return InspectionNoteCommandResult.Ok(noteId);
     }
 
+    public async Task<InspectionNoteCommandResult> RenumberNotesAsync(
+        IReadOnlyList<(long NoteId, string SubIndex)> renumberings,
+        CancellationToken cancellationToken = default)
+    {
+        if (renumberings.Count == 0)
+            return InspectionNoteCommandResult.Ok();
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var (noteId, subIndex) in renumberings)
+        {
+            var note = await db.InspectionNotes.FindAsync([noteId], cancellationToken).ConfigureAwait(false);
+            if (note is null)
+                continue;
+
+            if (await IsReportLockedAsync(db, note.ReportId, cancellationToken).ConfigureAwait(false))
+                return InspectionNoteCommandResult.Fail("הדוח נעול לאחר שליחה.");
+
+            note.NoteSubIndex = subIndex;
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return InspectionNoteCommandResult.Ok();
+    }
+
     private static async Task<bool> IsReportLockedAsync(
         SiNetSQLDbContext db, int reportId, CancellationToken cancellationToken) =>
         await db.InspectionReports

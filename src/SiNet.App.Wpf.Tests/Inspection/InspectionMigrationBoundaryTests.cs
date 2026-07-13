@@ -19,6 +19,7 @@ public sealed class InspectionMigrationBoundaryTests
         Assert.Contains("AddSiNetInspectionSql", source, StringComparison.Ordinal);
         Assert.Contains("AddSiNetAi", source, StringComparison.Ordinal);
         Assert.Contains("V2InspectionFileTreePickerHost", source, StringComparison.Ordinal);
+        Assert.Contains("V2InspectionNoteLinkedFileHost", source, StringComparison.Ordinal);
     }
 
     [Fact]
