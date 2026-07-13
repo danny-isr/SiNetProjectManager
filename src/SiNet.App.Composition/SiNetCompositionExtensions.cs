@@ -41,6 +41,7 @@ public static class SiNetCompositionExtensions
         services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();
         services.AddSiNetLegacyBridge();
+        services.AddSiNetInspectionSql();
         services.AddSiNetDevTools();
         return services;
     }

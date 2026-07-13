@@ -155,6 +155,22 @@ public sealed class InspectionWindowViewModelTaskModeTests
         public Task<IReadOnlyList<AppInspectionNoteRow>> GetNotesAsync(
             int reportId, CancellationToken cancellationToken = default)
             => Task.FromResult(notes);
+
+        public Task<InspectionReportDetail?> GetReportDetailAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<InspectionReportDetail?>(null);
+
+        public Task<IReadOnlyList<InspectionChapterNode>> GetQuestionnaireTreeAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionChapterNode>>([]);
+
+        public Task<IReadOnlyList<InspectionDrawingRow>> GetDrawingsAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionDrawingRow>>([]);
+
+        public Task<IReadOnlyList<InspectionReviewedFileRow>> GetReviewedFilesAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionReviewedFileRow>>([]);
     }
 
     private sealed class RecordingCompletion : ITaskCompletionService

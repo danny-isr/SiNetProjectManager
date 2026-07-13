@@ -27,6 +27,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly ITaskCompletionService? _taskCompletion;
     private readonly ITaskCompletionMetadataResolver? _completionMetadata;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly IInspectionNoteCommandService? _noteCommands;
+    private readonly IInspectionNoteAiReviewer? _aiReviewer;
 
     private WorkSurfaceContext? _taskContext;
     private string _activeProjectDisplay = "\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4 \u2014 \u05D3\u05D5\u05D7\u05D5\u05EA \u05D1\u05D9\u05E7\u05D5\u05E8\u05EA";
@@ -50,17 +52,28 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionWorkspace? workspace,
         ITaskCompletionService? taskCompletion = null,
         ITaskCompletionMetadataResolver? completionMetadata = null,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        IInspectionNoteCommandService? noteCommands = null,
+        IInspectionNoteAiReviewer? aiReviewer = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
         _completionMetadata = completionMetadata;
         _currentUser = currentUser;
+        _noteCommands = noteCommands;
+        _aiReviewer = aiReviewer;
 
-        AvailableTemplates = new ObservableCollection<InspectionTemplateRow>(InspectionWindowDesignData.SampleTemplates);
-        Reports = new ObservableCollection<InspectionReportRow>();
+        CreateStrip = new InspectionCreateReportStripViewModel();
+        Questionnaire = new InspectionQuestionnaireViewModel();
+        NoteEditor = new InspectionNoteEditorViewModel();
+        DrawingsPanel = new InspectionDrawingsPanelViewModel();
+        ReportCards = new InspectionReportCardsViewModel();
+        Metadata = new InspectionMetadataViewModel();
+
+        AvailableTemplates = CreateStrip.AvailableTemplates;
+        Reports = ReportCards.Reports;
         Notes = new ObservableCollection<InspectionNoteRow>();
-        InspectionTree = new ObservableCollection<InspectionChapterItem>();
+        InspectionTree = Questionnaire.Chapters;
         StatusOptions = new ObservableCollection<string>(
         [
             "\u05E4\u05EA\u05D5\u05D7\u05D4",
@@ -72,14 +85,23 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
         if (_workspace is null)
         {
+            foreach (var template in InspectionWindowDesignData.SampleTemplates)
+                CreateStrip.AvailableTemplates.Add(template);
             foreach (var report in InspectionWindowDesignData.SampleReports)
                 Reports.Add(report);
             foreach (var note in InspectionWindowDesignData.SampleNotes)
                 Notes.Add(note);
             foreach (var chapter in InspectionWindowDesignData.BuildSampleTree())
                 InspectionTree.Add(chapter);
-            _selectedReport = Reports.FirstOrDefault();
+            SelectedTemplate = AvailableTemplates.FirstOrDefault();
+            SelectedReport = Reports.FirstOrDefault();
             _reportLoaded = true;
+        }
+        else
+        {
+            foreach (var template in InspectionWindowDesignData.SampleTemplates)
+                CreateStrip.AvailableTemplates.Add(template);
+            SelectedTemplate = AvailableTemplates.FirstOrDefault();
         }
 
         _selectedTemplate = AvailableTemplates.FirstOrDefault();
@@ -107,7 +129,21 @@ public sealed class InspectionWindowViewModel : ObservableObject
         MoveNoteDownCommand = Stub();
         ScreenshotPrimaryCommand = Stub();
         OpenNoteLinkedFileCommand = Stub();
+        SaveNoteCommand = new AsyncRelayCommand(SaveSelectedNoteAsync, () => NoteEditor.NoteId is > 0 && _noteCommands is not null);
+        ReviewNoteAiCommand = new AsyncRelayCommand(ReviewSelectedNoteAiAsync, () => _aiReviewer is not null && !string.IsNullOrWhiteSpace(NoteEditor.NoteText));
     }
+
+    public InspectionCreateReportStripViewModel CreateStrip { get; }
+
+    public InspectionQuestionnaireViewModel Questionnaire { get; }
+
+    public InspectionNoteEditorViewModel NoteEditor { get; }
+
+    public InspectionDrawingsPanelViewModel DrawingsPanel { get; }
+
+    public InspectionReportCardsViewModel ReportCards { get; }
+
+    public InspectionMetadataViewModel Metadata { get; }
 
     public string Title => "\u05D3\u05D5\u05D7\u05D5\u05EA \u05D1\u05D9\u05E7\u05D5\u05E8\u05EA";
 
@@ -220,6 +256,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public ICommand MoveNoteDownCommand { get; }
     public ICommand ScreenshotPrimaryCommand { get; }
     public ICommand OpenNoteLinkedFileCommand { get; }
+    public ICommand SaveNoteCommand { get; }
+    public ICommand ReviewNoteAiCommand { get; }
     public ICommand CompleteTaskCommand { get; }
 
     /// <summary>
@@ -422,8 +460,18 @@ public sealed class InspectionWindowViewModel : ObservableObject
                     note.Status ?? string.Empty));
             }
 
+            var tree = await _workspace.GetQuestionnaireTreeAsync(reportId, ct).ConfigureAwait(true);
+            Questionnaire.ReplaceTree(InspectionQuestionnaireViewModel.MapFromWorkspace(tree));
+
+            var detail = await _workspace.GetReportDetailAsync(reportId, ct).ConfigureAwait(true);
+            Metadata.ApplyDetail(detail);
+            var reviewed = await _workspace.GetReviewedFilesAsync(reportId, ct).ConfigureAwait(true);
+            Metadata.ReplaceReviewedFiles(reviewed);
+            var drawings = await _workspace.GetDrawingsAsync(reportId, ct).ConfigureAwait(true);
+            DrawingsPanel.Replace(drawings);
+
             _reportLoaded = true;
-            StatusMessage = $"Opened inspection report #{reportId} for task #{_taskContext?.TaskId} (read-only).";
+            StatusMessage = $"Opened inspection report #{reportId} for task #{_taskContext?.TaskId}.";
             OnPropertyChanged(nameof(CanCompleteTask));
             (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             return true;
@@ -510,6 +558,48 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 message =
                     "Cannot complete: this task allows multiple results. Select one before completing.";
                 return false;
+        }
+    }
+
+    private async Task SaveSelectedNoteAsync()
+    {
+        if (_noteCommands is null || NoteEditor.NoteId is not long noteId)
+        {
+            return;
+        }
+
+        var result = await _noteCommands
+            .SaveNoteTextAsync(noteId, NoteEditor.NoteText)
+            .ConfigureAwait(true);
+        StatusMessage = result.Succeeded ? "ההערה נשמרה." : (result.ErrorMessage ?? "שמירת ההערה נכשלה.");
+    }
+
+    private async Task ReviewSelectedNoteAiAsync()
+    {
+        if (_aiReviewer is null)
+        {
+            StatusMessage = "בדיקת AI אינה זמינה.";
+            return;
+        }
+
+        NoteEditor.IsAiBusy = true;
+        try
+        {
+            var result = await _aiReviewer.ReviewAsync(NoteEditor.NoteText).ConfigureAwait(true);
+            if (result.HasError)
+            {
+                StatusMessage = result.ErrorMessage ?? "בדיקת AI נכשלה.";
+                NoteEditor.ClearAi();
+                return;
+            }
+
+            NoteEditor.GrammarSuggestion = result.GrammarCorrected;
+            NoteEditor.RephraseSuggestion = result.Rephrased;
+            StatusMessage = "בדיקת AI הושלמה.";
+        }
+        finally
+        {
+            NoteEditor.IsAiBusy = false;
         }
     }
 

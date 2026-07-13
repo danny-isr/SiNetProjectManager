@@ -443,7 +443,17 @@ namespace SiNetProjectManagerV2
 
         private void OpenFloatingInspection_Click(object sender, RoutedEventArgs e)
         {
-            // Singleton: reuse existing window if still open
+            // Prefer the New System Inspection window when the factory is registered.
+            var factory = App.ServiceProvider.GetService<SiNet.App.Wpf.Surfaces.Inspection.IInspectionWindowFactory>();
+            if (factory is not null)
+            {
+                var window = factory.Create();
+                window.Owner = this;
+                window.Show();
+                return;
+            }
+
+            // Singleton: reuse existing legacy window if still open
             if (_floatingInspectionWindow is { IsLoaded: true })
             {
                 _floatingInspectionWindow.Activate();

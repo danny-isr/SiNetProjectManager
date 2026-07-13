@@ -120,5 +120,21 @@ public sealed class InspectionTreeViewModelTests
         public Task<IReadOnlyList<InspectionNoteRow>> GetNotesAsync(
             int reportId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<InspectionNoteRow>>(Array.Empty<InspectionNoteRow>());
+
+        public Task<InspectionReportDetail?> GetReportDetailAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<InspectionReportDetail?>(null);
+
+        public Task<IReadOnlyList<InspectionChapterNode>> GetQuestionnaireTreeAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionChapterNode>>([]);
+
+        public Task<IReadOnlyList<InspectionDrawingRow>> GetDrawingsAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionDrawingRow>>([]);
+
+        public Task<IReadOnlyList<InspectionReviewedFileRow>> GetReviewedFilesAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<InspectionReviewedFileRow>>([]);
     }
 }

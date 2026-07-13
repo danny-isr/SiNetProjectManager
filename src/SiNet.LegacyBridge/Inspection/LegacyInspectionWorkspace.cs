@@ -3,16 +3,8 @@ using SiNet.Application.Abstractions.Inspection;
 namespace SiNet.LegacyBridge.Inspection;
 
 /// <summary>
-/// Strangler adapter that implements the new <see cref="IInspectionWorkspace"/> Application port by
-/// delegating to the legacy-host <see cref="ILegacyInspectionSource"/> seam. It maps the bridge-local
-/// <see cref="LegacyInspectionSeriesDto"/> onto the UI-agnostic <see cref="InspectionSeriesSummary"/>.
-/// <para>
-/// The seam is optional: when no host binds it (e.g. the new <c>SiNet.App.Wpf</c> shell during early
-/// migration), the workspace returns an empty list so the rebuilt Inspection screen composes and
-/// renders without coupling the new app to <c>SiNetSQL</c>. The legacy WPF host supplies a real
-/// source and the new tree shows live series. Replace this with a native infrastructure
-/// implementation once Inspection is fully migrated.
-/// </para>
+/// Strangler adapter kept for hosts that still bind <see cref="ILegacyInspectionSource"/>.
+/// Prefer <c>SqlInspectionWorkspace</c> via <c>AddSiNetInspectionSql</c>.
 /// </summary>
 internal sealed class LegacyInspectionWorkspace : IInspectionWorkspace
 {
@@ -35,13 +27,7 @@ internal sealed class LegacyInspectionWorkspace : IInspectionWorkspace
             .GetSeriesForProjectAsync(projectId, cancellationToken)
             .ConfigureAwait(false);
 
-        var result = new List<InspectionSeriesSummary>(series.Count);
-        foreach (var s in series)
-        {
-            result.Add(new InspectionSeriesSummary(s.SeriesId, s.DisplayName));
-        }
-
-        return result;
+        return series.Select(s => new InspectionSeriesSummary(s.SeriesId, s.DisplayName)).ToList();
     }
 
     public async Task<IReadOnlyList<InspectionReportRow>> GetReportsAsync(
@@ -56,13 +42,9 @@ internal sealed class LegacyInspectionWorkspace : IInspectionWorkspace
             .GetReportsForSeriesAsync(projectId, seriesId, cancellationToken)
             .ConfigureAwait(false);
 
-        var result = new List<InspectionReportRow>(reports.Count);
-        foreach (var r in reports)
-        {
-            result.Add(new InspectionReportRow(r.ReportId, r.ReportNumber, r.InspectionDate, r.InspectorName));
-        }
-
-        return result;
+        return reports
+            .Select(r => new InspectionReportRow(r.ReportId, r.ReportNumber, r.InspectionDate, r.InspectorName))
+            .ToList();
     }
 
     public async Task<IReadOnlyList<InspectionNoteRow>> GetNotesAsync(
@@ -77,12 +59,22 @@ internal sealed class LegacyInspectionWorkspace : IInspectionWorkspace
             .GetNotesForReportAsync(reportId, cancellationToken)
             .ConfigureAwait(false);
 
-        var result = new List<InspectionNoteRow>(notes.Count);
-        foreach (var n in notes)
-        {
-            result.Add(new InspectionNoteRow(n.NoteId, n.Number, n.Text, n.Status));
-        }
-
-        return result;
+        return notes.Select(n => new InspectionNoteRow(n.NoteId, n.Number, n.Text, n.Status)).ToList();
     }
+
+    public Task<InspectionReportDetail?> GetReportDetailAsync(
+        int reportId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<InspectionReportDetail?>(null);
+
+    public Task<IReadOnlyList<InspectionChapterNode>> GetQuestionnaireTreeAsync(
+        int reportId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<InspectionChapterNode>>([]);
+
+    public Task<IReadOnlyList<InspectionDrawingRow>> GetDrawingsAsync(
+        int reportId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<InspectionDrawingRow>>([]);
+
+    public Task<IReadOnlyList<InspectionReviewedFileRow>> GetReviewedFilesAsync(
+        int reportId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<InspectionReviewedFileRow>>([]);
 }

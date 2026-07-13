@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.App.Wpf.Theme;
@@ -105,6 +106,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "פתיחת פרויקט חדש",
                 () => OpenNewProject(projectCreateFactory),
                 "יצירת פרויקט חדש עם מקום, חברה, איש קשר וסוגי פרויקט"));
+        }
+
+        // Inspection report window (visual clone) — production target surface.
+        if (_services.GetService<IInspectionWindowFactory>() is { } inspectionFactory
+            && CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
+        {
+            items.Add(new NewShellMenuItem(
+                "דוחות ביקורת",
+                () => ShowWindow(inspectionFactory.Create()),
+                "חלון בדיקת דוח (מערכת חדשה)"));
         }
 
         // Workflow closed-world viewer — native App.Wpf surface (catalog-bound, no save).

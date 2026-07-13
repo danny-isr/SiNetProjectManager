@@ -1,0 +1,60 @@
+namespace SiNet.Application.Abstractions.Inspection;
+
+/// <summary>AI grammar + rephrase review for inspection notes.</summary>
+public interface IInspectionNoteAiReviewer
+{
+    Task<InspectionNoteAiReviewResult> ReviewAsync(
+        string plainText, CancellationToken cancellationToken = default);
+
+    Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed record InspectionNoteAiReviewResult(
+    string OriginalText,
+    string? GrammarCorrected,
+    string? Rephrased,
+    string? ErrorMessage)
+{
+    public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    public static InspectionNoteAiReviewResult Fail(string original, string error) =>
+        new(original, null, null, error);
+}
+
+/// <summary>Host picks a project file tree selection for reviewed plan / note link.</summary>
+public interface IInspectionFileTreePickerHost
+{
+    Task<InspectionFilePickResult?> PickReviewedPlanAsync(
+        int projectId, CancellationToken cancellationToken = default);
+
+    Task<InspectionFilePickResult?> PickNoteLinkedFileAsync(
+        int projectId, CancellationToken cancellationToken = default);
+}
+
+public sealed record InspectionFilePickResult(
+    string FileName,
+    string? Alternative,
+    string? Version,
+    string? FullPath);
+
+/// <summary>Host sends the inspection report email workflow.</summary>
+public interface IInspectionReportEmailHost
+{
+    Task<bool> SendReportEmailAsync(int reportId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Host uploads a clipboard/screenshot attachment for a note.</summary>
+public interface IInspectionNoteScreenshotHost
+{
+    Task<InspectionScreenshotUploadResult> UploadFromClipboardAsync(
+        long noteId, CancellationToken cancellationToken = default);
+}
+
+public sealed record InspectionScreenshotUploadResult(
+    bool Succeeded,
+    string? ErrorMessage = null,
+    string? AttachmentUrl = null)
+{
+    public static InspectionScreenshotUploadResult Ok(string? url = null) => new(true, AttachmentUrl: url);
+    public static InspectionScreenshotUploadResult Fail(string message) => new(false, message);
+}

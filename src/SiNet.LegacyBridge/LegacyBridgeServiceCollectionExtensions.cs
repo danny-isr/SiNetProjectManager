@@ -1,6 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SiNet.Application.Abstractions.Inspection;
-using SiNet.LegacyBridge.Inspection;
 
 namespace SiNet.LegacyBridge;
 
@@ -17,24 +15,13 @@ namespace SiNet.LegacyBridge;
 public static class LegacyBridgeServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers bridge adapters. The Email/Google slice has been migrated to the native
-    /// <c>GmailEmailGateway</c> in <c>SiNet.Infrastructure.Google</c> (registered by
-    /// <c>AddSiNetGoogle</c>), so the bridge no longer wires <c>IEmailGateway</c>. It does wire the
-    /// <see cref="IInspectionWorkspace"/> port to <see cref="LegacyInspectionWorkspace"/> for the new
-    /// Inspection screen: that adapter delegates to the optional <c>ILegacyInspectionSource</c> seam
-    /// (bound only by the legacy WPF host, which knows both worlds) and degrades to an empty series
-    /// list when the seam is unbound, so the new app stays free of any <c>SiNetSQL</c> dependency.
-    /// <para>
-    /// Task navigation/completion ports migrated to <c>SiNet.Infrastructure.Sql</c>
-    /// (<c>AddSiNetTaskServices</c> via <c>AddSiNetProcessBackbone</c>). Legacy task adapters remain
-    /// in this assembly for reference and legacy-host override scenarios only — they are NOT
-    /// registered here. Do not use LegacyTaskNavigationService / LegacyTaskCompletionService for new
-    /// Work Surfaces unless explicitly approved.
-    /// </para>
+    /// Email and Inspection ports are registered natively (<c>AddSiNetGoogle</c>,
+    /// <c>AddSiNetInspectionSql</c>). This method is kept so hosts can continue calling it during
+    /// the strangler transition.
     /// </summary>
     public static IServiceCollection AddSiNetLegacyBridge(this IServiceCollection services)
     {
-        services.AddTransient<IInspectionWorkspace, LegacyInspectionWorkspace>();
+        ArgumentNullException.ThrowIfNull(services);
         return services;
     }
 }

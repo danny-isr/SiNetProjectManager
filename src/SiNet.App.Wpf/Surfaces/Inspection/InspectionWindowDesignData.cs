@@ -121,7 +121,8 @@ public sealed record InspectionNoteItem(
     string NoteText,
     string StatusText,
     bool HasLinkedFile,
-    bool HasPlannerResponse)
+    bool HasPlannerResponse,
+    long? NoteId = null)
 {
     /// <summary>Index label shown on the note row (matches legacy <c>DisplayLabel</c>).</summary>
     public string DisplayLabel => NoteNumber;

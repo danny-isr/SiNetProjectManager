@@ -30,6 +30,8 @@ public static class NewSystemServiceCollectionExtensions
 
         SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
         SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectCreateSql(services);
+        SiNet.Infrastructure.Sql.InspectionServiceCollectionExtensions.AddSiNetInspectionSql(services);
+        SiNet.Infrastructure.Sql.InspectionServiceCollectionExtensions.AddSiNetAi(services);
         SiNet.Infrastructure.Sql.UserManagementServiceCollectionExtensions.AddSiNetUserManagementSql(services);
         services.AddSiNetSecrets();
         services.AddSiNetSerilogLogging();
@@ -51,6 +53,12 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();
         services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
+
+        // Prefer V2 Inspection host adapters over App.Wpf no-ops (last registration wins for concrete resolve via factory override).
+        services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionFileTreePickerHost, V2InspectionFileTreePickerHost>();
+        services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionReportEmailHost, V2InspectionReportEmailHost>();
+        services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionNoteScreenshotHost, V2InspectionNoteScreenshotHost>();
+        services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionReportExportPort, V2InspectionReportExportPort>();
 
         return services;
     }
