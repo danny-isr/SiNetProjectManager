@@ -21,6 +21,18 @@ public interface IInspectionNoteCommandService
 
 public interface IInspectionReportCommandService
 {
+    /// <summary>
+    /// Creates a new inspection report from a template URL (syncs template structure when the host supports it).
+    /// </summary>
+    Task<InspectionReportCommandResult> CreateReportAsync(
+        int projectId,
+        string templateUrl,
+        int? seriesId = null,
+        string? inspectorName = null,
+        int? inspectorId = null,
+        string? spreadsheetId = null,
+        CancellationToken cancellationToken = default);
+
     Task<InspectionReportCommandResult> UnlockReportAsync(
         int reportId, CancellationToken cancellationToken = default);
 

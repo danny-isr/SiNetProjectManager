@@ -225,8 +225,17 @@
                               Margin="0,0,4,4"
                               ToolTip="בחר תבנית ביקורת" />
 
+                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button Content="רענון תבניות"
+                                Command="{Binding RefreshTemplatesCommand}"
+                                Style="{StaticResource CardActionButton}"
+                                Padding="8,3"
+                                Margin="0,0,0,4"
+                                ToolTip="טען תבניות מתיקיית Google Drive" />
+                    </StackPanel>
+
                     <!-- Create report -->
-                    <Button Grid.Row="1" Grid.Column="0"
+                    <Button Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                             Content="+ דוח חדש"
                             Command="{Binding CreateReportCommand}"
                             HorizontalAlignment="Right"
@@ -247,6 +256,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" MinHeight="120" MaxHeight="220" />
                     </Grid.RowDefinitions>
 
                     <!-- Title -->
@@ -296,8 +306,23 @@
                                         Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
-                                        Cursor="Hand"
+                                        Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="שתף קישור לכל מי שיש לו הקישור" />
+                                <Button Content="📤"
+                                        Command="{Binding ExportReportCommand}"
+                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        Background="Transparent" Foreground="#1565C0"
+                                        BorderBrush="#1565C0" BorderThickness="1"
+                                        Cursor="Hand"
+                                        ToolTip="ייצא דוח ל-Google Sheets" />
+                                <Button Content="השלם משימה"
+                                        Command="{Binding CompleteTaskCommand}"
+                                        Style="{StaticResource CardActionButton}"
+                                        Padding="8,2"
+                                        Margin="8,0,0,0"
+                                        FontWeight="SemiBold"
+                                        Visibility="{Binding CanCompleteTask, Converter={StaticResource BoolToVisibility}}"
+                                        ToolTip="השלם את המשימה הנוכחית" />
                             </StackPanel>
 
                             <!-- Metadata + reviewed-plan selection -->
@@ -352,13 +377,14 @@
                                     Padding="8,1" ToolTip="הוסף הערה חדשה" />
                         </Grid>
 
-                        <!-- Hierarchical questionnaire tree: Chapter → Section → Note (visual clone) -->
+                        <!-- Hierarchical questionnaire tree: Chapter → Section → Note -->
                         <TreeView Grid.Row="1"
                                   ItemsSource="{Binding InspectionTree}"
                                   BorderThickness="0"
                                   Background="Transparent"
                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  SelectedItemChanged="InspectionTree_SelectedItemChanged">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem">
                                     <Setter Property="IsExpanded" Value="True" />
@@ -517,6 +543,45 @@
                             </TreeView.Resources>
                         </TreeView>
                     </Grid>
+
+                    <!-- Note editor (selected tree note) -->
+                    <Border Grid.Row="3"
+                            Margin="2,6,2,0"
+                            Padding="6"
+                            Background="White"
+                            BorderBrush="#D0D0D0"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Visibility="{Binding HasNoteEditor, Converter={StaticResource BoolToVisibility}}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" MinHeight="72" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="עריכת הערה" FontWeight="SemiBold"
+                                       Foreground="#2E7D32" Margin="0,0,0,4" />
+                            <local:InspectionRichTextNoteEditor Grid.Row="1"
+                                    PlainText="{Binding NoteEditor.NoteText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    MinHeight="72"
+                                    BorderBrush="#CCC"
+                                    BorderThickness="1"
+                                    Padding="4"
+                                    VerticalScrollBarVisibility="Auto" />
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,6,0,0">
+                                <Button Content="שמור הערה"
+                                        Command="{Binding SaveNoteCommand}"
+                                        Style="{StaticResource CardActionButton}"
+                                        FontWeight="SemiBold"
+                                        Padding="10,3" />
+                                <Button Content="בדיקת AI"
+                                        Command="{Binding ReviewNoteAiCommand}"
+                                        Style="{StaticResource CardActionButton}"
+                                        Padding="10,3"
+                                        ToolTip="הצעות דקדוק / ניסוח" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 

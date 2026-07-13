@@ -333,6 +333,8 @@ public static class ReviewTaskInteractionRegistry
             // lifecycle outside this workflow). No project is created here and
             // no filing happens here — those belong to OpenQuoteProject /
             // FileQuoteMaterial in later PRP.* stages.
+            // UI: FloatingProjectTasksView intercepts ComponentKey=ProjectWork for
+            // this task type and opens QuoteClassificationDialog (not ProjectWork).
             new(
                 TaskTypeCodes.IdentifyQuoteRequest,
                 TaskOpenMode.ProjectWork,

@@ -200,6 +200,15 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
             case SiNetSQL.Services.Tasks.TaskComponentKeys.PoliceSubmission:
             case SiNetSQL.Services.Tasks.TaskComponentKeys.MaterialChecklist:
             case SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectWork:
+                // IdentifyQuoteRequest (and other classification-only tasks) are registered
+                // with ComponentKey=ProjectWork but must open QuoteClassificationDialog /
+                // TaskResultPicker — not Project Work. Otherwise Intake never advances.
+                if (request.ComponentKey == SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectWork
+                    && TryHandleClassificationNavigation(mainWindow, request, primaryEmailId))
+                {
+                    break;
+                }
+
                 if (request.ProjectId is int workProjectId)
                 {
                     _ = System.Threading.Tasks.Task.Run(async () =>
@@ -515,57 +524,11 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                 break;
 
             default:
-                // Classification-only tasks (e.g. IdentifyQuoteRequest) ride the
-                // ProjectWork host slot but have no dedicated screen — they simply
-                // need the operator to pick one of the allowed task results and
-                // close via ITaskCompletionCoordinator. Detect this case by the
-                // resolver-supplied AllowedTaskResultCodes and route to the
-                // shared TaskResultPickerDialog instead of silently no-oping.
-                if (request.AllowedTaskResultCodes.Count > 0
-                    && request.CompletionPolicy == SiNetSQL.Services.Tasks.TaskCompletionPolicy.WorkflowResultRecorded)
+                // Classification-only tasks may also arrive with an unknown ComponentKey;
+                // Prefer the shared host (QuoteClassificationDialog / TaskResultPicker).
+                if (TryHandleClassificationNavigation(mainWindow, request, primaryEmailId))
                 {
-                    var completionEventCode = ResolveClassificationCompletionEventCode(request.TaskTypeCode);
-                    if (!string.IsNullOrEmpty(completionEventCode))
-                    {
-                        string? pickedCode = null;
-
-                        // IdentifyQuoteRequest gets a dedicated host that shows the
-                        // source email + attachments so the operator can classify
-                        // with full context. Other classification tasks fall back
-                        // to the generic result picker.
-                        if (request.TaskTypeCode == SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest
-                            && primaryEmailId is int classificationEmailId)
-                        {
-                            var dialog = new Dialogs.QuoteClassificationDialog(classificationEmailId)
-                            {
-                                Owner = mainWindow ?? Application.Current.MainWindow
-                            };
-                            if (dialog.ShowDialog() == true)
-                            {
-                                pickedCode = dialog.SelectedResultCode;
-                            }
-                        }
-                        else
-                        {
-                            var picker = new Dialogs.TaskResultPickerDialog(
-                                taskTypeId: null,
-                                allowedCodes: request.AllowedTaskResultCodes,
-                                promptText: BuildClassificationPrompt(request.TaskTypeCode))
-                            {
-                                Owner = mainWindow ?? Application.Current.MainWindow
-                            };
-                            if (picker.ShowDialog() == true)
-                            {
-                                pickedCode = picker.SelectedResult?.Code;
-                            }
-                        }
-
-                        if (!string.IsNullOrEmpty(pickedCode))
-                        {
-                            _ = ViewModel.CompleteClassificationTaskAsync(request.TaskId, completionEventCode, pickedCode);
-                        }
-                        break;
-                    }
+                    break;
                 }
 
                 // No specialized host yet — surface this clearly instead of silently no-op.
@@ -705,6 +668,67 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         });
     }
 
+
+    /// <summary>
+    /// Opens QuoteClassificationDialog / TaskResultPicker for classification-only
+    /// tasks (IdentifyQuoteRequest, ClassifyRequestSource) and completes via coordinator.
+    /// Returns true when this request was handled as classification (even if the user cancelled).
+    /// </summary>
+    private bool TryHandleClassificationNavigation(
+        MainWindow? mainWindow,
+        SiNetSQL.Services.Tasks.TaskNavigationRequest request,
+        int? primaryEmailId)
+    {
+        if (request.AllowedTaskResultCodes.Count == 0
+            || request.CompletionPolicy != SiNetSQL.Services.Tasks.TaskCompletionPolicy.WorkflowResultRecorded)
+        {
+            return false;
+        }
+
+        var completionEventCode = ResolveClassificationCompletionEventCode(request.TaskTypeCode);
+        if (string.IsNullOrEmpty(completionEventCode))
+        {
+            return false;
+        }
+
+        string? pickedCode = null;
+
+        // IdentifyQuoteRequest gets a dedicated host that shows the source email
+        // + attachments. Other classification tasks fall back to the generic picker.
+        if (request.TaskTypeCode == SiNetSQL.Constants.TaskTypeCodes.IdentifyQuoteRequest
+            && primaryEmailId is int classificationEmailId)
+        {
+            var dialog = new Dialogs.QuoteClassificationDialog(classificationEmailId)
+            {
+                Owner = mainWindow ?? Application.Current.MainWindow
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                pickedCode = dialog.SelectedResultCode;
+            }
+        }
+        else
+        {
+            var picker = new Dialogs.TaskResultPickerDialog(
+                taskTypeId: null,
+                allowedCodes: request.AllowedTaskResultCodes,
+                promptText: BuildClassificationPrompt(request.TaskTypeCode))
+            {
+                Owner = mainWindow ?? Application.Current.MainWindow
+            };
+            if (picker.ShowDialog() == true)
+            {
+                pickedCode = picker.SelectedResult?.Code;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(pickedCode))
+        {
+            _ = ViewModel.CompleteClassificationTaskAsync(request.TaskId, completionEventCode, pickedCode);
+        }
+
+        return true;
+    }
 
     private static string? ResolveClassificationCompletionEventCode(string taskTypeCode) =>
         taskTypeCode switch

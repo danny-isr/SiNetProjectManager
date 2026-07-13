@@ -129,11 +129,26 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
             .ConfigureAwait(false);
 }
 
-internal sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQLDbContext> dbFactory)
+/// <summary>
+/// SQL-backed report commands. Create requires a host Google/template adapter (V2);
+/// this implementation returns a clear failure for create so unlock/delete still work standalone.
+/// </summary>
+public sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQLDbContext> dbFactory)
     : IInspectionReportCommandService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
+    public Task<InspectionReportCommandResult> CreateReportAsync(
+        int projectId,
+        string templateUrl,
+        int? seriesId = null,
+        string? inspectorName = null,
+        int? inspectorId = null,
+        string? spreadsheetId = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(InspectionReportCommandResult.Fail(
+            "יצירת דוח מחוברת רק כש-Host מספק סנכרון תבנית (Google Sheets)."));
 
     public async Task<InspectionReportCommandResult> UnlockReportAsync(
         int reportId, CancellationToken cancellationToken = default)

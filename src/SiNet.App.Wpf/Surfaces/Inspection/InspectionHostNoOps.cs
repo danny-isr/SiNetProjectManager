@@ -26,3 +26,11 @@ internal sealed class NoOpInspectionNoteScreenshotHost : IInspectionNoteScreensh
         long noteId, CancellationToken cancellationToken = default) =>
         Task.FromResult(InspectionScreenshotUploadResult.Fail("העלאת צילום מסך עדיין לא מחוברת."));
 }
+
+/// <summary>Empty template catalog when Google Drive is not wired.</summary>
+internal sealed class EmptyInspectionTemplateCatalog : IInspectionTemplateCatalog
+{
+    public Task<IReadOnlyList<InspectionTemplateCatalogItem>> ListTemplatesAsync(
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<InspectionTemplateCatalogItem>>([]);
+}

@@ -54,11 +54,13 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();
         services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
 
-        // Prefer V2 Inspection host adapters over App.Wpf no-ops (last registration wins for concrete resolve via factory override).
+        // Prefer V2 Inspection host adapters over App.Wpf no-ops / SQL placeholders.
         services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionFileTreePickerHost, V2InspectionFileTreePickerHost>();
         services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionReportEmailHost, V2InspectionReportEmailHost>();
         services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionNoteScreenshotHost, V2InspectionNoteScreenshotHost>();
-        services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionReportExportPort, V2InspectionReportExportPort>();
+        services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionTemplateCatalog, V2InspectionTemplateCatalog>();
+        services.AddTransient<SiNet.Application.Abstractions.Inspection.IInspectionReportExportPort, V2InspectionReportExportPort>();
+        services.AddTransient<SiNet.Application.Abstractions.Inspection.IInspectionReportCommandService, V2InspectionReportCommandService>();
 
         return services;
     }

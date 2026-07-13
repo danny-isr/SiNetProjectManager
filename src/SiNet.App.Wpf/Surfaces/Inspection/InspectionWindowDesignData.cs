@@ -76,8 +76,8 @@ internal static class InspectionWindowDesignData
     ];
 }
 
-/// <summary>Read-only template row for the template picker (fake/design-time data).</summary>
-public sealed record InspectionTemplateRow(string Name);
+/// <summary>Read-only template row for the template picker.</summary>
+public sealed record InspectionTemplateRow(string Name, string? SpreadsheetId = null, string? Url = null);
 
 /// <summary>Read-only report card row for the report list.</summary>
 public sealed record InspectionReportRow(int ReportId, int ReportNumber, string InspectorName, DateTime InspectionDate);
