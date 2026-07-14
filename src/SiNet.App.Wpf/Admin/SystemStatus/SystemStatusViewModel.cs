@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.Application.Runtime;
@@ -66,6 +67,14 @@ public sealed class SystemStatusViewModel : ObservableObject
 
     private void ApplySnapshot(IReadOnlyList<SubsystemRuntimeStatus> statuses)
     {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            var snapshot = statuses;
+            dispatcher.BeginInvoke(() => ApplySnapshot(snapshot), DispatcherPriority.Background);
+            return;
+        }
+
         Rows.Clear();
         foreach (var s in statuses)
             Rows.Add(SystemStatusRowViewModel.From(s));

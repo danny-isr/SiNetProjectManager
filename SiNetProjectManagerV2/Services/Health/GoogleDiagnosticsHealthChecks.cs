@@ -25,6 +25,13 @@ public static class GoogleHealthStatusMapper
         DiagnosticStatus.Error => ServiceHealthState.Offline,
         _ => ServiceHealthState.Unknown
     };
+
+    /// <summary>Display label for the Google account used by folder diagnostics.</summary>
+    public static string FormatConnectedEmail(string? connectedEmail) =>
+        string.IsNullOrWhiteSpace(connectedEmail)
+        || connectedEmail.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+            ? "לא ידוע"
+            : connectedEmail.Trim();
 }
 
 public sealed class GoogleAuthConfigHealthCheck : IServiceHealthCheck
@@ -126,20 +133,27 @@ public sealed class GoogleTemplatesFolderHealthCheck : IServiceHealthCheck
         
         var folderId = await _settings.GetOrDefaultAsync(Key, "");
         var result = await _diagnostic.DiagnoseAsync(folderId, isTemplateFolder: true, silentOnly: true, ct: ct);
-        
-        AppLogger.Info($"[Health][InspectionTemplatesFolderId] DiagnosticStatus = {result.Status}");
+        var email = GoogleHealthStatusMapper.FormatConnectedEmail(result.ConnectedEmail);
+
+        AppLogger.Info($"[Health][InspectionTemplatesFolderId] DiagnosticStatus = {result.Status}, ConnectedEmail = {email}");
 
         status.State = GoogleHealthStatusMapper.Map(result.Status);
 
         status.Message = result.Status switch
         {
-            DiagnosticStatus.NoAccess => "תיקיית תבניות הביקורת מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה.",
-            DiagnosticStatus.NotFound => "תיקיית תבניות הביקורת לא נמצאה או אינה גלויה לחשבון Google המחובר.",
-            DiagnosticStatus.EmptyFolder => "תיקיית תבניות הביקורת נגישה, אך לא נמצאו בה קבצי Google Sheets.",
+            DiagnosticStatus.NoAccess =>
+                $"תיקיית תבניות הביקורת מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה. חשבון Google: {email}",
+            DiagnosticStatus.NotFound =>
+                $"תיקיית תבניות הביקורת לא נמצאה או אינה גלויה לחשבון Google המחובר ({email}).",
+            DiagnosticStatus.EmptyFolder =>
+                $"תיקיית תבניות הביקורת נגישה, אך לא נמצאו בה קבצי Google Sheets. חשבון Google: {email}",
             DiagnosticStatus.NotConfigured => "לא הוגדרה תיקיית תבניות במערכת.",
-            DiagnosticStatus.NotAuthenticated => "נדרש חיבור ל-Google.",
-            DiagnosticStatus.OK => "תקין",
-            _ => "שגיאה בגישה לתיקייה"
+            DiagnosticStatus.NotAuthenticated =>
+                email == "לא ידוע"
+                    ? "נדרש חיבור ל-Google."
+                    : $"נדרש חיבור ל-Google (חשבון אחרון ידוע: {email}).",
+            DiagnosticStatus.OK => $"תקין ({email})",
+            _ => $"שגיאה בגישה לתיקייה. חשבון Google: {email}"
         };
         
         return status;
@@ -168,8 +182,9 @@ public sealed class GoogleReportsFolderHealthCheck : IServiceHealthCheck
         
         var folderId = await _settings.GetOrDefaultAsync(Key, "");
         var result = await _diagnostic.DiagnoseAsync(folderId, isTemplateFolder: false, silentOnly: true, ct: ct);
-        
-        AppLogger.Info($"[Health][InspectionReportsFolderId] DiagnosticStatus = {result.Status}");
+        var email = GoogleHealthStatusMapper.FormatConnectedEmail(result.ConnectedEmail);
+
+        AppLogger.Info($"[Health][InspectionReportsFolderId] DiagnosticStatus = {result.Status}, ConnectedEmail = {email}");
 
         status.State = result.Status == DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission 
             ? ServiceHealthState.Online 
@@ -177,13 +192,19 @@ public sealed class GoogleReportsFolderHealthCheck : IServiceHealthCheck
 
         status.Message = result.Status switch
         {
-            DiagnosticStatus.NoAccess => "תיקיית הדוחות מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה.",
-            DiagnosticStatus.NotFound => "תיקיית הדוחות לא נמצאה או אינה גלויה לחשבון Google המחובר.",
-            DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission => "תיקיית הדוחות נגישה.",
+            DiagnosticStatus.NoAccess =>
+                $"תיקיית הדוחות מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה. חשבון Google: {email}",
+            DiagnosticStatus.NotFound =>
+                $"תיקיית הדוחות לא נמצאה או אינה גלויה לחשבון Google המחובר ({email}).",
+            DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission =>
+                $"תיקיית הדוחות נגישה. חשבון Google: {email}",
             DiagnosticStatus.NotConfigured => "לא הוגדרה תיקיית דוחות במערכת.",
-            DiagnosticStatus.NotAuthenticated => "נדרש חיבור ל-Google.",
-            DiagnosticStatus.OK => "תקין",
-            _ => "שגיאה בגישה לתיקייה"
+            DiagnosticStatus.NotAuthenticated =>
+                email == "לא ידוע"
+                    ? "נדרש חיבור ל-Google."
+                    : $"נדרש חיבור ל-Google (חשבון אחרון ידוע: {email}).",
+            DiagnosticStatus.OK => $"תקין ({email})",
+            _ => $"שגיאה בגישה לתיקייה. חשבון Google: {email}"
         };
         
         return status;
