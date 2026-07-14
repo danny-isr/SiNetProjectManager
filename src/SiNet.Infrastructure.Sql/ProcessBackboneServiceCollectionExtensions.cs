@@ -13,17 +13,22 @@ public static class ProcessBackboneServiceCollectionExtensions
 {
     /// <summary>
     /// Registers native read/write backbone ports implemented in Infrastructure.Sql:
-    /// workflow reads, task navigation/completion/metadata, and the foundation action dispatcher.
-    /// Registers a fail-fast <see cref="UnboundWorkflowCommandService"/> for
-    /// <see cref="IWorkflowCommandService"/>; hosts with SiNetSQL must replace it via
-    /// <c>AddSiNetWorkflowCommands()</c> before auto-advance can succeed.
+    /// workflow reads, the native workflow write engine, task navigation/completion/metadata, and the
+    /// action dispatcher. The <see cref="IWorkflowCommandService"/> port is fulfilled by the native
+    /// <see cref="NativeWorkflowCommandService"/> (composing the re-homed orchestrator + engine), so
+    /// hosts no longer need the legacy SiNetSQL command adapter. Requires
+    /// <c>IDbContextFactory&lt;SiNetSQLDbContext&gt;</c> to be registered separately (e.g. via
+    /// <c>AddSiNetSql(connectionString)</c>).
     /// </summary>
     public static IServiceCollection AddSiNetProcessBackbone(this IServiceCollection services)
     {
         services.AddSiNetWorkflowReads();
+        services.AddSiNetWorkflowEngine();
         services.AddSiNetTaskServices();
         services.AddSiNetActionServices();
-        services.AddTransient<IWorkflowCommandService, UnboundWorkflowCommandService>();
+        services.AddTransient<NativeWorkflowCommandService>();
+        services.AddTransient<IWorkflowCommandService>(
+            sp => sp.GetRequiredService<NativeWorkflowCommandService>());
         return services;
     }
 }

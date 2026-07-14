@@ -40,6 +40,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     private int _backgroundWorkActiveCount;
     private int _lastBackgroundWorkCount;
     private int _autoRefreshGate;
+    private int _applyTaskContextGate;
 
     public EmailWindowViewModel()
         : this(
@@ -437,6 +438,30 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private async Task ApplyTaskContextAsync(WorkSurfaceContext context)
     {
+        // Single-flight: ignore a new task-context apply while one is already running so overlapping
+        // opens cannot race project/refresh state. Fire-and-forget callers rely on this guard plus the
+        // catch below so unobserved exceptions surface as a status message instead of crashing.
+        if (Interlocked.CompareExchange(ref _applyTaskContextGate, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await ApplyTaskContextCoreAsync(context).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"טעינת הקשר המשימה נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _applyTaskContextGate, 0);
+        }
+    }
+
+    private async Task ApplyTaskContextCoreAsync(WorkSurfaceContext context)
+    {
         if (context.ProjectId > 0)
         {
             var project = await _projectQuery
@@ -510,7 +535,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     {
         UpdateActiveProjectDisplay(e.Project);
         EmailDetail.UpdateActiveProjectDisplay(e.Project);
-        _ = ApplyProjectContextFromWorkbenchAsync();
+        _ = SafeApplyProjectContextFromWorkbenchAsync();
 
         if (!IsConnected)
         {
@@ -533,6 +558,22 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     {
         await EmailList.ApplyProjectContextAsync(BuildEmailListProjectContext(_currentProject.CurrentProject))
             .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Guarded fire-and-forget wrapper for the <see cref="OnCurrentProjectChanged"/> event handler so a
+    /// failed project-context apply surfaces as a status message instead of an unobserved exception.
+    /// </summary>
+    private async Task SafeApplyProjectContextFromWorkbenchAsync()
+    {
+        try
+        {
+            await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"החלת הקשר הפרויקט נכשלה: {ex.Message}";
+        }
     }
 
     private static EmailListProjectContext? BuildEmailListProjectContext(ProjectSummaryDto? project)

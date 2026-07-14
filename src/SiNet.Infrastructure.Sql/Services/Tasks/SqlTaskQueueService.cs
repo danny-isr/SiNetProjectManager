@@ -135,6 +135,14 @@ public sealed class SqlTaskQueueService : ITaskQueueService
         var oldPriority = task.WorkPriority;
         var inQueue = task.AssignmentStatus?.IsActionable == true && oldPriority.HasValue;
 
+        // The old-bucket compaction, new-bucket append, and audit event are multiple internal saves;
+        // keep them atomic so a mid-move failure cannot leave priority gaps or duplicate slots.
+        // The engine's internal SaveChanges calls enlist in this ambient transaction.
+        var useTransaction = db.Database.IsRelational();
+        await using var transaction = useTransaction
+            ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false)
+            : null;
+
         if (inQueue && task.AssignedToId.HasValue)
             TaskQueuePriorityEngine.RemoveFromQueue(db, task);
 
@@ -164,6 +172,11 @@ public sealed class SqlTaskQueueService : ITaskQueueService
         });
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
     }
 
     public async ValueTask<TaskQueueRepairResult> RepairQueueAsync(

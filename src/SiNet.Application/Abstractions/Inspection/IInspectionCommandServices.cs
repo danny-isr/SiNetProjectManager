@@ -8,6 +8,13 @@ public interface IInspectionNoteCommandService
     Task<InspectionNoteCommandResult> SaveNoteStatusAsync(
         long noteId, int? statusId, string? statusText, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Persists note text and status in a single write so callers no longer issue two independent
+    /// saves (which could leave text and status out of sync on a partial failure).
+    /// </summary>
+    Task<InspectionNoteCommandResult> SaveNoteAsync(
+        long noteId, string? text, int? statusId, string? statusText, CancellationToken cancellationToken = default);
+
     Task<InspectionNoteCommandResult> AddNoteAsync(
         int reportId, int sectionId, string? text, CancellationToken cancellationToken = default);
 

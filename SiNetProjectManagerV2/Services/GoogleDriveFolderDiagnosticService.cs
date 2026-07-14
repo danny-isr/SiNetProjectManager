@@ -1,11 +1,9 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Google.Apis.Drive.v3;
-using Google.Apis.Requests;
 using SiNetSQL.Services;
-using SiOffice.GoogleConnector;
+using SiOffice.GoogleConnector.Reports;
 
 namespace SiNetProjectManagerV2.Services;
 
@@ -35,16 +33,24 @@ public class GoogleDriveFolderDiagnosticResult
     public string? TechnicalDetails { get; set; }
 }
 
+/// <summary>
+/// Diagnoses Inspection templates/reports Drive folders using the same
+/// <see cref="GoogleAuthService"/> stack as template listing (not Gmail <c>GoogleService</c>).
+/// </summary>
 public class GoogleDriveFolderDiagnosticService
 {
-    private readonly GoogleService _authService;
+    private readonly GoogleAuthService _authService;
 
-    public GoogleDriveFolderDiagnosticService(GoogleService authService)
+    public GoogleDriveFolderDiagnosticService(GoogleAuthService authService)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
     }
 
-    public async Task<GoogleDriveFolderDiagnosticResult> DiagnoseAsync(string folderId, bool isTemplateFolder, CancellationToken ct = default, bool silentOnly = false)
+    public async Task<GoogleDriveFolderDiagnosticResult> DiagnoseAsync(
+        string folderId,
+        bool isTemplateFolder,
+        CancellationToken ct = default,
+        bool silentOnly = true)
     {
         var result = new GoogleDriveFolderDiagnosticResult();
 
@@ -56,36 +62,39 @@ public class GoogleDriveFolderDiagnosticService
 
         result.FolderIdSnippet = folderId.Length > 8 ? folderId.Substring(0, 8) + "..." : folderId;
 
-        result.ConnectedEmail = string.IsNullOrWhiteSpace(_authService.CurrentUserEmail) ? "Unknown" : _authService.CurrentUserEmail;
-
-        if (!_authService.IsAuthenticated)
+        // Health / diagnostics must never open a browser. Prefer silent restore;
+        // interactive EnsureAuthenticated is only when silentOnly is explicitly false.
+        bool authenticated;
+        if (_authService.IsAuthenticated && _authService.DriveService is not null)
         {
-            bool ok = false;
+            authenticated = true;
+        }
+        else if (silentOnly)
+        {
+            authenticated = await _authService.TryRestoreSessionAsync(ct).ConfigureAwait(false);
+        }
+        else
+        {
             try
             {
-                var credentialsPath = AppConfiguration.GetGoogleClientSecretsPath() ?? "client_secrets.json";
-                ok = await _authService.TryRestoreSessionAsync(credentialsPath, ct).ConfigureAwait(false);
+                authenticated = await _authService.EnsureAuthenticatedAsync(ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 result.TechnicalDetails = ex.Message;
+                authenticated = false;
             }
+        }
 
-            if (!ok)
-            {
-                result.Status = DiagnosticStatus.NotAuthenticated;
-                return result;
-            }
-            
-            result.ConnectedEmail = string.IsNullOrWhiteSpace(_authService.CurrentUserEmail) ? "Unknown" : _authService.CurrentUserEmail;
+        result.ConnectedEmail = await SafeGetEmailAsync().ConfigureAwait(false);
+
+        if (!authenticated || _authService.DriveService is null)
+        {
+            result.Status = DiagnosticStatus.NotAuthenticated;
+            return result;
         }
 
         var drive = _authService.DriveService;
-        if (drive == null)
-        {
-            result.Status = DiagnosticStatus.GoogleNotConfigured;
-            return result;
-        }
 
         try
         {
@@ -93,10 +102,11 @@ public class GoogleDriveFolderDiagnosticService
             getRequest.SupportsAllDrives = true;
             getRequest.Fields = "id, name, mimeType, webViewLink";
 
-            var fileInfo = await getRequest.ExecuteAsync(ct);
+            var fileInfo = await getRequest.ExecuteAsync(ct).ConfigureAwait(false);
 
             result.FolderName = fileInfo.Name;
             result.WebViewLink = fileInfo.WebViewLink;
+            result.ConnectedEmail = await SafeGetEmailAsync().ConfigureAwait(false);
 
             if (fileInfo.MimeType != "application/vnd.google-apps.folder")
             {
@@ -113,17 +123,17 @@ public class GoogleDriveFolderDiagnosticService
                 listRequest.Fields = "files(id, name)";
                 listRequest.PageSize = 1;
 
-                var listResult = await listRequest.ExecuteAsync(ct);
+                var listResult = await listRequest.ExecuteAsync(ct).ConfigureAwait(false);
                 result.Status = GoogleDriveDiagnosticStatusMapper.MapFolderState(
-                    fileInfo.MimeType, 
-                    listResult?.Files?.Count ?? 0, 
+                    fileInfo.MimeType,
+                    listResult?.Files?.Count ?? 0,
                     isTemplateFolder);
             }
             else
             {
                 result.Status = GoogleDriveDiagnosticStatusMapper.MapFolderState(
-                    fileInfo.MimeType, 
-                    -1, 
+                    fileInfo.MimeType,
+                    -1,
                     isTemplateFolder);
             }
         }
@@ -131,9 +141,23 @@ public class GoogleDriveFolderDiagnosticService
         {
             result.Status = GoogleDriveDiagnosticStatusMapper.MapExceptionToStatus(ex);
             result.TechnicalDetails = ex.Message;
+            result.ConnectedEmail = await SafeGetEmailAsync().ConfigureAwait(false);
         }
 
         return result;
+    }
+
+    private async Task<string> SafeGetEmailAsync()
+    {
+        try
+        {
+            var email = await _authService.GetCurrentUserEmailAsync().ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(email) ? "Unknown" : email;
+        }
+        catch
+        {
+            return "Unknown";
+        }
     }
 }
 
@@ -159,7 +183,7 @@ public static class GoogleDriveDiagnosticStatusMapper
             if (fileCount == 0) return DiagnosticStatus.EmptyFolder;
             return DiagnosticStatus.OK;
         }
-        
+
         return DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission;
     }
 }

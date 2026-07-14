@@ -78,8 +78,12 @@ public static class OpinionWorkflowSeedData
         Conditional(OpinionStageCodes.InternalReview, OpinionStageCodes.UpdateOpinion,
             taskResult: TaskResultCodes.OpinionRequiresRevision),
 
-        // Update done → back to internal review (linear, no extra result code).
-        Linear(OpinionStageCodes.UpdateOpinion, OpinionStageCodes.InternalReview),
+        // Update done → back to internal review. UpdateOpinionDraft records OpinionDraftPrepared
+        // (registry contract) and requests auto-advance, so this must be a result-driven Auto
+        // transition (mirrors PrepareDraft → InternalReview). A plain Linear defaults to Manual eval
+        // and never fires on the auto-advance path, stalling the revision loop at OPN.UpdateOpinion.
+        Conditional(OpinionStageCodes.UpdateOpinion, OpinionStageCodes.InternalReview,
+            taskResult: TaskResultCodes.OpinionDraftPrepared),
 
         // Internal review approved → send opinion.
         Conditional(OpinionStageCodes.InternalReview, OpinionStageCodes.SendOpinion,

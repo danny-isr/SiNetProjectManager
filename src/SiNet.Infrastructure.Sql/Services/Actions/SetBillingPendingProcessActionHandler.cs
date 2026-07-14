@@ -24,12 +24,12 @@ internal sealed class SetBillingPendingProcessActionHandler : IProcessActionHand
         if (instanceId <= 0)
             return ActionExecutionResultDto.Failed(ActionCode, "WorkflowInstanceId is required.");
 
-        var result = await WorkflowActionHelpers.SetProjectStatusByCodeAsync(
-            _dbFactory,
-            ProjectStatusCodes.BillingPending,
-            instanceId,
-            command.UserId ?? 0,
-            cancellationToken).ConfigureAwait(false);
+        var ambientDb = WorkflowActionHelpers.TryGetAmbientDbContext(command);
+        var result = ambientDb is not null
+            ? await WorkflowActionHelpers.SetProjectStatusByCodeAsync(
+                ambientDb, ProjectStatusCodes.BillingPending, instanceId, command.UserId ?? 0, cancellationToken).ConfigureAwait(false)
+            : await WorkflowActionHelpers.SetProjectStatusByCodeAsync(
+                _dbFactory, ProjectStatusCodes.BillingPending, instanceId, command.UserId ?? 0, cancellationToken).ConfigureAwait(false);
 
         return result.Success
             ? ActionExecutionResultDto.Completed(ActionCode, result.Message)

@@ -56,6 +56,13 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private string? _selectedResultCode;
     private string _statusMessage = "\u05DE\u05D5\u05DB\u05DF";
 
+    // Single-flight + debounce for note status auto-save: bursty StatusText edits must not race
+    // into overlapping, uncoalesced writes (last-write-wins data loss). Each note keeps at most one
+    // in-flight save; a newer edit cancels the prior one.
+    private static readonly TimeSpan StatusSaveDebounce = TimeSpan.FromMilliseconds(300);
+    private readonly Dictionary<long, CancellationTokenSource> _statusSaveCts = new();
+    private readonly object _statusSaveGate = new();
+
     /// <summary>Design-time / standalone constructor with fake data.</summary>
     public InspectionWindowViewModel()
         : this(null)
@@ -746,7 +753,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         }
     }
 
-    private async void OnNoteItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnNoteItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not InspectionNoteItem note)
             return;
@@ -764,11 +771,68 @@ public sealed class InspectionWindowViewModel : ObservableObject
         if (e.PropertyName != nameof(InspectionNoteItem.StatusText) || note.NoteId is not long noteId)
             return;
 
-        var result = await _noteCommands
-            .SaveNoteStatusAsync(noteId, note.StatusId, note.StatusText)
-            .ConfigureAwait(true);
-        if (!result.Succeeded)
-            StatusMessage = result.ErrorMessage ?? "שמירת סטטוס נכשלה.";
+        QueueNoteStatusSave(note, noteId);
+    }
+
+    /// <summary>
+    /// Coalesces status auto-saves per note: cancels any prior in-flight save for the same note and
+    /// schedules a debounced atomic save. Replaces the previous <c>async void</c> handler that fired
+    /// overlapping, unobserved <c>SaveNoteStatusAsync</c> calls (last-write-wins data loss).
+    /// </summary>
+    private void QueueNoteStatusSave(InspectionNoteItem note, long noteId)
+    {
+        CancellationTokenSource cts;
+        lock (_statusSaveGate)
+        {
+            if (_statusSaveCts.TryGetValue(noteId, out var prior))
+            {
+                prior.Cancel();
+                prior.Dispose();
+            }
+
+            cts = new CancellationTokenSource();
+            _statusSaveCts[noteId] = cts;
+        }
+
+        _ = RunNoteStatusSaveAsync(note, noteId, cts);
+    }
+
+    private async Task RunNoteStatusSaveAsync(InspectionNoteItem note, long noteId, CancellationTokenSource cts)
+    {
+        var token = cts.Token;
+        try
+        {
+            // Debounce: collapse a burst of StatusText changes into a single write.
+            await Task.Delay(StatusSaveDebounce, token).ConfigureAwait(true);
+
+            if (_noteCommands is null)
+                return;
+
+            // Route text + status through the atomic SaveNoteAsync so the two fields cannot drift.
+            var result = await _noteCommands
+                .SaveNoteAsync(noteId, note.NoteText, note.StatusId, note.StatusText, token)
+                .ConfigureAwait(true);
+            if (!result.Succeeded)
+                StatusMessage = result.ErrorMessage ?? "שמירת סטטוס נכשלה.";
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer edit; the newer save owns the final state.
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"שמירת סטטוס נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            lock (_statusSaveGate)
+            {
+                if (_statusSaveCts.TryGetValue(noteId, out var current) && current == cts)
+                    _statusSaveCts.Remove(noteId);
+            }
+
+            cts.Dispose();
+        }
     }
 
     private bool CanMoveNote(InspectionNoteItem? note, int direction)

@@ -25,9 +25,29 @@ public static class ReviewWorkflowSeedData
 
     /// <summary>
     /// All <c>REV.*</c> stages, in canonical SortOrder.
-    /// <see cref="ReviewStageCodes.Intake"/> is initial; <see cref="ReviewStageCodes.Completed"/> is final.
+    /// <see cref="ReviewStageCodes.AwaitingMunicipalityRequest"/> is initial;
+    /// <see cref="ReviewStageCodes.Completed"/> is final.
     /// Optional stages are included in the definition but activated per-ProjectType
     /// via <c>ProjectTypeWorkflowStage</c>.
+    /// <para>
+    /// TODO(review-intake): the documented target design (SiNetSQL/docs/WorkflowDecisions.md
+    /// §2 "Stage Sequencing and Classification Flow", 2026-06-15) inserts a
+    /// <see cref="ReviewStageCodes.Intake"/> classification stage (a
+    /// <c>ClassifyRequestSource</c> task) between <see cref="ReviewStageCodes.ProjectSetup"/>
+    /// and <see cref="ReviewStageCodes.MaterialIntake"/>, branching
+    /// RequestFromPlanner -&gt; <see cref="ReviewStageCodes.AwaitingMunicipalityRequest"/> (a
+    /// holding stage, NOT project creation) and RequestFromMunicipality -&gt;
+    /// <see cref="ReviewStageCodes.MaterialIntake"/>. That stage is intentionally NOT seeded
+    /// yet: the classification infrastructure (task type, registry, behavior, result-picker UI)
+    /// exists, but wiring REV.Intake into the live stages/transitions is deferred to a dedicated
+    /// intake-migration effort that must also reconcile the seed (initial =
+    /// AwaitingMunicipalityRequest) with the runtime start (REV.MaterialIntake). Do NOT remove
+    /// <c>ClassifyRequestSource</c> — it is retained for that migration. The pre-workflow
+    /// "planner request, no project yet" case is already handled at the email layer by the
+    /// <c>RequestAuthorityInvitation</c> suggested action (a standalone
+    /// <c>RequestMunicipalityInvitation</c> tracking task with optional/null ProjectId), which
+    /// does not force project creation.
+    /// </para>
     /// </summary>
     public static readonly PlanningWorkflowSeedData.StageDefinition[] Stages = new[]
     {

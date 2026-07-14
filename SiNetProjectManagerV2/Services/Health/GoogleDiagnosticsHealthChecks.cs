@@ -142,16 +142,14 @@ public sealed class GoogleTemplatesFolderHealthCheck : IServiceHealthCheck
         status.Message = result.Status switch
         {
             DiagnosticStatus.NoAccess =>
-                $"תיקיית תבניות הביקורת מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה. חשבון Google: {email}",
+                $"תיקיית תבניות הביקורת מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה. חשבון Google (דוחות/ביקורת): {email}",
             DiagnosticStatus.NotFound =>
                 $"תיקיית תבניות הביקורת לא נמצאה או אינה גלויה לחשבון Google המחובר ({email}).",
             DiagnosticStatus.EmptyFolder =>
-                $"תיקיית תבניות הביקורת נגישה, אך לא נמצאו בה קבצי Google Sheets. חשבון Google: {email}",
+                $"תיקיית תבניות נגישה, אך אין בה Google Sheets ישירים (לא נספרים תתי־תיקיות, Excel או קיצורי דרך). חשבון: {email}",
             DiagnosticStatus.NotConfigured => "לא הוגדרה תיקיית תבניות במערכת.",
             DiagnosticStatus.NotAuthenticated =>
-                email == "לא ידוע"
-                    ? "נדרש חיבור ל-Google."
-                    : $"נדרש חיבור ל-Google (חשבון אחרון ידוע: {email}).",
+                "אין סשן Google לדוחות/ביקורת בתחנה זו — התחבר דרך מסך ביקורת או דוחות.",
             DiagnosticStatus.OK => $"תקין ({email})",
             _ => $"שגיאה בגישה לתיקייה. חשבון Google: {email}"
         };
@@ -193,16 +191,14 @@ public sealed class GoogleReportsFolderHealthCheck : IServiceHealthCheck
         status.Message = result.Status switch
         {
             DiagnosticStatus.NoAccess =>
-                $"תיקיית הדוחות מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה. חשבון Google: {email}",
+                $"תיקיית הדוחות מוגדרת, אך לחשבון Google המחובר אין הרשאה לגשת אליה. חשבון Google (דוחות/ביקורת): {email}",
             DiagnosticStatus.NotFound =>
                 $"תיקיית הדוחות לא נמצאה או אינה גלויה לחשבון Google המחובר ({email}).",
             DiagnosticStatus.AccessibleReadOnlyOrUnknownWritePermission =>
-                $"תיקיית הדוחות נגישה. חשבון Google: {email}",
+                $"תיקיית הדוחות נגישה. חשבון Google (דוחות/ביקורת): {email}",
             DiagnosticStatus.NotConfigured => "לא הוגדרה תיקיית דוחות במערכת.",
             DiagnosticStatus.NotAuthenticated =>
-                email == "לא ידוע"
-                    ? "נדרש חיבור ל-Google."
-                    : $"נדרש חיבור ל-Google (חשבון אחרון ידוע: {email}).",
+                "אין סשן Google לדוחות/ביקורת בתחנה זו — התחבר דרך מסך ביקורת או דוחות.",
             DiagnosticStatus.OK => $"תקין ({email})",
             _ => $"שגיאה בגישה לתיקייה. חשבון Google: {email}"
         };

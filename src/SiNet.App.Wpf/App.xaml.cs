@@ -9,8 +9,10 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Common;
+using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Secrets;
+using SiNet.Infrastructure.Sql;
 
 namespace SiNet.App.Wpf;
 
@@ -38,6 +40,20 @@ public partial class App : System.Windows.Application
         services.AddSingleton(_configuration);
         services.AddSiNet(ConfigureGmail);
         services.AddSiNetSecrets();
+
+        // Vault-sourced SQL wiring: the native process backbone (workflow engine, task completion,
+        // action handlers) and the identity/settings services need a real IDbContextFactory. The
+        // connection string is the single-source-of-truth secret in the Credential Vault; when it is
+        // absent the host degrades gracefully (SQL-backed features simply stay unavailable) rather
+        // than crashing at startup — mirroring the Gmail no-secrets behavior.
+        var sqlConnectionString = TryResolveSqlConnectionStringFromVault();
+        if (!string.IsNullOrWhiteSpace(sqlConnectionString))
+        {
+            services.AddSiNetSql(sqlConnectionString, ConfigureSqlDiagnostics);
+            services.AddSiNetSystemSettingsSql();
+            services.AddSiNetAuthorizationSql();
+        }
+
         services.AddSiNetNewSystemWpf();
         services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainWindow>();
@@ -101,6 +117,43 @@ public partial class App : System.Windows.Application
         {
             options.TokenStorePath = tokenStore;
         }
+    }
+
+    /// <summary>
+    /// Reads the SiNet database connection string from the Credential Vault (the single source of
+    /// truth). Uses a throwaway bootstrap provider so the vault store can be resolved before the main
+    /// service graph is built. Returns <see langword="null"/> when the secret is missing or the vault
+    /// is unavailable, so the host can degrade gracefully instead of failing startup.
+    /// </summary>
+    private static string? TryResolveSqlConnectionStringFromVault()
+    {
+        try
+        {
+            var bootstrap = new ServiceCollection();
+            bootstrap.AddSiNetSecrets();
+            using var provider = bootstrap.BuildServiceProvider();
+
+            var vault = provider.GetRequiredService<ISecretVaultStore>();
+            var raw = vault.GetSecret(SecretCatalog.SiNetDatabase);
+            return string.IsNullOrWhiteSpace(raw) ? null : raw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[App] Failed to read SiNet DB connection string from the Credential Vault: {ex}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Enables EF diagnostics only in Debug builds, matching the legacy host's development-time
+    /// behavior. Release behavior is unchanged (diagnostics stay off).
+    /// </summary>
+    private static void ConfigureSqlDiagnostics(SiNetSqlOptions options)
+    {
+#if DEBUG
+        options.EnableEfDebugDiagnostics = true;
+#endif
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -153,6 +153,14 @@ internal sealed class SqlProjectCreateService(
             project.ProjectStatusId = defaultStatus.Id;
         }
 
+        // Keep the project row, its job-type rows, and the optional email link atomic so a mid-way
+        // failure cannot leave an orphan project without job types or a half-linked email. Transactions
+        // are relational-only (the EF InMemory provider used by unit tests does not support them).
+        var useTransaction = db.Database.IsRelational();
+        await using var transaction = useTransaction
+            ? await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : null;
+
         db.Projects.Add(project);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -169,15 +177,6 @@ internal sealed class SqlProjectCreateService(
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        try
-        {
-            _folderBootstrapper?.CreateFolders(project.Id);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "[SqlProjectCreate] Failed to create folders for Project {ProjectId}", project.Id);
-        }
-
         if (command.EmailMessageId is int emailId and > 0)
         {
             var email = await db.EmailInboxMessages.FindAsync([emailId], cancellationToken).ConfigureAwait(false);
@@ -187,6 +186,22 @@ internal sealed class SqlProjectCreateService(
                 email.UpdatedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
+        }
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Filesystem side effect runs only after the DB state is durable; best-effort (a folder
+        // failure must not roll back a successfully-created project).
+        try
+        {
+            _folderBootstrapper?.CreateFolders(project.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "[SqlProjectCreate] Failed to create folders for Project {ProjectId}", project.Id);
         }
 
         return CreateProjectResult.Ok(project.Id, title, place.Title);

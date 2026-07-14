@@ -17,6 +17,12 @@ namespace SiNet.Application.Tasks;
 /// <param name="NewProjectStatusCode">New broad project status code, if the completion changed it.</param>
 /// <param name="RecordedTaskResultCode">The task-result code that was recorded, if any.</param>
 /// <param name="StageAdvanceResult">The workflow auto-advance outcome, when an advance was attempted; otherwise <see langword="null"/>.</param>
+/// <param name="WorkflowAdvancePending">
+/// The task was closed and its own writes committed, but the follow-on workflow auto-advance did not
+/// complete and can be safely retried (advance evaluation is idempotent over committed state). Distinct
+/// from a hard <see cref="Success"/>=false so callers can surface a "retry advance" affordance instead of
+/// treating the whole completion as failed.
+/// </param>
 public sealed record TaskCompletionResultDto(
     bool Success,
     bool TaskClosed,
@@ -25,7 +31,8 @@ public sealed record TaskCompletionResultDto(
     int? NewProjectStatusId = null,
     string? NewProjectStatusCode = null,
     string? RecordedTaskResultCode = null,
-    StageCompletionResultDto? StageAdvanceResult = null)
+    StageCompletionResultDto? StageAdvanceResult = null,
+    bool WorkflowAdvancePending = false)
 {
     /// <summary>A failed completion (validation/business rule) carrying an error message.</summary>
     public static TaskCompletionResultDto Failure(string message) =>

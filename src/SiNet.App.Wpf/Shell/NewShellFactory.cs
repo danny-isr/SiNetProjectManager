@@ -226,10 +226,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         try
         {
-            return authorization
-                .CanCurrentUserAccessFeatureAsync(featureCode)
-                .GetAwaiter()
-                .GetResult();
+            return RunSync(() => authorization.CanCurrentUserAccessFeatureAsync(featureCode));
         }
         catch (ArgumentException)
         {
@@ -255,10 +252,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 return;
             }
 
-            var summary = query.GetProjectAsync(projectId).GetAwaiter().GetResult();
+            var summary = RunSync(() => query.GetProjectAsync(projectId));
             if (summary is not null)
             {
-                context.SetCurrentProjectAsync(summary).GetAwaiter().GetResult();
+                RunSync(() => context.SetCurrentProjectAsync(summary));
             }
         }
         catch (Exception ex)
@@ -535,7 +532,19 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         // Shell construction is synchronous; profile is in-memory after startup auth.
-        var profile = profileService.GetCurrentUserAsync().GetAwaiter().GetResult();
+        var profile = RunSync(() => profileService.GetCurrentUserAsync());
         return CurrentUserProfileDisplay.Format(profile);
     }
+
+    /// <summary>
+    /// Bridges an async port into the synchronous shell/menu construction path (menu handlers are
+    /// <see cref="Action"/> by contract). Running the operation via <see cref="Task.Run{TResult}(Func{Task{TResult}})"/>
+    /// detaches it from the UI <see cref="System.Threading.SynchronizationContext"/>, so blocking on the
+    /// result cannot deadlock regardless of whether the callee uses <c>ConfigureAwait(false)</c> internally.
+    /// </summary>
+    private static T RunSync<T>(Func<Task<T>> asyncOperation) =>
+        Task.Run(asyncOperation).GetAwaiter().GetResult();
+
+    private static void RunSync(Func<Task> asyncOperation) =>
+        Task.Run(asyncOperation).GetAwaiter().GetResult();
 }

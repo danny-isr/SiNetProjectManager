@@ -1049,6 +1049,8 @@ namespace SiNetProjectManagerV2
             ServiceProvider = ConfigureServices();
             WireLegacyLocators();
             SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
+            try { WireGoogleHealthAuthRefresh(); }
+            catch (Exception ex) { AppLogger.Info($"[Health][google] failed to wire AuthStateChanged refresh: {ex.Message}"); }
             StartNewSystemConnectorAuthRestore();
 
 #if DEBUG
@@ -1076,6 +1078,36 @@ namespace SiNetProjectManagerV2
 
             base.OnStartup(e);
             LaunchNewSystemShell();
+        }
+
+        /// <summary>
+        /// Refreshes System Health Google rows when Gmail or Reports/Inspection auth changes.
+        /// Folder diagnostics use <see cref="GoogleAuthService"/>; Gmail rows use <see cref="GoogleService"/>.
+        /// </summary>
+        private static void WireGoogleHealthAuthRefresh()
+        {
+            if (ServiceProvider is null)
+                return;
+
+            var healthSvc = ServiceProvider.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
+
+            var googleSvc = ServiceProvider.GetRequiredService<GoogleService>();
+            googleSvc.AuthStateChanged += (_, _) =>
+            {
+                AppLogger.Info("[Health][google] AuthStateChanged -> refreshing all Google rows");
+                _ = healthSvc.RefreshAsync("google", System.Threading.CancellationToken.None);
+                _ = healthSvc.RefreshAsync("google_account", System.Threading.CancellationToken.None);
+                _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionTemplatesFolderId, System.Threading.CancellationToken.None);
+                _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionReportsFolderId, System.Threading.CancellationToken.None);
+            };
+
+            var googleAuth = ServiceProvider.GetRequiredService<GoogleAuthService>();
+            googleAuth.AuthStateChanged += (_, _) =>
+            {
+                AppLogger.Info("[Health][google-auth] AuthStateChanged -> refreshing Inspection folder rows");
+                _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionTemplatesFolderId, System.Threading.CancellationToken.None);
+                _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionReportsFolderId, System.Threading.CancellationToken.None);
+            };
         }
 
         /// <summary>
@@ -1169,16 +1201,7 @@ namespace SiNetProjectManagerV2
 
             try
             {
-                var googleSvc = ServiceProvider.GetRequiredService<GoogleService>();
-                var healthSvc = ServiceProvider.GetRequiredService<SiNetSQL.Services.Health.ISystemHealthService>();
-                googleSvc.AuthStateChanged += (_, _) =>
-                {
-                    AppLogger.Info("[Health][google] AuthStateChanged -> refreshing all Google rows");
-                    _ = healthSvc.RefreshAsync("google", System.Threading.CancellationToken.None);
-                    _ = healthSvc.RefreshAsync("google_account", System.Threading.CancellationToken.None);
-                    _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionTemplatesFolderId, System.Threading.CancellationToken.None);
-                    _ = healthSvc.RefreshAsync(SystemSettingKeys.InspectionReportsFolderId, System.Threading.CancellationToken.None);
-                };
+                WireGoogleHealthAuthRefresh();
             }
             catch (Exception ex)
             {

@@ -53,6 +53,30 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
         return InspectionNoteCommandResult.Ok(noteId);
     }
 
+    public async Task<InspectionNoteCommandResult> SaveNoteAsync(
+        long noteId, string? text, int? statusId, string? statusText, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var note = await db.InspectionNotes.FindAsync([noteId], cancellationToken).ConfigureAwait(false);
+        if (note is null)
+        {
+            return InspectionNoteCommandResult.Fail($"הערה {noteId} לא נמצאה.");
+        }
+
+        if (await IsReportLockedAsync(db, note.ReportId, cancellationToken).ConfigureAwait(false))
+        {
+            return InspectionNoteCommandResult.Fail("הדוח נעול לאחר שליחה.");
+        }
+
+        note.NoteText = text;
+        note.NoteStatusId = statusId;
+        note.NoteStatus = string.IsNullOrWhiteSpace(statusText) ? null : statusText.Trim();
+
+        // Single write keeps text and status consistent (no split-brain on partial failure).
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return InspectionNoteCommandResult.Ok(noteId);
+    }
+
     public async Task<InspectionNoteCommandResult> AddNoteAsync(
         int reportId, int sectionId, string? text, CancellationToken cancellationToken = default)
     {
@@ -85,26 +109,49 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
 
         // Legacy parity: Level-3 index "Chapter.Section.Ordinal" (e.g. 1.1.2).
         var prefix = $"{section.ChapterNumber}.{section.SectionCode}.";
-        var existingSubNotes = await db.InspectionNotes
-            .AsNoTracking()
-            .Where(n => n.ReportId == reportId && n.SectionId == sectionId)
-            .Select(n => n.NoteSubIndex)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var subNoteCount = existingSubNotes.Count(idx =>
-            idx != null && idx.StartsWith(prefix, StringComparison.Ordinal));
-        var noteSubIndex = $"{prefix}{subNoteCount + 1}";
 
-        var note = new InspectionNote
+        // Serialize the read-max + insert so two concurrent adds cannot compute the same NoteSubIndex
+        // and violate IX_InspectionNotes_Report_Section_SubIndex. Serializable is relational-only
+        // (the EF InMemory provider used by unit tests does not support transactions/isolation).
+        await using var transaction = db.Database.IsRelational()
+            ? await db.Database
+                .BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
+                .ConfigureAwait(false)
+            : null;
+
+        try
         {
-            ReportId = reportId,
-            SectionId = sectionId,
-            NoteText = text,
-            NoteSubIndex = noteSubIndex,
-        };
-        db.InspectionNotes.Add(note);
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return InspectionNoteCommandResult.Ok(note.NoteId);
+            var existingSubNotes = await db.InspectionNotes
+                .Where(n => n.ReportId == reportId && n.SectionId == sectionId)
+                .Select(n => n.NoteSubIndex)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var subNoteCount = existingSubNotes.Count(idx =>
+                idx != null && idx.StartsWith(prefix, StringComparison.Ordinal));
+            var noteSubIndex = $"{prefix}{subNoteCount + 1}";
+
+            var note = new InspectionNote
+            {
+                ReportId = reportId,
+                SectionId = sectionId,
+                NoteText = text,
+                NoteSubIndex = noteSubIndex,
+            };
+            db.InspectionNotes.Add(note);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return InspectionNoteCommandResult.Ok(note.NoteId);
+        }
+        catch (DbUpdateException)
+        {
+            return InspectionNoteCommandResult.Fail(
+                "הוספת ההערה נכשלה (התנגשות אינדקס). נסה שוב.");
+        }
     }
 
     public async Task<InspectionNoteCommandResult> SetNoteLinkedFileAsync(

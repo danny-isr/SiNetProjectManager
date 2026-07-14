@@ -131,9 +131,12 @@ Approved mapping from `DiagnosticStatus` to `ServiceHealthState`:
 - Google auth model changes
 - Google Drive write test for reports folder
 
-## 12a. Implementation Notes (updated 2026-06-19)
+## 12a. Implementation Notes (updated 2026-07-14)
 
-**Auth source unification**: All new Google health checks (`GoogleAccountHealthCheck`, `GoogleTemplatesFolderHealthCheck`, `GoogleReportsFolderHealthCheck`) and `GoogleDriveFolderDiagnosticService` use the same `GoogleService` DI singleton that the existing `GoogleHealthCheck` (Gmail) uses. This ensures a single source of truth for auth state. The original design referenced `GoogleAuthService`, which is a separate service with its own runtime state — using it caused false `RequiresAuthorization` status even when the user was already authenticated via `GoogleService`. The `GoogleAuthService` is no longer used by health checks or diagnostics.
+**Auth sources (split by concern):**
+- `GoogleAccountHealthCheck` / Gmail health rows use the `GoogleService` DI singleton (Gmail token store).
+- `GoogleTemplatesFolderHealthCheck`, `GoogleReportsFolderHealthCheck`, and `GoogleDriveFolderDiagnosticService` use **`GoogleAuthService`** — the same Reports/Inspection Drive stack as `GoogleInspectionTemplateProvider` (per-Windows-user token under `GoogleTokens\{UserName}`), with **silent** `TryRestoreSessionAsync` (no browser). This avoids false NoAccess/EmptyFolder when Gmail and Reports accounts differ.
+- Folder health rows refresh on `GoogleAuthService.AuthStateChanged` as well as (legacy) `GoogleService.AuthStateChanged`.
 
 ## 11. Future Implementation Checklist
 - [ ] Create/extend `IServiceHealthCheck` implementation for Google config

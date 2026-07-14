@@ -114,10 +114,6 @@ public static class ProposalWorkflowSeedData
         Conditional(ProposalStageCodes.InternalApproval, ProposalStageCodes.Preparation,
             taskResult: TaskResultCodes.QuoteRequiresRevision),
 
-        // Quote sent — stays in SentFollowUp until the client responds.
-        Conditional(ProposalStageCodes.SentFollowUp, ProposalStageCodes.SentFollowUp,
-            taskResult: TaskResultCodes.QuoteSent),
-
         // ── Terminal outcomes ───────────────────────────────────────────────
         // Client approved → final Approved stage. The continuation workflow
         // is started AFTER a real project is created (resolved by ProjectType

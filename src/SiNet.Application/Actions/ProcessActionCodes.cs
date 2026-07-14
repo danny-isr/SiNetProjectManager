@@ -21,4 +21,13 @@ public static class ProcessActionCodes
 
     /// <summary>Workflow transition convenience: set project status to BillingPending.</summary>
     public const string SetBillingPending = nameof(SetBillingPending);
+
+    /// <summary>Workflow transition action: close the tasks linked to the stage being left.</summary>
+    public const string ClosePreviousStageTasks = nameof(ClosePreviousStageTasks);
+
+    /// <summary>Workflow transition action: start the sub-workflow attached to the target stage.</summary>
+    public const string StartSubWorkflow = nameof(StartSubWorkflow);
+
+    /// <summary>Workflow transition action: close the project (final status) and its open tasks.</summary>
+    public const string CloseProject = nameof(CloseProject);
 }

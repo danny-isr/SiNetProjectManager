@@ -63,6 +63,11 @@ public sealed class SqlEmailFilingService(
         // in Gmail with no matching SQL mapping.
         string? attachedLabelId = null;
 
+        // Snapshot of prior project labels that were removed during reassign. If a later Gmail step
+        // fails BEFORE we successfully attach the new label, we best-effort re-attach these so the
+        // message returns to its pre-filing label state instead of ending up unlabeled.
+        IReadOnlyList<string> removedProjectLabelIds = Array.Empty<string>();
+
         try
         {
             var gmailSw = Stopwatch.StartNew();
@@ -78,6 +83,7 @@ public sealed class SqlEmailFilingService(
                         moveToInbox: false,
                         cancellationToken)
                     .ConfigureAwait(false);
+                removedProjectLabelIds = existingProjectLabelIds;
             }
 
             var labelId = await _gmailModify
@@ -103,12 +109,12 @@ public sealed class SqlEmailFilingService(
         }
         catch (Exception ex)
         {
-            // The SQL sync failed after the Gmail label was applied. Best-effort compensation:
-            // remove the just-attached label so Gmail and SQL end in a consistent "not filed" state
-            // (matching the rolled-back DB). We cannot reliably restore any project labels that were
-            // removed in the reassign step above, so the message settles on "no project label".
+            // Best-effort compensation so Gmail and SQL settle in a consistent state. Never mask the
+            // original error — all compensation is wrapped in its own try/catch.
             if (!string.IsNullOrWhiteSpace(attachedLabelId))
             {
+                // The new label was already attached before the failure (SQL sync failed). Remove it so
+                // Gmail matches the rolled-back DB ("not filed").
                 try
                 {
                     await _gmailModify
@@ -117,8 +123,26 @@ public sealed class SqlEmailFilingService(
                 }
                 catch (Exception compensationEx)
                 {
-                    // Never mask the original error; the compensation is best-effort.
                     Debug.WriteLine($"[EmailFiling] Compensation RemoveProjectLabel failed: {compensationEx.Message}");
+                }
+            }
+            else if (removedProjectLabelIds.Count > 0)
+            {
+                // We removed the prior project labels but never attached the new one (a Gmail step
+                // failed mid-reassign). Re-attach the removed labels so the message returns to its
+                // pre-filing state instead of ending up with no project label at all.
+                foreach (var labelId in removedProjectLabelIds)
+                {
+                    try
+                    {
+                        await _gmailModify
+                            .AttachProjectLabelAsync(command.GmailMessageId, labelId, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception compensationEx)
+                    {
+                        Debug.WriteLine($"[EmailFiling] Compensation re-attach of prior label '{labelId}' failed: {compensationEx.Message}");
+                    }
                 }
             }
 

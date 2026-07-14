@@ -131,7 +131,7 @@ public sealed class ProcessBackboneBoundaryTests
     }
 
     [Fact]
-    public async Task Task_completion_reports_failure_when_workflow_auto_advance_throws()
+    public async Task Task_completion_marks_advance_pending_when_workflow_auto_advance_throws()
     {
         var throwingWorkflow = new ThrowingWorkflowCommandService();
         var (provider, taskId) = await CreateSeededProviderAsync(
@@ -150,9 +150,13 @@ public sealed class ProcessBackboneBoundaryTests
                 UserId: 7),
             CancellationToken.None).ConfigureAwait(false);
 
-        Assert.False(result.Success);
+        // The task's own writes already committed, so a failed follow-on auto-advance must NOT be
+        // reported as a failed completion. It is surfaced as a distinct, retryable "advance pending"
+        // state (the advance is idempotent over committed state and can be re-triggered).
+        Assert.True(result.Success);
         Assert.True(result.TaskClosed);
-        Assert.True(result.WorkflowAdvanced);
+        Assert.False(result.WorkflowAdvanced);
+        Assert.True(result.WorkflowAdvancePending);
         Assert.Contains("Workflow auto-advance failed", result.ErrorMessage, StringComparison.Ordinal);
     }
 
