@@ -166,6 +166,7 @@ Initial menu (P3 + P6 + native admin):
 | Action permissions | `ActionPermissions.Manage` | Administrator | `ActionPermissionsWindow` → native `ActionPermissionsView` |
 | Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
 | ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native ACC control/status + inbox reconciliation window |
+| System health | Authenticated user | Any signed-in user | `SystemStatusWindow` → native subsystem status + background work |
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 
@@ -193,6 +194,14 @@ process, and performs no settings writes or privileged ACC business orchestratio
 a manual read-only `projectId + folderId + fileName` lookup tester through `IAccDocumentService`, a
 derived ACC Docs URL that is shown only after a live resolve succeeds, and a read-only
 `IAccInboxReconciliationService` panel for truth-based inbox inspection from the New System screen.
+
+**System health (native, implemented):** Any authenticated user sees **מצב מערכת** (menu) and a
+footer health indicator (colored dot + short summary including background-work count). Both open
+native `SystemStatusWindow` in `SiNet.App.Wpf.Admin.SystemStatus`, backed by
+`IRuntimeSubsystemStatusService` (aggregates external health via host adapter, ACC mode/probe,
+Gmail connector auth, `IEmailAccBackgroundWorkTracker`, and the startup task registry). Display
+states: `Running` | `Idle` | `Degraded` | `Stopped` | `NotConfigured`. Does **not** open legacy
+`SystemHealthWindow`.
 
 Implemented capabilities in this surface:
 

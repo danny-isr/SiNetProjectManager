@@ -2,8 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
+using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Autodesk;
+using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Tasks;
@@ -21,6 +23,9 @@ public static class NewSystemWpfServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddSiNetRuntimeStatus();
+        services.AddTransient<SystemStatusViewModel>();
+        services.AddTransient<SystemStatusWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();
         services.AddSiNetUserAdminWpf();

@@ -1091,28 +1091,6 @@ namespace SiNetProjectManagerV2
                 var defaultProjectService = new SiNetSQL.Services.DefaultProjectService(dbContextFactory);
                 var projectId = defaultProjectService.EnsureDefaultProjectExists();
 
-                // #region agent log
-                try
-                {
-                    var dbg = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        sessionId = "487a8a",
-                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        runId = "post-fix",
-                        hypothesisId = "H-C",
-                        location = "App.WarmDefaultProjectCacheForNewSystem",
-                        message = "default project cache warmed",
-                        data = new
-                        {
-                            projectId,
-                            cached = SiNetSQL.Services.DefaultProjectService.CachedDefaultProjectId,
-                        },
-                    });
-                    System.IO.File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
-                }
-                catch { }
-                // #endregion
-
                 Log.Information(
                     "[STARTUP][NewSystem] Default project ready. ProjectId={ProjectId}",
                     projectId);
@@ -1136,6 +1114,20 @@ namespace SiNetProjectManagerV2
                 Current.MainWindow = shell;
                 Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
                 shell.Show();
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var runtime = ServiceProvider.GetService<SiNet.Application.Runtime.IRuntimeSubsystemStatusService>();
+                        if (runtime is not null)
+                            await runtime.RefreshAsync(_appShutdownCts.Token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        Log.Debug(ex, "[STARTUP][NewSystem] Initial runtime status refresh failed.");
+                    }
+                }, _appShutdownCts.Token);
 
                 Log.Information("[STARTUP][NewSystem] NewShell opened (legacy MainWindow not loaded).");
             }
@@ -1402,23 +1394,39 @@ namespace SiNetProjectManagerV2
         /// </summary>
         private void SchedulePdfRendererInit()
         {
+            var services = ServiceProvider;
+            if (services is null)
+                return;
+
+            var startupTasks = services.GetService<SiNet.Application.Runtime.IStartupTaskRegistry>();
             try
             {
-                var pdfRenderer = ServiceProvider.GetRequiredService<WebView2PdfRenderer>();
+                startupTasks?.Begin("pdf-renderer", "מנוע PDF");
+                var pdfRenderer = services.GetRequiredService<WebView2PdfRenderer>();
 
                 // Initialize WebView2 asynchronously but don't block the UI during init
                 Dispatcher.BeginInvoke(async () =>
                 {
-                    await pdfRenderer.InitializeAsync();
+                    try
+                    {
+                        await pdfRenderer.InitializeAsync();
 
-                    // Wire up the PDF renderer to the EmailIngestionServiceFactory
-                    var factory = ServiceProvider.GetRequiredService<IEmailIngestionServiceFactory>();
-                    factory.SetPdfRenderer(pdfRenderer);
+                        // Wire up the PDF renderer to the EmailIngestionServiceFactory
+                        var factory = services.GetRequiredService<IEmailIngestionServiceFactory>();
+                        factory.SetPdfRenderer(pdfRenderer);
+                        startupTasks?.Complete("pdf-renderer", succeeded: true, "מוכן");
+                    }
+                    catch (Exception ex)
+                    {
+                        startupTasks?.Complete("pdf-renderer", succeeded: false, ex.Message);
+                        Log.Warning(ex, "PDF renderer initialization failed. Email body PDFs will not be generated.");
+                    }
                 }, DispatcherPriority.Background);
             }
             catch (Exception pdfEx)
             {
                 // Non-fatal: PDF generation is optional
+                startupTasks?.Complete("pdf-renderer", succeeded: false, pdfEx.Message);
                 Log.Warning(pdfEx, "PDF renderer initialization failed. Email body PDFs will not be generated.");
             }
         }
@@ -1431,14 +1439,21 @@ namespace SiNetProjectManagerV2
         /// </summary>
         private static void StartNewSystemConnectorAuthRestore()
         {
+            var services = ServiceProvider;
+            if (services is null)
+                return;
+
+            var startupTasks = services.GetService<SiNet.Application.Runtime.IStartupTaskRegistry>();
+            startupTasks?.Begin("gmail-restore", "שחזור Gmail");
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var connectorAuthServices = ServiceProvider.GetServices<IConnectorAuthService>().ToArray();
+                    var connectorAuthServices = services.GetServices<IConnectorAuthService>().ToArray();
                     if (connectorAuthServices.Length == 0)
                     {
                         Log.Debug("[STARTUP][NewSystem] No IConnectorAuthService registered; skipping silent restore.");
+                        startupTasks?.Complete("gmail-restore", succeeded: true, "אין שירות אימות — דולג");
                         return;
                     }
 
@@ -1446,20 +1461,29 @@ namespace SiNetProjectManagerV2
                         "[STARTUP][NewSystem] Attempting silent connector auth restore ({Count} service(s))...",
                         connectorAuthServices.Length);
 
+                    var anyRestored = false;
                     foreach (var authService in connectorAuthServices)
                     {
                         var restored = await authService
                             .TryRestoreSessionAsync(_appShutdownCts.Token)
                             .ConfigureAwait(false);
+                        anyRestored |= restored;
                         Log.Information("[STARTUP][NewSystem] Connector auth silent restore result: {Restored}", restored);
                     }
+
+                    startupTasks?.Complete(
+                        "gmail-restore",
+                        succeeded: true,
+                        anyRestored ? "סשן שוחזר" : "אין סשן לשחזור");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    startupTasks?.Complete("gmail-restore", succeeded: false, ex.Message);
                     Log.Warning(ex, "[STARTUP][NewSystem] Silent connector auth restore failed; continuing without session.");
                 }
                 catch (OperationCanceledException)
                 {
+                    startupTasks?.Complete("gmail-restore", succeeded: false, "בוטל");
                     // Expected on shutdown — don't log as error
                 }
             }, _appShutdownCts.Token);

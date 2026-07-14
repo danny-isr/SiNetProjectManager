@@ -4,6 +4,7 @@ using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
+using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
@@ -15,6 +16,7 @@ using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
 using SiNet.Application.DevTools;
 using SiNet.Application.Projects;
+using SiNet.Application.Runtime;
 
 namespace SiNet.App.Wpf.Shell;
 
@@ -57,11 +59,18 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             openNewProject = () => OpenNewProject(projectCreateFactory);
         }
 
+        var runtimeStatus = _services.GetService<IRuntimeSubsystemStatusService>();
+        Action? openSystemStatus = HasAuthenticatedUser()
+            ? OpenNativeSystemStatus
+            : null;
+
         var viewModel = new NewShellViewModel(
             menu,
             currentUserDisplay,
             currentProject,
-            openNewProject: openNewProject);
+            openNewProject: openNewProject,
+            runtimeStatus: runtimeStatus,
+            openSystemStatus: openSystemStatus);
 
         var selectorView = TryCreateProjectSelector();
 
@@ -182,6 +191,11 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         if (HasAuthenticatedUser())
         {
+            items.Add(new NewShellMenuItem(
+                "מצב מערכת",
+                OpenNativeSystemStatus,
+                "מצב מערכות־משנה ועבודת רקע (מערכת חדשה)"));
+
             items.Add(new NewShellMenuItem(
                 "הגדרות אישיות",
                 OpenNativePersonalSettings,
@@ -347,6 +361,26 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת סטטוס ACC: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeSystemStatus()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<SystemStatusWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת מצב מערכת: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

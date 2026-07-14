@@ -1,0 +1,125 @@
+using System.Collections.ObjectModel;
+using System.Windows.Input;
+using System.Windows.Media;
+using SiNet.App.Wpf.Inbox;
+using SiNet.App.Wpf.Inspection;
+using SiNet.Application.Runtime;
+
+namespace SiNet.App.Wpf.Admin.SystemStatus;
+
+public sealed class SystemStatusViewModel : ObservableObject
+{
+    private readonly IRuntimeSubsystemStatusService _runtime;
+    private bool _isBusy;
+    private string _summary = "טוען…";
+
+    public SystemStatusViewModel(IRuntimeSubsystemStatusService runtime)
+    {
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        Rows = new ObservableCollection<SystemStatusRowViewModel>();
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
+        _runtime.Changed += OnRuntimeChanged;
+        ApplySnapshot(_runtime.Current);
+    }
+
+    public ObservableCollection<SystemStatusRowViewModel> Rows { get; }
+
+    public string Summary
+    {
+        get => _summary;
+        private set => SetField(ref _summary, value);
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set
+        {
+            if (!SetField(ref _isBusy, value))
+                return;
+            (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
+    public ICommand RefreshCommand { get; }
+
+    public async Task LoadAsync() => await RefreshAsync().ConfigureAwait(true);
+
+    public void Dispose() => _runtime.Changed -= OnRuntimeChanged;
+
+    private async Task RefreshAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            await _runtime.RefreshAsync().ConfigureAwait(true);
+            ApplySnapshot(_runtime.Current);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void OnRuntimeChanged(object? sender, EventArgs e) =>
+        ApplySnapshot(_runtime.Current);
+
+    private void ApplySnapshot(IReadOnlyList<SubsystemRuntimeStatus> statuses)
+    {
+        Rows.Clear();
+        foreach (var s in statuses)
+            Rows.Add(SystemStatusRowViewModel.From(s));
+
+        var running = statuses.Count(s => s.State == SubsystemRuntimeState.Running);
+        var degraded = statuses.Count(s =>
+            s.State is SubsystemRuntimeState.Degraded or SubsystemRuntimeState.Stopped);
+        var bg = statuses.Sum(s => s.ActiveWorkCount ?? 0);
+        var ok = statuses.Count(s => s.State is SubsystemRuntimeState.Idle or SubsystemRuntimeState.Running);
+        Summary = $"{ok} פעילים/מוכנים · {running} רצים ברקע · {degraded} בתקלה · עבודת רקע: {bg}";
+    }
+}
+
+public sealed class SystemStatusRowViewModel
+{
+    public required string Key { get; init; }
+    public required string DisplayName { get; init; }
+    public required string StateLabel { get; init; }
+    public required string Summary { get; init; }
+    public required string ActiveWorkDisplay { get; init; }
+    public required Brush StateBrush { get; init; }
+
+    public static SystemStatusRowViewModel From(SubsystemRuntimeStatus s) => new()
+    {
+        Key = s.Key,
+        DisplayName = s.DisplayNameHe,
+        StateLabel = StateToHe(s.State),
+        Summary = s.SummaryHe,
+        ActiveWorkDisplay = s.ActiveWorkCount is > 0 ? s.ActiveWorkCount.Value.ToString() : "—",
+        StateBrush = StateToBrush(s.State),
+    };
+
+    private static string StateToHe(SubsystemRuntimeState state) => state switch
+    {
+        SubsystemRuntimeState.Running => "רץ",
+        SubsystemRuntimeState.Idle => "מוכן",
+        SubsystemRuntimeState.Degraded => "מוגבל",
+        SubsystemRuntimeState.Stopped => "כבוי",
+        SubsystemRuntimeState.NotConfigured => "לא מוגדר",
+        _ => state.ToString(),
+    };
+
+    private static Brush StateToBrush(SubsystemRuntimeState state)
+    {
+        var color = state switch
+        {
+            SubsystemRuntimeState.Running => Color.FromRgb(0x15, 0x65, 0xC0),
+            SubsystemRuntimeState.Idle => Color.FromRgb(0x2E, 0x7D, 0x32),
+            SubsystemRuntimeState.Degraded => Color.FromRgb(0xEF, 0x6C, 0x00),
+            SubsystemRuntimeState.Stopped => Color.FromRgb(0xC6, 0x28, 0x28),
+            _ => Color.FromRgb(0x75, 0x75, 0x75),
+        };
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+}

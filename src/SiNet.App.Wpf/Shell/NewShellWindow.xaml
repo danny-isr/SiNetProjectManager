@@ -110,8 +110,23 @@
         </Grid>
 
         <Border Grid.Row="3" Background="{DynamicResource SiPrimaryBrush}" Padding="12,4">
-            <TextBlock Text="{Binding StatusText}" Style="{DynamicResource SiTextTinyStyle}"
-                       Foreground="White" Opacity="0.85" />
+            <Button Command="{Binding OpenSystemStatusCommand}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    Cursor="Hand"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Right"
+                    ToolTip="מצב מערכת — לחץ לפרטים">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="10" Height="10" Margin="0,0,8,0"
+                             Fill="{Binding OverallHealthBrush}" />
+                    <TextBlock Text="{Binding StatusText}"
+                               Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="White" Opacity="0.9"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
         </Border>
     </Grid>
 </Window>

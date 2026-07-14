@@ -218,7 +218,7 @@ Logging applier remains separate — appearance preview/save does **not** call `
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `InspectionShellView`, Email visual clone (content areas), Inspection visual clone (content areas). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
+`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (content areas), Inspection visual clone (content areas). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
 
 **Deferred:** legacy windows, `StartupModeSelectionWindow`, Email/Inspection **title-bar chrome** (brand blue/green headers — intentional visual-clone fidelity), semantic row tints in User Management DataGrid, `SiCardStyle`.
 

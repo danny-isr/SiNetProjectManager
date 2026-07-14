@@ -63,6 +63,8 @@ public static class NewSystemServiceCollectionExtensions
         services.AddTransient<SiNet.Application.Abstractions.Inspection.IInspectionReportExportPort, V2InspectionReportExportPort>();
         services.AddTransient<SiNet.Application.Abstractions.Inspection.IInspectionReportCommandService, V2InspectionReportCommandService>();
 
+        services.AddSingleton<SiNet.Application.Runtime.IExternalHealthCheckSource, LegacySystemHealthCheckSource>();
+
         return services;
     }
 
