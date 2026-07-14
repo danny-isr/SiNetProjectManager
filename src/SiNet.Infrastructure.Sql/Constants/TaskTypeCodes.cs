@@ -75,6 +75,9 @@ public static class TaskTypeCodes
     public const string SendReportToPlanner           = "SendReportToPlanner";
     public const string TrackPlannerCorrections       = "TrackPlannerCorrections";
     public const string RecheckPlan                   = "RecheckPlan";
+    // Post-recheck police-requirement decision (REV.PoliceApprovalDecision).
+    // Emits PoliceApprovalRequired / PoliceApprovalNotRequired.
+    public const string DeterminePoliceApprovalRequirement = "DeterminePoliceApprovalRequirement";
     public const string IssueApproval                 = "IssueApproval";
     public const string PreparePoliceSubmission       = "PreparePoliceSubmission";
     public const string SubmitToPolice                = "SubmitToPolice";

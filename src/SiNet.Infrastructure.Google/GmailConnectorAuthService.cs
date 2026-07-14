@@ -61,6 +61,13 @@ public sealed class GmailConnectorAuthService : IConnectorAuthService
         _provider.Logout();
     }
 
+    /// <inheritdoc />
+    public async Task LogoutAsync(CancellationToken cancellationToken = default)
+    {
+        ConnectedAccountEmail = null;
+        await _provider.LogoutAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// Attempts a silent (no-browser) restore of a previously authorized session from the token
     /// store. Returns <c>true</c> when a usable session was restored.

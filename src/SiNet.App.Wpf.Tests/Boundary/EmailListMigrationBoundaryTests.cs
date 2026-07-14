@@ -312,7 +312,7 @@ public sealed class EmailListMigrationBoundaryTests
         var listVmSource = EmailListImplementationSource.ReadCombined();
 
         Assert.Contains("DisconnectCommand", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("AuthService.Logout()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("AuthService.LogoutAsync()", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

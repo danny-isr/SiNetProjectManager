@@ -215,6 +215,21 @@ public static class ReviewTaskInteractionRegistry
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: false),
 
+            // DeterminePoliceApprovalRequirement — post-recheck decision on
+            // whether the plan needs police/authority approval. Internal
+            // project-work decision (no dedicated UI yet), reuses the ProjectWork
+            // component like the other decision-only tasks.
+            new(
+                TaskTypeCodes.DeterminePoliceApprovalRequirement,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
+                TaskCompletionPolicy.WorkflowResultRecorded,
+                new[] { TaskResultCodes.PoliceApprovalRequired, TaskResultCodes.PoliceApprovalNotRequired },
+                AutoCloseOnCompletion: true,
+                RequiresUserConfirmation: true),
+
             new(
                 TaskTypeCodes.IssueApproval,
                 TaskOpenMode.ProjectWork,

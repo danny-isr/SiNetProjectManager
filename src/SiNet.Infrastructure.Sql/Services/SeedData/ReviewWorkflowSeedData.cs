@@ -38,6 +38,7 @@ public static class ReviewWorkflowSeedData
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.AwaitingManagerApproval,      "ממתין לאישור מנהל",                   SortOrder: 60),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.AwaitingPlannerCorrections,   "ממתין לתיקוני מתכנן",                 SortOrder: 70),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.RecheckRound,                 "סבב בדיקה חוזרת",                     SortOrder: 80),
+        new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.PoliceApprovalDecision,       "החלטה: נדרש אישור משטרה?",            SortOrder: 85),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.PoliceSubmission,             "הגשה למשטרה",                         SortOrder: 90),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.AwaitingPoliceApproval,       "ממתין לאישור משטרה",                  SortOrder: 100),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.AwaitingPoliceCorrections,    "ממתין לתיקונים בעקבות הערות משטרה",  SortOrder: 110),
@@ -74,6 +75,7 @@ public static class ReviewWorkflowSeedData
             [ReviewStageCodes.AwaitingManagerApproval]     = ReviewUserGroupCodes.ReviewManagers,
             [ReviewStageCodes.AwaitingPlannerCorrections]  = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.RecheckRound]                = ReviewUserGroupCodes.Reviewers,
+            [ReviewStageCodes.PoliceApprovalDecision]      = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.PoliceSubmission]            = ReviewUserGroupCodes.PoliceLiaison,
             [ReviewStageCodes.AwaitingPoliceApproval]      = ReviewUserGroupCodes.PoliceLiaison,
             [ReviewStageCodes.AwaitingPoliceCorrections]   = ReviewUserGroupCodes.PoliceLiaison,
@@ -131,6 +133,13 @@ public static class ReviewWorkflowSeedData
             IsRequired: true,
             SortOrder: 1,
             Notes: "בדיקה חוזרת של התוכנית לאחר תיקונים"),
+        new PlanningWorkflowSeedData.StageTaskDefinition(
+            StageCode: ReviewStageCodes.PoliceApprovalDecision,
+            TaskTypeCode: TaskTypeCodes.DeterminePoliceApprovalRequirement,
+            AssignedGroupCode: ReviewUserGroupCodes.Reviewers,
+            IsRequired: true,
+            SortOrder: 1,
+            Notes: "החלטה האם התוכנית מחייבת אישור משטרה לפני סגירה"),
         new PlanningWorkflowSeedData.StageTaskDefinition(
             StageCode: ReviewStageCodes.PoliceSubmission,
             TaskTypeCode: TaskTypeCodes.SubmitToPolice,
@@ -227,10 +236,16 @@ public static class ReviewWorkflowSeedData
         Conditional(ReviewStageCodes.RecheckRound, ReviewStageCodes.AwaitingPlannerCorrections,
             taskResult: TaskResultCodes.RecheckRequiresMoreCorrections,
             actions: SetStatus(ProjectStatusCodes.WaitingForClient)),
-        Conditional(ReviewStageCodes.RecheckRound, ReviewStageCodes.Close,
-            taskResult: TaskResultCodes.PoliceApprovalNotRequired),
-        Conditional(ReviewStageCodes.RecheckRound, ReviewStageCodes.PoliceSubmission,
+        // Recheck passed → decide whether police/authority approval is required.
+        Conditional(ReviewStageCodes.RecheckRound, ReviewStageCodes.PoliceApprovalDecision,
+            taskResult: TaskResultCodes.RecheckPassed),
+
+        // Police-approval decision (DeterminePoliceApprovalRequirement task).
+        // Required → enter the police path; NotRequired → straight to Close.
+        Conditional(ReviewStageCodes.PoliceApprovalDecision, ReviewStageCodes.PoliceSubmission,
             taskResult: TaskResultCodes.PoliceApprovalRequired),
+        Conditional(ReviewStageCodes.PoliceApprovalDecision, ReviewStageCodes.Close,
+            taskResult: TaskResultCodes.PoliceApprovalNotRequired),
 
         // Police path.
         Conditional(ReviewStageCodes.PoliceSubmission, ReviewStageCodes.AwaitingPoliceApproval,

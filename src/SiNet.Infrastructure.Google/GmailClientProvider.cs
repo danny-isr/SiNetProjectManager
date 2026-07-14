@@ -216,11 +216,24 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// <summary>
     /// Signs out: disposes the cached client and deletes the persisted refresh token directory so
     /// the next sign-in requires fresh OAuth consent. Raises <see cref="AuthStateChanged"/> on transition.
+    /// <para>
+    /// Prefer <see cref="LogoutAsync"/> from async call sites. This synchronous overload blocks on the
+    /// gate (via <see cref="LogoutAsync"/>) and exists only for the legacy sync
+    /// <c>IConnectorAuthService.Logout</c> surface.
+    /// </para>
     /// </summary>
-    public void Logout()
+    public void Logout() => LogoutAsync().GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Async sign-out: acquires the gate with <see cref="SemaphoreSlim.WaitAsync()"/> (never the
+    /// blocking <c>Wait()</c>, which risks a UI deadlock when a concurrent sign-in/read holds the
+    /// gate), disposes the cached client, and deletes the persisted refresh token directory. Raises
+    /// <see cref="AuthStateChanged"/> outside the gate on transition.
+    /// </summary>
+    public async Task LogoutAsync(CancellationToken cancellationToken = default)
     {
         var wasSignedIn = _gmailService != null;
-        _gate.Wait();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             _gmailService?.Dispose();

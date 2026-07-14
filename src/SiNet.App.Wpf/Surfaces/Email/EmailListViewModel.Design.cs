@@ -77,6 +77,12 @@ public sealed partial class EmailListViewModel
             AuthStateChanged?.Invoke(false);
         }
 
+        public Task LogoutAsync(CancellationToken cancellationToken = default)
+        {
+            Logout();
+            return Task.CompletedTask;
+        }
+
         public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(IsAuthenticated);
 

@@ -104,6 +104,7 @@ public static class TaskTypeSeedData
         new TaskTypeDefinition(214, TaskTypeCodes.SendReportToPlanner,             "שליחת דוח למתכנן",             true, 214),
         new TaskTypeDefinition(215, TaskTypeCodes.TrackPlannerCorrections,         "מעקב תיקוני מתכנן",            true, 215),
         new TaskTypeDefinition(216, TaskTypeCodes.RecheckPlan,                     "בדיקה חוזרת",                  true, 216),
+        new TaskTypeDefinition(224, TaskTypeCodes.DeterminePoliceApprovalRequirement, "החלטת נדרשות אישור משטרה", true, 224),
         new TaskTypeDefinition(217, TaskTypeCodes.IssueApproval,                   "הוצאת אישור",                  true, 217),
         new TaskTypeDefinition(218, TaskTypeCodes.PreparePoliceSubmission,         "הכנת הגשה למשטרה",             true, 218),
         new TaskTypeDefinition(219, TaskTypeCodes.SubmitToPolice,                  "הגשה למשטרה",                  true, 219),

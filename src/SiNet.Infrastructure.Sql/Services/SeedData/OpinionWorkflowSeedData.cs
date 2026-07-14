@@ -117,6 +117,14 @@ public static class OpinionWorkflowSeedData
             StageCode: OpinionStageCodes.RequestMissingMaterial,
             TaskTypeCode: TaskTypeCodes.RequestMissingMaterial,
             AssignedGroupCode: UserGroupCodes.OfficeManagement),
+        // TrackMissingMaterial closes the missing-material loop: it is the only
+        // task type allowed to emit MissingMaterialReceived, which drives the
+        // RequestMissingMaterial → AnalyzeDocuments auto-transition. Without it
+        // the loop is a dead end.
+        new PlanningWorkflowSeedData.StageTaskDefinition(
+            StageCode: OpinionStageCodes.RequestMissingMaterial,
+            TaskTypeCode: TaskTypeCodes.TrackMissingMaterial,
+            AssignedGroupCode: UserGroupCodes.OfficeManagement),
         new PlanningWorkflowSeedData.StageTaskDefinition(
             StageCode: OpinionStageCodes.PrepareDraft,
             TaskTypeCode: TaskTypeCodes.PrepareOpinionDraft,
@@ -178,9 +186,20 @@ public static class OpinionWorkflowSeedData
             EvaluationMode = SiNetSQL.Models.WorkflowEvaluationMode.Auto,
         };
 
+    /// <summary>
+    /// Result-driven transition on the orchestrator's auto-advance path.
+    /// Sets <c>TaskStatusChanged</c> + <c>Auto</c> so <c>CheckAndAutoAdvanceAsync</c>
+    /// fires the matching rule as soon as the stage task records its result
+    /// (parity with Review's <c>Conditional</c>). Condition defaults to
+    /// <c>TaskResultEquals</c> via the seed service.
+    /// </summary>
     private static PlanningWorkflowSeedData.StageTransitionDefinition Conditional(
         string from, string to, string taskResult, PlanningWorkflowSeedData.StageActionDefinition[]? actions = null)
-        => new(from, to, taskResult, actions ?? Array.Empty<PlanningWorkflowSeedData.StageActionDefinition>());
+        => new(from, to, taskResult, actions ?? Array.Empty<PlanningWorkflowSeedData.StageActionDefinition>())
+        {
+            TriggerType = SiNetSQL.Models.WorkflowTransitionTriggerType.TaskStatusChanged,
+            EvaluationMode = SiNetSQL.Models.WorkflowEvaluationMode.Auto,
+        };
 
     private static PlanningWorkflowSeedData.StageActionDefinition[] SetStatus(string projectStatusCode)
         => new[]

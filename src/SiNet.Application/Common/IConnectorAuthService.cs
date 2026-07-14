@@ -16,6 +16,12 @@ public interface IConnectorAuthService
 
     void Logout();
 
+    /// <summary>
+    /// Async sign-out. Preferred over <see cref="Logout"/> from async call sites (e.g. UI disconnect)
+    /// because the sync overload can block a thread that another operation needs, risking deadlock.
+    /// </summary>
+    Task LogoutAsync(CancellationToken cancellationToken = default);
+
     Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Refreshes <see cref="ConnectedAccountEmail"/> after login or silent restore.</summary>

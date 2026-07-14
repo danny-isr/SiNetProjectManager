@@ -14,6 +14,10 @@ public static class ReviewStageCodes
     public const string AwaitingManagerApproval      = "REV.AwaitingManagerApproval";
     public const string AwaitingPlannerCorrections   = "REV.AwaitingPlannerCorrections";
     public const string RecheckRound                 = "REV.RecheckRound";
+    // Post-recheck decision: does this plan require police/authority approval?
+    // Splits RecheckPassed into the police path (PoliceSubmission) or straight
+    // to Close. Always runs after a passed recheck.
+    public const string PoliceApprovalDecision       = "REV.PoliceApprovalDecision";
     public const string PoliceSubmission             = "REV.PoliceSubmission";
     public const string AwaitingPoliceApproval       = "REV.AwaitingPoliceApproval";
     public const string AwaitingPoliceCorrections    = "REV.AwaitingPoliceCorrections";

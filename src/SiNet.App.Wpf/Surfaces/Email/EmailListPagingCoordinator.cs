@@ -401,7 +401,7 @@ internal sealed class EmailListPagingCoordinator
         _owner.SetStatusMessage("מתנתק...");
         try
         {
-            _owner.AuthService.Logout();
+            await _owner.AuthService.LogoutAsync().ConfigureAwait(true);
             _owner.SetStatusMessage("מנותק מ-Gmail.");
         }
         finally

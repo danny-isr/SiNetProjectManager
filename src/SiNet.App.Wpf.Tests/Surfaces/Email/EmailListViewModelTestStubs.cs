@@ -50,6 +50,12 @@ internal static partial class EmailListViewModelTestFixtures
             AuthStateChanged?.Invoke(false);
         }
 
+        public Task LogoutAsync(CancellationToken cancellationToken = default)
+        {
+            Logout();
+            return Task.CompletedTask;
+        }
+
         public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default)
         {
             if (!RestoreSessionOnFailedLogin)
@@ -83,6 +89,12 @@ internal static partial class EmailListViewModelTestFixtures
             IsAuthenticated = false;
             ConnectedAccountEmail = null;
             AuthStateChanged?.Invoke(false);
+        }
+
+        public Task LogoutAsync(CancellationToken cancellationToken = default)
+        {
+            Logout();
+            return Task.CompletedTask;
         }
 
         public Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default) =>

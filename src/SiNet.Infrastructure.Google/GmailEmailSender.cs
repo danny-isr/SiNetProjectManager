@@ -116,8 +116,7 @@ public sealed class GmailEmailSender : IEmailSender
     }
 
     internal static bool IsTransient(global::Google.GoogleApiException ex) =>
-        ex.HttpStatusCode == System.Net.HttpStatusCode.TooManyRequests
-        || (int)ex.HttpStatusCode >= 500;
+        GmailRetry.IsTransient(ex);
 
     /// <summary>
     /// Builds an RFC 5322 message and returns it base64url-encoded as required by the Gmail API.

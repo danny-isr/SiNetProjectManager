@@ -249,6 +249,16 @@ public static class ReviewCompletionEventBehavior
                 ProjectStatusCodes.WaitingForClient,
                 RequestWorkflowAdvance: true),
 
+            // ReviewPoliceRequirementDecided — REV.PoliceApprovalDecision.
+            // Required → police path (PoliceSubmission); NotRequired → Close.
+            // Both outcomes advance the workflow; project-status is driven by
+            // downstream stage transitions.
+            new(ReviewCompletionEvents.ReviewPoliceRequirementDecided,
+                new[] { TaskTypeCodes.DeterminePoliceApprovalRequirement },
+                new[] { TaskResultCodes.PoliceApprovalRequired, TaskResultCodes.PoliceApprovalNotRequired },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true),
+
             new(ReviewCompletionEvents.ReviewPrincipallyApproved,
                 new[] { TaskTypeCodes.IssueApproval, TaskTypeCodes.SendInternalApproval },
                 new[] { TaskResultCodes.PrincipallyApproved },
@@ -364,6 +374,53 @@ public static class ReviewCompletionEventBehavior
             new(ReviewCompletionEvents.DocumentSent,
                 new[] { TaskTypeCodes.SendOpinion },
                 new[] { TaskResultCodes.OpinionSent },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true),
+
+            // ── Proposal (PRP.*) quote task completion events ───────────────
+            // Calculation → Preparation → InternalApproval → SentFollowUp →
+            // Approved/Rejected. Each row maps to the exact results allowed by
+            // the matching ReviewTaskInteractionRegistry entry. Project-status
+            // updates are driven by the seed transition SetStatus actions, so
+            // NewProjectStatusCode stays null here.
+            new(ReviewCompletionEvents.QuoteCalculationCompleted,
+                new[] { TaskTypeCodes.PrepareQuoteCalculation },
+                new[] { TaskResultCodes.QuoteCalculationCompleted },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true),
+
+            new(ReviewCompletionEvents.QuoteDocumentPrepared,
+                new[] { TaskTypeCodes.PrepareQuoteDocument },
+                new[] { TaskResultCodes.QuotePrepared },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true),
+
+            new(ReviewCompletionEvents.QuoteInternallyApproved,
+                new[] { TaskTypeCodes.ApproveQuoteInternal },
+                new[] { TaskResultCodes.QuoteApprovedInternally, TaskResultCodes.QuoteRequiresRevision },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true),
+
+            new(ReviewCompletionEvents.QuoteApprovalTracked,
+                new[] { TaskTypeCodes.FollowQuoteApproval },
+                new[] { TaskResultCodes.QuoteApprovedByClient, TaskResultCodes.QuoteRejectedByClient },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true),
+
+            // ProjectCloseDecided — generic CloseProject task (REV.Close /
+            // PLN.Close). Distinct from CloseProjectTask/ReviewProjectClosed.
+            // Approved advances to the terminal stage (whose transition records
+            // ProjectClosed + runs the CloseProject action); Rejected /
+            // NeedsMoreInfo self-loop so the user can retry. Project-status is
+            // driven by the seed transition actions.
+            new(ReviewCompletionEvents.ProjectCloseDecided,
+                new[] { TaskTypeCodes.CloseProject },
+                new[]
+                {
+                    TaskResultCodes.ProjectCloseApproved,
+                    TaskResultCodes.ProjectCloseRejected,
+                    TaskResultCodes.ProjectCloseNeedsMoreInfo,
+                },
                 NewProjectStatusCode: null,
                 RequestWorkflowAdvance: true),
         };

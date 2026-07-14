@@ -34,6 +34,22 @@ public sealed class GmailClientProviderLogoutTests
     }
 
     [Fact]
+    public async Task LogoutAsync_clears_state_and_deletes_token_store()
+    {
+        var tokenPath = CreateTempTokenDirectory();
+        File.WriteAllText(Path.Combine(tokenPath, "user"), "{}");
+
+        var options = new GmailOptions { TokenStorePath = tokenPath };
+        var provider = new GmailClientProvider(options, new TestAppLogger());
+
+        // Async logout must acquire the gate via WaitAsync and complete without blocking/deadlock.
+        await provider.LogoutAsync();
+
+        Assert.False(provider.IsSignedIn);
+        Assert.False(Directory.Exists(tokenPath));
+    }
+
+    [Fact]
     public void DeleteTokenStoreDirectory_removes_expanded_path()
     {
         var tokenPath = CreateTempTokenDirectory();

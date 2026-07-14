@@ -235,7 +235,7 @@ public sealed class EmailListSliceBoundaryTests
     {
         var listVmSource = EmailListImplementationSource.ReadCombined();
 
-        Assert.Contains("AuthService.Logout()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("AuthService.LogoutAsync()", listVmSource, StringComparison.Ordinal);
     }
 
     [Fact]

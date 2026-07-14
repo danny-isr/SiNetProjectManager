@@ -58,6 +58,11 @@ public sealed class SqlEmailFilingService(
             project.NameAndNumber,
             project.Title);
 
+        // Tracks the label we newly attached so we can compensate (remove it) if the SQL sync that
+        // follows fails. Without this, a Gmail label applied + a DB failure leaves an orphaned label
+        // in Gmail with no matching SQL mapping.
+        string? attachedLabelId = null;
+
         try
         {
             var gmailSw = Stopwatch.StartNew();
@@ -81,6 +86,7 @@ public sealed class SqlEmailFilingService(
             await _gmailModify
                 .AttachProjectLabelAsync(command.GmailMessageId, labelId, cancellationToken)
                 .ConfigureAwait(false);
+            attachedLabelId = labelId;
             var gmailMs = gmailSw.ElapsedMilliseconds;
 
             var dbSw = Stopwatch.StartNew();
@@ -97,6 +103,25 @@ public sealed class SqlEmailFilingService(
         }
         catch (Exception ex)
         {
+            // The SQL sync failed after the Gmail label was applied. Best-effort compensation:
+            // remove the just-attached label so Gmail and SQL end in a consistent "not filed" state
+            // (matching the rolled-back DB). We cannot reliably restore any project labels that were
+            // removed in the reassign step above, so the message settles on "no project label".
+            if (!string.IsNullOrWhiteSpace(attachedLabelId))
+            {
+                try
+                {
+                    await _gmailModify
+                        .RemoveProjectLabelAsync(command.GmailMessageId, attachedLabelId, moveToInbox: false, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception compensationEx)
+                {
+                    // Never mask the original error; the compensation is best-effort.
+                    Debug.WriteLine($"[EmailFiling] Compensation RemoveProjectLabel failed: {compensationEx.Message}");
+                }
+            }
+
             return new EmailFilingResult(false, ex.Message);
         }
     }
@@ -203,6 +228,15 @@ public sealed class SqlEmailFilingService(
         int targetProjectId,
         CancellationToken cancellationToken)
     {
+        // Keep the thread-mapping upsert and the inbox-row update atomic with each other so a
+        // partial "mapping saved but inbox not updated" state can never persist. Transactions are a
+        // relational-only feature (the EF InMemory provider used by unit tests does not support
+        // them), so only open one when the underlying provider is relational.
+        var useTransaction = db.Database.IsRelational();
+        await using var transaction = useTransaction
+            ? await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : null;
+
         var inbox = await ResolveInboxRowAsync(db, command.InboxMessageId, command.GmailMessageId, command.InternetMessageId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -235,21 +269,24 @@ public sealed class SqlEmailFilingService(
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (inbox is null)
+        if (inbox is not null)
         {
-            return;
+            await db.EmailInboxMessages
+                .Where(message => message.Id == inbox.Id)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(message => message.ProjectId, targetProjectId)
+                        .SetProperty(
+                            message => message.GmailThreadId,
+                            message => message.GmailThreadId ?? gmailThreadId),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        await db.EmailInboxMessages
-            .Where(message => message.Id == inbox.Id)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(message => message.ProjectId, targetProjectId)
-                    .SetProperty(
-                        message => message.GmailThreadId,
-                        message => message.GmailThreadId ?? gmailThreadId),
-                cancellationToken)
-            .ConfigureAwait(false);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task TrySyncSqlAfterUnfileAsync(

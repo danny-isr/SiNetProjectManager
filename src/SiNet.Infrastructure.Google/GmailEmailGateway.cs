@@ -63,7 +63,7 @@ public sealed class GmailEmailGateway : IEmailGateway
 
         var labelPath = $"{_provider.RootLabel}/{location}/{projectName}";
 
-        var labelId = await ResolveLabelIdAsync(gmail, labelPath, cancellationToken).ConfigureAwait(false);
+        var labelId = await ResolveLabelIdAsync(gmail, labelPath, _logger, cancellationToken).ConfigureAwait(false);
         if (labelId == null)
         {
             _logger.Warn($"[Gmail] Label not found: {labelPath}");
@@ -88,7 +88,11 @@ public sealed class GmailEmailGateway : IEmailGateway
             return Array.Empty<EmailSummary>();
         }
 
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var labels = await GmailRetry.ExecuteAsync(
+            ct => gmail.Users.Labels.List("me").ExecuteAsync(ct),
+            _logger,
+            "Labels.List(project label lookup)",
+            cancellationToken).ConfigureAwait(false);
         var rootPrefix = _provider.RootLabel + "/";
         var labelIds = labels.Labels?
             .Where(static l => !string.IsNullOrWhiteSpace(l.Name) && !string.IsNullOrWhiteSpace(l.Id))
@@ -167,7 +171,11 @@ public sealed class GmailEmailGateway : IEmailGateway
         ListMessagesResponse listResponse;
         try
         {
-            listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            listResponse = await GmailRetry.ExecuteAsync(
+                ct => listRequest.ExecuteAsync(ct),
+                _logger,
+                "Messages.List(mailbox page)",
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -215,7 +223,7 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
 
         var unreadQuery = EmailMailboxQueryComposer.BuildUnreadCountQuery(query, _provider.DefaultMailboxQuery);
-        var count = await CountMessagesByQueryAsync(gmail, unreadQuery, cancellationToken).ConfigureAwait(false);
+        var count = await CountMessagesByQueryAsync(gmail, unreadQuery, _logger, cancellationToken).ConfigureAwait(false);
         return new EmailMailboxUnreadCount(count, IsExact: true, scopeDescription);
     }
 
@@ -270,7 +278,11 @@ public sealed class GmailEmailGateway : IEmailGateway
                 ListMessagesResponse listResponse;
                 try
                 {
-                    listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+                    listResponse = await GmailRetry.ExecuteAsync(
+                        ct => listRequest.ExecuteAsync(ct),
+                        _logger,
+                        $"Messages.List(label '{logLabel}')",
+                        cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -340,10 +352,16 @@ public sealed class GmailEmailGateway : IEmailGateway
 
         try
         {
-            var getRequest = gmail.Users.Messages.Get("me", messageId);
-            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
-
-            var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var message = await GmailRetry.ExecuteAsync(
+                ct =>
+                {
+                    var getRequest = gmail.Users.Messages.Get("me", messageId);
+                    getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
+                    return getRequest.ExecuteAsync(ct);
+                },
+                _logger,
+                $"Messages.Get(full '{messageId}')",
+                cancellationToken).ConfigureAwait(false);
             return MapDetails(message);
         }
         catch (Exception ex)
@@ -356,9 +374,14 @@ public sealed class GmailEmailGateway : IEmailGateway
     private static async Task<string?> ResolveLabelIdAsync(
         GmailService gmail,
         string labelPath,
+        IAppLogger logger,
         CancellationToken cancellationToken)
     {
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var labels = await GmailRetry.ExecuteAsync(
+            ct => gmail.Users.Labels.List("me").ExecuteAsync(ct),
+            logger,
+            "Labels.List(resolve label id)",
+            cancellationToken).ConfigureAwait(false);
         var match = labels.Labels?.FirstOrDefault(
             l => string.Equals(l.Name, labelPath, StringComparison.OrdinalIgnoreCase));
         return match?.Id;
@@ -372,12 +395,18 @@ public sealed class GmailEmailGateway : IEmailGateway
     {
         try
         {
-            var getRequest = gmail.Users.Messages.Get("me", messageId);
-            getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Metadata;
-            getRequest.MetadataHeaders = MetadataHeaders;
-            getRequest.Fields = MetadataSummaryFieldsMask;
-
-            var message = await getRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var message = await GmailRetry.ExecuteAsync(
+                ct =>
+                {
+                    var getRequest = gmail.Users.Messages.Get("me", messageId);
+                    getRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Metadata;
+                    getRequest.MetadataHeaders = MetadataHeaders;
+                    getRequest.Fields = MetadataSummaryFieldsMask;
+                    return getRequest.ExecuteAsync(ct);
+                },
+                _logger,
+                $"Messages.Get(metadata '{messageId}')",
+                cancellationToken).ConfigureAwait(false);
             if (labelMap is null)
             {
                 labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
@@ -466,13 +495,14 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
 
         var unreadQuery = EmailMailboxQueryComposer.BuildUnreadCountQuery(query, _provider.DefaultMailboxQuery);
-        var count = await CountMessagesByQueryAsync(gmail, unreadQuery, cancellationToken).ConfigureAwait(false);
+        var count = await CountMessagesByQueryAsync(gmail, unreadQuery, _logger, cancellationToken).ConfigureAwait(false);
         return new EmailMailboxUnreadCount(count, IsExact: true, scopeDescription);
     }
 
     private static async Task<int> CountMessagesByQueryAsync(
         GmailService gmail,
         string gmailQuery,
+        IAppLogger logger,
         CancellationToken cancellationToken)
     {
         var totalCount = 0;
@@ -489,7 +519,11 @@ public sealed class GmailEmailGateway : IEmailGateway
             ListMessagesResponse listResponse;
             try
             {
-                listResponse = await listRequest.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+                listResponse = await GmailRetry.ExecuteAsync(
+                    ct => listRequest.ExecuteAsync(ct),
+                    logger,
+                    "Messages.List(unread count)",
+                    cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -523,7 +557,11 @@ public sealed class GmailEmailGateway : IEmailGateway
             return _cachedLabelMap;
         }
 
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var labels = await GmailRetry.ExecuteAsync(
+            ct => gmail.Users.Labels.List("me").ExecuteAsync(ct),
+            _logger,
+            "Labels.List(label map)",
+            cancellationToken).ConfigureAwait(false);
         var labelMap = labels.Labels?
                    .Where(static label => !string.IsNullOrWhiteSpace(label.Id))
                    .ToDictionary(static label => label.Id!, static label => label, StringComparer.Ordinal)

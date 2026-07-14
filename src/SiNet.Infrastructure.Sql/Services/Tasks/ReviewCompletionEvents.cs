@@ -26,6 +26,9 @@ public static class ReviewCompletionEvents
     public const string ReviewPoliceCorrectionsReceived       = "Review.PoliceCorrectionsReceived";
     public const string ReviewProjectClosed                   = "Review.ProjectClosed";
 
+    /// <summary>Post-recheck decision on whether police/authority approval is required (REV.PoliceApprovalDecision).</summary>
+    public const string ReviewPoliceRequirementDecided        = "Review.PoliceRequirementDecided";
+
     // ───────────────────────────────────────────────────────────────────
     // Generic, workflow-agnostic completion events (per WorkflowDecisions
     // §1 — Completion Events must be generic and reusable). The "Review."
@@ -59,4 +62,19 @@ public static class ReviewCompletionEvents
 
     /// <summary>Generic: a billing milestone was evaluated.</summary>
     public const string BillingMilestoneChecked               = "Review.BillingMilestoneChecked";
+
+    /// <summary>Generic: a quote calculation was completed (Proposal PRP.Calculation).</summary>
+    public const string QuoteCalculationCompleted             = "Review.QuoteCalculationCompleted";
+
+    /// <summary>Generic: a quote document was prepared (Proposal PRP.Preparation).</summary>
+    public const string QuoteDocumentPrepared                 = "Review.QuoteDocumentPrepared";
+
+    /// <summary>Generic: a quote was internally approved or sent back for revision (Proposal PRP.InternalApproval).</summary>
+    public const string QuoteInternallyApproved               = "Review.QuoteInternallyApproved";
+
+    /// <summary>Generic: a sent quote's client decision was tracked — approved/rejected (Proposal PRP.SentFollowUp).</summary>
+    public const string QuoteApprovalTracked                  = "Review.QuoteApprovalTracked";
+
+    /// <summary>Generic: an administrative project-close decision was made — approved/rejected/needs-more-info (REV.Close / PLN.Close CloseProject task).</summary>
+    public const string ProjectCloseDecided                   = "Review.ProjectCloseDecided";
 }

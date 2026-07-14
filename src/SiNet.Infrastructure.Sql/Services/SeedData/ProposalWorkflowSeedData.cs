@@ -89,12 +89,15 @@ public static class ProposalWorkflowSeedData
         // the orchestrator's auto-advance path (parity with AutoOnTaskResult).
         AutoLinear(ProposalStageCodes.FileMaterial, ProposalStageCodes.MaterialCheck),
 
+        // MaterialCheck uses the shared CheckQuoteMaterialCompleteness task type,
+        // whose registry + ReviewMaterialCheckCompleted behavior emit the generic
+        // MaterialComplete / MaterialMissing result codes (same as MAT.Check).
         Conditional(ProposalStageCodes.MaterialCheck, ProposalStageCodes.Calculation,
-            taskResult: TaskResultCodes.QuoteMaterialComplete),
+            taskResult: TaskResultCodes.MaterialComplete),
 
         // Missing material loop — stays in MaterialCheck until material is complete.
         Conditional(ProposalStageCodes.MaterialCheck, ProposalStageCodes.MaterialCheck,
-            taskResult: TaskResultCodes.QuoteMaterialMissing),
+            taskResult: TaskResultCodes.MaterialMissing),
 
         Conditional(ProposalStageCodes.Calculation,  ProposalStageCodes.Preparation,
             taskResult: TaskResultCodes.QuoteCalculationCompleted),
@@ -205,9 +208,20 @@ public static class ProposalWorkflowSeedData
         string from, string to, PlanningWorkflowSeedData.StageActionDefinition[]? actions = null)
         => new(from, to, TaskResultCode: null, actions ?? Array.Empty<PlanningWorkflowSeedData.StageActionDefinition>());
 
+    /// <summary>
+    /// Result-driven transition on the orchestrator's auto-advance path.
+    /// Sets <c>TaskStatusChanged</c> + <c>Auto</c> so <c>CheckAndAutoAdvanceAsync</c>
+    /// fires the matching rule as soon as the stage task records its result
+    /// (parity with Review's <c>Conditional</c>). Condition defaults to
+    /// <c>TaskResultEquals</c> via the seed service.
+    /// </summary>
     private static PlanningWorkflowSeedData.StageTransitionDefinition Conditional(
         string from, string to, string taskResult, PlanningWorkflowSeedData.StageActionDefinition[]? actions = null)
-        => new(from, to, taskResult, actions ?? Array.Empty<PlanningWorkflowSeedData.StageActionDefinition>());
+        => new(from, to, taskResult, actions ?? Array.Empty<PlanningWorkflowSeedData.StageActionDefinition>())
+        {
+            TriggerType = SiNetSQL.Models.WorkflowTransitionTriggerType.TaskStatusChanged,
+            EvaluationMode = SiNetSQL.Models.WorkflowEvaluationMode.Auto,
+        };
 
     /// <summary>
     /// Auto-evaluated result-driven transition. Mirrors the Review workflow

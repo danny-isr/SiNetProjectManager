@@ -61,6 +61,14 @@ public static class MaterialIntakeWorkflowSeedData
             StageCode: MaterialStageCodes.AwaitingCompletion,
             TaskTypeCode: TaskTypeCodes.RequestMissingMaterial,
             AssignedGroupCode: UserGroupCodes.OfficeManagement),
+        // TrackMissingMaterial closes the missing-material loop: it is the only
+        // task type allowed to emit MissingMaterialReceived, which drives the
+        // AwaitingCompletion → Check auto-transition. Without it the loop is a
+        // dead end (RequestMissingMaterial can only emit MissingMaterialRequestSent).
+        new PlanningWorkflowSeedData.StageTaskDefinition(
+            StageCode: MaterialStageCodes.AwaitingCompletion,
+            TaskTypeCode: TaskTypeCodes.TrackMissingMaterial,
+            AssignedGroupCode: UserGroupCodes.OfficeManagement),
     };
 
     /// <summary>

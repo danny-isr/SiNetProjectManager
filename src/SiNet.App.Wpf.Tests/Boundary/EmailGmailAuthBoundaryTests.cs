@@ -13,8 +13,8 @@ public sealed class EmailGmailAuthBoundaryTests
         var listVmSource = EmailListImplementationSource.ReadCombined();
         var authSource = ReadRepoFile("src/SiNet.Application/Common/IConnectorAuthService.cs");
 
-        Assert.Contains("AuthService.Logout()", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("void Logout()", authSource, StringComparison.Ordinal);
+        Assert.Contains("AuthService.LogoutAsync()", listVmSource, StringComparison.Ordinal);
+        Assert.Contains("Task LogoutAsync(", authSource, StringComparison.Ordinal);
         Assert.Contains("AccountStatusDisplay", listVmSource, StringComparison.Ordinal);
         Assert.Contains("לא מחובר ל-Gmail", listVmSource, StringComparison.Ordinal);
     }
