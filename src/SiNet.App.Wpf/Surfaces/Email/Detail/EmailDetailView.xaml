@@ -42,14 +42,15 @@
 
                 </StackPanel.Style>
 
-                <TextBlock Text="✉" FontSize="{DynamicResource SiTextHugeFontSize}" HorizontalAlignment="Center" Foreground="#CCC" />
+                <TextBlock Text="✉" FontSize="{DynamicResource SiTextHugeFontSize}" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource SiSecondaryBrush}" />
 
                 <TextBlock Text="בחר מייל מהרשימה לצפייה"
-
                            Opacity="0.7"
-
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextNormalFontSize}"
+                           Foreground="{DynamicResource SiSecondaryBrush}"
                            HorizontalAlignment="Center"
-
                            Margin="0,10,0,0" />
 
             </StackPanel>

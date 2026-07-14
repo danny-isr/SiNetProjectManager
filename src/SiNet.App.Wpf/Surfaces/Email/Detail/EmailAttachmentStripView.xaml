@@ -9,8 +9,9 @@
     <StackPanel>
         <TextBlock Text="📎 קבצים מצורפים"
                    FontWeight="SemiBold"
+                   FontFamily="{DynamicResource SiFontFamily}"
                    FontSize="{DynamicResource SiTextSmallFontSize}"
-                   Foreground="#666"
+                   Foreground="{DynamicResource SiSecondaryBrush}"
                    Margin="0,0,0,2" />
 
         <ItemsControl ItemsSource="{Binding ExternalDownloadLinks}"
@@ -28,6 +29,7 @@
                             ToolTip="{Binding Url}"
                             Padding="6,1"
                             Margin="0,0,4,2"
+                            FontFamily="{DynamicResource SiFontFamily}"
                             FontSize="{DynamicResource SiTextSmallFontSize}"
                             Foreground="#1565C0"
                             Cursor="Hand" />
@@ -46,21 +48,26 @@
                     <Border Padding="6,2" Margin="0,0,4,4" Background="#EEF2FF" BorderBrush="#C5CAE9" BorderThickness="1" CornerRadius="4">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding DisplayLabel}"
+                                       FontFamily="{DynamicResource SiFontFamily}"
                                        FontSize="{DynamicResource SiTextSmallFontSize}"
+                                       Foreground="{DynamicResource SiForegroundBrush}"
                                        VerticalAlignment="Center"
                                        Margin="0,0,6,0" />
                             <Button Content="{Binding TagButtonText}"
                                     Command="{Binding TagCommand}"
                                     MinWidth="80"
                                     MaxWidth="180"
-                                    Height="20"
-                                    Padding="4,0"
-                                    FontSize="10"
+                                    MinHeight="20"
+                                    Padding="4,1"
+                                    FontFamily="{DynamicResource SiFontFamily}"
+                                    FontSize="{DynamicResource SiTextTinyFontSize}"
                                     Margin="0,0,4,0"
                                     Visibility="{Binding ShowTagSelector, Converter={StaticResource BoolToVis}}" />
                             <ComboBox MinWidth="70"
                                       MaxWidth="120"
-                                      Height="20"
+                                      MinHeight="20"
+                                      Style="{DynamicResource SiComboBoxStyle}"
+                                      FontSize="{DynamicResource SiTextTinyFontSize}"
                                       ItemsSource="{Binding AvailableAlternatives}"
                                       SelectedValue="{Binding SelectedAlternativeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       SelectedValuePath="Id"

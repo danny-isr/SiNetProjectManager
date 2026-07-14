@@ -47,14 +47,20 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="10,6">
                     <TextBlock Text="&#x2709;" FontSize="{DynamicResource SiTextMediumFontSize}" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}"
+                               Foreground="White"
+                               FontWeight="Bold"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"
+                               VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Content="&#x2715;"
                             Foreground="White"
+                            FontFamily="{DynamicResource SiFontFamily}"
                             FontSize="{DynamicResource SiTextNormalFontSize}"
-                            Width="34"
-                            Height="28"
+                            MinWidth="34"
+                            MinHeight="28"
                             BorderThickness="0"
                             Background="Transparent"
                             Cursor="Hand"
@@ -63,9 +69,10 @@
                     <Button x:Name="MaximizeButton"
                             Content="&#x25A1;"
                             Foreground="White"
-                            FontSize="14"
-                            Width="34"
-                            Height="28"
+                            FontFamily="{DynamicResource SiFontFamily}"
+                            FontSize="{DynamicResource SiTextNormalFontSize}"
+                            MinWidth="34"
+                            MinHeight="28"
                             BorderThickness="0"
                             Background="Transparent"
                             Cursor="Hand"
@@ -73,9 +80,10 @@
                             ToolTip="הגדל" />
                     <Button Content="&#x2500;"
                             Foreground="White"
-                            FontSize="14"
-                            Width="34"
-                            Height="28"
+                            FontFamily="{DynamicResource SiFontFamily}"
+                            FontSize="{DynamicResource SiTextNormalFontSize}"
+                            MinWidth="34"
+                            MinHeight="28"
                             BorderThickness="0"
                             Background="Transparent"
                             Cursor="Hand"
@@ -85,7 +93,7 @@
             </Grid>
 
             <Border Grid.Row="1"
-                    Background="#FAFAFA"
+                    Background="{DynamicResource SiBackgroundBrush}"
                     BorderBrush="#E0E0E0"
                     BorderThickness="1"
                     CornerRadius="4"
@@ -94,8 +102,9 @@
                 <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="פרויקט:"
                                FontWeight="SemiBold"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"
-                               Foreground="#555"
+                               Foreground="{DynamicResource SiSecondaryBrush}"
                                VerticalAlignment="Center"
                                Margin="0,0,8,0" />
                     <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
@@ -107,6 +116,7 @@
                                Margin="16,0,0,0"
                                VerticalAlignment="Center"
                                Foreground="#2E7D32"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"
                                TextWrapping="Wrap" />
                 </WrapPanel>
@@ -142,7 +152,7 @@
             </Grid>
 
             <Border Grid.Row="4"
-                    Background="#ECEFF1"
+                    Background="{DynamicResource SiBackgroundBrush}"
                     BorderBrush="#E0E0E0"
                     BorderThickness="0,1,0,0"
                     Padding="10,5"
@@ -166,20 +176,24 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
                                    Text="{Binding StatusMessage}"
-                                   Foreground="#555"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"
                                    VerticalAlignment="Center"
                                    TextWrapping="Wrap" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding BackgroundWorkDisplay}"
                                    Foreground="#E65100"
                                    FontWeight="SemiBold"
+                                   FontFamily="{DynamicResource SiFontFamily}"
                                    FontSize="{DynamicResource SiTextSmallFontSize}"
                                    VerticalAlignment="Center"
                                    Margin="12,0,0,0"
                                    Visibility="{Binding HasBackgroundWork, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Grid.Column="2"
                                    Text="{Binding RuntimeSummary}"
-                                   Foreground="#999"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   FontFamily="{DynamicResource SiFontFamily}"
                                    FontSize="{DynamicResource SiTextSmallFontSize}"
                                    VerticalAlignment="Center"
                                    Margin="12,0,0,0" />

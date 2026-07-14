@@ -713,9 +713,17 @@ public sealed class InspectionWindowViewModel : ObservableObject
         if (renumberings.Count > 0)
         {
             var result = await _noteCommands.RenumberNotesAsync(renumberings).ConfigureAwait(true);
-            StatusMessage = result.Succeeded
-                ? "סדר ההערות עודכן."
-                : (result.ErrorMessage ?? "עדכון סדר ההערות נכשל.");
+            if (result.Succeeded)
+            {
+                StatusMessage = "סדר ההערות עודכן.";
+            }
+            else
+            {
+                var err = result.ErrorMessage ?? "עדכון סדר ההערות נכשל.";
+                if (SelectedReport is not null && ResolveActiveProjectId() is int projectId)
+                    await LoadReportContentAsync(projectId, SelectedReport.ReportId).ConfigureAwait(true);
+                StatusMessage = err;
+            }
         }
 
         RaiseCommandStates();

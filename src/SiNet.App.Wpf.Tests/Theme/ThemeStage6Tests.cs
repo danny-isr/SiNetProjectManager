@@ -349,11 +349,47 @@ public sealed class ThemeStage6Tests
     [InlineData("Admin/Settings/SettingsView.xaml")]
     [InlineData("Inspection/InspectionShellView.xaml")]
     [InlineData("Surfaces/Email/EmailWindowView.xaml")]
+    [InlineData("Surfaces/Email/EmailWorkItemWindow.xaml")]
     [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
+    [InlineData("Surfaces/Tasks/TaskWorkbenchView.xaml")]
+    [InlineData("Surfaces/Tasks/TaskCreateDialogView.xaml")]
+    [InlineData("Surfaces/Workflow/WorkflowVisualCanvasWindow.xaml")]
+    [InlineData("Surfaces/Workflow/WorkflowClosedViewerWindow.xaml")]
     public void Migrated_native_xaml_uses_si_background_brush(string relativePath)
     {
         var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
         Assert.Contains("SiBackgroundBrush", content, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Surfaces/Email/EmailWindowView.xaml")]
+    [InlineData("Surfaces/Email/EmailWorkItemWindow.xaml")]
+    [InlineData("Surfaces/Email/EmailListView.xaml")]
+    [InlineData("Surfaces/Email/EmailListFilterBar.xaml")]
+    [InlineData("Surfaces/Email/EmailListItemCard.xaml")]
+    [InlineData("Surfaces/Email/EmailLabelGroupHeader.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailDetailView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailViewerPaneView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailActionBarView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailAttachmentStripView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml")]
+    [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
+    [InlineData("Surfaces/Tasks/TaskWorkbenchView.xaml")]
+    [InlineData("Surfaces/Tasks/TaskCreateDialogView.xaml")]
+    [InlineData("Surfaces/Workflow/WorkflowVisualCanvasWindow.xaml")]
+    [InlineData("Surfaces/Workflow/WorkflowClosedViewerWindow.xaml")]
+    public void Surfaces_xaml_references_si_text_typography(string relativePath)
+    {
+        var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
+        var hasFontSize = content.Contains("SiText", StringComparison.Ordinal)
+            && (content.Contains("FontSize", StringComparison.Ordinal)
+                || content.Contains("SiTextTinyStyle", StringComparison.Ordinal)
+                || content.Contains("SiTextSmallStyle", StringComparison.Ordinal)
+                || content.Contains("SiTextNormalStyle", StringComparison.Ordinal)
+                || content.Contains("SiTextMediumStyle", StringComparison.Ordinal)
+                || content.Contains("SiTextLargeStyle", StringComparison.Ordinal)
+                || content.Contains("SiTextHugeStyle", StringComparison.Ordinal));
+        Assert.True(hasFontSize, $"{relativePath} should reference SiText* FontSize or Style tokens.");
     }
 
     [Fact]
@@ -458,13 +494,37 @@ public sealed class ThemeStage6Tests
     [InlineData("Admin/Settings/SettingsView.xaml")]
     [InlineData("Inspection/InspectionShellView.xaml")]
     [InlineData("Surfaces/Email/EmailWindowView.xaml")]
+    [InlineData("Surfaces/Email/EmailWorkItemWindow.xaml")]
+    [InlineData("Surfaces/Email/EmailListView.xaml")]
+    [InlineData("Surfaces/Email/EmailListFilterBar.xaml")]
+    [InlineData("Surfaces/Email/EmailListItemCard.xaml")]
+    [InlineData("Surfaces/Email/EmailLabelGroupHeader.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailDetailView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailViewerPaneView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailActionBarView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailAttachmentStripView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml")]
     [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
+    [InlineData("Surfaces/Tasks/TaskWorkbenchView.xaml")]
+    [InlineData("Surfaces/Tasks/TaskCreateDialogView.xaml")]
+    [InlineData("Surfaces/Workflow/WorkflowVisualCanvasWindow.xaml")]
+    [InlineData("Surfaces/Workflow/WorkflowClosedViewerWindow.xaml")]
     public void Migrated_native_xaml_does_not_use_hardcoded_font_size_literals(string relativePath)
     {
         var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
         var matches = Regex.Matches(content, @"FontSize\s*=\s*""[0-9]");
         Assert.True(matches.Count == 0,
             $"Hardcoded FontSize literals found in {relativePath}: {string.Join(", ", matches.Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value))}");
+    }
+
+    [Fact]
+    public void Inspection_note_row_avoids_fixed_heights_that_block_typography_growth()
+    {
+        var content = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "Inspection", "InspectionWindowView.xaml"));
+        Assert.Empty(Regex.Matches(content, @"(?<!Min)Height=""22"""));
+        Assert.Empty(Regex.Matches(content, @"(?<!Min)Height=""11"""));
+        Assert.Contains("MinHeight=\"22\"", content, StringComparison.Ordinal);
+        Assert.Contains("SiTextSmallFontSize", content, StringComparison.Ordinal);
     }
 
     private static string ExtractXamlSection(string xaml, string startMarker, string endMarker)

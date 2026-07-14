@@ -98,10 +98,11 @@
 
             <TextBlock Text="{Binding Snippet}"
                        Margin="0,2,0,0"
-                       Foreground="#888"
+                       Foreground="{DynamicResource SiSecondaryBrush}"
+                       FontFamily="{DynamicResource SiFontFamily}"
                        FontSize="{DynamicResource SiTextSmallFontSize}"
                        TextTrimming="CharacterEllipsis"
-                       MaxHeight="18"
+                       TextWrapping="NoWrap"
                        ToolTip="{Binding Snippet}" />
 
             <ProgressBar Height="2"

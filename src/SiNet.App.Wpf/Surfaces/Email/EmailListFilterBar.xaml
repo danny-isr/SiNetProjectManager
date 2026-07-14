@@ -17,7 +17,9 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="#CCC" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -49,7 +51,9 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="#CCC" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -173,28 +177,40 @@
                     BorderThickness="0,1,0,0">
                 <StackPanel>
                 <WrapPanel Orientation="Horizontal">
-                    <ComboBox Width="100" Height="24"
+                    <ComboBox Width="100" MinHeight="24"
+                              Style="{DynamicResource SiComboBoxStyle}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"
                               ItemsSource="{Binding MailboxScopeOptions}"
                               SelectedValue="{Binding SelectedMailboxScope}"
                               SelectedValuePath="Scope"
                               DisplayMemberPath="DisplayName"
                               Margin="0,0,4,0" ToolTip="תיבה" />
-                    <TextBox Width="120" Height="24" VerticalContentAlignment="Center"
+                    <TextBox Width="120" MinHeight="24" VerticalContentAlignment="Center"
+                             Style="{DynamicResource SiTextBoxStyle}"
+                             FontSize="{DynamicResource SiTextSmallFontSize}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,4,0" ToolTip="חיפוש חופשי" />
-                    <TextBox Width="100" Height="24" VerticalContentAlignment="Center"
+                    <TextBox Width="100" MinHeight="24" VerticalContentAlignment="Center"
+                             Style="{DynamicResource SiTextBoxStyle}"
+                             FontSize="{DynamicResource SiTextSmallFontSize}"
                              Text="{Binding AddressFilter, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,4,0" ToolTip="from:/to:" />
-                    <TextBox Width="100" Height="24" VerticalContentAlignment="Center"
+                    <TextBox Width="100" MinHeight="24" VerticalContentAlignment="Center"
+                             Style="{DynamicResource SiTextBoxStyle}"
+                             FontSize="{DynamicResource SiTextSmallFontSize}"
                              Text="{Binding SubjectFilter, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,4,0" ToolTip="subject:" />
-                    <ComboBox Width="140" Height="24"
+                    <ComboBox Width="140" MinHeight="24"
+                              Style="{DynamicResource SiComboBoxStyle}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"
                               ItemsSource="{Binding AvailableLabels}"
                               SelectedValue="{Binding SelectedLabel}"
                               SelectedValuePath="Name"
                               DisplayMemberPath="Name"
                               Margin="0,0,4,0" ToolTip="label:" />
-                    <ComboBox Width="90" Height="24"
+                    <ComboBox Width="90" MinHeight="24"
+                              Style="{DynamicResource SiComboBoxStyle}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"
                               ItemsSource="{Binding ProjectLinkFilterOptions}"
                               SelectedValue="{Binding SelectedProjectLinkFilter}"
                               SelectedValuePath="Value"
@@ -208,7 +224,7 @@
                                   Style="{StaticResource ToggleActionButton}" />
                 </WrapPanel>
                 <TextBlock Text="{Binding MailboxDiagnostics}"
-                           Foreground="#999"
+                           Foreground="{DynamicResource SiSecondaryBrush}"
                            FontSize="{DynamicResource SiTextTinyFontSize}"
                            Margin="0,4,0,0"
                            TextWrapping="Wrap"

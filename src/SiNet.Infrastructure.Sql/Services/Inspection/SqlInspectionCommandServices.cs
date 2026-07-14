@@ -141,6 +141,8 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
             return InspectionNoteCommandResult.Ok();
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        var notes = new List<(InspectionNote Note, string FinalSubIndex)>();
         foreach (var (noteId, subIndex) in renumberings)
         {
             var note = await db.InspectionNotes.FindAsync([noteId], cancellationToken).ConfigureAwait(false);
@@ -150,10 +152,37 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
             if (await IsReportLockedAsync(db, note.ReportId, cancellationToken).ConfigureAwait(false))
                 return InspectionNoteCommandResult.Fail("הדוח נעול לאחר שליחה.");
 
-            note.NoteSubIndex = subIndex;
+            notes.Add((note, subIndex));
         }
 
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (notes.Count == 0)
+            return InspectionNoteCommandResult.Ok();
+
+        await using var tx = await db.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            // Phase 1: unique temp indices avoid IX_InspectionNotes_Report_Section_SubIndex collisions on swap.
+            foreach (var (note, _) in notes)
+                note.NoteSubIndex = $"~tmp.{note.NoteId}";
+
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            // Phase 2: final indices
+            foreach (var (note, finalSubIndex) in notes)
+                note.NoteSubIndex = finalSubIndex;
+
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            return InspectionNoteCommandResult.Fail(
+                "עדכון סדר ההערות נכשל (התנגשות אינדקס). נסה שוב.");
+        }
+
         return InspectionNoteCommandResult.Ok();
     }
 

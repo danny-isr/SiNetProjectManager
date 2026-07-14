@@ -66,6 +66,64 @@ public sealed class WorkflowCanvasInspectVmTests
     }
 
     [Fact]
+    public void StageInspect_InitialIntake_ShowsEntryHint()
+    {
+        var intake = MakeStage(
+            id: 1,
+            code: "PRP.Intake",
+            name: "קליטת פנייה",
+            isInitial: true,
+            tasks:
+            [
+                new WorkflowStageTaskGraphDto(
+                    Id: 1, StageId: 1, SortOrder: 1, IsRequired: true, Notes: null,
+                    TaskTypeName: "זיהוי בקשת הצעת מחיר", TaskTypeCode: "IdentifyQuoteRequest",
+                    AssigneeDisplay: "Office", HasInteraction: false, OpenMode: null, ComponentKey: null,
+                    AllowedTaskResults: Array.Empty<WorkflowLabeledCodeDto>()),
+            ]);
+
+        var inspect = WorkflowCanvasStageInspectVm.From(intake, incoming: [], outgoing: []);
+
+        Assert.True(inspect.HasInitialEntryHint);
+        Assert.Contains("StartWorkflow", inspect.InitialEntryHint!, StringComparison.Ordinal);
+        Assert.True(inspect.HasNoIncoming);
+    }
+
+    [Fact]
+    public void TransitionInspect_FileQuoteMaterial_AllRequiredTasksClosed_GateListsFileQuote()
+    {
+        var fileStage = MakeStage(
+            id: 25,
+            code: "PRP.FileMaterial",
+            name: "תיוק חומר להצעת מחיר",
+            isInitial: false,
+            tasks:
+            [
+                new WorkflowStageTaskGraphDto(
+                    Id: 10, StageId: 25, SortOrder: 1, IsRequired: true, Notes: null,
+                    TaskTypeName: "תיוק חומר להצעת מחיר", TaskTypeCode: "FileQuoteMaterial",
+                    AssigneeDisplay: "Office", HasInteraction: false, OpenMode: null, ComponentKey: null,
+                    AllowedTaskResults: Array.Empty<WorkflowLabeledCodeDto>()),
+            ]);
+        var toCheck = MakeTransition(
+            id: 50, from: 25, to: 30,
+            fromName: "תיוק חומר להצעת מחיר", toName: "בדיקת חומר להצעת מחיר",
+            trigger: "AllRequiredTasksClosed", condition: "AllTasksComplete",
+            resultCode: null, resultName: null);
+
+        var inspect = WorkflowCanvasTransitionInspectVm.From(toCheck, fileStage);
+
+        Assert.True(inspect.ShowTriggerGateTasks);
+        Assert.Single(inspect.TriggerGateTasks);
+        Assert.Equal("FileQuoteMaterial", inspect.TriggerGateTasks[0].TaskTypeCode);
+        Assert.Contains("תיוק חומר להצעת מחיר", inspect.TriggerGateTasks[0].TaskTypeName, StringComparison.Ordinal);
+
+        var path = WorkflowCanvasPathSummaryVm.ForOutgoing(toCheck);
+        Assert.Contains("AllRequiredTasksClosed", path.DisplayEn, StringComparison.Ordinal);
+        Assert.Contains("כל המשימות הנדרשות נסגרו", path.DisplayHe, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StageInspect_Outgoing_IsBilingual()
     {
         var stage = MakeStage(tasks: Array.Empty<WorkflowStageTaskGraphDto>());

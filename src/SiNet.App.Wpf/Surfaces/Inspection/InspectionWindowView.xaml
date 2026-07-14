@@ -30,6 +30,9 @@
 
         <!-- Small action button (mirrors the legacy CardActionButton chrome). -->
         <Style TargetType="Button" x:Key="CardActionButton">
+            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="Margin" Value="4,0,0,0" />
             <Setter Property="MinWidth" Value="0" />
@@ -96,6 +99,8 @@
                     <TextBlock Grid.Column="0"
                                Text="{Binding ActiveProjectDisplay}"
                                Foreground="White"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
@@ -218,6 +223,7 @@
 
                     <!-- Template picker -->
                     <ComboBox Grid.Row="0" Grid.Column="0"
+                              Style="{DynamicResource SiComboBoxStyle}"
                               ItemsSource="{Binding AvailableTemplates}"
                               SelectedItem="{Binding SelectedTemplate}"
                               DisplayMemberPath="Name"
@@ -259,7 +265,9 @@
                     </Grid.RowDefinitions>
 
                     <!-- Title -->
-                    <TextBlock Grid.Row="0" FontWeight="SemiBold" Foreground="#2E7D32" Margin="4,0,0,4">
+                    <TextBlock Grid.Row="0" FontWeight="SemiBold" Foreground="#2E7D32" Margin="4,0,0,4"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}">
                         <Run Text="📋 שאלון ביקורת — דוח #" />
                         <Run Text="{Binding SelectedReport.ReportNumber, Mode=OneWay}" />
                     </TextBlock>
@@ -274,42 +282,54 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Button Content="✅"
                                         Command="{Binding MarkResponseReceivedCommand}"
-                                        Width="28" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        MinWidth="28" MinHeight="24" Padding="4,2"
+                                        FontFamily="{DynamicResource SiFontFamily}"
+                                        FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="#43A047" Foreground="White"
                                         BorderBrush="#2E7D32" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="התקבלה תגובה מהמתכנן" />
                                 <Button Content="🔄"
                                         Command="{Binding RepullPlannerResponsesCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        MinWidth="26" MinHeight="24" Padding="4,2"
+                                        FontFamily="{DynamicResource SiFontFamily}"
+                                        FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#2E7D32"
                                         BorderBrush="#2E7D32" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="משיכת תגובות המתכנן מחדש" />
                                 <Button Content="🔗"
                                         Command="{Binding OpenSourceReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        MinWidth="26" MinHeight="24" Padding="4,2"
+                                        FontFamily="{DynamicResource SiFontFamily}"
+                                        FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#1565C0"
                                         BorderBrush="#1565C0" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="פתח את דוח המקור" />
                                 <Button Content="🔓"
                                         Command="{Binding UnlockReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        MinWidth="26" MinHeight="24" Padding="4,2"
+                                        FontFamily="{DynamicResource SiFontFamily}"
+                                        FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="שחרר נעילה" />
                                 <Button Content="🌐"
                                         Command="{Binding ShareReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        MinWidth="26" MinHeight="24" Padding="4,2"
+                                        FontFamily="{DynamicResource SiFontFamily}"
+                                        FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
                                         ToolTip="שתף קישור לכל מי שיש לו הקישור" />
                                 <Button Content="📤"
                                         Command="{Binding ExportReportCommand}"
-                                        Width="26" Height="24" Padding="0" FontSize="{DynamicResource SiTextNormalFontSize}"
+                                        MinWidth="26" MinHeight="24" Padding="4,2"
+                                        FontFamily="{DynamicResource SiFontFamily}"
+                                        FontSize="{DynamicResource SiTextNormalFontSize}"
                                         Background="Transparent" Foreground="#1565C0"
                                         BorderBrush="#1565C0" BorderThickness="1"
                                         Cursor="Hand"
@@ -343,20 +363,33 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" Text="בודק:" Foreground="#555"
+                                <TextBlock Grid.Column="0" Text="בודק:"
+                                           Foreground="{DynamicResource SiSecondaryBrush}"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextSmallFontSize}"
                                            VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding SelectedReport.InspectorName, Mode=OneWay}"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                                           Foreground="{DynamicResource SiForegroundBrush}"
                                            FontWeight="SemiBold" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="2" Text="תאריך:" Foreground="#555"
+                                <TextBlock Grid.Column="2" Text="תאריך:"
+                                           Foreground="{DynamicResource SiSecondaryBrush}"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextSmallFontSize}"
                                            VerticalAlignment="Center" Margin="12,0,6,0" />
                                 <TextBlock Grid.Column="3"
                                            Text="{Binding SelectedReport.InspectionDate, StringFormat=dd/MM/yyyy, Mode=OneWay}"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                                           Foreground="{DynamicResource SiForegroundBrush}"
                                            FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <Button Grid.Column="5"
                                         Content="בחר תוכנית..."
                                         Command="{Binding SelectReviewedPlanCommand}"
+                                        Style="{StaticResource CardActionButton}"
                                         Margin="6,0,0,0" Padding="8,1"
                                         VerticalAlignment="Center"
                                         ToolTip="בחר את התוכנית שנבדקה" />
@@ -378,7 +411,10 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="📋 שאלון ביקורת" FontWeight="SemiBold"
-                                       Foreground="#555" VerticalAlignment="Center" />
+                                       Foreground="{DynamicResource SiSecondaryBrush}"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                                       VerticalAlignment="Center" />
                             <Button Grid.Column="1" Content="בדיקת AI"
                                     Command="{Binding ReviewNoteAiCommand}"
                                     Style="{StaticResource CardActionButton}"
@@ -405,6 +441,9 @@
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                     <Setter Property="Padding" Value="0" />
                                     <Setter Property="Margin" Value="0" />
+                                    <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+                                    <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
                                 </Style>
                             </TreeView.ItemContainerStyle>
                             <TreeView.Resources>
@@ -414,6 +453,8 @@
                                     <TextBlock Text="{Binding DisplayTitle}"
                                                FontWeight="Bold"
                                                Foreground="#1565C0"
+                                               FontFamily="{DynamicResource SiFontFamily}"
+                                               FontSize="{DynamicResource SiTextMediumFontSize}"
                                                Margin="0,2"
                                                ToolTip="שדות כלליים מהתבנית" />
                                 </HierarchicalDataTemplate>
@@ -446,7 +487,8 @@
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding Label}"
                                                        FontWeight="SemiBold"
-                                                       Foreground="#333"
+                                                       Foreground="{DynamicResource SiForegroundBrush}"
+                                                       FontFamily="{DynamicResource SiFontFamily}"
                                                        FontSize="{DynamicResource SiTextSmallFontSize}"
                                                        VerticalAlignment="Center"
                                                        Margin="0,0,6,0" />
@@ -455,23 +497,26 @@
                                                      TextWrapping="Wrap"
                                                      AcceptsReturn="True"
                                                      MinHeight="28"
+                                                     FontFamily="{DynamicResource SiFontFamily}"
                                                      FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                     Foreground="{DynamicResource SiForegroundBrush}"
                                                      Padding="3,2"
                                                      VerticalAlignment="Top"
                                                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                                      LostFocus="GeneralField_LostFocus">
                                                 <TextBox.Style>
-                                                    <Style TargetType="TextBox">
+                                                    <Style TargetType="TextBox" BasedOn="{StaticResource SiTextBoxStyle}">
+                                                        <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsEditable}" Value="False">
                                                                 <Setter Property="IsReadOnly" Value="True" />
                                                                 <Setter Property="Background" Value="#F0F0F0" />
-                                                                <Setter Property="Foreground" Value="#888" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource SiSecondaryBrush}" />
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding DataContext.IsSelectedReportLocked, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                                                 <Setter Property="IsReadOnly" Value="True" />
                                                                 <Setter Property="Background" Value="#F0F0F0" />
-                                                                <Setter Property="Foreground" Value="#888" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource SiSecondaryBrush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -480,9 +525,11 @@
                                             <ToggleButton Grid.Column="2"
                                                           IsChecked="{Binding IsManualOverride}"
                                                           IsEnabled="{Binding DataContext.IsReportEditable, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                          FontSize="10"
+                                                          FontFamily="{DynamicResource SiFontFamily}"
+                                                          FontSize="{DynamicResource SiTextTinyFontSize}"
                                                           Padding="4,1"
                                                           Margin="4,0,0,0"
+                                                          MinHeight="22"
                                                           VerticalAlignment="Top"
                                                           ToolTip="לחץ כדי לעבור בין מילוי אוטומטי לידני"
                                                           Click="AutoManualToggle_Click">
@@ -511,6 +558,8 @@
                                     <TextBlock Text="{Binding DisplayTitle}"
                                                FontWeight="Bold"
                                                Foreground="#2E7D32"
+                                               FontFamily="{DynamicResource SiFontFamily}"
+                                               FontSize="{DynamicResource SiTextMediumFontSize}"
                                                Margin="0,2"
                                                ToolTip="{Binding DisplayTitle}" />
                                 </HierarchicalDataTemplate>
@@ -525,7 +574,9 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0"
                                                    Text="{Binding SectionHeaderText}"
-                                                   Foreground="#333"
+                                                   Foreground="{DynamicResource SiForegroundBrush}"
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextSmallFontSize}"
                                                    FontWeight="Bold"
                                                    VerticalAlignment="Center"
                                                    TextWrapping="Wrap"
@@ -535,7 +586,7 @@
                                                 CommandParameter="{Binding}"
                                                 Style="{StaticResource CardActionButton}"
                                                 Padding="2,0" FontWeight="Bold"
-                                                Width="18" Height="18"
+                                                MinWidth="18" MinHeight="18"
                                                 ToolTip="הוסף הערה חדשה" />
                                     </Grid>
                                 </HierarchicalDataTemplate>
@@ -573,13 +624,13 @@
                                             <StackPanel Grid.Column="0" Orientation="Vertical"
                                                         VerticalAlignment="Center" Margin="0,0,2,0">
                                                 <Button Content="▲" FontSize="{DynamicResource SiTextTinyFontSize}"
-                                                        Width="14" Height="11" Padding="0"
+                                                        MinWidth="14" MinHeight="14" Padding="0"
                                                         Command="{Binding DataContext.MoveNoteUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource CardActionButton}"
                                                         ToolTip="הזז למעלה" />
                                                 <Button Content="▼" FontSize="{DynamicResource SiTextTinyFontSize}"
-                                                        Width="14" Height="11" Padding="0"
+                                                        MinWidth="14" MinHeight="14" Padding="0"
                                                         Command="{Binding DataContext.MoveNoteDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource CardActionButton}"
@@ -589,7 +640,7 @@
                                             <StackPanel Grid.Column="1" Orientation="Horizontal"
                                                         VerticalAlignment="Center" Margin="2,0,4,0">
                                                 <Button Content="📂" FontSize="{DynamicResource SiTextSmallFontSize}"
-                                                        Width="18" Height="18" Padding="0" Margin="0,0,3,0"
+                                                        MinWidth="18" MinHeight="18" Padding="2" Margin="0,0,3,0"
                                                         Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         ToolTip="פתח קובץ מקושר">
@@ -605,7 +656,7 @@
                                                     </Button.Style>
                                                 </Button>
                                                 <Button Content="📷" FontSize="{DynamicResource SiTextSmallFontSize}"
-                                                        Width="18" Height="18" Padding="0"
+                                                        MinWidth="18" MinHeight="18" Padding="2"
                                                         Command="{Binding DataContext.ScreenshotPrimaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource CardActionButton}"
@@ -614,7 +665,10 @@
 
                                             <TextBlock Grid.Column="2"
                                                        Text="{Binding DisplayLabel}"
-                                                       Foreground="#333" FontWeight="Bold"
+                                                       Foreground="{DynamicResource SiForegroundBrush}"
+                                                       FontFamily="{DynamicResource SiFontFamily}"
+                                                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                       FontWeight="Bold"
                                                        VerticalAlignment="Center"
                                                        HorizontalAlignment="Right"
                                                        Margin="0,0,4,0" />
@@ -636,12 +690,13 @@
                                             </TextBlock>
 
                                             <ComboBox Grid.Column="4"
+                                                      Style="{DynamicResource SiComboBoxStyle}"
                                                       ItemsSource="{Binding DataContext.StatusOptions, RelativeSource={RelativeSource AncestorType=Window}}"
                                                       DisplayMemberPath="Label"
                                                       SelectedValuePath="DbKey"
                                                       SelectedValue="{Binding StatusText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      FontSize="{DynamicResource SiTextSmallFontSize}" Padding="1,0" Margin="0,0,4,0"
-                                                      Height="22" VerticalAlignment="Top"
+                                                      FontSize="{DynamicResource SiTextSmallFontSize}" Padding="1,2" Margin="0,0,4,0"
+                                                      MinHeight="22" VerticalAlignment="Top"
                                                       IsEnabled="{Binding DataContext.IsReportEditable, RelativeSource={RelativeSource AncestorType=Window}}"
                                                       ToolTip="סטטוס ההערה" />
 
@@ -653,14 +708,17 @@
                                                      BorderBrush="#CCC"
                                                      BorderThickness="1"
                                                      Padding="3"
+                                                     FontFamily="{DynamicResource SiFontFamily}"
                                                      FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                     Foreground="{DynamicResource SiForegroundBrush}"
                                                      VerticalAlignment="Top"
                                                      VerticalContentAlignment="Top"
                                                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                      LostFocus="NoteEditor_LostFocus">
                                                 <TextBox.Style>
-                                                    <Style TargetType="TextBox">
+                                                    <Style TargetType="TextBox" BasedOn="{StaticResource SiTextBoxStyle}">
+                                                        <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding DataContext.IsSelectedReportLocked, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                                                 <Setter Property="IsReadOnly" Value="True" />
@@ -698,7 +756,10 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="📋 דוחות ביקורת" FontWeight="SemiBold"
-                               Foreground="#555" Margin="0,0,0,2" />
+                               Foreground="{DynamicResource SiSecondaryBrush}"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
+                               Margin="0,0,0,2" />
 
                     <ListBox Grid.Row="1"
                              ItemsSource="{Binding Reports}"
@@ -708,7 +769,17 @@
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              Background="Transparent"
                              BorderThickness="0"
-                             Padding="2,0">
+                             Padding="2,0"
+                             FontFamily="{DynamicResource SiFontFamily}"
+                             FontSize="{DynamicResource SiTextSmallFontSize}">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+                                <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Padding="4,3" Margin="0,0,0,2"
@@ -723,16 +794,24 @@
 
                                         <Border Grid.Column="0" Background="#E8F5E9" CornerRadius="2"
                                                 Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center">
-                                            <TextBlock FontWeight="SemiBold" Foreground="#2E7D32">
+                                            <TextBlock FontWeight="SemiBold" Foreground="#2E7D32"
+                                                       FontFamily="{DynamicResource SiFontFamily}"
+                                                       FontSize="{DynamicResource SiTextSmallFontSize}">
                                                 <Run Text="#" /><Run Text="{Binding ReportNumber, Mode=OneWay}" />
                                             </TextBlock>
                                         </Border>
                                         <TextBlock Grid.Column="1" Text="{Binding InspectorName}"
                                                    Opacity="0.7" TextTrimming="CharacterEllipsis"
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                   Foreground="{DynamicResource SiForegroundBrush}"
                                                    VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="2"
                                                    Text="{Binding InspectionDate, StringFormat=dd/MM}"
-                                                   Foreground="#888" VerticalAlignment="Center" Margin="4,0" />
+                                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                   VerticalAlignment="Center" Margin="4,0" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -744,7 +823,9 @@
             <!-- ═══════ Status Bar ═══════ -->
             <Border Grid.Row="4" Background="{DynamicResource SiBackgroundBrush}" Padding="8,4" CornerRadius="0,0,8,8">
                 <TextBlock Text="{Binding StatusMessage}"
-                           Foreground="#555"
+                           Foreground="{DynamicResource SiSecondaryBrush}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"
                            TextTrimming="CharacterEllipsis" />
             </Border>
         </Grid>

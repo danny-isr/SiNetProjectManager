@@ -8,7 +8,8 @@
         MinWidth="640"
         MinHeight="480"
         FlowDirection="RightToLeft"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SiBackgroundBrush}">
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -22,6 +23,8 @@
             <TextBlock Text="{Binding Viewer.Subject, FallbackValue=פרטי מייל}"
                        Foreground="White"
                        FontWeight="Bold"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextMediumFontSize}"
                        TextWrapping="Wrap" />
         </Border>
         <detail:EmailDetailView x:Name="DetailHost" Grid.Row="1" />
