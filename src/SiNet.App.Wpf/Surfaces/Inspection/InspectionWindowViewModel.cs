@@ -38,6 +38,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionReportExportPort? _exportPort;
     private readonly IInspectionNoteScreenshotHost? _screenshotHost;
     private readonly IInspectionNoteLinkedFileHost? _linkedFileHost;
+    private readonly IInspectionFileTreePickerHost? _fileTreePicker;
 
     private WorkSurfaceContext? _taskContext;
     private int? _browseProjectId;
@@ -73,7 +74,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionReportCommandService? reportCommands = null,
         IInspectionReportExportPort? exportPort = null,
         IInspectionNoteScreenshotHost? screenshotHost = null,
-        IInspectionNoteLinkedFileHost? linkedFileHost = null)
+        IInspectionNoteLinkedFileHost? linkedFileHost = null,
+        IInspectionFileTreePickerHost? fileTreePicker = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -87,6 +89,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _exportPort = exportPort;
         _screenshotHost = screenshotHost;
         _linkedFileHost = linkedFileHost;
+        _fileTreePicker = fileTreePicker;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -168,11 +171,45 @@ public sealed class InspectionWindowViewModel : ObservableObject
             note => MoveNoteAsync(note, direction: 1),
             note => CanMoveNote(note, direction: 1));
         ScreenshotPrimaryCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            ScreenshotPrimaryAsync,
+            note => note is not null
+                && ((note.HasAttachments && !string.IsNullOrWhiteSpace(note.LastAttachmentUrl) && _screenshotHost is not null)
+                    || (note.NoteId is > 0 && _screenshotHost is not null && IsReportEditable && !IsBusy)));
+        AttachScreenshotCommand = new AsyncRelayCommand<InspectionNoteItem>(
             UploadScreenshotAsync,
             note => note?.NoteId is > 0 && _screenshotHost is not null && IsReportEditable && !IsBusy);
+        OpenLastAttachmentCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            OpenLastAttachmentAsync,
+            note => note is not null
+                && note.HasAttachments
+                && !string.IsNullOrWhiteSpace(note.LastAttachmentUrl)
+                && _screenshotHost is not null
+                && !IsBusy);
         OpenNoteLinkedFileCommand = new AsyncRelayCommand<InspectionNoteItem>(
-            OpenLinkedFileAsync,
-            note => note is not null && SelectedReport is not null && _linkedFileHost is not null && !IsBusy);
+            OpenOrSetLinkedFileAsync,
+            note => note is not null
+                && SelectedReport is not null
+                && !IsBusy
+                && (note.HasLinkedFile
+                    ? _linkedFileHost is not null
+                    : _fileTreePicker is not null && _noteCommands is not null && IsReportEditable));
+        SetNoteLinkedFileCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            SetNoteLinkedFileAsync,
+            note => note?.NoteId is > 0
+                && SelectedReport is not null
+                && _fileTreePicker is not null
+                && _noteCommands is not null
+                && IsReportEditable
+                && !IsBusy);
+        ClearNoteLinkedFileCommand = new AsyncRelayCommand<InspectionNoteItem>(
+            ClearNoteLinkedFileAsync,
+            note => note is not null
+                && note.HasLinkedFile
+                && note.NoteId is > 0
+                && SelectedReport is not null
+                && _noteCommands is not null
+                && IsReportEditable
+                && !IsBusy);
         SaveNoteCommand = new AsyncRelayCommand(
             SaveSelectedNoteAsync,
             () => Questionnaire.SelectedNote?.NoteId is > 0 && _noteCommands is not null && IsReportEditable);
@@ -348,7 +385,11 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public ICommand MoveNoteUpCommand { get; }
     public ICommand MoveNoteDownCommand { get; }
     public ICommand ScreenshotPrimaryCommand { get; }
+    public ICommand AttachScreenshotCommand { get; }
+    public ICommand OpenLastAttachmentCommand { get; }
     public ICommand OpenNoteLinkedFileCommand { get; }
+    public ICommand SetNoteLinkedFileCommand { get; }
+    public ICommand ClearNoteLinkedFileCommand { get; }
     public ICommand SaveNoteCommand { get; }
     public ICommand ReviewNoteAiCommand { get; }
     public ICommand CompleteTaskCommand { get; }
@@ -560,7 +601,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         RaiseCommandStates();
     }
 
-    /// <summary>Persists note text after LostFocus on the inline editor.</summary>
+    /// <summary>Persists note text after the inline rich editor exits edit mode.</summary>
     public async Task SaveNoteTextAsync(InspectionNoteItem? note)
     {
         if (note?.NoteId is not long noteId || _noteCommands is null || !IsReportEditable)
@@ -589,6 +630,75 @@ public sealed class InspectionWindowViewModel : ObservableObject
         NoteEditor.ApplyNote(note);
         StatusMessage = "ההערה נשמרה.";
         RaiseCommandStates();
+    }
+
+    /// <summary>
+    /// Runs AI review for a note: fills grammar/rephrase cache without auto-applying text.
+    /// </summary>
+    public async Task ReviewNoteAiAsync(InspectionNoteItem? note)
+    {
+        if (note is null || string.IsNullOrWhiteSpace(note.NoteText) || _aiReviewer is null)
+            return;
+
+        var (plain, _) = RichTextCodec.Parse(note.NoteText);
+        if (string.IsNullOrWhiteSpace(plain))
+            return;
+
+        if (!await _aiReviewer.IsAvailableAsync().ConfigureAwait(true))
+        {
+            StatusMessage = "שירות AI אינו זמין.";
+            return;
+        }
+
+        note.AiReviewInProgress = true;
+        NoteEditor.IsAiBusy = true;
+        try
+        {
+            var result = await _aiReviewer.ReviewAsync(plain).ConfigureAwait(true);
+            if (result.HasError)
+            {
+                note.ClearAiResults();
+                StatusMessage = result.ErrorMessage ?? "בדיקת AI נכשלה.";
+                return;
+            }
+
+            note.AiOriginalText = result.OriginalText;
+            note.AiGrammarResult = result.GrammarCorrected ?? result.OriginalText;
+            note.AiRephraseResult = result.Rephrased;
+            NoteEditor.GrammarSuggestion = note.AiGrammarResult;
+            NoteEditor.RephraseSuggestion = note.AiRephraseResult;
+            StatusMessage = note.HasAiGrammarChanges
+                ? "בדיקת AI הושלמה — לחץ ימני על ההערה להחלת הצעה."
+                : "בדיקת AI הושלמה — אין שגיאות תחביריות.";
+        }
+        catch (Exception ex)
+        {
+            note.ClearAiResults();
+            StatusMessage = $"בדיקת AI נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            note.AiReviewInProgress = false;
+            NoteEditor.IsAiBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies an AI suggestion from the note rich-editor context menu, then re-saves and re-reviews.
+    /// </summary>
+    public async Task ApplyAiSuggestionAsync(InspectionNoteItem? note, string reviewType, string suggestedText)
+    {
+        if (note is null || string.IsNullOrWhiteSpace(suggestedText))
+            return;
+
+        note.NoteText = suggestedText;
+        note.ClearAiResults();
+        await SaveNoteTextAsync(note).ConfigureAwait(true);
+
+        var displayType = reviewType == "grammar" ? "בדיקת שגיאות" : "בדיקת ניסוח";
+        StatusMessage = $"✓ {displayType} הוחל בהצלחה";
+
+        await ReviewNoteAiAsync(note).ConfigureAwait(true);
     }
 
     private void OnQuestionnairePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -729,6 +839,20 @@ public sealed class InspectionWindowViewModel : ObservableObject
         RaiseCommandStates();
     }
 
+    private async Task ScreenshotPrimaryAsync(InspectionNoteItem? note)
+    {
+        if (note is null)
+            return;
+
+        if (note.HasAttachments && !string.IsNullOrWhiteSpace(note.LastAttachmentUrl))
+        {
+            await OpenLastAttachmentAsync(note).ConfigureAwait(true);
+            return;
+        }
+
+        await UploadScreenshotAsync(note).ConfigureAwait(true);
+    }
+
     private async Task UploadScreenshotAsync(InspectionNoteItem? note)
     {
         if (note?.NoteId is not long noteId || _screenshotHost is null)
@@ -736,11 +860,99 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
         StatusMessage = "מעלה צילום מסך...";
         var result = await _screenshotHost.UploadFromClipboardAsync(noteId).ConfigureAwait(true);
-        StatusMessage = result.Succeeded
-            ? (string.IsNullOrWhiteSpace(result.AttachmentUrl)
+        if (result.Succeeded)
+        {
+            note.AttachmentCount += 1;
+            if (!string.IsNullOrWhiteSpace(result.AttachmentUrl))
+                note.LastAttachmentUrl = result.AttachmentUrl;
+            StatusMessage = string.IsNullOrWhiteSpace(result.AttachmentUrl)
                 ? "צילום המסך הועלה."
-                : $"צילום הועלה: {result.AttachmentUrl}")
-            : (result.ErrorMessage ?? "העלאת צילום מסך נכשלה.");
+                : $"צילום הועלה: {result.AttachmentUrl}";
+            RaiseCommandStates();
+        }
+        else
+        {
+            StatusMessage = result.ErrorMessage ?? "העלאת צילום מסך נכשלה.";
+        }
+    }
+
+    private async Task OpenLastAttachmentAsync(InspectionNoteItem? note)
+    {
+        if (note?.NoteId is not long noteId || _screenshotHost is null)
+            return;
+
+        var result = await _screenshotHost.OpenLastAsync(noteId).ConfigureAwait(true);
+        StatusMessage = result.Message;
+    }
+
+    private async Task OpenOrSetLinkedFileAsync(InspectionNoteItem? note)
+    {
+        if (note is null)
+            return;
+
+        if (note.HasLinkedFile)
+        {
+            await OpenLinkedFileAsync(note).ConfigureAwait(true);
+            return;
+        }
+
+        await SetNoteLinkedFileAsync(note).ConfigureAwait(true);
+    }
+
+    private async Task SetNoteLinkedFileAsync(InspectionNoteItem? note)
+    {
+        if (note?.NoteId is not long noteId
+            || _fileTreePicker is null
+            || _noteCommands is null
+            || ResolveActiveProjectId() is not int projectId)
+        {
+            StatusMessage = "לא ניתן לבחור קובץ מקושר — חסר פרויקט או בורר קבצים.";
+            return;
+        }
+
+        var picked = await _fileTreePicker
+            .PickNoteLinkedFileAsync(projectId)
+            .ConfigureAwait(true);
+        if (picked is null)
+            return;
+
+        var result = await _noteCommands
+            .SetNoteLinkedFileAsync(noteId, picked.FileName, picked.Alternative, picked.Version)
+            .ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            StatusMessage = result.ErrorMessage ?? "שמירת קובץ מקושר נכשלה.";
+            return;
+        }
+
+        note.LinkedFileName = picked.FileName;
+        note.LinkedAlternative = picked.Alternative;
+        note.LinkedVersion = picked.Version;
+        note.HasLinkedFile = true;
+        StatusMessage = $"הקובץ המקושר עודכן: {picked.FileName}";
+        RaiseCommandStates();
+    }
+
+    private async Task ClearNoteLinkedFileAsync(InspectionNoteItem? note)
+    {
+        if (note?.NoteId is not long noteId || _noteCommands is null || !note.HasLinkedFile)
+            return;
+
+        var result = await _noteCommands
+            .SetNoteLinkedFileAsync(noteId, null, null, null)
+            .ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            StatusMessage = result.ErrorMessage ?? "ניקוי קובץ מקושר נכשל.";
+            return;
+        }
+
+        note.LinkedFileName = null;
+        note.LinkedAlternative = null;
+        note.LinkedVersion = null;
+        note.HasLinkedFile = false;
+        StatusMessage = "הקובץ המקושר נוקה.";
+        RaiseCommandStates();
     }
 
     private async Task OpenLinkedFileAsync(InspectionNoteItem? note)
@@ -1311,7 +1523,11 @@ public sealed class InspectionWindowViewModel : ObservableObject
         (MoveNoteUpCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
         (MoveNoteDownCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
         (ScreenshotPrimaryCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (AttachScreenshotCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (OpenLastAttachmentCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
         (OpenNoteLinkedFileCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (SetNoteLinkedFileCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
+        (ClearNoteLinkedFileCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(CanCompleteTask));
         NotifyValidationUi();
     }
@@ -1410,28 +1626,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
             return;
         }
 
-        var note = Questionnaire.SelectedNote;
-        NoteEditor.IsAiBusy = true;
-        try
-        {
-            var result = await _aiReviewer.ReviewAsync(note.NoteText).ConfigureAwait(true);
-            if (result.HasError)
-            {
-                StatusMessage = result.ErrorMessage ?? "בדיקת AI נכשלה.";
-                NoteEditor.ClearAi();
-                return;
-            }
-
-            NoteEditor.GrammarSuggestion = result.GrammarCorrected;
-            NoteEditor.RephraseSuggestion = result.Rephrased;
-            if (!string.IsNullOrWhiteSpace(result.GrammarCorrected))
-                note.NoteText = result.GrammarCorrected;
-            StatusMessage = "בדיקת AI הושלמה.";
-        }
-        finally
-        {
-            NoteEditor.IsAiBusy = false;
-        }
+        await ReviewNoteAiAsync(Questionnaire.SelectedNote).ConfigureAwait(true);
     }
 
     private AsyncRelayCommand Stub() => new(() =>

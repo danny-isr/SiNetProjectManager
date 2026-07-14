@@ -25,6 +25,10 @@ internal sealed class NoOpInspectionNoteScreenshotHost : IInspectionNoteScreensh
     public Task<InspectionScreenshotUploadResult> UploadFromClipboardAsync(
         long noteId, CancellationToken cancellationToken = default) =>
         Task.FromResult(InspectionScreenshotUploadResult.Fail("העלאת צילום מסך עדיין לא מחוברת."));
+
+    public Task<InspectionScreenshotOpenResult> OpenLastAsync(
+        long noteId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(InspectionScreenshotOpenResult.Fail("פתיחת תמונה מצורפת עדיין לא מחוברת."));
 }
 
 internal sealed class NoOpInspectionNoteLinkedFileHost : IInspectionNoteLinkedFileHost

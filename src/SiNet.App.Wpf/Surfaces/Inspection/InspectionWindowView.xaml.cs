@@ -68,10 +68,21 @@ public partial class InspectionWindowView : Window
             await ViewModel.SaveGeneralFieldAsync(field).ConfigureAwait(true);
     }
 
-    private async void NoteEditor_LostFocus(object sender, RoutedEventArgs e)
+    private async void NoteRichEditor_EditCompleted(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: InspectionNoteItem note })
-            await ViewModel.SaveNoteTextAsync(note).ConfigureAwait(true);
+        if (sender is not FrameworkElement { DataContext: InspectionNoteItem note })
+            return;
+
+        await ViewModel.SaveNoteTextAsync(note).ConfigureAwait(true);
+        await ViewModel.ReviewNoteAiAsync(note).ConfigureAwait(true);
+    }
+
+    private async void NoteRichEditor_AiReviewRequested(object sender, InspectionNoteRichEditor.AiReviewRequestedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: InspectionNoteItem note })
+            return;
+
+        await ViewModel.ApplyAiSuggestionAsync(note, e.ReviewType, e.SuggestedText).ConfigureAwait(true);
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

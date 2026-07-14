@@ -43,7 +43,7 @@ public sealed class InspectionMigrationBoundaryTests
     {
         Assert.NotNull(typeof(SiNet.App.Wpf.Surfaces.Inspection.InspectionQuestionnaireViewModel));
         Assert.NotNull(typeof(SiNet.App.Wpf.Surfaces.Inspection.InspectionNoteEditorViewModel));
-        Assert.NotNull(typeof(SiNet.App.Wpf.Surfaces.Inspection.InspectionRichTextNoteEditor));
+        Assert.NotNull(typeof(SiNet.App.Wpf.Surfaces.Inspection.InspectionNoteRichEditor));
         Assert.NotNull(typeof(SiNet.Application.Abstractions.Inspection.IInspectionNoteAiReviewer));
     }
 

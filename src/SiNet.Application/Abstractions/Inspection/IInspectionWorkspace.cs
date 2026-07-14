@@ -80,7 +80,8 @@ public sealed record InspectionNoteTreeRow(
     string? LinkedFileName,
     string? LinkedAlternative,
     string? LinkedVersion,
-    int AttachmentCount);
+    int AttachmentCount,
+    string? LastAttachmentUrl);
 
 /// <summary>One Chapter-0 general field row (backed by an InspectionNote without dotted sub-index).</summary>
 public sealed record InspectionGeneralFieldRow(

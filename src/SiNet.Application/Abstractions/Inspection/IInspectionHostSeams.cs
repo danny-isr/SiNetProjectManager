@@ -48,6 +48,9 @@ public interface IInspectionNoteScreenshotHost
 {
     Task<InspectionScreenshotUploadResult> UploadFromClipboardAsync(
         long noteId, CancellationToken cancellationToken = default);
+
+    Task<InspectionScreenshotOpenResult> OpenLastAsync(
+        long noteId, CancellationToken cancellationToken = default);
 }
 
 public sealed record InspectionScreenshotUploadResult(
@@ -57,6 +60,12 @@ public sealed record InspectionScreenshotUploadResult(
 {
     public static InspectionScreenshotUploadResult Ok(string? url = null) => new(true, AttachmentUrl: url);
     public static InspectionScreenshotUploadResult Fail(string message) => new(false, message);
+}
+
+public sealed record InspectionScreenshotOpenResult(bool Succeeded, string Message)
+{
+    public static InspectionScreenshotOpenResult Ok(string message) => new(true, message);
+    public static InspectionScreenshotOpenResult Fail(string message) => new(false, message);
 }
 
 /// <summary>Host opens a note-linked project file (or reviewed-plan fallback).</summary>

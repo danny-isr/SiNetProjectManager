@@ -164,16 +164,47 @@ public sealed class InspectionNoteItem : ObservableObject
     private string _statusText = string.Empty;
     private bool _isDirty;
     private bool _suppressStatusSync;
+    private string? _aiGrammarResult;
+    private string? _aiRephraseResult;
+    private string? _aiOriginalText;
+    private bool _aiReviewInProgress;
+    private bool _hasLinkedFile;
+    private int _attachmentCount;
+    private string? _lastAttachmentUrl;
 
     public long? NoteId { get; init; }
     public int SectionId { get; init; }
     public int? StatusId { get; set; }
     public string NoteNumber { get; set; } = string.Empty;
-    public bool HasLinkedFile { get; set; }
+
+    public bool HasLinkedFile
+    {
+        get => _hasLinkedFile;
+        set => SetField(ref _hasLinkedFile, value);
+    }
+
     public bool HasPlannerResponse { get; init; }
     public string? LinkedFileName { get; set; }
     public string? LinkedAlternative { get; set; }
     public string? LinkedVersion { get; set; }
+
+    public int AttachmentCount
+    {
+        get => _attachmentCount;
+        set
+        {
+            if (SetField(ref _attachmentCount, value))
+                OnPropertyChanged(nameof(HasAttachments));
+        }
+    }
+
+    public string? LastAttachmentUrl
+    {
+        get => _lastAttachmentUrl;
+        set => SetField(ref _lastAttachmentUrl, value);
+    }
+
+    public bool HasAttachments => AttachmentCount > 0;
 
     public string DisplayLabel => NoteNumber;
 
@@ -239,7 +270,62 @@ public sealed class InspectionNoteItem : ObservableObject
         }
     }
 
+    /// <summary>Cached grammar-corrected text from the AI review.</summary>
+    public string? AiGrammarResult
+    {
+        get => _aiGrammarResult;
+        set
+        {
+            _aiGrammarResult = value;
+            OnPropertyChanged(nameof(AiGrammarResult));
+            OnPropertyChanged(nameof(HasAiGrammarChanges));
+        }
+    }
+
+    /// <summary>Cached professionally rephrased text from the AI review.</summary>
+    public string? AiRephraseResult
+    {
+        get => _aiRephraseResult;
+        set
+        {
+            _aiRephraseResult = value;
+            OnPropertyChanged(nameof(AiRephraseResult));
+        }
+    }
+
+    /// <summary>The plain text that was sent for AI review (to detect staleness).</summary>
+    public string? AiOriginalText
+    {
+        get => _aiOriginalText;
+        set => _aiOriginalText = value;
+    }
+
+    /// <summary>Whether an AI review is currently running in the background.</summary>
+    public bool AiReviewInProgress
+    {
+        get => _aiReviewInProgress;
+        set
+        {
+            _aiReviewInProgress = value;
+            OnPropertyChanged(nameof(AiReviewInProgress));
+        }
+    }
+
+    /// <summary>Whether the grammar correction differs from the original plain text.</summary>
+    public bool HasAiGrammarChanges =>
+        !string.IsNullOrEmpty(AiGrammarResult) &&
+        !string.Equals(AiGrammarResult.Trim(), AiOriginalText?.Trim(), StringComparison.Ordinal);
+
     public void ClearDirty() => IsDirty = false;
+
+    /// <summary>Clears cached AI review results.</summary>
+    public void ClearAiResults()
+    {
+        AiGrammarResult = null;
+        AiRephraseResult = null;
+        AiOriginalText = null;
+        AiReviewInProgress = false;
+    }
 
     public void SetNoteTextWithoutStatusSync(string text)
     {

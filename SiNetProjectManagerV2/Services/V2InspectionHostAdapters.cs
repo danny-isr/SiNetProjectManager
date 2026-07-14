@@ -186,11 +186,26 @@ internal sealed class V2InspectionFileTreePickerHost : IInspectionFileTreePicker
 {
     public Task<InspectionFilePickResult?> PickReviewedPlanAsync(
         int projectId, CancellationToken cancellationToken = default) =>
+        // Multi-select reviewed-plans flow does not map cleanly to a single pick result.
         Task.FromResult<InspectionFilePickResult?>(null);
 
-    public Task<InspectionFilePickResult?> PickNoteLinkedFileAsync(
-        int projectId, CancellationToken cancellationToken = default) =>
-        Task.FromResult<InspectionFilePickResult?>(null);
+    public async Task<InspectionFilePickResult?> PickNoteLinkedFileAsync(
+        int projectId, CancellationToken cancellationToken = default)
+    {
+        _ = projectId;
+        var picker = new Inspection.NoteLinkedFilePicker();
+        var chosen = await picker
+            .PickAsync([], currentSelection: null, cancellationToken)
+            .ConfigureAwait(true);
+        if (chosen is null)
+            return null;
+
+        return new InspectionFilePickResult(
+            chosen.FileName,
+            string.IsNullOrWhiteSpace(chosen.Alternative) ? null : chosen.Alternative,
+            Version: null,
+            FullPath: null);
+    }
 }
 
 internal sealed class V2InspectionReportEmailHost : IInspectionReportEmailHost
@@ -199,11 +214,174 @@ internal sealed class V2InspectionReportEmailHost : IInspectionReportEmailHost
         Task.FromResult(false);
 }
 
-internal sealed class V2InspectionNoteScreenshotHost : IInspectionNoteScreenshotHost
+internal sealed class V2InspectionNoteScreenshotHost(
+    GoogleAuthService authService,
+    IDbContextFactory<SiNetSQLDbContext> dbContextFactory,
+    IInspectionReportService reportService,
+    ISystemSettingsQueryService settings,
+    ILoggerFactory? loggerFactory = null) : IInspectionNoteScreenshotHost
 {
-    public Task<InspectionScreenshotUploadResult> UploadFromClipboardAsync(
-        long noteId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(InspectionScreenshotUploadResult.Fail("העלאת צילום מסך תחובר בסלייס הבא."));
+    private readonly GoogleAuthService _authService =
+        authService ?? throw new ArgumentNullException(nameof(authService));
+    private readonly IDbContextFactory<SiNetSQLDbContext> _dbContextFactory =
+        dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+    private readonly IInspectionReportService _reportService =
+        reportService ?? throw new ArgumentNullException(nameof(reportService));
+    private readonly ISystemSettingsQueryService _settings =
+        settings ?? throw new ArgumentNullException(nameof(settings));
+    private readonly ILoggerFactory? _loggerFactory = loggerFactory;
+
+    public async Task<InspectionScreenshotUploadResult> UploadFromClipboardAsync(
+        long noteId, CancellationToken cancellationToken = default)
+    {
+        if (noteId <= 0)
+            return InspectionScreenshotUploadResult.Fail("הערה לא חוקית.");
+
+        // Clipboard must be read on the UI thread before any ConfigureAwait(false) hop.
+        byte[] pngBytes;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsImage())
+            {
+                return InspectionScreenshotUploadResult.Fail(
+                    "אין תמונה בלוח (Clipboard). העתק/י צילום מסך תחילה.");
+            }
+
+            var src = System.Windows.Clipboard.GetImage();
+            if (src is null)
+                return InspectionScreenshotUploadResult.Fail("לא ניתן לקרוא את התמונה מהלוח.");
+
+            using var ms = new System.IO.MemoryStream();
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(src));
+            encoder.Save(ms);
+            pngBytes = ms.ToArray();
+        }
+        catch (Exception ex)
+        {
+            return InspectionScreenshotUploadResult.Fail($"שגיאה בקריאת התמונה מהלוח: {ex.Message}");
+        }
+
+        string hash;
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+        {
+            hash = Convert.ToHexString(sha.ComputeHash(pngBytes));
+        }
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var note = await db.InspectionNotes
+            .AsNoTracking()
+            .Where(n => n.NoteId == noteId)
+            .Select(n => new { n.NoteId, n.ReportId })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (note is null)
+            return InspectionScreenshotUploadResult.Fail($"הערה {noteId} לא נמצאה.");
+
+        try
+        {
+            var dup = await _reportService
+                .CheckDuplicateNoteAttachmentAsync(note.ReportId, hash, cancellationToken)
+                .ConfigureAwait(true);
+            if (dup is not null)
+            {
+                if (dup.NoteId == noteId)
+                {
+                    return InspectionScreenshotUploadResult.Fail("התמונה הזו כבר צורפה להערה הזו.");
+                }
+
+                var confirm = System.Windows.MessageBox.Show(
+                    "התמונה הזו כבר צורפה לסעיף אחר בדוח. האם אתה בטוח שברצונך לצרף אותה גם לסעיף הנוכחי?",
+                    "צירוף צילום מסך — כפילות בדוח",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning,
+                    System.Windows.MessageBoxResult.No);
+                if (confirm != System.Windows.MessageBoxResult.Yes)
+                {
+                    return InspectionScreenshotUploadResult.Fail("העלאה בוטלה.");
+                }
+            }
+        }
+        catch
+        {
+            // Duplicate check is best-effort; continue upload if it fails.
+        }
+
+        try
+        {
+            var dto = await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
+            var logger = _loggerFactory?.CreateLogger<GoogleNoteScreenshotUploadService>();
+            var uploadService = new GoogleNoteScreenshotUploadService(_authService, _dbContextFactory, logger)
+            {
+                ReportsFolderId = dto.Inspection.InspectionReportsFolderId,
+            };
+
+            var fileName = $"note-{noteId}-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+            var result = await uploadService
+                .UploadScreenshotAsync(note.ReportId, noteId, fileName, pngBytes, "image/png", cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.GoogleDriveFileId))
+            {
+                return InspectionScreenshotUploadResult.Fail(
+                    result.ErrorMessage ?? "העלאת צילום מסך נכשלה.");
+            }
+
+            var attachment = new SiNetSQL.Models.InspectionNoteAttachment
+            {
+                NoteId = noteId,
+                AttachmentType = SiNetSQL.Models.InspectionNoteAttachmentType.Screenshot,
+                FileName = result.FileName ?? fileName,
+                GoogleDriveFileId = result.GoogleDriveFileId,
+                GoogleDriveUrl = result.GoogleDriveUrl,
+                ContentHashSha256 = hash,
+                FileSizeBytes = pngBytes.LongLength,
+                UploadedAt = DateTime.UtcNow,
+            };
+
+            await _reportService.AddNoteAttachmentAsync(attachment, cancellationToken).ConfigureAwait(false);
+            return InspectionScreenshotUploadResult.Ok(attachment.GoogleDriveUrl);
+        }
+        catch (Exception ex)
+        {
+            return InspectionScreenshotUploadResult.Fail($"שגיאה בצירוף צילום מסך: {ex.Message}");
+        }
+    }
+
+    public async Task<InspectionScreenshotOpenResult> OpenLastAsync(
+        long noteId, CancellationToken cancellationToken = default)
+    {
+        if (noteId <= 0)
+            return InspectionScreenshotOpenResult.Fail("הערה לא חוקית.");
+
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var url = await db.InspectionNoteAttachments
+                .AsNoTracking()
+                .Where(a => a.NoteId == noteId)
+                .OrderByDescending(a => a.UploadedAt)
+                .Select(a => a.GoogleDriveUrl)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return InspectionScreenshotOpenResult.Fail(
+                    "אין תמונה זמינה לפתיחה (חסר קישור Google Drive).");
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true,
+            });
+            return InspectionScreenshotOpenResult.Ok("נפתחה התמונה האחרונה.");
+        }
+        catch (Exception ex)
+        {
+            return InspectionScreenshotOpenResult.Fail($"שגיאה בפתיחת התמונה: {ex.Message}");
+        }
+    }
 }
 
 /// <summary>Opens a note-linked file via the live Work Window registries (legacy parity).</summary>

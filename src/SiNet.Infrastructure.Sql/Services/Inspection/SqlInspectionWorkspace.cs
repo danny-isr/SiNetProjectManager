@@ -175,6 +175,10 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                 n.LinkedAlternative,
                 n.LinkedVersion,
                 AttachmentCount = n.Attachments.Count,
+                LastAttachmentUrl = n.Attachments
+                    .OrderByDescending(a => a.UploadedAt)
+                    .Select(a => a.GoogleDriveUrl)
+                    .FirstOrDefault(),
                 SectionId = n.SectionId,
                 SectionCode = n.Section.SectionCode,
                 SectionTitle = n.Section.SectionName != null
@@ -229,7 +233,8 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                                 n.LinkedFileName,
                                 n.LinkedAlternative,
                                 n.LinkedVersion,
-                                n.AttachmentCount))
+                                n.AttachmentCount,
+                                n.LastAttachmentUrl))
                             .ToList()))
                     .ToList()))
             .ToList();

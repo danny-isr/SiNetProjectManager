@@ -171,6 +171,8 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
                             LinkedFileName = n.LinkedFileName,
                             LinkedAlternative = n.LinkedAlternative,
                             LinkedVersion = n.LinkedVersion,
+                            AttachmentCount = n.AttachmentCount,
+                            LastAttachmentUrl = n.LastAttachmentUrl,
                         };
                         note.SetNoteTextWithoutStatusSync(n.Text ?? string.Empty);
                         note.ClearDirty();
