@@ -106,6 +106,7 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<IAccFileDownloadService, ModeSwitchingAccFileDownloadService>();
         services.AddTransient<IAccFolderBrowserService, ModeSwitchingAccFolderBrowserService>();
         services.AddTransient<IAccItemService, ModeSwitchingAccItemService>();
+        services.AddTransient<SiNet.Application.Abstractions.Autodesk.Metadata.IAccItemMetadataService, AccItemMetadataService>();
         services.AddTransient<IAccProjectTreeSearchService, ModeSwitchingAccProjectTreeSearchService>();
         services.AddTransient<IAccInboxBootstrapService>(sp =>
             new ModeSwitchingAccInboxBootstrapService(

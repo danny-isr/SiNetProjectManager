@@ -41,6 +41,9 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
         services.AddSiNetAutodesk();
+        // Native centralized project-file filing (FileServer + ACC). Required by the
+        // native MoveToProject executor and AddMaterial flows (Phase 3).
+        SiNet.Infrastructure.Sql.FilingServiceCollectionExtensions.AddSiNetFilingServices(services);
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
         services.AddSiNetGoogle(ConfigureNewSystemGmail);
         SiNet.Infrastructure.Sql.EmailReadServiceCollectionExtensions.AddSiNetEmailReadSql(services);

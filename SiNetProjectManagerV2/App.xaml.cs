@@ -212,7 +212,11 @@ namespace SiNetProjectManagerV2
             services.AddSingleton<SiNet.Application.Email.Acc.IEmailAccClosePrompt, EmailAccClosePrompt>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailAccIngestionExecutor, LegacyEmailAccIngestionExecutor>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailAccRecoveryExecutor, LegacyEmailAccRecoveryExecutor>();
-            services.AddTransient<SiNet.Application.Email.Acc.IEmailMoveToProjectExecutor, LegacyEmailMoveToProjectExecutor>();
+            // Native MoveToProject executor (Phase 3b) — replaces the legacy process-action bridge.
+            // Files tagged inbox attachments via the native IProjectFileFilingService and stamps ACC
+            // Move/Lock metadata; task completion routes through the native ITaskCompletionService.
+            services.AddTransient<SiNet.Application.Email.Acc.IEmailMoveToProjectExecutor,
+                SiNet.Infrastructure.Sql.Services.Email.Acc.NativeEmailMoveToProjectExecutor>();
             services.AddTransient<SiNet.Application.Email.Acc.IEmailExternalDownloadExecutor, LegacyEmailExternalDownloadExecutor>();
             services.AddSingleton<SiNet.Application.Email.Acc.IEmailExternalDownloadBrowserHost, V2EmailExternalDownloadBrowserHost>();
             services.AddTransient<IEmailRelevanceService, EmailRelevanceService>();
