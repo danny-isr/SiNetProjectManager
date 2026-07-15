@@ -37,6 +37,16 @@ public interface IWorkflowCommandService
     ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct);
 
     /// <summary>
+    /// Evaluates and (when the matched transition is <c>Auto</c>) performs workflow advance after a
+    /// workflow-advancing Process Action reported Completed (e.g. <c>ApproveOrClose</c> /
+    /// <c>CloseOpinion</c>). Native replacement for the legacy <c>WorkflowActionCompletedHandler</c>.
+    /// Returns <see langword="null"/> when the instance is not active or no <c>ActionCompleted</c>
+    /// transition applies; a <see cref="StageCompletionActionDto.ConfirmationRequired"/> result when a
+    /// matching transition needs user confirmation; otherwise the advance outcome.
+    /// </summary>
+    ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct);
+
+    /// <summary>
     /// Re-provisions the current stage's tasks for a stalled workflow that has no open tasks
     /// and could not be auto-advanced (last-resort watchdog recovery). Returns the number of
     /// tasks created.

@@ -58,6 +58,9 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct) =>
         _orchestrator.CheckAndAutoAdvanceStalledWorkflowAsync(command.InstanceId, command.UserId, ct);
 
+    public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct) =>
+        _orchestrator.CheckAndAdvanceOnActionCompletedAsync(command.InstanceId, command.ActionCode, command.ActionOutcome, command.UserId, ct);
+
     public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct) =>
         _orchestrator.ReprovisionCurrentStageTasksAsync(command.InstanceId, command.UserId, ct);
 

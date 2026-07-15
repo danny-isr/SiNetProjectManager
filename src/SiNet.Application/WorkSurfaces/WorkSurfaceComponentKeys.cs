@@ -24,4 +24,14 @@ public static class WorkSurfaceComponentKeys
         || string.Equals(componentKey, ProjectCreationFromEmail, StringComparison.OrdinalIgnoreCase)
         || string.Equals(componentKey, ReviewProjectSetupFromEmail, StringComparison.OrdinalIgnoreCase)
         || string.Equals(componentKey, EmailComposeToPlanner, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the key should open the native ProjectWork task surface. Groups the project-scoped
+    /// task keys that legacy routed to <c>ProjectWorkView</c> (<c>ShowProjectWork</c>): project work,
+    /// material checklist, and police submission tasks.
+    /// </summary>
+    public static bool IsProjectWorkSurface(string? componentKey) =>
+        string.Equals(componentKey, ProjectWork, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(componentKey, MaterialChecklist, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(componentKey, PoliceSubmission, StringComparison.OrdinalIgnoreCase);
 }

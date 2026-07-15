@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Surfaces.Inspection;
+using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.Application.Abstractions.Inspection;
 
 namespace SiNet.App.Wpf.WorkSurfaces;
@@ -13,6 +14,8 @@ public static class WorkSurfaceServiceCollectionExtensions
 
         services.AddTransient<InspectionWindowViewModel>();
         services.AddSingleton<IInspectionWindowFactory, InspectionWindowFactory>();
+        services.AddTransient<ProjectWorkWindowViewModel>();
+        services.AddSingleton<IProjectWorkWindowFactory, ProjectWorkWindowFactory>();
         services.AddSingleton<IWorkSurfaceLauncher, WorkSurfaceLauncher>();
 
         services.AddSingleton<IInspectionFileTreePickerHost, NoOpInspectionFileTreePickerHost>();

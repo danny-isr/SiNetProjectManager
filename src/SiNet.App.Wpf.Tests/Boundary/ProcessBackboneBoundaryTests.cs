@@ -486,6 +486,9 @@ public sealed class ProcessBackboneBoundaryTests
         public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
 
+        public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct)
+            => ValueTask.FromResult<StageCompletionResultDto?>(null);
+
         public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
 
@@ -515,6 +518,9 @@ public sealed class ProcessBackboneBoundaryTests
 
         public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct)
+            => throw new InvalidOperationException("simulated orchestrator failure");
 
         public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
@@ -556,6 +562,9 @@ public sealed class ProcessBackboneBoundaryTests
 
         public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct)
+            => ValueTask.FromResult<StageCompletionResultDto?>(null);
 
         public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
             => throw new NotSupportedException();

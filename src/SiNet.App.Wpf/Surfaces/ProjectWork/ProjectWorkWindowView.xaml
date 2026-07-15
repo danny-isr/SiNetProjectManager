@@ -1,0 +1,81 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.ProjectWork.ProjectWorkWindowView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.ProjectWork"
+        mc:Ignorable="d"
+        Title="{Binding Title}"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        Width="560" Height="460"
+        MinWidth="420" MinHeight="320"
+        FlowDirection="RightToLeft"
+        d:DataContext="{d:DesignInstance Type=local:ProjectWorkWindowViewModel, IsDesignTimeCreatable=True}">
+
+    <!--
+        Native ProjectWork TASK-EXECUTION shell (Phase 5a). Opened by WorkSurfaceLauncher for the
+        ProjectWork / MaterialChecklist / PoliceSubmission component keys. Presents task header,
+        allowed-result completion strip, and a placeholder for the deferred project file workspace.
+        No file tree / ACC / drag-drop lives here (separate gated phase).
+    -->
+
+    <Border Padding="16" Background="#FFF7F8FA">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header: project context -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Foreground="#FF1F2937" />
+                <TextBlock Text="{Binding ActiveProjectDisplay}" FontSize="13" Foreground="#FF4B5563" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <!-- Task header -->
+            <Border Grid.Row="1" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1"
+                    CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
+                <TextBlock Text="{Binding TaskHeader}" FontSize="14" FontWeight="SemiBold" Foreground="#FF111827" />
+            </Border>
+
+            <!-- Work area placeholder -->
+            <Border Grid.Row="2" Background="#FFFDF6EC" BorderBrush="#FFF0D9A8" BorderThickness="1"
+                    CornerRadius="6" Padding="12">
+                <TextBlock Text="{Binding WorkAreaMessage}" TextWrapping="Wrap"
+                           FontSize="13" Foreground="#FF7A5B12" VerticalAlignment="Top" />
+            </Border>
+
+            <!-- Completion strip -->
+            <Grid Grid.Row="3" Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="&#x05EA;&#x05D5;&#x05E6;&#x05D0;&#x05D4;:"
+                           VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13" Foreground="#FF374151" />
+
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AllowedResultCodes}"
+                          SelectedItem="{Binding SelectedResultCode, Mode=TwoWay}"
+                          MinWidth="180" VerticalAlignment="Center" />
+
+                <Button Grid.Column="2"
+                        Content="&#x05E1;&#x05D9;&#x05D9;&#x05DD; &#x05DE;&#x05E9;&#x05D9;&#x05DE;&#x05D4;"
+                        Command="{Binding CompleteTaskCommand}"
+                        Padding="14,6" Margin="8,0,0,0" FontWeight="SemiBold"
+                        Background="#FF2563EB" Foreground="White" BorderThickness="0" Cursor="Hand" />
+            </Grid>
+
+            <!-- Status bar -->
+            <Border Grid.Row="4" Margin="0,10,0,0" Padding="8,4" Background="#FFEEF1F5" CornerRadius="4">
+                <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#FF4B5563" TextWrapping="Wrap" />
+            </Border>
+        </Grid>
+    </Border>
+</Window>

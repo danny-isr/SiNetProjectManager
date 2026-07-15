@@ -97,6 +97,63 @@ internal static class WorkflowActionHelpers
         return null;
     }
 
+    /// <summary>
+    /// Reads a list of strings from the transition <c>ConfigJson</c> property <paramref name="propertyName"/>.
+    /// Accepts either a JSON array of strings (<c>["a","b"]</c>) or a single delimited string
+    /// (<c>"a, b; c"</c>, split on comma/semicolon). Returns an empty list when absent or malformed.
+    /// </summary>
+    internal static IReadOnlyList<string> ReadConfigStringList(ActionExecutionCommand command, string propertyName)
+    {
+        var configJson = ReadDataString(command, ActionExecutionDataKeys.ConfigJson);
+        if (string.IsNullOrWhiteSpace(configJson))
+            return Array.Empty<string>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(configJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object
+                || !doc.RootElement.TryGetProperty(propertyName, out var prop))
+            {
+                return Array.Empty<string>();
+            }
+
+            if (prop.ValueKind == JsonValueKind.String)
+                return SplitDelimited(prop.GetString());
+
+            if (prop.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var element in prop.EnumerateArray())
+                {
+                    if (element.ValueKind == JsonValueKind.String)
+                    {
+                        var value = element.GetString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                            list.Add(value.Trim());
+                    }
+                }
+
+                return list;
+            }
+        }
+        catch (JsonException)
+        {
+            // fall through to empty
+        }
+
+        return Array.Empty<string>();
+    }
+
+    private static IReadOnlyList<string> SplitDelimited(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return Array.Empty<string>();
+
+        return raw.Split(
+            new[] { ',', ';' },
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
     internal static async Task<(bool Success, string Message)> SetProjectStatusByCodeAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         string statusCode,

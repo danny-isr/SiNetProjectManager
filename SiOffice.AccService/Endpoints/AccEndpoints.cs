@@ -479,6 +479,69 @@ internal static class AccEndpoints
             return Results.Ok(new { Ok = ok });
         });
 
+        // ── ACC item custom attributes (metadata read) ──────────────────────
+        // Privileged BIM 360 Docs custom-attribute read. Runs server-side so the
+        // WPF client never needs Autodesk credentials — it forwards here via
+        // RemoteAccItemMetadataService. Metadata-only: failures are reported in the
+        // envelope, never surfaced as a missing-file signal.
+        v1.MapGet("/projects/{projectId}/items/{itemId}/custom-attributes", async (
+            string projectId,
+            string itemId,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var result = await bim360.GetItemCustomAttributesAsync(NormalizeProjectId(projectId), itemId.Trim(), ct);
+            return Results.Ok(new
+            {
+                result.Success,
+                result.HttpStatus,
+                result.ErrorMessage,
+                Attributes = result.Value ?? new Dictionary<string, string?>(StringComparer.Ordinal)
+            });
+        });
+
+        // ── ACC item custom attributes (metadata write) ─────────────────────
+        // Version-scoped custom-attribute batch update. Definitions are per-folder,
+        // so the caller supplies accFolderId + versionId. Same server-side privilege
+        // boundary as the read endpoint above.
+        v1.MapPost("/projects/{projectId}/items/{itemId}/custom-attributes", async (
+            string projectId,
+            string itemId,
+            AccItemCustomAttributesWriteRequest body,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+            if (body is null || string.IsNullOrWhiteSpace(body.AccFolderId))
+                return Results.BadRequest(new { error = "accFolderId is required." });
+            if (string.IsNullOrWhiteSpace(body.VersionId))
+                return Results.BadRequest(new { error = "versionId is required." });
+
+            var attributes = body.Attributes ?? new Dictionary<string, string?>(StringComparer.Ordinal);
+            var bim360 = new Bim360Service(tokenProvider);
+            var result = await bim360.SetItemCustomAttributesAsync(
+                NormalizeProjectId(projectId),
+                body.AccFolderId.Trim(),
+                body.VersionId.Trim(),
+                attributes,
+                ct);
+            return Results.Ok(new
+            {
+                result.Success,
+                result.HttpStatus,
+                result.ErrorMessage
+            });
+        });
+
         v1.MapPost("/projects/{projectId}/folders/resolve-path", async (
             string projectId,
             AccFolderPathEndpointRequest body,
@@ -933,6 +996,11 @@ internal static class AccEndpoints
         {
         }
     }
+
+    private sealed record AccItemCustomAttributesWriteRequest(
+        string AccFolderId,
+        string VersionId,
+        Dictionary<string, string?>? Attributes);
 
     private sealed record AccTreeSearchLocation(string FolderId, string FolderPath);
 

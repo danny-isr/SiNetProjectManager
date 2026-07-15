@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Actions;
+using SiNet.Application.Notifications;
 using SiNet.Infrastructure.Sql.Services.Actions;
+using SiNet.Infrastructure.Sql.Services.Notifications;
 
 namespace SiNet.Infrastructure.Sql.DependencyInjection;
 
@@ -17,6 +20,11 @@ public static class ActionsServiceCollectionExtensions
         // on its own (e.g. boundary tests), without double-registering when
         // AddSiNetProcessBackbone also wires the engine.
         services.AddSiNetWorkflowEngine();
+
+        // Notification delivery channel behind the SendNotification handler. Default is the policy-safe
+        // log/audit channel; a host may override with a Gmail/in-app implementation (TryAdd = last
+        // explicit registration wins) once G-Policy approves.
+        services.TryAddTransient<INotificationDeliveryService, LogNotificationDeliveryService>();
 
         services.AddTransient<IProcessActionHandler, SendNotificationProcessActionHandler>();
         services.AddTransient<IProcessActionHandler, SetProjectStatusProcessActionHandler>();

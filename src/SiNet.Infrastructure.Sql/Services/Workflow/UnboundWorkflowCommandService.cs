@@ -25,6 +25,9 @@ public sealed class UnboundWorkflowCommandService : IWorkflowCommandService
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
         => throw Unbound();
 
+    public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct)
+        => throw Unbound();
+
     public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
         => throw Unbound();
 

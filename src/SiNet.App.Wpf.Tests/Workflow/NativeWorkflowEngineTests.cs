@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Actions;
+using SiNet.Application.Email.Detail;
 using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNet.Infrastructure.Sql.Services.DevTools;
+using SiNet.Infrastructure.Sql.Services.Email.Detail;
 using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -158,6 +160,214 @@ public sealed class NativeWorkflowEngineTests
         Assert.True(actions.HasHandler(ProcessActionCodes.StartSubWorkflow));
         Assert.True(actions.HasHandler(ProcessActionCodes.ClosePreviousStageTasks));
     }
+
+    [Fact]
+    public async Task ActionCompleted_auto_transition_advances_through_native_command_service()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options;
+        var factory = new StubDbContextFactory(options);
+
+        var (instanceId, _, _) = await SeedActionCompletedScenarioAsync(factory);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(factory);
+        services.AddSiNetProcessBackbone();
+        await using var provider = services.BuildServiceProvider();
+
+        var commands = provider.GetRequiredService<IWorkflowCommandService>();
+
+        // The matching workflow-advancing action reports Completed → the native engine
+        // (replacing the legacy WorkflowActionCompletedHandler) auto-advances to the final stage.
+        var result = await commands.CheckAndAdvanceOnActionCompletedAsync(
+            new ActionCompletedCommand(instanceId, "ApproveOrClose", "Succeeded", UserId),
+            CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(StageCompletionActionDto.AutoAdvanced, result!.Action);
+        Assert.NotNull(result.AdvancedInstance);
+
+        await using var db = new SiNetSQLDbContext(options);
+        var instance = await db.WorkflowInstances.FirstAsync(i => i.Id == instanceId);
+        Assert.Equal(WorkflowStatus.Completed, instance.Status);
+    }
+
+    [Fact]
+    public async Task ActionCompleted_with_non_matching_action_does_not_advance()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options;
+        var factory = new StubDbContextFactory(options);
+
+        var (instanceId, stageAId, _) = await SeedActionCompletedScenarioAsync(factory);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(factory);
+        services.AddSiNetProcessBackbone();
+        await using var provider = services.BuildServiceProvider();
+
+        var commands = provider.GetRequiredService<IWorkflowCommandService>();
+
+        // A different action code has no matching ActionCompleted transition → no advance.
+        var result = await commands.CheckAndAdvanceOnActionCompletedAsync(
+            new ActionCompletedCommand(instanceId, "SomeUnrelatedAction", "Succeeded", UserId),
+            CancellationToken.None);
+
+        Assert.Null(result);
+
+        await using var db = new SiNetSQLDbContext(options);
+        var instance = await db.WorkflowInstances.FirstAsync(i => i.Id == instanceId);
+        Assert.Equal(WorkflowStatus.Active, instance.Status);
+        Assert.Equal(stageAId, instance.CurrentStageId);
+    }
+
+    /// <summary>
+    /// Seeds a minimal 2-stage definition (A → B) with a single ActionCompleted Auto transition rule
+    /// matching action code <c>ApproveOrClose</c>, plus one Active instance parked at stage A.
+    /// Returns the instance id and both stage ids.
+    /// </summary>
+    private static async Task<(int InstanceId, int StageAId, int StageBId)> SeedActionCompletedScenarioAsync(
+        IDbContextFactory<SiNetSQLDbContext> factory)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+
+        db.Siusers.Add(new Siuser { Id = UserId, Name = "Test User", IsActive = true });
+
+        var status = new ProjectStatus { Code = "AC_ACTIVE", Title = "Active", IsActive = true, SortOrder = 1 };
+        db.ProjectStatuses.Add(status);
+        await db.SaveChangesAsync();
+
+        var project = new Project { Title = "ActionCompleted test", ProjectStatusId = status.Id };
+        db.Projects.Add(project);
+
+        var def = new WorkflowDefinition { Code = "TEST_AC", Name = "Action Completed Test", IsActive = true };
+        db.WorkflowDefinitions.Add(def);
+        await db.SaveChangesAsync();
+
+        var stageA = new WorkflowStageDefinition
+        {
+            WorkflowDefinitionId = def.Id,
+            Code = "A",
+            Name = "Await Decision",
+            NodeType = "Stage",
+            IsInitial = true,
+            SortOrder = 1,
+        };
+        var stageB = new WorkflowStageDefinition
+        {
+            WorkflowDefinitionId = def.Id,
+            Code = "B",
+            Name = "Done",
+            NodeType = "End",
+            IsFinal = true,
+            SortOrder = 2,
+        };
+        db.WorkflowStageDefinitions.AddRange(stageA, stageB);
+        await db.SaveChangesAsync();
+
+        const string conditionJson = "{\"ActionCode\":\"ApproveOrClose\"}";
+        db.WorkflowTransitionRules.Add(new WorkflowTransitionRule
+        {
+            WorkflowDefinitionId = def.Id,
+            FromStageId = stageA.Id,
+            ToStageId = stageB.Id,
+            Name = "On ApproveOrClose",
+            TriggerType = WorkflowTransitionTriggerType.ActionCompleted,
+            ConditionType = WorkflowTransitionConditionType.ActionCompleted,
+            ConditionJson = conditionJson,
+            ConditionHash = WorkflowTransitionRule.ComputeConditionHash(conditionJson),
+            EvaluationMode = WorkflowEvaluationMode.Auto,
+            Priority = 1,
+        });
+
+        var instance = new WorkflowInstance
+        {
+            WorkflowDefinitionId = def.Id,
+            ProjectId = project.Id,
+            IsProjectBound = false,
+            Status = WorkflowStatus.Active,
+            CurrentStageId = stageA.Id,
+            TriggerType = WorkflowTriggerType.Email,
+            CreatedByUserId = UserId,
+            CreatedAtUtc = DateTime.UtcNow,
+        };
+        db.WorkflowInstances.Add(instance);
+        await db.SaveChangesAsync();
+
+        return (instance.Id, stageA.Id, stageB.Id);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Phase 3e — email suggested action starts native Proposal workflow
+    // ────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Email_CreatePriceQuote_action_starts_native_Proposal_workflow()
+    {
+        var (provider, options) = await BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var (_, emailId, defId) = await SeedProjectAndEmailAsync(options);
+            var execution = BuildExecutionService(provider);
+
+            var result = await execution.ExecuteAsync(
+                new EmailSuggestedActionExecutionCommand(
+                    EmailSuggestedActionCodes.CreatePriceQuote, emailId, UserId),
+                CancellationToken.None);
+
+            Assert.True(result.Succeeded, result.Message);
+            Assert.False(result.RequiresFollowUp);
+
+            await using var db = new SiNetSQLDbContext(options);
+            var instance = await db.WorkflowInstances
+                .SingleOrDefaultAsync(w =>
+                    w.WorkflowDefinitionId == defId
+                    && w.TriggerType == WorkflowTriggerType.Email
+                    && w.TriggerEntityId == emailId);
+
+            Assert.NotNull(instance);
+            Assert.False(instance!.IsProjectBound); // Proposal is project-independent
+            Assert.Equal(WorkflowStatus.Active, instance.Status);
+        }
+    }
+
+    [Fact]
+    public async Task Email_CreatePriceQuote_action_is_idempotent_per_email()
+    {
+        var (provider, options) = await BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var (_, emailId, defId) = await SeedProjectAndEmailAsync(options);
+            var execution = BuildExecutionService(provider);
+
+            var first = await execution.ExecuteAsync(
+                new EmailSuggestedActionExecutionCommand(
+                    EmailSuggestedActionCodes.CreatePriceQuote, emailId, UserId),
+                CancellationToken.None);
+            Assert.True(first.Succeeded, first.Message);
+
+            var second = await execution.ExecuteAsync(
+                new EmailSuggestedActionExecutionCommand(
+                    EmailSuggestedActionCodes.CreatePriceQuote, emailId, UserId),
+                CancellationToken.None);
+
+            Assert.False(second.Succeeded);
+            Assert.Contains("כבר קיים", second.Message);
+
+            await using var db = new SiNetSQLDbContext(options);
+            var count = await db.WorkflowInstances.CountAsync(w =>
+                w.WorkflowDefinitionId == defId && w.TriggerEntityId == emailId);
+            Assert.Equal(1, count);
+        }
+    }
+
+    private static SqlEmailSuggestedActionExecutionService BuildExecutionService(
+        Microsoft.Extensions.DependencyInjection.ServiceProvider provider) =>
+        new(
+            provider.GetRequiredService<IProcessActionService>(),
+            provider.GetRequiredService<IWorkflowCommandService>(),
+            provider.GetRequiredService<IWorkflowQueryService>(),
+            provider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>());
 
     // ────────────────────────────────────────────────────────────────────────
     // Harness

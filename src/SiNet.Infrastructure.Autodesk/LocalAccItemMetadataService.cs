@@ -4,17 +4,18 @@ using SiNet.Application.Abstractions.Autodesk.Metadata;
 namespace SiNet.Infrastructure.Autodesk;
 
 /// <summary>
-/// Connector-backed implementation of <see cref="IAccItemMetadataService"/>.
+/// In-process (SDK) implementation of <see cref="IAccItemMetadataService"/> — the privileged
+/// "Local" side of the ACC control-plane separation. Runs on hosts that hold Autodesk credentials
+/// (e.g. <c>SiOffice.AccService</c>); on the WPF client it is only used when the app is configured
+/// for <see cref="SiNet.Application.Abstractions.Autodesk.AccServiceMode.Local"/>.
 /// <para>
-/// Native port of the legacy <c>SiNetSQL.FileIndex.AccItemMetadataService</c>: it
-/// translates the ACC-SDK <c>AccMetadataResult</c> returned by
-/// <see cref="IAccTransferConnector"/> into the SDK-free Application result records.
-/// Metadata-only: read/write failures are surfaced as failed results (never thrown for
-/// ordinary ACC errors) so callers must not interpret a failure as proof the ACC file
-/// is missing.
+/// Translates the ACC-SDK <c>AccMetadataResult</c> returned by <see cref="IAccTransferConnector"/>
+/// into the SDK-free Application result records. Metadata-only: read/write failures are surfaced as
+/// failed results (never thrown for ordinary ACC errors) so callers must not interpret a failure as
+/// proof the ACC file is missing.
 /// </para>
 /// </summary>
-internal sealed class AccItemMetadataService(IAccTransferConnector connector) : IAccItemMetadataService
+internal sealed class LocalAccItemMetadataService(IAccTransferConnector connector) : IAccItemMetadataService
 {
     private readonly IAccTransferConnector _connector = connector;
 
@@ -83,7 +84,7 @@ internal sealed class AccItemMetadataService(IAccTransferConnector connector) : 
             if (result.Success)
             {
                 Trace.TraceInformation(
-                    $"[AccItemMetadata] WriteAttributes OK itemId='{itemId}' versionId='{versionId}' attrs={attributes.Count}");
+                    $"[AccItemMetadata][Local] WriteAttributes OK itemId='{itemId}' versionId='{versionId}' attrs={attributes.Count}");
                 return AccItemMetadataResult.Ok();
             }
 
@@ -104,13 +105,13 @@ internal sealed class AccItemMetadataService(IAccTransferConnector connector) : 
 
     private static AccItemMetadataReadResult ReportReadFailure(string? itemId, int? httpStatus, string errorMessage)
     {
-        Trace.TraceWarning($"[AccItemMetadata] ReadAttributes FAILED itemId='{itemId}' http={httpStatus}: {errorMessage}");
+        Trace.TraceWarning($"[AccItemMetadata][Local] ReadAttributes FAILED itemId='{itemId}' http={httpStatus}: {errorMessage}");
         return AccItemMetadataReadResult.Fail(httpStatus, errorMessage);
     }
 
     private static AccItemMetadataResult ReportWriteFailure(string? itemId, int? httpStatus, string errorMessage)
     {
-        Trace.TraceWarning($"[AccItemMetadata] WriteAttributes FAILED itemId='{itemId}' http={httpStatus}: {errorMessage}");
+        Trace.TraceWarning($"[AccItemMetadata][Local] WriteAttributes FAILED itemId='{itemId}' http={httpStatus}: {errorMessage}");
         return AccItemMetadataResult.Fail(httpStatus, errorMessage);
     }
 }

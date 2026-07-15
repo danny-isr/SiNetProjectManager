@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Actions;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Settings;
+using SiNet.Application.Workflow;
+using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -136,17 +138,35 @@ internal sealed class SqlEmailSuggestedActionService : IEmailSuggestedActionServ
     public string? SelectedActionCode => null;
 }
 
-internal sealed class SqlEmailSuggestedActionExecutionService(IProcessActionService processActions)
+internal sealed class SqlEmailSuggestedActionExecutionService(
+    IProcessActionService processActions,
+    IWorkflowCommandService workflowCommands,
+    IWorkflowQueryService workflowQuery,
+    IDbContextFactory<SiNetSQLDbContext> dbFactory)
     : IEmailSuggestedActionExecutionService
 {
     private readonly IProcessActionService _processActions =
         processActions ?? throw new ArgumentNullException(nameof(processActions));
+    private readonly IWorkflowCommandService _workflowCommands =
+        workflowCommands ?? throw new ArgumentNullException(nameof(workflowCommands));
+    private readonly IWorkflowQueryService _workflowQuery =
+        workflowQuery ?? throw new ArgumentNullException(nameof(workflowQuery));
+    private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
 
     public async Task<EmailSuggestedActionExecutionResult> ExecuteAsync(
         EmailSuggestedActionExecutionCommand command,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        // Phase 3e: email-driven workflow starts that need no UI / project creation are routed
+        // through the native IWorkflowCommandService.StartAsync (single native engine).
+        if (TryResolveWorkflowStart(command.ActionCode, out var workflowCode, out var isProjectBound))
+        {
+            return await StartWorkflowAsync(command, workflowCode, isProjectBound, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         if (IsUnassignedInboxAction(command.ActionCode))
         {
@@ -204,4 +224,120 @@ internal sealed class SqlEmailSuggestedActionExecutionService(IProcessActionServ
                     RequiresFollowUp: true,
                     "הפעולה עדיין לא מחוברת במערכת החדשה — בקרוב."),
         };
+
+    /// <summary>
+    /// Maps email suggested-action codes to native workflow starts that require no UI / project
+    /// creation. Mirrors the legacy <c>ActionExecutor</c> dispatch:
+    /// <c>CreatePriceQuote → Proposal</c> (project-independent) and
+    /// <c>CreateOpinionProject → Opinion</c> (bound to the email's office project).
+    /// UI-/project-creation-dependent starts (CreateNewReview, RequestAuthorityInvitation, …)
+    /// are deferred to the ProjectWork surface (Phase 5a).
+    /// </summary>
+    private static bool TryResolveWorkflowStart(string actionCode, out string workflowCode, out bool isProjectBound)
+    {
+        switch (actionCode)
+        {
+            case EmailSuggestedActionCodes.CreatePriceQuote:
+                workflowCode = WorkflowCodes.Proposal;
+                isProjectBound = false;
+                return true;
+            case EmailSuggestedActionCodes.CreateOpinionProject:
+                workflowCode = WorkflowCodes.Opinion;
+                isProjectBound = true;
+                return true;
+            default:
+                workflowCode = string.Empty;
+                isProjectBound = false;
+                return false;
+        }
+    }
+
+    private async Task<EmailSuggestedActionExecutionResult> StartWorkflowAsync(
+        EmailSuggestedActionExecutionCommand command,
+        string workflowCode,
+        bool isProjectBound,
+        CancellationToken cancellationToken)
+    {
+        if (command.InboxMessageId is not int inboxMessageId || inboxMessageId <= 0)
+        {
+            return new EmailSuggestedActionExecutionResult(false, false, "חסר מזהה מייל להפעלת התהליך.");
+        }
+
+        var definitions = await _workflowQuery.GetActiveDefinitionsAsync(cancellationToken).ConfigureAwait(false);
+        var definition = definitions.FirstOrDefault(
+            d => string.Equals(d.Code, workflowCode, StringComparison.OrdinalIgnoreCase));
+
+        if (definition is null)
+        {
+            return new EmailSuggestedActionExecutionResult(
+                false, false, $"תבנית תהליך '{workflowCode}' לא נמצאה או אינה פעילה.");
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        var message = await db.EmailInboxMessages
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == inboxMessageId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (message is null)
+        {
+            return new EmailSuggestedActionExecutionResult(false, false, "המייל לא נמצא.");
+        }
+
+        // Inbox rows always carry a ProjectId (office default when unassigned). It backs the
+        // office placeholder for project-independent starts (Proposal) and the owning project
+        // for bound starts (Opinion) — matching legacy ActionExecutor behaviour.
+        var projectId = message.ProjectId;
+        if (projectId <= 0)
+        {
+            return new EmailSuggestedActionExecutionResult(
+                false, true, "לא נמצא פרויקט לשיוך התהליך — פתח דרך משטח העבודה.");
+        }
+
+        // Duplicate guard per source email (mirrors legacy EnsureNoDuplicateForEmailAsync).
+        var existing = await db.WorkflowInstances
+            .AsNoTracking()
+            .Where(w => w.WorkflowDefinitionId == definition.Id
+                        && w.TriggerType == WorkflowTriggerType.Email
+                        && w.TriggerEntityId == inboxMessageId
+                        && w.Status != WorkflowStatus.Cancelled)
+            .OrderByDescending(w => w.Id)
+            .Select(w => w.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (existing > 0)
+        {
+            return new EmailSuggestedActionExecutionResult(
+                false, false, $"כבר קיים תהליך '{definition.Name}' עבור מייל זה (#{existing}).");
+        }
+
+        try
+        {
+            var result = await _workflowCommands
+                .StartAsync(
+                    new StartWorkflowCommand(
+                        definition.Id,
+                        projectId,
+                        WorkflowTriggerTypeDto.Email,
+                        TriggerEntityId: inboxMessageId,
+                        command.ActingUserId,
+                        Notes: null,
+                        IsProjectBound: isProjectBound),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            var message2 = result.CreatedTasks.Count > 0
+                ? $"תהליך '{definition.Name}' הופעל בהצלחה ונוצרה משימה."
+                : $"תהליך '{definition.Name}' הופעל (מופע #{result.Instance.Id}), אך לא נוצרו משימות לשלב הראשון.";
+
+            return new EmailSuggestedActionExecutionResult(true, false, message2);
+        }
+        catch (Exception ex)
+        {
+            return new EmailSuggestedActionExecutionResult(
+                false, false, $"שגיאה בהפעלת תהליך '{definition.Name}': {ex.Message}");
+        }
+    }
 }

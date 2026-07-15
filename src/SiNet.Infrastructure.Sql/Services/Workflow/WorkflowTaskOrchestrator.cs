@@ -240,6 +240,65 @@ internal sealed class WorkflowTaskOrchestrator(
         return null;
     }
 
+    /// <summary>
+    /// Native replacement for the legacy <c>WorkflowActionCompletedHandler</c>: evaluates
+    /// <see cref="WorkflowTransitionTriggerType.ActionCompleted"/> transitions from the instance's
+    /// current stage using the completed action's code + outcome, and advances through the native
+    /// engine when the best-matching transition's mode is <see cref="WorkflowEvaluationMode.Auto"/>.
+    /// Returns <see langword="null"/> when the instance is not active or no transition matches;
+    /// mirrors the legacy handler's "skip Manual / require confirmation for AutoWithConfirm" behavior.
+    /// </summary>
+    public async ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(
+        int instanceId, string actionCode, string? actionOutcome, int userId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(actionCode)) return null;
+
+        var evalContext = new TransitionEvaluationContext
+        {
+            ActionCode = actionCode,
+            ActionOutcome = actionOutcome,
+        };
+
+        // The evaluator already gates on instance Active + CurrentStageId (returns [] otherwise).
+        var evaluated = await _evaluator.EvaluateAsync(
+            instanceId, WorkflowTransitionTriggerType.ActionCompleted, evalContext, ct).ConfigureAwait(false);
+
+        if (evaluated.Count == 0) return null;
+
+        var best = evaluated[0];
+
+        switch (best.EvaluationMode)
+        {
+            case WorkflowEvaluationMode.Auto:
+                return MapToDto(await ExecuteTransitionAsync(best.Rule, instanceId, userId, ct).ConfigureAwait(false));
+
+            case WorkflowEvaluationMode.AutoWithConfirm:
+                await using (var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false))
+                {
+                    var currentStageId = await db.WorkflowInstances
+                        .AsNoTracking()
+                        .Where(i => i.Id == instanceId)
+                        .Select(i => i.CurrentStageId)
+                        .FirstOrDefaultAsync(ct)
+                        .ConfigureAwait(false);
+
+                    Trace.TraceInformation(
+                        $"[Orchestrator] ActionCompleted transition to stage {best.Rule.ToStageId} requires confirmation for workflow {instanceId}.");
+
+                    return new StageCompletionResultDto(
+                        instanceId,
+                        currentStageId ?? 0,
+                        StageCompletionActionDto.ConfirmationRequired,
+                        TargetStageId: best.Rule.ToStageId,
+                        TransitionRuleId: best.Rule.Id);
+                }
+
+            case WorkflowEvaluationMode.Manual:
+            default:
+                return null;
+        }
+    }
+
     public async ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledWorkflowAsync(
         int instanceId, int userId, CancellationToken ct)
     {

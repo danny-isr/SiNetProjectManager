@@ -322,16 +322,24 @@ namespace SiNetProjectManagerV2
 
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
-            // ── LEGACY WORKFLOW ENGINE (isolated — scheduled for Phase 6 retirement) ─────────────
+            // ── LEGACY WORKFLOW ENGINE (isolated — Phase 6 retirement is GATED, see below) ───────
             // These SiNetSQL engine services are NO LONGER the New System workflow command path
-            // (that is now NativeWorkflowCommandService, registered by AddSiNetProcessBackbone above).
-            // They are retained ONLY because they are still live dependencies of:
-            //   (1) Legacy mode UI (legacy MainWindow), and
-            //   (2) the legacy heavy-action handlers below (MoveToProject / AddMaterialToProject /
-            //       StartWorkflow, lines ~493-496) that New System email filing still bridges to
-            //       until native handlers land (plan Phase 3).
-            // Do NOT wire these into any New System Work Surface. Remove this whole block in Phase 6
-            // once native heavy-action handlers replace the legacy filing/start handlers.
+            // (that is now NativeWorkflowCommandService, registered by AddSiNetProcessBackbone above),
+            // and they are NOT resolved by any New System Work Surface.
+            //
+            // Phase 6 status (verified 2026-07): the native heavy-action handlers HAVE landed
+            // (NativeEmailMoveToProjectExecutor, NativeAddMaterialToProjectProcessActionHandler,
+            // StartWorkflow/TaskLifecycle now use the native IWorkflowCommandService). Despite that,
+            // this block CANNOT be removed yet: it is a live *transitive* dependency of the legacy
+            // IProcessActionDispatcher (registered by AddProcessActions below). The dispatcher
+            // collects every IProcessActionHandler, and the legacy StartSubWorkflowProcessActionHandler
+            // ctor requires WorkflowEngine + WorkflowStageTaskProvisioningService (which in turn pull
+            // WorkflowTransitionEvaluator / WorkflowActionExecutor / the dispatcher factory). The
+            // dispatcher itself is still live for the legacy email UI, Suggested Actions
+            // (ActionExecutor), typed continuations, and FileImportDialog.
+            // Remove this whole block in Phase 6 ONLY AFTER the legacy IProcessActionDispatcher and
+            // its handlers are retired — i.e. once those UI paths migrate to the native
+            // IProcessActionService / IWorkflowCommandService. Do NOT wire these into any Work Surface.
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTransitionEvaluator>();
@@ -422,20 +430,22 @@ namespace SiNetProjectManagerV2
             // Action lifecycle reporter: composite fan-out so ActionExecutor's call sites
             // stay unchanged. Inner reporters:
             //   • NoOpActionLifecycleReporter — preserves the safe baseline.
-            //   • WorkflowActionLifecycleReporter — bridges Completed events to
-            //     WorkflowActionCompletedHandler, but only when explicit safety
-            //     conditions are met (WorkflowInstanceId present, ActionDefinition
-            //     CanAdvanceWorkflow == true, etc.). It never infers a workflow
-            //     from ProjectId / EmailMessageId.
+            //   • NativeWorkflowActionLifecycleReporter — bridges Completed events to the SINGLE
+            //     native workflow engine via IWorkflowCommandService.CheckAndAdvanceOnActionCompletedAsync,
+            //     but only when explicit safety conditions are met (WorkflowInstanceId present,
+            //     ActionDefinition CanAdvanceWorkflow == true, etc.). It never infers a workflow
+            //     from ProjectId / EmailMessageId. This replaces the legacy
+            //     WorkflowActionLifecycleReporter → WorkflowActionCompletedHandler → legacy orchestrator
+            //     path (plan Phase 3d — one engine, native only).
             services.AddSingleton<SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter>(
                 _ => SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter.Instance);
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionLifecycleReporter>();
+            services.AddTransient<SiNetProjectManagerV2.Services.NativeWorkflowActionLifecycleReporter>();
             services.AddTransient<SiNetSQL.Domain.Actions.IActionLifecycleReporter>(sp =>
                 new SiNetSQL.Domain.Actions.CompositeActionLifecycleReporter(
                     new SiNetSQL.Domain.Actions.IActionLifecycleReporter[]
                     {
                         sp.GetRequiredService<SiNetSQL.Domain.Actions.NoOpActionLifecycleReporter>(),
-                        sp.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowActionLifecycleReporter>(),
+                        sp.GetRequiredService<SiNetProjectManagerV2.Services.NativeWorkflowActionLifecycleReporter>(),
                     }));
 
             // Process Actions runtime scaffolding (stage 1).
@@ -500,12 +510,15 @@ namespace SiNetProjectManagerV2
                 SiNetSQL.Domain.Actions.Handlers.CloseProjectProcessActionHandler>();
 
             // Phase 3: filing-related Suggested Actions routed through the dispatcher.
-            //  - AddMaterialToProject: returns Deferred/RequiresUi when ProjectFile/source
-            //    are missing; otherwise files through IProjectFileFilingService.
+            //  - AddMaterialToProject (Phase 3c): NATIVE handler — files through the native
+            //    SiNet.Infrastructure.Sql IProjectFileFilingService (FileServer + ACC) instead of the
+            //    legacy SiNetSQL filing service. Same legacy IProcessActionHandler contract, so the
+            //    FileImportContinuation / ActionExecutor trigger points are unchanged. Returns
+            //    Deferred/RequiresUi when ProjectFile/source are missing.
             //  - MoveToProject: backend equivalent of EmailManagementViewModel.MoveToProjectAsync,
             //    files every tagged inbox attachment via IProjectFileFilingService.
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
-                SiNetSQL.Domain.Actions.Handlers.AddMaterialToProjectProcessActionHandler>();
+                SiNetProjectManagerV2.Services.NativeAddMaterialToProjectProcessActionHandler>();
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.MoveToProjectProcessActionHandler>();
 

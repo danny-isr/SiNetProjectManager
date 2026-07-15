@@ -209,32 +209,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                     break;
                 }
 
-                if (request.ProjectId is int workProjectId)
-                {
-                    _ = System.Threading.Tasks.Task.Run(async () =>
-                    {
-                        try
-                        {
-                            var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
-                            await using var db = await dbFactory.CreateDbContextAsync();
-                            var project = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-                                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Projects), p => p.Id == workProjectId);
-                            if (project != null)
-                            {
-                                SiNetSQL.Services.ActiveProjectContext.Instance.SetActiveProject(project);
-                            }
-                            await Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                mainWindow?.ShowProjectWork();
-                                mainWindow?.Activate();
-                            });
-                        }
-                        catch (System.Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[FloatingTasksView] Error loading project for PoliceSubmission/MaterialChecklist/ProjectWork: {ex}");
-                        }
-                    });
-                }
+                OpenProjectWorkTask(mainWindow, request);
                 break;
 
             case SiNetSQL.Services.Tasks.TaskComponentKeys.ProjectCreationFromEmail:
@@ -668,6 +643,74 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         });
     }
 
+
+    /// <summary>
+    /// Opens the project-scoped task surface (ProjectWork / MaterialChecklist / PoliceSubmission).
+    /// Prefers the New System <see cref="SiNet.App.Wpf.WorkSurfaces.IWorkSurfaceLauncher"/> (native
+    /// ProjectWork task surface + completion via ITaskCompletionService); when the launcher is not
+    /// registered it falls back to the legacy <c>ShowProjectWork</c> file window. Sets the legacy
+    /// ActiveProjectContext first so file providers / legacy windows stay in sync. Classification-only
+    /// ProjectWork tasks are intercepted earlier by <see cref="TryHandleClassificationNavigation"/> and
+    /// never reach this method.
+    /// </summary>
+    private void OpenProjectWorkTask(
+        MainWindow? mainWindow,
+        SiNetSQL.Services.Tasks.TaskNavigationRequest request)
+    {
+        if (request.ProjectId is not int workProjectId)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[FloatingTasksView] ProjectWork task {request.TaskId} (ComponentKey={request.ComponentKey}) has no project; cannot open.");
+            return;
+        }
+
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            // Keep the legacy ActiveProjectContext in sync (file providers / legacy Work Window).
+            try
+            {
+                var dbFactory = App.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
+                await using var db = await dbFactory.CreateDbContextAsync();
+                var project = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                    Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Projects), p => p.Id == workProjectId);
+                if (project != null)
+                {
+                    SiNetSQL.Services.ActiveProjectContext.Instance.SetActiveProject(project);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[FloatingTasksView] Error loading project for PoliceSubmission/MaterialChecklist/ProjectWork: {ex}");
+            }
+
+            await Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                // Prefer New System WorkSurfaceLauncher (native ProjectWork task surface + completion).
+                if (App.ServiceProvider.GetService<SiNet.App.Wpf.WorkSurfaces.IWorkSurfaceLauncher>() is { } launcher)
+                {
+                    var opened = await launcher.TryOpenFromTaskAsync(request.TaskId).ConfigureAwait(true);
+                    if (opened)
+                    {
+                        mainWindow?.Activate();
+                        return;
+                    }
+
+                    MessageBox.Show(
+                        $"לא ניתן לפתוח את משימה #{request.TaskId} דרך WorkSurfaceLauncher.\n" +
+                        "אין fallback לחלון סביבת העבודה הישן מנתיב משימה כשה-launcher רשום.",
+                        "פתיחת משימת עבודה",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                // TEMPORARY — legacy ProjectWork window when launcher is not registered.
+                // REMOVAL WHEN: IWorkSurfaceLauncher is always registered in V2 DI.
+                mainWindow?.ShowProjectWork();
+                mainWindow?.Activate();
+            });
+        });
+    }
 
     /// <summary>
     /// Opens QuoteClassificationDialog / TaskResultPicker for classification-only

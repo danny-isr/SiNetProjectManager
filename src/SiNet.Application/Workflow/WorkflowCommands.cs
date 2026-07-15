@@ -67,6 +67,23 @@ public sealed record StalledWorkflowCommand(
     int InstanceId,
     int UserId);
 
+/// <summary>
+/// Evaluates workflow advance after a workflow-advancing Process Action reported Completed
+/// (e.g. <c>ApproveOrClose</c> / <c>CloseOpinion</c>). The <paramref name="ActionCode"/> and
+/// <paramref name="ActionOutcome"/> are matched against <c>ActionCompleted</c> transition rules
+/// from the instance's current stage. Native replacement for the legacy
+/// <c>WorkflowActionCompletedHandler</c> bridge.
+/// </summary>
+/// <param name="InstanceId">Workflow instance whose transitions are evaluated.</param>
+/// <param name="ActionCode">The completed action's code (e.g. <c>ApproveOrClose</c>).</param>
+/// <param name="ActionOutcome">The completed action's outcome label (e.g. <c>Succeeded</c>).</param>
+/// <param name="UserId">Acting user id.</param>
+public sealed record ActionCompletedCommand(
+    int InstanceId,
+    string ActionCode,
+    string? ActionOutcome,
+    int UserId);
+
 /// <summary>Pauses an active workflow instance (admin lifecycle).</summary>
 public sealed record PauseWorkflowCommand(int InstanceId, int UserId, string? Notes);
 
