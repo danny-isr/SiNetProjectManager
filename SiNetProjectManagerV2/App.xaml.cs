@@ -318,6 +318,16 @@ namespace SiNetProjectManagerV2
 
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
+            // ── LEGACY WORKFLOW ENGINE (isolated — scheduled for Phase 6 retirement) ─────────────
+            // These SiNetSQL engine services are NO LONGER the New System workflow command path
+            // (that is now NativeWorkflowCommandService, registered by AddSiNetProcessBackbone above).
+            // They are retained ONLY because they are still live dependencies of:
+            //   (1) Legacy mode UI (legacy MainWindow), and
+            //   (2) the legacy heavy-action handlers below (MoveToProject / AddMaterialToProject /
+            //       StartWorkflow, lines ~493-496) that New System email filing still bridges to
+            //       until native handlers land (plan Phase 3).
+            // Do NOT wire these into any New System Work Surface. Remove this whole block in Phase 6
+            // once native heavy-action handlers replace the legacy filing/start handlers.
             // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTransitionEvaluator>();
@@ -332,13 +342,13 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowStageTaskProvisioningService>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
-            // Workflow write port (assessment phase P3b): registered via the modular
-            // AddSiNetWorkflowCommands() extension hosted in the SiNetSQL assembly (where the
-            // adapter + orchestrator live). The adapter delegates to the WorkflowTaskOrchestrator
-            // registered above; the engine/provisioning chain is unchanged.
-            SiNetSQL.Services.Workflow.WorkflowCommandsServiceCollectionExtensions.AddSiNetWorkflowCommands(services);
+            // Workflow write port: the SINGLE IWorkflowCommandService for the New System is the
+            // native NativeWorkflowCommandService registered by AddSiNetProcessBackbone() above
+            // (line ~288). The legacy AddSiNetWorkflowCommands() (WorkflowCommandServiceAdapter)
+            // is intentionally NOT registered here: registration-order "last wins" would otherwise
+            // shadow the native service and disable the atomic task-close + auto-advance path in
+            // SqlTaskCompletionService. One engine — native only.
             services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowSeedService>();
             // Composition adoption (Phase 1): the Workflow READ slice is delegated to the modular
             // SiNet.Infrastructure.Sql module. This registers WorkflowQueryService / IWorkflowQueryService
             // and ProjectWorkflowPolicyService / IProjectWorkflowPolicyService with identical Transient
@@ -1620,12 +1630,16 @@ namespace SiNetProjectManagerV2
                     }
                 }
 
-                // Seed Workflow definitions in background (idempotent — skips existing definitions)
+                // Seed Workflow definitions in background (idempotent — skips existing definitions).
+                // Native seed (SqlWorkflowSeedService) is now the single source of workflow-definition
+                // truth, matching the native engine that runs them. The legacy WorkflowSeedService is
+                // no longer registered. Task-lifecycle behaviors still seed via the legacy behavior
+                // seeder until a native behavior seeder is introduced.
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        var workflowSeedService = ServiceProvider.GetRequiredService<SiNetSQL.Services.Workflow.WorkflowSeedService>();
+                        var workflowSeedService = ServiceProvider.GetRequiredService<SiNet.Infrastructure.Sql.Services.DevTools.SqlWorkflowSeedService>();
                         await workflowSeedService.SeedAllAsync(_appShutdownCts.Token);
 
                         var behaviorSeedService = ServiceProvider.GetRequiredService<SiNetSQL.Services.TaskLifecycle.TaskBehaviorSeedService>();
@@ -1639,6 +1653,53 @@ namespace SiNetProjectManagerV2
                     {
                         // Non-fatal: workflow definitions can be created later via admin UI
                         Log.Error(wfSeedEx, "Workflow seed data initialization failed.");
+                    }
+                }, _appShutdownCts.Token);
+
+                // ═══════════════════════════════════════════════════════════════════
+                // STALLED WORKFLOW WATCHDOG (native): periodic background safety net.
+                // Runs every 5 minutes after a 2-minute initial delay. Detects active
+                // workflows with all tasks closed but no stage advance, then re-invokes
+                // the native IWorkflowCommandService to unstick them. Uses the native
+                // StalledWorkflowWatchdog registered by AddSiNetProcessBackbone().
+                // ═══════════════════════════════════════════════════════════════════
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromMinutes(2), _appShutdownCts.Token);
+
+                        while (!_appShutdownCts.Token.IsCancellationRequested)
+                        {
+                            try
+                            {
+                                var watchdog = ServiceProvider.GetRequiredService<SiNet.Infrastructure.Sql.Services.Workflow.StalledWorkflowWatchdog>();
+                                var stalled = await watchdog.DetectStalledAsync(_appShutdownCts.Token);
+
+                                if (stalled.Count > 0)
+                                {
+                                    Log.Information("[Watchdog] Detected {Count} stalled workflow(s). Attempting recovery...", stalled.Count);
+                                    var systemUserId = SiNetSQL.Services.CurrentUserContext.Instance.CurrentUserId ?? 0;
+                                    var recovered = await watchdog.AttemptRecoveryAsync(stalled, systemUserId, _appShutdownCts.Token);
+                                    Log.Information("[Watchdog] Recovery complete: {Recovered}/{Total} workflows unstuck.", recovered, stalled.Count);
+                                }
+                            }
+                            catch (OperationCanceledException) { throw; }
+                            catch (Exception sweepEx)
+                            {
+                                Log.Error(sweepEx, "[Watchdog] Sweep iteration failed (non-fatal).");
+                            }
+
+                            await Task.Delay(TimeSpan.FromMinutes(5), _appShutdownCts.Token);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected on shutdown
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "[Watchdog] Background watchdog loop terminated unexpectedly.");
                     }
                 }, _appShutdownCts.Token);
 

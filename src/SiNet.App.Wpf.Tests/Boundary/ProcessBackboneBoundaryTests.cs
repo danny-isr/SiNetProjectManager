@@ -183,6 +183,33 @@ public sealed class ProcessBackboneBoundaryTests
     }
 
     [Fact]
+    public async Task Every_seedable_transition_action_type_has_a_native_handler()
+    {
+        // Parity guard (Phase 1c): the native engine is now the single IWorkflowCommandService.
+        // Any seeded transition fires a WorkflowTransitionActionType; the native IProcessActionService
+        // MUST have a handler for each. If a new transition-action type is added without a matching
+        // native handler, a live transition would fail with NotSupported — this test fails first.
+        var dbName = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>().UseInMemoryDatabase(dbName).Options;
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(new StubDbContextFactory(options));
+        services.AddSiNetProcessBackbone();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        var actions = provider.GetRequiredService<IProcessActionService>();
+
+        foreach (var type in Enum.GetValues<WorkflowTransitionActionType>())
+        {
+            // Seed + mapper emit the enum member name as the action code (matches ProcessActionCodes).
+            var actionCode = type.ToString();
+            Assert.True(
+                actions.HasHandler(actionCode),
+                $"No native IProcessActionHandler registered for transition action '{actionCode}'.");
+        }
+    }
+
+    [Fact]
     public void ProcessBackbone_readiness_matrix_is_documented()
     {
         var doc = File.ReadAllText(Path.Combine(RepoRoot, "docs", "PROCESS_BACKBONE_FOUNDATION.md"));

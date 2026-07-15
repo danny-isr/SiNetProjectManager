@@ -29,6 +29,10 @@ public static class ProcessBackboneServiceCollectionExtensions
         services.AddTransient<NativeWorkflowCommandService>();
         services.AddTransient<IWorkflowCommandService>(
             sp => sp.GetRequiredService<NativeWorkflowCommandService>());
+
+        // Stalled-workflow safety net. Depends only on the DbContext factory and the native command
+        // port above; the host schedules the periodic sweep (see V2 startup background loop).
+        services.AddTransient<StalledWorkflowWatchdog>();
         return services;
     }
 }
