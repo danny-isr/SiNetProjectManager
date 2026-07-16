@@ -33,6 +33,7 @@
             <Setter Property="HeadersVisibility" Value="Column" />
             <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
             <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+            <EventSetter Event="MouseDoubleClick" Handler="TaskGrid_OnMouseDoubleClick" />
         </Style>
 
         <Style x:Key="TaskWorkbenchDataGridCellStyle" TargetType="DataGridCell">

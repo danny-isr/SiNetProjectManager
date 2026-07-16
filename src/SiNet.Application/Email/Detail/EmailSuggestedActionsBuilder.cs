@@ -29,32 +29,39 @@ public static class EmailSuggestedActionsBuilder
                 "שיוך לפרויקט קיים",
                 "קישור המייל לפרויקט שכבר קיים במערכת",
                 SortOrder: 10),
-            new(
+        };
+
+        // Once Proposal is running for this email, hide start/reject — duplicate start is blocked
+        // server-side; UI should make that obvious instead of offering the same action again.
+        if (!context.HasActiveProposalForEmail)
+        {
+            actions.Add(new(
                 EmailSuggestedActionCodes.CreatePriceQuote,
                 "פתיחת הצעת מחיר",
                 "מאשר שזה בקשת הצעת מחיר ומתחיל את התהליך (מתקדם לשלב הבא)",
-                SortOrder: 20),
-            new(
+                SortOrder: 20));
+            actions.Add(new(
                 EmailSuggestedActionCodes.RejectPriceQuote,
                 "לא בקשת הצעת מחיר",
                 "סוגר את הפנייה כלא רלוונטית להצעת מחיר — בלי דיאלוג נוסף",
-                SortOrder: 25),
-            new(
-                EmailSuggestedActionCodes.CreateNewReview,
-                "פתיחת עבודה (מהרשות)",
-                "יצירת משימה לפתיחת פרויקט בדיקה על בסיס מייל רשמי מהרשות",
-                SortOrder: 30),
-            new(
-                EmailSuggestedActionCodes.RequestAuthorityInvitation,
-                "בקשת הזמנה מהרשות (ממתכנן)",
-                "מייל ממתכנן — פתיחת משימת מעקב עד לקבלת הזמנה רשמית מהרשות",
-                SortOrder: 40),
-            new(
-                EmailSuggestedActionCodes.CreateOpinionProject,
-                "פתיחת חוות דעת",
-                null,
-                SortOrder: 50),
-        };
+                SortOrder: 25));
+        }
+
+        actions.Add(new(
+            EmailSuggestedActionCodes.CreateNewReview,
+            "פתיחת עבודה (מהרשות)",
+            "יצירת משימה לפתיחת פרויקט בדיקה על בסיס מייל רשמי מהרשות",
+            SortOrder: 30));
+        actions.Add(new(
+            EmailSuggestedActionCodes.RequestAuthorityInvitation,
+            "בקשת הזמנה מהרשות (ממתכנן)",
+            "מייל ממתכנן — פתיחת משימת מעקב עד לקבלת הזמנה רשמית מהרשות",
+            SortOrder: 40));
+        actions.Add(new(
+            EmailSuggestedActionCodes.CreateOpinionProject,
+            "פתיחת חוות דעת",
+            null,
+            SortOrder: 50));
 
         if (context.AttachmentCount > 0)
         {

@@ -11,6 +11,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Loading -->
@@ -78,8 +79,24 @@
                 </Border>
             </WrapPanel>
 
+            <!-- Active Proposal banner -->
+            <Border Grid.Row="1"
+                    Background="#E8F5E9"
+                    BorderBrush="#66BB6A"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="8,4"
+                    Margin="0,4,0,2"
+                    Visibility="{Binding ShowProposalBanner, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding ActiveProposalSummary}"
+                           Foreground="#1B5E20"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
+            </Border>
+
             <!-- Actions row -->
-            <Grid Grid.Row="1" Margin="0,2,0,0">
+            <Grid Grid.Row="2" Margin="0,2,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" MaxWidth="280" />
@@ -118,7 +135,7 @@
                            Foreground="#1565C0"
                            VerticalAlignment="Center"
                            Margin="6,0,0,0"
-                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="Wrap"
                            FontSize="{DynamicResource SiTextSmallFontSize}" />
             </Grid>
         </Grid>

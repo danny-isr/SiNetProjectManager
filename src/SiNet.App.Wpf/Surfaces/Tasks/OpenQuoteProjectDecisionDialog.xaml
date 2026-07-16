@@ -3,79 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         Title="פתיחת פרויקט הצעת מחיר"
-        Width="920" Height="820"
+        Width="1100" Height="780"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
-        MinWidth="720" MinHeight="640"
+        MinWidth="860" MinHeight="600"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="1.1*" MinHeight="180"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="1.4*" MinHeight="280"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <!-- Email + attachments -->
-        <Border Grid.Row="0" Padding="12" CornerRadius="6"
-                Background="#FFF8E1" BorderBrush="#FFD54F" BorderThickness="1">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Text="{Binding Subject}" FontSize="16" FontWeight="SemiBold"
-                           TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <StackPanel Grid.Row="1" Margin="0,0,0,8">
-                    <TextBlock Text="{Binding FromDisplay}" Foreground="#555"/>
-                    <TextBlock Text="{Binding DateDisplay}" Foreground="#555" Margin="0,2,0,0"/>
-                    <TextBlock Text="{Binding PromptHint}" Foreground="#666" TextWrapping="Wrap"
-                               FontSize="12" Margin="0,6,0,0"/>
-                </StackPanel>
-
-                <DockPanel Grid.Row="2">
-                    <TextBlock DockPanel.Dock="Top" Text="קבצים מקושרים"
-                               FontWeight="SemiBold" Margin="0,0,0,6"/>
-                    <TextBlock DockPanel.Dock="Bottom"
-                               Text="{Binding AttachmentsHint}"
-                               Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
-                    <ListBox ItemsSource="{Binding Attachments}"
-                             BorderBrush="#E0E0E0" BorderThickness="1"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="4,2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding FileName}"
-                                               TextWrapping="Wrap" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="פתח ב-ACC"
-                                            Margin="8,0,0,0" Padding="10,4"
-                                            IsEnabled="{Binding CanOpenInAcc}"
-                                            Click="OpenAttachment_Click"
-                                            Tag="{Binding}"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
-            </Grid>
-        </Border>
-
-        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
-                      Background="#FFD54F" ResizeBehavior="PreviousAndNext"/>
-
-        <!-- Embedded project create form -->
-        <Border Grid.Row="2" BorderBrush="#B0BEC5" BorderThickness="1" Padding="4">
-            <projects:ProjectCreateDialogView x:Name="ProjectFormHost"/>
-        </Border>
-
-        <Border Grid.Row="3" Margin="0,10,0,0">
+    <DockPanel Margin="10">
+        <Border DockPanel.Dock="Bottom" Margin="0,10,0,0">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top"
                            Text="{Binding StatusMessage}"
@@ -92,5 +27,74 @@
                 </StackPanel>
             </DockPanel>
         </Border>
-    </Grid>
+
+        <!-- Physical LTR split: email LEFT, project form RIGHT -->
+        <Grid FlowDirection="LeftToRight">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.05*" MinWidth="320"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="1.15*" MinWidth="360"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: email + attachments -->
+            <Border Grid.Column="0" Padding="12" CornerRadius="6"
+                    Background="#FFF8E1" BorderBrush="#FFD54F" BorderThickness="1"
+                    FlowDirection="RightToLeft">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{Binding Subject}" FontSize="15" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                        <TextBlock Text="{Binding FromDisplay}" Foreground="#555"/>
+                        <TextBlock Text="{Binding DateDisplay}" Foreground="#555" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding PromptHint}" Foreground="#666" TextWrapping="Wrap"
+                                   FontSize="12" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <DockPanel Grid.Row="2">
+                        <TextBlock DockPanel.Dock="Top" Text="קבצים מקושרים"
+                                   FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <TextBlock DockPanel.Dock="Bottom"
+                                   Text="{Binding AttachmentsHint}"
+                                   Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <ListBox ItemsSource="{Binding Attachments}"
+                                 BorderBrush="#E0E0E0" BorderThickness="1"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="4,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding FileName}"
+                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="פתח ב-ACC"
+                                                Margin="8,0,0,0" Padding="10,4"
+                                                IsEnabled="{Binding CanOpenInAcc}"
+                                                Click="OpenAttachment_Click"
+                                                Tag="{Binding}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                          Background="#FFD54F" ResizeBehavior="PreviousAndNext"/>
+
+            <!-- Right: project create form (approval lives here) -->
+            <Border Grid.Column="2" BorderBrush="#B0BEC5" BorderThickness="1" Padding="4"
+                    FlowDirection="RightToLeft">
+                <projects:ProjectCreateDialogView x:Name="ProjectFormHost"/>
+            </Border>
+        </Grid>
+    </DockPanel>
 </Window>

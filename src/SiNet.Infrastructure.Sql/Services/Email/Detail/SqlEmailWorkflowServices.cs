@@ -24,26 +24,35 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        if (query.InboxMessageId is not int inboxMessageId || inboxMessageId <= 0)
-        {
-            return null;
-        }
-
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var message = await db.EmailInboxMessages
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id == inboxMessageId, cancellationToken)
-            .ConfigureAwait(false);
-
+        var message = await ResolveInboxMessageAsync(db, query, cancellationToken).ConfigureAwait(false);
         if (message is null)
         {
+            // Gmail-only row (not materialized yet) — still offer unassigned actions.
+            if (!string.IsNullOrWhiteSpace(query.GmailMessageId))
+            {
+                return new EmailWorkflowContextDto(
+                    HasContext: true,
+                    ProjectDisplay: "לא משויך לפרויקט",
+                    WorkflowFamilyDisplay: null,
+                    ConfidenceDisplay: null,
+                    ActiveWorkflowCount: 0,
+                    AttachmentCount: 0,
+                    IsAssociatedToProject: false);
+            }
+
             return null;
         }
 
+        var inboxMessageId = message.Id;
         var attachmentCount = await db.EmailInboxAttachments
             .AsNoTracking()
             .CountAsync(a => a.MessageId == inboxMessageId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var (hasProposal, proposalSummary) = await TryGetActiveProposalForEmailAsync(
+                db, inboxMessageId, cancellationToken)
             .ConfigureAwait(false);
 
         // Inbox rows always have a ProjectId (defaults to office "ניהול משרד").
@@ -59,11 +68,13 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             return new EmailWorkflowContextDto(
                 HasContext: true,
                 ProjectDisplay: "לא משויך לפרויקט",
-                WorkflowFamilyDisplay: null,
-                ConfidenceDisplay: null,
-                ActiveWorkflowCount: 0,
+                WorkflowFamilyDisplay: hasProposal ? "הצעת מחיר" : null,
+                ConfidenceDisplay: hasProposal ? "פעיל" : null,
+                ActiveWorkflowCount: hasProposal ? 1 : 0,
                 AttachmentCount: attachmentCount,
-                IsAssociatedToProject: false);
+                IsAssociatedToProject: false,
+                HasActiveProposalForEmail: hasProposal,
+                ActiveProposalSummary: proposalSummary);
         }
 
         var project = await db.Projects
@@ -76,11 +87,13 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             return new EmailWorkflowContextDto(
                 HasContext: true,
                 ProjectDisplay: "לא משויך לפרויקט",
-                WorkflowFamilyDisplay: null,
-                ConfidenceDisplay: null,
-                ActiveWorkflowCount: 0,
+                WorkflowFamilyDisplay: hasProposal ? "הצעת מחיר" : null,
+                ConfidenceDisplay: hasProposal ? "פעיל" : null,
+                ActiveWorkflowCount: hasProposal ? 1 : 0,
                 AttachmentCount: attachmentCount,
-                IsAssociatedToProject: false);
+                IsAssociatedToProject: false,
+                HasActiveProposalForEmail: hasProposal,
+                ActiveProposalSummary: proposalSummary);
         }
 
         var activeWorkflows = await db.WorkflowInstances
@@ -101,11 +114,95 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
         return new EmailWorkflowContextDto(
             HasContext: true,
             projectDisplay,
-            WorkflowFamilyDisplay: null,
-            activeWorkflows > 0 ? "גבוהה" : "בינונית",
-            activeWorkflows,
+            WorkflowFamilyDisplay: hasProposal ? "הצעת מחיר" : null,
+            activeWorkflows > 0 || hasProposal ? "גבוהה" : "בינונית",
+            Math.Max(activeWorkflows, hasProposal ? 1 : 0),
             attachmentCount,
-            IsAssociatedToProject: true);
+            IsAssociatedToProject: true,
+            HasActiveProposalForEmail: hasProposal,
+            ActiveProposalSummary: proposalSummary);
+    }
+
+    private static async Task<EmailInboxMessage?> ResolveInboxMessageAsync(
+        SiNetSQLDbContext db,
+        EmailWorkflowContextQuery query,
+        CancellationToken cancellationToken)
+    {
+        if (query.InboxMessageId is int inboxMessageId && inboxMessageId > 0)
+        {
+            return await db.EmailInboxMessages
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == inboxMessageId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.InternetMessageId))
+        {
+            var cleaned = query.InternetMessageId.Trim().Trim('<', '>').Trim();
+            if (!string.IsNullOrEmpty(cleaned))
+            {
+                var byRfc = await db.EmailInboxMessages
+                    .AsNoTracking()
+                    .Where(m => m.InternetMessageId == cleaned || m.MessageUniqueId == cleaned)
+                    .OrderByDescending(m => m.Id)
+                    .FirstOrDefaultAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                if (byRfc is not null)
+                    return byRfc;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(query.GmailMessageId))
+            return null;
+
+        var gmailKey = $"gmail:{query.GmailMessageId}";
+        return await db.EmailInboxMessages
+            .AsNoTracking()
+            .Where(m => m.MessageUniqueId == query.GmailMessageId || m.MessageUniqueId == gmailKey)
+            .OrderByDescending(m => m.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<(bool HasProposal, string? Summary)> TryGetActiveProposalForEmailAsync(
+        SiNetSQLDbContext db,
+        int inboxMessageId,
+        CancellationToken cancellationToken)
+    {
+        var proposalDefId = await db.WorkflowDefinitions
+            .AsNoTracking()
+            .Where(d => d.Code == WorkflowCodes.Proposal && d.IsActive)
+            .Select(d => (int?)d.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (proposalDefId is null)
+            return (false, null);
+
+        var row = await db.WorkflowInstances
+            .AsNoTracking()
+            .Where(w => w.WorkflowDefinitionId == proposalDefId.Value
+                        && w.TriggerType == WorkflowTriggerType.Email
+                        && w.TriggerEntityId == inboxMessageId
+                        && w.Status != WorkflowStatus.Completed
+                        && w.Status != WorkflowStatus.Cancelled)
+            .OrderByDescending(w => w.Id)
+            .Select(w => new
+            {
+                w.Id,
+                StageName = w.CurrentStage != null ? w.CurrentStage.Name : null,
+                StageCode = w.CurrentStage != null ? w.CurrentStage.Code : null,
+            })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (row is null)
+            return (false, null);
+
+        var stage = !string.IsNullOrWhiteSpace(row.StageName)
+            ? row.StageName
+            : row.StageCode ?? "פעיל";
+        return (true, $"נפתח תהליך הצעת מחיר #{row.Id} — {stage}");
     }
 
     private static async Task<int> ResolveDefaultOfficeProjectIdAsync(
@@ -373,7 +470,11 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             WorkflowDebugTrace.Step("Email.StartWorkflow",
                 $"inbox={inboxMessageId} workflow={workflowCode} DUPLICATE-GUARD hit (existing instance #{existing}) — not started");
             return new EmailSuggestedActionExecutionResult(
-                false, false, $"כבר קיים תהליך '{definition.Name}' עבור מייל זה (#{existing}).");
+                false,
+                false,
+                $"כבר קיים תהליך '{definition.Name}' עבור מייל זה (#{existing}).",
+                InboxMessageId: inboxMessageId,
+                WorkflowInstanceId: existing);
         }
 
         // TEMP WF-DEBUG
@@ -406,17 +507,23 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
                         intakeResultCode,
                         command.ActingUserId,
                         definition.Name,
+                        inboxMessageId,
                         cancellationToken)
                     .ConfigureAwait(false);
             }
 
             var message2 = result.CreatedTasks.Count > 0
                 ? initialStageCode == ProposalStageCodes.ProjectSetup
-                    ? $"פתיחת הצעת מחיר אושרה. תהליך #{result.Instance.Id} בשלב בחירת סוג פרויקט — בדוק בלוח המשימות את 'פתיחת פרויקט הצעת מחיר'."
+                    ? $"נפתח תהליך הצעת מחיר #{result.Instance.Id} — בדוק בלוח המשימות את 'פתיחת פרויקט הצעת מחיר'."
                     : $"תהליך '{definition.Name}' הופעל בהצלחה ונוצרה משימה."
                 : $"תהליך '{definition.Name}' הופעל (מופע #{result.Instance.Id}), אך לא נוצרו משימות לשלב הראשון.";
 
-            return new EmailSuggestedActionExecutionResult(true, false, message2);
+            return new EmailSuggestedActionExecutionResult(
+                true,
+                false,
+                message2,
+                InboxMessageId: inboxMessageId,
+                WorkflowInstanceId: result.Instance.Id);
         }
         catch (Exception ex)
         {
@@ -435,6 +542,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         string intakeResultCode,
         int actingUserId,
         string definitionName,
+        int inboxMessageId,
         CancellationToken cancellationToken)
     {
         var intakeTask = start.CreatedTasks[0];
@@ -464,7 +572,9 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             return new EmailSuggestedActionExecutionResult(
                 false,
                 true,
-                $"תהליך '{definitionName}' הופעל (#{start.Instance.Id}) אך סיווג הקליטה לא הושלם: {detail}. נסה שוב או פתח את משימת הזיהוי ידנית.");
+                $"תהליך '{definitionName}' הופעל (#{start.Instance.Id}) אך סיווג הקליטה לא הושלם: {detail}. נסה שוב או פתח את משימת הזיהוי ידנית.",
+                InboxMessageId: inboxMessageId,
+                WorkflowInstanceId: start.Instance.Id);
         }
 
         if (string.Equals(intakeResultCode, NotQuoteRequest, StringComparison.Ordinal))
@@ -472,7 +582,9 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             return new EmailSuggestedActionExecutionResult(
                 true,
                 false,
-                $"סומן כלא בקשת הצעת מחיר — תהליך #{start.Instance.Id} נסגר.");
+                $"סומן כלא בקשת הצעת מחיר — תהליך #{start.Instance.Id} נסגר.",
+                InboxMessageId: inboxMessageId,
+                WorkflowInstanceId: start.Instance.Id);
         }
 
         var nextStage = completion.StageAdvanceResult?.AdvancedInstance?.CurrentStage?.Code
@@ -490,7 +602,9 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             false,
             advanced
                 ? $"פתיחת הצעת מחיר אושרה. התהליך #{start.Instance.Id} התקדם ל־{nextStage}. בדוק בלוח המשימות את המשימה הבאה (פתיחת פרויקט הצעה)."
-                : $"פתיחת הצעת מחיר אושרה (תהליך #{start.Instance.Id}). המשימה הבאה אמורה להופיע בלוח המשימות.");
+                : $"פתיחת הצעת מחיר אושרה (תהליך #{start.Instance.Id}). המשימה הבאה אמורה להופיע בלוח המשימות.",
+            InboxMessageId: inboxMessageId,
+            WorkflowInstanceId: start.Instance.Id);
     }
 
     /// <summary>

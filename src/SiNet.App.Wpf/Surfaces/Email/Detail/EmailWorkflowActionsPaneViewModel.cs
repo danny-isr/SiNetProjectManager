@@ -12,6 +12,8 @@ public sealed class EmailWorkflowActionsPaneViewModel : ObservableObject
     private string? _workflowFamilyDisplay;
     private string? _confidenceDisplay;
     private int _activeWorkflowCount;
+    private bool _hasActiveProposalForEmail;
+    private string? _activeProposalSummary;
     private EmailSuggestedActionDto? _selectedAction;
     private bool _isLoading;
     private string _statusMessage = string.Empty;
@@ -58,6 +60,29 @@ public sealed class EmailWorkflowActionsPaneViewModel : ObservableObject
         set => SetField(ref _activeWorkflowCount, value);
     }
 
+    public bool HasActiveProposalForEmail
+    {
+        get => _hasActiveProposalForEmail;
+        set
+        {
+            if (SetField(ref _hasActiveProposalForEmail, value))
+                OnPropertyChanged(nameof(ShowProposalBanner));
+        }
+    }
+
+    public string? ActiveProposalSummary
+    {
+        get => _activeProposalSummary;
+        set
+        {
+            if (SetField(ref _activeProposalSummary, value))
+                OnPropertyChanged(nameof(ShowProposalBanner));
+        }
+    }
+
+    public bool ShowProposalBanner =>
+        HasActiveProposalForEmail && !string.IsNullOrWhiteSpace(ActiveProposalSummary);
+
     public EmailSuggestedActionDto? SelectedAction
     {
         get => _selectedAction;
@@ -98,6 +123,8 @@ public sealed class EmailWorkflowActionsPaneViewModel : ObservableObject
             WorkflowFamilyDisplay = null;
             ConfidenceDisplay = null;
             ActiveWorkflowCount = 0;
+            HasActiveProposalForEmail = false;
+            ActiveProposalSummary = null;
             SuggestedActions.Clear();
             SelectedAction = null;
             return;
@@ -107,6 +134,8 @@ public sealed class EmailWorkflowActionsPaneViewModel : ObservableObject
         WorkflowFamilyDisplay = context.WorkflowFamilyDisplay;
         ConfidenceDisplay = context.ConfidenceDisplay;
         ActiveWorkflowCount = context.ActiveWorkflowCount;
+        HasActiveProposalForEmail = context.HasActiveProposalForEmail;
+        ActiveProposalSummary = context.ActiveProposalSummary;
         SuggestedActions.Clear();
         foreach (var action in actions.OrderBy(a => a.SortOrder))
         {

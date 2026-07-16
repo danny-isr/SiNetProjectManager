@@ -68,7 +68,12 @@ public static class TaskQueuePriorityEngine
             return task;
         }
 
-        if (!SupportsSerializableTransactions(context))
+        // Atomic task-close + auto-advance already owns a transaction on this context.
+        // Beginning a nested Serializable transaction fails SQL Server with:
+        // "The connection is already in a transaction and cannot participate in another transaction."
+        // (seen when provisioning FileQuoteMaterial after OpenQuoteProject completion).
+        if (!SupportsSerializableTransactions(context)
+            || context.Database.CurrentTransaction is not null)
             return await InsertWithAutoPrioritySimpleAsync(context, task, cancellationToken).ConfigureAwait(false);
 
         var attempt = 0;

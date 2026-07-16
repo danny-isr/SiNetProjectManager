@@ -487,10 +487,18 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         Workflow.StatusMessage = "מנתח הקשר...";
         try
         {
-            EmailWorkflowContextDto? context;
-            if (_selectedEmail.InboxMessageId is not int inboxId || inboxId <= 0)
+            // Resolve by inbox id and/or Gmail id — after CreatePriceQuote the inbox row may
+            // have been materialized even when the list row still has InboxMessageId=null.
+            var context = await _workflowContextService.AnalyzeAsync(
+                    new EmailWorkflowContextQuery(
+                        _selectedEmail.InboxMessageId,
+                        _selectedEmail.Id,
+                        OverrideProjectId: null,
+                        InternetMessageId: _selectedEmail.InternetMessageId))
+                .ConfigureAwait(true);
+
+            if (context is null)
             {
-                // Gmail row not yet in inbox DB — still offer unassigned actions.
                 context = new EmailWorkflowContextDto(
                     HasContext: true,
                     ProjectDisplay: "לא משויך לפרויקט",
@@ -500,23 +508,16 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                     AttachmentCount: _selectedEmail.AttachmentCount,
                     IsAssociatedToProject: false);
             }
-            else
-            {
-                // Do not pass global/current project — association is email ProjectId only.
-                context = await _workflowContextService.AnalyzeAsync(
-                    new EmailWorkflowContextQuery(
-                        inboxId,
-                        _selectedEmail.Id,
-                        OverrideProjectId: null))
-                    .ConfigureAwait(true);
-            }
 
-            var actions = context is null
-                ? Array.Empty<EmailSuggestedActionDto>()
-                : _suggestedActionService.BuildActions(context);
+            var actions = _suggestedActionService.BuildActions(context);
 
             Workflow.ApplyContext(context, actions);
-            if (string.Equals(Workflow.StatusMessage, "מנתח הקשר...", StringComparison.Ordinal))
+            if (context.HasActiveProposalForEmail
+                && !string.IsNullOrWhiteSpace(context.ActiveProposalSummary))
+            {
+                Workflow.StatusMessage = context.ActiveProposalSummary!;
+            }
+            else if (string.Equals(Workflow.StatusMessage, "מנתח הקשר...", StringComparison.Ordinal))
             {
                 Workflow.StatusMessage = string.Empty;
             }
@@ -544,8 +545,33 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                     _currentUser?.UserId ?? 0,
                     BuildGmailSource(_selectedEmail))).ConfigureAwait(true);
 
-            Workflow.StatusMessage = result.Message ?? (result.Succeeded ? "הפעולה הושלמה." : "הפעולה נכשלה.");
+            var feedback = result.Message ?? (result.Succeeded ? "הפעולה הושלמה." : "הפעולה נכשלה.");
+            Workflow.StatusMessage = feedback;
+            SetStatus(feedback);
+
+            if (result.InboxMessageId is int materializedInboxId
+                && materializedInboxId > 0
+                && _selectedEmail is { } selected)
+            {
+                var patched = _emailList.PatchRowInboxMessageId(selected.Id, materializedInboxId);
+                if (patched is not null)
+                {
+                    _selectedEmail = patched;
+                    OnPropertyChanged(nameof(HasSelectedEmail));
+                }
+            }
+
             await RefreshWorkflowContextAsync().ConfigureAwait(true);
+
+            // Keep a clear top-of-pane message after refresh (banner + status line).
+            if (result.Succeeded
+                && (string.Equals(action.ActionCode, EmailSuggestedActionCodes.CreatePriceQuote, StringComparison.Ordinal)
+                    || string.Equals(action.ActionCode, EmailSuggestedActionCodes.RejectPriceQuote, StringComparison.Ordinal)))
+            {
+                if (!Workflow.ShowProposalBanner)
+                    Workflow.StatusMessage = feedback;
+                SetStatus(Workflow.ActiveProposalSummary ?? feedback);
+            }
         }
         finally
         {

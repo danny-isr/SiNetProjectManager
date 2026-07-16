@@ -358,6 +358,11 @@ internal sealed class WorkflowStageTaskProvisioningService
                 // TEMP WF-DEBUG
                 WorkflowDebugTrace.Step("Provisioning.TaskCreated",
                     $"instance={instanceId} stage={stageId} template={template.Id} taskType={template.TaskTypeId} FAILED: {ex.Message}");
+
+                // Inside the atomic close+advance transaction, swallowing would leave the
+                // instance advanced with zero stage tasks (seen after OpenQuoteProject).
+                if (db.Database.CurrentTransaction is not null)
+                    throw;
             }
         }
 

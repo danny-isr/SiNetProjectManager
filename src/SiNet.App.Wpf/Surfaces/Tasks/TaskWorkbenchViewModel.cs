@@ -902,16 +902,22 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         if (SelectedTask is null || _workSurfaceLauncher is null)
             return;
 
+        // Capture before LoadAsync — reload clears SelectedTask.
+        var taskId = SelectedTask.TaskId;
+
         IsBusy = true;
         try
         {
             var opened = await _workSurfaceLauncher
-                .TryOpenFromTaskAsync(SelectedTask.TaskId, ct)
+                .TryOpenFromTaskAsync(taskId, ct)
                 .ConfigureAwait(true);
 
+            // Surfaces (e.g. OpenQuoteProject) may close/advance the workflow — reload the board.
+            await LoadAsync(ct).ConfigureAwait(true);
+
             StatusMessage = opened
-                ? $"נפתחה משימה #{SelectedTask.TaskId}."
-                : $"לא ניתן לפתוח את משימה #{SelectedTask.TaskId}. אין fallback.";
+                ? $"נפתחה משימה #{taskId}."
+                : $"לא ניתן לפתוח את משימה #{taskId}. אין fallback.";
         }
         catch (Exception ex)
         {

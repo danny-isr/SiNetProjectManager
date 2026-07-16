@@ -31,6 +31,27 @@ public sealed class EmailSuggestedActionsBuilderTests
     }
 
     [Fact]
+    public void Unassigned_with_active_proposal_hides_quote_start_actions()
+    {
+        var context = new EmailWorkflowContextDto(
+            HasContext: true,
+            ProjectDisplay: "לא משויך לפרויקט",
+            WorkflowFamilyDisplay: "הצעת מחיר",
+            ConfidenceDisplay: "פעיל",
+            ActiveWorkflowCount: 1,
+            AttachmentCount: 0,
+            IsAssociatedToProject: false,
+            HasActiveProposalForEmail: true,
+            ActiveProposalSummary: "נפתח תהליך הצעת מחיר #1 — בחירת סוג פרויקט עתידי");
+
+        var actions = EmailSuggestedActionsBuilder.Build(context);
+
+        Assert.DoesNotContain(actions, a => a.ActionCode == EmailSuggestedActionCodes.CreatePriceQuote);
+        Assert.DoesNotContain(actions, a => a.ActionCode == EmailSuggestedActionCodes.RejectPriceQuote);
+        Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.AssociateToExistingProject);
+    }
+
+    [Fact]
     public void Associated_context_returns_foundation_process_actions()
     {
         var context = new EmailWorkflowContextDto(

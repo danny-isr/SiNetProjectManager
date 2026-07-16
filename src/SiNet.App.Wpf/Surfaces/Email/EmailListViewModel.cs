@@ -737,6 +737,23 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         return updated;
     }
 
+    /// <summary>
+    /// After a workflow-starting action materializes an inbox row, bind it onto the visible Gmail row
+    /// so subsequent context analysis / duplicate guards see the same identity.
+    /// </summary>
+    public EmailListRow? PatchRowInboxMessageId(string messageId, int inboxMessageId)
+    {
+        var row = _display.FindRowById(messageId);
+        if (row is null || inboxMessageId <= 0 || row.InboxMessageId == inboxMessageId)
+        {
+            return row;
+        }
+
+        var updated = row with { InboxMessageId = inboxMessageId };
+        PatchAccRow(updated);
+        return updated;
+    }
+
     private bool CanLoadEmails() => !IsBusy && IsConnected;
 
     private bool CanUploadToAccInbox(EmailListRow? row) =>

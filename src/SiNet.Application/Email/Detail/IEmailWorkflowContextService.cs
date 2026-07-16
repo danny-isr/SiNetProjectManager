@@ -10,7 +10,8 @@ public interface IEmailWorkflowContextService
 public sealed record EmailWorkflowContextQuery(
     int? InboxMessageId,
     string? GmailMessageId,
-    int? OverrideProjectId);
+    int? OverrideProjectId,
+    string? InternetMessageId = null);
 
 public sealed record EmailWorkflowContextDto(
     bool HasContext,
@@ -19,7 +20,11 @@ public sealed record EmailWorkflowContextDto(
     string? ConfidenceDisplay,
     int ActiveWorkflowCount,
     int AttachmentCount,
-    bool IsAssociatedToProject = false);
+    bool IsAssociatedToProject = false,
+    /// <summary>True when an active Proposal instance is already bound to this inbox email.</summary>
+    bool HasActiveProposalForEmail = false,
+    /// <summary>Short Hebrew banner, e.g. "נפתח תהליך הצעת מחיר #5 — בחירת סוג פרויקט".</summary>
+    string? ActiveProposalSummary = null);
 
 public interface IEmailSuggestedActionService
 {
@@ -72,7 +77,9 @@ public sealed record EmailGmailSourceIdentity(
 public sealed record EmailSuggestedActionExecutionResult(
     bool Succeeded,
     bool RequiresFollowUp,
-    string? Message);
+    string? Message,
+    int? InboxMessageId = null,
+    int? WorkflowInstanceId = null);
 
 /// <summary>
 /// Suggested-action codes for the email workflow pane (ported from legacy SuggestedActionType).
