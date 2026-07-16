@@ -81,6 +81,12 @@ public static class ProposalWorkflowSeedData
             taskResult: TaskResultCodes.ProjectOpened,
             actions: SetStatus(ProjectStatusCodes.QuotePreparation)),
 
+        // Operator can still decline at ProjectSetup (CreatePriceQuote skips Intake):
+        // "לא הצעת מחיר" on OpenQuoteProject terminates the proposal.
+        AutoOnTaskResult(ProposalStageCodes.ProjectSetup, ProposalStageCodes.Rejected,
+            taskResult: TaskResultCodes.NotQuoteRequest,
+            actions: SetStatus(ProjectStatusCodes.ClosedLost)),
+
         // Filing is closed by the existing MoveToProject pipeline emitting
         // ReviewMaterialFiled against FileQuoteMaterial (see
         // ReviewCompletionEventBehavior). No task result is recorded, so the

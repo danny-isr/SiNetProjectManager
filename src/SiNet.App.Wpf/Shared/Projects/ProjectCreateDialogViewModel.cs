@@ -162,6 +162,11 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// When set, <see cref="CreateProjectCommand.EmailMessageId"/> links the new project to that inbox row.
+    /// </summary>
+    public int? EmailMessageId { get; set; }
+
     public int? CreatedProjectId { get; private set; }
 
     public string? CreatedProjectTitle { get; private set; }
@@ -259,7 +264,8 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
                     SelectedCompany!.Id,
                     SelectedContact!.Id,
                     JobTypes.Where(j => j.IsSelected).Select(j => j.Id).ToList(),
-                    ParentProjectId: _parentProjectContext.CurrentProject?.ProjectId))
+                    ParentProjectId: _parentProjectContext.CurrentProject?.ProjectId,
+                    EmailMessageId: EmailMessageId))
                 .ConfigureAwait(true);
 
             if (!result.Succeeded)

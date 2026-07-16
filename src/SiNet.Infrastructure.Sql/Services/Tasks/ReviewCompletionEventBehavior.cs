@@ -173,8 +173,11 @@ public static class ReviewCompletionEventBehavior
             // (taskClosed=False / willAutoAdvance=False) — seen in manual tests
             // when the intake task was reused across Proposal instances on the
             // office project.
+            // Also applies to OpenQuoteProject when the operator declines at
+            // ProjectSetup (CreatePriceQuote skips Intake) — NotQuoteRequest only;
+            // QuoteRequestDetected is blocked by OpenQuoteProject's interaction allow-list.
             new(ReviewCompletionEvents.ReviewQuoteRequestClassified,
-                new[] { TaskTypeCodes.IdentifyQuoteRequest },
+                new[] { TaskTypeCodes.IdentifyQuoteRequest, TaskTypeCodes.OpenQuoteProject },
                 new[] { TaskResultCodes.QuoteRequestDetected, TaskResultCodes.NotQuoteRequest },
                 NewProjectStatusCode: null,
                 RequestWorkflowAdvance: true,

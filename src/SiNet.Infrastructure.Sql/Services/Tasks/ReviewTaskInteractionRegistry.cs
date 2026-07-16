@@ -361,13 +361,11 @@ public static class ReviewTaskInteractionRegistry
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: true),
 
-            // OpenQuoteProject — opens the project-creation dialog
-            // (WorkflowCreateProjectWindow) for the originating inbox email.
-            // The dialog is project-creation only; filing of the email's
-            // attachments runs later as the dedicated FileQuoteMaterial task.
-            // Uses TaskLinkRole.Source because the orchestrator's
-            // AddSourceLinkIfApplicableAsync propagates the workflow's
-            // originating email to every stage task as a Source link.
+            // OpenQuoteProject — native decision host (email + open project OR
+            // not-a-quote). Project creation closes via ProjectOpened; decline
+            // closes via NotQuoteRequest → PRP.Rejected. Filing of attachments
+            // runs later as FileQuoteMaterial. Uses TaskLinkRole.Source because
+            // the orchestrator propagates the originating email as a Source link.
             new(
                 TaskTypeCodes.OpenQuoteProject,
                 TaskOpenMode.ProjectCreationFromEmail,
@@ -375,9 +373,9 @@ public static class ReviewTaskInteractionRegistry
                 TaskWorkTargetEntityType.EmailInboxMessage,
                 TaskLinkRole.Source,
                 TaskCompletionPolicy.ProjectCreated,
-                new[] { TaskResultCodes.ProjectOpened },
+                new[] { TaskResultCodes.ProjectOpened, TaskResultCodes.NotQuoteRequest },
                 AutoCloseOnCompletion: true,
-                RequiresUserConfirmation: false),
+                RequiresUserConfirmation: true),
 
             // FileQuoteMaterial — dedicated PRP.FileMaterial task. Reuses the
             // existing email-filing host and the MoveToProject pipeline; the

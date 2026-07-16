@@ -68,6 +68,61 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         WorkflowDebugTrace.Step("Launcher.Open",
             $"task={context.TaskId} componentKey={context.ComponentKey} project={context.ProjectId} primaryTarget={context.PrimaryWorkTargetEntityId}");
 
+        // Proposal task-type hosts must run before generic ComponentKey routing
+        // (OpenQuoteProject shares ProjectCreationFromEmail with the email surface).
+        if (string.Equals(context.TaskTypeCode, "IdentifyQuoteRequest", StringComparison.OrdinalIgnoreCase))
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Launcher.Open",
+                $"task={context.TaskId} → routing to QuoteClassification dialog (email={context.PrimaryWorkTargetEntityId})");
+
+            if (_services.GetService<ITaskCompletionService>() is not { } completion)
+            {
+                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                return false;
+            }
+
+            var dialog = new QuoteClassificationDialog(
+                context,
+                completion,
+                _services.GetService<IEmailInboxQueryService>())
+            {
+                Owner = System.Windows.Application.Current?.MainWindow,
+            };
+            dialog.ShowDialog();
+            return true;
+        }
+
+        if (string.Equals(context.TaskTypeCode, "OpenQuoteProject", StringComparison.OrdinalIgnoreCase))
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Launcher.Open",
+                $"task={context.TaskId} → routing to OpenQuoteProject decision dialog (email={context.PrimaryWorkTargetEntityId})");
+
+            if (_services.GetService<ITaskCompletionService>() is not { } openQuoteCompletion)
+            {
+                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                return false;
+            }
+
+            if (_services.GetService<IProjectCreateDialogFactory>() is not { } projectCreate)
+            {
+                Trace.TraceWarning("[WorkSurfaceLauncher] IProjectCreateDialogFactory is not registered.");
+                return false;
+            }
+
+            var openQuoteDialog = new OpenQuoteProjectDecisionDialog(
+                context,
+                openQuoteCompletion,
+                projectCreate,
+                _services.GetService<IEmailInboxQueryService>())
+            {
+                Owner = System.Windows.Application.Current?.MainWindow,
+            };
+            openQuoteDialog.ShowDialog();
+            return true;
+        }
+
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
         {
             // TEMP WF-DEBUG
@@ -142,31 +197,6 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             }
 
             inspectionWindow.Show();
-            return true;
-        }
-
-        // Classification-only Proposal intake — native dialog (mirrors legacy QuoteClassificationDialog).
-        // Must run before ProjectWork routing so Task Workbench does not open an empty project shell.
-        if (string.Equals(context.TaskTypeCode, "IdentifyQuoteRequest", StringComparison.OrdinalIgnoreCase))
-        {
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step("Launcher.Open",
-                $"task={context.TaskId} → routing to QuoteClassification dialog (email={context.PrimaryWorkTargetEntityId})");
-
-            if (_services.GetService<ITaskCompletionService>() is not { } completion)
-            {
-                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
-                return false;
-            }
-
-            var dialog = new QuoteClassificationDialog(
-                context,
-                completion,
-                _services.GetService<IEmailInboxQueryService>())
-            {
-                Owner = System.Windows.Application.Current?.MainWindow,
-            };
-            dialog.ShowDialog();
             return true;
         }
 
