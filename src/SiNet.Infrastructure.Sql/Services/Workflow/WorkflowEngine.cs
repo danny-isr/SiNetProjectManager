@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNetSQL.Services.Workflow;
@@ -96,6 +97,10 @@ internal sealed class WorkflowEngine
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Start",
+            $"instance={instance.Id} def={definitionId} '{definition.Code}' → initialStage={initialStage.Code}(#{initialStage.Id}) status={instance.Status} bound={isProjectBound}");
+
         return instance;
     }
 
@@ -174,6 +179,9 @@ internal sealed class WorkflowEngine
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Advance",
+            $"instance={instanceId} stage {previousStageId} → {targetStageId} '{targetStage.Code}' isFinal={targetStage.IsFinal} status={instance.Status}");
         return instance;
     }
 
@@ -193,6 +201,8 @@ internal sealed class WorkflowEngine
         instance.Status = WorkflowStatus.Paused;
         instance.Notes = notes ?? instance.Notes;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Pause", $"instance={instanceId} → status=Paused (stage={instance.CurrentStageId})");
         return instance;
     }
 
@@ -212,6 +222,8 @@ internal sealed class WorkflowEngine
         instance.Status = WorkflowStatus.Active;
         instance.Notes = notes ?? instance.Notes;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Resume", $"instance={instanceId} → status=Active (stage={instance.CurrentStageId})");
         return instance;
     }
 

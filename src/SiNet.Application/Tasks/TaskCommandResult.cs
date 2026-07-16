@@ -3,4 +3,5 @@ namespace SiNet.Application.Tasks;
 public sealed record TaskCommandResult(
     bool Succeeded,
     string Message,
-    int? TaskId = null);
+    int? TaskId = null,
+    bool BlockedByWorkflow = false);

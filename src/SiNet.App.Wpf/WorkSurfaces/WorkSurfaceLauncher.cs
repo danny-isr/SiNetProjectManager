@@ -6,6 +6,7 @@ using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -52,8 +53,15 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Launcher.Open",
+            $"task={context.TaskId} componentKey={context.ComponentKey} project={context.ProjectId} primaryTarget={context.PrimaryWorkTargetEntityId}");
+
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to EMAIL surface");
+
             // Task-driven email opens require an exact primary work target — never browse fallback.
             if (context.TaskId is > 0)
             {
@@ -87,6 +95,9 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
         if (string.Equals(context.ComponentKey, WorkSurfaceComponentKeys.InspectionReport, StringComparison.OrdinalIgnoreCase))
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to INSPECTION surface");
+
             if (context.PrimaryWorkTargetEntityId is not > 0)
             {
                 Trace.TraceWarning(
@@ -118,6 +129,9 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
         if (WorkSurfaceComponentKeys.IsProjectWorkSurface(context.ComponentKey))
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to PROJECT-WORK surface");
+
             // Project-scoped task surface (native replacement for legacy ShowProjectWork). Requires a
             // project; the file workspace itself is a later gated phase (task shell + completion here).
             if (context.ProjectId <= 0)
@@ -149,6 +163,9 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             return true;
         }
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Launcher.Open",
+            $"task={context.TaskId} componentKey={context.ComponentKey} UNSUPPORTED — no surface registered");
         Trace.TraceWarning(
             "[WorkSurfaceLauncher] Unsupported component key '{0}' for task {1}. No surface registered.",
             context.ComponentKey,

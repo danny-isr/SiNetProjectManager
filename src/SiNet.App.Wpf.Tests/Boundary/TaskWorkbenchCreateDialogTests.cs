@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Tests.Support;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
@@ -114,7 +115,7 @@ public sealed class TaskWorkbenchCreateDialogTests
     {
         var (options, userId, statusId, taskTypeId1, _, projectId) = await SeedEmptyTaskDatabaseAsync(12);
         var factory = new StubDbContextFactory(options);
-        var workbench = new SqlTaskWorkbenchService(factory);
+        var workbench = new SqlTaskWorkbenchService(factory, new StubWorkflowCommandService());
 
         var result = await workbench.CreateTaskAsync(
             new CreateTaskRequest(projectId, userId, taskTypeId1, statusId, "Queued", WorkQueueBucketCodes.Quick),
@@ -326,6 +327,12 @@ public sealed class TaskWorkbenchCreateDialogTests
         }
 
         public ValueTask<TaskCommandResult> DeleteTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskCommandResult(true, "ok"));
+
+        public ValueTask<TaskCommandResult> DeactivateTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskCommandResult(true, "ok"));
+
+        public ValueTask<TaskCommandResult> ReactivateTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
             ValueTask.FromResult(new TaskCommandResult(true, "ok"));
 
         public ValueTask<IReadOnlyList<int>> GetDemoTaskAssigneeUserIdsAsync(CancellationToken ct = default) =>

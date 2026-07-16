@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Settings;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -298,13 +299,23 @@ internal sealed class WorkflowStageTaskProvisioningService
                 await AddSourceLinkIfApplicableAsync(db, task.Id, instance, userId, ct).ConfigureAwait(false);
 
                 createdTasks.Add(task);
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Provisioning.TaskCreated",
+                    $"instance={instanceId} stage={stageId} taskId={task.Id} taskTypeId={template.TaskTypeId} assignedTo={task.AssignedToId?.ToString() ?? "(none)"}");
             }
             catch (Exception ex)
             {
                 Trace.TraceError(
                     $"[Provisioning] failed to create task from template (Instance={instanceId}, Stage={stageId}, Template={template.Id}, TaskType={template.TaskTypeId}): {ex}");
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Provisioning.TaskCreated",
+                    $"instance={instanceId} stage={stageId} template={template.Id} taskType={template.TaskTypeId} FAILED: {ex.Message}");
             }
         }
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Provisioning.Stage",
+            $"instance={instanceId} stage={stageId} tasksCreated={createdTasks.Count}");
 
         return createdTasks;
     }
@@ -420,6 +431,9 @@ internal sealed class WorkflowStageTaskProvisioningService
         if (alreadyExists)
         {
             Trace.TraceInformation($"[Provisioning] Task for stage {stageId} already exists — skipping.");
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Provisioning.TaskCreated",
+                $"instance={instance.Id} stage={stageId} SKIPPED (task already exists for stageTag='{stageTag}')");
             return [];
         }
 

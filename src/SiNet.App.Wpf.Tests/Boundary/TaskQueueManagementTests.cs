@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Tests.Support;
 using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Constants;
@@ -20,7 +21,7 @@ public sealed class TaskQueueManagementTests
     {
         var (options, userId, statusId, taskTypeId1, taskTypeId2, projectId) = await SeedEmptyTaskDatabaseAsync(12);
         var factory = new StubDbContextFactory(options);
-        var workbench = new SqlTaskWorkbenchService(factory);
+        var workbench = new SqlTaskWorkbenchService(factory, new StubWorkflowCommandService());
 
         await workbench.CreateTaskAsync(
             new CreateTaskRequest(projectId, userId, taskTypeId1, statusId, "T1", WorkQueueBucketCodes.Quick),
@@ -46,7 +47,7 @@ public sealed class TaskQueueManagementTests
     {
         var (options, userId, statusId, taskTypeId1, taskTypeId2, projectId) = await SeedEmptyTaskDatabaseAsync(12);
         var factory = new StubDbContextFactory(options);
-        var workbench = new SqlTaskWorkbenchService(factory);
+        var workbench = new SqlTaskWorkbenchService(factory, new StubWorkflowCommandService());
 
         var first = await workbench.CreateTaskAsync(new CreateTaskRequest(projectId, userId, taskTypeId1, statusId, "T1", WorkQueueBucketCodes.Quick), userId);
         await workbench.CreateTaskAsync(new CreateTaskRequest(projectId, userId, taskTypeId2, statusId, "T2", WorkQueueBucketCodes.Quick), userId);

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -51,6 +52,9 @@ internal sealed class WorkflowTaskOrchestrator(
         instance = advancedInstance;
 
         Trace.TraceInformation($"[Orchestrator] Workflow {instance.Id} started → stage {instance.CurrentStageId}, {tasks.Count} tasks created.");
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.Start",
+            $"instance={instance.Id} def={definitionId} project={projectId} → stageId={instance.CurrentStageId} status={instance.Status} tasksCreated={tasks.Count}");
 
         return new WorkflowStartResultDto(instance.ToDto(), tasks.ToSummaryDtoList());
     }
@@ -175,6 +179,10 @@ internal sealed class WorkflowTaskOrchestrator(
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.AutoAdvance",
+            $"task={taskId} triggerLinks={workflowLinks.Count} user={userId}");
+
         if (workflowLinks.Count == 0) return null;
 
         var task = await db.ProjectAssignments
@@ -192,6 +200,10 @@ internal sealed class WorkflowTaskOrchestrator(
             }
             : null;
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.AutoAdvance",
+            $"task={taskId} taskTypeId={task?.TaskTypeId} statusId={task?.StatusId} resultCode={evalContext?.ChangedTaskResultCode ?? "(none)"}");
+
         foreach (var link in workflowLinks)
         {
             var instanceId = (int)link.LinkedEntityId;
@@ -203,6 +215,11 @@ internal sealed class WorkflowTaskOrchestrator(
                 instanceId, WorkflowTransitionTriggerType.TaskStatusChanged, evalContext, ct).ConfigureAwait(false);
 
             evaluated.AddRange(statusEvaluated);
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Orchestrator.AutoAdvance",
+                $"instance={instanceId} matchedTransitions={evaluated.Count}" +
+                (evaluated.Count > 0 ? $" best→stage={evaluated[0].Rule.ToStageId} mode={evaluated[0].EvaluationMode}" : " (none)"));
 
             if (evaluated.Count == 0)
             {
@@ -262,6 +279,11 @@ internal sealed class WorkflowTaskOrchestrator(
         // The evaluator already gates on instance Active + CurrentStageId (returns [] otherwise).
         var evaluated = await _evaluator.EvaluateAsync(
             instanceId, WorkflowTransitionTriggerType.ActionCompleted, evalContext, ct).ConfigureAwait(false);
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.ActionCompleted",
+            $"instance={instanceId} action={actionCode} outcome={actionOutcome ?? "(none)"} matchedTransitions={evaluated.Count}" +
+            (evaluated.Count > 0 ? $" best→stage={evaluated[0].Rule.ToStageId} mode={evaluated[0].EvaluationMode}" : " (none)"));
 
         if (evaluated.Count == 0) return null;
 
@@ -386,6 +408,10 @@ internal sealed class WorkflowTaskOrchestrator(
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.AutoAdvance.Shared",
+            $"task={taskId} triggerLinks={workflowLinks.Count} user={userId}");
+
         if (workflowLinks.Count == 0) return null;
 
         var task = await db.ProjectAssignments
@@ -403,6 +429,10 @@ internal sealed class WorkflowTaskOrchestrator(
             }
             : null;
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.AutoAdvance.Shared",
+            $"task={taskId} taskTypeId={task?.TaskTypeId} statusId={task?.StatusId} resultCode={evalContext?.ChangedTaskResultCode ?? "(none)"}");
+
         foreach (var link in workflowLinks)
         {
             var instanceId = (int)link.LinkedEntityId;
@@ -414,6 +444,11 @@ internal sealed class WorkflowTaskOrchestrator(
                 db, instanceId, WorkflowTransitionTriggerType.TaskStatusChanged, evalContext, ct).ConfigureAwait(false);
 
             evaluated.AddRange(statusEvaluated);
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Orchestrator.AutoAdvance.Shared",
+                $"instance={instanceId} matchedTransitions={evaluated.Count}" +
+                (evaluated.Count > 0 ? $" best→stage={evaluated[0].Rule.ToStageId} mode={evaluated[0].EvaluationMode}" : " (none)"));
 
             if (evaluated.Count == 0)
                 continue;
@@ -489,6 +524,9 @@ internal sealed class WorkflowTaskOrchestrator(
         }
 
         Trace.TraceInformation($"[Orchestrator] (atomic) Auto-advanced workflow {instanceId} to stage {rule.ToStageId}.");
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.Transition.Shared",
+            $"instance={instanceId} rule={rule.Id} fromStage={rule.FromStageId} → toStage={rule.ToStageId} newStatus={instance.Status} newStageId={instance.CurrentStageId}");
 
         return new StageCompletionResult(
             instanceId, rule.FromStageId, StageCompletionAction.AutoAdvanced, AdvancedInstance: instance.ToDto());
@@ -514,6 +552,9 @@ internal sealed class WorkflowTaskOrchestrator(
                 $"מעבר אוטומטי — {rule.Name ?? rule.Label ?? "ללא שם"}", ct).ConfigureAwait(false);
 
             Trace.TraceInformation($"[Orchestrator] Auto-advanced workflow {instanceId} to stage {rule.ToStageId}.");
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Orchestrator.Transition",
+                $"instance={instanceId} rule={rule.Id} fromStage={rule.FromStageId} → toStage={rule.ToStageId} newStatus={result.Instance.Status} newStageId={result.Instance.CurrentStageId}");
 
             return new StageCompletionResult(
                 instanceId, rule.FromStageId, StageCompletionAction.AutoAdvanced, AdvancedInstance: result.Instance);
@@ -521,6 +562,9 @@ internal sealed class WorkflowTaskOrchestrator(
         catch (Exception ex)
         {
             Trace.TraceError($"[Orchestrator] Transition execution failed (Instance={instanceId}, RuleId={rule.Id}, TargetStageId={rule.ToStageId}): {ex}");
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Orchestrator.Transition",
+                $"instance={instanceId} rule={rule.Id} → toStage={rule.ToStageId} FAILED: {ex.Message}");
             return new StageCompletionResult(instanceId, rule.FromStageId, StageCompletionAction.AutoAdvanceFailed);
         }
     }

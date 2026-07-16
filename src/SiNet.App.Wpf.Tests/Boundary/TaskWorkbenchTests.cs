@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Tests.Support;
 using SiNet.Application.DevTools;
 using SiNet.Application.Identity;
 using SiNet.Application.Tasks;
@@ -124,7 +125,7 @@ public sealed class TaskWorkbenchTests
     {
         var (options, userId, statusId, taskTypeId, _, projectId) = await SeedEmptyTaskDatabaseAsync(12);
         var factory = new StubDbContextFactory(options);
-        var svc = new SqlTaskWorkbenchService(factory);
+        var svc = new SqlTaskWorkbenchService(factory, new StubWorkflowCommandService());
 
         var result = await svc.CreateTaskAsync(
             new CreateTaskRequest(projectId, userId, taskTypeId, statusId, "New task", WorkQueueBucketCodes.Quick),
@@ -142,7 +143,7 @@ public sealed class TaskWorkbenchTests
     {
         var (options, userId, statusId, taskTypeId, _, projectId) = await SeedEmptyTaskDatabaseAsync(12);
         var factory = new StubDbContextFactory(options);
-        var svc = new SqlTaskWorkbenchService(factory);
+        var svc = new SqlTaskWorkbenchService(factory, new StubWorkflowCommandService());
         var request = new CreateTaskRequest(projectId, userId, taskTypeId, statusId, "Dup", WorkQueueBucketCodes.Quick);
 
         Assert.True((await svc.CreateTaskAsync(request, userId)).Succeeded);
@@ -156,7 +157,7 @@ public sealed class TaskWorkbenchTests
     {
         var (options, userId, statusId, taskTypeId1, taskTypeId2, projectId) = await SeedEmptyTaskDatabaseAsync(12);
         var factory = new StubDbContextFactory(options);
-        var svc = new SqlTaskWorkbenchService(factory);
+        var svc = new SqlTaskWorkbenchService(factory, new StubWorkflowCommandService());
 
         var first = await svc.CreateTaskAsync(new CreateTaskRequest(projectId, userId, taskTypeId1, statusId, "T1", WorkQueueBucketCodes.Quick), userId);
         var second = await svc.CreateTaskAsync(new CreateTaskRequest(projectId, userId, taskTypeId2, statusId, "T2", WorkQueueBucketCodes.Quick), userId);
@@ -326,6 +327,10 @@ public sealed class TaskWorkbenchTests
         public ValueTask<TaskCommandResult> CreateTaskAsync(CreateTaskRequest request, int changedByUserId, CancellationToken ct = default) =>
             ValueTask.FromResult(new TaskCommandResult(true, "ok"));
         public ValueTask<TaskCommandResult> DeleteTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskCommandResult(true, "ok"));
+        public ValueTask<TaskCommandResult> DeactivateTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskCommandResult(true, "ok"));
+        public ValueTask<TaskCommandResult> ReactivateTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
             ValueTask.FromResult(new TaskCommandResult(true, "ok"));
         public ValueTask<IReadOnlyList<int>> GetDemoTaskAssigneeUserIdsAsync(CancellationToken ct = default) =>
             ValueTask.FromResult(demoUsers);

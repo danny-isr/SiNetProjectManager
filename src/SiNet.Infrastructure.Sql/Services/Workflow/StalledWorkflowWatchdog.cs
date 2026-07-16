@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Notifications;
 using SiNet.Application.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -26,10 +27,15 @@ namespace SiNet.Infrastructure.Sql.Services.Workflow;
 /// </summary>
 public sealed class StalledWorkflowWatchdog(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
-    IWorkflowCommandService workflowCommands)
+    IWorkflowCommandService workflowCommands,
+    INotificationDeliveryService? notifications = null)
 {
+    /// <summary>Template code for the structured "orphaned workflow" audit signal.</summary>
+    internal const string OrphanNotificationTemplate = "workflow-orphaned";
+
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
     private readonly IWorkflowCommandService _workflowCommands = workflowCommands;
+    private readonly INotificationDeliveryService? _notifications = notifications;
 
     /// <summary>Scans for active workflow instances that appear stalled.</summary>
     public async ValueTask<List<StalledWorkflowInfo>> DetectStalledAsync(CancellationToken ct)
@@ -137,9 +143,11 @@ public sealed class StalledWorkflowWatchdog(
                         }
                         else
                         {
-                            Trace.TraceWarning(
-                                "[Watchdog] Workflow {0} still stalled after re-provisioning. Manual intervention needed.",
-                                info.InstanceId);
+                            await NotifyOrphanAsync(
+                                    info,
+                                    "0-task stage could not be auto-advanced or re-provisioned",
+                                    ct)
+                                .ConfigureAwait(false);
                         }
                     }
                 }
@@ -164,9 +172,11 @@ public sealed class StalledWorkflowWatchdog(
                 }
                 else
                 {
-                    Trace.TraceWarning(
-                        "[Watchdog] Workflow {0} still stalled after re-evaluation (stage '{1}', task #{2}).",
-                        info.InstanceId, info.StageName, taskId);
+                    await NotifyOrphanAsync(
+                            info,
+                            $"stage '{info.StageName}' has no advancing transition after task #{taskId} closed",
+                            ct)
+                        .ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -176,6 +186,47 @@ public sealed class StalledWorkflowWatchdog(
         }
 
         return recovered;
+    }
+
+    /// <summary>
+    /// Emits a visible, structured "orphaned workflow — manual intervention needed" signal for a
+    /// workflow the watchdog could not recover. Always logs at warning level, and additionally routes
+    /// the same intent through the host's audit/notification channel when one is configured, so the
+    /// orphan is tracked/flagged rather than only trace-logged. Never throws.
+    /// </summary>
+    private async ValueTask NotifyOrphanAsync(StalledWorkflowInfo info, string reason, CancellationToken ct)
+    {
+        Trace.TraceWarning(
+            "[Watchdog] ORPHANED WORKFLOW {0} (def {1}, stage '{2}', project {3}): {4}. Manual intervention needed.",
+            info.InstanceId, info.WorkflowDefinitionId, info.StageName, info.ProjectId, reason);
+
+        if (_notifications is null)
+            return;
+
+        try
+        {
+            var message =
+                $"Workflow instance {info.InstanceId} (definition {info.WorkflowDefinitionId}) is orphaned at " +
+                $"stage '{info.StageName}': {reason}. Manual intervention needed.";
+
+            await _notifications.DeliverAsync(
+                    new NotificationDeliveryRequest(
+                        Template: OrphanNotificationTemplate,
+                        Recipients: Array.Empty<string>(),
+                        RawConfigJson: null,
+                        ProjectId: info.ProjectId,
+                        WorkflowInstanceId: info.InstanceId,
+                        TaskId: info.MostRecentClosedTaskId,
+                        UserId: null),
+                    ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError(
+                "[Watchdog] Failed to emit orphan notification for workflow {0} (non-fatal): {1}",
+                info.InstanceId, ex);
+        }
     }
 }
 

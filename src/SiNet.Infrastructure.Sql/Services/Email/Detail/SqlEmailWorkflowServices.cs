@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Actions;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Settings;
 using SiNet.Application.Workflow;
@@ -160,6 +161,10 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.Action",
+            $"action={command.ActionCode} inbox={command.InboxMessageId?.ToString() ?? "(none)"} user={command.ActingUserId}");
+
         // Phase 3e: email-driven workflow starts that need no UI / project creation are routed
         // through the native IWorkflowCommandService.StartAsync (single native engine).
         if (TryResolveWorkflowStart(command.ActionCode, out var workflowCode, out var isProjectBound))
@@ -309,9 +314,16 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
 
         if (existing > 0)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.StartWorkflow",
+                $"inbox={inboxMessageId} workflow={workflowCode} DUPLICATE-GUARD hit (existing instance #{existing}) — not started");
             return new EmailSuggestedActionExecutionResult(
                 false, false, $"כבר קיים תהליך '{definition.Name}' עבור מייל זה (#{existing}).");
         }
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.StartWorkflow",
+            $"inbox={inboxMessageId} workflow={workflowCode} def={definition.Id} project={projectId} bound={isProjectBound} → starting");
 
         try
         {

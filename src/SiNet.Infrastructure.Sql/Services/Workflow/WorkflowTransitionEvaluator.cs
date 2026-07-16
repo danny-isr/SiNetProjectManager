@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -45,7 +46,12 @@ internal sealed class WorkflowTransitionEvaluator(IDbContextFactory<SiNetSQLDbCo
             .ConfigureAwait(false);
 
         if (instance is null || instance.Status != WorkflowStatus.Active || instance.CurrentStageId is null)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Evaluator.Gate",
+                $"instance={instanceId} trigger={triggerEvent} SKIPPED (status={instance?.Status.ToString() ?? "null"} stage={instance?.CurrentStageId?.ToString() ?? "null"})");
             return [];
+        }
 
         var rules = await db.WorkflowTransitionRules
             .Include(r => r.Actions)
@@ -67,6 +73,10 @@ internal sealed class WorkflowTransitionEvaluator(IDbContextFactory<SiNetSQLDbCo
 
             var conditionMet = await EvaluateConditionAsync(db, rule, instance, context, ct)
                 .ConfigureAwait(false);
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Evaluator.Rule",
+                $"instance={instanceId} trigger={triggerEvent} rule={rule.Id} (stage {rule.FromStageId}→{rule.ToStageId}) cond={rule.ConditionType} json={rule.ConditionJson ?? "(none)"} met={conditionMet}");
 
             if (!conditionMet)
                 continue;

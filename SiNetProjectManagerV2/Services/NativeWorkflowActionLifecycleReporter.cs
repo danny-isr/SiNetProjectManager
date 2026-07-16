@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Workflow;
 using SiNetSQL.Domain.Actions;
 using SiNetSQL.Services;
@@ -47,17 +48,41 @@ public sealed class NativeWorkflowActionLifecycleReporter(
     {
         // Safety gates — silent skips, no exceptions (parity with the legacy reporter).
         if (context is null) return;
-        if (context.WorkflowInstanceId is not int instanceId || instanceId <= 0) return;
-        if (string.IsNullOrWhiteSpace(context.ActionCode)) return;
+        if (context.WorkflowInstanceId is not int instanceId || instanceId <= 0)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("LifecycleReporter.Completed",
+                $"action={context?.ActionCode} SKIP — no WorkflowInstanceId (context {(context is null ? "null" : "present")})");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(context.ActionCode))
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("LifecycleReporter.Completed", $"instance={instanceId} SKIP — empty ActionCode");
+            return;
+        }
 
         if (!ActionDefinitionRegistry.TryGet(context.ActionCode, out var definition))
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("LifecycleReporter.Completed",
+                $"instance={instanceId} action={context.ActionCode} SKIP — no ActionDefinition registered");
             return;
+        }
 
         if (!definition.CanAdvanceWorkflow)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("LifecycleReporter.Completed",
+                $"instance={instanceId} action={context.ActionCode} SKIP — CanAdvanceWorkflow=false");
             return;
+        }
 
         try
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("LifecycleReporter.Completed",
+                $"instance={instanceId} action={context.ActionCode} outcome={outcome} → advancing via native command");
             await _workflowCommands.CheckAndAdvanceOnActionCompletedAsync(
                 new ActionCompletedCommand(
                     instanceId,

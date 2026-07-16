@@ -15,8 +15,10 @@ using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
 using SiNet.Application.DevTools;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Projects;
 using SiNet.Application.Runtime;
+using SiNet.Infrastructure.Sql.Services.Workflow; // TEMP WF-DEBUG (Run Watchdog now dev trigger)
 
 namespace SiNet.App.Wpf.Shell;
 
@@ -499,6 +501,61 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             "כלי פיתוח — טעינת משימות דמו",
             () => _ = coordinator.RunDemoTaskSeedAsync(Owner()),
             "משימות DEBUG בשלושה buckets ל-Task Panel read-only"));
+
+        // TEMP WF-DEBUG — manual watchdog trigger. The StalledWorkflowWatchdog background loop does NOT
+        // run on the New System startup path, so this lets the manual test exercise orphan detection /
+        // recovery on demand. Remove together with the rest of the WF-DEBUG instrumentation.
+        items.Add(new NewShellMenuItem(
+            "כלי פיתוח — הרץ Watchdog עכשיו",
+            RunWatchdogNow,
+            "סורק Workflows תקועים ומנסה שחזור (StalledWorkflowWatchdog) — כתיבה ל-workflow-manual-debug.log"));
+    }
+
+    // TEMP WF-DEBUG
+    private void RunWatchdogNow()
+    {
+        if (_services.GetService<StalledWorkflowWatchdog>() is not { } watchdog)
+        {
+            MessageBox.Show(
+                "StalledWorkflowWatchdog אינו רשום ב-DI.",
+                "Watchdog",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var userId = _services.GetService<ICurrentUserContext>()?.UserId ?? 0;
+
+        try
+        {
+            var (stalledCount, recoveredCount) = RunSync(async () =>
+            {
+                var stalled = await watchdog.DetectStalledAsync(CancellationToken.None).ConfigureAwait(false);
+                var recovered = await watchdog
+                    .AttemptRecoveryAsync(stalled, userId, CancellationToken.None)
+                    .ConfigureAwait(false);
+                return (stalled.Count, recovered);
+            });
+
+            WorkflowDebugTrace.Step("Watchdog.DevTrigger",
+                $"user={userId} detectedStalled={stalledCount} recovered={recoveredCount}");
+
+            MessageBox.Show(
+                $"Watchdog הושלם.\n\nזוהו תקועים: {stalledCount}\nשוחזרו: {recoveredCount}\n\n" +
+                $"פירוט מלא: {WorkflowDebugTrace.FilePath}",
+                "Watchdog",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            WorkflowDebugTrace.Step("Watchdog.DevTrigger", $"FAILED: {ex.Message}");
+            MessageBox.Show(
+                $"Watchdog נכשל: {ex.Message}",
+                "Watchdog",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private static void ShowWindow(Window window)

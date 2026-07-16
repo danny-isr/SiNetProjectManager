@@ -327,6 +327,12 @@ public sealed class TaskWorkbenchScopeTests
         public ValueTask<TaskCommandResult> DeleteTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
             ValueTask.FromResult(new TaskCommandResult(true, "ok"));
 
+        public ValueTask<TaskCommandResult> DeactivateTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskCommandResult(true, "ok"));
+
+        public ValueTask<TaskCommandResult> ReactivateTaskAsync(int taskId, int changedByUserId, CancellationToken ct = default) =>
+            ValueTask.FromResult(new TaskCommandResult(true, "ok"));
+
         public ValueTask<IReadOnlyList<int>> GetDemoTaskAssigneeUserIdsAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IReadOnlyList<int>>([]);
     }

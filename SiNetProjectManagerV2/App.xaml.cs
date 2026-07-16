@@ -322,45 +322,23 @@ namespace SiNetProjectManagerV2
 
             services.AddSingleton<IOutboundMailService, GmailOutboundMailService>();
 
-            // ── LEGACY WORKFLOW ENGINE (isolated — Phase 6 retirement is GATED, see below) ───────
-            // These SiNetSQL engine services are NO LONGER the New System workflow command path
-            // (that is now NativeWorkflowCommandService, registered by AddSiNetProcessBackbone above),
-            // and they are NOT resolved by any New System Work Surface.
+            // ── LEGACY WORKFLOW ENGINE — RETIRED FROM THE NEW SYSTEM HOST (Phase 6) ──────────────
+            // The SiNetSQL workflow engine graph (WorkflowEngine / WorkflowTransitionEvaluator /
+            // WorkflowActionExecutor / WorkflowStageTaskProvisioningService / WorkflowTaskOrchestrator /
+            // WorkflowActionCompletedHandler / WorkflowValidationService) and the legacy dispatcher
+            // factory (Func<IProcessActionDispatcher>) are NO LONGER registered here.
             //
-            // Phase 6 status (verified 2026-07): the native heavy-action handlers HAVE landed
-            // (NativeEmailMoveToProjectExecutor, NativeAddMaterialToProjectProcessActionHandler,
-            // StartWorkflow/TaskLifecycle now use the native IWorkflowCommandService). Despite that,
-            // this block CANNOT be removed yet: it is a live *transitive* dependency of the legacy
-            // IProcessActionDispatcher (registered by AddProcessActions below). The dispatcher
-            // collects every IProcessActionHandler, and the legacy StartSubWorkflowProcessActionHandler
-            // ctor requires WorkflowEngine + WorkflowStageTaskProvisioningService (which in turn pull
-            // WorkflowTransitionEvaluator / WorkflowActionExecutor / the dispatcher factory). The
-            // dispatcher itself is still live for the legacy email UI, Suggested Actions
-            // (ActionExecutor), typed continuations, and FileImportDialog.
-            // Remove this whole block in Phase 6 ONLY AFTER the legacy IProcessActionDispatcher and
-            // its handlers are retired — i.e. once those UI paths migrate to the native
-            // IProcessActionService / IWorkflowCommandService. Do NOT wire these into any Work Surface.
-            // Workflow Services: Transient (short-lived, use IDbContextFactory internally)
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowEngine>();
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTransitionEvaluator>();
-            // WorkflowActionExecutor depends on IProcessActionDispatcher only at
-            // action-execution time. Handlers like StartWorkflowProcessActionHandler
-            // pull WorkflowTaskOrchestrator → WorkflowActionExecutor, which closes
-            // a constructor-time DI cycle. Resolving the dispatcher lazily via a
-            // factory breaks the cycle without changing runtime behavior.
-            services.AddTransient<Func<SiNetSQL.Domain.Actions.IProcessActionDispatcher>>(sp =>
-                () => sp.GetRequiredService<SiNetSQL.Domain.Actions.IProcessActionDispatcher>());
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionExecutor>();
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowStageTaskProvisioningService>();
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowTaskOrchestrator>();
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowActionCompletedHandler>();
-            // Workflow write port: the SINGLE IWorkflowCommandService for the New System is the
-            // native NativeWorkflowCommandService registered by AddSiNetProcessBackbone() above
-            // (line ~288). The legacy AddSiNetWorkflowCommands() (WorkflowCommandServiceAdapter)
-            // is intentionally NOT registered here: registration-order "last wins" would otherwise
-            // shadow the native service and disable the atomic task-close + auto-advance path in
-            // SqlTaskCompletionService. One engine — native only.
-            services.AddTransient<SiNetSQL.Services.Workflow.WorkflowValidationService>();
+            // The single New System workflow command path is the native NativeWorkflowCommandService
+            // (registered by AddSiNetProcessBackbone() above); workflow-stage transitions run through
+            // the native IProcessActionService, and TaskLifecycle / StartWorkflow use the native
+            // IWorkflowCommandService. The legacy AddSiNetWorkflowCommands() (WorkflowCommandServiceAdapter)
+            // is likewise intentionally NOT registered — one engine, native only.
+            //
+            // The legacy IProcessActionDispatcher (AddProcessActions below) is still live for the legacy
+            // email UI / Suggested Actions (ActionExecutor) / typed continuations / FileImportDialog, but
+            // it no longer pulls the legacy engine: its ONLY engine-dependent handler,
+            // StartSubWorkflowProcessActionHandler, is not registered (sub-workflow starts run through the
+            // native engine). Verified: no live V2 consumer resolves any of the types listed above.
             // Composition adoption (Phase 1): the Workflow READ slice is delegated to the modular
             // SiNet.Infrastructure.Sql module. This registers WorkflowQueryService / IWorkflowQueryService
             // and ProjectWorkflowPolicyService / IProjectWorkflowPolicyService with identical Transient
@@ -413,12 +391,11 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Services.Email.EmailFilingService>();
             services.AddTransient<SiNetSQL.Services.Email.EmailStatusService>();
 
-            // EmailFilingService depends on TaskLifecycleService only at notify-time,
-            // and TaskLifecycleService transitively pulls WorkflowTaskOrchestrator →
-            // WorkflowActionExecutor → IProcessActionDispatcher → handlers (some of
-            // which file emails via EmailFilingService). That closes a constructor
-            // cycle. Resolving TaskLifecycleService lazily via a factory breaks the
-            // cycle without changing any business behavior.
+            // EmailFilingService depends on TaskLifecycleService only at notify-time. Some legacy
+            // IProcessActionDispatcher handlers file emails via EmailFilingService, which can close a
+            // constructor cycle back through TaskLifecycleService. Resolving TaskLifecycleService lazily
+            // via a factory breaks that cycle without changing any business behavior. (TaskLifecycleService
+            // itself now uses the native IWorkflowCommandService — it no longer touches the legacy engine.)
             services.AddTransient<Func<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService?>>(sp =>
                 () => sp.GetService<SiNetSQL.Services.TaskLifecycle.TaskLifecycleService>());
 
@@ -448,11 +425,10 @@ namespace SiNetProjectManagerV2
                         sp.GetRequiredService<SiNetProjectManagerV2.Services.NativeWorkflowActionLifecycleReporter>(),
                     }));
 
-            // Process Actions runtime scaffolding (stage 1).
-            // Registers only IProcessActionDispatcher. No IProcessActionHandler
-            // implementations are registered yet, so this does not change runtime
-            // behavior — existing ActionExecutor and WorkflowActionExecutor remain
-            // the effective execution paths.
+            // Process Actions runtime scaffolding: registers the legacy IProcessActionDispatcher used by
+            // the legacy email UI / Suggested Actions (ActionExecutor) / typed continuations. The handler
+            // registrations follow below. (The legacy WorkflowActionExecutor transition path has been
+            // retired; workflow-stage transitions run through the native IProcessActionService.)
             SiNetSQL.Domain.Actions.ProcessActionsServiceCollectionExtensions.AddProcessActions(services);
 
             // Stage 2A pilot: register the first IProcessActionHandler — AssociateToExistingProject.
@@ -488,18 +464,23 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.StartWorkflowProcessActionHandler>();
 
-            // Strict dispatcher-only: WorkflowTransitionActionType (all 8) run through
-            // IProcessActionDispatcher inside WorkflowActionExecutor. NO legacy switch,
-            // NO silent fallback. Missing handler / handler exception / unexpected status
-            // → ActionExecutionResult(Success=false) returned to WorkflowTaskOrchestrator.
+            // Legacy WorkflowTransitionActionType handlers. The legacy transition path
+            // (WorkflowActionExecutor → IProcessActionDispatcher → these handlers) has been RETIRED;
+            // workflow-stage transitions now run through the native IProcessActionService. These
+            // registrations are retained only because the legacy dispatcher is still used by the legacy
+            // email UI / Suggested Actions / continuations, and constructing them is inert (none touch
+            // the removed legacy engine).
+            //
+            // EXCEPTION: StartSubWorkflowProcessActionHandler is intentionally NOT registered — it is the
+            // sole legacy handler whose ctor requires the (now removed) WorkflowEngine +
+            // WorkflowStageTaskProvisioningService. Registering it would re-introduce a transitive
+            // dependency on the retired legacy engine. Sub-workflow starts run through the native engine.
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.CreateStageTasksProcessActionHandler>();
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.ClosePreviousStageTasksProcessActionHandler>();
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.SendNotificationProcessActionHandler>();
-            services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
-                SiNetSQL.Domain.Actions.Handlers.StartSubWorkflowProcessActionHandler>();
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,
                 SiNetSQL.Domain.Actions.Handlers.SetProjectStatusProcessActionHandler>();
             services.AddTransient<SiNetSQL.Domain.Actions.IProcessActionHandler,

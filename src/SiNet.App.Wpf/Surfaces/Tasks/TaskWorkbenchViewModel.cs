@@ -103,6 +103,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         ResolveCommand = new AsyncRelayCommand(() => ResolveSelectedAsync(), () => !IsBusy && SelectedTask is not null);
         AddTaskCommand = new AsyncRelayCommand(AddTaskAsync, () => !IsBusy && _workbench is not null && _taskCreateDialogFactory is not null);
         DeleteTaskCommand = new AsyncRelayCommand(DeleteSelectedAsync, () => !IsBusy && SelectedTask is not null && _workbench is not null);
+        DeactivateTaskCommand = new AsyncRelayCommand(DeactivateSelectedAsync, () => !IsBusy && SelectedTask is not null && _workbench is not null);
+        ReactivateTaskCommand = new AsyncRelayCommand(ReactivateSelectedAsync, () => !IsBusy && SelectedTask is not null && _workbench is not null);
         RepairQueueCommand = new AsyncRelayCommand(RepairQueueAsync, () => !IsBusy && CanManageQueue);
         MoveUpCommand = new AsyncRelayCommand(MoveSelectedUpAsync, CanMoveSelectedUp);
         MoveDownCommand = new AsyncRelayCommand(MoveSelectedDownAsync, CanMoveSelectedDown);
@@ -266,6 +268,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     public ICommand ResolveCommand { get; }
     public ICommand AddTaskCommand { get; }
     public ICommand DeleteTaskCommand { get; }
+    public ICommand DeactivateTaskCommand { get; }
+    public ICommand ReactivateTaskCommand { get; }
     public ICommand RepairQueueCommand { get; }
     public ICommand MoveUpCommand { get; }
     public ICommand MoveDownCommand { get; }
@@ -559,12 +563,29 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         if (MessageBox.Show("למחוק את המשימה שנבחרה?", "מחיקת משימה", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
+        var taskId = SelectedTask.TaskId;
         IsBusy = true;
         try
         {
-            var result = await _workbench.DeleteTaskAsync(SelectedTask.TaskId, actorId).ConfigureAwait(true);
+            var result = await _workbench.DeleteTaskAsync(taskId, actorId).ConfigureAwait(true);
             if (!result.Succeeded)
             {
+                // A workflow-linked task cannot be hard-deleted (it would orphan the workflow). Offer to
+                // deactivate it instead — this pauses the workflow and preserves the task for reactivation.
+                if (result.BlockedByWorkflow)
+                {
+                    var offer = MessageBox.Show(
+                        result.Message + "\n\nלהשבית את המשימה במקום זאת? ה-Workflow יושהה וניתן יהיה להפעיל אותה מחדש בהמשך.",
+                        "מחיקת משימה",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                    if (offer == MessageBoxResult.Yes)
+                        await RunDeactivateAsync(taskId, actorId).ConfigureAwait(true);
+
+                    return;
+                }
+
                 MessageBox.Show(result.Message, "מחיקת משימה", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -575,6 +596,79 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         {
             Debug.WriteLine(ex);
             MessageBox.Show(ex.Message, "מחיקת משימה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task DeactivateSelectedAsync()
+    {
+        if (_workbench is null || SelectedTask is null || _currentUser?.UserId is not int actorId)
+            return;
+
+        if (MessageBox.Show(
+                "להשבית את המשימה שנבחרה? אם היא מפעילה Workflow, ה-Workflow יושהה עד להפעלה מחדש.",
+                "השבתת משימה",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        var taskId = SelectedTask.TaskId;
+        IsBusy = true;
+        try
+        {
+            await RunDeactivateAsync(taskId, actorId).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            MessageBox.Show(ex.Message, "השבתת משימה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RunDeactivateAsync(int taskId, int actorId)
+    {
+        var result = await _workbench!.DeactivateTaskAsync(taskId, actorId).ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            MessageBox.Show(result.Message, "השבתת משימה", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        StatusMessage = $"המשימה #{taskId} הושבתה וה-Workflow (אם קיים) הושהה.";
+        await LoadAsync().ConfigureAwait(true);
+    }
+
+    private async Task ReactivateSelectedAsync()
+    {
+        if (_workbench is null || SelectedTask is null || _currentUser?.UserId is not int actorId)
+            return;
+
+        var taskId = SelectedTask.TaskId;
+        IsBusy = true;
+        try
+        {
+            var result = await _workbench.ReactivateTaskAsync(taskId, actorId).ConfigureAwait(true);
+            if (!result.Succeeded)
+            {
+                MessageBox.Show(result.Message, "הפעלת משימה מחדש", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            StatusMessage = $"המשימה #{taskId} הופעלה מחדש וה-Workflow (אם היה מושהה) חודש.";
+            await LoadAsync().ConfigureAwait(true);
+            RestoreSelection(taskId);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            MessageBox.Show(ex.Message, "הפעלת משימה מחדש", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -875,6 +969,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         (ResolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (AddTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (DeleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (DeactivateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ReactivateTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ClearSelectedProjectCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (RepairQueueCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (MoveUpCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

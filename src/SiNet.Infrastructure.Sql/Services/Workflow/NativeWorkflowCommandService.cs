@@ -1,3 +1,4 @@
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -21,8 +22,12 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
     }
 
-    public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct) =>
-        _orchestrator.StartWorkflowAsync(
+    public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
+    {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Command.Start",
+            $"def={command.DefinitionId} project={command.ProjectId} trigger={command.TriggerType} entity={command.TriggerEntityId} user={command.UserId} bound={command.IsProjectBound} initialStage={command.InitialStageCode ?? "(default)"}");
+        return _orchestrator.StartWorkflowAsync(
             command.DefinitionId,
             command.ProjectId,
             ToModel(command.TriggerType),
@@ -32,6 +37,7 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
             ct,
             command.IsProjectBound,
             command.InitialStageCode);
+    }
 
     public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct) =>
         _orchestrator.AdvanceWithTasksAsync(
@@ -41,8 +47,12 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
             command.Notes,
             ct);
 
-    public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct) =>
-        _orchestrator.CheckAndAutoAdvanceAsync(command.TaskId, command.UserId, ct);
+    public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct)
+    {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Command.AutoAdvance", $"task={command.TaskId} user={command.UserId} (non-atomic)");
+        return _orchestrator.CheckAndAutoAdvanceAsync(command.TaskId, command.UserId, ct);
+    }
 
     /// <summary>
     /// Atomic (shared-context) auto-advance entry point used by <c>SqlTaskCompletionService</c> to run
@@ -52,25 +62,38 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
     /// service is in effect. Throws on failure so the caller's transaction rolls back.
     /// </summary>
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceSharedAsync(
-        SiNetSQLDbContext db, TaskClosedCommand command, CancellationToken ct) =>
-        _orchestrator.CheckAndAutoAdvanceSharedAsync(db, command.TaskId, command.UserId, ct);
+        SiNetSQLDbContext db, TaskClosedCommand command, CancellationToken ct)
+    {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Command.AutoAdvance", $"task={command.TaskId} user={command.UserId} (atomic/shared-tx)");
+        return _orchestrator.CheckAndAutoAdvanceSharedAsync(db, command.TaskId, command.UserId, ct);
+    }
 
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct) =>
         _orchestrator.CheckAndAutoAdvanceStalledWorkflowAsync(command.InstanceId, command.UserId, ct);
 
-    public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct) =>
-        _orchestrator.CheckAndAdvanceOnActionCompletedAsync(command.InstanceId, command.ActionCode, command.ActionOutcome, command.UserId, ct);
+    public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct)
+    {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Command.ActionCompleted",
+            $"instance={command.InstanceId} action={command.ActionCode} outcome={command.ActionOutcome ?? "(none)"} user={command.UserId}");
+        return _orchestrator.CheckAndAdvanceOnActionCompletedAsync(command.InstanceId, command.ActionCode, command.ActionOutcome, command.UserId, ct);
+    }
 
     public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct) =>
         _orchestrator.ReprovisionCurrentStageTasksAsync(command.InstanceId, command.UserId, ct);
 
     public async ValueTask PauseAsync(PauseWorkflowCommand command, CancellationToken ct)
     {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Command.Pause", $"instance={command.InstanceId} user={command.UserId} notes={command.Notes}");
         await _engine.PauseAsync(command.InstanceId, command.UserId, command.Notes, ct).ConfigureAwait(false);
     }
 
     public async ValueTask ResumeAsync(ResumeWorkflowCommand command, CancellationToken ct)
     {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Engine.Command.Resume", $"instance={command.InstanceId} user={command.UserId} notes={command.Notes}");
         await _engine.ResumeAsync(command.InstanceId, command.UserId, command.Notes, ct).ConfigureAwait(false);
     }
 

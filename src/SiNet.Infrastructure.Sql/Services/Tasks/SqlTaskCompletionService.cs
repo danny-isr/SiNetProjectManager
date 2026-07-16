@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 
@@ -41,6 +42,10 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
 
     public async ValueTask<TaskCompletionResultDto> CompleteAsync(CompleteTaskCommand command, CancellationToken ct)
     {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("TaskCompletion.Complete",
+            $"task={command.TaskId} event={command.CompletionEventCode} result={command.TaskResultCode ?? "(none)"} user={command.UserId}");
+
         if (string.IsNullOrWhiteSpace(command.CompletionEventCode))
             return TaskCompletionResultDto.Failure("completionEventCode is required.");
 
@@ -224,6 +229,10 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
 
         var willAutoAdvance = behavior.RequestWorkflowAdvance && taskClosed;
         var nativeCommands = _workflowCommands as NativeWorkflowCommandService;
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("TaskCompletion.Closure",
+            $"task={command.TaskId} recordedResult={taskResultCode ?? "(none)"} taskClosed={taskClosed} requestAdvance={behavior.RequestWorkflowAdvance} willAutoAdvance={willAutoAdvance} path={(willAutoAdvance && nativeCommands is not null ? "atomic" : "fallback")} newProjectStatus={newProjectStatusCode ?? "(unchanged)"}");
 
         // Atomic path (Phase 1d): when the native command service is in effect, run the auto-advance on
         // this same DbContext so it sees the not-yet-committed close and, on relational providers,

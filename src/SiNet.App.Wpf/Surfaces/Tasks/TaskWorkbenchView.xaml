@@ -81,6 +81,12 @@
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Button Content="השבת משימה" Command="{Binding DeactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+                    ToolTip="השבתת משימה מפעילת Workflow משהה את ה-Workflow ושומרת את המשימה להפעלה מחדש."
+                    Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Button Content="הפעל מחדש" Command="{Binding ReactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+                    ToolTip="הפעלת משימה מושבתת מחדש ומחדשת את ה-Workflow המושהה."
+                    Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
