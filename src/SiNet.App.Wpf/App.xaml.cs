@@ -111,6 +111,14 @@ public partial class App : System.Windows.Application
     {
         _configuration?.GetSection("Gmail").Bind(options);
 
+        // ProjectWork Drive base folder (Shared Drive + projects root) — same keys as V2 host.
+        var drive = _configuration?.GetSection("GoogleDrive");
+        if (drive is not null)
+        {
+            options.SharedDriveId ??= drive["SharedDriveId"];
+            options.ProjectsRootFolderId ??= drive["ProjectsRootFolderId"];
+        }
+
         // Token store env override only — client secrets come from Vault via IGoogleClientSecretsPathProvider.
         var tokenStore = Environment.GetEnvironmentVariable("SINET_GOOGLE_TOKEN_STORE");
         if (!string.IsNullOrWhiteSpace(tokenStore))

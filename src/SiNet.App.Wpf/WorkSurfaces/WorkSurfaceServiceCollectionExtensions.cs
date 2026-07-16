@@ -14,6 +14,8 @@ public static class WorkSurfaceServiceCollectionExtensions
 
         services.AddTransient<InspectionWindowViewModel>();
         services.AddSingleton<IInspectionWindowFactory, InspectionWindowFactory>();
+        services.AddTransient<SiNet.App.Wpf.Surfaces.ProjectWork.ProjectWorkTreeViewModel>();
+        services.AddTransient<SiNet.App.Wpf.Shared.Projects.ProjectSelectorViewModel>();
         services.AddTransient<ProjectWorkWindowViewModel>();
         services.AddSingleton<IProjectWorkWindowFactory, ProjectWorkWindowFactory>();
         services.AddSingleton<IWorkSurfaceLauncher, WorkSurfaceLauncher>();

@@ -15,6 +15,7 @@ using SiNetSQL.Services;
 using SiNetSQL.Data;
 using SiOffice.GoogleConnector;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.Application.Projects;
 using SiNetProjectManagerV2.Services;
 
@@ -31,8 +32,10 @@ namespace SiNetProjectManagerV2
         // The view-models subscribe to ActiveProjectContext.ActiveProjectChanged so
         // they stay in sync with the global active project even while hidden,
         // and any embedded WebView2 instances keep their state across navigation.
-        private ProjectWorkView? _cachedProjectWorkView;
         private EmailManagementView? _cachedEmailManagementView;
+
+        /// <summary>Native ProjectWork surface (browse / menu). Kept alive so the active-file hub stays registered for Inspection.</summary>
+        private ProjectWorkWindowView? _nativeProjectWorkWindow;
 
         // New clean-architecture Current Project context (fake/in-memory this slice).
         // The shell is the single subscriber that renders the Current Project into the window
@@ -288,7 +291,7 @@ namespace SiNetProjectManagerV2
             => NavigateToView(new ProjectFolderTreeView());
 
         private void OpenProjectWork2_Click(object sender, RoutedEventArgs e)
-            => NavigateToView(_cachedProjectWorkView ??= new ProjectWorkView());
+            => _ = ShowNativeProjectWorkAsync();
 
         private void Control_Click(object sender, RoutedEventArgs e)
         {
@@ -513,9 +516,41 @@ namespace SiNetProjectManagerV2
             return _floatingInspectionWindow;
         }
 
-        public void ShowProjectWork()
+        /// <summary>
+        /// Opens the native ProjectWork browse surface (replacement for legacy <c>ProjectWorkView</c>).
+        /// </summary>
+        public void ShowProjectWork() => _ = ShowNativeProjectWorkAsync();
+
+        private async Task ShowNativeProjectWorkAsync()
         {
-            NavigateToView(_cachedProjectWorkView ??= new ProjectWorkView());
+            var factory = App.ServiceProvider?.GetService<IProjectWorkWindowFactory>();
+            if (factory is null)
+            {
+                MessageBox.Show(
+                    "IProjectWorkWindowFactory אינו רשום — לא ניתן לפתוח את סביבת העבודה החדשה.",
+                    "סביבת עבודה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (_nativeProjectWorkWindow is { IsLoaded: true })
+            {
+                await _nativeProjectWorkWindow.OpenBrowseModeAsync().ConfigureAwait(true);
+                _nativeProjectWorkWindow.Activate();
+                return;
+            }
+
+            var window = factory.Create();
+            _nativeProjectWorkWindow = window;
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_nativeProjectWorkWindow, window))
+                    _nativeProjectWorkWindow = null;
+            };
+            await window.OpenBrowseModeAsync().ConfigureAwait(true);
+            window.Owner = this;
+            window.Show();
         }
 
         // ─────────────────────────────────────────────────────────────

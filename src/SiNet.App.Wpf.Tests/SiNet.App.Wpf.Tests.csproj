@@ -29,6 +29,7 @@
 	<ProjectReference Include="..\SiNet.App.Composition\SiNet.App.Composition.csproj" />
 	<ProjectReference Include="..\SiNet.App.Wpf\SiNet.App.Wpf.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />
+	<ProjectReference Include="..\SiNet.Infrastructure.FileSystem\SiNet.Infrastructure.FileSystem.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Logging\SiNet.Infrastructure.Logging.csproj" />

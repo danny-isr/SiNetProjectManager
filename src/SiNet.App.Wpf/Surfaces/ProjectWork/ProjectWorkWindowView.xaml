@@ -4,25 +4,120 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.ProjectWork"
+        xmlns:proj="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         mc:Ignorable="d"
         Title="{Binding Title}"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True"
-        Width="560" Height="460"
-        MinWidth="420" MinHeight="320"
+        Width="1000" Height="680"
+        MinWidth="720" MinHeight="480"
         FlowDirection="RightToLeft"
         d:DataContext="{d:DesignInstance Type=local:ProjectWorkWindowViewModel, IsDesignTimeCreatable=True}">
 
     <!--
-        Native ProjectWork TASK-EXECUTION shell (Phase 5a). Opened by WorkSurfaceLauncher for the
-        ProjectWork / MaterialChecklist / PoliceSubmission component keys. Presents task header,
-        allowed-result completion strip, and a placeholder for the deferred project file workspace.
-        No file tree / ACC / drag-drop lives here (separate gated phase).
+        Native ProjectWork surface (Phase 1: read-only). Left: shared project selector + unified
+        file/folder tree (FileServer + ACC read). Right: viewer pane placeholder (embedded ACC viewer
+        arrives in Phase 2). Task header + completion strip appear only when opened from a task.
+        Drag/drop, replace, rename/delete and ACC write are later gated phases.
     -->
 
-    <Border Padding="16" Background="#FFF7F8FA">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Version (leaf): opens on click via the node's OpenCommand. Right-click to replace/delete.
+             Colour reflects real state: red on extension conflict, green while mid-upload. -->
+        <DataTemplate DataType="{x:Type local:VersionNodeVm}">
+            <StackPanel Orientation="Horizontal">
+                <StackPanel.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="&#x05D4;&#x05D7;&#x05DC;&#x05E3; (&#x05D2;&#x05E8;&#x05E8;&#x05EA; &#x05D7;&#x05D3;&#x05E9;&#x05D4;)&#x2026;" Command="{Binding ReplaceCommand}" />
+                        <MenuItem Header="&#x05DE;&#x05D7;&#x05E7;&#x05D2;&#x05E8;&#x05E1;&#x05D4;&#x2026;" Command="{Binding DeleteCommand}" />
+                    </ContextMenu>
+                </StackPanel.ContextMenu>
+                <TextBlock Text="&#x26A0;" Foreground="#FFD32F2F" VerticalAlignment="Center" Margin="0,0,4,0"
+                           ToolTip="&#x05D4;&#x05EA;&#x05E0;&#x05D2;&#x05E9;&#x05D5;&#x05EA; &#x05E1;&#x05D9;&#x05D5;&#x05DE;&#x05D5;&#x05EA;"
+                           Visibility="{Binding HasExtensionConflict, Converter={StaticResource BoolToVis}}" />
+                <Button Command="{Binding OpenCommand}" Cursor="Hand"
+                        Background="Transparent" BorderThickness="0" Padding="0"
+                        HorizontalContentAlignment="Right" ToolTip="{Binding FullPath}">
+                    <TextBlock Text="{Binding Title}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#FF1D4ED8" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsInFlight}" Value="True">
+                                        <Setter Property="Foreground" Value="#FF0F9D58" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasExtensionConflict}" Value="True">
+                                        <Setter Property="Foreground" Value="#FFD32F2F" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Button>
+                <TextBlock Margin="8,0,0,0" FontSize="11" Foreground="#FF0F9D58" VerticalAlignment="Center"
+                           Text="&#x2191; &#x05DE;&#x05E2;&#x05DC;&#x05D4;&#x2026;"
+                           Visibility="{Binding IsInFlight, Converter={StaticResource BoolToVis}}" />
+                <TextBlock Text="{Binding Details}" Margin="10,0,0,0" FontSize="11" Foreground="#FF9CA3AF" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Alternative: contains versions. Right-click to add a version. -->
+        <HierarchicalDataTemplate DataType="{x:Type local:AlternativeNodeVm}" ItemsSource="{Binding Children}">
+            <TextBlock Foreground="#FF6B7280">
+                <TextBlock.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="&#x05D2;&#x05E8;&#x05E1;&#x05D4; &#x05D7;&#x05D3;&#x05E9;&#x05D4;&#x2026;" Command="{Binding AddVersionCommand}" />
+                    </ContextMenu>
+                </TextBlock.ContextMenu>
+                <Run Text="&#x25CB;" />
+                <Run Text="{Binding Title, Mode=OneWay}" />
+            </TextBlock>
+        </HierarchicalDataTemplate>
+
+        <!-- File (logical): contains alternatives. Right-click to add an alternative. -->
+        <HierarchicalDataTemplate DataType="{x:Type local:ProjectFileNodeVm}" ItemsSource="{Binding Children}">
+            <StackPanel Orientation="Horizontal">
+                <StackPanel.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="&#x05D0;&#x05DC;&#x05D8;&#x05E8;&#x05E0;&#x05D8;&#x05D9;&#x05D1;&#x05D4; &#x05E0;&#x05D5;&#x05E1;&#x05E4;&#x05EA;&#x2026;" Command="{Binding AddVersionCommand}" />
+                    </ContextMenu>
+                </StackPanel.ContextMenu>
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="#FF111827" />
+                <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="3" Background="#FFEEF2FF" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding StorageLabel}" FontSize="10" Foreground="#FF4338CA" />
+                </Border>
+            </StackPanel>
+        </HierarchicalDataTemplate>
+
+        <!-- Folder: contains subfolders + files. -->
+        <HierarchicalDataTemplate DataType="{x:Type local:ProjectFolderNodeVm}" ItemsSource="{Binding Children}">
+            <TextBlock FontWeight="SemiBold">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="#FF9CA3AF" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasFiles}" Value="True">
+                                <Setter Property="Foreground" Value="#FF047857" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+                <Run Text="&#x1F4C1;" />
+                <Run Text="{Binding Title, Mode=OneWay}" />
+            </TextBlock>
+        </HierarchicalDataTemplate>
+
+        <Style x:Key="TreeItemStyle" TargetType="TreeViewItem">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+        </Style>
+    </Window.Resources>
+
+    <Border Padding="14" Background="#FFF7F8FA">
         <Grid>
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -36,21 +131,55 @@
                 <TextBlock Text="{Binding ActiveProjectDisplay}" FontSize="13" Foreground="#FF4B5563" Margin="0,2,0,0" />
             </StackPanel>
 
-            <!-- Task header -->
-            <Border Grid.Row="1" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1"
-                    CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
+            <!-- Project selector (browse mode) -->
+            <ContentControl Grid.Row="1" Content="{Binding Selector}" Margin="0,0,0,8">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate>
+                        <proj:ProjectSelectorView />
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+
+            <!-- Task header (task mode only) -->
+            <Border Grid.Row="2" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1"
+                    CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                    Visibility="{Binding IsTaskMode, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="{Binding TaskHeader}" FontSize="14" FontWeight="SemiBold" Foreground="#FF111827" />
             </Border>
 
-            <!-- Work area placeholder -->
-            <Border Grid.Row="2" Background="#FFFDF6EC" BorderBrush="#FFF0D9A8" BorderThickness="1"
-                    CornerRadius="6" Padding="12">
-                <TextBlock Text="{Binding WorkAreaMessage}" TextWrapping="Wrap"
-                           FontSize="13" Foreground="#FF7A5B12" VerticalAlignment="Top" />
-            </Border>
+            <!-- Work area: unified tree (left) + viewer pane placeholder (right) -->
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" MinWidth="260" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="3*" MinWidth="240" />
+                </Grid.ColumnDefinitions>
 
-            <!-- Completion strip -->
-            <Grid Grid.Row="3" Margin="0,10,0,0">
+                <Border Grid.Column="0" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1" CornerRadius="6">
+                    <TreeView x:Name="FileTree" BorderThickness="0" Background="Transparent"
+                              ItemsSource="{Binding Tree.RootFolders}"
+                              ItemContainerStyle="{StaticResource TreeItemStyle}" />
+                </Border>
+
+                <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch" Background="Transparent" />
+
+                <Border Grid.Column="2" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1" CornerRadius="6">
+                    <!-- The embedded ACC viewer host (WebView2, provided by the host via IAccViewerHost)
+                         replaces this ContentControl's content on attach. Until then / when unavailable,
+                         the placeholder explains the external-browser fallback. -->
+                    <ContentControl x:Name="AccViewerHost">
+                        <Border Background="#FFFDF6EC" Padding="14">
+                            <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="#FF7A5B12" VerticalAlignment="Top"
+                                       Text="&#x05E6;&#x05D5;&#x05E4;&#x05D4; &#x05D4;-ACC &#x05D4;&#x05DE;&#x05D5;&#x05D8;&#x05DE;&#x05E2; &#x05D9;&#x05D5;&#x05E4;&#x05D9;&#x05E2; &#x05DB;&#x05D0;&#x05DF;. &#x05D1;&#x05D3;&#x05E4;&#x05D3;&#x05E4;&#x05DF; &#x05D6;&#x05D4; &#x05D0;&#x05D9;&#x05DF; &#x05E6;&#x05D5;&#x05E4;&#x05D4; &#x05DE;&#x05D5;&#x05D8;&#x05DE;&#x05E2; &#x2014; &#x05E7;&#x05D1;&#x05E6;&#x05D9; ACC &#x05D9;&#x05D9;&#x05E4;&#x05EA;&#x05D7;&#x05D5; &#x05D1;&#x05D3;&#x05E4;&#x05D3;&#x05E4;&#x05DF; &#x05D7;&#x05D9;&#x05E6;&#x05D5;&#x05E0;&#x05D9;." />
+                        </Border>
+                    </ContentControl>
+                </Border>
+            </Grid>
+
+            <!-- Completion strip (task mode only) -->
+            <Grid Grid.Row="4" Margin="0,10,0,0"
+                  Visibility="{Binding IsTaskMode, Converter={StaticResource BoolToVis}}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -73,8 +202,11 @@
             </Grid>
 
             <!-- Status bar -->
-            <Border Grid.Row="4" Margin="0,10,0,0" Padding="8,4" Background="#FFEEF1F5" CornerRadius="4">
-                <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#FF4B5563" TextWrapping="Wrap" />
+            <Border Grid.Row="5" Margin="0,10,0,0" Padding="8,4" Background="#FFEEF1F5" CornerRadius="4">
+                <StackPanel>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#FF4B5563" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Tree.ScanStatus}" FontSize="12" Foreground="#FF6B7280" TextWrapping="Wrap" Margin="0,2,0,0" />
+                </StackPanel>
             </Border>
         </Grid>
     </Border>

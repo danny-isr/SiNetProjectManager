@@ -219,13 +219,17 @@ public sealed class GoogleFoundationClosureTests
     }
 
     [Fact]
-    public void Google_boundary_doc_records_drive_sheets_reports_defer_policy()
+    public void Google_boundary_doc_records_drive_sheets_reports_status()
     {
         var source = ReadRepoFile("docs/GOOGLE_BOUNDARY.md");
 
-        Assert.Contains("Drive / Sheets / Reports defer decision", source, StringComparison.Ordinal);
-        Assert.Contains("Requires an approved `ProjectFiles` / storage-destination slice", source, StringComparison.Ordinal);
-        Assert.Contains("No runtime movement of Drive, Sheets, or report/export code until a real consumer slice is named.", source, StringComparison.Ordinal);
+        Assert.Contains("Drive / Sheets / Reports status", source, StringComparison.Ordinal);
+        Assert.Contains("Google Drive ProjectWork read/write", source, StringComparison.Ordinal);
+        Assert.Contains("Approved / native", source, StringComparison.Ordinal);
+        Assert.Contains("SharedDriveId", source, StringComparison.Ordinal);
+        Assert.Contains("ProjectsRootFolderId", source, StringComparison.Ordinal);
+        Assert.Contains("Google Sheets read/write/export", source, StringComparison.Ordinal);
+        Assert.Contains("Deferred", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -235,8 +239,8 @@ public sealed class GoogleFoundationClosureTests
 
         Assert.Contains("First real email window (read-only content/details)", source, StringComparison.Ordinal);
         Assert.Contains("now consumes the same shared", source, StringComparison.Ordinal);
-        Assert.Contains("not consume `GmailClientProvider` or `IEmailSender` directly", source, StringComparison.Ordinal);
-        Assert.Contains("full body/attachment metadata by the project's canonical label leaf", source, StringComparison.Ordinal);
+        Assert.Contains("must not consume `GmailClientProvider` or", source, StringComparison.Ordinal);
+        Assert.Contains("`IEmailSender` directly", source, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)

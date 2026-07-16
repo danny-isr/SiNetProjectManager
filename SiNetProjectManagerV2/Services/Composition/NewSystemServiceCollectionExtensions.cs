@@ -77,5 +77,7 @@ public static class NewSystemServiceCollectionExtensions
 
         options.TokenStorePath = AppConfiguration.GoogleTokenStorePath;
         options.ApplicationName = AppConfiguration.GoogleApplicationName;
+        options.SharedDriveId = AppConfiguration.GoogleDriveSharedDriveId;
+        options.ProjectsRootFolderId = AppConfiguration.GoogleDriveProjectsRootFolderId;
     }
 }

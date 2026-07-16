@@ -24,7 +24,12 @@ public sealed record InspectionNoteAiReviewResult(
 /// <summary>Host picks a project file tree selection for reviewed plan / note link.</summary>
 public interface IInspectionFileTreePickerHost
 {
-    Task<InspectionFilePickResult?> PickReviewedPlanAsync(
+    /// <summary>
+    /// Multi-select reviewed plans from the live ProjectWork tree. Returns an empty list when the
+    /// user confirms with no selection; <see langword="null"/> when cancelled. Requires the native
+    /// ProjectWork surface to have registered an active-file provider.
+    /// </summary>
+    Task<IReadOnlyList<InspectionFilePickResult>?> PickReviewedPlansAsync(
         int projectId, CancellationToken cancellationToken = default);
 
     Task<InspectionFilePickResult?> PickNoteLinkedFileAsync(

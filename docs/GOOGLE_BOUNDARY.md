@@ -1,6 +1,6 @@
 # Google Boundary
 
-> **Status:** Draft - boundary alignment round (2026-07-03)  
+> **Status:** Active - ProjectWork Drive slice (2026-07-16)  
 > **Branch:** `SiWorkNet10`
 
 This document records the **current code truth** for Google/Gmail/Drive/Sheets across the clean stack
@@ -14,18 +14,23 @@ decision for any behavior change.
 
 ## 1. Executive Boundary
 
-- **Native today:** Gmail **read**, Gmail auth-state/health, interactive/silent sign-in, and a native
-  Gmail **send capability** exist in `SiNet.Infrastructure.Google`.
-- **Production today:** `SiNetProjectManagerV2` still uses the legacy Google path for Gmail/Drive/Sheets;
-  the native module is not yet the production-host runtime path.
-- **Still legacy today:** all Google **Sheets**, all Google **Drive**, legacy outbound send flow,
-  legacy Gmail modify/throttle/full-body paths, and every production host consumer under
-  `SiNetProjectManagerV2`.
+- **Native today:** Gmail **read**, Gmail auth-state/health, interactive/silent sign-in, native Gmail
+  **send/modify**, and **ProjectWork Google Drive** (read + write via `IFileStore`) exist in
+  `SiNet.Infrastructure.Google`.
+- **Shared auth (locked):** one user OAuth session (`GmailClientProvider`) owns `UserCredential` for
+  both Gmail and Drive; automatic token refresh; no per-window / per-operation login. UI uses
+  `IConnectorAuthService` only.
+- **Drive base folder (locked):** `GoogleDrive:SharedDriveId` + `GoogleDrive:ProjectsRootFolderId`
+  (central projects root). All ProjectWork Drive paths are resolved under that root.
+- **Production today:** `SiNetProjectManagerV2` still uses the legacy Google path for Sheets/Reports
+  and for the legacy ProjectWork window; the New System graph registers the native module additively.
+- **Still legacy today:** all Google **Sheets**, Reports/Inspection Drive consumers, legacy outbound
+  send flow, and legacy Gmail throttle/full-body paths under `SiNetProjectManagerV2`.
 - **Not used at all:** Google Docs, Google Calendar, Google Tasks.
-- **Blocked by design:** token-store consolidation and legacy-host replacement. The native and legacy
-  Google paths are **not behavior-equivalent**.
-- **Open decision:** `GmailSend` is present in code and in the native module scope set; product/policy
-  approval for that send capability must remain explicit and documented.
+- **Blocked by design:** forced token-store consolidation with unrelated legacy Reports clients beyond
+  the existing V2 New System mapping. Native and legacy Google paths are **not** fully
+  behavior-equivalent for Sheets/Reports.
+- **Open decision:** `GmailSend` product/policy approval for broad window adoption remains explicit.
 
 ## 2. Active Ownership Map
 
@@ -40,7 +45,8 @@ decision for any behavior change.
 | Gmail full-body / attachments / throttle | `GoogleService` / `GmailThrottleService` | Legacy host | Active, not ported |
 | Google Sheets reports (`R01/R02/R03`) | `SiOffice.GoogleConnector/Reports/*` | Legacy host | Active, not ported |
 | Google Sheets migration readers | `SiNetProjectManagerV2/Services/Migration/*` | Legacy host | Active, not ported |
-| Google Drive project-file read path | `GoogleDriveServiceProvider` | Legacy host | Active, not ported |
+| Google Drive ProjectWork read/write | `GoogleDriveFileStore` -> `IGoogleDriveFileService` -> `GmailClientProvider` (shared credential) | Native | Active (User OAuth + Shared Drive root) |
+| Google Drive project-file path (legacy window) | `GoogleDriveServiceProvider` / `GoogleDriveStore` | Legacy host | Active until ProjectWork surface cutover |
 | Google Drive screenshot upload / PDF export | `GoogleNoteScreenshotUploadService`, `InspectionReportEmailBuilder` | Legacy host | Active, not ported |
 
 ## 2.1 Hosts and wiring
@@ -75,10 +81,13 @@ The live code in `GmailClientProvider` currently uses these hard-coded scopes:
 - `GmailService.Scope.GmailReadonly`
 - `GmailService.Scope.GmailSend`
 - `GmailService.Scope.GmailModify`
+- `DriveService.Scope.Drive` (full Drive — ProjectWork read/write)
 
 That means the native module is **not** "read-only" anymore at the OAuth level. The **read gateway**
-remains read-only in behavior, but the module also contains native send and **label-modify** capabilities
-and therefore a broader scope set. Existing users must re-consent after `GmailModify` is deployed.
+remains read-only in behavior, but the module also contains native send, **label-modify**, and
+**Drive** capabilities. Existing users must perform a **one-time interactive re-consent** when a
+previously stored token lacks Drive (or send/modify). Silent restore still works for previously
+granted scopes; insufficient-scope Drive calls surface as `GoogleConsentRequiredException`.
 
 `GmailOptions` does **not** currently expose scopes; only path/app/root/interactive settings are
 configurable. Scope selection remains a code-level decision inside `GmailClientProvider`.
@@ -161,14 +170,14 @@ Rules:
 | --- | --- | --- |
 | Gmail mailbox read / send / reply as the signed-in user | **User OAuth** | Personal mailbox access is user-scoped |
 | Gmail auth-state / connect / disconnect | **User OAuth** | Tied to the user's mailbox session |
-| Organizational Sheets/Drive report generation | Candidate for **service account** only after explicit design | Changes ownership, sharing, and admin setup |
-| Drive-backed project file storage / automation | Candidate for **service account** only after explicit design | Crosses storage-destination and org-permission boundaries |
+| ProjectWork Drive file storage (list/download/upload/delete/rename) | **User OAuth** (same session as Gmail) | Locked 2026-07-16: shared credential provider + Shared Drive root |
+| Organizational Sheets / Reports Drive automation | Candidate for **service account** only after explicit design | Changes ownership, sharing, and admin setup |
 
 Rule of thumb:
 
-- **Mailbox behavior** stays user OAuth unless a later approved design says otherwise.
-- **Org-owned Sheets/Drive automation** must not be moved piecemeal; it needs an explicit ownership and
-  permission strategy first.
+- **Mailbox + ProjectWork Drive** stay **user OAuth** on the shared `GmailClientProvider` session.
+- **Org-owned Sheets/Reports automation** must not be moved piecemeal; it needs an explicit ownership
+  and permission strategy first.
 
 ### 4.1 Capability policy map
 
@@ -177,10 +186,10 @@ Rule of thumb:
 | Gmail inbox read | User OAuth | Approved (`GmailReadonly`) | Native and allowed |
 | Gmail silent restore / explicit connect | User OAuth | Approved | Native and allowed |
 | Gmail send | User OAuth | Code present (`GmailSend`) | **Policy gap**: not broadly approved for window migration by default |
-| Gmail modify / labels / mark-read | User OAuth | Not added | Deferred |
+| Gmail modify / labels / mark-read | User OAuth | Code present (`GmailModify`) | Native for list filing/triage; re-consent may be required |
 | Gmail full body / attachment metadata | User OAuth | Approved under `GmailReadonly` | Native and allowed for the first real email window |
-| Drive read/list/open | TBD (likely user OAuth or service account by domain) | Not defined | Deferred until a ProjectFiles consumer is selected |
-| Drive upload/write | TBD | Not defined | Deferred; do not implement ad hoc |
+| Drive ProjectWork read/list/open | User OAuth | Approved (`Drive`) | Native via `GoogleDriveFileStore` |
+| Drive ProjectWork upload/write/delete/rename | User OAuth | Approved (`Drive`) | Native via `GoogleDriveFileStore` |
 | Sheets read/write/export | Candidate service account only after explicit design | Not defined | Deferred; keep under Reports ownership |
 | Reports generation / screenshot upload | Mixed legacy consumers today | Not defined | Deferred until a Reports boundary is selected |
 
@@ -188,84 +197,46 @@ Rule of thumb:
 
 Until a separately approved design says otherwise:
 
-1. **Do not consolidate** legacy `GoogleService` onto `AddSiNetGoogle`.
-2. **Do not unify token stores** between native and legacy paths.
+1. **Do not consolidate** legacy `GoogleService` onto `AddSiNetGoogle` for Sheets/Reports.
+2. **Do not unify token stores** beyond the existing V2 New System mapping of native Gmail/Drive to
+   `AppConfiguration.GoogleTokenStorePath`.
 3. **Do not add/remove scopes** in `GmailClientProvider` without an explicit approved slice.
-4. **Do not port Drive/Sheets ad hoc** from random consumers; introduce clean ports only when a real
-   migration slice is approved.
-5. **Do not reintroduce `SiNet.LegacyBridge`** into the native Gmail read/send flow.
+4. **Do not port Sheets/Reports Drive** ad hoc; ProjectWork Drive is the approved consumer slice.
+5. **Do not reintroduce `SiNet.LegacyBridge`** into the native Gmail/Drive ProjectWork flow.
+6. **Do not open a second OAuth flow** for Drive — always reuse the shared user credential.
 
 ## 6. Deferred Gaps
 
-Still deferred after the native Gmail slice:
+Still deferred after the ProjectWork Drive slice:
 
-- Explicit product/policy decision on whether native `GmailSend` is approved capability or code-present only
-- Gmail modify / labels / mark-read parity
+- Explicit product/policy decision on whether native `GmailSend` is approved for broad window adoption
 - Attachment open/download behavior from the first real email window
 - Gmail throttling / rate-limit parity
-- Google Drive read/write ports and implementation
 - Google Sheets ports and implementation
-- Legacy-host switch from `GoogleService` to the native module
-- Token-store strategy / one-time re-consent strategy across hosts
-- Any service-account move for Sheets/Drive
+- Legacy-host switch of Reports/Inspection Drive consumers from `GoogleAuthService`
+- ~~Full production cutover of the legacy ProjectWork window (Phase 6)~~ — menu/task routing + native hubs wired; legacy `ProjectWorkView` file cleanup optional
+- Any service-account move for Sheets/Reports
 
-Minimum parity decision before migrating the first real email window:
+`src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` may consume `IConnectorAuthService` and
+`IEmailGateway` for the read-only email window, but must not consume `GmailClientProvider` or
+`IEmailSender` directly and must not grow send/modify behavior ad hoc.
 
-- Required foundation: auth/session ownership, vault-first secrets path resolution, token-store
-  policy, read summaries, full body/attachment metadata, and explicit connect/restore behavior.
-- Optional read expansion: HTML rendering or attachment-open/download behavior, but only if the
-  chosen window genuinely requires them.
-- Explicitly out for now: send-by-default adoption, modify/labels, Drive, Sheets, and reports.
-- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` is now allowed to consume
-  `IConnectorAuthService` and `IEmailGateway` for the first real read-only window slice, but it must
-  not consume `GmailClientProvider` or `IEmailSender` directly and must not grow send/modify behavior
-  ad hoc.
+## 6.1 Drive / Sheets / Reports status
 
-## 6.1 Drive / Sheets / Reports defer decision
-
-This foundation round makes the defer policy explicit:
-
-| Area | Current decision | Ownership gate before any runtime move |
+| Area | Current decision | Notes |
 | --- | --- | --- |
-| Google Drive read/list/open | Deferred | Requires an approved `ProjectFiles` / storage-destination slice |
-| Google Drive upload/write | Deferred | Requires explicit storage ownership + auth model decision |
+| Google Drive ProjectWork read/write | **Approved / native** | User OAuth; `SharedDriveId` + `ProjectsRootFolderId` |
 | Google Sheets read/write/export | Deferred | Requires an approved `Reports` boundary and ownership model |
 | Report generation / screenshot upload | Deferred | Requires the report/export consumer to be selected first |
 
-Auth policy before any later move:
+Auth policy:
 
-- Gmail mailbox behavior stays **user OAuth**.
-- Drive/Sheets/report automation is a separate ownership problem and is a **candidate** for service
-  account or other org-owned auth only after explicit design.
-- Do **not** choose that auth model opportunistically inside Gmail migration work.
-
-Guardrails:
-
-- No runtime movement of Drive, Sheets, or report/export code until a real consumer slice is named.
-- No ad-hoc ports or infra adapters for Drive/Sheets just because the native Gmail module exists.
-- The first real email window must not become the accidental migration home for Drive or Sheets.
+- Gmail mailbox + ProjectWork Drive stay **user OAuth** on one shared credential.
+- Sheets/Reports automation remains a separate ownership problem (service-account candidate only
+  after explicit design).
 
 ## 7. Recommended Next Step
 
-Google should **not** be the next implementation-heavy slice after ACC. The safe follow-up is to
-keep Google work staged and policy-led:
-
-1. **G1 — Policy alignment first**
-   - explicit Gmail send approval/non-approval,
-   - explicit scope policy,
-   - explicit token-store coexistence policy,
-   - explicit definition of what “Google health” means in product terms.
-2. **G2 — Auth/config clarification**
-   - vault-first secrets source,
-   - allowed config fallback,
-   - no forced token-store consolidation.
-3. **G3 — Gmail parity only if explicitly approved**
-   - full body / attachments / modify / labels / throttling,
-   - sender-context gaps only if required by real production-host adoption.
-4. **G4 — Drive only behind a ProjectFiles/storage slice**
-   - no ad-hoc Drive migration.
-5. **G5 — Sheets / Reports after a clear application boundary exists**
-   - no opportunistic Sheets/report rewrites before ownership and auth policy are explicit.
-
-Until G1 is settled, keep Google changes limited to **approved documentation/policy alignment** and
-do not attempt production-host consolidation.
+1. Optional cleanup: delete unused legacy `ProjectWorkView` / `ProjectWorkViewModel` after soak.
+2. Keep Sheets/Reports on the legacy Google path until a Reports boundary is approved.
+3. GmailSend broad adoption remains a separate policy decision.

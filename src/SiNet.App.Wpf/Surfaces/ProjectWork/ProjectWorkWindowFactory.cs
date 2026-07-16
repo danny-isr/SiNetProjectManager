@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.ProjectWork;
 
 namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 
@@ -14,6 +15,13 @@ public sealed class ProjectWorkWindowFactory(IServiceProvider services) : IProje
     public ProjectWorkWindowView Create()
     {
         var viewModel = _services.GetRequiredService<ProjectWorkWindowViewModel>();
-        return new ProjectWorkWindowView(viewModel);
+        var view = new ProjectWorkWindowView(viewModel);
+
+        // Optional host-seam: the embedded ACC viewer is only registered by hosts that ship WebView2
+        // (production V2 host). When absent, the surface uses the external-browser fallback.
+        var accViewerHost = _services.GetService<IAccViewerHost>();
+        view.SetAccViewerHost(accViewerHost);
+
+        return view;
     }
 }

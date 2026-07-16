@@ -1,6 +1,7 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
 using Google.Apis.Auth.OAuth2.Requests;
+using Google.Apis.Drive.v3;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
@@ -11,28 +12,30 @@ using SiNet.Application.Configuration;
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>
-/// Owns a fresh, independent Gmail OAuth session for the new stack (its own client secrets and
-/// token store, separate from the legacy <c>GoogleService</c>). Builds and caches a read-only
-/// <see cref="GmailService"/> on first use.
+/// Owns the shared Google <b>user</b> OAuth session for the new stack (Gmail + Drive). One
+/// <see cref="UserCredential"/> (with automatic refresh) backs both <see cref="GmailService"/> and
+/// <see cref="DriveService"/>. Windows and feature surfaces must not sign in again per operation —
+/// they consume this singleton via <see cref="IConnectorAuthService"/> / the typed TryGet* APIs.
 /// <para>
 /// Auth strategy: try a <b>silent</b> restore from the token store first (no browser); refresh a
 /// stale token using the refresh token only. Interactive consent is attempted only when
-/// <see cref="GmailOptions.AllowInteractiveSignIn"/> is set. When no usable credential exists,
-/// <see cref="TryGetServiceAsync"/> returns <c>null</c> so callers can degrade gracefully.
+/// <see cref="GmailOptions.AllowInteractiveSignIn"/> is set (or via explicit
+/// <see cref="SignInInteractiveAsync"/>). Expanding scopes (e.g. Drive) may require a one-time
+/// interactive re-consent; silent restore still succeeds for previously granted scopes.
 /// </para>
 /// </summary>
 public sealed class GmailClientProvider : IAsyncDisposable
 {
-    // Read + send. GmailSend is the narrowest scope that allows sending (not full MailGoogleCom).
-    // NOTE: expanding scopes invalidates the *send* authorization of any token persisted before
-    // this change. Silent restore still works for reads; sending will surface as "requires consent"
-    // until the user performs a deliberate interactive sign-in that re-grants read + send.
+    // Gmail read/send/modify + full Drive (ProjectWork read/write). Expanding scopes invalidates
+    // authorization for newly added capabilities until the user re-consents interactively.
     private static readonly string[] Scopes =
     {
         GmailService.Scope.GmailReadonly,
         GmailService.Scope.GmailSend,
         GmailService.Scope.GmailModify,
+        DriveService.Scope.Drive,
     };
+
     private const string TokenUser = "user";
 
     private readonly GmailOptions _options;
@@ -40,7 +43,9 @@ public sealed class GmailClientProvider : IAsyncDisposable
     private readonly IGoogleClientSecretsPathProvider? _pathProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
+    private UserCredential? _credential;
     private GmailService? _gmailService;
+    private DriveService? _driveService;
 
     public GmailClientProvider(
         GmailOptions options,
@@ -52,6 +57,9 @@ public sealed class GmailClientProvider : IAsyncDisposable
         _pathProvider = pathProvider;
     }
 
+    /// <summary>The OAuth scopes requested for the shared user session (Gmail + Drive).</summary>
+    internal static IReadOnlyList<string> RequestedScopes => Scopes;
+
     /// <summary>The root Gmail label under which projects are filed.</summary>
     public string RootLabel => _options.RootLabel;
 
@@ -59,29 +67,20 @@ public sealed class GmailClientProvider : IAsyncDisposable
     public string DefaultMailboxQuery => _options.DefaultMailboxQuery;
 
     /// <summary>
-    /// <c>true</c> once a usable Gmail session has been established (via silent restore or an
-    /// explicit interactive sign-in) and cached. Reflects the last known state for the UI; it does
-    /// not itself attempt a sign-in. Call <see cref="TrySignInSilentlyAsync"/> or
-    /// <see cref="SignInInteractiveAsync"/> to establish a session.
+    /// <c>true</c> once a usable Google user session has been established and cached. Reflects the
+    /// last known state for the UI; it does not itself attempt a sign-in.
     /// </summary>
-    public bool IsSignedIn => _gmailService != null;
+    public bool IsSignedIn => _credential != null;
 
     /// <summary>
-    /// Raised whenever the signed-in state transitions (false→true on a successful silent restore
-    /// or interactive sign-in; true→false on <see cref="Logout"/> or disposal). The payload is the
-    /// new <see cref="IsSignedIn"/> value. This is the native equivalent of the legacy
-    /// <c>GoogleService.AuthStateChanged</c> health/auth bridge. Handlers must not throw.
+    /// Raised whenever the signed-in state transitions. The payload is the new
+    /// <see cref="IsSignedIn"/> value. Handlers must not throw.
     /// </summary>
     public event Action<bool>? AuthStateChanged;
 
-    /// <summary>
-    /// Compares the cached-session state captured before a mutation (<paramref name="wasSignedIn"/>)
-    /// with the current state and raises <see cref="AuthStateChanged"/> only on a real transition.
-    /// Always call this outside the <c>_gate</c> so handlers cannot deadlock the provider.
-    /// </summary>
     private void RaiseIfAuthStateChanged(bool wasSignedIn)
     {
-        var isSignedIn = _gmailService != null;
+        var isSignedIn = _credential != null;
         if (isSignedIn != wasSignedIn)
         {
             AuthStateChanged?.Invoke(isSignedIn);
@@ -89,22 +88,45 @@ public sealed class GmailClientProvider : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns a ready <see cref="GmailService"/>, or <c>null</c> when the mailbox is not
-    /// available (no client secrets configured, or no token and interactive sign-in disabled).
-    /// Never throws for the "not signed in" case.
+    /// Returns a ready <see cref="GmailService"/> built from the shared credential, or <c>null</c>
+    /// when the mailbox is not available.
     /// </summary>
     public async Task<GmailService?> TryGetServiceAsync(CancellationToken cancellationToken = default)
     {
         if (_gmailService != null)
-        {
             return _gmailService;
-        }
 
-        var wasSignedIn = _gmailService != null;
+        var wasSignedIn = _credential != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await BuildServiceLockedAsync(allowInteractive: false, cancellationToken).ConfigureAwait(false);
+            var credential = await EnsureCredentialLockedAsync(allowInteractive: false, cancellationToken)
+                .ConfigureAwait(false);
+            return credential == null ? null : EnsureGmailServiceLocked(credential);
+        }
+        finally
+        {
+            _gate.Release();
+            RaiseIfAuthStateChanged(wasSignedIn);
+        }
+    }
+
+    /// <summary>
+    /// Returns a ready <see cref="DriveService"/> built from the <b>same</b> shared credential as
+    /// Gmail, or <c>null</c> when the user session is not available. Does not open a browser.
+    /// </summary>
+    public async Task<DriveService?> TryGetDriveServiceAsync(CancellationToken cancellationToken = default)
+    {
+        if (_driveService != null)
+            return _driveService;
+
+        var wasSignedIn = _credential != null;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var credential = await EnsureCredentialLockedAsync(allowInteractive: false, cancellationToken)
+                .ConfigureAwait(false);
+            return credential == null ? null : EnsureDriveServiceLocked(credential);
         }
         finally
         {
@@ -115,22 +137,20 @@ public sealed class GmailClientProvider : IAsyncDisposable
 
     /// <summary>
     /// Attempts a <b>silent</b> sign-in from the persisted token store only (never opens a
-    /// browser). Suitable for application startup. Returns <c>true</c> when a usable session was
-    /// restored and the cached service is ready. Never throws for the "not signed in" case.
+    /// browser). Suitable for application startup.
     /// </summary>
     public async Task<bool> TrySignInSilentlyAsync(CancellationToken cancellationToken = default)
     {
-        if (_gmailService != null)
-        {
+        if (_credential != null)
             return true;
-        }
 
-        var wasSignedIn = _gmailService != null;
+        var wasSignedIn = _credential != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var service = await BuildServiceLockedAsync(allowInteractive: false, cancellationToken).ConfigureAwait(false);
-            return service != null;
+            var credential = await EnsureCredentialLockedAsync(allowInteractive: false, cancellationToken)
+                .ConfigureAwait(false);
+            return credential != null;
         }
         finally
         {
@@ -142,9 +162,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// <summary>
     /// Performs an <b>explicit, user-initiated</b> sign-in. Tries a silent restore first; if none
     /// is available it opens the browser for OAuth consent regardless of
-    /// <see cref="GmailOptions.AllowInteractiveSignIn"/> (which only guards <i>implicit</i> prompts).
-    /// On success the cached <see cref="GmailService"/> is (re)built so a subsequent inbox load
-    /// uses the new session. Never throws; failures are reported via the returned result.
+    /// <see cref="GmailOptions.AllowInteractiveSignIn"/>.
     /// </summary>
     public Task<GmailSignInResult> SignInInteractiveAsync(CancellationToken cancellationToken = default) =>
         SignInInteractiveAsync(options: null, cancellationToken);
@@ -152,32 +170,24 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// <summary>
     /// Performs an <b>explicit, user-initiated</b> sign-in. By default tries silent restore first;
     /// when <paramref name="options"/>.<see cref="ConnectorLoginOptions.SkipSilentRestore"/> is
-    /// <c>true</c>, opens the browser immediately. Raises <see cref="AuthStateChanged"/> on transition.
+    /// <c>true</c>, opens the browser immediately.
     /// </summary>
     public async Task<GmailSignInResult> SignInInteractiveAsync(
         ConnectorLoginOptions? options,
         CancellationToken cancellationToken = default)
     {
-        var wasSignedIn = _gmailService != null;
+        var wasSignedIn = _credential != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_gmailService != null && options?.SkipSilentRestore != true)
-            {
+            if (_credential != null && options?.SkipSilentRestore != true)
                 return GmailSignInResult.Success;
-            }
 
-            if (_gmailService != null)
-            {
-                _gmailService.Dispose();
-                _gmailService = null;
-            }
+            ClearCachedServicesLocked();
 
             var setup = await TryPrepareAuthAsync(cancellationToken).ConfigureAwait(false);
             if (setup == null)
-            {
                 return GmailSignInResult.NotConfigured;
-            }
 
             var (secrets, dataStore) = setup.Value;
 
@@ -194,16 +204,9 @@ public sealed class GmailClientProvider : IAsyncDisposable
                 cancellationToken).ConfigureAwait(false);
 
             if (credential == null)
-            {
                 return GmailSignInResult.Failed;
-            }
 
-            _gmailService = new GmailService(new BaseClientService.Initializer
-            {
-                HttpClientInitializer = credential,
-                ApplicationName = _options.ApplicationName,
-            });
-
+            BindCredentialLocked(credential);
             return GmailSignInResult.Success;
         }
         finally
@@ -214,30 +217,19 @@ public sealed class GmailClientProvider : IAsyncDisposable
     }
 
     /// <summary>
-    /// Signs out: disposes the cached client and deletes the persisted refresh token directory so
-    /// the next sign-in requires fresh OAuth consent. Raises <see cref="AuthStateChanged"/> on transition.
-    /// <para>
-    /// Prefer <see cref="LogoutAsync"/> from async call sites. This synchronous overload blocks on the
-    /// gate (via <see cref="LogoutAsync"/>) and exists only for the legacy sync
-    /// <c>IConnectorAuthService.Logout</c> surface.
-    /// </para>
+    /// Signs out: disposes cached clients and deletes the persisted refresh token directory.
+    /// Prefer <see cref="LogoutAsync"/> from async call sites.
     /// </summary>
     public void Logout() => LogoutAsync().GetAwaiter().GetResult();
 
-    /// <summary>
-    /// Async sign-out: acquires the gate with <see cref="SemaphoreSlim.WaitAsync()"/> (never the
-    /// blocking <c>Wait()</c>, which risks a UI deadlock when a concurrent sign-in/read holds the
-    /// gate), disposes the cached client, and deletes the persisted refresh token directory. Raises
-    /// <see cref="AuthStateChanged"/> outside the gate on transition.
-    /// </summary>
+    /// <summary>Async sign-out for the shared Google user session (Gmail + Drive together).</summary>
     public async Task LogoutAsync(CancellationToken cancellationToken = default)
     {
-        var wasSignedIn = _gmailService != null;
+        var wasSignedIn = _credential != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _gmailService?.Dispose();
-            _gmailService = null;
+            ClearCachedServicesLocked();
             DeletePersistedTokenStore();
         }
         finally
@@ -270,63 +262,92 @@ public sealed class GmailClientProvider : IAsyncDisposable
         try
         {
             DeleteTokenStoreDirectory(_options.TokenStorePath);
-            _logger.Info("[Gmail] Persisted token store deleted on logout.");
+            _logger.Info("[Google] Persisted token store deleted on logout.");
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[Gmail] Failed to delete token store on logout: {ex.Message}");
+            _logger.Warn($"[Google] Failed to delete token store on logout: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// Builds (and caches) the <see cref="GmailService"/> while the gate is held. Honors
-    /// <paramref name="allowInteractive"/> in addition to <see cref="GmailOptions.AllowInteractiveSignIn"/>:
-    /// a browser is opened only when <paramref name="allowInteractive"/> is <c>true</c> and the
-    /// silent restore failed.
-    /// </summary>
-    private async Task<GmailService?> BuildServiceLockedAsync(bool allowInteractive, CancellationToken cancellationToken)
+    private async Task<UserCredential?> EnsureCredentialLockedAsync(bool allowInteractive, CancellationToken cancellationToken)
     {
-        if (_gmailService != null)
-        {
-            return _gmailService;
-        }
+        if (_credential != null)
+            return _credential;
 
         var credential = await AcquireCredentialAsync(allowInteractive, cancellationToken).ConfigureAwait(false);
         if (credential == null)
-        {
             return null;
-        }
+
+        BindCredentialLocked(credential);
+        return _credential;
+    }
+
+    private void BindCredentialLocked(UserCredential credential)
+    {
+        _credential = credential;
+        _gmailService = new GmailService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = _options.ApplicationName,
+        });
+        _driveService = new DriveService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = _options.ApplicationName,
+        });
+    }
+
+    private GmailService EnsureGmailServiceLocked(UserCredential credential)
+    {
+        if (_gmailService != null)
+            return _gmailService;
 
         _gmailService = new GmailService(new BaseClientService.Initializer
         {
             HttpClientInitializer = credential,
             ApplicationName = _options.ApplicationName,
         });
-
         return _gmailService;
+    }
+
+    private DriveService EnsureDriveServiceLocked(UserCredential credential)
+    {
+        if (_driveService != null)
+            return _driveService;
+
+        _driveService = new DriveService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = _options.ApplicationName,
+        });
+        return _driveService;
+    }
+
+    private void ClearCachedServicesLocked()
+    {
+        _gmailService?.Dispose();
+        _gmailService = null;
+        _driveService?.Dispose();
+        _driveService = null;
+        _credential = null;
     }
 
     private async Task<UserCredential?> AcquireCredentialAsync(bool allowInteractive, CancellationToken cancellationToken)
     {
         var setup = await TryPrepareAuthAsync(cancellationToken).ConfigureAwait(false);
         if (setup == null)
-        {
             return null;
-        }
 
         var (secrets, dataStore) = setup.Value;
 
-        // 1) Silent restore from the token store (no browser).
         var restored = await TryRestoreAsync(secrets, dataStore, cancellationToken).ConfigureAwait(false);
         if (restored != null)
-        {
             return restored;
-        }
 
-        // 2) Interactive consent only when both the caller and the options allow it.
         if (!allowInteractive || !_options.AllowInteractiveSignIn)
         {
-            _logger.Warn("[Gmail] No stored token and interactive sign-in is disabled. Mailbox unavailable.");
+            _logger.Warn("[Google] No stored token and interactive sign-in is disabled. Session unavailable.");
             return null;
         }
 
@@ -334,17 +355,13 @@ public sealed class GmailClientProvider : IAsyncDisposable
             .ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Loads the client secrets and creates the token data store, or returns <c>null</c> when
-    /// secrets are missing/unreadable (mailbox stays unavailable, never throws).
-    /// </summary>
     private async Task<(ClientSecrets Secrets, FileDataStore DataStore)?> TryPrepareAuthAsync(
         CancellationToken cancellationToken)
     {
         var secretsPath = await ResolveSecretsPathAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(secretsPath) || !File.Exists(secretsPath))
         {
-            _logger.Warn($"[Gmail] client secrets not found at '{secretsPath ?? "(null)"}'. Mailbox unavailable.");
+            _logger.Warn($"[Google] client secrets not found at '{secretsPath ?? "(null)"}'. Session unavailable.");
             return null;
         }
 
@@ -359,7 +376,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Gmail] Failed to read client secrets: {ex.Message}", ex);
+            _logger.Error($"[Google] Failed to read client secrets: {ex.Message}", ex);
             return null;
         }
 
@@ -377,19 +394,15 @@ public sealed class GmailClientProvider : IAsyncDisposable
                 return vaultPath;
             }
 
-            _logger.Warn("[Gmail] Vault Google client secrets unavailable; config fallback is deprecated — use Secret Setup.");
+            _logger.Warn("[Google] Vault Google client secrets unavailable; config fallback is deprecated — use Secret Setup.");
         }
 
         var configuredPath = _options.ClientSecretsPath;
         if (string.IsNullOrWhiteSpace(configuredPath))
-        {
             return null;
-        }
 
         if (File.Exists(configuredPath))
-        {
             return configuredPath;
-        }
 
         return null;
     }
@@ -411,7 +424,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
                     cancellationToken,
                     dataStore).ConfigureAwait(false);
 
-                _logger.Info("[Gmail] Interactive sign-in completed.");
+                _logger.Info("[Google] Interactive sign-in completed (Gmail + Drive scopes).");
                 return credential;
             }
 
@@ -433,12 +446,12 @@ public sealed class GmailClientProvider : IAsyncDisposable
                 receiver.RedirectUri,
                 cancellationToken).ConfigureAwait(false);
 
-            _logger.Info("[Gmail] Interactive sign-in completed (account selection prompted).");
+            _logger.Info("[Google] Interactive sign-in completed (account selection prompted).");
             return new UserCredential(flow, TokenUser, token);
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Gmail] Interactive sign-in failed: {ex.Message}", ex);
+            _logger.Error($"[Google] Interactive sign-in failed: {ex.Message}", ex);
             return null;
         }
     }
@@ -459,9 +472,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
 
             var token = await flow.LoadTokenAsync(TokenUser, cancellationToken).ConfigureAwait(false);
             if (token == null)
-            {
                 return null;
-            }
 
             var credential = new UserCredential(flow, TokenUser, token);
 
@@ -470,26 +481,25 @@ public sealed class GmailClientProvider : IAsyncDisposable
                 var refreshed = await credential.RefreshTokenAsync(cancellationToken).ConfigureAwait(false);
                 if (!refreshed)
                 {
-                    _logger.Warn("[Gmail] Stored token is stale and could not be refreshed.");
+                    _logger.Warn("[Google] Stored token is stale and could not be refreshed.");
                     return null;
                 }
             }
 
-            _logger.Info("[Gmail] Silently restored session from token store.");
+            _logger.Info("[Google] Silently restored session from token store.");
             return credential;
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[Gmail] Silent token restore failed: {ex.Message}");
+            _logger.Warn($"[Google] Silent token restore failed: {ex.Message}");
             return null;
         }
     }
 
     public ValueTask DisposeAsync()
     {
-        var wasSignedIn = _gmailService != null;
-        _gmailService?.Dispose();
-        _gmailService = null;
+        var wasSignedIn = _credential != null;
+        ClearCachedServicesLocked();
         _gate.Dispose();
         RaiseIfAuthStateChanged(wasSignedIn);
         return ValueTask.CompletedTask;

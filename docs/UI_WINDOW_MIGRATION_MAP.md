@@ -53,7 +53,7 @@
 | --- | --- | --- |
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
 | EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
-| ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/... (TBD) | Not started |
+| ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/ProjectWorkWindowView | Replaced (V2 menu + task launcher; legacy view no longer opened) |
 | TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView | **Started / Pilot** — Task Workbench (queue + CRUD, 2026-07-06) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started |

@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using SiNet.Application.ProjectWork;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.FileSystem;
 using SiNet.Infrastructure.Google;
@@ -28,7 +30,6 @@ public static class SiNetCompositionExtensions
         Action<GmailOptions> configureGmail)
     {
         services.AddSiNetLogging();
-        services.AddSiNetFileSystem();
         services.AddSiNetSql();
         services.AddSiNetProcessBackbone();
         services.AddSiNetProjectQuerySql();
@@ -43,6 +44,47 @@ public static class SiNetCompositionExtensions
         services.AddSiNetLegacyBridge();
         services.AddSiNetInspectionSql();
         services.AddSiNetDevTools();
+
+        // ProjectWork runtime (FileServer/ACC/Drive stores + hubs). Google Drive store is registered
+        // by AddSiNetGoogle above; FileServer/ACC + hubs land here.
+        services.AddSiNetProjectWorkRuntime();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the ProjectWork file-index runtime: SQL folder resolvers, FileServer store/watcher,
+    /// ACC store, ACC-write gate (closed by default), FileIndex coordinator, and process-wide
+    /// <see cref="IActiveFileQueryHub"/> / <see cref="IFileOpenHub"/>. Safe to call from hosts that
+    /// already registered Google/Autodesk modules (Drive store comes from <c>AddSiNetGoogle</c>).
+    /// Idempotent for the ACC-write policy via <c>TryAddSingleton</c>.
+    /// </summary>
+    public static IServiceCollection AddSiNetProjectWorkRuntime(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddSiNetFileSystem();
+        services.AddSiNetProjectWorkSql();
+
+        // ACC-write gate: closed by default (writes ship dark). A host may override this registration
+        // with a configuration-driven policy after the ACC-Write-Policy is approved.
+        services.TryAddSingleton<IAccWritePolicy>(new StaticAccWritePolicy(isWriteEnabled: false));
+
+        if (!services.Any(d =>
+                d.ServiceType == typeof(IFileStore)
+                && d.ImplementationType == typeof(SiNet.Infrastructure.Autodesk.ProjectWork.AccFileStore)))
+        {
+            services.AddSingleton<IFileStore, SiNet.Infrastructure.Autodesk.ProjectWork.AccFileStore>();
+        }
+
+        services.TryAddSingleton<IFileIndexService, FileIndexService>();
+        services.TryAddSingleton<ActiveFileQueryHub>();
+        services.TryAddSingleton<IActiveFileQueryHub>(sp => sp.GetRequiredService<ActiveFileQueryHub>());
+        services.TryAddSingleton<IActiveFileQueryService>(sp => sp.GetRequiredService<ActiveFileQueryHub>());
+        services.TryAddSingleton<FileOpenHub>();
+        services.TryAddSingleton<IFileOpenHub>(sp => sp.GetRequiredService<FileOpenHub>());
+        services.TryAddSingleton<IFileOpenService>(sp => sp.GetRequiredService<FileOpenHub>());
+
         return services;
     }
 }

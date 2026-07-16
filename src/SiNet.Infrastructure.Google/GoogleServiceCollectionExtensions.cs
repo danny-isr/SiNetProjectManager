@@ -3,29 +3,29 @@ using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
+using SiNet.Application.ProjectWork;
+using SiNet.Infrastructure.Google.ProjectWork;
 
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>
-/// Modular DI registration for the Google/Gmail module. Wires the native Gmail
-/// <see cref="IEmailGateway"/> (read) and <see cref="IEmailSender"/> (send) implementations
-/// (direct Gmail API access via <see cref="GmailClientProvider"/>) and the native
-/// <see cref="IConnectorAuthService"/> auth/health bridge, with no dependency on the legacy
-/// <c>GoogleService</c> or <c>SiNet.LegacyBridge</c>.
+/// Modular DI registration for the native Google module: shared user OAuth
+/// (<see cref="GmailClientProvider"/>) for Gmail + Drive, Gmail gateway/send/modify,
+/// <see cref="IConnectorAuthService"/>, and ProjectWork <see cref="GoogleDriveFileStore"/>.
 /// </summary>
 public static class GoogleServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the Gmail module with default options. The host should normally use the
+    /// Registers the Google module with default options. The host should normally use the
     /// <see cref="AddSiNetGoogle(IServiceCollection, Action{GmailOptions})"/> overload to point
-    /// the gateway at its client secrets and token store.
+    /// the gateway at its client secrets, token store, and Drive folder ids.
     /// </summary>
     public static IServiceCollection AddSiNetGoogle(this IServiceCollection services)
         => services.AddSiNetGoogle(static _ => { });
 
     /// <summary>
-    /// Registers the Gmail module and lets the host configure <see cref="GmailOptions"/>
-    /// (client secrets path, token store, root label, interactive sign-in).
+    /// Registers the Google module and lets the host configure <see cref="GmailOptions"/>
+    /// (client secrets path, token store, root label, interactive sign-in, Drive folder ids).
     /// </summary>
     public static IServiceCollection AddSiNetGoogle(
         this IServiceCollection services,
@@ -40,6 +40,7 @@ public static class GoogleServiceCollectionExtensions
             return options;
         });
 
+        // Shared user credential owner for Gmail + Drive (one token, auto-refresh).
         services.AddSingleton<GmailClientProvider>(sp => new GmailClientProvider(
             sp.GetRequiredService<GmailOptions>(),
             sp.GetRequiredService<IAppLogger>(),
@@ -54,6 +55,10 @@ public static class GoogleServiceCollectionExtensions
         // user re-consents, SendAsync reports RequiresConsent rather than throwing.
         services.AddSingleton<IEmailSender, GmailEmailSender>();
         services.AddSingleton<IEmailGmailModifyService, GmailEmailModifyService>();
+
+        // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
+        services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();
+        services.AddSingleton<IFileStore, GoogleDriveFileStore>();
 
         return services;
     }

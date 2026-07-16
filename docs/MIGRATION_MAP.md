@@ -1673,7 +1673,7 @@ with all filing/placement logic behind domain services, and **no** direct workfl
 
 | Domain | Legacy source | New home | Status | Notes |
 | --- | --- | --- | --- | --- |
-| ProjectWork / Files | Legacy ProjectWork window(s) + scattered file/filing logic | ProjectWork **Work Surface** + `ProjectFileFilingService` / `FileIndex` domain services; `SiNet.Infrastructure.*` for IO (ACC, Drive, FileSystem) | ⬜ | Screen is a work surface only; filing/placement/versioning/naming live in services; ProjectWork **must not** advance workflow directly. See target below. |
+| ProjectWork / Files | Legacy ProjectWork window(s) + scattered file/filing logic | ProjectWork **Work Surface** (`ProjectWorkWindowView` / `ProjectWorkTreeViewModel`) + native `IFileStore` / `FileIndexService` / hubs; `SiNet.Infrastructure.*` for IO (ACC, Drive, FileSystem); V2 menu + task routing cut over | ✅ | Screen is a work surface only; filing/placement/versioning/naming live in stores/services; task completion via `ITaskCompletionService` (not direct workflow control). Legacy `ProjectWorkView` navigation retired; file may remain for cleanup. |
 
 **Target responsibilities:**
 

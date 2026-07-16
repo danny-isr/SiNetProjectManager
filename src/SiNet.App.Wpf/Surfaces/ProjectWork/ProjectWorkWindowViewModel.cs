@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
@@ -22,13 +23,18 @@ namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 /// is represented here by a read-only work-area placeholder.
 /// </para>
 /// </summary>
-public sealed class ProjectWorkWindowViewModel : ObservableObject
+public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 {
     private readonly ITaskCompletionService? _taskCompletion;
     private readonly ITaskCompletionMetadataResolver? _completionMetadata;
     private readonly ICurrentUserContext? _currentUser;
     private readonly ICurrentProjectContext? _currentProject;
     private readonly IProjectQueryService? _projectQuery;
+    private readonly ProjectWorkTreeViewModel? _tree;
+    private readonly ProjectSelectorViewModel? _selector;
+
+    private int _lastLoadedProjectId;
+    private bool _disposed;
 
     private WorkSurfaceContext? _taskContext;
     private bool _loaded;
@@ -52,20 +58,39 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject
         ITaskCompletionMetadataResolver? completionMetadata = null,
         ICurrentUserContext? currentUser = null,
         ICurrentProjectContext? currentProject = null,
-        IProjectQueryService? projectQuery = null)
+        IProjectQueryService? projectQuery = null,
+        ProjectWorkTreeViewModel? tree = null,
+        ProjectSelectorViewModel? selector = null)
     {
         _taskCompletion = taskCompletion;
         _completionMetadata = completionMetadata;
         _currentUser = currentUser;
         _currentProject = currentProject;
         _projectQuery = projectQuery;
+        _tree = tree;
+        _selector = selector;
 
         AllowedResultCodes = new ObservableCollection<string>();
 
         CompleteTaskCommand = new AsyncRelayCommand(
             async () => { _ = await CompleteFromTaskAsync().ConfigureAwait(true); },
             () => CanCompleteTask);
+
+        // Browse mode: react to the shared Current Project (e.g. driven by the embedded selector) and
+        // (re)load the file tree. Task mode also loads explicitly in ApplyContextAsync; the load is
+        // de-duplicated by project id so it never runs twice for the same project.
+        if (_currentProject is not null)
+            _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
     }
+
+    /// <summary>The unified file/folder tree (null in the design-time / task-only host).</summary>
+    public ProjectWorkTreeViewModel? Tree => _tree;
+
+    /// <summary>Embedded shared project selector for browse mode (null in design-time host).</summary>
+    public ProjectSelectorViewModel? Selector => _selector;
+
+    /// <summary>True when the file workspace (tree) is available in this host.</summary>
+    public bool HasFileWorkspace => _tree is not null;
 
     public string Title => "\u05E1\u05D1\u05D9\u05D1\u05EA \u05E2\u05D1\u05D5\u05D3\u05D4";
 
@@ -143,6 +168,38 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject
         _ = ApplyContextAsync(context);
     }
 
+    /// <summary>
+    /// Browse-mode entry (menu / ShowProjectWork): no task strip. Loads the tree from the current
+    /// project context when available; otherwise leaves the selector ready for the user to pick one.
+    /// </summary>
+    public async Task OpenBrowseModeAsync(CancellationToken cancellationToken = default)
+    {
+        _taskContext = null;
+        _loaded = true;
+        AllowedResultCodes.Clear();
+        SelectedResultCode = null;
+        TaskHeader = string.Empty;
+        StatusMessage = "\u05DE\u05D5\u05DB\u05DF";
+        OnPropertyChanged(nameof(IsTaskMode));
+        OnPropertyChanged(nameof(TaskContext));
+        OnPropertyChanged(nameof(CanCompleteTask));
+        (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+
+        var projectId = _currentProject?.CurrentProject?.ProjectId ?? 0;
+        if (projectId > 0)
+        {
+            ActiveProjectDisplay = _currentProject?.CurrentProject is { } p
+                ? FormatProjectDisplay(p)
+                : $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {projectId}";
+            await LoadTreeAsync(projectId, cancellationToken).ConfigureAwait(true);
+        }
+        else
+        {
+            ActiveProjectDisplay =
+                "\u05D1\u05D7\u05E8/\u05D9 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 \u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05E2\u05E5 \u05D4\u05E7\u05D1\u05E6\u05D9\u05DD";
+        }
+    }
+
     public async Task<bool> ApplyContextAsync(WorkSurfaceContext? context, CancellationToken cancellationToken = default)
     {
         _taskContext = context;
@@ -178,6 +235,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject
             : $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u2014 {context.TaskTypeCode}";
 
         await BindProjectAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
+        await LoadTreeAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
 
         _loaded = true;
         StatusMessage = $"\u05E0\u05E4\u05EA\u05D7\u05D4 \u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u05E2\u05D1\u05D5\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId}.";
@@ -210,6 +268,48 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject
         ActiveProjectDisplay = project is not null
             ? FormatProjectDisplay(project)
             : $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {projectId}";
+    }
+
+    private async Task LoadTreeAsync(int projectId, CancellationToken cancellationToken)
+    {
+        if (_tree is null || projectId <= 0 || projectId == _lastLoadedProjectId)
+            return;
+
+        _lastLoadedProjectId = projectId;
+        try
+        {
+            await _tree.LoadProjectAsync(projectId, cancellationToken).ConfigureAwait(true);
+        }
+        catch
+        {
+            // A failed tree load must not break the task shell; the status bar reflects scan state.
+            _lastLoadedProjectId = 0;
+        }
+    }
+
+    private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
+    {
+        var projectId = e.Project?.ProjectId ?? 0;
+        if (_tree is null || projectId <= 0)
+            return;
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        void Load() => _ = LoadTreeAsync(projectId, CancellationToken.None);
+        if (dispatcher is null || dispatcher.CheckAccess())
+            Load();
+        else
+            dispatcher.BeginInvoke(Load);
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        if (_currentProject is not null)
+            _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
+        _tree?.Dispose();
     }
 
     public async Task<bool> CompleteFromTaskAsync(

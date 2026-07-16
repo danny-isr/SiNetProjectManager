@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Composition;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
@@ -22,6 +23,10 @@ public static class NewSystemWpfServiceCollectionExtensions
     public static IServiceCollection AddSiNetNewSystemWpf(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // ProjectWork file-index runtime + hubs (FileServer/ACC; Drive via AddSiNetGoogle).
+        // Must precede work-surface VM registration so ProjectWorkTreeViewModel can resolve them.
+        services.AddSiNetProjectWorkRuntime();
 
         services.AddSiNetRuntimeStatus();
         services.AddTransient<SystemStatusViewModel>();

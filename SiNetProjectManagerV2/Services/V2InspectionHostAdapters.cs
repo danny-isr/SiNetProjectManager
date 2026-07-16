@@ -2,11 +2,18 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.ProjectWork;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Sql.Services.Inspection;
 using SiNetSQL.Data;
 using SiNetSQL.Services.InspectionSync;
 using SiOffice.GoogleConnector.Reports;
+using NativeActiveFileInfo = SiNet.Application.ProjectWork.ActiveFileInfo;
+using NativeActiveFolderInfo = SiNet.Application.ProjectWork.ActiveFolderInfo;
+using LegacyActiveFileInfo = SiNetSQL.Services.ActiveFileQuery.ActiveFileInfo;
+using LegacyActiveFolderInfo = SiNetSQL.Services.ActiveFileQuery.ActiveFolderInfo;
+using LegacyActiveAlternativeInfo = SiNetSQL.Services.ActiveFileQuery.ActiveAlternativeInfo;
+using LegacyActiveVersionInfo = SiNetSQL.Services.ActiveFileQuery.ActiveVersionInfo;
 
 namespace SiNetProjectManagerV2.Services;
 
@@ -181,28 +188,65 @@ internal sealed class V2InspectionReportCommandService(
     }
 }
 
-/// <summary>V2 host adapters for Inspection file picker / email / screenshot / export seams.</summary>
-internal sealed class V2InspectionFileTreePickerHost : IInspectionFileTreePickerHost
+/// <summary>V2 host adapters for Inspection file picker — native ProjectWork hubs + legacy FileTreePicker UI.</summary>
+internal sealed class V2InspectionFileTreePickerHost(IActiveFileQueryHub activeFiles) : IInspectionFileTreePickerHost
 {
-    public Task<InspectionFilePickResult?> PickReviewedPlanAsync(
-        int projectId, CancellationToken cancellationToken = default) =>
-        // Multi-select reviewed-plans flow does not map cleanly to a single pick result.
-        Task.FromResult<InspectionFilePickResult?>(null);
+    private readonly IActiveFileQueryHub _activeFiles =
+        activeFiles ?? throw new ArgumentNullException(nameof(activeFiles));
+
+    public async Task<IReadOnlyList<InspectionFilePickResult>?> PickReviewedPlansAsync(
+        int projectId, CancellationToken cancellationToken = default)
+    {
+        _ = projectId;
+        if (!_activeFiles.IsAvailable)
+            return null;
+
+        var tree = NativeActiveFileTreeMapper.ToLegacy(_activeFiles.GetActiveFolderTree());
+        var picker = new Inspection.FileTreePicker();
+        var picked = await picker.PickAsync(new FileTreePickerRequest
+        {
+            Title = "בחר תוכניות שנבדקו",
+            Purpose = "ReviewedPlans",
+            SelectionMode = FilePickerSelectionMode.Multiple,
+            Tree = tree,
+        }, cancellationToken).ConfigureAwait(true);
+
+        if (picked is null)
+            return null;
+
+        return picked
+            .Select(p => new InspectionFilePickResult(
+                p.FileName,
+                string.IsNullOrWhiteSpace(p.Alternative) ? null : p.Alternative,
+                Version: null,
+                FullPath: null))
+            .ToList();
+    }
 
     public async Task<InspectionFilePickResult?> PickNoteLinkedFileAsync(
         int projectId, CancellationToken cancellationToken = default)
     {
         _ = projectId;
-        var picker = new Inspection.NoteLinkedFilePicker();
-        var chosen = await picker
-            .PickAsync([], currentSelection: null, cancellationToken)
-            .ConfigureAwait(true);
-        if (chosen is null)
+        if (!_activeFiles.IsAvailable)
             return null;
 
+        var tree = NativeActiveFileTreeMapper.ToLegacy(_activeFiles.GetActiveFolderTree());
+        var picker = new Inspection.FileTreePicker();
+        var picked = await picker.PickAsync(new FileTreePickerRequest
+        {
+            Title = "בחר קובץ מקושר להערה",
+            Purpose = "NoteLinkedFile",
+            SelectionMode = FilePickerSelectionMode.Single,
+            Tree = tree,
+        }, cancellationToken).ConfigureAwait(true);
+
+        if (picked is null || picked.Count == 0)
+            return null;
+
+        var p = picked[0];
         return new InspectionFilePickResult(
-            chosen.FileName,
-            string.IsNullOrWhiteSpace(chosen.Alternative) ? null : chosen.Alternative,
+            p.FileName,
+            string.IsNullOrWhiteSpace(p.Alternative) ? null : p.Alternative,
             Version: null,
             FullPath: null);
     }
@@ -384,9 +428,16 @@ internal sealed class V2InspectionNoteScreenshotHost(
     }
 }
 
-/// <summary>Opens a note-linked file via the live Work Window registries (legacy parity).</summary>
-internal sealed class V2InspectionNoteLinkedFileHost : IInspectionNoteLinkedFileHost
+/// <summary>Opens a note-linked file via the native ProjectWork hubs (IActiveFileQueryHub / IFileOpenHub).</summary>
+internal sealed class V2InspectionNoteLinkedFileHost(
+    IActiveFileQueryHub activeFiles,
+    IFileOpenHub fileOpen) : IInspectionNoteLinkedFileHost
 {
+    private readonly IActiveFileQueryHub _activeFiles =
+        activeFiles ?? throw new ArgumentNullException(nameof(activeFiles));
+    private readonly IFileOpenHub _fileOpen =
+        fileOpen ?? throw new ArgumentNullException(nameof(fileOpen));
+
     public async Task<InspectionLinkedFileOpenResult> OpenAsync(
         InspectionLinkedFileOpenRequest request,
         CancellationToken cancellationToken = default)
@@ -414,7 +465,7 @@ internal sealed class V2InspectionNoteLinkedFileHost : IInspectionNoteLinkedFile
                 .ToList(),
         };
 
-        var available = SiNetSQL.Services.FileOpen.FileOpenServiceRegistry.Instance.IsAvailable;
+        var available = _fileOpen.IsAvailable && _activeFiles.IsAvailable;
         var decision = InspectionFileLinkHelper.DecideOpen(note, report, fileOpenServiceAvailable: available);
         if (!decision.IsEnabled || string.IsNullOrWhiteSpace(decision.FileName))
         {
@@ -424,40 +475,31 @@ internal sealed class V2InspectionNoteLinkedFileHost : IInspectionNoteLinkedFile
                     : decision.Tooltip);
         }
 
-        var match = SiNetSQL.Services.ActiveFileQuery.ActiveFileQueryRegistry.Instance
-            .FindActiveFileByName(decision.FileName!);
+        var match = _activeFiles.FindActiveFileByName(decision.FileName!);
         int? versionNumber = int.TryParse(decision.Version, out var parsed) ? parsed : null;
 
-        var openRequest = match?.FileId != null
-            ? new SiNetSQL.Services.FileOpen.FileOpenRequest(
-                FileId: match.FileId,
-                AlternativeName: string.IsNullOrWhiteSpace(decision.Alternative) ? null : decision.Alternative,
-                VersionNumber: versionNumber)
-            : new SiNetSQL.Services.FileOpen.FileOpenRequest(
-                AlternativeName: string.IsNullOrWhiteSpace(decision.Alternative) ? null : decision.Alternative,
-                VersionNumber: versionNumber);
+        var openRequest = new FileOpenRequest(
+            FileId: match?.FileId,
+            AlternativeName: string.IsNullOrWhiteSpace(decision.Alternative) ? null : decision.Alternative,
+            VersionNumber: versionNumber);
 
         try
         {
-            var result = await SiNetSQL.Services.FileOpen.FileOpenServiceRegistry.Instance
-                .OpenAsync(openRequest, cancellationToken)
-                .ConfigureAwait(false);
+            var result = await _fileOpen.OpenAsync(openRequest, cancellationToken).ConfigureAwait(false);
 
             var message = result.Outcome switch
             {
-                SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedInAcc => $"נפתח ב-ACC: {decision.FileName}",
-                SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedLocally => $"נפתח מקומית: {decision.FileName}",
-                SiNetSQL.Services.FileOpen.FileOpenOutcome.NotFound => $"הקובץ לא נמצא: {decision.FileName}",
-                SiNetSQL.Services.FileOpen.FileOpenOutcome.Unavailable =>
+                FileOpenOutcome.OpenedInAcc => $"נפתח ב-ACC: {decision.FileName}",
+                FileOpenOutcome.OpenedLocally => $"נפתח מקומית: {decision.FileName}",
+                FileOpenOutcome.NotFound => $"הקובץ לא נמצא: {decision.FileName}",
+                FileOpenOutcome.Unavailable =>
                     InspectionFileLinkHelper.MessageWorkWindowRequiredForOpen,
-                SiNetSQL.Services.FileOpen.FileOpenOutcome.Failed =>
+                FileOpenOutcome.Failed =>
                     $"שגיאה בפתיחת קובץ: {result.Error}",
                 _ => decision.Tooltip ?? string.Empty,
             };
 
-            var ok = result.Outcome is SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedInAcc
-                or SiNetSQL.Services.FileOpen.FileOpenOutcome.OpenedLocally;
-            return ok
+            return result.Success
                 ? InspectionLinkedFileOpenResult.Ok(message)
                 : InspectionLinkedFileOpenResult.Fail(message);
         }
@@ -466,6 +508,40 @@ internal sealed class V2InspectionNoteLinkedFileHost : IInspectionNoteLinkedFile
             return InspectionLinkedFileOpenResult.Fail($"שגיאה בפתיחת קובץ: {ex.Message}");
         }
     }
+}
+
+/// <summary>Maps native ProjectWork active-file DTOs onto the legacy FileTreePicker shape.</summary>
+internal static class NativeActiveFileTreeMapper
+{
+    public static IReadOnlyList<LegacyActiveFolderInfo> ToLegacy(IReadOnlyList<NativeActiveFolderInfo> folders)
+        => folders.Select(MapFolder).ToList();
+
+    private static LegacyActiveFolderInfo MapFolder(NativeActiveFolderInfo folder) =>
+        new(
+            folder.FolderId,
+            folder.Title,
+            folder.FullPath,
+            folder.Files.Select(MapFile).ToList(),
+            folder.Children.Select(MapFolder).ToList());
+
+    private static LegacyActiveFileInfo MapFile(NativeActiveFileInfo file) =>
+        new(
+            file.FileId,
+            file.FileName,
+            file.Extension,
+            file.ProjectNumber,
+            file.FolderId,
+            file.StorageDestination,
+            file.Alternatives.Select(a => new LegacyActiveAlternativeInfo(
+                a.AlternativeName,
+                a.Versions.Select(v => new LegacyActiveVersionInfo(
+                    v.VersionNumber,
+                    v.Description,
+                    v.FullPath,
+                    v.Size,
+                    v.Date,
+                    v.AccItemId,
+                    v.AccViewerUrl)).ToList())).ToList());
 }
 
 internal sealed class V2InspectionReportExportPort(

@@ -163,7 +163,13 @@ public sealed class InspectionWindowViewModel : ObservableObject
         ExportReportCommand = new AsyncRelayCommand(
             ExportReportAsync,
             () => SelectedReport is not null && _exportPort is not null && !IsBusy);
-        SelectReviewedPlanCommand = Stub();
+        SelectReviewedPlanCommand = new AsyncRelayCommand(
+            SelectReviewedPlansAsync,
+            () => SelectedReport is not null
+                && _fileTreePicker is not null
+                && _reportCommands is not null
+                && IsReportEditable
+                && !IsBusy);
         AddNoteCommand = new AsyncRelayCommand<InspectionSectionItem>(
             AddNoteToSectionAsync,
             section => section is not null
@@ -994,6 +1000,47 @@ public sealed class InspectionWindowViewModel : ObservableObject
         note.LinkedVersion = picked.Version;
         note.HasLinkedFile = true;
         StatusMessage = $"הקובץ המקושר עודכן: {picked.FileName}";
+        RaiseCommandStates();
+    }
+
+    private async Task SelectReviewedPlansAsync()
+    {
+        if (SelectedReport is null
+            || _fileTreePicker is null
+            || _reportCommands is null
+            || ResolveActiveProjectId() is not int projectId)
+        {
+            StatusMessage = "לא ניתן לבחור תוכניות שנבדקו — חסר דוח, פרויקט או בורר קבצים (פתח סביבת עבודה).";
+            return;
+        }
+
+        var picked = await _fileTreePicker
+            .PickReviewedPlansAsync(projectId)
+            .ConfigureAwait(true);
+        if (picked is null)
+            return;
+
+        var rows = picked
+            .Select((p, i) => new InspectionReviewedFileRow(
+                Id: 0,
+                FileName: p.FileName,
+                Alternative: p.Alternative,
+                SortOrder: i))
+            .ToList();
+
+        var result = await _reportCommands
+            .ReplaceReviewedFilesAsync(SelectedReport.ReportId, rows)
+            .ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            StatusMessage = result.ErrorMessage ?? "שמירת תוכניות שנבדקו נכשלה.";
+            return;
+        }
+
+        Metadata.ReplaceReviewedFiles(rows);
+        StatusMessage = rows.Count == 0
+            ? "רשימת התוכניות שנבדקו רוקנה."
+            : $"עודכנו {rows.Count} תוכניות שנבדקו.";
         RaiseCommandStates();
     }
 

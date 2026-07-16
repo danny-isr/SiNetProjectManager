@@ -685,7 +685,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
             await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
-                // Prefer New System WorkSurfaceLauncher (native ProjectWork task surface + completion).
+                // Native ProjectWork task surface via WorkSurfaceLauncher (no legacy ProjectWorkView fallback).
                 if (App.ServiceProvider.GetService<SiNet.App.Wpf.WorkSurfaces.IWorkSurfaceLauncher>() is { } launcher)
                 {
                     var opened = await launcher.TryOpenFromTaskAsync(request.TaskId).ConfigureAwait(true);
@@ -696,18 +696,18 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                     }
 
                     MessageBox.Show(
-                        $"לא ניתן לפתוח את משימה #{request.TaskId} דרך WorkSurfaceLauncher.\n" +
-                        "אין fallback לחלון סביבת העבודה הישן מנתיב משימה כשה-launcher רשום.",
+                        $"לא ניתן לפתוח את משימה #{request.TaskId} דרך WorkSurfaceLauncher.",
                         "פתיחת משימת עבודה",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                     return;
                 }
 
-                // TEMPORARY — legacy ProjectWork window when launcher is not registered.
-                // REMOVAL WHEN: IWorkSurfaceLauncher is always registered in V2 DI.
-                mainWindow?.ShowProjectWork();
-                mainWindow?.Activate();
+                MessageBox.Show(
+                    "IWorkSurfaceLauncher אינו רשום — לא ניתן לפתוח משימת סביבת עבודה.",
+                    "פתיחת משימת עבודה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             });
         });
     }

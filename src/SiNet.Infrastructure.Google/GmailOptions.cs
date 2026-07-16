@@ -1,8 +1,8 @@
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>
-/// Configuration for the native Gmail integration. Kept free of hard-coded paths so the
-/// host can point the gateway at its own, independent OAuth client and token store.
+/// Configuration for the native Google user session (Gmail + Drive). Kept free of hard-coded paths
+/// so the host can point the module at its own OAuth client, token store, and Shared Drive roots.
 /// </summary>
 public sealed class GmailOptions
 {
@@ -40,4 +40,21 @@ public sealed class GmailOptions
     /// surprise consent prompt; a dedicated "Connect Google" action can enable it later.
     /// </summary>
     public bool AllowInteractiveSignIn { get; set; }
+
+    /// <summary>
+    /// Shared Drive id used by ProjectWork Google Drive file storage. Required together with
+    /// <see cref="ProjectsRootFolderId"/> for Drive to be considered configured.
+    /// </summary>
+    public string? SharedDriveId { get; set; }
+
+    /// <summary>
+    /// Folder id inside the Shared Drive under which all project subtrees are created/resolved.
+    /// This is the central ProjectWork Drive base folder.
+    /// </summary>
+    public string? ProjectsRootFolderId { get; set; }
+
+    /// <summary>True when both Shared Drive and projects-root folder ids are set.</summary>
+    public bool IsDriveConfigured =>
+        !string.IsNullOrWhiteSpace(SharedDriveId) &&
+        !string.IsNullOrWhiteSpace(ProjectsRootFolderId);
 }
