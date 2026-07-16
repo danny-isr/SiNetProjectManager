@@ -445,15 +445,17 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        if (!completion.Success)
+        if (!completion.Success || !completion.TaskClosed)
         {
+            var detail = completion.ErrorMessage
+                         ?? (completion.TaskClosed ? null : "המשימה לא נסגרה (יעד עבודה פתוח / מדיניות סגירה) — אין התקדמות שלב");
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Email.StartWorkflow",
-                $"instance={start.Instance.Id} intake auto-complete FAILED: {completion.ErrorMessage}");
+                $"instance={start.Instance.Id} intake auto-complete FAILED: success={completion.Success} taskClosed={completion.TaskClosed} {detail}");
             return new EmailSuggestedActionExecutionResult(
+                false,
                 true,
-                true,
-                $"תהליך '{definitionName}' הופעל (#{start.Instance.Id}) אך סיווג הקליטה נכשל: {completion.ErrorMessage}. פתח את משימת הזיהוי ידנית.");
+                $"תהליך '{definitionName}' הופעל (#{start.Instance.Id}) אך סיווג הקליטה לא הושלם: {detail}. נסה שוב או פתח את משימת הזיהוי ידנית.");
         }
 
         if (string.Equals(intakeResultCode, NotQuoteRequest, StringComparison.Ordinal))

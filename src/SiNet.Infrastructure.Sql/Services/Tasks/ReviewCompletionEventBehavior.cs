@@ -166,17 +166,19 @@ public static class ReviewCompletionEventBehavior
                 ProjectStatusCodes.LeadReceived,
                 RequestWorkflowAdvance: true),
 
-            // IdentifyQuoteRequest — Intake classification-only completion. The
-            // operator picks one of the two allowed results via the shared
-            // TaskResultPickerDialog; QuoteRequestDetected drives the Proposal
-            // workflow forward to PRP.ProjectSetup, NotQuoteRequest closes the
-            // task without a configured forward transition (lifecycle ends
-            // outside this workflow).
+            // IdentifyQuoteRequest — Intake classification-only completion.
+            // ClosesAssociatedTask: classification IS the work (CreatePriceQuote /
+            // RejectPriceQuote already chose the verdict). Without this flag, a
+            // Pending email WorkTarget link blocks close and auto-advance
+            // (taskClosed=False / willAutoAdvance=False) — seen in manual tests
+            // when the intake task was reused across Proposal instances on the
+            // office project.
             new(ReviewCompletionEvents.ReviewQuoteRequestClassified,
                 new[] { TaskTypeCodes.IdentifyQuoteRequest },
                 new[] { TaskResultCodes.QuoteRequestDetected, TaskResultCodes.NotQuoteRequest },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // ReviewMaterialFiled is the canonical event raised by
             // MoveToProjectProcessActionHandler after a successful filing run.

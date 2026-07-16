@@ -171,6 +171,20 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
         var closure = await EvaluateClosureAsync(task, interaction, behavior).ConfigureAwait(false);
         var taskClosed = false;
 
+        // Classification / "work is done" events close regardless of WorkTarget state — mark
+        // pending targets Done so reused parent tasks (multi-email on office project) stay consistent.
+        if (closure.ShouldClose && behavior.ClosesAssociatedTask)
+        {
+            foreach (var link in task.TaskLinks.Where(l => l.IsWorkTarget
+                         && l.WorkStatus != WorkTargetStatus.Done
+                         && l.WorkStatus != WorkTargetStatus.Skipped))
+            {
+                link.WorkStatus = WorkTargetStatus.Done;
+                link.CompletedAtUtc = nowUtc;
+                link.CompletedByUserId = command.UserId;
+            }
+        }
+
         if (closure.ShouldClose)
         {
             var completedStatus = await db.ProjectAssignmentStatuses

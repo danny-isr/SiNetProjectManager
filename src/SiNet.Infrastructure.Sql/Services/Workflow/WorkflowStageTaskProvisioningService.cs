@@ -239,8 +239,12 @@ internal sealed class WorkflowStageTaskProvisioningService
 
             try
             {
-                // Defence-in-depth: reuse an existing open task for this combo instead of creating a
-                // duplicate that would violate IX_ProjectAssignment_UniqueOpenTask.
+                var taskTypeName = template.TaskType?.Name ?? $"משימה #{template.TaskTypeId}";
+
+                // IX_ProjectAssignment_UniqueOpenTask: one open queued row per
+                // (project, assignee, taskType, parent=null). On the office project many Proposal
+                // emails share that key — reuse the open parent and attach another email WorkTarget
+                // + workflow-instance link (legacy ActionExecutor Tier-2 pattern) instead of failing.
                 var existingOpenTask = await db.ProjectAssignments
                     .Include(t => t.AssignmentStatus)
                     .FirstOrDefaultAsync(t =>
@@ -248,14 +252,17 @@ internal sealed class WorkflowStageTaskProvisioningService
                         && t.AssignedToId == assigneeId
                         && t.TaskTypeId == template.TaskTypeId
                         && t.ParentAssignmentId == null
-                        && t.WorkPriority != null, ct)
+                        && t.WorkPriority != null
+                        && t.AssignmentStatus != null
+                        && t.AssignmentStatus.IsOpen, ct)
                     .ConfigureAwait(false);
 
                 if (existingOpenTask is not null)
                 {
                     Trace.TraceWarning(
                         $"[Provisioning] Open task #{existingOpenTask.Id} already exists for " +
-                        $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}). Reusing.");
+                        $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}). " +
+                        "Reusing parent and linking this email/instance.");
 
                     var alreadyLinked = await db.TaskLinks.AnyAsync(l =>
                         l.TaskId == existingOpenTask.Id
@@ -277,35 +284,33 @@ internal sealed class WorkflowStageTaskProvisioningService
                         });
                     }
 
-                    // Upgrade opaque WF-… titles when we can show the email subject.
-                    var reuseTypeName = template.TaskType?.Name ?? $"משימה #{template.TaskTypeId}";
-                    var readable = BuildHumanReadableTaskTitle(
-                        reuseTypeName, emailSource, instanceId, stageId, template.TaskTypeId);
-                    if (emailSource is not null
-                        && (string.IsNullOrWhiteSpace(existingOpenTask.Title)
-                            || existingOpenTask.Title.StartsWith("WF-", StringComparison.Ordinal)))
+                    // Stable parent title (not per-email WF-… / subject noise).
+                    if (string.IsNullOrWhiteSpace(existingOpenTask.Title)
+                        || existingOpenTask.Title.StartsWith("WF-", StringComparison.Ordinal))
                     {
-                        existingOpenTask.Title = readable;
+                        existingOpenTask.Title = taskTypeName;
                         db.ProjectAssignments.Update(existingOpenTask);
                     }
 
                     await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await AddSourceLinkIfApplicableAsync(db, existingOpenTask.Id, instance, userId, ct)
+                        .ConfigureAwait(false);
 
                     createdTasks.Add(existingOpenTask);
-                    // TEMP WF-DEBUG — reuse path previously looked like "tasksCreated=1" with no TaskCreated line
+                    // TEMP WF-DEBUG
                     WorkflowDebugTrace.Step("Provisioning.TaskCreated",
-                        $"instance={instanceId} stage={stageId} taskId={existingOpenTask.Id} taskTypeId={template.TaskTypeId} assignedTo={assigneeId} REUSED existing open task (project={instance.ProjectId}) title='{existingOpenTask.Title}'");
+                        $"instance={instanceId} stage={stageId} taskId={existingOpenTask.Id} taskTypeId={template.TaskTypeId} assignedTo={assigneeId} REUSED parent+link email={(emailSource?.Id.ToString() ?? "none")} title='{existingOpenTask.Title}'");
                     continue;
                 }
 
-                var taskTypeName = template.TaskType?.Name ?? $"משימה #{template.TaskTypeId}";
                 var task = new ProjectAssignment
                 {
                     ProjectId = instance.ProjectId,
                     AssignedToId = assigneeId,
                     TaskTypeId = template.TaskTypeId,
                     StatusId = openStatusId,
-                    Title = BuildHumanReadableTaskTitle(taskTypeName, emailSource, instanceId, stageId, template.TaskTypeId),
+                    // Parent queue title = task type name; email subject lives on TaskLinks / body.
+                    Title = taskTypeName,
                 };
 
                 await WorkflowTaskFactory.CreateAsync(db, task, userId,
@@ -319,7 +324,7 @@ internal sealed class WorkflowStageTaskProvisioningService
                 createdTasks.Add(task);
                 // TEMP WF-DEBUG
                 WorkflowDebugTrace.Step("Provisioning.TaskCreated",
-                    $"instance={instanceId} stage={stageId} taskId={task.Id} taskTypeId={template.TaskTypeId} assignedTo={task.AssignedToId?.ToString() ?? "(none)"}");
+                    $"instance={instanceId} stage={stageId} taskId={task.Id} taskTypeId={template.TaskTypeId} assignedTo={task.AssignedToId?.ToString() ?? "(none)"} title='{task.Title}'");
             }
             catch (Exception ex)
             {
