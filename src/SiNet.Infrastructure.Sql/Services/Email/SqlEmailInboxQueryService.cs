@@ -27,10 +27,31 @@ public sealed class SqlEmailInboxQueryService(IDbContextFactory<SiNetSQLDbContex
                 message.FromAddress,
                 message.ReceivedUtc,
                 message.MessageUniqueId,
-                message.InternetMessageId))
+                message.InternetMessageId,
+                message.InboxAccProjectId,
+                message.InboxAccFolderId))
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         return row;
+    }
+
+    public async Task<IReadOnlyList<EmailInboxAttachmentViewDto>> GetAttachmentsAsync(
+        int inboxMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        return await db.EmailInboxAttachments
+            .AsNoTracking()
+            .Where(a => a.MessageId == inboxMessageId)
+            .OrderBy(a => a.AttachmentIndex)
+            .Select(a => new EmailInboxAttachmentViewDto(
+                a.Id,
+                a.OriginalFileName ?? a.SavedFileName ?? $"קובץ #{a.AttachmentIndex}",
+                a.AttachmentIndex,
+                a.AccItemId))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 }

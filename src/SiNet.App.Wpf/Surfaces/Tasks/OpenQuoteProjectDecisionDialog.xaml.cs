@@ -1,17 +1,21 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email;
+using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
 namespace SiNet.App.Wpf.Surfaces.Tasks;
 
 /// <summary>
-/// Native ProjectSetup host for <c>OpenQuoteProject</c>: shows the source email and lets the
-/// operator either create a project (→ <c>ProjectOpened</c>) or decline (→ <c>NotQuoteRequest</c>).
-/// Filing / MoveToProject belongs to the next stage (<c>FileQuoteMaterial</c>).
+/// Combined ProjectSetup host: email + ACC attachments + native project-create form,
+/// with decline ("לא הצעת מחיר"). Filing / MoveToProject stays in the next stage.
 /// </summary>
 public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyChanged
 {
@@ -22,29 +26,54 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
 
     private readonly WorkSurfaceContext _context;
     private readonly ITaskCompletionService _completion;
-    private readonly IProjectCreateDialogFactory _projectCreate;
+    private readonly ProjectCreateDialogViewModel _createVm;
+    private readonly IPlaceCatalogService _places;
+    private readonly ICompanyCatalogService _companies;
     private readonly IEmailInboxQueryService? _inboxQuery;
+    private readonly IAccResolvedDocsUrlLauncher? _accLauncher;
 
     private string _subject = "טוען…";
     private string _fromDisplay = string.Empty;
     private string _dateDisplay = string.Empty;
     private string _statusMessage = string.Empty;
+    private string _attachmentsHint = string.Empty;
+    private string? _accProjectId;
+    private string? _accFolderId;
+    private bool _completing;
 
     public OpenQuoteProjectDecisionDialog(
         WorkSurfaceContext context,
         ITaskCompletionService completion,
-        IProjectCreateDialogFactory projectCreate,
-        IEmailInboxQueryService? inboxQuery = null)
+        ProjectCreateDialogViewModel createVm,
+        IPlaceCatalogService places,
+        ICompanyCatalogService companies,
+        IEmailInboxQueryService? inboxQuery = null,
+        IAccResolvedDocsUrlLauncher? accLauncher = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _completion = completion ?? throw new ArgumentNullException(nameof(completion));
-        _projectCreate = projectCreate ?? throw new ArgumentNullException(nameof(projectCreate));
+        _createVm = createVm ?? throw new ArgumentNullException(nameof(createVm));
+        _places = places ?? throw new ArgumentNullException(nameof(places));
+        _companies = companies ?? throw new ArgumentNullException(nameof(companies));
         _inboxQuery = inboxQuery;
+        _accLauncher = accLauncher;
+
+        if (_context.PrimaryWorkTargetEntityId is int emailId && emailId > 0)
+            _createVm.EmailMessageId = emailId;
+        _createVm.PrimaryActionLabel = "פתיחת פרויקט";
 
         InitializeComponent();
         DataContext = this;
+        ProjectFormHost.DataContext = _createVm;
+
+        _createVm.RequestClose += OnCreateRequestClose;
+        _createVm.RequestPlacePicker += OnRequestPlacePickerAsync;
+        _createVm.RequestCompanyPicker += OnRequestCompanyPickerAsync;
+        Closed += OnClosed;
         Loaded += OnLoaded;
     }
+
+    public ObservableCollection<AttachmentRow> Attachments { get; } = [];
 
     public string Subject
     {
@@ -70,17 +99,40 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         private set => SetField(ref _statusMessage, value);
     }
 
+    public string AttachmentsHint
+    {
+        get => _attachmentsHint;
+        private set => SetField(ref _attachmentsHint, value);
+    }
+
     public string PromptHint =>
         _context.TaskId is int taskId
-            ? $"משימה #{taskId} — פתח פרויקט חדש להצעת מחיר, או סמן שזה לא רלוונטי."
-            : "פתח פרויקט חדש להצעת מחיר, או סמן שזה לא רלוונטי.";
+            ? $"משימה #{taskId} — מלא פרטי פרויקט למטה, או סמן שזה לא הצעת מחיר. אפשר לפתוח קבצים ב-ACC לפני האישור."
+            : "מלא פרטי פרויקט למטה, או סמן שזה לא הצעת מחיר. אפשר לפתוח קבצים ב-ACC לפני האישור.";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
-        await LoadEmailAsync().ConfigureAwait(true);
+        try
+        {
+            await LoadEmailAsync().ConfigureAwait(true);
+            await _createVm.InitializeAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"שגיאה בטעינה: {ex.Message}";
+        }
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        Closed -= OnClosed;
+        _createVm.RequestClose -= OnCreateRequestClose;
+        _createVm.RequestPlacePicker -= OnRequestPlacePickerAsync;
+        _createVm.RequestCompanyPicker -= OnRequestCompanyPickerAsync;
+        _createVm.Dispose();
     }
 
     private async Task LoadEmailAsync()
@@ -90,56 +142,108 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
             Subject = _context.PrimaryWorkTargetEntityId is int id
                 ? $"מייל מקור #{id}"
                 : "(אין קישור למייל מקור)";
+            AttachmentsHint = "אין מייל מקור — לא ניתן להציג קבצים.";
+            return;
+        }
+
+        var email = await _inboxQuery.GetByIdAsync(emailId).ConfigureAwait(true);
+        if (email is null)
+        {
+            Subject = $"מייל #{emailId} לא נמצא";
+            return;
+        }
+
+        Title = $"פתיחת פרויקט הצעת מחיר — {Truncate(email.Subject, 60)}";
+        Subject = string.IsNullOrWhiteSpace(email.Subject) ? "(ללא נושא)" : email.Subject!;
+        FromDisplay = string.IsNullOrWhiteSpace(email.FromAddress)
+            ? "מאת: (לא ידוע)"
+            : $"מאת: {email.FromAddress}";
+        DateDisplay = $"תאריך: {email.ReceivedUtc.ToLocalTime():dd/MM/yyyy HH:mm}";
+        _accProjectId = email.InboxAccProjectId;
+        _accFolderId = email.InboxAccFolderId;
+
+        var attachments = await _inboxQuery.GetAttachmentsAsync(emailId).ConfigureAwait(true);
+        Attachments.Clear();
+        foreach (var a in attachments)
+            Attachments.Add(new AttachmentRow(a));
+
+        if (Attachments.Count == 0)
+            AttachmentsHint = "אין קבצים מקושרים למייל זה.";
+        else if (Attachments.All(a => !a.CanOpenInAcc))
+            AttachmentsHint = "הקבצים עדיין לא זמינים ב-ACC לפתיחה.";
+        else if (string.IsNullOrWhiteSpace(_accProjectId))
+            AttachmentsHint = "חסר מזהה פרויקט ACC — לא ניתן לפתוח קבצים.";
+        else
+            AttachmentsHint = "לחיצה על «פתח ב-ACC» פותחת את הקובץ בדפדפן Autodesk.";
+    }
+
+    private async void OnCreateRequestClose(bool confirmed)
+    {
+        if (_completing)
+            return;
+
+        if (!confirmed)
+        {
+            DialogResult = false;
+            Close();
+            return;
+        }
+
+        if (_createVm.CreatedProjectId is not > 0)
+        {
+            StatusMessage = "יצירת הפרויקט לא החזירה מזהה.";
+            return;
+        }
+
+        StatusMessage = $"נוצר פרויקט #{_createVm.CreatedProjectId} — סוגר משימה…";
+        IsEnabled = false;
+        _completing = true;
+        var ok = await CompleteAsync(ProjectCreatedEvent, ProjectOpened).ConfigureAwait(true);
+        if (!ok)
+        {
+            _completing = false;
+            IsEnabled = true;
+        }
+    }
+
+    private void OpenAttachment_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: AttachmentRow row })
+            return;
+
+        if (!row.CanOpenInAcc)
+        {
+            MessageBox.Show("הקובץ עדיין לא הועלה ל-ACC.", "לא זמין",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_accProjectId))
+        {
+            MessageBox.Show("מזהה פרויקט ACC לא נמצא למייל זה.", "לא זמין",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (_accLauncher is null)
+        {
+            MessageBox.Show("שירות פתיחת ACC אינו זמין.", "לא זמין",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         try
         {
-            var email = await _inboxQuery.GetByIdAsync(emailId).ConfigureAwait(true);
-            if (email is null)
-            {
-                Subject = $"מייל #{emailId} לא נמצא";
-                return;
-            }
-
-            Title = $"פתיחת פרויקט הצעת מחיר — {Truncate(email.Subject, 60)}";
-            Subject = string.IsNullOrWhiteSpace(email.Subject) ? "(ללא נושא)" : email.Subject!;
-            FromDisplay = string.IsNullOrWhiteSpace(email.FromAddress)
-                ? "מאת: (לא ידוע)"
-                : $"מאת: {email.FromAddress}";
-            DateDisplay = $"תאריך: {email.ReceivedUtc.ToLocalTime():dd/MM/yyyy HH:mm}";
+            var url = AccResolvedDocsUrlBuilder.Build(
+                _accProjectId,
+                _accFolderId ?? string.Empty,
+                row.AccItemId!);
+            _accLauncher.Open(url);
         }
         catch (Exception ex)
         {
-            Subject = $"שגיאה בטעינת המייל: {ex.Message}";
-        }
-    }
-
-    private async void OpenProject_Click(object sender, RoutedEventArgs e)
-    {
-        StatusMessage = string.Empty;
-        IsEnabled = false;
-        try
-        {
-            var emailId = _context.PrimaryWorkTargetEntityId is int id && id > 0 ? id : (int?)null;
-            var created = _projectCreate.ShowDialog(this, emailId);
-            if (!created.Confirmed || created.ProjectId is not > 0)
-            {
-                IsEnabled = true;
-                return;
-            }
-
-            StatusMessage = $"נוצר פרויקט #{created.ProjectId} — סוגר משימה…";
-            var ok = await CompleteAsync(ProjectCreatedEvent, ProjectOpened).ConfigureAwait(true);
-            if (!ok)
-            {
-                IsEnabled = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"שגיאה: {ex.Message}", "פתיחת פרויקט", MessageBoxButton.OK, MessageBoxImage.Error);
-            IsEnabled = true;
+            MessageBox.Show($"שגיאה בפתיחת הקובץ: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -155,9 +259,13 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
 
         StatusMessage = string.Empty;
         IsEnabled = false;
+        _completing = true;
         var ok = await CompleteAsync(QuoteClassifiedEvent, NotQuoteRequest).ConfigureAwait(true);
         if (!ok)
+        {
+            _completing = false;
             IsEnabled = true;
+        }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
@@ -213,6 +321,54 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         }
     }
 
+    private async Task<PlaceDto?> OnRequestPlacePickerAsync()
+    {
+        var pickerVm = new PlacePickerDialogViewModel(_places);
+        var window = new Window
+        {
+            Title = "בחר מקום",
+            Owner = this,
+            Width = 560,
+            Height = 560,
+            FlowDirection = FlowDirection.RightToLeft,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new PlacePickerDialogView { DataContext = pickerVm },
+        };
+        ThemeWindowChrome.ApplyThemedWindowBackground(window);
+        pickerVm.RequestClose += result =>
+        {
+            window.DialogResult = result;
+            window.Close();
+        };
+        await pickerVm.InitializeAsync().ConfigureAwait(true);
+        return window.ShowDialog() == true ? pickerVm.SelectedPlaceDto : null;
+    }
+
+    private async Task<(CompanyDto? Company, ContactDto? Contact)> OnRequestCompanyPickerAsync()
+    {
+        var pickerVm = new CompanyContactPickerDialogViewModel(_companies);
+        var window = new Window
+        {
+            Title = "בחר חברה ואיש קשר",
+            Owner = this,
+            Width = 720,
+            Height = 560,
+            FlowDirection = FlowDirection.RightToLeft,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new CompanyContactPickerDialogView { DataContext = pickerVm },
+        };
+        ThemeWindowChrome.ApplyThemedWindowBackground(window);
+        pickerVm.RequestClose += result =>
+        {
+            window.DialogResult = result;
+            window.Close();
+        };
+        await pickerVm.InitializeAsync().ConfigureAwait(true);
+        return window.ShowDialog() == true
+            ? (pickerVm.SelectedCompany, pickerVm.SelectedContact)
+            : (null, null);
+    }
+
     private static string Truncate(string? value, int max)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -226,5 +382,13 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         if (field == value) return;
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    public sealed class AttachmentRow(EmailInboxAttachmentViewDto dto)
+    {
+        public int Id { get; } = dto.Id;
+        public string FileName { get; } = dto.FileName;
+        public string? AccItemId { get; } = dto.AccItemId;
+        public bool CanOpenInAcc { get; } = dto.CanOpenInAcc;
     }
 }

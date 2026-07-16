@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
@@ -10,6 +11,7 @@ using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email;
+using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -97,7 +99,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         {
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Launcher.Open",
-                $"task={context.TaskId} → routing to OpenQuoteProject decision dialog (email={context.PrimaryWorkTargetEntityId})");
+                $"task={context.TaskId} → routing to OpenQuoteProject combined dialog (email={context.PrimaryWorkTargetEntityId})");
 
             if (_services.GetService<ITaskCompletionService>() is not { } openQuoteCompletion)
             {
@@ -105,17 +107,22 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 return false;
             }
 
-            if (_services.GetService<IProjectCreateDialogFactory>() is not { } projectCreate)
+            if (_services.GetService<ProjectCreateDialogViewModel>() is not { } createVm
+                || _services.GetService<IPlaceCatalogService>() is not { } places
+                || _services.GetService<ICompanyCatalogService>() is not { } companies)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] IProjectCreateDialogFactory is not registered.");
+                Trace.TraceWarning("[WorkSurfaceLauncher] Project create services are not registered.");
                 return false;
             }
 
             var openQuoteDialog = new OpenQuoteProjectDecisionDialog(
                 context,
                 openQuoteCompletion,
-                projectCreate,
-                _services.GetService<IEmailInboxQueryService>())
+                createVm,
+                places,
+                companies,
+                _services.GetService<IEmailInboxQueryService>(),
+                _services.GetService<IAccResolvedDocsUrlLauncher>())
             {
                 Owner = System.Windows.Application.Current?.MainWindow,
             };

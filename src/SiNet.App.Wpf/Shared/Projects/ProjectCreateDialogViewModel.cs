@@ -167,6 +167,9 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
     /// </summary>
     public int? EmailMessageId { get; set; }
 
+    /// <summary>Label for the primary create button (default: אישור).</summary>
+    public string PrimaryActionLabel { get; set; } = "אישור";
+
     public int? CreatedProjectId { get; private set; }
 
     public string? CreatedProjectTitle { get; private set; }

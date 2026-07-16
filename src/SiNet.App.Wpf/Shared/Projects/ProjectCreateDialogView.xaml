@@ -101,10 +101,10 @@
                        Margin="0,0,0,8"/>
 
             <StackPanel Grid.Row="15" Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="אישור"
+                <Button Content="{Binding PrimaryActionLabel}"
                         Command="{Binding CreateCommand}"
                         Style="{DynamicResource SiPrimaryButtonStyle}"
-                        MinWidth="100" Margin="0,0,8,0"
+                        MinWidth="120" Margin="0,0,8,0"
                         IsDefault="True"/>
                 <Button Content="ביטול"
                         Command="{Binding CancelCommand}"

@@ -10,4 +10,6 @@ public sealed record EmailInboxMessageDto(
     string? FromAddress,
     DateTime ReceivedUtc,
     string MessageUniqueId,
-    string InternetMessageId);
+    string InternetMessageId,
+    string? InboxAccProjectId = null,
+    string? InboxAccFolderId = null);
