@@ -7,6 +7,7 @@ namespace SiNet.Application.Identity;
 public static class AppFeatureCodes
 {
     public const string ShellOpenEmailSurface = "Shell.OpenEmailSurface";
+    public const string ShellOpenProjectWorkSurface = "Shell.OpenProjectWorkSurface";
     public const string ShellOpenInspectionSurface = "Shell.OpenInspectionSurface";
     public const string ShellOpenTaskPanelReadOnly = "Shell.OpenTaskPanelReadOnly";
     public const string ShellOpenWorkflowClosedViewer = "Shell.OpenWorkflowClosedViewer";

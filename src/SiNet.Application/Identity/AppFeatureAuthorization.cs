@@ -10,6 +10,7 @@ public static class AppFeatureAuthorization
         new Dictionary<string, AppRole>(StringComparer.Ordinal)
         {
             [AppFeatureCodes.ShellOpenEmailSurface] = AppRole.Employee,
+            [AppFeatureCodes.ShellOpenProjectWorkSurface] = AppRole.Employee,
             [AppFeatureCodes.ShellOpenInspectionSurface] = AppRole.Employee,
             [AppFeatureCodes.ShellOpenTaskPanelReadOnly] = AppRole.Employee,
             [AppFeatureCodes.ShellOpenWorkflowClosedViewer] = AppRole.Employee,

@@ -11,6 +11,7 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
+using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.App.Wpf.Theme;
@@ -111,6 +112,15 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "מיילים",
                 () => emailSurfaceHost.Show(),
                 "פתיחת מסך דוא\"ל בתוך האפליקציה (נשמר בזיכרון)"));
+        }
+
+        if (_services.GetService<ProjectWorkSurfaceHost>() is { } projectWorkHost
+            && CanAccessFeature(AppFeatureCodes.ShellOpenProjectWorkSurface))
+        {
+            projects.Add(new NewShellMenuItem(
+                "בעבודה 2",
+                () => _ = OpenProjectWorkBrowseAsync(projectWorkHost),
+                "סביבת קבצי פרויקט בתוך האפליקציה (נשמרת בזיכרון)"));
         }
 
         AddGroupIfAny(top, "פרויקטים ותבניות", projects);
@@ -287,6 +297,31 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת פרויקט חדש: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private static async Task OpenProjectWorkBrowseAsync(ProjectWorkSurfaceHost host)
+    {
+        try
+        {
+            var opened = await host.TryOpenBrowseAsync().ConfigureAwait(true);
+            if (!opened)
+            {
+                MessageBox.Show(
+                    "לא ניתן לפתוח את סביבת העבודה בתוך המעטפת.",
+                    "בעבודה 2",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת בעבודה 2: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

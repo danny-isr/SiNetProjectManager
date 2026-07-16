@@ -89,8 +89,8 @@
                 <MenuItem Header="עדכון פרויקט"      Click="OpenTemplate_Click" Visibility="{Binding IsInProjectManagers , Converter={StaticResource BoolToVis}}"/>
                 <Separator/>
                 <MenuItem Header="בעבודה"            Click="Approve_Click" Visibility="{Binding IsInUsers , Converter={StaticResource BoolToVis}}"/>
-                <MenuItem Header="בעבודה 2"          Click="OpenProjectWork2_Click" Visibility="{Binding IsInUsers , Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="מיילים"           Click="OpenEmailManagement_Click" Visibility="{Binding IsInUsers , Converter={StaticResource BoolToVis}}"/>
+                <MenuItem Header="בעבודה 2"          Click="OpenProjectWork2_Click" Visibility="{Binding IsInUsers , Converter={StaticResource BoolToVis}}"/>
                 <MenuItem Header="ניהול קבצים"      Command="{Binding OpenProjectFilesCommand}" Visibility="{Binding IsInAdmins, Converter={StaticResource BoolToVis}}"/>
                 <Separator/>
                 <MenuItem Header="בקרה"             Click="Control_Click" Visibility="{Binding IsInAdmins , Converter={StaticResource BoolToVis}}"/>

@@ -13,6 +13,7 @@ public sealed class AppFeatureCodesCoverageTests
         new[]
         {
             AppFeatureCodes.ShellOpenEmailSurface,
+            AppFeatureCodes.ShellOpenProjectWorkSurface,
             AppFeatureCodes.ShellOpenInspectionSurface,
             AppFeatureCodes.ShellOpenTaskPanelReadOnly,
             AppFeatureCodes.ShellOpenWorkflowClosedViewer,
