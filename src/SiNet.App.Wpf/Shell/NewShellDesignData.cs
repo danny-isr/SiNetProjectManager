@@ -5,8 +5,7 @@ namespace SiNet.App.Wpf.Shell;
 
 /// <summary>
 /// Design-time sample data for <see cref="NewShellWindow"/> so the XAML designer can render the clean
-/// shell (header, migrated-only menu, status bar) without DI or a database. Referenced via
-/// <c>d:DataContext</c> only; never used at runtime.
+/// shell (header, hierarchical menu, status bar) without DI or a database.
 /// </summary>
 public sealed class NewShellDesignData : NewShellViewModel
 {
@@ -38,11 +37,20 @@ public sealed class NewShellDesignData : NewShellViewModel
 
     private static IEnumerable<NewShellMenuItem> CreateSampleMenu() =>
     [
-        // Design-time labels mirror production pilot menu text (see NewShellFactory); Inspection harness is DEBUG-only at runtime.
-        new NewShellMenuItem("דוא\"ל", static () => { }, "Inbox hosted in main shell"),
-        new NewShellMenuItem("משימות — Task Workbench", static () => { }, "תורים אישיים"),
-        new NewShellMenuItem("פתיחת פרויקט חדש", static () => { }, "יצירת פרויקט חדש"),
-        new NewShellMenuItem("ביקורת (מעטפת — DEBUG)", static () => { }, "Developer harness — not in Release shell menu"),
-        new NewShellMenuItem("הגדרות", static () => { }, "בקרוב", isAvailable: false),
+        NewShellMenuItem.Group("פרויקטים ותבניות",
+        [
+            new NewShellMenuItem("פתיחת פרויקט חדש", static () => { }),
+            new NewShellMenuItem("מיילים", static () => { }),
+        ]),
+        NewShellMenuItem.Group("משימות",
+        [
+            new NewShellMenuItem("לוח משימות", static () => { }),
+            new NewShellMenuItem("דוחות ביקורת", static () => { }),
+        ]),
+        NewShellMenuItem.Group("מנהלה",
+        [
+            new NewShellMenuItem("הגדרות אישיות", static () => { }),
+            new NewShellMenuItem("מצב מערכת", static () => { }),
+        ]),
     ];
 }

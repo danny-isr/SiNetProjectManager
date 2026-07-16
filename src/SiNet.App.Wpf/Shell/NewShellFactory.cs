@@ -81,98 +81,90 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             contentHost.Attach(viewModel);
         }
 
-        var selectorView = TryCreateProjectSelector();
         var emailSurfaceHost = _services.GetService<IEmailSurfaceHost>();
-
-        return new NewShellWindow(viewModel, selectorView, emailSurfaceHost);
+        return new NewShellWindow(viewModel, emailSurfaceHost);
     }
 
     /// <summary>
-    /// Builds the shell menu from surfaces that ALREADY exist in the refactored stack. Nothing legacy
-    /// is scanned or copied; each item opens its surface through the same DI/factory the legacy host
-    /// uses. Menu availability is resolved via <see cref="IAuthorizationQueryService"/> (not legacy
-    /// singletons in this assembly).
+    /// Builds a hierarchical shell menu (top groups + submenus), mirroring the legacy
+    /// <c>MainWindow</c> layout. Only groups that have at least one available child are included.
     /// </summary>
     private IReadOnlyList<NewShellMenuItem> BuildMigratedOnlyMenu()
     {
-        var items = new List<NewShellMenuItem>();
+        var top = new List<NewShellMenuItem>();
 
-        // Email — hosted inside the main shell as a singleton surface (legacy EmailManagementView cache).
-        if (_services.GetService<IEmailSurfaceHost>() is { } emailSurfaceHost
-            && CanAccessFeature(AppFeatureCodes.ShellOpenEmailSurface))
-        {
-            items.Add(new NewShellMenuItem(
-                "דוא\"ל",
-                () => emailSurfaceHost.Show(),
-                "פתיחת מסך דוא\"ל בתוך האפליקציה (נשמר בזיכרון)"));
-        }
-
-        // Task Panel — read-only pilot (three personal bucket queues via ITaskQueryService).
-        if (_services.GetService<ITaskPanelReadOnlyWindowFactory>() is { } taskPanelFactory
-            && CanAccessFeature(AppFeatureCodes.ShellOpenTaskPanelReadOnly))
-        {
-            items.Add(new NewShellMenuItem(
-                "משימות — Task Workbench",
-                () => ShowWindow(taskPanelFactory.Create()),
-                "תורים אישיים Quick / Medium / Long — צפייה, הוספה ומחיקה בסיסית"));
-        }
-
-        // New Project — native create dialog (place / company / job types).
+        // ── פרויקטים ותבניות ──────────────────────────────────────────────
+        var projects = new List<NewShellMenuItem>();
         if (_services.GetService<IProjectCreateDialogFactory>() is { } projectCreateFactory
             && CanAccessFeature(AppFeatureCodes.ProjectCreate))
         {
-            items.Add(new NewShellMenuItem(
+            projects.Add(new NewShellMenuItem(
                 "פתיחת פרויקט חדש",
                 () => OpenNewProject(projectCreateFactory),
                 "יצירת פרויקט חדש עם מקום, חברה, איש קשר וסוגי פרויקט"));
         }
 
-        // Inspection report window (visual clone) — production target surface.
+        if (_services.GetService<IEmailSurfaceHost>() is { } emailSurfaceHost
+            && CanAccessFeature(AppFeatureCodes.ShellOpenEmailSurface))
+        {
+            projects.Add(new NewShellMenuItem(
+                "מיילים",
+                () => emailSurfaceHost.Show(),
+                "פתיחת מסך דוא\"ל בתוך האפליקציה (נשמר בזיכרון)"));
+        }
+
+        AddGroupIfAny(top, "פרויקטים ותבניות", projects);
+
+        // ── משימות ────────────────────────────────────────────────────────
+        var tasks = new List<NewShellMenuItem>();
+        if (_services.GetService<ITaskPanelReadOnlyWindowFactory>() is { } taskPanelFactory
+            && CanAccessFeature(AppFeatureCodes.ShellOpenTaskPanelReadOnly))
+        {
+            tasks.Add(new NewShellMenuItem(
+                "לוח משימות",
+                () => ShowWindow(taskPanelFactory.Create()),
+                "תורים אישיים Quick / Medium / Long"));
+        }
+
         if (_services.GetService<IInspectionWindowFactory>() is { } inspectionFactory
             && CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
         {
-            items.Add(new NewShellMenuItem(
+            tasks.Add(new NewShellMenuItem(
                 "דוחות ביקורת",
                 () => ShowWindow(inspectionFactory.Create()),
                 "חלון בדיקת דוח (מערכת חדשה)"));
         }
 
-        // Workflow closed-world viewer — native App.Wpf surface (catalog-bound, no save).
         if (_services.GetService<IWorkflowClosedViewerWindowFactory>() is { } workflowViewerFactory
             && CanAccessFeature(AppFeatureCodes.ShellOpenWorkflowClosedViewer))
         {
-            items.Add(new NewShellMenuItem(
-                "תהליכים — קנבס (צפייה)",
+            tasks.Add(new NewShellMenuItem(
+                "צפייה בתהליכים (סגור)",
                 () => ShowWindow(workflowViewerFactory.Create()),
                 "קנבס ויזואלי לקריאה בלבד — מקרא + תבניות, ללא שמירה"));
         }
 
 #if DEBUG
-        // InspectionShellView is a developer harness only — NOT part of the limited production pilot.
-        // Release builds must not expose it in the shell menu. Dev entry points remain in V2 legacy
-        // MainWindow admin preview (OpenInspectionFromTask_Click) and standalone harness.
         if (CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
         {
-            items.Add(new NewShellMenuItem(
+            tasks.Add(new NewShellMenuItem(
                 "ביקורת (מעטפת — DEBUG)",
                 OpenInspectionShell,
                 "Developer harness — not for production users"));
         }
 #endif
 
-#if DEBUG
-        AppendDevToolsMenuItems(items);
-#endif
+        AddGroupIfAny(top, "משימות", tasks);
 
-        // Native user admin — App.Wpf surfaces + Infrastructure.Sql (see docs/NEW_SYSTEM_BOUNDARY.md).
+        // ── משתמשים והרשאות ───────────────────────────────────────────────
+        var users = new List<NewShellMenuItem>();
         if (CanAccessFeature(AppFeatureCodes.UsersManage))
         {
-            items.Add(new NewShellMenuItem(
+            users.Add(new NewShellMenuItem(
                 "ניהול משתמשים",
                 OpenNativeUserList,
                 "רשימת משתמשים (מערכת חדשה)"));
-
-            items.Add(new NewShellMenuItem(
+            users.Add(new NewShellMenuItem(
                 "הוספת משתמש",
                 OpenNativeAddUser,
                 "הוספת משתמש חדש (מערכת חדשה)"));
@@ -180,33 +172,19 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         if (CanAccessFeature(AppFeatureCodes.ActionPermissionsManage))
         {
-            items.Add(new NewShellMenuItem(
+            users.Add(new NewShellMenuItem(
                 "הרשאות פעולה",
                 OpenNativeActionPermissions,
                 "ניהול הרשאות פעולה (מערכת חדשה)"));
         }
 
-        if (CanAccessFeature(AppFeatureCodes.SystemSettingsWrite))
-        {
-            items.Add(new NewShellMenuItem(
-                "מפתחות וסודות",
-                OpenNativeSecretSetup,
-                "הגדרת מפתחות וסודות (Credential Vault)"));
+        AddGroupIfAny(top, "משתמשים והרשאות", users);
 
-            items.Add(new NewShellMenuItem(
-                "סטטוס ACC",
-                OpenNativeAccControlPlaneStatus,
-                "מצב ריצה / browse / reconciliation של ACC"));
-        }
-
+        // ── מנהלה (הגדרות + כלי ניהול + מצב מערכת) ────────────────────────
+        var admin = new List<NewShellMenuItem>();
         if (HasAuthenticatedUser())
         {
-            items.Add(new NewShellMenuItem(
-                "מצב מערכת",
-                OpenNativeSystemStatus,
-                "מצב מערכות־משנה ועבודת רקע (מערכת חדשה)"));
-
-            items.Add(new NewShellMenuItem(
+            admin.Add(new NewShellMenuItem(
                 "הגדרות אישיות",
                 OpenNativePersonalSettings,
                 "הגדרות אישיות (JSON מקומי)"));
@@ -214,13 +192,49 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         if (CanAccessFeature(AppFeatureCodes.SystemSettingsWrite))
         {
-            items.Add(new NewShellMenuItem(
+            admin.Add(new NewShellMenuItem(
                 "הגדרות מערכת",
                 OpenNativeSystemSettings,
                 "הגדרות מערכת / שרת (Administrator)"));
+            admin.Add(new NewShellMenuItem(
+                "מפתחות וסודות",
+                OpenNativeSecretSetup,
+                "הגדרת מפתחות וסודות (Credential Vault)"));
+            admin.Add(new NewShellMenuItem(
+                "סטטוס ACC",
+                OpenNativeAccControlPlaneStatus,
+                "מצב ריצה / browse / reconciliation של ACC"));
         }
 
-        return items;
+        if (HasAuthenticatedUser())
+        {
+            admin.Add(new NewShellMenuItem(
+                "מצב מערכת",
+                OpenNativeSystemStatus,
+                "מצב מערכות־משנה ועבודת רקע (מערכת חדשה)"));
+        }
+
+#if DEBUG
+        var devTools = BuildDevToolsMenuItems();
+        if (devTools.Count > 0)
+        {
+            admin.Add(NewShellMenuItem.Group("כלי פיתוח", devTools));
+        }
+#endif
+
+        AddGroupIfAny(top, "מנהלה", admin);
+
+        return top;
+    }
+
+    private static void AddGroupIfAny(List<NewShellMenuItem> top, string title, List<NewShellMenuItem> children)
+    {
+        if (children.Count == 0)
+        {
+            return;
+        }
+
+        top.Add(NewShellMenuItem.Group(title, children));
     }
 
     /// <summary>
@@ -465,58 +479,45 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
     }
 
-    private ProjectSelectorView? TryCreateProjectSelector()
+    private List<NewShellMenuItem> BuildDevToolsMenuItems()
     {
-        // The selector VM is constructed the same way the Email surface does it (it is not a DI type):
-        // resolve the read side + shared context and bind a fresh view model to the reusable control.
-        var projectQuery = _services.GetService<IProjectQueryService>();
-        var filterOptions = _services.GetService<IProjectFilterOptionsService>();
-        var currentProject = _services.GetService<ICurrentProjectContext>();
-        if (projectQuery is null || filterOptions is null || currentProject is null)
-        {
-            return null;
-        }
-
-        var selectorViewModel = new ProjectSelectorViewModel(projectQuery, filterOptions, currentProject);
-        return new ProjectSelectorView { DataContext = selectorViewModel };
-    }
-
-    private void AppendDevToolsMenuItems(List<NewShellMenuItem> items)
-    {
+        var items = new List<NewShellMenuItem>();
         if (_services.GetService<IDevDataResetService>() is null
             && _services.GetService<IStaticSeedService>() is null)
         {
-            return;
+            return items;
         }
 
         if (!CanAccessFeature(AppFeatureCodes.DevToolsReset))
-            return;
+        {
+            return items;
+        }
 
         var coordinator = new DevToolsCoordinator(_services);
         Window? Owner() => System.Windows.Application.Current?.MainWindow;
 
         items.Add(new NewShellMenuItem(
-            "כלי פיתוח — איפוס נתוני פיתוח",
+            "איפוס נתוני פיתוח",
             () => _ = coordinator.RunResetWithDialogAsync(Owner()),
             "מוחק נתוני migration ומריץ seed (New System — לא legacy DevDataResetService)"));
 
         items.Add(new NewShellMenuItem(
-            "כלי פיתוח — טעינת Seed בסיסי",
+            "טעינת Seed בסיסי",
             () => _ = coordinator.RunCoreSeedAsync(Owner()),
             "Task static + mappings + workflow seed"));
 
         items.Add(new NewShellMenuItem(
-            "כלי פיתוח — טעינת משימות דמו",
+            "טעינת משימות דמו",
             () => _ = coordinator.RunDemoTaskSeedAsync(Owner()),
             "משימות DEBUG בשלושה buckets ל-Task Panel read-only"));
 
-        // TEMP WF-DEBUG — manual watchdog trigger. The StalledWorkflowWatchdog background loop does NOT
-        // run on the New System startup path, so this lets the manual test exercise orphan detection /
-        // recovery on demand. Remove together with the rest of the WF-DEBUG instrumentation.
+        // TEMP WF-DEBUG — manual watchdog trigger. Remove with the rest of WF-DEBUG instrumentation.
         items.Add(new NewShellMenuItem(
-            "כלי פיתוח — הרץ Watchdog עכשיו",
+            "הרץ Watchdog עכשיו",
             RunWatchdogNow,
-            "סורק Workflows תקועים ומנסה שחזור (StalledWorkflowWatchdog) — כתיבה ל-workflow-manual-debug.log"));
+            "סורק Workflows תקועים ומנסה שחזור (StalledWorkflowWatchdog)"));
+
+        return items;
     }
 
     // TEMP WF-DEBUG

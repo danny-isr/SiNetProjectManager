@@ -121,7 +121,7 @@ public sealed class DevToolsBoundaryTests
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
         var debugIdx = source.IndexOf("#if DEBUG", StringComparison.Ordinal);
-        var devToolsIdx = source.IndexOf("AppendDevToolsMenuItems", StringComparison.Ordinal);
+        var devToolsIdx = source.IndexOf("BuildDevToolsMenuItems", StringComparison.Ordinal);
         Assert.True(debugIdx >= 0 && devToolsIdx > debugIdx);
     }
 

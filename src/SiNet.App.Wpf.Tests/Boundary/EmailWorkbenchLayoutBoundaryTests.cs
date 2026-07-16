@@ -8,11 +8,11 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
     [Fact]
     public void Email_workbench_project_context_bar_spans_full_width()
     {
-        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
-        var projectBarIdx = windowXaml.IndexOf("ProjectSelectorView", StringComparison.Ordinal);
-        var mainGridIdx = windowXaml.IndexOf("Grid Grid.Row=\"3\"", StringComparison.Ordinal);
+        var projectBarIdx = surfaceXaml.IndexOf("ProjectSelectorView", StringComparison.Ordinal);
+        var mainGridIdx = surfaceXaml.IndexOf("Grid Grid.Row=\"2\"", StringComparison.Ordinal);
         Assert.True(projectBarIdx >= 0);
         Assert.True(mainGridIdx > projectBarIdx);
         Assert.DoesNotContain("ProjectSelectorView", listXaml, StringComparison.Ordinal);
@@ -21,11 +21,11 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
     [Fact]
     public void Email_workbench_filter_bar_spans_full_width()
     {
-        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
-        Assert.Contains("EmailListFilterBar", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"2\"", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListFilterBar", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"1\"", surfaceXaml, StringComparison.Ordinal);
         Assert.Contains("ApplyFiltersCommand", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("LoadNextPageCommand", filterBarXaml, StringComparison.Ordinal);
     }

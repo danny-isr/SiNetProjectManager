@@ -11,12 +11,9 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource SiBackgroundBrush}"
         d:DataContext="{d:DesignInstance Type=local:NewShellDesignData, IsDesignTimeCreatable=True}">
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-    </Window.Resources>
 
     <DockPanel LastChildFill="True">
-        <!-- Header branding -->
+        <!-- Header branding (no project selector — project is chosen inside surfaces such as Email) -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource SiPrimaryBrush}" Padding="16,10">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -39,15 +36,20 @@
             </Grid>
         </Border>
 
-        <!-- Top application menu (legacy MainWindow pattern) -->
+        <!-- Top application menu with groups + submenus (legacy MainWindow pattern) -->
         <Menu DockPanel.Dock="Top"
               FlowDirection="RightToLeft"
               Background="{DynamicResource SiBackgroundBrush}"
               Padding="4,2"
               ItemsSource="{Binding MenuItems}">
+            <Menu.Resources>
+                <HierarchicalDataTemplate DataType="{x:Type local:NewShellMenuItem}"
+                                          ItemsSource="{Binding Children}">
+                    <TextBlock Text="{Binding Title}" ToolTip="{Binding Description}" />
+                </HierarchicalDataTemplate>
+            </Menu.Resources>
             <Menu.ItemContainerStyle>
                 <Style TargetType="MenuItem">
-                    <Setter Property="Header" Value="{Binding Title}" />
                     <Setter Property="Command" Value="{Binding OpenCommand}" />
                     <Setter Property="ToolTip" Value="{Binding Description}" />
                     <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
@@ -55,35 +57,6 @@
                 </Style>
             </Menu.ItemContainerStyle>
         </Menu>
-
-        <!-- Current project bar -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource SiBackgroundBrush}" Padding="12,5"
-                BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="0,0,0,1" Opacity="0.95">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Column="0" Text="פרויקט נוכחי:" VerticalAlignment="Center"
-                           Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,10,0" />
-
-                <ContentControl Grid.Column="1" x:Name="ProjectSelectorHost" VerticalAlignment="Center" />
-
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                    <Button Content="פרויקט חדש"
-                            Command="{Binding OpenNewProjectCommand}"
-                            Style="{DynamicResource SiPrimaryButtonStyle}"
-                            Padding="12,4"
-                            Margin="0,0,10,0"
-                            Visibility="{Binding CanOpenNewProject, Converter={StaticResource BoolToVis}}"
-                            ToolTip="פתיחת פרויקט חדש"/>
-                    <TextBlock Text="{Binding CurrentProjectDisplay}" VerticalAlignment="Center"
-                               Style="{DynamicResource SiTextSmallStyle}" Opacity="0.85" />
-                </StackPanel>
-            </Grid>
-        </Border>
 
         <!-- Footer health -->
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource SiPrimaryBrush}" Padding="12,4">

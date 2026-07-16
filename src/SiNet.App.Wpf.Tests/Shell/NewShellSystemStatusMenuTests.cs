@@ -15,15 +15,17 @@ public sealed class NewShellSystemStatusMenuTests
     [Fact]
     public void NewShell_shows_system_status_menu_for_authenticated_user()
     {
-        var items = BuildMenuItems(authenticated: true);
+        var top = BuildMenuItems(authenticated: true);
+        var items = Flatten(top);
 
+        Assert.Contains(top, g => g.Title == "מנהלה");
         Assert.Contains(items, i => i.Title == "מצב מערכת" && i.IsAvailable);
     }
 
     [Fact]
     public void NewShell_hides_system_status_menu_when_not_authenticated()
     {
-        var items = BuildMenuItems(authenticated: false);
+        var items = Flatten(BuildMenuItems(authenticated: false));
 
         Assert.DoesNotContain(items, i => i.Title == "מצב מערכת");
     }
@@ -77,6 +79,18 @@ public sealed class NewShellSystemStatusMenuTests
         var method = typeof(NewShellFactory).GetMethod("BuildMigratedOnlyMenu", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         return (IReadOnlyList<NewShellMenuItem>)method!.Invoke(factory, null)!;
+    }
+
+    private static IEnumerable<NewShellMenuItem> Flatten(IEnumerable<NewShellMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return item;
+            foreach (var child in Flatten(item.Children))
+            {
+                yield return child;
+            }
+        }
     }
 
     private static string ReadRepoFile(string relativePath)

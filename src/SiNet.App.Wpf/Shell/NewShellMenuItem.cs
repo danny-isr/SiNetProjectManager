@@ -1,38 +1,41 @@
+using System.Collections.ObjectModel;
 using System.Windows.Input;
 
 namespace SiNet.App.Wpf.Shell;
 
 /// <summary>
-/// A single, data-driven entry in the new shell menu (see <c>docs/APP_SHELL.md</c> §6/§7).
-/// <para>
-/// The shell menu is a list of these descriptors, built <b>only</b> from surfaces that already exist
-/// in the refactored stack. A menu item carries no business logic: it only exposes a display label and
-/// an <see cref="Open"/> action that resolves the target surface from DI / a factory and shows it. The
-/// shell never mutates workflow from here (see <c>AI_DEVELOPMENT_GUIDE.md</c> rule 11).
-/// </para>
+/// A data-driven entry in the new shell menu (see <c>docs/APP_SHELL.md</c> §6/§7).
+/// May be a <b>leaf</b> (opens a surface) or a <b>group</b> (submenu with <see cref="Children"/>),
+/// matching the legacy top-menu / submenu pattern.
 /// </summary>
 public sealed class NewShellMenuItem
 {
-    private readonly Action _open;
+    private readonly Action? _open;
 
-    /// <summary>
-    /// Creates a migrated-surface menu item.
-    /// </summary>
-    /// <param name="title">Display label (he-IL).</param>
-    /// <param name="open">Action that opens the migrated surface (resolve from DI / factory).</param>
-    /// <param name="description">Optional secondary text / tooltip.</param>
-    /// <param name="isAvailable">
-    /// <see langword="false"/> to show the item as present-but-disabled (e.g. a documented placeholder
-    /// that is not yet implemented). Defaults to <see langword="true"/>.
-    /// </param>
+    /// <summary>Creates a leaf menu item that opens a migrated surface.</summary>
     public NewShellMenuItem(string title, Action open, string? description = null, bool isAvailable = true)
     {
         Title = title ?? throw new ArgumentNullException(nameof(title));
         _open = open ?? throw new ArgumentNullException(nameof(open));
         Description = description;
         IsAvailable = isAvailable;
+        Children = new ObservableCollection<NewShellMenuItem>();
         OpenCommand = new RelayCommand(_ => _open(), _ => IsAvailable);
     }
+
+    private NewShellMenuItem(string title, IEnumerable<NewShellMenuItem> children, string? description)
+    {
+        Title = title ?? throw new ArgumentNullException(nameof(title));
+        _open = null;
+        Description = description;
+        IsAvailable = true;
+        Children = new ObservableCollection<NewShellMenuItem>(children);
+        OpenCommand = null;
+    }
+
+    /// <summary>Creates a top-level (or nested) group whose children appear as a submenu.</summary>
+    public static NewShellMenuItem Group(string title, IEnumerable<NewShellMenuItem> children, string? description = null)
+        => new(title, children, description);
 
     /// <summary>Display label shown in the shell menu.</summary>
     public string Title { get; }
@@ -41,14 +44,20 @@ public sealed class NewShellMenuItem
     public string? Description { get; }
 
     /// <summary>
-    /// Whether the item's surface is available in the new stack. Unavailable items are shown but
-    /// disabled so the menu documents what is coming without throwing.
+    /// Whether the item's surface is available. Unavailable leaves are shown but disabled.
+    /// Groups are always available when present.
     /// </summary>
     public bool IsAvailable { get; }
 
-    /// <summary>Command bound by the shell menu; invokes <see cref="Open"/> when available.</summary>
-    public ICommand OpenCommand { get; }
+    /// <summary>Submenu items. Empty for leaf actions.</summary>
+    public ObservableCollection<NewShellMenuItem> Children { get; }
 
-    /// <summary>Opens the migrated surface. No-op safety is the caller's responsibility.</summary>
-    public void Open() => _open();
+    /// <summary>True when this item is a submenu group.</summary>
+    public bool IsGroup => Children.Count > 0;
+
+    /// <summary>Command for leaf items; <see langword="null"/> for groups (submenu only).</summary>
+    public ICommand? OpenCommand { get; }
+
+    /// <summary>Opens the migrated surface. No-op for groups.</summary>
+    public void Open() => _open?.Invoke();
 }

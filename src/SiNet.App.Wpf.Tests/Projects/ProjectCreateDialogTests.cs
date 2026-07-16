@@ -416,8 +416,9 @@ public sealed class ProjectCreateDialogBoundaryTests
         Assert.Contains("IProjectCreateDialogFactory", shellSource, StringComparison.Ordinal);
         Assert.Contains("פתיחת פרויקט חדש", shellSource, StringComparison.Ordinal);
         Assert.Contains("AppFeatureCodes.ProjectCreate", shellSource, StringComparison.Ordinal);
-        Assert.Contains("OpenNewProjectCommand", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("פרויקט חדש", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("פרויקטים ותבניות", shellSource, StringComparison.Ordinal);
+        // Project create lives in the hierarchical menu (not a shell project-selector bar).
+        Assert.DoesNotContain("ProjectSelectorHost", windowXaml, StringComparison.Ordinal);
     }
 
     [Fact]

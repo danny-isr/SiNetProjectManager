@@ -131,10 +131,10 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void Email_workbench_hosts_project_selector_outside_email_list_component()
     {
-        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
-        Assert.Contains("ProjectSelectorView", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectSelectorView", surfaceXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ProjectSelectorView", listXaml, StringComparison.Ordinal);
     }
 
@@ -161,10 +161,10 @@ public sealed class EmailListSliceBoundaryTests
     [Fact]
     public void No_duplicate_project_selector_created()
     {
-        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
-        Assert.Equal(1, CountOccurrences(windowXaml, "ProjectSelectorView"));
+        Assert.Equal(1, CountOccurrences(surfaceXaml, "ProjectSelectorView"));
         Assert.Equal(0, CountOccurrences(listXaml, "ProjectSelectorView"));
     }
 

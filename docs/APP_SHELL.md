@@ -133,14 +133,23 @@ build a second container.
 
 ## 6. Menu model for the new system
 
-The shell menu is a **data-driven list of migrated items**, not a legacy menu clone.
+The shell menu is a **hierarchical, data-driven menu** (top groups + submenus), not a flat list and
+not a legacy menu clone. Project selection is **not** in the shell chrome — surfaces that need it
+(e.g. Email) host their own selector.
 
 ```plaintext
 NewShellMenuItem
   Title            : display label (he-IL)
   Description      : optional tooltip / secondary text
-  Open             : Action invoked to open the surface (resolves from DI/factory)
+  Children         : submenu items (empty for leaf actions)
+  Open             : Action for leaf items (null for groups)
   IsAvailable      : bool — item is shown only when its surface exists in the new stack
+
+Top groups (when they have children):
+  פרויקטים ותבניות  → פתיחת פרויקט חדש, מיילים
+  משימות             → לוח משימות, דוחות ביקורת, תהליכים, …
+  משתמשים והרשאות    → ניהול משתמשים, הוספת משתמש, הרשאות פעולה
+  מנהלה              → הגדרות, מפתחות, ACC, מצב מערכת, כלי פיתוח (DEBUG)
 ```
 
 Rules:
