@@ -47,6 +47,12 @@ public interface IActiveFileQueryHub : IActiveFileQueryService
     /// <summary>Registers the live provider. Passing <see langword="null"/> unregisters the current one.</summary>
     void RegisterProvider(IActiveFileQueryService? provider);
 
+    /// <summary>
+    /// Unregisters <paramref name="provider"/> only when it is the currently registered instance —
+    /// so disposing a floating/task surface does not clear a still-cached shell surface.
+    /// </summary>
+    void UnregisterProvider(IActiveFileQueryService provider);
+
     /// <summary>Re-raises <see cref="ProviderChanged"/> so subscribers can refresh availability.</summary>
     void NotifyAvailabilityChanged();
 

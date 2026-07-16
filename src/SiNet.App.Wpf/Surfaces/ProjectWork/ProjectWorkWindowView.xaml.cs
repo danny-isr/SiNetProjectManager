@@ -9,11 +9,16 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 
 /// <summary>
-/// Window for the native ProjectWork task-execution surface. Chrome only; task/completion logic
-/// lives in <see cref="ProjectWorkWindowViewModel"/>.
+/// Native ProjectWork surface UI (UserControl). Hosted in the main shell content area and kept
+/// alive across navigation (like EmailManagementView) so file-query / file-open providers stay
+/// registered. Can also be wrapped in a floating <see cref="Window"/> for hosts without a shell.
 /// </summary>
-public partial class ProjectWorkWindowView : Window
+public partial class ProjectWorkWindowView : UserControl, IDisposable
 {
+    private IAccViewerHost? _accViewerHost;
+    private Point _dragStart;
+    private bool _disposed;
+
     /// <summary>Design/standalone constructor.</summary>
     public ProjectWorkWindowView()
         : this(new ProjectWorkWindowViewModel())
@@ -21,9 +26,6 @@ public partial class ProjectWorkWindowView : Window
     }
 
     /// <summary>Primary constructor: binds to the supplied view model.</summary>
-    private IAccViewerHost? _accViewerHost;
-    private Point _dragStart;
-
     public ProjectWorkWindowView(ProjectWorkWindowViewModel viewModel)
     {
         InitializeComponent();
@@ -35,15 +37,8 @@ public partial class ProjectWorkWindowView : Window
         FileTree.AllowDrop = true;
         FileTree.DragOver += FileTree_DragOver;
         FileTree.Drop += FileTree_Drop;
-
-        Closed += (_, _) =>
-        {
-            _accViewerHost?.Clear();
-            ViewModel.Dispose();
-        };
     }
 
-    // Drag-in: dropping OS files onto a file/alternative/version node adds/replaces a version.
     private void FileTree_DragOver(object sender, DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && ResolveDropTarget(e) is not null
@@ -80,7 +75,6 @@ public partial class ProjectWorkWindowView : Window
         return item?.DataContext as ProjectWorkNodeVm;
     }
 
-    // Drag-out: dragging a FileServer version node onto Explorer / another app copies the file.
     private void FileTree_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed)
@@ -101,7 +95,7 @@ public partial class ProjectWorkWindowView : Window
             return;
 
         if (string.IsNullOrEmpty(version.FullPath) || !File.Exists(version.FullPath))
-            return; // ACC / missing versions can't be dragged to the file system.
+            return;
 
         var data = new DataObject(DataFormats.FileDrop, new[] { version.FullPath });
         try
@@ -127,8 +121,6 @@ public partial class ProjectWorkWindowView : Window
 
     /// <summary>
     /// Attaches the host-provided embedded ACC viewer (WebView2) to the right-pane host element.
-    /// Called by <see cref="ProjectWorkWindowFactory"/>; a <see langword="null"/> host keeps the
-    /// external-browser fallback (see <c>ProjectWorkTreeViewModel</c>).
     /// </summary>
     public void SetAccViewerHost(IAccViewerHost? accViewerHost)
     {
@@ -150,4 +142,17 @@ public partial class ProjectWorkWindowView : Window
     /// <summary>Browse-mode entry (menu): no task strip; loads tree from current project when set.</summary>
     public Task OpenBrowseModeAsync(CancellationToken cancellationToken = default)
         => ViewModel.OpenBrowseModeAsync(cancellationToken);
+
+    /// <summary>
+    /// Releases the view-model / ACC host. Call only when the surface is truly discarded — not when
+    /// the shell merely navigates away (cached instances must stay alive for file services).
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _accViewerHost?.Clear();
+        ViewModel.Dispose();
+    }
 }

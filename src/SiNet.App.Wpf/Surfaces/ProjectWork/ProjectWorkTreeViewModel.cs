@@ -997,8 +997,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _loadCts?.Dispose();
         _watcher?.Dispose();
 
-        // Drop provider registrations so other surfaces don't query a stale, closed tree.
-        _activeHub.RegisterProvider(null);
-        _openHub.RegisterProvider(null);
+        // Drop provider registrations only if we are still the live provider (cached shell surface
+        // must not be cleared when a floating/task surface disposes).
+        _activeHub.UnregisterProvider(this);
+        _openHub.UnregisterProvider(this);
     }
 }

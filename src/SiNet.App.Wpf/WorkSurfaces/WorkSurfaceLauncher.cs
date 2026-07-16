@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Windows;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +13,7 @@ using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email;
 using SiNet.Application.Projects;
+using SiNet.Application.ProjectWork;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -222,24 +224,47 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 return false;
             }
 
+            // Prefer the shell-hosted cached surface (main content area) when the host provides it.
+            if (_services.GetService<IProjectWorkSurfaceHost>() is { } projectWorkHost)
+            {
+                var hosted = await projectWorkHost.TryOpenFromTaskAsync(context, cancellationToken).ConfigureAwait(true);
+                if (hosted)
+                    return true;
+            }
+
             if (_services.GetService<IProjectWorkWindowFactory>() is not { } projectWorkFactory)
             {
                 Trace.TraceWarning("[WorkSurfaceLauncher] IProjectWorkWindowFactory is not registered.");
                 return false;
             }
 
-            var projectWorkWindow = projectWorkFactory.Create();
-            var projectOpened = await projectWorkWindow.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
+            var projectWorkSurface = projectWorkFactory.Create();
+            var projectOpened = await projectWorkSurface.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
             if (!projectOpened)
             {
                 Trace.TraceWarning(
                     "[WorkSurfaceLauncher] ProjectWork task {0} could not open for project #{1}.",
                     context.TaskId,
                     context.ProjectId);
+                projectWorkSurface.Dispose();
                 return false;
             }
 
-            projectWorkWindow.Show();
+            // Fallback floating window for hosts without a shell content host.
+            var hostWindow = new Window
+            {
+                Title = projectWorkSurface.ViewModel.Title,
+                Content = projectWorkSurface,
+                Width = 1000,
+                Height = 680,
+                MinWidth = 720,
+                MinHeight = 480,
+                FlowDirection = FlowDirection.RightToLeft,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ShowInTaskbar = true,
+            };
+            hostWindow.Closed += (_, _) => projectWorkSurface.Dispose();
+            hostWindow.Show();
             return true;
         }
 

@@ -17,6 +17,7 @@ using SiOffice.GoogleConnector;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.Application.Projects;
+using SiNet.Application.WorkSurfaces;
 using SiNetProjectManagerV2.Services;
 
 namespace SiNetProjectManagerV2
@@ -34,8 +35,12 @@ namespace SiNetProjectManagerV2
         // and any embedded WebView2 instances keep their state across navigation.
         private EmailManagementView? _cachedEmailManagementView;
 
-        /// <summary>Native ProjectWork surface (browse / menu). Kept alive so the active-file hub stays registered for Inspection.</summary>
-        private ProjectWorkWindowView? _nativeProjectWorkWindow;
+        /// <summary>
+        /// Cached native ProjectWork surface (browse / task). Created once, then reused via
+        /// <see cref="NavigateToView"/> like Email — switching away does not dispose it, so
+        /// file-query / file-open hubs stay registered for Inspection and other surfaces.
+        /// </summary>
+        private ProjectWorkWindowView? _cachedProjectWorkView;
 
         // New clean-architecture Current Project context (fake/in-memory this slice).
         // The shell is the single subscriber that renders the Current Project into the window
@@ -291,7 +296,7 @@ namespace SiNetProjectManagerV2
             => NavigateToView(new ProjectFolderTreeView());
 
         private void OpenProjectWork2_Click(object sender, RoutedEventArgs e)
-            => _ = ShowNativeProjectWorkAsync();
+            => _ = ShowNativeProjectWorkBrowseAsync();
 
         private void Control_Click(object sender, RoutedEventArgs e)
         {
@@ -517,40 +522,61 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// Opens the native ProjectWork browse surface (replacement for legacy <c>ProjectWorkView</c>).
+        /// Opens the native ProjectWork browse surface in the main content area
+        /// (replacement for legacy <c>ProjectWorkView</c>).
         /// </summary>
-        public void ShowProjectWork() => _ = ShowNativeProjectWorkAsync();
+        public void ShowProjectWork() => _ = ShowNativeProjectWorkBrowseAsync();
 
-        private async Task ShowNativeProjectWorkAsync()
+        /// <summary>Shell host entry: browse mode in the main content area.</summary>
+        public Task<bool> TryOpenProjectWorkBrowseAsync(CancellationToken cancellationToken = default)
+            => ShowNativeProjectWorkBrowseAsync(cancellationToken);
+
+        /// <summary>Shell host entry: task mode in the main content area.</summary>
+        public async Task<bool> TryOpenProjectWorkFromTaskAsync(
+            WorkSurfaceContext context,
+            CancellationToken cancellationToken = default)
         {
-            var factory = App.ServiceProvider?.GetService<IProjectWorkWindowFactory>();
-            if (factory is null)
+            var surface = EnsureCachedProjectWorkView();
+            if (surface is null)
+                return false;
+
+            var opened = await surface.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
+            if (!opened)
+                return false;
+
+            NavigateToView(surface);
+            return true;
+        }
+
+        private async Task<bool> ShowNativeProjectWorkBrowseAsync(CancellationToken cancellationToken = default)
+        {
+            var surface = EnsureCachedProjectWorkView();
+            if (surface is null)
             {
                 MessageBox.Show(
                     "IProjectWorkWindowFactory אינו רשום — לא ניתן לפתוח את סביבת העבודה החדשה.",
                     "סביבת עבודה",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
-                return;
+                return false;
             }
 
-            if (_nativeProjectWorkWindow is { IsLoaded: true })
-            {
-                await _nativeProjectWorkWindow.OpenBrowseModeAsync().ConfigureAwait(true);
-                _nativeProjectWorkWindow.Activate();
-                return;
-            }
+            await surface.OpenBrowseModeAsync(cancellationToken).ConfigureAwait(true);
+            NavigateToView(surface);
+            return true;
+        }
 
-            var window = factory.Create();
-            _nativeProjectWorkWindow = window;
-            window.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_nativeProjectWorkWindow, window))
-                    _nativeProjectWorkWindow = null;
-            };
-            await window.OpenBrowseModeAsync().ConfigureAwait(true);
-            window.Owner = this;
-            window.Show();
+        private ProjectWorkWindowView? EnsureCachedProjectWorkView()
+        {
+            if (_cachedProjectWorkView is not null)
+                return _cachedProjectWorkView;
+
+            var factory = App.ServiceProvider?.GetService<IProjectWorkWindowFactory>();
+            if (factory is null)
+                return null;
+
+            _cachedProjectWorkView = factory.Create();
+            return _cachedProjectWorkView;
         }
 
         // ─────────────────────────────────────────────────────────────

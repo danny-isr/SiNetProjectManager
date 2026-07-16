@@ -39,4 +39,9 @@ public interface IFileOpenHub : IFileOpenService
 {
     /// <summary>Registers the live provider. Passing <see langword="null"/> unregisters the current one.</summary>
     void RegisterProvider(IFileOpenService? provider);
+
+    /// <summary>
+    /// Unregisters <paramref name="provider"/> only when it is the currently registered instance.
+    /// </summary>
+    void UnregisterProvider(IFileOpenService provider);
 }

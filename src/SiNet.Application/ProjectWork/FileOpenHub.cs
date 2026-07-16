@@ -13,6 +13,15 @@ public sealed class FileOpenHub : IFileOpenHub
     public void RegisterProvider(IFileOpenService? provider) => _provider = provider;
 
     /// <inheritdoc />
+    public void UnregisterProvider(IFileOpenService provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        if (!ReferenceEquals(_provider, provider))
+            return;
+        _provider = null;
+    }
+
+    /// <inheritdoc />
     public bool IsAvailable => _provider?.IsAvailable == true;
 
     /// <inheritdoc />

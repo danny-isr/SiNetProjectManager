@@ -20,6 +20,15 @@ public sealed class ActiveFileQueryHub : IActiveFileQueryHub
     }
 
     /// <inheritdoc />
+    public void UnregisterProvider(IActiveFileQueryService provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        if (!ReferenceEquals(_provider, provider))
+            return;
+        RegisterProvider(null);
+    }
+
+    /// <inheritdoc />
     public void NotifyAvailabilityChanged() => ProviderChanged?.Invoke(_provider);
 
     /// <inheritdoc />

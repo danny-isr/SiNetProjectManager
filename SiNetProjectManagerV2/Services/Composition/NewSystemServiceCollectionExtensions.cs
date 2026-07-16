@@ -66,6 +66,9 @@ public static class NewSystemServiceCollectionExtensions
         services.AddTransient<SiNet.Application.Abstractions.Inspection.IInspectionReportExportPort, V2InspectionReportExportPort>();
         services.AddTransient<SiNet.Application.Abstractions.Inspection.IInspectionReportCommandService, V2InspectionReportCommandService>();
 
+        // ProjectWork: shell content host (cached UserControl) preferred over floating window.
+        services.AddSingleton<SiNet.Application.ProjectWork.IProjectWorkSurfaceHost, V2ProjectWorkSurfaceHost>();
+
         services.AddSingleton<SiNet.Application.Runtime.IExternalHealthCheckSource, LegacySystemHealthCheckSource>();
 
         return services;
