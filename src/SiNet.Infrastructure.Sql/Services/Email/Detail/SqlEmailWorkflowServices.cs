@@ -177,9 +177,9 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         // through the native IWorkflowCommandService.StartAsync (single native engine).
         // CreatePriceQuote / RejectPriceQuote already express the intake classification — auto-complete
         // IdentifyQuoteRequest so the operator is not asked again in a second dialog.
-        if (TryResolveWorkflowStart(command.ActionCode, out var workflowCode, out var isProjectBound, out var intakeResultCode))
+        if (TryResolveWorkflowStart(command.ActionCode, out var workflowCode, out var isProjectBound, out var intakeResultCode, out var initialStageCode))
         {
-            return await StartWorkflowAsync(command, workflowCode, isProjectBound, intakeResultCode, cancellationToken)
+            return await StartWorkflowAsync(command, workflowCode, isProjectBound, intakeResultCode, initialStageCode, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -244,7 +244,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
     /// <summary>
     /// Maps email suggested-action codes to native workflow starts that require no UI / project
     /// creation. Mirrors the legacy <c>ActionExecutor</c> dispatch:
-    /// <c>CreatePriceQuote → Proposal</c> (project-independent; intake auto-classified as quote),
+    /// <c>CreatePriceQuote → Proposal</c> at ProjectSetup (click already means quote — skip Intake),
     /// <c>RejectPriceQuote → Proposal</c> (intake auto-classified as not-a-quote → terminal),
     /// <c>CreateOpinionProject → Opinion</c> (bound to the email's office project).
     /// </summary>
@@ -252,29 +252,34 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         string actionCode,
         out string workflowCode,
         out bool isProjectBound,
-        out string? intakeResultCode)
+        out string? intakeResultCode,
+        out string? initialStageCode)
     {
         switch (actionCode)
         {
             case EmailSuggestedActionCodes.CreatePriceQuote:
                 workflowCode = WorkflowCodes.Proposal;
                 isProjectBound = false;
-                intakeResultCode = QuoteRequestDetected;
+                intakeResultCode = null;
+                initialStageCode = ProposalStageCodes.ProjectSetup;
                 return true;
             case EmailSuggestedActionCodes.RejectPriceQuote:
                 workflowCode = WorkflowCodes.Proposal;
                 isProjectBound = false;
                 intakeResultCode = NotQuoteRequest;
+                initialStageCode = null;
                 return true;
             case EmailSuggestedActionCodes.CreateOpinionProject:
                 workflowCode = WorkflowCodes.Opinion;
                 isProjectBound = true;
                 intakeResultCode = null;
+                initialStageCode = null;
                 return true;
             default:
                 workflowCode = string.Empty;
                 isProjectBound = false;
                 intakeResultCode = null;
+                initialStageCode = null;
                 return false;
         }
     }
@@ -284,6 +289,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         string workflowCode,
         bool isProjectBound,
         string? intakeResultCode,
+        string? initialStageCode,
         CancellationToken cancellationToken)
     {
         var definitions = await _workflowQuery.GetActiveDefinitionsAsync(cancellationToken).ConfigureAwait(false);
@@ -372,7 +378,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
 
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Email.StartWorkflow",
-            $"inbox={inboxMessageId} workflow={workflowCode} def={definition.Id} project={projectId} bound={isProjectBound} → starting");
+            $"inbox={inboxMessageId} workflow={workflowCode} def={definition.Id} project={projectId} bound={isProjectBound} initialStage={initialStageCode ?? "(default)"} → starting");
 
         try
         {
@@ -385,7 +391,8 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
                         TriggerEntityId: inboxMessageId,
                         command.ActingUserId,
                         Notes: null,
-                        IsProjectBound: isProjectBound),
+                        IsProjectBound: isProjectBound,
+                        InitialStageCode: initialStageCode),
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -404,7 +411,9 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             }
 
             var message2 = result.CreatedTasks.Count > 0
-                ? $"תהליך '{definition.Name}' הופעל בהצלחה ונוצרה משימה."
+                ? initialStageCode == ProposalStageCodes.ProjectSetup
+                    ? $"פתיחת הצעת מחיר אושרה. תהליך #{result.Instance.Id} בשלב בחירת סוג פרויקט — בדוק בלוח המשימות את 'פתיחת פרויקט הצעת מחיר'."
+                    : $"תהליך '{definition.Name}' הופעל בהצלחה ונוצרה משימה."
                 : $"תהליך '{definition.Name}' הופעל (מופע #{result.Instance.Id}), אך לא נוצרו משימות לשלב הראשון.";
 
             return new EmailSuggestedActionExecutionResult(true, false, message2);

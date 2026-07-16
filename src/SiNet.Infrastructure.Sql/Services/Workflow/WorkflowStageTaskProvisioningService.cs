@@ -243,8 +243,7 @@ internal sealed class WorkflowStageTaskProvisioningService
 
                 // IX_ProjectAssignment_UniqueOpenTask: one open queued row per
                 // (project, assignee, taskType, parent=null). On the office project many Proposal
-                // emails share that key — reuse the open parent and attach another email WorkTarget
-                // + workflow-instance link (legacy ActionExecutor Tier-2 pattern) instead of failing.
+                // emails share that key.
                 var existingOpenTask = await db.ProjectAssignments
                     .Include(t => t.AssignmentStatus)
                     .FirstOrDefaultAsync(t =>
@@ -257,8 +256,9 @@ internal sealed class WorkflowStageTaskProvisioningService
                         && t.AssignmentStatus.IsOpen, ct)
                     .ConfigureAwait(false);
 
-                if (existingOpenTask is not null)
+                if (existingOpenTask is not null && instance.IsProjectBound)
                 {
+                    // Bound workflows: legacy Tier-2 reuse (one parent + extra WorkTarget/instance links).
                     Trace.TraceWarning(
                         $"[Provisioning] Open task #{existingOpenTask.Id} already exists for " +
                         $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}). " +
@@ -284,7 +284,6 @@ internal sealed class WorkflowStageTaskProvisioningService
                         });
                     }
 
-                    // Stable parent title (not per-email WF-… / subject noise).
                     if (string.IsNullOrWhiteSpace(existingOpenTask.Title)
                         || existingOpenTask.Title.StartsWith("WF-", StringComparison.Ordinal))
                     {
@@ -303,12 +302,38 @@ internal sealed class WorkflowStageTaskProvisioningService
                     continue;
                 }
 
+                // Unbound (Proposal): each instance needs its own driving task. When the unique-open
+                // slot is taken, create a non-queued shell parent + queued child (ParentAssignmentId
+                // differs → index allows another open row of the same type).
+                int? parentAssignmentId = null;
+                if (existingOpenTask is not null && !instance.IsProjectBound)
+                {
+                    var shell = new ProjectAssignment
+                    {
+                        ProjectId = instance.ProjectId,
+                        AssignedToId = assigneeId,
+                        TaskTypeId = template.TaskTypeId,
+                        StatusId = openStatusId,
+                        ParentAssignmentId = null,
+                        WorkPriority = null,
+                        Title = $"{taskTypeName} — תהליך #{instanceId}",
+                    };
+                    db.ProjectAssignments.Add(shell);
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    parentAssignmentId = shell.Id;
+
+                    Trace.TraceWarning(
+                        $"[Provisioning] Unbound collision on open task #{existingOpenTask.Id}; " +
+                        $"creating child under shell #{shell.Id} for instance {instanceId}.");
+                }
+
                 var task = new ProjectAssignment
                 {
                     ProjectId = instance.ProjectId,
                     AssignedToId = assigneeId,
                     TaskTypeId = template.TaskTypeId,
                     StatusId = openStatusId,
+                    ParentAssignmentId = parentAssignmentId,
                     // Parent queue title = task type name; email subject lives on TaskLinks / body.
                     Title = taskTypeName,
                 };
@@ -324,7 +349,7 @@ internal sealed class WorkflowStageTaskProvisioningService
                 createdTasks.Add(task);
                 // TEMP WF-DEBUG
                 WorkflowDebugTrace.Step("Provisioning.TaskCreated",
-                    $"instance={instanceId} stage={stageId} taskId={task.Id} taskTypeId={template.TaskTypeId} assignedTo={task.AssignedToId?.ToString() ?? "(none)"} title='{task.Title}'");
+                    $"instance={instanceId} stage={stageId} taskId={task.Id} taskTypeId={template.TaskTypeId} assignedTo={task.AssignedToId?.ToString() ?? "(none)"} parent={parentAssignmentId?.ToString() ?? "null"} title='{task.Title}'");
             }
             catch (Exception ex)
             {

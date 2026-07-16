@@ -176,15 +176,20 @@ internal static class WorkflowActionHelpers
         int userId,
         CancellationToken ct)
     {
-        var projectId = await db.WorkflowInstances
+        var instance = await db.WorkflowInstances
             .AsNoTracking()
-            .Where(i => i.Id == workflowInstanceId && i.IsProjectBound)
-            .Select(i => (int?)i.ProjectId)
+            .Where(i => i.Id == workflowInstanceId)
+            .Select(i => new { i.ProjectId, i.IsProjectBound })
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-        if (projectId is null)
-            return (false, $"Workflow instance {workflowInstanceId} is not project-bound.");
+        if (instance is null)
+            return (false, $"Workflow instance {workflowInstanceId} not found.");
+
+        // Proposal / price-quote instances keep an office ProjectId for FK integrity only.
+        // Mutating that project's status would pollute "ניהול משרד" — skip without failing the transition.
+        if (!instance.IsProjectBound)
+            return (true, $"Skipped SetProjectStatus '{statusCode}': workflow instance {workflowInstanceId} is not project-bound.");
 
         var status = await db.ProjectStatuses
             .FirstOrDefaultAsync(s => s.Code == statusCode && s.IsActive, ct)
@@ -193,9 +198,9 @@ internal static class WorkflowActionHelpers
         if (status is null)
             return (false, $"Project status '{statusCode}' is not seeded.");
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == projectId.Value, ct).ConfigureAwait(false);
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == instance.ProjectId, ct).ConfigureAwait(false);
         if (project is null)
-            return (false, $"Project {projectId.Value} not found.");
+            return (false, $"Project {instance.ProjectId} not found.");
 
         if (project.ProjectStatusId != status.Id)
         {

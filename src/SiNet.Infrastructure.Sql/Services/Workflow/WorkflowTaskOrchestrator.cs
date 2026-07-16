@@ -204,10 +204,15 @@ internal sealed class WorkflowTaskOrchestrator(
         WorkflowDebugTrace.Step("Orchestrator.AutoAdvance",
             $"task={taskId} taskTypeId={task?.TaskTypeId} statusId={task?.StatusId} resultCode={evalContext?.ChangedTaskResultCode ?? "(none)"}");
 
-        foreach (var link in workflowLinks)
-        {
-            var instanceId = (int)link.LinkedEntityId;
+        var orderedInstanceIds = await OrderActiveTriggerInstanceIdsAsync(db, workflowLinks, ct)
+            .ConfigureAwait(false);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.AutoAdvance",
+            $"task={taskId} activeInstances=[{string.Join(",", orderedInstanceIds)}] (newest-first; skip non-Active)");
+
+        foreach (var instanceId in orderedInstanceIds)
+        {
             var evaluated = await _evaluator.EvaluateAsync(
                 instanceId, WorkflowTransitionTriggerType.AllRequiredTasksClosed, evalContext, ct).ConfigureAwait(false);
 
@@ -347,6 +352,32 @@ internal sealed class WorkflowTaskOrchestrator(
         return null;
     }
 
+    /// <summary>
+    /// When one open task is linked to many workflow instances (office-project reuse), prefer
+    /// Active instances and newest-first so auto-advance does not resurrect stale Instance=1.
+    /// </summary>
+    private static async Task<List<int>> OrderActiveTriggerInstanceIdsAsync(
+        SiNetSQLDbContext db,
+        IReadOnlyList<TaskLink> workflowLinks,
+        CancellationToken ct)
+    {
+        var linkedIds = workflowLinks
+            .Select(l => (int)l.LinkedEntityId)
+            .Distinct()
+            .ToList();
+
+        if (linkedIds.Count == 0)
+            return [];
+
+        return await db.WorkflowInstances
+            .AsNoTracking()
+            .Where(i => linkedIds.Contains(i.Id) && i.Status == WorkflowStatus.Active)
+            .OrderByDescending(i => i.Id)
+            .Select(i => i.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
     private async ValueTask LogNoTransitionDiagnosticAsync(
         SiNetSQLDbContext db,
         int instanceId,
@@ -433,10 +464,15 @@ internal sealed class WorkflowTaskOrchestrator(
         WorkflowDebugTrace.Step("Orchestrator.AutoAdvance.Shared",
             $"task={taskId} taskTypeId={task?.TaskTypeId} statusId={task?.StatusId} resultCode={evalContext?.ChangedTaskResultCode ?? "(none)"}");
 
-        foreach (var link in workflowLinks)
-        {
-            var instanceId = (int)link.LinkedEntityId;
+        var orderedInstanceIds = await OrderActiveTriggerInstanceIdsAsync(db, workflowLinks, ct)
+            .ConfigureAwait(false);
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Orchestrator.AutoAdvance.Shared",
+            $"task={taskId} activeInstances=[{string.Join(",", orderedInstanceIds)}] (newest-first; skip non-Active)");
+
+        foreach (var instanceId in orderedInstanceIds)
+        {
             var evaluated = await _evaluator.EvaluateAsync(
                 db, instanceId, WorkflowTransitionTriggerType.AllRequiredTasksClosed, evalContext, ct).ConfigureAwait(false);
 
