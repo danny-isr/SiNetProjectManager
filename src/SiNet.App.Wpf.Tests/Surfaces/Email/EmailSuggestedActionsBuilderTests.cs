@@ -22,6 +22,7 @@ public sealed class EmailSuggestedActionsBuilderTests
 
         Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.AssociateToExistingProject);
         Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.CreatePriceQuote);
+        Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.RejectPriceQuote);
         Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.CreateNewReview);
         Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.RequestAuthorityInvitation);
         Assert.Contains(actions, a => a.ActionCode == EmailSuggestedActionCodes.CollectMaterial);

@@ -367,7 +367,8 @@ public sealed class NativeWorkflowEngineTests
             provider.GetRequiredService<IProcessActionService>(),
             provider.GetRequiredService<IWorkflowCommandService>(),
             provider.GetRequiredService<IWorkflowQueryService>(),
-            provider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>());
+            provider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>(),
+            provider.GetService<ITaskCompletionService>());
 
     // ────────────────────────────────────────────────────────────────────────
     // Harness

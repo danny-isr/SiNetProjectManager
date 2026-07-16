@@ -87,41 +87,32 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ## 2. Happy path — Start → all 8 stages → PRP.Approved
 
-### 2.0 — Start the workflow (email `CreatePriceQuote`)
+### 2.0 — Start + intake (email `CreatePriceQuote`) — **skips second classification UI**
 
 - **Precondition:** unassigned inbox email selected; Proposal seeded.
 - **Action:** in the email's suggested actions, click **"פתיחת הצעת מחיר"** (`CreatePriceQuote`).
+  This action **already means** “yes, this is a quote request” — intake is auto-completed with
+  `QuoteRequestDetected` (no separate classification dialog). Use **"לא בקשת הצעת מחיר"**
+  (`RejectPriceQuote`) on the same email pane to close as not-a-quote.
+- **Expected UI message:** process advanced to `PRP.ProjectSetup`; next task is OpenQuoteProject.
 - **Expected `[WF-STEP]` logs:**
-  - `Email.Action | action=CreatePriceQuote inbox=<id> user=<uid>`
-  - `Email.StartWorkflow | inbox=<id> workflow=Proposal def=<defId> project=<pid> bound=False → starting`
-  - `Engine.Command.Start | def=<defId> project=<pid> trigger=Email entity=<id> user=<uid> bound=False …`
-  - `Engine.Start | instance=<I> def=<defId> 'Proposal' → initialStage=PRP.Intake(#…) status=Active bound=False`
-  - `Provisioning.TaskCreated | instance=<I> stage=<intakeStageId> taskId=<T1> taskTypeId=… …`
-  - `Provisioning.Stage | instance=<I> stage=<intakeStageId> tasksCreated=1`
-  - `Orchestrator.Start | instance=<I> def=<defId> project=<pid> → stageId=<intakeStageId> status=Active tasksCreated=1`
-- **Expected DB state:** new `WorkflowInstance` `status=Active`, `CurrentStage=PRP.Intake`,
-  `IsProjectBound=false`, `TriggerType=Email`, `TriggerEntityId=<inbox id>`; one open
-  `IdentifyQuoteRequest` task linked (Trigger role).
-- **Idempotency:** click `CreatePriceQuote` again on the same email → expect
-  `Email.StartWorkflow | … DUPLICATE-GUARD hit (existing instance #<I>) — not started` and **no** new instance.
+  - `Email.Action | action=CreatePriceQuote …`
+  - `Email.StartWorkflow | … → starting` (+ optional `materialized inbox row`)
+  - `Engine.Start | … initialStage=PRP.Intake …`
+  - `Provisioning.TaskCreated | …` / `Provisioning.Stage | … tasksCreated=1`
+  - `Email.StartWorkflow | … auto-complete intake task=<T1> result=QuoteRequestDetected`
+  - `TaskCompletion.* | … result=QuoteRequestDetected …`
+  - `Engine.Advance | … → 'PRP.ProjectSetup' …`
+  - `Provisioning.Stage | …` (OpenQuoteProject task)
+- **Expected DB state:** `CurrentStage=PRP.ProjectSetup`; Intake task `Completed`; new
+  `OpenQuoteProject` task open; project status = `LeadReceived`.
+- **Idempotency:** click `CreatePriceQuote` again on the same email → `DUPLICATE-GUARD` — no new instance.
 - `[ ]` **Result/Notes:** ________________________________________________
 
-### 2.1 — `PRP.Intake` → `PRP.ProjectSetup`  (`QuoteRequestDetected`)
+### 2.1 — *(merged into 2.0)* Intake auto-advance
 
-- **Precondition:** instance at `PRP.Intake`, `IdentifyQuoteRequest` task open.
-- **Action:** open the task and complete it choosing result **`QuoteRequestDetected`** ("זו בקשת הצעת מחיר").
-- **Expected `[WF-STEP]` logs:**
-  - `Launcher.Open | task=<T1> componentKey=ProjectWork … → routing to PROJECT-WORK surface` *(Intake uses IdentifyQuoteRequest — classification; may open a classification dialog instead)*
-  - `TaskCompletion.Complete | task=<T1> event=<…> result=QuoteRequestDetected user=<uid>`
-  - `TaskCompletion.Closure | task=<T1> recordedResult=QuoteRequestDetected taskClosed=True requestAdvance=True willAutoAdvance=True path=atomic …`
-  - `Orchestrator.AutoAdvance.Shared | task=<T1> triggerLinks=1 …`
-  - `Evaluator.Rule | instance=<I> trigger=TaskStatusChanged rule=<r> (stage <intake>→<setup>) cond=TaskResultEquals json={"TaskResultCode":"QuoteRequestDetected"} met=True`
-  - `Orchestrator.AutoAdvance.Shared | instance=<I> matchedTransitions=1 best→stage=<setupStageId> mode=Auto`
-  - `Engine.Advance | instance=<I> stage=<intake> → <setup> 'PRP.ProjectSetup' isFinal=False status=Active`
-  - `Provisioning.Stage | instance=<I> stage=<setupStageId> tasksCreated=1`
-  - `Orchestrator.Transition.Shared | instance=<I> rule=<r> fromStage=<intake> → toStage=<setup> newStatus=Active …`
-- **Expected DB state:** `CurrentStage=PRP.ProjectSetup`; Intake task `Completed`; new `OpenQuoteProject`
-  task open; project status = `LeadReceived`.
+- Covered by 2.0. Manual classification dialog remains only for leftover open `IdentifyQuoteRequest`
+  tasks from older runs.
 - `[ ]` **Result/Notes:** ________________________________________________
 
 ### 2.2 — `PRP.ProjectSetup` → `PRP.FileMaterial`  (`ProjectOpened`)

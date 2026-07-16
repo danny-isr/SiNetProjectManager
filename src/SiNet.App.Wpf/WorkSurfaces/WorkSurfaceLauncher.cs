@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
@@ -41,6 +42,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             return false;
         }
 
+        // Resolve off the UI thread; open surfaces must hop back to STA.
         var context = await navigation.ResolveAsync(taskId, cancellationToken).ConfigureAwait(false);
         if (context is null)
         {
@@ -48,13 +50,20 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             return false;
         }
 
-        return await TryOpenAsync(context, cancellationToken).ConfigureAwait(false);
+        return await TryOpenAsync(context, cancellationToken).ConfigureAwait(true);
     }
 
     public async ValueTask<bool> TryOpenAsync(WorkSurfaceContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Window/dialog creation requires the WPF STA UI thread. Callers often reach here after
+        // ConfigureAwait(false) (e.g. task resolve), so always marshal before touching UI.
+        return await UiThread.RunAsync(() => OpenOnUiThreadAsync(context, cancellationToken)).ConfigureAwait(true);
+    }
+
+    private async Task<bool> OpenOnUiThreadAsync(WorkSurfaceContext context, CancellationToken cancellationToken)
+    {
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Launcher.Open",
             $"task={context.TaskId} componentKey={context.ComponentKey} project={context.ProjectId} primaryTarget={context.PrimaryWorkTargetEntityId}");

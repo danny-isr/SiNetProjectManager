@@ -4,6 +4,7 @@ using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Settings;
+using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
@@ -144,9 +145,14 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
     IProcessActionService processActions,
     IWorkflowCommandService workflowCommands,
     IWorkflowQueryService workflowQuery,
-    IDbContextFactory<SiNetSQLDbContext> dbFactory)
+    IDbContextFactory<SiNetSQLDbContext> dbFactory,
+    ITaskCompletionService? taskCompletion = null)
     : IEmailSuggestedActionExecutionService
 {
+    private const string QuoteRequestClassifiedEvent = "Review.QuoteRequestClassified";
+    private const string QuoteRequestDetected = "QuoteRequestDetected";
+    private const string NotQuoteRequest = "NotQuoteRequest";
+
     private readonly IProcessActionService _processActions =
         processActions ?? throw new ArgumentNullException(nameof(processActions));
     private readonly IWorkflowCommandService _workflowCommands =
@@ -155,6 +161,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         workflowQuery ?? throw new ArgumentNullException(nameof(workflowQuery));
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly ITaskCompletionService? _taskCompletion = taskCompletion;
 
     public async Task<EmailSuggestedActionExecutionResult> ExecuteAsync(
         EmailSuggestedActionExecutionCommand command,
@@ -168,9 +175,11 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
 
         // Phase 3e: email-driven workflow starts that need no UI / project creation are routed
         // through the native IWorkflowCommandService.StartAsync (single native engine).
-        if (TryResolveWorkflowStart(command.ActionCode, out var workflowCode, out var isProjectBound))
+        // CreatePriceQuote / RejectPriceQuote already express the intake classification — auto-complete
+        // IdentifyQuoteRequest so the operator is not asked again in a second dialog.
+        if (TryResolveWorkflowStart(command.ActionCode, out var workflowCode, out var isProjectBound, out var intakeResultCode))
         {
-            return await StartWorkflowAsync(command, workflowCode, isProjectBound, cancellationToken)
+            return await StartWorkflowAsync(command, workflowCode, isProjectBound, intakeResultCode, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -208,6 +217,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
     private static bool IsUnassignedInboxAction(string actionCode) =>
         actionCode is EmailSuggestedActionCodes.AssociateToExistingProject
             or EmailSuggestedActionCodes.CreatePriceQuote
+            or EmailSuggestedActionCodes.RejectPriceQuote
             or EmailSuggestedActionCodes.CreateNewReview
             or EmailSuggestedActionCodes.RequestAuthorityInvitation
             or EmailSuggestedActionCodes.CreateOpinionProject
@@ -234,26 +244,37 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
     /// <summary>
     /// Maps email suggested-action codes to native workflow starts that require no UI / project
     /// creation. Mirrors the legacy <c>ActionExecutor</c> dispatch:
-    /// <c>CreatePriceQuote → Proposal</c> (project-independent) and
+    /// <c>CreatePriceQuote → Proposal</c> (project-independent; intake auto-classified as quote),
+    /// <c>RejectPriceQuote → Proposal</c> (intake auto-classified as not-a-quote → terminal),
     /// <c>CreateOpinionProject → Opinion</c> (bound to the email's office project).
-    /// UI-/project-creation-dependent starts (CreateNewReview, RequestAuthorityInvitation, …)
-    /// are deferred to the ProjectWork surface (Phase 5a).
     /// </summary>
-    private static bool TryResolveWorkflowStart(string actionCode, out string workflowCode, out bool isProjectBound)
+    private static bool TryResolveWorkflowStart(
+        string actionCode,
+        out string workflowCode,
+        out bool isProjectBound,
+        out string? intakeResultCode)
     {
         switch (actionCode)
         {
             case EmailSuggestedActionCodes.CreatePriceQuote:
                 workflowCode = WorkflowCodes.Proposal;
                 isProjectBound = false;
+                intakeResultCode = QuoteRequestDetected;
+                return true;
+            case EmailSuggestedActionCodes.RejectPriceQuote:
+                workflowCode = WorkflowCodes.Proposal;
+                isProjectBound = false;
+                intakeResultCode = NotQuoteRequest;
                 return true;
             case EmailSuggestedActionCodes.CreateOpinionProject:
                 workflowCode = WorkflowCodes.Opinion;
                 isProjectBound = true;
+                intakeResultCode = null;
                 return true;
             default:
                 workflowCode = string.Empty;
                 isProjectBound = false;
+                intakeResultCode = null;
                 return false;
         }
     }
@@ -262,6 +283,7 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         EmailSuggestedActionExecutionCommand command,
         string workflowCode,
         bool isProjectBound,
+        string? intakeResultCode,
         CancellationToken cancellationToken)
     {
         var definitions = await _workflowQuery.GetActiveDefinitionsAsync(cancellationToken).ConfigureAwait(false);
@@ -367,6 +389,20 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            if (intakeResultCode is not null
+                && result.CreatedTasks.Count > 0
+                && _taskCompletion is not null
+                && command.ActingUserId > 0)
+            {
+                return await CompleteProposalIntakeAsync(
+                        result,
+                        intakeResultCode,
+                        command.ActingUserId,
+                        definition.Name,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             var message2 = result.CreatedTasks.Count > 0
                 ? $"תהליך '{definition.Name}' הופעל בהצלחה ונוצרה משימה."
                 : $"תהליך '{definition.Name}' הופעל (מופע #{result.Instance.Id}), אך לא נוצרו משימות לשלב הראשון.";
@@ -378,6 +414,72 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             return new EmailSuggestedActionExecutionResult(
                 false, false, $"שגיאה בהפעלת תהליך '{definition.Name}': {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Completes the intake <c>IdentifyQuoteRequest</c> task created by Start, using the verdict
+    /// already chosen on the email action (CreatePriceQuote / RejectPriceQuote). Advances the
+    /// Proposal workflow without a second classification UI.
+    /// </summary>
+    private async Task<EmailSuggestedActionExecutionResult> CompleteProposalIntakeAsync(
+        WorkflowStartResultDto start,
+        string intakeResultCode,
+        int actingUserId,
+        string definitionName,
+        CancellationToken cancellationToken)
+    {
+        var intakeTask = start.CreatedTasks[0];
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.StartWorkflow",
+            $"instance={start.Instance.Id} auto-complete intake task={intakeTask.Id} result={intakeResultCode}");
+
+        var completion = await _taskCompletion!
+            .CompleteAsync(
+                new CompleteTaskCommand(
+                    intakeTask.Id,
+                    QuoteRequestClassifiedEvent,
+                    intakeResultCode,
+                    CompletedTaskLinkIds: null,
+                    actingUserId),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!completion.Success)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.StartWorkflow",
+                $"instance={start.Instance.Id} intake auto-complete FAILED: {completion.ErrorMessage}");
+            return new EmailSuggestedActionExecutionResult(
+                true,
+                true,
+                $"תהליך '{definitionName}' הופעל (#{start.Instance.Id}) אך סיווג הקליטה נכשל: {completion.ErrorMessage}. פתח את משימת הזיהוי ידנית.");
+        }
+
+        if (string.Equals(intakeResultCode, NotQuoteRequest, StringComparison.Ordinal))
+        {
+            return new EmailSuggestedActionExecutionResult(
+                true,
+                false,
+                $"סומן כלא בקשת הצעת מחיר — תהליך #{start.Instance.Id} נסגר.");
+        }
+
+        var nextStage = completion.StageAdvanceResult?.AdvancedInstance?.CurrentStage?.Code
+                        ?? (completion.StageAdvanceResult?.TargetStageId is int sid ? $"שלב #{sid}" : null)
+                        ?? "השלב הבא";
+        var advanced = completion.WorkflowAdvanced
+                       || completion.StageAdvanceResult?.Action == StageCompletionActionDto.AutoAdvanced;
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.StartWorkflow",
+            $"instance={start.Instance.Id} intake done result={intakeResultCode} advanced={advanced} next={nextStage}");
+
+        return new EmailSuggestedActionExecutionResult(
+            true,
+            false,
+            advanced
+                ? $"פתיחת הצעת מחיר אושרה. התהליך #{start.Instance.Id} התקדם ל־{nextStage}. בדוק בלוח המשימות את המשימה הבאה (פתיחת פרויקט הצעה)."
+                : $"פתיחת הצעת מחיר אושרה (תהליך #{start.Instance.Id}). המשימה הבאה אמורה להופיע בלוח המשימות.");
     }
 
     /// <summary>

@@ -81,6 +81,12 @@ public static class EmailSuggestedActionCodes
 {
     public const string AssociateToExistingProject = nameof(AssociateToExistingProject);
     public const string CreatePriceQuote = nameof(CreatePriceQuote);
+    /// <summary>
+    /// Marks the email as not a price-quote request: starts Proposal and immediately completes intake
+    /// with <c>NotQuoteRequest</c> (terminal reject). Offered beside <see cref="CreatePriceQuote"/> so the
+    /// operator does not need a second classification dialog.
+    /// </summary>
+    public const string RejectPriceQuote = nameof(RejectPriceQuote);
     public const string CreateNewReview = nameof(CreateNewReview);
     public const string RequestAuthorityInvitation = nameof(RequestAuthorityInvitation);
     public const string CreateOpinionProject = nameof(CreateOpinionProject);

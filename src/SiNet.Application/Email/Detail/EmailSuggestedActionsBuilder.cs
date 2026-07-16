@@ -32,8 +32,13 @@ public static class EmailSuggestedActionsBuilder
             new(
                 EmailSuggestedActionCodes.CreatePriceQuote,
                 "פתיחת הצעת מחיר",
-                "יצירת תהליך הצעת מחיר ממייל חדש",
+                "מאשר שזה בקשת הצעת מחיר ומתחיל את התהליך (מתקדם לשלב הבא)",
                 SortOrder: 20),
+            new(
+                EmailSuggestedActionCodes.RejectPriceQuote,
+                "לא בקשת הצעת מחיר",
+                "סוגר את הפנייה כלא רלוונטית להצעת מחיר — בלי דיאלוג נוסף",
+                SortOrder: 25),
             new(
                 EmailSuggestedActionCodes.CreateNewReview,
                 "פתיחת עבודה (מהרשות)",
