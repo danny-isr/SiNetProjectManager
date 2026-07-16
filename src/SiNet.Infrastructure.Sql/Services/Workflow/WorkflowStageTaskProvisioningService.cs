@@ -216,6 +216,7 @@ internal sealed class WorkflowStageTaskProvisioningService
         var openStatusId = await WorkflowTaskFactory.GetOpenStatusIdAsync(db, ct).ConfigureAwait(false);
         var createdTasks = new List<ProjectAssignment>(stageTasks.Count);
         var stageTag = WorkflowConstants.BuildStageTag(stageId);
+        var emailSource = await TryLoadEmailSourceAsync(db, instance, ct).ConfigureAwait(false);
 
         foreach (var template in stageTasks)
         {
@@ -274,20 +275,37 @@ internal sealed class WorkflowStageTaskProvisioningService
                             CreatedAtUtc = DateTime.UtcNow,
                             CreatedByUserId = userId,
                         });
-                        await db.SaveChangesAsync(ct).ConfigureAwait(false);
                     }
 
+                    // Upgrade opaque WF-… titles when we can show the email subject.
+                    var reuseTypeName = template.TaskType?.Name ?? $"משימה #{template.TaskTypeId}";
+                    var readable = BuildHumanReadableTaskTitle(
+                        reuseTypeName, emailSource, instanceId, stageId, template.TaskTypeId);
+                    if (emailSource is not null
+                        && (string.IsNullOrWhiteSpace(existingOpenTask.Title)
+                            || existingOpenTask.Title.StartsWith("WF-", StringComparison.Ordinal)))
+                    {
+                        existingOpenTask.Title = readable;
+                        db.ProjectAssignments.Update(existingOpenTask);
+                    }
+
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
                     createdTasks.Add(existingOpenTask);
+                    // TEMP WF-DEBUG — reuse path previously looked like "tasksCreated=1" with no TaskCreated line
+                    WorkflowDebugTrace.Step("Provisioning.TaskCreated",
+                        $"instance={instanceId} stage={stageId} taskId={existingOpenTask.Id} taskTypeId={template.TaskTypeId} assignedTo={assigneeId} REUSED existing open task (project={instance.ProjectId}) title='{existingOpenTask.Title}'");
                     continue;
                 }
 
+                var taskTypeName = template.TaskType?.Name ?? $"משימה #{template.TaskTypeId}";
                 var task = new ProjectAssignment
                 {
                     ProjectId = instance.ProjectId,
                     AssignedToId = assigneeId,
                     TaskTypeId = template.TaskTypeId,
                     StatusId = openStatusId,
-                    Title = $"WF-{instanceId}-S{stageId}-{template.TaskTypeId}-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                    Title = BuildHumanReadableTaskTitle(taskTypeName, emailSource, instanceId, stageId, template.TaskTypeId),
                 };
 
                 await WorkflowTaskFactory.CreateAsync(db, task, userId,
@@ -405,7 +423,10 @@ internal sealed class WorkflowStageTaskProvisioningService
             .ConfigureAwait(false);
 
         var projectLabel = project?.NameAndNumber ?? project?.Title ?? $"פרויקט #{instance.ProjectId}";
-        var taskTitle = $"{stage.Name} — {projectLabel}";
+        var emailSource = await TryLoadEmailSourceAsync(db, instance, ct).ConfigureAwait(false);
+        var taskTitle = emailSource is not null
+            ? BuildHumanReadableTaskTitle(stage.Name, emailSource, instance.Id, stageId, taskTypeId: 0)
+            : $"{stage.Name} — {projectLabel}";
 
         var bodyLines = new List<string>
         {
@@ -418,8 +439,16 @@ internal sealed class WorkflowStageTaskProvisioningService
         if (stage.Description is not null)
             bodyLines.Add($"הנחיות: {stage.Description}");
 
-        if (instance.TriggerEntityId.HasValue && instance.TriggerType == WorkflowTriggerType.Email)
+        if (emailSource is not null)
+        {
+            bodyLines.Add($"מייל מקור: {emailSource.Subject}");
+            if (!string.IsNullOrWhiteSpace(emailSource.FromAddress))
+                bodyLines.Add($"מאת: {emailSource.FromAddress}");
+        }
+        else if (instance.TriggerEntityId.HasValue && instance.TriggerType == WorkflowTriggerType.Email)
+        {
             bodyLines.Add($"[מייל מקור: #{instance.TriggerEntityId}]");
+        }
 
         var alreadyExists = await db.TaskLinks
             .AnyAsync(l => l.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
@@ -456,6 +485,59 @@ internal sealed class WorkflowStageTaskProvisioningService
         await AddSourceLinkIfApplicableAsync(db, task.Id, instance, userId, ct).ConfigureAwait(false);
 
         return [task];
+    }
+
+    private sealed record EmailSourceInfo(int Id, string Subject, string? FromAddress);
+
+    private static async ValueTask<EmailSourceInfo?> TryLoadEmailSourceAsync(
+        SiNetSQLDbContext db,
+        WorkflowInstance instance,
+        CancellationToken ct)
+    {
+        if (instance.TriggerType != WorkflowTriggerType.Email
+            || instance.TriggerEntityId is not int emailId
+            || emailId <= 0)
+        {
+            return null;
+        }
+
+        var row = await db.EmailInboxMessages
+            .AsNoTracking()
+            .Where(m => m.Id == emailId)
+            .Select(m => new { m.Id, m.Subject, m.FromAddress })
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        var subject = string.IsNullOrWhiteSpace(row.Subject) ? "(ללא נושא)" : row.Subject.Trim();
+        return new EmailSourceInfo(row.Id, subject, row.FromAddress);
+    }
+
+    /// <summary>
+    /// Builds a human-readable task title: "{task type} — {email subject}" (optional from),
+    /// instead of the opaque WF-{instance}-S{stage}-… machine key.
+    /// </summary>
+    private static string BuildHumanReadableTaskTitle(
+        string taskTypeOrStageName,
+        EmailSourceInfo? email,
+        int instanceId,
+        int stageId,
+        int taskTypeId)
+    {
+        if (email is null)
+        {
+            return $"WF-{instanceId}-S{stageId}-{taskTypeId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        }
+
+        var title = string.IsNullOrWhiteSpace(email.FromAddress)
+            ? $"{taskTypeOrStageName} — {email.Subject}"
+            : $"{taskTypeOrStageName} — {email.Subject} ({email.FromAddress})";
+
+        return title.Length <= 240 ? title : title[..237] + "...";
     }
 
     private static async ValueTask AddSourceLinkIfApplicableAsync(

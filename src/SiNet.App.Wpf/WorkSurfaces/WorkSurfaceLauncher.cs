@@ -6,7 +6,9 @@ using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
+using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Email;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -131,6 +133,31 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             }
 
             inspectionWindow.Show();
+            return true;
+        }
+
+        // Classification-only Proposal intake — native dialog (mirrors legacy QuoteClassificationDialog).
+        // Must run before ProjectWork routing so Task Workbench does not open an empty project shell.
+        if (string.Equals(context.TaskTypeCode, "IdentifyQuoteRequest", StringComparison.OrdinalIgnoreCase))
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Launcher.Open",
+                $"task={context.TaskId} → routing to QuoteClassification dialog (email={context.PrimaryWorkTargetEntityId})");
+
+            if (_services.GetService<ITaskCompletionService>() is not { } completion)
+            {
+                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                return false;
+            }
+
+            var dialog = new QuoteClassificationDialog(
+                context,
+                completion,
+                _services.GetService<IEmailInboxQueryService>())
+            {
+                Owner = System.Windows.Application.Current?.MainWindow,
+            };
+            dialog.ShowDialog();
             return true;
         }
 
