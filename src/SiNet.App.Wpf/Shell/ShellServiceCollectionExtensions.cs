@@ -23,6 +23,7 @@ public static class ShellServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<INewShellFactory, NewShellFactory>();
+        services.AddSingleton<IShellContentHost, ShellContentHost>();
 
         return services;
     }

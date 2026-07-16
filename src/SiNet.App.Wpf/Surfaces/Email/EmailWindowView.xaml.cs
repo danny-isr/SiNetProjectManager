@@ -7,25 +7,16 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNet.App.Wpf.Surfaces.Email;
 
 /// <summary>
-/// Window code-behind for the first read-only New System slice of the legacy <c>EmailManagementView</c>.
-/// <para>
-/// The code-behind still contains <i>view-level chrome only</i> — header drag-to-move, minimize,
-/// maximize/restore, and close — matching the borderless window shell used by the other new surfaces.
-/// It deliberately carries no business logic: no DB, no Gmail SDK calls, no file-system access, no
-/// project linking, no task creation, and no workflow mutation. All behavior is exposed through
-/// <see cref="EmailWindowViewModel"/>.
-/// </para>
-/// <para>
-/// The parameterless constructor exists so the window can still be shown with fake design-time data;
-/// the typed constructor is the path a DI host / work-surface launcher uses for the real slice.
-/// </para>
+/// Optional popup window wrapper around <see cref="EmailSurfaceView"/>. Production New System
+/// navigation hosts the surface inside <c>NewShellWindow</c> via <see cref="IEmailSurfaceHost"/>;
+/// this window remains for standalone / fallback opens.
 /// </summary>
 public partial class EmailWindowView : Window
 {
     private Rect _restoreBounds;
     private bool _isCustomMaximized;
 
-    /// <summary>Design/standalone constructor: shows the window with fake in-memory data.</summary>
+    /// <summary>Design/standalone constructor: shows the window with fake design-time data.</summary>
     public EmailWindowView()
         : this(new EmailWindowViewModel())
     {
@@ -37,6 +28,7 @@ public partial class EmailWindowView : Window
         InitializeComponent();
         ViewModel = viewModel;
         DataContext = viewModel;
+        EmailSurfaceHost.DataContext = viewModel;
         UpdateMaximizeButtonGlyph();
     }
 
@@ -44,7 +36,7 @@ public partial class EmailWindowView : Window
     public EmailWindowViewModel ViewModel { get; }
 
     public void SetBodyRenderer(IEmailBodyRenderer? bodyRenderer) =>
-        EmailDetailHost.SetBodyRenderer(bodyRenderer);
+        EmailSurfaceHost.SetBodyRenderer(bodyRenderer);
 
     /// <summary>
     /// Placeholder workflow-first entry point. A later slice will use this to open the window from a

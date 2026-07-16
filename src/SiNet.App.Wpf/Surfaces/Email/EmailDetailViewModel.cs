@@ -541,7 +541,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 new EmailSuggestedActionExecutionCommand(
                     action.ActionCode,
                     _selectedEmail?.InboxMessageId,
-                    _currentUser?.UserId ?? 0)).ConfigureAwait(true);
+                    _currentUser?.UserId ?? 0,
+                    BuildGmailSource(_selectedEmail))).ConfigureAwait(true);
 
             Workflow.StatusMessage = result.Message ?? (result.Succeeded ? "הפעולה הושלמה." : "הפעולה נכשלה.");
             await RefreshWorkflowContextAsync().ConfigureAwait(true);
@@ -550,6 +551,30 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         {
             Workflow.IsLoading = false;
         }
+    }
+
+    /// <summary>
+    /// Builds the Gmail message identity carried alongside a suggested-action command so that a
+    /// workflow-starting action (e.g. CreatePriceQuote) can materialize an inbox row on demand when the
+    /// email has not been ingested yet (no <see cref="EmailListRow.InboxMessageId"/>). Returns null when
+    /// there is no selected email.
+    /// </summary>
+    private static EmailGmailSourceIdentity? BuildGmailSource(EmailListRow? row)
+    {
+        if (row is null)
+        {
+            return null;
+        }
+
+        return new EmailGmailSourceIdentity(
+            GmailMessageId: row.Id,
+            InternetMessageId: row.InternetMessageId,
+            References: null,
+            InReplyTo: null,
+            Subject: row.Subject,
+            FromAddress: row.Sender,
+            ReceivedUtc: row.ReceivedOn == DateTime.MinValue ? null : row.ReceivedOn.ToUniversalTime(),
+            GmailThreadId: row.ThreadId);
     }
 
     private void RefreshActionBarState()

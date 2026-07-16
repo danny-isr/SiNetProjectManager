@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         FlowDirection="RightToLeft"
         Title="{Binding WindowTitle}"
-        Height="600" Width="960"
+        Height="800" Width="1280"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource SiBackgroundBrush}"
         d:DataContext="{d:DesignInstance Type=local:NewShellDesignData, IsDesignTimeCreatable=True}">
@@ -15,15 +15,9 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </Window.Resources>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <Border Grid.Row="0" Background="{DynamicResource SiPrimaryBrush}" Padding="16,10">
+    <DockPanel LastChildFill="True">
+        <!-- Header branding -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource SiPrimaryBrush}" Padding="16,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -45,7 +39,25 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Background="{DynamicResource SiBackgroundBrush}" Padding="12,5"
+        <!-- Top application menu (legacy MainWindow pattern) -->
+        <Menu DockPanel.Dock="Top"
+              FlowDirection="RightToLeft"
+              Background="{DynamicResource SiBackgroundBrush}"
+              Padding="4,2"
+              ItemsSource="{Binding MenuItems}">
+            <Menu.ItemContainerStyle>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Header" Value="{Binding Title}" />
+                    <Setter Property="Command" Value="{Binding OpenCommand}" />
+                    <Setter Property="ToolTip" Value="{Binding Description}" />
+                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                    <Setter Property="Padding" Value="10,4" />
+                </Style>
+            </Menu.ItemContainerStyle>
+        </Menu>
+
+        <!-- Current project bar -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource SiBackgroundBrush}" Padding="12,5"
                 BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="0,0,0,1" Opacity="0.95">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -73,43 +85,8 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="240" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0" Background="{DynamicResource SiBackgroundBrush}"
-                    BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1,0,0,0" Opacity="0.5">
-                <DockPanel LastChildFill="True">
-                    <TextBlock DockPanel.Dock="Top" Text="תפריט מערכת חדשה" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" Margin="12,12,12,6" />
-                    <ItemsControl ItemsSource="{Binding MenuItems}" Margin="8,0,8,8">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Button Command="{Binding OpenCommand}"
-                                        Style="{DynamicResource SiSecondaryButtonStyle}"
-                                        ToolTip="{Binding Description}"
-                                        IsEnabled="{Binding IsAvailable}"
-                                        HorizontalContentAlignment="Right"
-                                        Padding="12,8" Margin="0,4"
-                                        Content="{Binding Title}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </DockPanel>
-            </Border>
-
-            <Grid Grid.Column="1" Margin="16">
-                <TextBlock Text="בחר פריט מהתפריט כדי לפתוח מסך חדש."
-                           Style="{DynamicResource SiTextNormalStyle}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.85" />
-                <ContentControl x:Name="ContentHost" />
-            </Grid>
-        </Grid>
-
-        <Border Grid.Row="3" Background="{DynamicResource SiPrimaryBrush}" Padding="12,4">
+        <!-- Footer health -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource SiPrimaryBrush}" Padding="12,4">
             <Button Command="{Binding OpenSystemStatusCommand}"
                     Background="Transparent"
                     BorderThickness="0"
@@ -128,5 +105,27 @@
                 </StackPanel>
             </Button>
         </Border>
-    </Grid>
+
+        <!-- Main content host (email and other in-shell surfaces) -->
+        <Grid Margin="0">
+            <TextBlock Text="בחר פריט מהתפריט כדי לפתוח מסך."
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.85">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Visible" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasContent}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <ContentControl x:Name="ContentHost"
+                            Content="{Binding CurrentContent}"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
+        </Grid>
+    </DockPanel>
 </Window>

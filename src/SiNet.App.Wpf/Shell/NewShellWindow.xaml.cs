@@ -1,17 +1,21 @@
+using System.ComponentModel;
 using System.Windows;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Surfaces.Email;
 
 namespace SiNet.App.Wpf.Shell;
 
 /// <summary>
 /// The clean New System shell window (see <c>docs/APP_SHELL.md</c>). It is intentionally minimal and
-/// carries no business logic in code-behind: it wires the shared Project Selector into the header.
+/// carries no business logic in code-behind: it wires the shared Project Selector into the header and
+/// hosts migrated surfaces in <see cref="ContentHost"/> (legacy <c>MainWindow</c> content pattern).
 /// It does NOT open the legacy <c>MainWindow</c> and does NOT load the legacy menu.
 /// </summary>
 public partial class NewShellWindow : Window
 {
     private readonly NewShellViewModel _viewModel;
     private readonly ProjectSelectorView? _projectSelector;
+    private readonly IEmailSurfaceHost? _emailSurfaceHost;
 
     /// <summary>
     /// Creates the shell.
@@ -21,11 +25,18 @@ public partial class NewShellWindow : Window
     /// The shared, reusable Project Selector view (already bound to its view model by the host) to host
     /// in the current-project bar. Optional — omitted when the Project Context is unavailable.
     /// </param>
-    public NewShellWindow(NewShellViewModel viewModel, ProjectSelectorView? projectSelector = null)
+    /// <param name="emailSurfaceHost">
+    /// Optional email surface host used to block shell close while ACC/background email work is active.
+    /// </param>
+    public NewShellWindow(
+        NewShellViewModel viewModel,
+        ProjectSelectorView? projectSelector = null,
+        IEmailSurfaceHost? emailSurfaceHost = null)
     {
         InitializeComponent();
 
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _emailSurfaceHost = emailSurfaceHost;
         DataContext = _viewModel;
 
         if (projectSelector is not null)
@@ -34,7 +45,16 @@ public partial class NewShellWindow : Window
             ProjectSelectorHost.Content = projectSelector;
         }
 
+        Closing += OnClosing;
         Closed += OnClosed;
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (_emailSurfaceHost?.TryBlockShellClose(this) == true)
+        {
+            e.Cancel = true;
+        }
     }
 
     private void OnClosed(object? sender, EventArgs e)

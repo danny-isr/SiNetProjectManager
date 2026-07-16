@@ -29,7 +29,7 @@ public sealed class ProductionPilotBoundaryTests
         Assert.Contains("#if DEBUG", source, StringComparison.Ordinal);
         Assert.Contains("OpenInspectionShell,", source, StringComparison.Ordinal);
         Assert.Contains("developer harness", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("קריאה בלבד", source, StringComparison.Ordinal);
+        Assert.Contains("IEmailSurfaceHost", source, StringComparison.Ordinal);
 
         var debugIdx = source.IndexOf("#if DEBUG", StringComparison.Ordinal);
         var inspectionMenuIdx = source.IndexOf("OpenInspectionShell,", StringComparison.Ordinal);
@@ -40,11 +40,13 @@ public sealed class ProductionPilotBoundaryTests
     [Fact]
     public void Email_window_exposes_detail_component_with_action_bar()
     {
-        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
+        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
         var detailXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailDetailView.xaml");
         var actionBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailActionBarView.xaml");
 
         Assert.Contains("EmailDetailView", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailSurfaceView", windowXaml, StringComparison.Ordinal);
         Assert.Contains("EmailActionBarView", detailXaml, StringComparison.Ordinal);
         Assert.Contains("MoveToProjectCommand", actionBarXaml, StringComparison.Ordinal);
     }
@@ -52,7 +54,7 @@ public sealed class ProductionPilotBoundaryTests
     [Fact]
     public void Email_window_view_uses_two_column_list_detail_layout()
     {
-        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
 
         Assert.Contains("EmailListView", xaml, StringComparison.Ordinal);
         Assert.Contains("EmailDetailView", xaml, StringComparison.Ordinal);

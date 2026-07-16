@@ -91,6 +91,8 @@ public static class ProjectContextServiceCollectionExtensions
         // Small factory so hosts open the window through DI instead of constructing an isolated context.
         services.AddSingleton<IEmailWindowFactory, EmailWindowFactory>();
         services.AddSingleton<IEmailWorkItemWindowFactory, EmailWorkItemWindowFactory>();
+        // Shell-hosted singleton inbox (create-once, reuse in main content — legacy cache pattern).
+        services.AddSingleton<IEmailSurfaceHost, EmailSurfaceHost>();
 
         services.AddTransient<ProjectCreateDialogViewModel>();
         services.AddTransient<IProjectCreateDialogFactory, ProjectCreateDialogFactory>();

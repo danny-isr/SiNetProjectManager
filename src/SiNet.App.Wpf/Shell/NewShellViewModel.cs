@@ -41,6 +41,7 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
     private string _statusText;
     private Brush _overallHealthBrush;
     private int _activeBackgroundWorkCount;
+    private object? _currentContent;
 
     /// <summary>
     /// Creates the shell view model.
@@ -120,6 +121,30 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>The migrated-only menu shown by the shell. Never the legacy menu.</summary>
     public ObservableCollection<NewShellMenuItem> MenuItems { get; }
+
+    /// <summary>
+    /// Content shown in the shell's main content host (e.g. the cached email surface).
+    /// Set via <see cref="IShellContentHost.NavigateTo"/>; not disposed when replaced so heavy
+    /// surfaces can stay in memory (legacy cached-view pattern).
+    /// </summary>
+    public object? CurrentContent
+    {
+        get => _currentContent;
+        set
+        {
+            if (EqualityComparer<object?>.Default.Equals(_currentContent, value))
+            {
+                return;
+            }
+
+            _currentContent = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentContent)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasContent)));
+        }
+    }
+
+    /// <summary>True when <see cref="CurrentContent"/> is set (hides the empty-state placeholder).</summary>
+    public bool HasContent => CurrentContent is not null;
 
     /// <summary>Friendly current-user text shown in the header.</summary>
     public string CurrentUserDisplay

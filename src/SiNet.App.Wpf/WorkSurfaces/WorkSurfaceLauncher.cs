@@ -85,7 +85,14 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 return true;
             }
 
-            // Browse / project-centric email (no TaskId): full inbox window.
+            // Browse / project-centric email (no TaskId): hosted singleton inbox in the main shell.
+            if (_services.GetService<IEmailSurfaceHost>() is { } emailSurfaceHost)
+            {
+                emailSurfaceHost.Show(context);
+                return true;
+            }
+
+            // Fallback when shell host is unavailable (standalone / tests): popup window.
             var factory = _services.GetRequiredService<IEmailWindowFactory>();
             var window = factory.Create();
             window.ApplyContext(context);

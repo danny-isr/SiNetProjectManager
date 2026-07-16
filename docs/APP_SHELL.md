@@ -147,8 +147,9 @@ Rules:
 
 - The menu is built **only** from surfaces that already exist in the refactored stack. Adding an item
   requires a real, DI-resolvable surface — no placeholders that throw.
-- Menu items open surfaces through the **same** DI/factory paths the legacy host already uses
-  (`IEmailWindowFactory`, `InspectionShellView`), so behavior is identical to the reviewed clones.
+- Menu items open surfaces through DI/factory paths. **Email** is hosted **inside** the shell content
+  area via `IEmailSurfaceHost` (singleton, create-once — legacy `_cachedEmailManagementView` pattern).
+  Other surfaces may still open as separate windows until they are migrated to in-shell hosting.
 - **Menu availability (P3):** `NewShellFactory` resolves whether an item is included/enabled via
   `IAuthorizationQueryService.CanCurrentUserAccessFeatureAsync` and `AppFeatureCodes` — not via legacy
   `CurrentUserContext` or `IsAdmin` checks inside `NewShellViewModel`.
@@ -159,7 +160,7 @@ Initial menu (P3 + P6 + native admin):
 
 | Item | Feature code | Min role | Opens |
 | --- | --- | --- | --- |
-| Email (visual clone) | `Shell.OpenEmailSurface` | Employee | `IEmailWindowFactory.Create()` |
+| Email (inbox) | `Shell.OpenEmailSurface` | Employee | `IEmailSurfaceHost.Show()` → hosted `EmailSurfaceView` in shell content |
 | Inspection (shell) | `Shell.OpenInspectionSurface` | Employee | DI-resolved `InspectionShellView` |
 | User management | `Users.Manage` | Administrator | `UserListWindow` → native `UserManagementView` |
 | Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |

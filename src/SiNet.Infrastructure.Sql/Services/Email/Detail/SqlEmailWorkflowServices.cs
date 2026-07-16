@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Actions;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Email;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Settings;
 using SiNet.Application.Workflow;
@@ -263,11 +264,6 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
         bool isProjectBound,
         CancellationToken cancellationToken)
     {
-        if (command.InboxMessageId is not int inboxMessageId || inboxMessageId <= 0)
-        {
-            return new EmailSuggestedActionExecutionResult(false, false, "חסר מזהה מייל להפעלת התהליך.");
-        }
-
         var definitions = await _workflowQuery.GetActiveDefinitionsAsync(cancellationToken).ConfigureAwait(false);
         var definition = definitions.FirstOrDefault(
             d => string.Equals(d.Code, workflowCode, StringComparison.OrdinalIgnoreCase));
@@ -280,20 +276,51 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var message = await db.EmailInboxMessages
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id == inboxMessageId, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (message is null)
+        // Resolve the source inbox row. A price-quote request need not have attachments, so the email
+        // may not have been pre-ingested by the ACC pipeline (InboxMessageId is null). In that case the
+        // action itself materializes the inbox row on demand (mirrors legacy
+        // EmailContextViewModel.EnsureEmailInboxMessageForActionAsync) so the workflow can start.
+        int inboxMessageId;
+        int projectId;
+        if (command.InboxMessageId is int existingInboxId && existingInboxId > 0)
         {
-            return new EmailSuggestedActionExecutionResult(false, false, "המייל לא נמצא.");
+            var message = await db.EmailInboxMessages
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == existingInboxId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (message is null)
+            {
+                return new EmailSuggestedActionExecutionResult(false, false, "המייל לא נמצא.");
+            }
+
+            inboxMessageId = message.Id;
+            projectId = message.ProjectId;
+        }
+        else
+        {
+            var (materializedId, materializedProjectId, materializeError) =
+                await EnsureInboxMessageAsync(db, command.GmailSource, cancellationToken).ConfigureAwait(false);
+
+            if (materializeError is not null)
+            {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Email.StartWorkflow",
+                    $"workflow={workflowCode} materialize FAILED: {materializeError}");
+                return new EmailSuggestedActionExecutionResult(false, true, materializeError);
+            }
+
+            inboxMessageId = materializedId;
+            projectId = materializedProjectId;
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.StartWorkflow",
+                $"workflow={workflowCode} materialized inbox row #{inboxMessageId} (project={projectId})");
         }
 
         // Inbox rows always carry a ProjectId (office default when unassigned). It backs the
         // office placeholder for project-independent starts (Proposal) and the owning project
         // for bound starts (Opinion) — matching legacy ActionExecutor behaviour.
-        var projectId = message.ProjectId;
         if (projectId <= 0)
         {
             return new EmailSuggestedActionExecutionResult(
@@ -351,5 +378,122 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
             return new EmailSuggestedActionExecutionResult(
                 false, false, $"שגיאה בהפעלת תהליך '{definition.Name}': {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Materializes an <see cref="EmailInboxMessage"/> row on demand for a workflow-starting action when
+    /// the email is not yet in the inbox DB. Idempotent (re-uses an existing row matched by
+    /// RFC 2822 identity). Enforces the strict inbox policy: an RFC 2822 <c>Message-ID</c> is required.
+    /// Assigns the default office project. Mirrors legacy
+    /// <c>EmailContextViewModel.EnsureEmailInboxMessageForActionAsync</c>.
+    /// </summary>
+    private async Task<(int InboxMessageId, int ProjectId, string? Error)> EnsureInboxMessageAsync(
+        SiNetSQLDbContext db,
+        EmailGmailSourceIdentity? source,
+        CancellationToken cancellationToken)
+    {
+        if (source is null)
+        {
+            return (0, 0, "חסר מידע על המייל להפעלת התהליך.");
+        }
+
+        // Strict policy: InternetMessageId (RFC 2822 Message-ID) is required and UNIQUE. The Gmail
+        // message id is a mailbox-local runtime identifier and is not accepted for new rows.
+        if (string.IsNullOrWhiteSpace(source.InternetMessageId))
+        {
+            return (0, 0, "לא ניתן לתייק את המייל: חסר מזהה Message-ID (RFC 2822).");
+        }
+
+        var messageUniqueId = EmailMessageIdentity.GetMessageUniqueId(source.InternetMessageId, source.GmailMessageId);
+
+        // Idempotency: re-use an existing row for the same message if one already exists.
+        var existing = await db.EmailInboxMessages
+            .AsNoTracking()
+            .Where(m => m.MessageUniqueId == messageUniqueId || m.InternetMessageId == source.InternetMessageId)
+            .Select(m => new { m.Id, m.ProjectId })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (existing is not null)
+        {
+            return (existing.Id, existing.ProjectId, null);
+        }
+
+        var defaultProjectId = await ResolveDefaultOfficeProjectIdAsync(db, cancellationToken).ConfigureAwait(false);
+        if (defaultProjectId <= 0)
+        {
+            return (0, 0, "לא נמצא פרויקט משרד ברירת מחדל לתיוק המייל.");
+        }
+
+        var threadUniqueId = EmailMessageIdentity.GetThreadUniqueId(
+            source.References, source.InReplyTo, source.InternetMessageId);
+        var threadKey = EmailMessageIdentity.GetThreadKey(threadUniqueId);
+
+        var nowUtc = DateTime.UtcNow;
+        var inboxMessage = new EmailInboxMessage
+        {
+            MessageUniqueId = messageUniqueId,
+            InternetMessageId = source.InternetMessageId.Trim(),
+            InReplyTo = source.InReplyTo,
+            References = source.References,
+            ThreadUniqueId = threadUniqueId,
+            ThreadKey = threadKey,
+            GmailThreadId = source.GmailThreadId,
+            ProjectId = defaultProjectId,
+            Subject = source.Subject ?? string.Empty,
+            FromAddress = source.FromAddress ?? string.Empty,
+            ReceivedUtc = source.ReceivedUtc?.ToUniversalTime() ?? nowUtc,
+            Status = EmailInboxStatus.Pending,
+            CreatedByLogin = Environment.UserName,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+        };
+
+        try
+        {
+            db.EmailInboxMessages.Add(inboxMessage);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // Lost a race (UNIQUE on MessageUniqueId/InternetMessageId) — re-read the winner.
+            var winner = await db.EmailInboxMessages
+                .AsNoTracking()
+                .Where(m => m.MessageUniqueId == messageUniqueId || m.InternetMessageId == source.InternetMessageId)
+                .Select(m => new { m.Id, m.ProjectId })
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (winner is null)
+                throw;
+
+            return (winner.Id, winner.ProjectId, null);
+        }
+
+        return (inboxMessage.Id, inboxMessage.ProjectId, null);
+    }
+
+    private static async Task<int> ResolveDefaultOfficeProjectIdAsync(
+        SiNetSQLDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var defaultTitle = await db.SystemSettings
+            .AsNoTracking()
+            .Where(setting => setting.SettingKey == SystemSettingKeys.DefaultProjectTitle)
+            .Select(setting => setting.SettingValue)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(defaultTitle))
+        {
+            defaultTitle = SystemSettingsDefaults.DefaultProjectTitle;
+        }
+
+        return await db.Projects
+            .AsNoTracking()
+            .Where(project => project.Title == defaultTitle)
+            .Select(project => project.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 }

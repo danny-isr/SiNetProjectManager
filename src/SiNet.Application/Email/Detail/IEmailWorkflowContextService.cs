@@ -41,10 +41,33 @@ public interface IEmailSuggestedActionExecutionService
         CancellationToken cancellationToken = default);
 }
 
+/// <param name="ActionCode">The suggested-action code being executed.</param>
+/// <param name="InboxMessageId">Persisted inbox row id, when the email is already in the inbox DB.</param>
+/// <param name="ActingUserId">The acting user id.</param>
+/// <param name="GmailSource">
+/// Optional Gmail message identity, supplied when <paramref name="InboxMessageId"/> is null so that a
+/// workflow-starting action (e.g. <c>CreatePriceQuote</c>) can materialize an inbox row on demand — a
+/// price-quote request need not have attachments, so it is not pre-ingested by the ACC pipeline.
+/// </param>
 public sealed record EmailSuggestedActionExecutionCommand(
     string ActionCode,
     int? InboxMessageId,
-    int ActingUserId);
+    int ActingUserId,
+    EmailGmailSourceIdentity? GmailSource = null);
+
+/// <summary>
+/// Minimal Gmail message identity needed to materialize an <c>EmailInboxMessage</c> on demand.
+/// <see cref="InternetMessageId"/> (RFC 2822 Message-ID) is required by the strict inbox policy.
+/// </summary>
+public sealed record EmailGmailSourceIdentity(
+    string GmailMessageId,
+    string? InternetMessageId,
+    string? References,
+    string? InReplyTo,
+    string? Subject,
+    string? FromAddress,
+    DateTime? ReceivedUtc,
+    string? GmailThreadId);
 
 public sealed record EmailSuggestedActionExecutionResult(
     bool Succeeded,

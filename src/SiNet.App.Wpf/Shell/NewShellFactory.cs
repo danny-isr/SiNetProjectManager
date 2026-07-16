@@ -9,6 +9,7 @@ using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
@@ -31,8 +32,8 @@ public interface INewShellFactory
 {
     /// <summary>
     /// Creates a fully wired <see cref="NewShellWindow"/>: header + current user + shared Project
-    /// Selector + a menu whose items open only migrated surfaces (Email clone, Inspection shell) via
-    /// DI/factories. No legacy menu or window is loaded.
+    /// Selector + a top menu whose items open migrated surfaces. Email is hosted in-shell via
+    /// <see cref="IEmailSurfaceHost"/>; other surfaces may still open as windows. No legacy menu.
     /// </summary>
     Window CreateShell();
 }
@@ -74,9 +75,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             runtimeStatus: runtimeStatus,
             openSystemStatus: openSystemStatus);
 
-        var selectorView = TryCreateProjectSelector();
+        // Attach shell content navigation so hosted surfaces (email) can NavigateTo the content host.
+        if (_services.GetService<IShellContentHost>() is { } contentHost)
+        {
+            contentHost.Attach(viewModel);
+        }
 
-        return new NewShellWindow(viewModel, selectorView);
+        var selectorView = TryCreateProjectSelector();
+        var emailSurfaceHost = _services.GetService<IEmailSurfaceHost>();
+
+        return new NewShellWindow(viewModel, selectorView, emailSurfaceHost);
     }
 
     /// <summary>
@@ -89,14 +97,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     {
         var items = new List<NewShellMenuItem>();
 
-        // Email — limited production pilot (read-only). Opened via the shared factory + app-wide project context.
-        if (_services.GetService<IEmailWindowFactory>() is { } emailFactory
+        // Email — hosted inside the main shell as a singleton surface (legacy EmailManagementView cache).
+        if (_services.GetService<IEmailSurfaceHost>() is { } emailSurfaceHost
             && CanAccessFeature(AppFeatureCodes.ShellOpenEmailSurface))
         {
             items.Add(new NewShellMenuItem(
-                "דוא\"ל — קריאה בלבד",
-                () => ShowWindow(emailFactory.Create()),
-                "פתיחת מסך דוא\"ל (Gmail read-only — production pilot)"));
+                "דוא\"ל",
+                () => emailSurfaceHost.Show(),
+                "פתיחת מסך דוא\"ל בתוך האפליקציה (נשמר בזיכרון)"));
         }
 
         // Task Panel — read-only pilot (three personal bucket queues via ITaskQueryService).

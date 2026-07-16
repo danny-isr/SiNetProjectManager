@@ -90,7 +90,7 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 ### 2.0 — Start the workflow (email `CreatePriceQuote`)
 
 - **Precondition:** unassigned inbox email selected; Proposal seeded.
-- **Action:** in the email's suggested actions, click **"הפקת הצעת מחיר"** (`CreatePriceQuote`).
+- **Action:** in the email's suggested actions, click **"פתיחת הצעת מחיר"** (`CreatePriceQuote`).
 - **Expected `[WF-STEP]` logs:**
   - `Email.Action | action=CreatePriceQuote inbox=<id> user=<uid>`
   - `Email.StartWorkflow | inbox=<id> workflow=Proposal def=<defId> project=<pid> bound=False → starting`

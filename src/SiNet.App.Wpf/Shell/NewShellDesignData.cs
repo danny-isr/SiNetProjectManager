@@ -39,7 +39,7 @@ public sealed class NewShellDesignData : NewShellViewModel
     private static IEnumerable<NewShellMenuItem> CreateSampleMenu() =>
     [
         // Design-time labels mirror production pilot menu text (see NewShellFactory); Inspection harness is DEBUG-only at runtime.
-        new NewShellMenuItem("דוא\"ל — קריאה בלבד", static () => { }, "Gmail read-only production pilot"),
+        new NewShellMenuItem("דוא\"ל", static () => { }, "Inbox hosted in main shell"),
         new NewShellMenuItem("משימות — Task Workbench", static () => { }, "תורים אישיים"),
         new NewShellMenuItem("פתיחת פרויקט חדש", static () => { }, "יצירת פרויקט חדש"),
         new NewShellMenuItem("ביקורת (מעטפת — DEBUG)", static () => { }, "Developer harness — not in Release shell menu"),
