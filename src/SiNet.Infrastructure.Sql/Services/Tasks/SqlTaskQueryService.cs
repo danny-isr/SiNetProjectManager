@@ -147,6 +147,7 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             WorkQueueBucketDisplayName: WorkQueueBucketCodes.ToDisplayName(bucket),
             WorkPriority: task.WorkPriority,
             DueDate: task.DueDate,
+            CreatedAt: task.Created ?? task.StartDate,
             LastTaskResultCode: task.LastTaskResult?.Code,
             Title: task.Title,
             ComponentKey: interaction?.ComponentKey);

@@ -138,7 +138,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailAttachmentTaggingService? attachmentTaggingService = null,
         IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null,
         IEmailFilingProjectPickerHost? filingProjectPicker = null,
-        IEmailAlternativeNamePromptHost? alternativeNamePrompt = null)
+        IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
+        IShellContentHost? shellContentHost = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -183,7 +184,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             attachmentTaggingService,
             attachmentProjectFilePicker,
             filingProjectPicker,
-            alternativeNamePrompt);
+            alternativeNamePrompt,
+            shellContentHost);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null
             ? new EmailExternalDownloadHandler(

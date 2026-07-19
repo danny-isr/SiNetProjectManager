@@ -113,10 +113,19 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
     {
         ProjectFileId = projectFileId is > 0 ? projectFileId : null;
         TaggedProjectFileTitle = projectFileId is > 0 ? projectFileTitle : null;
-        if (projectAlternativeId is > 0)
+
+        var resolvedAlternativeId = projectAlternativeId is > 0
+            ? projectAlternativeId
+            : EmailProjectAlternativeOption.ResolveDefaultId(AvailableAlternatives);
+
+        if (resolvedAlternativeId is > 0)
         {
-            _previousAlternativeId = projectAlternativeId;
-            SelectedAlternativeId = projectAlternativeId;
+            _previousAlternativeId = resolvedAlternativeId;
+            SelectedAlternativeId = resolvedAlternativeId;
+        }
+        else if (ProjectFileId is null)
+        {
+            SelectedAlternativeId = null;
         }
 
         (TagCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -141,7 +150,7 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
             projectFileId,
             projectFileTitle,
             projectAlternativeId
-            ?? alternatives.FirstOrDefault(a => a.IsDefault && !a.IsCreateNew)?.Id);
+            ?? EmailProjectAlternativeOption.ResolveDefaultId(alternatives));
         OnPropertyChanged(nameof(ShowTagSelector));
         OnPropertyChanged(nameof(ShowAlternativeSelector));
         OnPropertyChanged(nameof(CanEditTarget));
@@ -160,6 +169,17 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
             AvailableAlternatives.Add(EmailProjectAlternativeOption.CreateNewSentinel);
         }
 
+        // After alternatives appear (e.g. project remembered, tags restored), ensure a selection.
+        if (IsTagged && SelectedAlternativeId is not > 0)
+        {
+            var fallback = EmailProjectAlternativeOption.ResolveDefaultId(AvailableAlternatives);
+            if (fallback is > 0)
+            {
+                SelectedAlternativeId = fallback;
+                _previousAlternativeId = fallback;
+            }
+        }
+
         OnPropertyChanged(nameof(ShowAlternativeSelector));
         (AlternativeChangedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
@@ -167,7 +187,7 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
     public void RestorePreviousAlternativeSelection()
     {
         SelectedAlternativeId = _previousAlternativeId
-            ?? AvailableAlternatives.FirstOrDefault(a => a.IsDefault && !a.IsCreateNew)?.Id;
+            ?? EmailProjectAlternativeOption.ResolveDefaultId(AvailableAlternatives);
     }
 
     public void RememberCurrentAlternativeAsPrevious()

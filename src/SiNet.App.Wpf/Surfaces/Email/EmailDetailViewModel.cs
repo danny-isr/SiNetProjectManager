@@ -1,4 +1,5 @@
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email.Detail;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
@@ -28,6 +29,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private readonly IEmailAlternativeNamePromptHost? _alternativeNamePrompt;
     private readonly ITaskCompletionService? _taskCompletionService;
     private readonly IEmailBodyRenderer? _bodyRenderer;
+    private readonly IShellContentHost? _shellContentHost;
     private EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private EmailListRow? _selectedEmail;
@@ -57,7 +59,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IEmailAttachmentTaggingService? attachmentTaggingService = null,
         IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null,
         IEmailFilingProjectPickerHost? filingProjectPicker = null,
-        IEmailAlternativeNamePromptHost? alternativeNamePrompt = null)
+        IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
+        IShellContentHost? shellContentHost = null)
     {
         ArgumentNullException.ThrowIfNull(emailList);
         ArgumentNullException.ThrowIfNull(emailGateway);
@@ -76,6 +79,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _attachmentProjectFilePicker = attachmentProjectFilePicker;
         _filingProjectPicker = filingProjectPicker;
         _alternativeNamePrompt = alternativeNamePrompt;
+        _shellContentHost = shellContentHost;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
         ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync);
@@ -371,9 +375,18 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasSelectedEmail));
         SyncViewerHeader();
         await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
+        await EnsureDefaultAlternativesPersistedAsync().ConfigureAwait(true);
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         await RefreshWorkflowContextAsync().ConfigureAwait(true);
         RefreshActionBarState();
+
+        // Filing task UX: assign + move in one click — do not leave the user on a second "העבר" step.
+        if (_moveToProjectService?.IsAvailable == true
+            && _selectedEmail?.InboxMessageId is > 0
+            && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
+        {
+            await MoveSelectedEmailToProjectAsync().ConfigureAwait(true);
+        }
     }
 
     private async Task MoveSelectedEmailToProjectAsync()
@@ -411,6 +424,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
             SetStatus(result.Message);
 
+            var taskCompleted = false;
             string? completionBlockReason = null;
             if (result.Succeeded
                 && _workSurfaceContext?.TaskId is int taskId
@@ -431,6 +445,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                     SetStatus(
                         $"העברה הצליחה אך השלמת המשימה נכשלה: {completion.ErrorMessage ?? "unknown error"}.");
                 }
+                else
+                {
+                    taskCompleted = true;
+                    SetStatus("העברה והשלמת משימת התיוק הושלמו.");
+                }
             }
             else if (result.Succeeded
                      && _workSurfaceContext?.TaskId is int
@@ -445,12 +464,72 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 await _emailList.LoadAccStatusForRowAsync(_selectedEmail).ConfigureAwait(true);
                 await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
             }
+
+            if (result.Succeeded && _workSurfaceContext?.TaskId is not null)
+            {
+                TryDismissFilingSurface();
+            }
         }
         finally
         {
             IsBusy = false;
             await RefreshMoveEligibilityAsync().ConfigureAwait(true);
             RefreshActionBarState();
+        }
+    }
+
+    private void TryDismissFilingSurface()
+    {
+        if (_shellContentHost is not { IsAttached: true })
+        {
+            return;
+        }
+
+        // Leave the email work surface so the operator is not left staring at a half-finished action bar.
+        _shellContentHost.NavigateTo(null);
+    }
+
+    /// <summary>
+    /// Persists alternative «1» (or IsDefault) for tagged attachments that still have no alternative id.
+    /// </summary>
+    private async Task EnsureDefaultAlternativesPersistedAsync()
+    {
+        if (_attachmentTaggingService is null
+            || _selectedEmail?.InboxMessageId is not int inboxMessageId)
+        {
+            return;
+        }
+
+        foreach (var item in AttachmentStrip.Attachments)
+        {
+            if (item.ProjectFileId is not int projectFileId || projectFileId <= 0)
+            {
+                continue;
+            }
+
+            var alternativeId = item.SelectedAlternativeId is > 0
+                ? item.SelectedAlternativeId
+                : EmailProjectAlternativeOption.ResolveDefaultId(item.AvailableAlternatives);
+
+            if (alternativeId is not > 0)
+            {
+                continue;
+            }
+
+            item.SelectedAlternativeId = alternativeId;
+            item.RememberCurrentAlternativeAsPrevious();
+
+            var result = await _attachmentTaggingService.SetTagAsync(
+                new EmailAttachmentTagCommand(
+                    item.InboxAttachmentId,
+                    projectFileId,
+                    alternativeId,
+                    _currentUser?.UserId ?? 0)).ConfigureAwait(true);
+
+            if (!result.Succeeded)
+            {
+                SetStatus(result.ErrorMessage ?? "שמירת אלטרנטיבת ברירת מחדל נכשלה.");
+            }
         }
     }
 
@@ -726,6 +805,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (item.AvailableAlternatives.Count == 0)
+        {
+            var alternatives = await _attachmentTaggingService.LoadAlternativesAsync(projectId).ConfigureAwait(true);
+            item.SetAlternatives(alternatives);
+        }
+
         var pickedProjectFileId = await _attachmentProjectFilePicker
             .PickProjectFileAsync(projectId, item.ProjectFileId)
             .ConfigureAwait(true);
@@ -737,7 +822,13 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         var alternativeId = item.SelectedAlternativeId is > 0
             ? item.SelectedAlternativeId
-            : item.AvailableAlternatives.FirstOrDefault(a => a.IsDefault && !a.IsCreateNew)?.Id;
+            : EmailProjectAlternativeOption.ResolveDefaultId(item.AvailableAlternatives);
+
+        if (alternativeId is not > 0)
+        {
+            SetStatus("לא נמצאה אלטרנטיבה לפרויקט (צפוי «1»). רענן ונסה שוב.");
+            return;
+        }
 
         var validation = await _attachmentTaggingService.ValidateTagAsync(
             new EmailAttachmentTagValidationQuery(

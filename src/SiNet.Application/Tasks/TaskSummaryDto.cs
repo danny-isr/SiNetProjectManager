@@ -18,6 +18,8 @@ public sealed record TaskSummaryDto(
     string WorkQueueBucketDisplayName,
     int? WorkPriority,
     DateTime? DueDate,
+    /// <summary>When the task row was created/opened (<c>ProjectAssignment.Created</c>), UTC when stored as UTC.</summary>
+    DateTime? CreatedAt,
     string? LastTaskResultCode,
     string? Title,
     string? ComponentKey);

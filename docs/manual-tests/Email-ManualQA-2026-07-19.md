@@ -47,6 +47,8 @@
 | When | Item # | Result | Observation |
 | --- | --- | --- | --- |
 | 2026-07-19 | guardrails | AUTO OK | Menu/host/UX/WF wiring + engine tests: **15 passed** |
+| 2026-07-19 17:52 | CreatePriceQuote | INVESTIGATED | Log: new task **#15** OpenQuoteProject (instance 2); leftover **#14** FileQuoteMaterial from 2026-07-16 still open — not a double-create on one click |
+| 2026-07-19 | Task CreatedAt UI | AUTO OK | `ProjectAssignment.Created` (+ StartDate fallback) exposed as `TaskSummaryDto.CreatedAt`; column «נפתחה» on TaskWorkbench |
 
 ## How to continue live
 

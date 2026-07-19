@@ -57,6 +57,27 @@ public sealed record EmailProjectAlternativeOption(
 
     public static EmailProjectAlternativeOption CreateNewSentinel { get; } =
         new(CreateNewId, "+ חדש...", IsDefault: false, IsCreateNew: true);
+
+    /// <summary>
+    /// Picks the default alternative for tagging: flagged default, else name "1", else first real option.
+    /// </summary>
+    public static int? ResolveDefaultId(IEnumerable<EmailProjectAlternativeOption>? options)
+    {
+        if (options is null)
+        {
+            return null;
+        }
+
+        var real = options.Where(static a => !a.IsCreateNew && a.Id > 0).ToList();
+        if (real.Count == 0)
+        {
+            return null;
+        }
+
+        return real.FirstOrDefault(static a => a.IsDefault)?.Id
+            ?? real.FirstOrDefault(static a => string.Equals(a.Name, "1", StringComparison.Ordinal))?.Id
+            ?? real[0].Id;
+    }
 }
 
 public sealed record EmailAttachmentTagTarget(

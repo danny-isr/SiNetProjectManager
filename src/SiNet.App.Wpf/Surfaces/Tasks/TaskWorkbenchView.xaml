@@ -200,6 +200,7 @@
                         <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
                         <DataGridTextColumn Header="Task type" Binding="{Binding TaskTypeName}" Width="120" />
                         <DataGridTextColumn Header="Status" Binding="{Binding StatusName}" Width="100" />
+                        <DataGridTextColumn Header="נפתחה" Binding="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}" Width="130" />
                         <DataGridTextColumn Header="Due" Binding="{Binding DueDate, StringFormat=d}" Width="90" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -217,6 +218,7 @@
                         <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
                         <DataGridTextColumn Header="Task type" Binding="{Binding TaskTypeName}" Width="120" />
                         <DataGridTextColumn Header="Status" Binding="{Binding StatusName}" Width="100" />
+                        <DataGridTextColumn Header="נפתחה" Binding="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}" Width="130" />
                         <DataGridTextColumn Header="Due" Binding="{Binding DueDate, StringFormat=d}" Width="90" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -234,6 +236,7 @@
                         <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
                         <DataGridTextColumn Header="Task type" Binding="{Binding TaskTypeName}" Width="120" />
                         <DataGridTextColumn Header="Status" Binding="{Binding StatusName}" Width="100" />
+                        <DataGridTextColumn Header="נפתחה" Binding="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}" Width="130" />
                         <DataGridTextColumn Header="Due" Binding="{Binding DueDate, StringFormat=d}" Width="90" />
                     </DataGrid.Columns>
                 </DataGrid>
