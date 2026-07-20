@@ -303,6 +303,7 @@ public sealed class TaskWorkbenchCreateDialogTests
                 WorkQueueBucketDisplayName: WorkQueueBucketCodes.ToDisplayName(bucket),
                 WorkPriority: 1,
                 DueDate: null,
+                CreatedAt: null,
                 LastTaskResultCode: null,
                 Title: $"Task {id}",
                 ComponentKey: null);

@@ -263,6 +263,7 @@ public sealed class TaskPanelReadOnlyTests
             WorkQueueBucketDisplayName: WorkQueueBucketCodes.ToDisplayName(bucket),
             WorkPriority: workPriority,
             DueDate: new DateTime(2026, 7, 10),
+            CreatedAt: new DateTime(2026, 7, 9, 10, 30, 0),
             LastTaskResultCode: null,
             Title: "Sample task",
             ComponentKey: "Email");

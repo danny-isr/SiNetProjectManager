@@ -267,6 +267,7 @@ public sealed class TaskWorkbenchScopeTests
             WorkQueueBucketDisplayName: WorkQueueBucketCodes.ToDisplayName(bucket),
             WorkPriority: 1,
             DueDate: null,
+            CreatedAt: null,
             LastTaskResultCode: null,
             Title: $"Task {id}",
             ComponentKey: null);

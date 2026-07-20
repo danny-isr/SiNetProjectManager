@@ -258,6 +258,7 @@ public sealed class TaskWorkbenchPolishTests
             WorkQueueBucketDisplayName: WorkQueueBucketCodes.ToDisplayName(WorkQueueBucketCodes.Quick),
             WorkPriority: workPriority,
             DueDate: null,
+            CreatedAt: null,
             LastTaskResultCode: null,
             Title: $"Task {taskId}",
             ComponentKey: null);
