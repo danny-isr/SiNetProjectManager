@@ -1,5 +1,5 @@
 using SiNet.App.Wpf.Inspection;
-using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG + agent debug
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -73,7 +73,26 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         _htmlBody = htmlBody;
         _gmailMessageId = gmailMessageId;
         _inlineImages = inlineImages ?? [];
-        _bodyRenderer = bodyRenderer;
+        // Keep the renderer that received AttachHost via SetBodyRenderer.
+        // EmailDetailViewModel may hold a different Transient DI instance — overwriting it
+        // leaves LoadAsync on an unattached WebView2 (deferred forever → no inline images).
+        if (bodyRenderer is not null && _bodyRenderer is null)
+        {
+            _bodyRenderer = bodyRenderer;
+        }
+
+        // #region agent log
+        AgentDebugNdjson.Write("D", "EmailViewerPaneViewModel.SyncFromBody", "sync",
+            new
+            {
+                gmailMessageId,
+                htmlLen = htmlBody?.Length ?? 0,
+                inlineCount = _inlineImages.Count,
+                hasAttachedRenderer = _bodyRenderer is not null,
+                ignoredCtorRenderer = bodyRenderer is not null && !ReferenceEquals(bodyRenderer, _bodyRenderer),
+            });
+        // #endregion
+
         UseRichBodyRenderer = false;
         OnPropertyChanged(nameof(UseRichBodyRenderer));
         _ = TryRenderRichBodyAsync();

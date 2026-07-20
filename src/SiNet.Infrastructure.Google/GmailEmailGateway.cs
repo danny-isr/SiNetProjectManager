@@ -6,6 +6,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Diagnostics;
 using SiNet.Domain.ValueObjects;
 
 namespace SiNet.Infrastructure.Google;
@@ -932,24 +933,53 @@ public sealed class GmailEmailGateway : IEmailGateway
     {
         if (payload is null || string.IsNullOrWhiteSpace(htmlBody))
         {
+            // #region agent log
+            AgentDebugNdjson.Write("A", "GmailEmailGateway.ResolveInlineImagesAsync", "early-exit empty payload/html",
+                new { messageId, hasPayload = payload is not null, htmlLen = htmlBody?.Length ?? 0 });
+            // #endregion
             return [];
         }
 
+        var rawCidHitCount = Regex.Matches(htmlBody, "cid:", RegexOptions.IgnoreCase).Count;
         var referencedCids = InlineCidRegex.Matches(htmlBody)
             .Select(m => NormalizeContentId(m.Groups["cid"].Value))
             .Where(cid => !string.IsNullOrWhiteSpace(cid))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // #region agent log
+        AgentDebugNdjson.Write("A", "GmailEmailGateway.ResolveInlineImagesAsync", "cid-scan",
+            new
+            {
+                messageId,
+                htmlLen = htmlBody.Length,
+                rawCidHitCount,
+                regexCidCount = referencedCids.Count,
+                sampleCids = referencedCids.Take(5).ToArray(),
+                htmlHasImg = htmlBody.Contains("<img", StringComparison.OrdinalIgnoreCase),
+            });
+        // #endregion
 
         if (referencedCids.Count == 0)
         {
             return [];
         }
 
-        var inlineParts = new List<(string ContentId, string AttachmentId, string MimeType)>();
+        var inlineParts = new List<(string ContentId, string AttachmentId, string MimeType, bool HasInlineData)>();
         CollectInlineImagePartsRecursive(payload, inlineParts);
 
+        // #region agent log
+        AgentDebugNdjson.Write("B", "GmailEmailGateway.ResolveInlineImagesAsync", "inline-parts",
+            new
+            {
+                messageId,
+                partCount = inlineParts.Count,
+                parts = inlineParts.Take(8).Select(p => new { p.ContentId, p.MimeType, attLen = p.AttachmentId.Length, p.HasInlineData }).ToArray(),
+                unmatchedCids = referencedCids.Except(inlineParts.Select(p => p.ContentId), StringComparer.OrdinalIgnoreCase).Take(5).ToArray(),
+            });
+        // #endregion
+
         var results = new List<EmailInlineImage>();
-        foreach (var (contentId, attachmentId, mimeType) in inlineParts)
+        foreach (var (contentId, attachmentId, mimeType, hasInlineData) in inlineParts)
         {
             if (!referencedCids.Contains(contentId) || results.Any(r =>
                     string.Equals(r.ContentId, contentId, StringComparison.OrdinalIgnoreCase)))
@@ -966,6 +996,12 @@ public sealed class GmailEmailGateway : IEmailGateway
                     cancellationToken).ConfigureAwait(false);
 
                 var bytes = DecodeBase64UrlSafeToBytes(attachment?.Data);
+
+                // #region agent log
+                AgentDebugNdjson.Write("C", "GmailEmailGateway.ResolveInlineImagesAsync", "fetch-one",
+                    new { messageId, contentId, mimeType, hasAttachmentId = true, hasInlineData, byteLen = bytes.Length });
+                // #endregion
+
                 if (bytes.Length > 0)
                 {
                     results.Add(new EmailInlineImage(contentId, mimeType, bytes));
@@ -973,24 +1009,34 @@ public sealed class GmailEmailGateway : IEmailGateway
             }
             catch (Exception ex)
             {
+                // #region agent log
+                AgentDebugNdjson.Write("C", "GmailEmailGateway.ResolveInlineImagesAsync", "fetch-failed",
+                    new { messageId, contentId, err = ex.GetType().Name, ex.Message });
+                // #endregion
                 _logger.Warn($"[Gmail] Inline image fetch failed for cid '{contentId}' on '{messageId}': {ex.Message}");
             }
         }
+
+        // #region agent log
+        AgentDebugNdjson.Write("C", "GmailEmailGateway.ResolveInlineImagesAsync", "done",
+            new { messageId, resultCount = results.Count, totalBytes = results.Sum(r => r.Data.Length) });
+        // #endregion
 
         return results;
     }
 
     private static void CollectInlineImagePartsRecursive(
         MessagePart part,
-        ICollection<(string ContentId, string AttachmentId, string MimeType)> inlineParts)
+        ICollection<(string ContentId, string AttachmentId, string MimeType, bool HasInlineData)> inlineParts)
     {
         var contentId = NormalizeContentId(GetHeader(part.Headers, "Content-ID"));
         var mimeType = part.MimeType ?? string.Empty;
+        var hasInlineData = !string.IsNullOrWhiteSpace(part.Body?.Data);
         if (!string.IsNullOrWhiteSpace(contentId)
             && mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
             && part.Body?.AttachmentId is { Length: > 0 } attachmentId)
         {
-            inlineParts.Add((contentId, attachmentId, mimeType));
+            inlineParts.Add((contentId, attachmentId, mimeType, hasInlineData));
         }
 
         if (part.Parts == null)

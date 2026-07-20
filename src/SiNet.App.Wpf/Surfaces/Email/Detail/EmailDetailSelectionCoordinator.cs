@@ -196,6 +196,20 @@ internal sealed class EmailDetailSelectionCoordinator
 
     private void ApplySelectedEmailDetails(EmailMessageDetails details)
     {
+        // #region agent log
+        SiNet.Application.Diagnostics.AgentDebugNdjson.Write(
+            "D",
+            "EmailDetailSelectionCoordinator.ApplySelectedEmailDetails",
+            "apply-details",
+            new
+            {
+                details.MessageId,
+                htmlLen = details.HtmlBody?.Length ?? 0,
+                inlineCount = details.InlineImages.Count,
+                attachmentCount = details.Attachments.Count,
+            });
+        // #endregion
+
         _setSelectedEmailContent(string.IsNullOrWhiteSpace(details.BodyText)
             ? "לא התקבל תוכן טקסטואלי זמין עבור המייל הזה."
             : details.BodyText,
