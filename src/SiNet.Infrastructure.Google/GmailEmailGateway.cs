@@ -362,7 +362,11 @@ public sealed class GmailEmailGateway : IEmailGateway
                 _logger,
                 $"Messages.Get(full '{messageId}')",
                 cancellationToken).ConfigureAwait(false);
-            return MapDetails(message);
+
+            var details = MapDetails(message);
+            var inlineImages = await ResolveInlineImagesAsync(
+                gmail, messageId, message.Payload, details.HtmlBody, cancellationToken).ConfigureAwait(false);
+            return inlineImages.Count == 0 ? details : details with { InlineImages = inlineImages };
         }
         catch (Exception ex)
         {
@@ -907,6 +911,124 @@ public sealed class GmailEmailGateway : IEmailGateway
 
         var match = Regex.Match(disposition, "filename=\"?([^\"]+)\"?", RegexOptions.IgnoreCase);
         return match.Success ? match.Groups[1].Value : string.Empty;
+    }
+
+    // Matches src="cid:CONTENT-ID" (single/double quotes) in the HTML body.
+    private static readonly Regex InlineCidRegex = new(
+        "src\\s*=\\s*[\"']cid:(?<cid>[^\"']+)[\"']",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Fetches bytes for inline images (<c>Content-ID</c> + <c>image/*</c>) that are actually
+    /// referenced from the HTML body via <c>cid:</c>. Returns an empty list when there is no HTML,
+    /// no referenced cids, or the fetch fails — the body still renders (images just stay broken).
+    /// </summary>
+    private async Task<IReadOnlyList<EmailInlineImage>> ResolveInlineImagesAsync(
+        GmailService gmail,
+        string messageId,
+        MessagePart? payload,
+        string? htmlBody,
+        CancellationToken cancellationToken)
+    {
+        if (payload is null || string.IsNullOrWhiteSpace(htmlBody))
+        {
+            return [];
+        }
+
+        var referencedCids = InlineCidRegex.Matches(htmlBody)
+            .Select(m => NormalizeContentId(m.Groups["cid"].Value))
+            .Where(cid => !string.IsNullOrWhiteSpace(cid))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (referencedCids.Count == 0)
+        {
+            return [];
+        }
+
+        var inlineParts = new List<(string ContentId, string AttachmentId, string MimeType)>();
+        CollectInlineImagePartsRecursive(payload, inlineParts);
+
+        var results = new List<EmailInlineImage>();
+        foreach (var (contentId, attachmentId, mimeType) in inlineParts)
+        {
+            if (!referencedCids.Contains(contentId) || results.Any(r =>
+                    string.Equals(r.ContentId, contentId, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            try
+            {
+                var attachment = await GmailRetry.ExecuteAsync(
+                    ct => gmail.Users.Messages.Attachments.Get("me", messageId, attachmentId).ExecuteAsync(ct),
+                    _logger,
+                    $"Messages.Attachments.Get('{messageId}','{attachmentId}')",
+                    cancellationToken).ConfigureAwait(false);
+
+                var bytes = DecodeBase64UrlSafeToBytes(attachment?.Data);
+                if (bytes.Length > 0)
+                {
+                    results.Add(new EmailInlineImage(contentId, mimeType, bytes));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[Gmail] Inline image fetch failed for cid '{contentId}' on '{messageId}': {ex.Message}");
+            }
+        }
+
+        return results;
+    }
+
+    private static void CollectInlineImagePartsRecursive(
+        MessagePart part,
+        ICollection<(string ContentId, string AttachmentId, string MimeType)> inlineParts)
+    {
+        var contentId = NormalizeContentId(GetHeader(part.Headers, "Content-ID"));
+        var mimeType = part.MimeType ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(contentId)
+            && mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            && part.Body?.AttachmentId is { Length: > 0 } attachmentId)
+        {
+            inlineParts.Add((contentId, attachmentId, mimeType));
+        }
+
+        if (part.Parts == null)
+        {
+            return;
+        }
+
+        foreach (var nested in part.Parts)
+        {
+            CollectInlineImagePartsRecursive(nested, inlineParts);
+        }
+    }
+
+    private static string NormalizeContentId(string? value)
+        => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().Trim('<', '>').Trim();
+
+    private static byte[] DecodeBase64UrlSafeToBytes(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        try
+        {
+            var base64 = value.Replace('-', '+').Replace('_', '/');
+            var padding = base64.Length % 4;
+            if (padding > 0)
+            {
+                base64 += new string('=', 4 - padding);
+            }
+
+            return Convert.FromBase64String(base64);
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static bool IsInlineAttachment(MessagePart part)

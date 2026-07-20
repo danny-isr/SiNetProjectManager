@@ -31,6 +31,7 @@ Self-contained Email Detail component: viewer, attachments, action bar, workflow
 - Display: `IEmailBodyRenderer` / `WebView2EmailBodyRenderer` → `NavigateToString(HtmlBody)`. Not a Gmail popout URL.
 - DI: **Transient** per email surface (shell / window / work-item) so WebView2 is not reparented across hosts.
 - Layout: `EmailViewerPaneView` gives `BodyHost` a star-sized Grid row so WebView2 gets real height (do not nest it in a StackPanel).
+- Embedded images (`<img src="cid:...">`): `GmailEmailGateway` fetches the referenced inline attachment bytes (`Messages.Attachments.Get`) into `EmailMessageDetails.InlineImages`. `WebView2EmailBodyRenderer` rewrites `cid:` to `https://sinet-mail-images.local/{content-id}` and serves the bytes via `WebResourceRequested`. Bytes are **not** inlined as Base64 data-URIs (crashes WebView2 with large images / hits the `NavigateToString` size limit). External `http(s)` images load normally.
 
 ## Ports
 

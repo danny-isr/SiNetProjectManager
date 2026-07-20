@@ -40,6 +40,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _selectionCts;
     private string _selectedEmailBody = string.Empty;
     private string? _selectedEmailHtmlBody;
+    private IReadOnlyList<EmailInlineImage> _selectedInlineImages = [];
     private string _selectedAccStatusDisplay = string.Empty;
     private bool _isBusy;
     private readonly EmailDetailSelectionCoordinator _selectionCoordinator;
@@ -91,7 +92,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             emailGateway,
             _emailList,
             message => StatusMessage = message,
-            (body, html) => SetSelectedEmailContent(body, html),
+            (body, html, inlineImages) => SetSelectedEmailContent(body, html, inlineImages),
             acc => SelectedAccStatusDisplay = acc,
             AttachmentStrip.Attachments,
             CreateDisplayAttachmentItem,
@@ -132,9 +133,13 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     public string StatusMessage { get; private set; } = string.Empty;
 
-    private void SetSelectedEmailContent(string bodyText, string? htmlBody)
+    private void SetSelectedEmailContent(
+        string bodyText,
+        string? htmlBody,
+        IReadOnlyList<EmailInlineImage> inlineImages)
     {
         _selectedEmailHtmlBody = htmlBody;
+        _selectedInlineImages = inlineImages;
         SelectedEmailBody = bodyText;
         if (string.IsNullOrWhiteSpace(bodyText)
             || string.Equals(bodyText, "טוען תוכן מייל...", StringComparison.Ordinal))
@@ -154,7 +159,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         {
             if (SetField(ref _selectedEmailBody, value))
             {
-                Viewer.SyncFromBody(value, _selectedEmailHtmlBody, _bodyRenderer, _selectedEmail?.Id);
+                Viewer.SyncFromBody(value, _selectedEmailHtmlBody, _bodyRenderer, _selectedEmail?.Id, _selectedInlineImages);
                 RefreshExternalDownloadLinks();
             }
         }

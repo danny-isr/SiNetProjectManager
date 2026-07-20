@@ -84,6 +84,17 @@ public sealed class GmailEmailGatewayAttachmentTests
     }
 
     [Fact]
+    public void GetDetails_resolves_inline_cid_images_via_attachments_get()
+    {
+        var source = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
+
+        Assert.Contains("ResolveInlineImagesAsync", source, StringComparison.Ordinal);
+        Assert.Contains("Messages.Attachments.Get", source, StringComparison.Ordinal);
+        Assert.Contains("InlineImages =", source, StringComparison.Ordinal);
+        Assert.Contains("cid:", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MapForTests_metadata_only_message_has_zero_attachment_count()
     {
         var gateway = CreateGateway();

@@ -231,6 +231,29 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("NavigateToString", renderer, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Embedded images (cid:) are served via virtual-host + WebResourceRequested, never inlined
+    /// as Base64 data-URIs (crashes WebView2 with large images / hits NavigateToString size limit).
+    /// </summary>
+    [Fact]
+    public void Inline_images_served_via_virtual_host_not_base64_data_uri()
+    {
+        var gateway = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
+        var renderer = ReadRepoFile("SiNetProjectManagerV2/Services/Email/WebView2EmailBodyRenderer.cs");
+
+        // Gateway fetches inline image bytes for cids referenced in the HTML body.
+        Assert.Contains("Messages.Attachments.Get", gateway, StringComparison.Ordinal);
+        Assert.Contains("InlineImages", gateway, StringComparison.Ordinal);
+        Assert.Contains("cid:", gateway, StringComparison.Ordinal);
+
+        // Renderer rewrites cid → virtual host and serves bytes via WebResourceRequested.
+        Assert.Contains("AddWebResourceRequestedFilter", renderer, StringComparison.Ordinal);
+        Assert.Contains("WebResourceRequested", renderer, StringComparison.Ordinal);
+        Assert.Contains("CreateWebResourceResponse", renderer, StringComparison.Ordinal);
+        Assert.Contains("RewriteInlineCidSources", renderer, StringComparison.Ordinal);
+        Assert.DoesNotContain("data:image", renderer, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Tag_picker_loads_all_outsidedata_types_with_optional_filter()
     {

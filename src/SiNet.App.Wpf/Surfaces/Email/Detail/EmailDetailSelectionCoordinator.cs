@@ -11,7 +11,7 @@ internal sealed class EmailDetailSelectionCoordinator
     private readonly IEmailGateway _emailGateway;
     private readonly EmailListViewModel _emailList;
     private readonly Action<string> _setStatusMessage;
-    private readonly Action<string, string?> _setSelectedEmailContent;
+    private readonly Action<string, string?, IReadOnlyList<EmailInlineImage>> _setSelectedEmailContent;
     private readonly Action<string> _setSelectedAccStatusDisplay;
     private readonly ObservableCollection<EmailDetailAttachmentItem> _attachments;
     private readonly Func<string, string, string, EmailDetailAttachmentItem> _createAttachmentItem;
@@ -23,7 +23,7 @@ internal sealed class EmailDetailSelectionCoordinator
         IEmailGateway emailGateway,
         EmailListViewModel emailList,
         Action<string> setStatusMessage,
-        Action<string, string?> setSelectedEmailContent,
+        Action<string, string?, IReadOnlyList<EmailInlineImage>> setSelectedEmailContent,
         Action<string> setSelectedAccStatusDisplay,
         ObservableCollection<EmailDetailAttachmentItem> attachments,
         Func<string, string, string, EmailDetailAttachmentItem> createAttachmentItem,
@@ -46,14 +46,14 @@ internal sealed class EmailDetailSelectionCoordinator
     public void ClearSelectedEmailDetails()
     {
         _bumpLoadVersion();
-        _setSelectedEmailContent(string.Empty, null);
+        _setSelectedEmailContent(string.Empty, null, []);
         _setSelectedAccStatusDisplay(string.Empty);
         _attachments.Clear();
     }
 
     public void PrepareSelectedEmailDetailsLoading()
     {
-        _setSelectedEmailContent("טוען תוכן מייל...", null);
+        _setSelectedEmailContent("טוען תוכן מייל...", null, []);
         _attachments.Clear();
         var selected = _getSelectedEmail();
         if (selected?.HasAttachments == true)
@@ -199,7 +199,8 @@ internal sealed class EmailDetailSelectionCoordinator
         _setSelectedEmailContent(string.IsNullOrWhiteSpace(details.BodyText)
             ? "לא התקבל תוכן טקסטואלי זמין עבור המייל הזה."
             : details.BodyText,
-            details.HtmlBody);
+            details.HtmlBody,
+            details.InlineImages);
 
         _attachments.Clear();
         foreach (var attachment in details.Attachments)
@@ -217,7 +218,8 @@ internal sealed class EmailDetailSelectionCoordinator
         _setSelectedEmailContent(selected is null
             ? string.Empty
             : $"לא ניתן היה לטעון את תוכן המייל המלא.\n\nשולח: {selected.Sender}\nנושא: {selected.Subject}\nהתקבל: {selected.ReceivedDisplay}",
-            null);
+            null,
+            []);
 
         _attachments.Clear();
         if (selected?.HasAttachments == true)

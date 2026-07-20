@@ -14,7 +14,11 @@ public sealed record EmailMessageDetails(
     DateTimeOffset ReceivedAt,
     string BodyText,
     IReadOnlyList<EmailMessageAttachmentDetails> Attachments,
-    string? HtmlBody = null)
+    string? HtmlBody = null,
+    IReadOnlyList<EmailInlineImage>? InlineImages = null)
 {
     public bool HasAttachments => Attachments.Count > 0;
+
+    /// <summary>Embedded images referenced from <see cref="HtmlBody"/> via <c>cid:</c>. Never null.</summary>
+    public IReadOnlyList<EmailInlineImage> InlineImages { get; init; } = InlineImages ?? [];
 }

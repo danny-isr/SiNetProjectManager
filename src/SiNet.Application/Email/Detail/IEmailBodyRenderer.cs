@@ -1,3 +1,5 @@
+using SiNet.Application.Abstractions.Email;
+
 namespace SiNet.Application.Email.Detail;
 
 /// <summary>
@@ -20,4 +22,9 @@ public interface IEmailBodyRenderer
 public sealed record EmailBodyRenderRequest(
     string BodyText,
     string? HtmlBody,
-    string? GmailMessageId);
+    string? GmailMessageId,
+    IReadOnlyList<EmailInlineImage>? InlineImages = null)
+{
+    /// <summary>Embedded images referenced from <see cref="HtmlBody"/> via <c>cid:</c>. Never null.</summary>
+    public IReadOnlyList<EmailInlineImage> InlineImages { get; init; } = InlineImages ?? [];
+}

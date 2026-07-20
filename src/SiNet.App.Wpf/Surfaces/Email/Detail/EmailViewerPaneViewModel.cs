@@ -12,6 +12,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
     private string _bodyText = string.Empty;
     private string? _htmlBody;
     private string? _gmailMessageId;
+    private IReadOnlyList<SiNet.Application.Abstractions.Email.EmailInlineImage> _inlineImages = [];
     private string _accStatusDisplay = string.Empty;
     private IEmailBodyRenderer? _bodyRenderer;
 
@@ -65,11 +66,13 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         string bodyText,
         string? htmlBody,
         IEmailBodyRenderer? bodyRenderer,
-        string? gmailMessageId)
+        string? gmailMessageId,
+        IReadOnlyList<SiNet.Application.Abstractions.Email.EmailInlineImage>? inlineImages = null)
     {
         BodyText = bodyText;
         _htmlBody = htmlBody;
         _gmailMessageId = gmailMessageId;
+        _inlineImages = inlineImages ?? [];
         _bodyRenderer = bodyRenderer;
         UseRichBodyRenderer = false;
         OnPropertyChanged(nameof(UseRichBodyRenderer));
@@ -84,6 +87,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         BodyText = string.Empty;
         _htmlBody = null;
         _gmailMessageId = null;
+        _inlineImages = [];
         AccStatusDisplay = string.Empty;
         UseRichBodyRenderer = false;
         OnPropertyChanged(nameof(UseRichBodyRenderer));
@@ -117,7 +121,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         var messageId = _gmailMessageId;
         var bodySnapshot = BodyText;
         var loaded = await _bodyRenderer!.LoadAsync(
-            new EmailBodyRenderRequest(BodyText, _htmlBody, _gmailMessageId),
+            new EmailBodyRenderRequest(BodyText, _htmlBody, _gmailMessageId, _inlineImages),
             CancellationToken.None).ConfigureAwait(true);
 
         // TEMP WF-DEBUG
