@@ -87,16 +87,34 @@ public sealed class EmailActionBarViewModel : ObservableObject
     public bool ShowUnassignedLayout
     {
         get => _showUnassignedLayout;
-        set => SetField(ref _showUnassignedLayout, value);
+        set
+        {
+            if (SetField(ref _showUnassignedLayout, value))
+            {
+                OnPropertyChanged(nameof(ShowMoveBlockReason));
+            }
+        }
     }
 
     public bool ShowAssignedLayout
     {
         get => _showAssignedLayout;
-        set => SetField(ref _showAssignedLayout, value);
+        set
+        {
+            if (SetField(ref _showAssignedLayout, value))
+            {
+                OnPropertyChanged(nameof(ShowMoveBlockReason));
+            }
+        }
     }
 
-    public bool ShowMoveBlockReason => !string.IsNullOrWhiteSpace(MoveBlockReason);
+    /// <summary>
+    /// Move-block text is only meaningful after Gmail project-label filing
+    /// (<see cref="ShowAssignedLayout"/>); otherwise it falsely shows «המייל לא משויך»
+    /// next to the File button before any label was applied.
+    /// </summary>
+    public bool ShowMoveBlockReason =>
+        ShowAssignedLayout && !string.IsNullOrWhiteSpace(MoveBlockReason);
 
     public ICommand FileEmailCommand { get; }
     public ICommand MoveToProjectCommand { get; }

@@ -86,43 +86,44 @@ internal sealed class EmailListFilingCoordinator
         };
     }
 
-    public Task FileEmailToProjectAsync(EmailListRow? row) =>
+    public Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row) =>
         FileEmailToProjectAsync(row, targetProject: null);
 
-    public async Task FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject)
+    public async Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject)
     {
         if (row is null)
         {
             _owner.SetLoadWarning(DescribeWriteActionBlockedReason(null) ?? "לא נבחר מייל.");
-            return;
+            return null;
         }
 
         if (_owner.FilingService is null)
         {
             _owner.SetLoadWarning(DescribeFileToProjectDisabledReason(row));
-            return;
+            return null;
         }
 
         var project = targetProject ?? _owner.GetCurrentProject();
         if (project is null)
         {
             _owner.SetLoadWarning(DescribeFileToProjectDisabledReason(row));
-            return;
+            return null;
         }
 
         var actingUserId = _owner.GetCurrentUserId();
         if (actingUserId is null or <= 0)
         {
             _owner.SetLoadWarning(DescribeFileToProjectDisabledReason(row));
-            return;
+            return null;
         }
 
         if (row.IsFiledToProject && row.ProjectId == project.ProjectId)
         {
             _owner.SetLoadWarning(DescribeFileToProjectDisabledReason(row));
-            return;
+            return row;
         }
 
+        EmailListRow? filedRow = null;
         await ExecuteRowActionAsync(
             row,
             startingStatusMessage: "משייך מייל לפרויקט...",
@@ -139,8 +140,18 @@ internal sealed class EmailListFilingCoordinator
                     row.InternetMessageId)).ConfigureAwait(true);
                 return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט נכשל.");
             },
-            onSuccessLocalUpdate: currentRow => RefreshRowAfterFileAsync(currentRow, project),
+            onSuccessLocalUpdate: async currentRow =>
+            {
+                filedRow = await RefreshRowAfterFileAsync(currentRow, project).ConfigureAwait(true);
+                return filedRow;
+            },
             failureMessagePrefix: "שיוך לפרויקט נכשל").ConfigureAwait(true);
+
+        return filedRow is { IsFiledToProject: true }
+            ? filedRow
+            : _display.FindRowById(row.Id) is { IsFiledToProject: true } visible
+                ? visible
+                : null;
     }
 
     public async Task FileEmailToThreadProjectAsync(EmailListRow? row)
@@ -309,6 +320,7 @@ internal sealed class EmailListFilingCoordinator
     {
         if (_owner.IsRowActionBusy(row.Id))
         {
+            _owner.SetLoadWarning("פעולה כבר רצה על מייל זה.");
             return;
         }
 

@@ -2,6 +2,7 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email.Detail;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
@@ -369,9 +370,41 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         var selectedId = _selectedEmail.Id;
-        await _emailList.FileEmailToProjectAsync(_selectedEmail, project).ConfigureAwait(true);
 
-        _selectedEmail = _emailList.FindRowById(selectedId) ?? _selectedEmail;
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step(
+            "Email.File",
+            $"start gmailFiled={_selectedEmail.IsFiledToProject} target={project.ProjectId} inbox={_selectedEmail.InboxMessageId?.ToString() ?? "(none)"}");
+
+        // Only Gmail project-label filing counts as "משויך". Capture the returned row so we
+        // do not depend on list filters that may hide the message after the label is applied.
+        var filedRow = await _emailList.FileEmailToProjectAsync(_selectedEmail, project).ConfigureAwait(true);
+        _selectedEmail = filedRow
+                         ?? _emailList.FindRowById(selectedId)
+                         ?? _selectedEmail;
+
+        if (_selectedEmail is null || !_selectedEmail.IsFiledToProject)
+        {
+            var warning = _emailList.LoadWarning;
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.File",
+                $"FAILED — no Gmail project label on row. warning={warning ?? "(none)"}");
+            SetStatus(string.IsNullOrWhiteSpace(warning)
+                ? "שיוך המייל לפרויקט נכשל (תווית Gmail לא עודכנה)."
+                : warning);
+            OnPropertyChanged(nameof(HasSelectedEmail));
+            SyncViewerHeader();
+            await RefreshMoveEligibilityAsync().ConfigureAwait(true);
+            RefreshActionBarState();
+            return;
+        }
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step(
+            "Email.File",
+            $"ok — Gmail filed label={_selectedEmail.FiledProjectLabelPath ?? "(path pending)"}");
+
         OnPropertyChanged(nameof(HasSelectedEmail));
         SyncViewerHeader();
         await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
@@ -380,12 +413,21 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         await RefreshWorkflowContextAsync().ConfigureAwait(true);
         RefreshActionBarState();
 
-        // Filing task UX: assign + move in one click — do not leave the user on a second "העבר" step.
+        // Filing task UX: assign (Gmail label) + move in one click.
         if (_moveToProjectService?.IsAvailable == true
-            && _selectedEmail?.InboxMessageId is > 0
+            && _selectedEmail.InboxMessageId is > 0
             && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.File", "auto-move after Gmail label");
             await MoveSelectedEmailToProjectAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.File",
+                $"auto-move skipped: moveAvail={_moveToProjectService?.IsAvailable == true} inbox={_selectedEmail.InboxMessageId?.ToString() ?? "(none)"} block={ActionBar.MoveBlockReason ?? "(none)"}");
         }
     }
 
@@ -410,11 +452,17 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             await RefreshMoveEligibilityAsync().ConfigureAwait(true);
             if (!string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
             {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Email.Move", $"blocked: {ActionBar.MoveBlockReason}");
                 SetStatus(ActionBar.MoveBlockReason);
                 RefreshActionBarState();
                 return;
             }
 
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.Move",
+                $"start inbox={inboxMessageId} project={projectId} task={_workSurfaceContext?.TaskId?.ToString() ?? "(none)"}");
             var result = await _moveToProjectService.MoveAsync(
                 new EmailMoveToProjectDetailCommand(
                     inboxMessageId,
