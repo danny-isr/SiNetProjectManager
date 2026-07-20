@@ -8,6 +8,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <Border Grid.Row="0" Background="{DynamicResource SiBackgroundBrush}" BorderBrush="#EEE" BorderThickness="0,0,0,1" Padding="12,8">
@@ -31,49 +32,59 @@
                 </StackPanel>
             </StackPanel>
         </Border>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,8">
-            <StackPanel>
-                <TextBlock Text="{Binding AccStatusDisplay}"
-                           TextWrapping="Wrap"
-                           Foreground="#4527A0"
-                           FontWeight="SemiBold"
-                           Margin="0,0,0,8">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding ShowAccStatus}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-                <ContentControl x:Name="BodyHost">
-                    <ContentControl.Style>
-                        <Style TargetType="ContentControl">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding UseRichBodyRenderer}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ContentControl.Style>
-                </ContentControl>
-                <TextBlock Text="{Binding BodyText}" TextWrapping="Wrap" Foreground="#333">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
+        <TextBlock Grid.Row="1"
+                   Text="{Binding AccStatusDisplay}"
+                   TextWrapping="Wrap"
+                   Foreground="#4527A0"
+                   FontWeight="SemiBold"
+                   Margin="12,8,12,0">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ShowAccStatus}" Value="True">
                             <Setter Property="Visibility" Value="Visible" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding UseRichBodyRenderer}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-            </StackPanel>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+        <!--
+          Rich body (WebView2) needs a real allocated height — StackPanel+ScrollViewer
+          collapsed it to ~0. Star-sized row gives BodyHost the remaining viewport;
+          scroll happens inside WebView2. Plain-text fallback uses ScrollViewer.
+        -->
+        <ContentControl x:Name="BodyHost" Grid.Row="2" Margin="0,8,0,0">
+            <ContentControl.Style>
+                <Style TargetType="ContentControl">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding UseRichBodyRenderer}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ContentControl.Style>
+        </ContentControl>
+        <ScrollViewer Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="12,8"
+                      Margin="0,0,0,0">
+            <ScrollViewer.Style>
+                <Style TargetType="ScrollViewer">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding UseRichBodyRenderer}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ScrollViewer.Style>
+            <TextBlock Text="{Binding BodyText}"
+                       TextWrapping="Wrap"
+                       Foreground="#333"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}" />
         </ScrollViewer>
     </Grid>
 </UserControl>

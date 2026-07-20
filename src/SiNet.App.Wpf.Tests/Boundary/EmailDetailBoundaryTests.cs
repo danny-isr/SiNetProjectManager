@@ -17,13 +17,16 @@ public sealed class EmailDetailBoundaryTests
     public void Email_detail_extracted_from_email_window_without_legacy_bridge()
     {
         var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var detailVmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
         var detailFolder = Path.Combine(
             ResolveRepoRoot(),
             "src/SiNet.App.Wpf/Surfaces/Email/Detail");
 
-        Assert.Contains("EmailDetailView", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("Binding EmailDetail", windowXaml, StringComparison.Ordinal);
+        // Standalone window hosts EmailSurfaceView; detail lives inside the surface.
+        Assert.Contains("EmailSurfaceView", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailDetailView", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("Binding EmailDetail", surfaceXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Calendar", windowXaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("LegacyBridge", detailVmSource, StringComparison.Ordinal);
         Assert.DoesNotContain("SiNetSQL.MVVM", detailVmSource, StringComparison.Ordinal);
@@ -125,6 +128,107 @@ public sealed class EmailDetailBoundaryTests
         Assert.DoesNotContain("query.OverrideProjectId ?? message.ProjectId", sql, StringComparison.Ordinal);
         Assert.Contains("ResolveDefaultOfficeProjectIdAsync", sql, StringComparison.Ordinal);
         Assert.Contains("defaultOfficeProjectId", sql, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Guard: mailbox "filed" is Gmail-label-only. See docs/EMAIL_ACC_SOURCE_OF_TRUTH.md
+    /// and EmailSystemPrinciples §6.6 — do not reintroduce SQL ProjectId as IsFiledToProject.
+    /// </summary>
+    [Fact]
+    public void Move_eligibility_uses_gmail_IsFiledToProject_not_sql_project_id()
+    {
+        var detailVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
+        var sotDoc = ReadRepoFile("docs/EMAIL_ACC_SOURCE_OF_TRUTH.md");
+        var principles = ReadRepoFile(
+            "SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md");
+
+        Assert.Contains("_selectedEmail.IsFiledToProject", detailVm, StringComparison.Ordinal);
+        Assert.Contains("Only Gmail project-label filing counts", detailVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsEffectivelyFiled", detailVm, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "row.ProjectId == targetProjectId",
+            detailVm,
+            StringComparison.Ordinal);
+
+        Assert.Contains("Gmail project label", sotDoc, StringComparison.Ordinal);
+        Assert.Contains("IsEffectivelyFiled", sotDoc, StringComparison.Ordinal);
+        Assert.Contains("### 6.6 Mailbox project association", principles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Source_tree_has_no_IsEffectivelyFiled_helper()
+    {
+        var root = ResolveRepoRoot();
+        var hits = new List<string>();
+        // Split so this test file does not match its own assertion string.
+        var needle = "IsEffectively" + "Filed";
+        foreach (var dirName in new[] { "src", "SiNetProjectManagerV2" })
+        {
+            var dir = Path.Combine(root, dirName);
+            if (!Directory.Exists(dir))
+            {
+                continue;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories))
+            {
+                if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.Contains($"{Path.DirectorySeparatorChar}Tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.EndsWith("EmailDetailBoundaryTests.cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var text = File.ReadAllText(file);
+                if (text.Contains(needle, StringComparison.Ordinal))
+                {
+                    hits.Add(Path.GetRelativePath(root, file));
+                }
+            }
+        }
+
+        Assert.True(hits.Count == 0, needle + " found in: " + string.Join(", ", hits));
+    }
+
+    /// <summary>
+    /// Local body render: Gmail API Messages.Get(messageId) returns one message — no thread DOM.
+    /// Body WebView2 must be Transient (per surface) and sit in a star-sized Grid row (not StackPanel).
+    /// </summary>
+    [Fact]
+    public void Body_render_is_local_single_message_with_per_surface_webview()
+    {
+        var gateway = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
+        var viewerXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailViewerPaneView.xaml");
+        var app = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
+        var renderer = ReadRepoFile("SiNetProjectManagerV2/Services/Email/WebView2EmailBodyRenderer.cs");
+
+        Assert.Contains("Messages.Get(\"me\", messageId)", gateway, StringComparison.Ordinal);
+        Assert.Contains("FormatEnum.Full", gateway, StringComparison.Ordinal);
+        Assert.DoesNotContain("Users.Threads.Get", gateway, StringComparison.Ordinal);
+
+        Assert.Contains("x:Name=\"BodyHost\" Grid.Row=\"2\"", viewerXaml, StringComparison.Ordinal);
+        Assert.Contains("Height=\"*\"", viewerXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("mail.google.com", viewerXaml, StringComparison.Ordinal);
+        // BodyHost must not live inside a StackPanel (WebView2 collapses to height 0).
+        var bodyHostIndex = viewerXaml.IndexOf("x:Name=\"BodyHost\"", StringComparison.Ordinal);
+        Assert.True(bodyHostIndex > 0);
+        var beforeBodyHost = viewerXaml[..bodyHostIndex];
+        var lastStackOpen = beforeBodyHost.LastIndexOf("<StackPanel", StringComparison.Ordinal);
+        var lastStackClose = beforeBodyHost.LastIndexOf("</StackPanel>", StringComparison.Ordinal);
+        Assert.True(
+            lastStackOpen < 0 || lastStackClose > lastStackOpen,
+            "BodyHost must not be nested inside an open StackPanel.");
+
+        Assert.Contains(
+            "AddTransient<SiNet.Application.Email.Detail.IEmailBodyRenderer",
+            app,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "AddSingleton<SiNet.Application.Email.Detail.IEmailBodyRenderer",
+            app,
+            StringComparison.Ordinal);
+        Assert.Contains("NavigateToString", renderer, StringComparison.Ordinal);
     }
 
     [Fact]

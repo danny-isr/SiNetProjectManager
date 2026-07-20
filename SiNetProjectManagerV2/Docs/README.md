@@ -1,8 +1,8 @@
 # SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 26.06.2026
-> **Status:** Active documentation index — Phase 2 skipCarryOver / validation defaults documented (26.06.2026).
+> **Updated:** 20.07.2026
+> **Status:** Active documentation index — Email/ACC source-of-truth summary linked (20.07.2026).
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -34,6 +34,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Architecture — Service Catalog | [`Domains\Architecture\ServiceCatalog-2026-05-26.md`](Domains/Architecture/ServiceCatalog-2026-05-26.md) |
 | Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
 | Email — Management View and Actions Tree | [`Domains\Email\EmailManagementViewAndActionsTree-2026-06-21.md`](Domains/Email/EmailManagementViewAndActionsTree-2026-06-21.md) |
+| Email / ACC — Source of Truth (New System agent summary) | [`docs/EMAIL_ACC_SOURCE_OF_TRUTH.md`](../../docs/EMAIL_ACC_SOURCE_OF_TRUTH.md) |
 | ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
 | Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
 | Authorization | [`Domains\Authorization\AuthorizationPrinciples-2026-06-18.md`](Domains/Authorization/AuthorizationPrinciples-2026-06-18.md) |

@@ -15,3 +15,13 @@ When working on documentation or making meaningful changes in this project, adhe
 11. **README update requirements**: When updating `Docs/README.md`, update the `Updated:` date, add the new document to the appropriate table, and preserve the reading structure. Do not move things to Archive without permission.
 12. **No Archive edits as active documentation**: `Docs/Archive` is historical. Do not update it as a source of truth. If documents conflict, the one in `Domains` or `Decisions` wins.
 13. **End report format**: At the end of a documentation round, report: what was created/updated, whether `Docs/README.md` was updated, local README updates, cross-references added, code changes (must be none), DB changes, Out of Scope items, Dropped/Postponed items, Needs Review items, and recommended next steps.
+
+## Email / ACC source of truth
+
+Before changing email filing, MoveToProject eligibility, or ACC Inbox presence logic, read:
+
+- `docs/EMAIL_ACC_SOURCE_OF_TRUTH.md`
+- `SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md` (§6.1, §6.6)
+- `SiNetProjectManagerV2/Docs/Domains/ACC/AccSystemPrinciples-2026-05-26.md`
+
+**Mailbox filed = Gmail project label only. Physical file = ACC. DB = helper.** Do not “fix” Move/File by treating SQL `ProjectId` as filed.

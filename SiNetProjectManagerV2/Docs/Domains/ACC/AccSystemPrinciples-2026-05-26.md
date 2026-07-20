@@ -11,6 +11,7 @@ Define the binding principles for how the application interacts with ACC, what i
 - **ACC is the source of truth** for files that have been uploaded.
 - **DB is a cache / helper** and never proof on its own that a file still exists in ACC.
 - Custom attribute values on ACC items are the source of truth for ACC-side metadata. The DB mirror is a helper only.
+- **Do not confuse** ACC physical presence / Inbox tag-move-lock attributes with **mailbox project association**. Whether an email is filed to a project in Gmail is owned by **Gmail project labels** (`IsFiledToProject`) — see [`EmailSystemPrinciples` §6.6](../Email/EmailSystemPrinciples-2026-05-26.md) and [`docs/EMAIL_ACC_SOURCE_OF_TRUTH.md`](../../../../docs/EMAIL_ACC_SOURCE_OF_TRUTH.md). SQL `ProjectId` is not proof of either ACC presence or Gmail filing.
 
 ## Core principles
 1. Before any operation that depends on a file existing in ACC, verify existence via ACC reconciliation. Do not trust DB-only state.

@@ -1,0 +1,22 @@
+---
+description: Email/ACC sources of truth — Gmail label vs ACC vs DB helper
+globs: "**/Surfaces/Email/**,**/Services/Email/**,**/Email/Acc/**,**/EmailGmailLabelNames.cs,docs/EMAIL*.md,**/EmailSystemPrinciples*,**/AccSystemPrinciples*"
+alwaysApply: false
+---
+
+# Email / ACC source of truth
+
+Before changing filing, Move eligibility, or ACC Inbox presence, read
+`docs/EMAIL_ACC_SOURCE_OF_TRUTH.md` and `EmailSystemPrinciples` §6.1 / §6.6.
+
+## Rules
+
+1. **Mailbox filed to project** (`IsFiledToProject`) = **Gmail project label only**.
+2. **Physical file in ACC / Inbox** = **ACC** (reconcile). `AccItemId` in SQL is cache only.
+3. **DB** = helper/mirror for those concerns — never proof of mailbox filing or ACC presence.
+
+## Forbidden
+
+- Inferring “משויך” / clearing Move block from SQL `ProjectId` alone.
+- `IsEffectivelyFiled*` (or similar) that ORs SQL state into filed.
+- Treating Gmail “do not write content” as a ban on **label** filing/triage writes.

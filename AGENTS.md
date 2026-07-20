@@ -33,6 +33,9 @@ Report in the final message: build result, test result, and whether DB/schema ch
 - `docs/PROJECTS.md` — Shared ProjectSelector, project context
 - `docs/PROJECT_CONTEXT_MIGRATION.md` — Migration slice notes
 - `docs/ARCHITECTURE_TARGET.md` — Target architecture
+- `docs/EMAIL_ACC_SOURCE_OF_TRUTH.md` — **Email/ACC sources of truth** (Gmail label = mailbox filed; ACC = physical file; DB = helper)
+- `SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md` — Email domain principles (§6.6 mailbox association)
+- `SiNetProjectManagerV2/Docs/Domains/ACC/AccSystemPrinciples-2026-05-26.md` — ACC domain principles
 
 ## New stack layout
 

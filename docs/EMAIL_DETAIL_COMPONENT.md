@@ -25,6 +25,13 @@ Self-contained Email Detail component: viewer, attachments, action bar, workflow
 - Work item: EmailWorkItemWindow = EmailDetailView only
 - Task: WorkSurfaceLauncher.ApplyContext
 
+## Body rendering (local single-message)
+
+- Source: `IEmailGateway.GetDetailsAsync(messageId)` → Gmail API `Messages.Get(format=full)` for **one** message id (not a thread).
+- Display: `IEmailBodyRenderer` / `WebView2EmailBodyRenderer` → `NavigateToString(HtmlBody)`. Not a Gmail popout URL.
+- DI: **Transient** per email surface (shell / window / work-item) so WebView2 is not reparented across hosts.
+- Layout: `EmailViewerPaneView` gives `BodyHost` a star-sized Grid row so WebView2 gets real height (do not nest it in a StackPanel).
+
 ## Ports
 
 See plan: IEmailBodyRenderer, IEmailAccIngestionService, IEmailAttachmentTaggingService, IEmailMoveToProjectService, IEmailExternalDownloadService, IEmailWorkflowContextService, IEmailSuggestedActionService.

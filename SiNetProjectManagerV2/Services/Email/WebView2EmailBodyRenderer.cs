@@ -1,12 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Web.WebView2.Wpf;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email.Detail;
 
 namespace SiNetProjectManagerV2.Services.Email;
 
 /// <summary>
 /// V2 host adapter: renders email body HTML in WebView2 inside the Detail viewer host element.
+/// Registered as Transient so each email surface gets its own WebView2 instance (no reparent across hosts).
 /// </summary>
 internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 {
@@ -23,6 +25,12 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
             return;
         }
 
+        // Already attached to this host — keep the existing WebView2.
+        if (ReferenceEquals(_host, host) && _webView is not null && ReferenceEquals(host.Content, _webView))
+        {
+            return;
+        }
+
         _host = host;
         if (_webView is null)
         {
@@ -34,6 +42,11 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
         host.Content = _webView;
         host.Visibility = Visibility.Visible;
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step(
+            "Email.BodyRender",
+            $"AttachHost hostHash={host.GetHashCode()} webViewHash={_webView.GetHashCode()} pending={_pendingRequest is not null}");
 
         if (_pendingRequest is not null)
         {
@@ -50,6 +63,10 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         if (_webView is null || _host is null)
         {
             _pendingRequest = request;
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.BodyRender",
+                $"LoadAsync deferred (no host) gmailId={request.GmailMessageId ?? "(none)"} htmlLen={request.HtmlBody?.Length ?? 0}");
             return false;
         }
 
@@ -59,10 +76,21 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
             var html = BuildHtmlDocument(request.HtmlBody, request.BodyText);
             _webView.NavigateToString(html);
+            // Clear may have set a local Collapsed; restore so the XAML DataTrigger can show the host.
+            _host.Visibility = Visibility.Visible;
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.BodyRender",
+                $"NavigateToString ok gmailId={request.GmailMessageId ?? "(none)"} htmlLen={html.Length} coreReady={_webView.CoreWebView2 is not null}");
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.BodyRender",
+                $"LoadAsync FAILED: {ex.GetType().Name}: {ex.Message}");
             return false;
         }
     }
@@ -73,14 +101,25 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
         if (_webView?.CoreWebView2 is not null)
         {
-            _webView.NavigateToString("<html><body></body></html>");
+            try
+            {
+                _webView.NavigateToString("<html><body></body></html>");
+            }
+            catch
+            {
+                // ignore clear navigation failures
+            }
         }
 
+        // Keep WebView2 attached to this host (Transient: one renderer per surface).
+        // Only hide — do not Dispose here; Dispose would force a cold CoreWebView2 init on next load.
         if (_host is not null)
         {
-            _host.Content = null;
             _host.Visibility = Visibility.Collapsed;
         }
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.BodyRender", "Clear content (WebView2 kept for surface)");
     }
 
     private async Task EnsureInitializedAsync()

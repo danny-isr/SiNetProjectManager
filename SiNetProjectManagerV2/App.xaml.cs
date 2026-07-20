@@ -223,7 +223,9 @@ namespace SiNetProjectManagerV2
 
             // PDF Renderer: Singleton (reused for all PDF generations)
             services.AddSingleton<WebView2PdfRenderer>();
-            services.AddSingleton<SiNet.Application.Email.Detail.IEmailBodyRenderer, SiNetProjectManagerV2.Services.Email.WebView2EmailBodyRenderer>();
+            // Transient: each email surface (shell / window / work-item) gets its own WebView2.
+            // Singleton caused reparent of a single WebView2 across hosts → blank body panes.
+            services.AddTransient<SiNet.Application.Email.Detail.IEmailBodyRenderer, SiNetProjectManagerV2.Services.Email.WebView2EmailBodyRenderer>();
             // Embedded ACC document viewer for the ProjectWork surface (host-seam; WebView2 lives here).
             services.AddSingleton<SiNet.Application.ProjectWork.IAccViewerHost, SiNetProjectManagerV2.Services.ProjectWork.WebView2AccViewerHost>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailAttachmentProjectFilePickerHost,

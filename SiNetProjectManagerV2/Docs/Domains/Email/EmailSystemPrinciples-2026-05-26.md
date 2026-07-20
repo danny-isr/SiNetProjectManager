@@ -213,6 +213,9 @@ https://mail.google.com/mail/u/0/#search/rfc822msgid:{EncodedMessageId}
   as `Uploaded`.
 - Reconciliation against ACC is required to confirm physical presence; the
   DB cache must not contradict ACC.
+- This physical-existence rule is **independent** of mailbox project
+  association (§6.6). A SQL `ProjectId` on an inbox row does **not** prove
+  either that the email is Gmail-filed or that attachments still exist in ACC.
 
 ### 6.2 ACC Inbox layout — current and target
 
@@ -292,9 +295,14 @@ Each kind of metadata has one defined owner:
 
 - **Gmail / RFC822 headers** — source of truth for email identity and global
   thread relationships (`Message-ID`, `In-Reply-To`, `References`).
+- **Gmail project labels** — source of truth for **mailbox project
+  association** (whether the message is filed to a project in the mailbox);
+  see §6.6.
 - **DB** — source of truth for business process: projects, tasks, workflow,
   `ProjectFile` / `ProjectAlternative` / `ProjectFileInstance`, user
-  decisions, and the links between email, file, project, and task.
+  decisions, and the links between email, file, project, and task. The DB is
+  **not** the source of truth for mailbox filing (§6.6) or physical ACC
+  presence (§6.1).
 - **Storage Destination** — source of truth for the physical existence of a
   file (see `ProjectFilesPrinciples`).
 - **ACC custom attributes** — source of truth for metadata that must travel
@@ -311,12 +319,72 @@ Each kind of metadata has one defined owner:
 Forbidden:
 
 - Using the DB alone as proof that a file exists physically.
+- Using the DB alone (`EmailInboxMessage.ProjectId`, thread mapping,
+  workflow association) as proof that a message is **mailbox-filed** to a
+  project — that requires a Gmail project label (§6.6).
 - Using ACC attributes as the source of truth for general workflow.
 - Using `manifest.json` instead of the DB, or instead of a Storage Destination
   existence check.
 - Using UI / DOM as a source of truth.
 - Updating metadata in multiple places without defining which is the source
   and which is the copy.
+
+### 6.6 Mailbox project association — Gmail labels are the source of truth (added 2026-07-20)
+
+**Concern:** “Is this email filed / tagged to a project in the operator’s
+mailbox?” (`IsFiledToProject`, File / Unfile / Move eligibility gate).
+
+This is **not** the same concern as:
+
+- physical presence of an attachment in ACC (§6.1), or
+- ACC custom attributes for tag / move / lock on an Inbox item (§6.5), or
+- business `ProjectId` links used by workflow / tasks (DB).
+
+#### Source of truth
+
+- The **Gmail project label** under root `פרויקטים_משרד`
+  (`EmailGmailLabelNames.RootLabel` / `IsProjectLabel`: at least
+  `root/location/project…`) is the **sole source of truth** for mailbox
+  project association.
+- UI and services expose this as `IsFiledToProject` (mapped from Gmail
+  `labelNames` in `EmailListRowMapper`). Move eligibility must pass that
+  Gmail-derived flag — not a SQL inference.
+
+#### Database role
+
+- SQL (`EmailInboxMessage.ProjectId`, thread mappings, etc.) is a
+  **best-effort mirror / helper** after a successful Gmail label attach
+  (`SqlEmailFilingService`: Gmail first, then SQL sync).
+- If SQL sync fails after the label was attached, compensation **removes the
+  Gmail label** so mailbox truth and DB do not diverge permanently.
+- A non-null SQL `ProjectId` (including after `CreatePriceQuote` /
+  `OpenQuoteProject` materialization) **does not** mean the message is
+  mailbox-filed.
+
+#### Allowed Gmail writes (carve-out)
+
+- Gmail remains **not** a Storage Destination and **not** a place to store
+  project file content.
+- **Allowed:** Gmail label modify for (1) project filing / unfiling and
+  (2) triage status labels (`OfficeSystem_*`). That write path **is** the
+  mailbox association source of truth.
+- **Forbidden:** treating “do not write back to Gmail” as a ban on those
+  label operations, or inventing a SQL-only “effectively filed” shortcut
+  (e.g. `ProjectId == currentProject`) to bypass the label.
+
+#### Forbidden fixes / regressions
+
+- Inferring “משויך לפרויקט” from SQL `ProjectId`, `IsAssociatedToProject`,
+  or workflow context alone.
+- Auto-moving / completing FileQuoteMaterial without a successful Gmail
+  project-label File.
+- Reintroducing helpers named like `IsEffectivelyFiled*` that OR SQL state
+  into `IsFiledToProject`.
+
+Operational detail for New System list filing:
+[`docs/EMAIL_LIST_MIGRATION.md`](../../../../docs/EMAIL_LIST_MIGRATION.md)
+and the agent-facing summary
+[`docs/EMAIL_ACC_SOURCE_OF_TRUTH.md`](../../../../docs/EMAIL_ACC_SOURCE_OF_TRUTH.md).
 
 ## 7. Things we deliberately do NOT do right now
 
@@ -329,7 +397,10 @@ Forbidden:
   `MoveToProject`, PDF rendering or attachment classification in this round.
 - Do **not** introduce a new fallback URL form or a parallel URL builder; the
   single approved property is `EmailInfo.GmailPopoutUrl`.
-- Do **not** write back to Gmail. Gmail is a read-only ingestion source.
+- Do **not** use Gmail as a Storage Destination or write email/file **content**
+  back to Gmail. **Allowed carve-out (see §6.6):** Gmail label modify for
+  project filing / unfiling and triage status labels — that label write **is**
+  the mailbox association source of truth.
 - Do **not** persist mailbox-local Gmail identifiers (`message.id` /
   `threadId`) as business data (see §2.5).
 - Do **not** put business decisions (identity, workflow, filing, Storage
@@ -346,9 +417,11 @@ Forbidden:
   dropped in principle and replaced by `THREAD_<ThreadKey>\MSG_<MessageKey>\`;
   any actual implementation gap is recorded in
   [`Decisions\DocumentationVsImplementationGaps-2026-05-26.md`](../../Decisions/DocumentationVsImplementationGaps-2026-05-26.md).
-- Gmail as a write/management Storage Destination — **dropped**; Gmail is a
-  read-only ingestion source (see `ProjectFilesPrinciples`).
-- Metadata without a defined source of truth — **dropped** (see §6.5).
+- Gmail as a write/management **Storage Destination** — **dropped**; Gmail is
+  not a place to store project file content (see `ProjectFilesPrinciples`).
+  Label modify for mailbox filing / triage is **allowed** and is SoT for
+  association (§6.6) — that is not “Gmail as Storage Destination”.
+- Metadata without a defined source of truth — **dropped** (see §6.5 / §6.6).
 - Promoting RFC822 `Message-ID` to a first-class, persisted field on
   `EmailInfo` is **postponed** to a separate approved round (requires
   exposing it via `GoogleService.MapMessageToInfo` / `MapMessageToInfoMetadataOnly`
@@ -373,7 +446,8 @@ Forbidden:
   separate approved round.
 - Mixing Gmail and Google Drive as the same Storage Destination —
   **dropped**.
-- Writing back to Gmail — **dropped** (Gmail is read-only ingestion).
+- Using Gmail as a Storage Destination / writing file content back to Gmail —
+  **dropped**. Label-only filing/triage writes remain allowed (§6.6).
 - Persisting Gmail mailbox-local `message.id` / `threadId` in the DB as
   business identifiers — **dropped**.
 - Adding a Google Drive upload mechanism for email attachments without an
@@ -461,9 +535,11 @@ the email domain** and what it does not.
 
 ### 11.3 Gmail / Drive / Sheets separation
 
-- **Gmail** — read-only ingestion source for emails and RFC822 headers.
-  Gmail is **not** a write Storage Destination; the system does **not**
-  write back to Gmail.
+- **Gmail** — primary ingestion source for emails and RFC822 headers.
+  Gmail is **not** a write Storage Destination for file content. **Allowed:**
+  label modify for project filing / unfiling and triage (`OfficeSystem_*`);
+  those labels are the source of truth for mailbox project association
+  (§6.6).
 - **Google Drive** — separate from Gmail. Drive may be a Storage
   Destination for project files (see `ProjectFilesPrinciples`), but Drive
   **upload is postponed** and Drive is **not** an email destination.
@@ -476,7 +552,10 @@ the email domain** and what it does not.
 - Mixing Gmail and Google Drive as the same Storage Destination.
 - Persisting Gmail mailbox-local identifiers (`message.id`, `threadId`) as
   business data in the DB.
-- Writing back to Gmail.
+- Writing email/file **content** back to Gmail, or using Gmail as a project
+  file Storage Destination. (Label filing/triage writes are allowed — §6.6.)
+- Inferring mailbox “filed to project” from SQL alone (bypass of Gmail
+  project labels).
 - Using `SiOffice.GoogleConnector` / `GoogleService` to bypass
   `ProjectFiles` / `Workflow` / Storage Destination rules.
 - Using Google Sheets as a general business source of truth without an
@@ -571,6 +650,7 @@ Fields:
 - `ProjectAlternative` is project-scoped; alternatives are **not** filtered by `JobType` / `TypeOfProjectInProjectId`. The pre-2026 model that associated alternatives with `TypeOfProjectInProject` is retired in code; remaining references survive only in historical EF migrations.
 - Auto-sync to the final project after tagging is **disabled by design** (`EmailManagementViewModel.EnableAutoSyncToProject = false`). Tagging is metadata-only; `MoveToProject` is the sole transfer path.
 - ACC is the source of truth for Inbox file existence. DB-only identifiers must not be used to open or move Inbox files without ACC reconciliation/layout-aware verification.
+- Mailbox “filed to project” is a **separate** concern: Gmail project labels are the source of truth (`EmailSystemPrinciples` §6.6). Do not treat SQL `ProjectId` as proof the message is filed in the mailbox.
 
 ## 7. Files
 

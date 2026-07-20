@@ -64,6 +64,7 @@
 - **Version Management:** No new versions are ever created through the system. ACC handles its own versioning natively — files are uploaded with their full original name, and ACC manages version history internally. The tree structure (Folder → File → Alternative → Version) remains unchanged.
 - **ACC Inbox Tagging & Metadata:** 
   - Treat ACC and ACC custom attributes as the source of truth; DB fields are cache/helper only.
+  - **Mailbox project association (separate concern):** Gmail project labels are the source of truth for “email filed to project” (`IsFiledToProject`). Do **not** treat SQL `EmailInboxMessage.ProjectId` / thread mapping as proof the message is filed. See `docs/EMAIL_ACC_SOURCE_OF_TRUTH.md` and `EmailSystemPrinciples` §6.6. Label modify for filing/triage is allowed; Gmail is not a Storage Destination for file content.
   - Write ACC metadata before updating the DB cache. If the ACC metadata write fails, roll back any DB cache updates.
   - On metadata read failures, warn and continue using the ProjectFileInstanceId legacy fallback; do not fail the overall process.
   - Log metadata-read failures and fallback usage for later reconciliation.

@@ -34,6 +34,13 @@ Provide a single Application-layer port for project filing side effects so WPF n
 
 `EmailFilingResult(Succeeded, ErrorMessage?, AssignedProjectId?)` — structured failure; no fallback paths.
 
+## Source of truth (mailbox association)
+
+- **Gmail project labels** are the source of truth for “filed to project” (`IsFiledToProject`).
+- **Order:** attach/remove Gmail label first; SQL `EmailInboxMessage` / mapping update is best-effort mirror.
+- **Compensation:** if SQL sync fails after a label was attached, remove the Gmail label so mailbox truth stays consistent.
+- **Forbidden:** treating SQL `ProjectId` alone as filed. See [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) and `EmailSystemPrinciples` §6.6.
+
 ## Implementation
 
 1. `SqlEmailFilingService` / `SqlEmailStatusService` in `SiNet.Infrastructure.Sql`

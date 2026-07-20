@@ -146,6 +146,11 @@ The list component receives `EmailListProjectContext` through `ApplyProjectConte
 
 ### Gmail-first filing (legacy parity)
 
+> **Approved principle (not only a migration note):** Gmail project labels are the
+> source of truth for mailbox project association; SQL is a best-effort mirror.
+> See [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) and
+> `EmailSystemPrinciples` §6.6. Do **not** treat SQL `ProjectId` as “filed”.
+
 1. **File:** create/attach Gmail project label hierarchy (`RootLabel/location/projectDisplayName`); remove other project labels under `RootLabel/*` before attach; SQL `EmailInboxMessage` update is best-effort when a row exists (by `InboxMessageId` or `MessageUniqueId` lookup).
 2. **Unfile:** remove project label + restore `INBOX`; default SQL project from `SystemSettings.DefaultProjectTitle`.
 3. **OAuth:** `GmailModify` scope required — re-consent if token predates modify scope.
