@@ -122,6 +122,17 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             }
         }
 
+        // Proposal ProjectSetup: the OpenQuoteProject dialog creates the real project and
+        // SqlProjectCreateService reassigns the source email's inbox row to it. The task and its
+        // trigger workflow instance still carry the office placeholder project, so rebind them here —
+        // before the project-status update and the auto-advance — so the next stage's tasks,
+        // transition actions and status changes all target the created project instead of the
+        // office default ("ניהול משרד").
+        if (string.Equals(command.CompletionEventCode, ReviewCompletionEvents.ReviewProjectCreated, StringComparison.Ordinal))
+        {
+            await RebindCreatedProjectAsync(db, task, ct).ConfigureAwait(false);
+        }
+
         var nowUtc = DateTime.UtcNow;
         var success = new TaskCompletionResultDto(
             Success: true,
@@ -339,6 +350,68 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             NewProjectStatusCode = newProjectStatusCode,
             StageAdvanceResult = fallbackAdvanceResult,
         };
+    }
+
+    /// <summary>
+    /// On <see cref="ReviewCompletionEvents.ReviewProjectCreated"/>: reads the created project id
+    /// from the task's source email inbox row (already reassigned by <c>SqlProjectCreateService</c>)
+    /// and rebinds the task and its trigger workflow instance(s) to it. No-op when the email row is
+    /// missing or still points at the task's current (placeholder) project.
+    /// </summary>
+    private static async Task RebindCreatedProjectAsync(
+        SiNetSQLDbContext db,
+        ProjectAssignment task,
+        CancellationToken ct)
+    {
+        var emailLink = task.TaskLinks.FirstOrDefault(
+            l => l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage);
+        if (emailLink is null)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("TaskCompletion.RebindProject",
+                $"task={task.Id} skipped — no EmailInboxMessage link");
+            return;
+        }
+
+        var inboxId = (int)emailLink.LinkedEntityId;
+        var inboxProjectId = await db.EmailInboxMessages
+            .AsNoTracking()
+            .Where(m => m.Id == inboxId)
+            .Select(m => (int?)m.ProjectId)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (inboxProjectId is not > 0 || inboxProjectId == task.ProjectId)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("TaskCompletion.RebindProject",
+                $"task={task.Id} skipped — inbox={inboxId} inboxProject={inboxProjectId?.ToString() ?? "(none)"} taskProject={task.ProjectId?.ToString() ?? "(none)"}");
+            return;
+        }
+
+        task.ProjectId = inboxProjectId.Value;
+
+        var instanceIds = task.TaskLinks
+            .Where(l => l.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
+                     && l.Role == TaskLinkRole.Trigger)
+            .Select(l => (int)l.LinkedEntityId)
+            .Distinct()
+            .ToList();
+
+        var instances = await db.WorkflowInstances
+            .Where(i => instanceIds.Contains(i.Id) && i.Status == WorkflowStatus.Active)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var instance in instances)
+        {
+            instance.ProjectId = inboxProjectId.Value;
+            instance.IsProjectBound = true;
+        }
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("TaskCompletion.RebindProject",
+            $"task={task.Id} inbox={inboxId} project→{inboxProjectId.Value} instances=[{string.Join(",", instances.Select(i => i.Id))}] bound=True");
     }
 
     private static ValueTask<(bool ShouldClose, string? Reason)> EvaluateClosureAsync(

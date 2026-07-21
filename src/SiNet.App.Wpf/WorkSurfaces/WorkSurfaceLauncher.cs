@@ -124,7 +124,9 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 places,
                 companies,
                 _services.GetService<IEmailInboxQueryService>(),
-                _services.GetService<IAccResolvedDocsUrlLauncher>())
+                _services.GetService<IAccResolvedDocsUrlLauncher>(),
+                _services.GetService<SiNet.Application.Email.IEmailFilingService>(),
+                _services.GetService<SiNet.Application.Abstractions.Email.IEmailGateway>())
             {
                 Owner = System.Windows.Application.Current?.MainWindow,
             };

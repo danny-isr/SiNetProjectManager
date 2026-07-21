@@ -2,6 +2,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Diagnostics;
 
 namespace SiNet.Infrastructure.Google;
 
@@ -28,6 +29,20 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
 
         var existing = labels.Labels?.FirstOrDefault(
             label => string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        // #region agent log
+        var parentPrefix = $"{_provider.RootLabel}/{location}/";
+        var nearMatches = labels.Labels?
+            .Where(l => l.Name != null
+                && (l.Name.StartsWith(parentPrefix, StringComparison.OrdinalIgnoreCase)
+                    || l.Name.Contains("136", StringComparison.Ordinal)))
+            .Select(l => $"'{l.Name}'(len={l.Name!.Length},id={l.Id})")
+            .ToList() ?? [];
+        WorkflowDebugTrace.Step(
+            "Email.File.Label",
+            $"GetOrCreate fullPath='{fullPath}' len={fullPath.Length} slashes={fullPath.Count(static c => c == '/')} totalLabels={labels.Labels?.Count ?? 0} existingFound={existing?.Id != null} siblings=[{string.Join(";", nearMatches)}]");
+        // #endregion
+
         if (!string.IsNullOrWhiteSpace(existing?.Id))
         {
             return existing.Id;
@@ -36,14 +51,26 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         await EnsureParentLabelExistsAsync(gmail, labels, _provider.RootLabel, cancellationToken).ConfigureAwait(false);
         await EnsureParentLabelExistsAsync(gmail, labels, $"{_provider.RootLabel}/{location}", cancellationToken).ConfigureAwait(false);
 
-        var created = await gmail.Users.Labels.Create(new Label
+        try
         {
-            Name = fullPath,
-            LabelListVisibility = "labelShow",
-            MessageListVisibility = "show",
-        }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var created = await gmail.Users.Labels.Create(new Label
+            {
+                Name = fullPath,
+                LabelListVisibility = "labelShow",
+                MessageListVisibility = "show",
+            }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
 
-        return created.Id ?? throw new InvalidOperationException($"Failed to create Gmail label '{fullPath}'.");
+            return created.Id ?? throw new InvalidOperationException($"Failed to create Gmail label '{fullPath}'.");
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.File.Label",
+                $"Create FAILED at PROJECT label fullPath='{fullPath}' ex={ex.GetType().Name}: {ex.Message}");
+            // #endregion
+            throw;
+        }
     }
 
     public async Task<string?> GetProjectLabelIdAsync(
@@ -216,15 +243,27 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             return;
         }
 
-        var created = await gmail.Users.Labels.Create(new Label
+        try
         {
-            Name = labelName,
-            LabelListVisibility = "labelShow",
-            MessageListVisibility = "show",
-        }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var created = await gmail.Users.Labels.Create(new Label
+            {
+                Name = labelName,
+                LabelListVisibility = "labelShow",
+                MessageListVisibility = "show",
+            }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
 
-        existingLabels.Labels ??= [];
-        existingLabels.Labels.Add(created);
+            existingLabels.Labels ??= [];
+            existingLabels.Labels.Add(created);
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.File.Label",
+                $"Create FAILED at PARENT label name='{labelName}' ex={ex.GetType().Name}: {ex.Message}");
+            // #endregion
+            throw;
+        }
     }
 
     private async Task<GmailService> RequireServiceAsync(CancellationToken cancellationToken)

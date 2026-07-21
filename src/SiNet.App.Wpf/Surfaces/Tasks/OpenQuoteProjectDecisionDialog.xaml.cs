@@ -6,6 +6,8 @@ using System.Windows.Controls;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Theme;
+using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
@@ -31,6 +33,8 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
     private readonly ICompanyCatalogService _companies;
     private readonly IEmailInboxQueryService? _inboxQuery;
     private readonly IAccResolvedDocsUrlLauncher? _accLauncher;
+    private readonly IEmailFilingService? _filingService;
+    private readonly IEmailGateway? _emailGateway;
 
     private string _subject = "טוען…";
     private string _fromDisplay = string.Empty;
@@ -48,7 +52,9 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         IPlaceCatalogService places,
         ICompanyCatalogService companies,
         IEmailInboxQueryService? inboxQuery = null,
-        IAccResolvedDocsUrlLauncher? accLauncher = null)
+        IAccResolvedDocsUrlLauncher? accLauncher = null,
+        IEmailFilingService? filingService = null,
+        IEmailGateway? emailGateway = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _completion = completion ?? throw new ArgumentNullException(nameof(completion));
@@ -57,6 +63,8 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
         _inboxQuery = inboxQuery;
         _accLauncher = accLauncher;
+        _filingService = filingService;
+        _emailGateway = emailGateway;
 
         if (_context.PrimaryWorkTargetEntityId is int emailId && emailId > 0)
             _createVm.EmailMessageId = emailId;
@@ -195,14 +203,102 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
             return;
         }
 
-        StatusMessage = $"נוצר פרויקט #{_createVm.CreatedProjectId} — סוגר משימה…";
         IsEnabled = false;
         _completing = true;
+
+        // The project was created from this specific email, so the Gmail project label is applied
+        // here — immediately on creation — instead of waiting for a manual "שייך לפרויקט" in the
+        // FileMaterial stage. Best-effort: a Gmail failure must not block the task completion; the
+        // FileMaterial stage surface remains the manual retry path.
+        StatusMessage = $"נוצר פרויקט #{_createVm.CreatedProjectId} — מתייג את המייל לפרויקט…";
+        await TryAutoFileEmailToCreatedProjectAsync(_createVm.CreatedProjectId.Value).ConfigureAwait(true);
+
+        StatusMessage = $"נוצר פרויקט #{_createVm.CreatedProjectId} — סוגר משימה…";
         var ok = await CompleteAsync(ProjectCreatedEvent, ProjectOpened).ConfigureAwait(true);
         if (!ok)
         {
             _completing = false;
             IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Applies the Gmail project label of the newly created project to the originating email.
+    /// Resolves the Gmail message id from the inbox row's RFC 2822 Message-ID via an
+    /// <c>rfc822msgid:</c> mailbox search (the SQL row does not store the Gmail id).
+    /// Never throws — failures leave a status message and are retryable at the FileMaterial stage.
+    /// </summary>
+    private async Task TryAutoFileEmailToCreatedProjectAsync(int createdProjectId)
+    {
+        try
+        {
+            if (_filingService is null
+                || _emailGateway is null
+                || _inboxQuery is null
+                || _context.PrimaryWorkTargetEntityId is not int emailId
+                || emailId <= 0)
+            {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
+                    $"skipped — filing={_filingService is not null} gateway={_emailGateway is not null} inboxQuery={_inboxQuery is not null} emailId={_context.PrimaryWorkTargetEntityId?.ToString() ?? "(none)"}");
+                return;
+            }
+
+            var inboxRow = await _inboxQuery.GetByIdAsync(emailId).ConfigureAwait(true);
+            if (inboxRow is null || string.IsNullOrWhiteSpace(inboxRow.InternetMessageId))
+            {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
+                    $"skipped — inbox={emailId} rowFound={inboxRow is not null} internetMessageId=missing");
+                return;
+            }
+
+            var rawMessageId = inboxRow.InternetMessageId.Trim().Trim('<', '>');
+            var page = await _emailGateway.GetMailboxPageAsync(
+                new EmailMailboxQuery
+                {
+                    FreeText = $"rfc822msgid:{rawMessageId}",
+                    MailboxScope = EmailMailboxScope.AllMail,
+                    PageSize = 1,
+                }).ConfigureAwait(true);
+
+            var summary = page.Items.FirstOrDefault();
+            if (summary is null)
+            {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
+                    $"FAILED — Gmail message not found for rfc822msgid (inbox={emailId})");
+                StatusMessage = "המייל לא אותר ב-Gmail — ניתן לשייך ידנית בשלב תיוק החומר.";
+                return;
+            }
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
+                $"filing gmailId={summary.MessageId} inbox={emailId} project={createdProjectId}");
+
+            var result = await _filingService.FileToProjectAsync(
+                new FileEmailToProjectCommand(
+                    TargetProjectId: createdProjectId,
+                    ActingUserId: _context.ActingUserId ?? 0,
+                    GmailMessageId: summary.MessageId,
+                    InboxMessageId: emailId,
+                    GmailThreadId: summary.ThreadId,
+                    InternetMessageId: inboxRow.InternetMessageId)).ConfigureAwait(true);
+
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
+                $"result ok={result.Succeeded} error={result.ErrorMessage ?? "(none)"}");
+
+            if (!result.Succeeded)
+            {
+                StatusMessage = $"שיוך המייל לפרויקט נכשל: {result.ErrorMessage} — ניתן לשייך ידנית בשלב תיוק החומר.";
+            }
+        }
+        catch (Exception ex)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.File.AutoOnCreate", $"EXCEPTION {ex.GetType().Name}: {ex.Message}");
+            StatusMessage = $"שיוך המייל לפרויקט נכשל: {ex.Message} — ניתן לשייך ידנית בשלב תיוק החומר.";
         }
     }
 
