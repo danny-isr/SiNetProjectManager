@@ -95,11 +95,7 @@ internal sealed class EmailListRowDisplayCoordinator
         string? subject,
         string? fromAddress)
     {
-        var (match, matchedBy) = FindByInboxCorrelation(messageUniqueId, internetMessageId, subject, fromAddress);
-
-        // TEMP WF-DEBUG
-        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
-            $"correlate scan rows={_owner.Emails.Count} rowsWithImid={_owner.Emails.Count(static r => !string.IsNullOrWhiteSpace(r.InternetMessageId))} matchedBy={matchedBy} wantedImid='{internetMessageId ?? "(null)"}' wantedSubject='{subject ?? "(null)"}'");
+        var (match, _) = FindByInboxCorrelation(messageUniqueId, internetMessageId, subject, fromAddress);
 
         if (match is null)
         {
@@ -180,12 +176,8 @@ internal sealed class EmailListRowDisplayCoordinator
         // project-context change land in any order relative to the explicit task selection.
         if (_owner.PendingTaskSelection is { } pending)
         {
-            var (taskMatch, taskMatchedBy) = FindByInboxCorrelation(
+            var (taskMatch, _) = FindByInboxCorrelation(
                 pending.MessageUniqueId, pending.InternetMessageId, pending.Subject, pending.FromAddress);
-
-            // TEMP WF-DEBUG
-            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
-                $"ReplaceRows pending-task-target rows={rows.Count} matchedBy={taskMatchedBy}");
 
             if (taskMatch is not null)
             {
@@ -204,11 +196,6 @@ internal sealed class EmailListRowDisplayCoordinator
               ?? projectGroup?.Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
               ?? selectionPool.FirstOrDefault()
               ?? projectGroup?.Emails.FirstOrDefault();
-
-        // TEMP WF-DEBUG
-        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
-            $"ReplaceRows rows={rows.Count} preserveId={preserveSelectionId ?? "(null)"} autoSelected={_owner.SelectedEmail?.Id ?? "(none)"}");
-
         _owner.NotifyUnreadDisplayProperties();
     }
 

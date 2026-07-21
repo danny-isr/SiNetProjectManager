@@ -1,5 +1,4 @@
 using SiNet.App.Wpf.Inspection;
-using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -69,11 +68,6 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         string? gmailMessageId,
         IReadOnlyList<SiNet.Application.Abstractions.Email.EmailInlineImage>? inlineImages = null)
     {
-        // TEMP WF-DEBUG
-        WorkflowDebugTrace.Step(
-            "Email.BodyRender",
-            $"sync viewer={GetHashCode()} gmailId={gmailMessageId ?? "(none)"} bodyLen={bodyText?.Length ?? 0} htmlLen={htmlBody?.Length ?? 0}");
-
         BodyText = bodyText ?? string.Empty;
         _htmlBody = htmlBody;
         _gmailMessageId = gmailMessageId;
@@ -114,18 +108,8 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         var hasHtml = !string.IsNullOrWhiteSpace(_htmlBody);
         var hasBody = !string.IsNullOrWhiteSpace(BodyText) && BodyText != "טוען תוכן מייל...";
 
-        // TEMP WF-DEBUG
-        WorkflowDebugTrace.Step(
-            "Email.BodyRender",
-            $"gate hasRenderer={hasRenderer} hasGmailId={hasGmailId} hasHtml={hasHtml} hasBody={hasBody} gmailId={_gmailMessageId ?? "(none)"} htmlLen={_htmlBody?.Length ?? 0}");
-
         if (!hasRenderer || !hasGmailId || !hasHtml || !hasBody)
         {
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step(
-                "Email.BodyRender",
-                $"plain-mode viewer={GetHashCode()} bodyLen={BodyText?.Length ?? 0} useRichWas={UseRichBodyRenderer}");
-
             if (UseRichBodyRenderer)
             {
                 UseRichBodyRenderer = false;
@@ -147,11 +131,6 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         var loaded = await _bodyRenderer!.LoadAsync(
             new EmailBodyRenderRequest(BodyText, _htmlBody, _gmailMessageId, _inlineImages),
             CancellationToken.None).ConfigureAwait(true);
-
-        // TEMP WF-DEBUG
-        WorkflowDebugTrace.Step(
-            "Email.BodyRender",
-            $"LoadAsync loaded={loaded} stillSame={string.Equals(_gmailMessageId, messageId, StringComparison.Ordinal)}");
 
         if (!loaded
             || !string.Equals(_gmailMessageId, messageId, StringComparison.Ordinal)

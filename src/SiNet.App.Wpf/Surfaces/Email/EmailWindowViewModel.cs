@@ -537,19 +537,11 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // TEMP WF-DEBUG
-        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
-            $"target inbox={inboxMessageId} uid={inboxMessage.MessageUniqueId ?? "(null)"} imid={inboxMessage.InternetMessageId ?? "(null)"} subject='{inboxMessage.Subject}'");
-
         var correlated = EmailList.TrySelectByInboxCorrelation(
             inboxMessage.MessageUniqueId,
             inboxMessage.InternetMessageId,
             inboxMessage.Subject,
             inboxMessage.FromAddress);
-
-        // TEMP WF-DEBUG
-        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
-            $"correlate result={correlated} selectedAfter={SelectedEmail?.InternetMessageId ?? SelectedEmail?.Id ?? "(none)"}");
 
         if (correlated)
         {

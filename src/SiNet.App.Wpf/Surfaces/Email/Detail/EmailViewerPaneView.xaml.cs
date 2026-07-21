@@ -29,11 +29,6 @@ public partial class EmailViewerPaneView : UserControl
 
     private void OnDataContextChanged(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
     {
-        // TEMP WF-DEBUG
-        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
-            "Email.BodyRender",
-            $"view DataContextChanged view={GetHashCode()} vm={(e.NewValue as EmailViewerPaneViewModel)?.GetHashCode().ToString() ?? "(not-vm)"} hasRenderer={_bodyRenderer is not null}");
-
         if (e.NewValue is EmailViewerPaneViewModel vm)
         {
             if (_bodyRenderer?.IsAvailable == true)

@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using SiNet.Application.Abstractions.Email;
-using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email.Detail;
 
 namespace SiNetProjectManagerV2.Services.Email;
@@ -65,11 +64,6 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         // plain-text fallback with the previous email's HTML (observed in manual QA).
         host.ClearValue(UIElement.VisibilityProperty);
 
-        // TEMP WF-DEBUG
-        WorkflowDebugTrace.Step(
-            "Email.BodyRender",
-            $"AttachHost hostHash={host.GetHashCode()} webViewHash={_webView.GetHashCode()} pending={_pendingRequest is not null}");
-
         if (_pendingRequest is not null)
         {
             var pending = _pendingRequest;
@@ -85,10 +79,6 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         if (_webView is null || _host is null)
         {
             _pendingRequest = request;
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step(
-                "Email.BodyRender",
-                $"LoadAsync deferred (no host) gmailId={request.GmailMessageId ?? "(none)"} htmlLen={request.HtmlBody?.Length ?? 0}");
             return false;
         }
 
@@ -112,19 +102,12 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
             // Visibility is owned by the XAML style DataTrigger (UseRichBodyRenderer) — remove any
             // stale local value so the trigger keeps working.
             _host.ClearValue(UIElement.VisibilityProperty);
-
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step(
-                "Email.BodyRender",
-                $"NavigateToString ok gmailId={request.GmailMessageId ?? "(none)"} htmlLen={html.Length} inlineImages={request.InlineImages.Count} coreReady={_webView.CoreWebView2 is not null}");
             return true;
         }
         catch (Exception ex)
         {
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step(
-                "Email.BodyRender",
-                $"LoadAsync FAILED: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Trace.TraceWarning(
+                $"[EmailBodyRenderer] LoadAsync failed: {ex.GetType().Name}: {ex.Message}");
             return false;
         }
     }
@@ -151,9 +134,6 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         // Visibility stays owned by the XAML style DataTrigger (UseRichBodyRenderer) — a local
         // value here would outrank the trigger and freeze the host visible/hidden.
         _host?.ClearValue(UIElement.VisibilityProperty);
-
-        // TEMP WF-DEBUG
-        WorkflowDebugTrace.Step("Email.BodyRender", "Clear content (WebView2 kept for surface)");
     }
 
     private async Task EnsureInitializedAsync()
