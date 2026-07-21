@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Notifications;
 using SiNet.Application.Workflow;
 using SiNetSQL.Data;
@@ -47,6 +48,9 @@ public sealed class StalledWorkflowWatchdog(
             .Include(i => i.CurrentStage)
             .Where(i => i.Status == WorkflowStatus.Active && i.CurrentStageId != null)
             .ToListAsync(ct);
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Watchdog.Detect", $"activeInstances={activeInstances.Count} scan=starting");
 
         var stalled = new List<StalledWorkflowInfo>();
 
@@ -101,6 +105,11 @@ public sealed class StalledWorkflowWatchdog(
                 OpenTasks: 0));
         }
 
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step(
+            "Watchdog.Detect",
+            $"activeInstances={activeInstances.Count} stalled={stalled.Count} instances=[{string.Join(",", stalled.Select(s => s.InstanceId))}]");
+
         return stalled;
     }
 
@@ -117,6 +126,11 @@ public sealed class StalledWorkflowWatchdog(
 
         foreach (var info in stalledWorkflows)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Watchdog.Recovery",
+                $"instance={info.InstanceId} stage={info.StageName} task={info.MostRecentClosedTaskId?.ToString() ?? "(none)"} totalTasks={info.TotalTasks}");
+
             if (info.MostRecentClosedTaskId is not int taskId)
             {
                 try
@@ -125,6 +139,10 @@ public sealed class StalledWorkflowWatchdog(
                         new StalledWorkflowCommand(info.InstanceId, systemUserId), ct);
                     if (result is not null)
                     {
+                        // TEMP WF-DEBUG
+                        WorkflowDebugTrace.Step(
+                            "Watchdog.Recovery",
+                            $"instance={info.InstanceId} recovered=autoAdvance action={result.Action} targetStage={result.TargetStageId}");
                         Trace.TraceInformation(
                             "[Watchdog] Recovered 0-task workflow {0}: Action={1}, TargetStage={2}",
                             info.InstanceId, result.Action, result.TargetStageId);
@@ -136,6 +154,10 @@ public sealed class StalledWorkflowWatchdog(
                             new StalledWorkflowCommand(info.InstanceId, systemUserId), ct);
                         if (createdTaskCount > 0)
                         {
+                            // TEMP WF-DEBUG
+                            WorkflowDebugTrace.Step(
+                                "Watchdog.Recovery",
+                                $"instance={info.InstanceId} recovered=reprovision tasksCreated={createdTaskCount}");
                             Trace.TraceInformation(
                                 "[Watchdog] Recovered 0-task workflow {0} by provisioning {1} tasks.",
                                 info.InstanceId, createdTaskCount);
@@ -143,6 +165,10 @@ public sealed class StalledWorkflowWatchdog(
                         }
                         else
                         {
+                            // TEMP WF-DEBUG
+                            WorkflowDebugTrace.Step(
+                                "Watchdog.Recovery",
+                                $"instance={info.InstanceId} ORPHAN no auto-advance or reprovision");
                             await NotifyOrphanAsync(
                                     info,
                                     "0-task stage could not be auto-advanced or re-provisioned",
@@ -153,6 +179,10 @@ public sealed class StalledWorkflowWatchdog(
                 }
                 catch (Exception ex)
                 {
+                    // TEMP WF-DEBUG
+                    WorkflowDebugTrace.Step(
+                        "Watchdog.Recovery",
+                        $"instance={info.InstanceId} FAILED type={ex.GetType().Name} message={ex.Message}");
                     Trace.TraceError("[Watchdog] Recovery failed for 0-task workflow {0} (non-fatal): {1}", info.InstanceId, ex);
                 }
                 continue;
@@ -165,6 +195,10 @@ public sealed class StalledWorkflowWatchdog(
 
                 if (result is not null)
                 {
+                    // TEMP WF-DEBUG
+                    WorkflowDebugTrace.Step(
+                        "Watchdog.Recovery",
+                        $"instance={info.InstanceId} recovered=taskClosed task={taskId} action={result.Action} targetStage={result.TargetStageId}");
                     Trace.TraceInformation(
                         "[Watchdog] Recovered workflow {0}: Action={1}, TargetStage={2}",
                         info.InstanceId, result.Action, result.TargetStageId);
@@ -172,6 +206,10 @@ public sealed class StalledWorkflowWatchdog(
                 }
                 else
                 {
+                    // TEMP WF-DEBUG
+                    WorkflowDebugTrace.Step(
+                        "Watchdog.Recovery",
+                        $"instance={info.InstanceId} ORPHAN task={taskId} no advancing transition");
                     await NotifyOrphanAsync(
                             info,
                             $"stage '{info.StageName}' has no advancing transition after task #{taskId} closed",
@@ -181,6 +219,10 @@ public sealed class StalledWorkflowWatchdog(
             }
             catch (Exception ex)
             {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step(
+                    "Watchdog.Recovery",
+                    $"instance={info.InstanceId} task={taskId} FAILED type={ex.GetType().Name} message={ex.Message}");
                 Trace.TraceError("[Watchdog] Recovery failed for workflow {0}, task #{1} (non-fatal): {2}", info.InstanceId, taskId, ex);
             }
         }

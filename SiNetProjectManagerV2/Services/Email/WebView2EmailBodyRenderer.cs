@@ -5,7 +5,7 @@ using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using SiNet.Application.Abstractions.Email;
-using SiNet.Application.Diagnostics; // TEMP WF-DEBUG + agent debug
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email.Detail;
 
 namespace SiNetProjectManagerV2.Services.Email;
@@ -86,16 +86,6 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
             WorkflowDebugTrace.Step(
                 "Email.BodyRender",
                 $"LoadAsync deferred (no host) gmailId={request.GmailMessageId ?? "(none)"} htmlLen={request.HtmlBody?.Length ?? 0}");
-            // #region agent log
-            AgentDebugNdjson.Write("D", "WebView2EmailBodyRenderer.LoadAsync", "deferred-no-host",
-                new
-                {
-                    gmailId = request.GmailMessageId,
-                    requestInlineCount = request.InlineImages.Count,
-                    hasWebView = _webView is not null,
-                    hasHost = _host is not null,
-                });
-            // #endregion
             return false;
         }
 
@@ -106,25 +96,6 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
             RegisterInlineImages(request.InlineImages);
             var html = BuildHtmlDocument(request.HtmlBody, request.BodyText);
-            var stillHasCid = html.Contains("cid:", StringComparison.OrdinalIgnoreCase);
-            var rewrittenCount = System.Text.RegularExpressions.Regex.Matches(
-                html, InlineImageHost, System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
-
-            // #region agent log
-            AgentDebugNdjson.Write("D", "WebView2EmailBodyRenderer.LoadAsync", "before-navigate",
-                new
-                {
-                    gmailId = request.GmailMessageId,
-                    requestInlineCount = request.InlineImages.Count,
-                    registeredCount = _inlineImages.Count,
-                    htmlLen = html.Length,
-                    stillHasCid,
-                    rewrittenHostHits = rewrittenCount,
-                    handlerAttached = _webResourceHandlerAttached,
-                    coreReady = _webView.CoreWebView2 is not null,
-                });
-            // #endregion
-
             _webView.NavigateToString(html);
             // Clear may have set a local Collapsed; restore so the XAML DataTrigger can show the host.
             _host.Visibility = Visibility.Visible;
@@ -235,21 +206,7 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
             }
 
             var key = NormalizeContentId(Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')));
-            var found = _inlineImages.TryGetValue(key, out var entry);
-
-            // #region agent log
-            AgentDebugNdjson.Write("E", "WebView2EmailBodyRenderer.OnWebResourceRequested", "request",
-                new
-                {
-                    uri = e.Request.Uri,
-                    key,
-                    found,
-                    cacheCount = _inlineImages.Count,
-                    cacheKeys = _inlineImages.Keys.Take(5).ToArray(),
-                });
-            // #endregion
-
-            if (!found)
+            if (!_inlineImages.TryGetValue(key, out var entry))
             {
                 return;
             }

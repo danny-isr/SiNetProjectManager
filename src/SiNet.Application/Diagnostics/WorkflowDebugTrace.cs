@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 
 namespace SiNet.Application.Diagnostics;
 
@@ -21,6 +22,8 @@ public static class WorkflowDebugTrace
 {
     private static readonly object Gate = new();
     private static readonly Lazy<string> LogFilePath = new(ResolveLogFilePath);
+    private const string AgentDebugSessionId = "cbfc8f";
+    private const string AgentDebugLogPath = @"D:\repos2026\debug-cbfc8f.log";
     private static bool? _enabledOverride;
 
     /// <summary>Master on/off switch. See class remarks for the default resolution.</summary>
@@ -59,6 +62,21 @@ public static class WorkflowDebugTrace
             lock (Gate)
             {
                 File.AppendAllText(LogFilePath.Value, line + Environment.NewLine, Encoding.UTF8);
+
+                // #region agent log
+                var hypothesisId = ResolveAgentHypothesis(area);
+                var payload = JsonSerializer.Serialize(new
+                {
+                    sessionId = AgentDebugSessionId,
+                    runId = "workflow-manual-pre-fix",
+                    hypothesisId,
+                    location = $"WorkflowDebugTrace.Step/{area}",
+                    message = area,
+                    data = new { detail = message },
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                });
+                File.AppendAllText(AgentDebugLogPath, payload + Environment.NewLine, Encoding.UTF8);
+                // #endregion
             }
         }
         catch
@@ -66,6 +84,37 @@ public static class WorkflowDebugTrace
             // Best-effort file sink; ignore IO failures (locked file, missing dir, etc.).
         }
     }
+
+    // #region agent log
+    private static string ResolveAgentHypothesis(string area)
+    {
+        if (area.StartsWith("Review.", StringComparison.Ordinal)
+            || area.StartsWith("Email.File", StringComparison.Ordinal)
+            || area.StartsWith("Email.Move", StringComparison.Ordinal))
+            return "H3";
+
+        if (area.StartsWith("Email.", StringComparison.Ordinal)
+            || area.StartsWith("Engine.Start", StringComparison.Ordinal)
+            || area.StartsWith("Provisioning.", StringComparison.Ordinal))
+            return "H1";
+
+        if (area.StartsWith("TaskCompletion.", StringComparison.Ordinal)
+            || area.StartsWith("Evaluator.", StringComparison.Ordinal)
+            || area.StartsWith("Orchestrator.", StringComparison.Ordinal)
+            || area.StartsWith("Engine.Advance", StringComparison.Ordinal))
+            return "H2";
+
+        if (area.StartsWith("Workbench.", StringComparison.Ordinal)
+            || area.StartsWith("Engine.Pause", StringComparison.Ordinal)
+            || area.StartsWith("Engine.Resume", StringComparison.Ordinal))
+            return "H4";
+
+        if (area.StartsWith("Watchdog.", StringComparison.Ordinal))
+            return "H5";
+
+        return "H2";
+    }
+    // #endregion
 
     private static bool ResolveDefaultEnabled()
     {
