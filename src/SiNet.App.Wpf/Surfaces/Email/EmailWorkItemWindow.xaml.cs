@@ -20,7 +20,13 @@ public partial class EmailWorkItemWindow : Window
         DataContext = shellViewModel.EmailDetail;
         DetailHost.DataContext = shellViewModel.EmailDetail;
         DetailHost.SetBodyRenderer(bodyRenderer);
+
+        // Close this popup host when the task-driven filing flow completes (file + move + task close).
+        shellViewModel.EmailDetail.WorkItemDismissRequested += OnWorkItemDismissRequested;
+        Closed += (_, _) => shellViewModel.EmailDetail.WorkItemDismissRequested -= OnWorkItemDismissRequested;
     }
+
+    private void OnWorkItemDismissRequested() => Close();
 
     public EmailDetailViewModel DetailViewModel => _shellViewModel.EmailDetail;
 

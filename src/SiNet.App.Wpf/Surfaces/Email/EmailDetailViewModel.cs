@@ -444,6 +444,15 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // The ACC move can take a minute; a second click while the first move is in flight would
+        // start a duplicate move + duplicate task completion (observed in manual QA logs).
+        if (IsBusy)
+        {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step("Email.Move", "re-entry blocked — move already in progress");
+            return;
+        }
+
         var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
         if (projectId <= 0)
         {
@@ -452,6 +461,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         IsBusy = true;
+        SetStatus("מעביר את הקבצים לפרויקט… הפעולה עשויה להימשך עד דקה.");
         try
         {
             await RefreshMoveEligibilityAsync().ConfigureAwait(true);
@@ -531,8 +541,22 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Raised when a task-driven filing flow finished and the hosting surface should close.
+    /// Subscribed by <c>EmailWorkItemWindow</c> (popup host); the shell-hosted surface is
+    /// dismissed directly via <see cref="IShellContentHost"/>.
+    /// </summary>
+    public event Action? WorkItemDismissRequested;
+
     private void TryDismissFilingSurface()
     {
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.Move",
+            $"dismiss surface — shellHostAttached={_shellContentHost is { IsAttached: true }} windowSubscribers={WorkItemDismissRequested is not null}");
+
+        // Popup host (task-driven EmailWorkItemWindow): ask the window to close.
+        WorkItemDismissRequested?.Invoke();
+
         if (_shellContentHost is not { IsAttached: true })
         {
             return;
