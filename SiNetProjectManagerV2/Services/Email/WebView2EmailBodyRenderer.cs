@@ -60,7 +60,10 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         }
 
         host.Content = _webView;
-        host.Visibility = Visibility.Visible;
+        // Never set a LOCAL Visibility here: a local value outranks the XAML style DataTrigger
+        // (UseRichBodyRenderer) and would keep the WebView2 layer visible forever — covering the
+        // plain-text fallback with the previous email's HTML (observed in manual QA).
+        host.ClearValue(UIElement.VisibilityProperty);
 
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step(
@@ -91,14 +94,24 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
         try
         {
+            // CoreWebView2 needs an HWND to initialize, and an HWND exists only while the host is
+            // visible — but the XAML trigger keeps the host collapsed until the first load succeeds.
+            // Break that cycle: force visibility for the one-time init, then hand ownership back to
+            // the trigger (ClearValue below).
+            if (_webView.CoreWebView2 is null)
+            {
+                _host.Visibility = Visibility.Visible;
+            }
+
             await EnsureInitializedAsync().ConfigureAwait(true);
             EnsureWebResourceHandler();
 
             RegisterInlineImages(request.InlineImages);
             var html = BuildHtmlDocument(request.HtmlBody, request.BodyText);
             _webView.NavigateToString(html);
-            // Clear may have set a local Collapsed; restore so the XAML DataTrigger can show the host.
-            _host.Visibility = Visibility.Visible;
+            // Visibility is owned by the XAML style DataTrigger (UseRichBodyRenderer) — remove any
+            // stale local value so the trigger keeps working.
+            _host.ClearValue(UIElement.VisibilityProperty);
 
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step(
@@ -134,11 +147,10 @@ internal sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         }
 
         // Keep WebView2 attached to this host (Transient: one renderer per surface).
-        // Only hide — do not Dispose here; Dispose would force a cold CoreWebView2 init on next load.
-        if (_host is not null)
-        {
-            _host.Visibility = Visibility.Collapsed;
-        }
+        // Do not Dispose here; Dispose would force a cold CoreWebView2 init on next load.
+        // Visibility stays owned by the XAML style DataTrigger (UseRichBodyRenderer) — a local
+        // value here would outrank the trigger and freeze the host visible/hidden.
+        _host?.ClearValue(UIElement.VisibilityProperty);
 
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Email.BodyRender", "Clear content (WebView2 kept for surface)");

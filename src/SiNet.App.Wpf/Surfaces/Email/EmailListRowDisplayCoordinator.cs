@@ -95,6 +95,28 @@ internal sealed class EmailListRowDisplayCoordinator
         string? subject,
         string? fromAddress)
     {
+        var (match, matchedBy) = FindByInboxCorrelation(messageUniqueId, internetMessageId, subject, fromAddress);
+
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
+            $"correlate scan rows={_owner.Emails.Count} rowsWithImid={_owner.Emails.Count(static r => !string.IsNullOrWhiteSpace(r.InternetMessageId))} matchedBy={matchedBy} wantedImid='{internetMessageId ?? "(null)"}' wantedSubject='{subject ?? "(null)"}'");
+
+        if (match is null)
+        {
+            return false;
+        }
+
+        _owner.ClearPendingTaskSelection();
+        _owner.SelectedEmail = match;
+        return true;
+    }
+
+    private (EmailListRow? Match, string MatchedBy) FindByInboxCorrelation(
+        string? messageUniqueId,
+        string? internetMessageId,
+        string? subject,
+        string? fromAddress)
+    {
         EmailListRow? match = null;
 
         if (!string.IsNullOrWhiteSpace(messageUniqueId) || !string.IsNullOrWhiteSpace(internetMessageId))
@@ -102,23 +124,25 @@ internal sealed class EmailListRowDisplayCoordinator
             match = _owner.Emails.FirstOrDefault(row =>
                 EmailMessageIdMatcher.Matches(row.InternetMessageId, internetMessageId)
                 || EmailMessageIdMatcher.Matches(row.InternetMessageId, messageUniqueId));
+            if (match is not null)
+            {
+                return (match, "messageId");
+            }
         }
 
-        if (match is null && !string.IsNullOrWhiteSpace(subject))
+        if (!string.IsNullOrWhiteSpace(subject))
         {
             match = _owner.Emails.FirstOrDefault(row =>
                 string.Equals(row.Subject, subject, StringComparison.OrdinalIgnoreCase)
                 && (string.IsNullOrWhiteSpace(fromAddress)
                     || row.Sender.Contains(fromAddress, StringComparison.OrdinalIgnoreCase)));
+            if (match is not null)
+            {
+                return (match, "subject");
+            }
         }
 
-        if (match is null)
-        {
-            return false;
-        }
-
-        _owner.SelectedEmail = match;
-        return true;
+        return (null, "(none)");
     }
 
     public IReadOnlyList<EmailListRow> ApplyClientRowFilters(IReadOnlyList<EmailListRow> rows)
@@ -152,6 +176,26 @@ internal sealed class EmailListRowDisplayCoordinator
             _rebuildDisplayGroups();
         }
 
+        // Task-driven target wins over the first-row auto-selection: reloads triggered by the
+        // project-context change land in any order relative to the explicit task selection.
+        if (_owner.PendingTaskSelection is { } pending)
+        {
+            var (taskMatch, taskMatchedBy) = FindByInboxCorrelation(
+                pending.MessageUniqueId, pending.InternetMessageId, pending.Subject, pending.FromAddress);
+
+            // TEMP WF-DEBUG
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
+                $"ReplaceRows pending-task-target rows={rows.Count} matchedBy={taskMatchedBy}");
+
+            if (taskMatch is not null)
+            {
+                _owner.ClearPendingTaskSelection();
+                _owner.SelectedEmail = taskMatch;
+                _owner.NotifyUnreadDisplayProperties();
+                return;
+            }
+        }
+
         var projectGroup = _owner.GetProjectGroup();
         var selectionPool = _owner.FlatDisplayEmails.Count > 0 ? _owner.FlatDisplayEmails : _owner.Emails;
         _owner.SelectedEmail = preserveSelectionId is null
@@ -160,6 +204,11 @@ internal sealed class EmailListRowDisplayCoordinator
               ?? projectGroup?.Emails.FirstOrDefault(row => string.Equals(row.Id, preserveSelectionId, StringComparison.Ordinal))
               ?? selectionPool.FirstOrDefault()
               ?? projectGroup?.Emails.FirstOrDefault();
+
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
+            $"ReplaceRows rows={rows.Count} preserveId={preserveSelectionId ?? "(null)"} autoSelected={_owner.SelectedEmail?.Id ?? "(none)"}");
+
         _owner.NotifyUnreadDisplayProperties();
     }
 

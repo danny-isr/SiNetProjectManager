@@ -364,6 +364,13 @@ public sealed class GmailEmailGateway : IEmailGateway
                 cancellationToken).ConfigureAwait(false);
 
             var details = MapDetails(message);
+
+            // #region agent log
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "Email.Details",
+                $"parts gmailId={messageId} bodyLen={details.BodyText?.Length ?? 0} htmlLen={details.HtmlBody?.Length ?? 0} bodyPreview='{Truncate(details.BodyText, 60)}' tree={DescribePartTree(message.Payload)}");
+            // #endregion
+
             var inlineImages = await ResolveInlineImagesAsync(
                 gmail, messageId, message.Payload, details.HtmlBody, cancellationToken).ConfigureAwait(false);
             return inlineImages.Count == 0 ? details : details with { InlineImages = inlineImages };
@@ -806,6 +813,27 @@ public sealed class GmailEmailGateway : IEmailGateway
             CountAttachmentsRecursive(nested, ref count);
         }
     }
+
+    // #region agent log
+    private static string Truncate(string? value, int max) =>
+        string.IsNullOrEmpty(value) ? "(empty)" : value.Length <= max ? value : value[..max] + "…";
+
+    private static string DescribePartTree(MessagePart? part)
+    {
+        if (part is null)
+        {
+            return "(null)";
+        }
+
+        var self = $"{part.MimeType ?? "?"}[data={(part.Body?.Data?.Length ?? 0)},attId={(string.IsNullOrEmpty(part.Body?.AttachmentId) ? "no" : "yes")},size={part.Body?.Size ?? 0},file='{part.Filename ?? ""}']";
+        if (part.Parts is null || part.Parts.Count == 0)
+        {
+            return self;
+        }
+
+        return self + "(" + string.Join(";", part.Parts.Select(DescribePartTree)) + ")";
+    }
+    // #endregion
 
     private static (string BodyText, string? HtmlBody) ExtractBodies(MessagePart? payload)
     {

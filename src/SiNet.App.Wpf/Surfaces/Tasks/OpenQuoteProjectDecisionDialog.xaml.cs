@@ -267,7 +267,7 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
             {
                 // TEMP WF-DEBUG
                 WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
-                    $"FAILED — Gmail message not found for rfc822msgid (inbox={emailId})");
+                    $"FAILED — Gmail message not found for rfc822msgid (inbox={emailId}) rawMessageId='{rawMessageId}' pageItems={page.Items.Count}");
                 StatusMessage = "המייל לא אותר ב-Gmail — ניתן לשייך ידנית בשלב תיוק החומר.";
                 return;
             }

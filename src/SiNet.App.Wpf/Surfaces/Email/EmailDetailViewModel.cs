@@ -485,6 +485,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                     _workSurfaceContext?.TaskId,
                     _workSurfaceContext?.CompletionEventCode)).ConfigureAwait(true);
 
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.Move",
+                $"result ok={result.Succeeded} message={result.Message}");
+
             SetStatus(result.Message);
 
             var taskCompleted = false;

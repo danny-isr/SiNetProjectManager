@@ -328,6 +328,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         if (context is null)
         {
             _workSurfaceContext = null;
+            EmailList.ClearPendingTaskSelection();
             EmailDetail.ApplyWorkSurfaceContext(null);
             return;
         }
@@ -464,6 +465,27 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private async Task ApplyTaskContextCoreAsync(WorkSurfaceContext context)
     {
+        // Register the task's target email BEFORE the project change below: that change fires
+        // reloads (some fire-and-forget) that auto-select the first row, racing the explicit
+        // selection at the end of this method. With the pending target registered, every reload
+        // re-applies it as soon as the row is present.
+        EmailInboxMessageDto? inboxMessage = null;
+        if (context.PrimaryWorkTargetEntityId is int targetInboxId && _emailInboxQuery is not null)
+        {
+            inboxMessage = await _emailInboxQuery
+                .GetByIdAsync(targetInboxId)
+                .ConfigureAwait(true);
+
+            if (inboxMessage is not null)
+            {
+                EmailList.SetPendingTaskSelection(
+                    inboxMessage.MessageUniqueId,
+                    inboxMessage.InternetMessageId,
+                    inboxMessage.Subject,
+                    inboxMessage.FromAddress);
+            }
+        }
+
         if (context.ProjectId > 0)
         {
             var project = await _projectQuery
@@ -508,21 +530,28 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var inboxMessage = await _emailInboxQuery
-            .GetByIdAsync(inboxMessageId)
-            .ConfigureAwait(true);
-
+        // Row was already fetched (and the pending target registered) at the top of this method.
         if (inboxMessage is null)
         {
             StatusMessage = $"מייל #{inboxMessageId} לא נמצא במערכת.";
             return;
         }
 
-        if (EmailList.TrySelectByInboxCorrelation(
-                inboxMessage.MessageUniqueId,
-                inboxMessage.InternetMessageId,
-                inboxMessage.Subject,
-                inboxMessage.FromAddress))
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
+            $"target inbox={inboxMessageId} uid={inboxMessage.MessageUniqueId ?? "(null)"} imid={inboxMessage.InternetMessageId ?? "(null)"} subject='{inboxMessage.Subject}'");
+
+        var correlated = EmailList.TrySelectByInboxCorrelation(
+            inboxMessage.MessageUniqueId,
+            inboxMessage.InternetMessageId,
+            inboxMessage.Subject,
+            inboxMessage.FromAddress);
+
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.TaskContext",
+            $"correlate result={correlated} selectedAfter={SelectedEmail?.InternetMessageId ?? SelectedEmail?.Id ?? "(none)"}");
+
+        if (correlated)
         {
             StatusMessage = context.TaskId is int openedTaskId
                 ? $"נפתח מתוך משימה #{openedTaskId} — נבחר מייל \"{inboxMessage.Subject}\"."

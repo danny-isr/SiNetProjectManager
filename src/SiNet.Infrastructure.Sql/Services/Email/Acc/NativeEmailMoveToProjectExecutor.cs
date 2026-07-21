@@ -93,6 +93,10 @@ public sealed class NativeEmailMoveToProjectExecutor(
                                 && a.OriginalFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))))
             .ToList();
 
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
+            $"executor state inbox={message.Id} project={projectId} attachments={message.Attachments.Count} tagged={taggedNeedingFiling.Count} accProjectId={(string.IsNullOrEmpty(message.InboxAccProjectId) ? "(missing)" : "present")} accFolderId={(string.IsNullOrEmpty(message.InboxAccFolderId) ? "(missing)" : "present")} status={message.Status} task={command.TaskId?.ToString() ?? "(none)"}");
+
         if (taggedNeedingFiling.Count == 0 && command.TaskId is null)
         {
             return Deferred("אין קבצים מתויגים לתיוק. יש לתייג קודם את הקבצים בפרויקט.");
@@ -334,6 +338,10 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 Trace.TraceError($"[MoveToProject] Task completion reporting failed (filing itself succeeded). {ex}");
             }
         }
+
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
+            $"executor done inbox={message.Id} moved={movedCount} failed={failedCount} sameSource={alreadySameSourceCount} warnings={warningCount} of {taggedNeedingFiling.Count}");
 
         var summary = $"תויקו {movedCount}/{taggedNeedingFiling.Count} קבצים לפרויקט.";
         return failedCount == 0
@@ -932,9 +940,17 @@ public sealed class NativeEmailMoveToProjectExecutor(
         catch { /* ignore cleanup errors */ }
     }
 
-    private static EmailMoveToProjectCoordinatorResult Failed(string message) =>
-        new(EmailMoveToProjectOutcome.Failed, message);
+    private static EmailMoveToProjectCoordinatorResult Failed(string message)
+    {
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"executor FAILED: {message}");
+        return new(EmailMoveToProjectOutcome.Failed, message);
+    }
 
-    private static EmailMoveToProjectCoordinatorResult Deferred(string message) =>
-        new(EmailMoveToProjectOutcome.DeferredRequiresUi, message);
+    private static EmailMoveToProjectCoordinatorResult Deferred(string message)
+    {
+        // TEMP WF-DEBUG
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"executor DEFERRED: {message}");
+        return new(EmailMoveToProjectOutcome.DeferredRequiresUi, message);
+    }
 }

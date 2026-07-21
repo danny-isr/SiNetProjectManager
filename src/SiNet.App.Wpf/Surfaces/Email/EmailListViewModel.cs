@@ -662,6 +662,31 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         string? fromAddress) =>
         _display.TrySelectByInboxCorrelation(messageUniqueId, internetMessageId, subject, fromAddress);
 
+    private EmailTaskSelectionTarget? _pendingTaskSelection;
+
+    /// <summary>
+    /// Task-driven opens race the (fire-and-forget) list reloads triggered by the project-context
+    /// change: a reload finishing after the explicit selection resets it to the first row, and an
+    /// explicit selection running before rows exist silently misses. Registering the target here
+    /// lets every <c>ReplaceRows</c> re-apply it until the row shows up (observed in manual QA logs).
+    /// </summary>
+    internal EmailTaskSelectionTarget? PendingTaskSelection => _pendingTaskSelection;
+
+    internal void SetPendingTaskSelection(
+        string? messageUniqueId,
+        string? internetMessageId,
+        string? subject,
+        string? fromAddress) =>
+        _pendingTaskSelection = new EmailTaskSelectionTarget(messageUniqueId, internetMessageId, subject, fromAddress);
+
+    internal void ClearPendingTaskSelection() => _pendingTaskSelection = null;
+
+    internal sealed record EmailTaskSelectionTarget(
+        string? MessageUniqueId,
+        string? InternetMessageId,
+        string? Subject,
+        string? FromAddress);
+
     public string? GetContextMenuDisabledReason(EmailListRow? row, EmailContextMenuAction action) =>
         action == EmailContextMenuAction.UploadToAccInbox
             ? DescribeUploadToAccDisabledReason(row)

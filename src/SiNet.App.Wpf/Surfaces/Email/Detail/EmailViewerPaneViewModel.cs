@@ -69,7 +69,12 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         string? gmailMessageId,
         IReadOnlyList<SiNet.Application.Abstractions.Email.EmailInlineImage>? inlineImages = null)
     {
-        BodyText = bodyText;
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step(
+            "Email.BodyRender",
+            $"sync viewer={GetHashCode()} gmailId={gmailMessageId ?? "(none)"} bodyLen={bodyText?.Length ?? 0} htmlLen={htmlBody?.Length ?? 0}");
+
+        BodyText = bodyText ?? string.Empty;
         _htmlBody = htmlBody;
         _gmailMessageId = gmailMessageId;
         _inlineImages = inlineImages ?? [];
@@ -116,10 +121,22 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
 
         if (!hasRenderer || !hasGmailId || !hasHtml || !hasBody)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.BodyRender",
+                $"plain-mode viewer={GetHashCode()} bodyLen={BodyText?.Length ?? 0} useRichWas={UseRichBodyRenderer}");
+
             if (UseRichBodyRenderer)
             {
                 UseRichBodyRenderer = false;
                 OnPropertyChanged(nameof(UseRichBodyRenderer));
+            }
+
+            // Blank the previous email's HTML so it can never linger behind/over the
+            // plain-text fallback when this email has no rich body.
+            if (hasRenderer && hasGmailId)
+            {
+                _bodyRenderer!.Clear();
             }
 
             return;
