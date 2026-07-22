@@ -94,12 +94,33 @@ public sealed class NativeEmailMoveToProjectExecutor(
             .ToList();
 
         // TEMP WF-DEBUG
+        var withProjectFileId = message.Attachments.Count(a => a.ProjectFileId.HasValue);
+        var withAccItemId = message.Attachments.Count(a => !string.IsNullOrEmpty(a.AccItemId));
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
-            $"executor state inbox={message.Id} project={projectId} attachments={message.Attachments.Count} tagged={taggedNeedingFiling.Count} accProjectId={(string.IsNullOrEmpty(message.InboxAccProjectId) ? "(missing)" : "present")} accFolderId={(string.IsNullOrEmpty(message.InboxAccFolderId) ? "(missing)" : "present")} status={message.Status} task={command.TaskId?.ToString() ?? "(none)"}");
+            $"executor state inbox={message.Id} project={projectId} attachments={message.Attachments.Count} tagged={taggedNeedingFiling.Count} withProjectFileId={withProjectFileId} withAccItemId={withAccItemId} accProjectId={(string.IsNullOrEmpty(message.InboxAccProjectId) ? "(missing)" : "present")} accFolderId={(string.IsNullOrEmpty(message.InboxAccFolderId) ? "(missing)" : "present")} status={message.Status} task={command.TaskId?.ToString() ?? "(none)"}");
 
-        if (taggedNeedingFiling.Count == 0 && command.TaskId is null)
+        // Never treat "nothing to file" as success — including when a TaskId is present.
+        // (Manual QA: tagged=0 + TaskId returned Succeeded "0/0", completed the workflow, and closed the UI.)
+        if (taggedNeedingFiling.Count == 0)
         {
-            return Deferred("אין קבצים מתויגים לתיוק. יש לתייג קודם את הקבצים בפרויקט.");
+            string deferredMessage;
+            if (withProjectFileId == 0)
+            {
+                deferredMessage =
+                    "אין קבצים מתויגים ליעד בפרויקט.\n" +
+                    "ליד כל צרופה לחץ «בחר קובץ», בחר יעד ואלטרנטיבה, ואז העבר לפרויקט.";
+            }
+            else
+            {
+                deferredMessage =
+                    $"יש {withProjectFileId} קבצים מתויגים אך אינם מוכנים להעברה (חסר קישור ל-ACC Inbox).\n" +
+                    "ודא שהצרופות הועלו ל-ACC ואז נסה שוב.";
+            }
+
+            // TEMP WF-DEBUG
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
+                $"executor DEFERRED empty-tagged: {deferredMessage.Replace('\n', ' ')}");
+            return Deferred(deferredMessage);
         }
 
         // Duplicate-target validation — backend-only, no MessageBox.
@@ -335,8 +356,12 @@ public sealed class NativeEmailMoveToProjectExecutor(
             }
         }
 
-        // Task-completion reporting — non-fatal to the filing operation.
-        if (command.TaskId is int taskId && taskId > 0)
+        var allTransferred = failedCount == 0
+                             && taggedNeedingFiling.Count > 0
+                             && (movedCount + alreadySameSourceCount) >= taggedNeedingFiling.Count;
+
+        // Task-completion reporting — only when every tagged file was transferred.
+        if (allTransferred && command.TaskId is int taskId && taskId > 0)
         {
             try
             {
@@ -356,18 +381,30 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
         // TEMP WF-DEBUG
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
-            $"executor done inbox={message.Id} moved={movedCount} failed={failedCount} sameSource={alreadySameSourceCount} warnings={warningCount} of {taggedNeedingFiling.Count}");
+            $"executor done inbox={message.Id} moved={movedCount} failed={failedCount} sameSource={alreadySameSourceCount} warnings={warningCount} of {taggedNeedingFiling.Count} allTransferred={allTransferred}");
 
         var messageText = EmailMoveToProjectOutcomeDisplay.Build(
-            movedCount, taggedNeedingFiling.Count, attachmentFailures);
+            movedCount, taggedNeedingFiling.Count, attachmentFailures, alreadySameSourceCount);
         // TEMP WF-DEBUG
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
             $"userMessage={messageText.Replace("\r\n", " | ").Replace('\n', '|').Replace('\r', '|')}");
-        return failedCount == 0
+        return allTransferred
             ? new EmailMoveToProjectCoordinatorResult(
-                EmailMoveToProjectOutcome.Succeeded, messageText, movedCount, failedCount, attachmentFailures)
+                EmailMoveToProjectOutcome.Succeeded,
+                messageText,
+                movedCount,
+                failedCount,
+                attachmentFailures,
+                taggedNeedingFiling.Count,
+                alreadySameSourceCount)
             : new EmailMoveToProjectCoordinatorResult(
-                EmailMoveToProjectOutcome.Failed, messageText, movedCount, failedCount, attachmentFailures);
+                EmailMoveToProjectOutcome.Failed,
+                messageText,
+                movedCount,
+                failedCount,
+                attachmentFailures,
+                taggedNeedingFiling.Count,
+                alreadySameSourceCount);
     }
 
     private async Task<(bool Moved, bool Failed, bool SameSource, int Warnings)> FileZipFolderAsync(

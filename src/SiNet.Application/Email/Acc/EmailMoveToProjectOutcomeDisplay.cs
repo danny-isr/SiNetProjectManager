@@ -13,35 +13,59 @@ public static class EmailMoveToProjectOutcomeDisplay
     public static string Build(
         int movedCount,
         int totalCount,
-        IReadOnlyList<EmailMoveToProjectAttachmentFailure>? failures)
+        IReadOnlyList<EmailMoveToProjectAttachmentFailure>? failures,
+        int alreadySameSourceCount = 0)
     {
         var failedCount = failures?.Count ?? 0;
-        var summary = failedCount == 0
-            ? $"תויקו {movedCount}/{totalCount} קבצים לפרויקט."
-            : $"תויקו {movedCount}/{totalCount} קבצים ({failedCount} נכשלו).";
+        var completedCount = movedCount + alreadySameSourceCount;
+        var allDone = failedCount == 0 && totalCount > 0 && completedCount >= totalCount;
 
-        if (failures is null || failures.Count == 0)
-            return summary;
-
-        var sb = new StringBuilder(summary);
-        var shown = Math.Min(failures.Count, MaxFailureLines);
-        for (var i = 0; i < shown; i++)
+        string summary;
+        if (allDone)
         {
-            var f = failures[i];
-            sb.AppendLine();
-            sb.Append("• ");
-            sb.Append(string.IsNullOrWhiteSpace(f.FileName) ? $"קובץ #{f.InboxAttachmentId}" : f.FileName);
-            sb.Append(" — ");
-            sb.Append(ResolveKindHebrew(f.Kind, f.Detail));
+            summary = alreadySameSourceCount > 0 && movedCount == 0
+                ? $"כל {totalCount} הקבצים כבר היו מתויקים לפרויקט."
+                : $"תויקו {completedCount}/{totalCount} קבצים לפרויקט.";
+        }
+        else if (failedCount > 0)
+        {
+            summary = $"לא כל הקבצים הועברו: {completedCount}/{totalCount} ({failedCount} נכשלו).";
+        }
+        else
+        {
+            summary = $"לא כל הקבצים הועברו: {completedCount}/{totalCount}.";
         }
 
-        var remaining = failures.Count - shown;
-        if (remaining > 0)
+        var sb = new StringBuilder(summary);
+
+        if (failures is { Count: > 0 })
+        {
+            var shown = Math.Min(failures.Count, MaxFailureLines);
+            for (var i = 0; i < shown; i++)
+            {
+                var f = failures[i];
+                sb.AppendLine();
+                sb.Append("• ");
+                sb.Append(string.IsNullOrWhiteSpace(f.FileName) ? $"קובץ #{f.InboxAttachmentId}" : f.FileName);
+                sb.Append(" — ");
+                sb.Append(ResolveKindHebrew(f.Kind, f.Detail));
+            }
+
+            var remaining = failures.Count - shown;
+            if (remaining > 0)
+            {
+                sb.AppendLine();
+                sb.Append("• ועוד ");
+                sb.Append(remaining);
+                sb.Append(" כשלונות.");
+            }
+        }
+
+        if (!allDone)
         {
             sb.AppendLine();
-            sb.Append("• ועוד ");
-            sb.Append(remaining);
-            sb.Append(" כשלונות.");
+            sb.AppendLine();
+            sb.Append("המשימה לא נסגרה. תקן את הקבצים שנכשלו (או בחר יעד אחר) ונסה שוב.");
         }
 
         return sb.ToString();

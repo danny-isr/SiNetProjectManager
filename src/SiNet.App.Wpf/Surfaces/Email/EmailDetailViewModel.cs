@@ -10,6 +10,7 @@ using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
+using System.Windows;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
 
@@ -500,13 +501,14 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step(
                 "Email.Move",
-                $"result ok={result.Succeeded} message={result.Message}");
+                $"result ok={result.Succeeded} moved={result.MovedCount} failures={result.AttachmentFailures?.Count ?? 0} message={result.Message.Replace("\r\n", " | ").Replace('\n', '|').Replace('\r', '|')}");
 
-            SetStatus(result.Message);
+            PresentMoveOutcomeToUser(result);
 
             var taskCompleted = false;
             string? completionBlockReason = null;
-            if (result.Succeeded
+            // Close / complete only when EVERY tagged file was transferred.
+            if (result.AllFilesTransferred
                 && _workSurfaceContext?.TaskId is int taskId
                 && _taskCompletionService is not null
                 && TryResolveTaskCompletionParams(out var completionEventCode, out var actingUserId, out completionBlockReason))
@@ -522,8 +524,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
                 if (!completion.Success)
                 {
-                    SetStatus(
-                        $"העברה הצליחה אך השלמת המשימה נכשלה: {completion.ErrorMessage ?? "unknown error"}.");
+                    var failText =
+                        $"העברה הצליחה אך השלמת המשימה נכשלה: {completion.ErrorMessage ?? "unknown error"}.";
+                    SetStatus(failText);
+                    PresentMoveOutcomeDialog(failText, succeeded: false);
                 }
                 else
                 {
@@ -531,12 +535,14 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                     SetStatus("העברה והשלמת משימת התיוק הושלמו.");
                 }
             }
-            else if (result.Succeeded
+            else if (result.AllFilesTransferred
                      && _workSurfaceContext?.TaskId is int
                      && _taskCompletionService is not null
                      && !TryResolveTaskCompletionParams(out _, out _, out completionBlockReason))
             {
-                SetStatus($"העברה הצליחה אך השלמת המשימה נחסמה: {completionBlockReason}.");
+                var blocked = $"העברה הצליחה אך השלמת המשימה נחסמה: {completionBlockReason}.";
+                SetStatus(blocked);
+                PresentMoveOutcomeDialog(blocked, succeeded: false);
             }
 
             if (_selectedEmail is not null)
@@ -545,7 +551,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
             }
 
-            if (result.Succeeded && _workSurfaceContext?.TaskId is not null)
+            // Window closes only after all files transferred — never on partial/empty/failed.
+            if (result.AllFilesTransferred && _workSurfaceContext?.TaskId is not null)
             {
                 TryDismissFilingSurface();
             }
@@ -807,14 +814,33 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     private async Task RefreshInboxAttachmentsAsync(int loadVersion, string messageId)
     {
+        // #region agent log
+        // TEMP WF-DEBUG — tagging UI visibility (ShowTagSelector)
+        var taggingServicePresent = _attachmentTaggingService is not null;
+        var inboxIdOnRow = _selectedEmail?.InboxMessageId;
+        var projectFromContext = _currentProject.CurrentProject?.ProjectId;
+        var projectFromRow = _selectedEmail?.ProjectId;
+        WorkflowDebugTrace.Step(
+            "Email.TagUI",
+            $"refresh enter service={taggingServicePresent} inboxId={(inboxIdOnRow?.ToString() ?? "null")} projectCtx={projectFromContext?.ToString() ?? "null"} projectRow={projectFromRow?.ToString() ?? "null"} stripCount={AttachmentStrip.Attachments.Count} taskPrimary={_workSurfaceContext?.PrimaryWorkTargetEntityId?.ToString() ?? "null"}");
+        // #endregion
+
         if (_attachmentTaggingService is null || _selectedEmail?.InboxMessageId is not int inboxMessageId)
         {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"EARLY_EXIT no-inbox-id-or-service service={taggingServicePresent} inboxId={(inboxIdOnRow?.ToString() ?? "null")} — tagging chips stay hidden");
+            // #endregion
             return;
         }
 
         var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
         if (projectId <= 0)
         {
+            // #region agent log
+            WorkflowDebugTrace.Step("Email.TagUI", "EARLY_EXIT projectId<=0 — tagging chips stay hidden");
+            // #endregion
             return;
         }
 
@@ -824,6 +850,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         if (!IsCurrentSelection(messageId, loadVersion))
         {
+            // #region agent log
+            WorkflowDebugTrace.Step("Email.TagUI", "EARLY_EXIT selection-stale after LoadInboxAttachments");
+            // #endregion
             return;
         }
 
@@ -833,10 +862,16 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         if (!IsCurrentSelection(messageId, loadVersion))
         {
+            // #region agent log
+            WorkflowDebugTrace.Step("Email.TagUI", "EARLY_EXIT selection-stale after LoadAlternatives");
+            // #endregion
             return;
         }
 
         var matchedInboxIds = new HashSet<int>();
+        var appliedTaggable = 0;
+        var skippedNotTaggable = 0;
+        var unmatchedStrip = 0;
         foreach (var item in AttachmentStrip.Attachments.ToList())
         {
             if (string.Equals(item.Kind, "Loading", StringComparison.Ordinal)
@@ -849,12 +884,14 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 string.Equals(a.FileName, item.FileName, StringComparison.OrdinalIgnoreCase));
             if (match is null)
             {
+                unmatchedStrip++;
                 continue;
             }
 
             matchedInboxIds.Add(match.InboxAttachmentId);
             if (!match.IsTaggable)
             {
+                skippedNotTaggable++;
                 continue;
             }
 
@@ -865,8 +902,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 match.ProjectFileTitle,
                 match.ProjectAlternativeId,
                 alternatives);
+            appliedTaggable++;
         }
 
+        var appendedAcc = 0;
         foreach (var attachment in inboxAttachments.Where(a => a.IsTaggable && !matchedInboxIds.Contains(a.InboxAttachmentId)))
         {
             var item = CreateDisplayAttachmentItem(attachment.FileName, "ACC", string.Empty);
@@ -878,7 +917,16 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 attachment.ProjectAlternativeId,
                 alternatives);
             AttachmentStrip.Attachments.Add(item);
+            appendedAcc++;
         }
+
+        // #region agent log
+        var showTagCount = AttachmentStrip.Attachments.Count(a => a.ShowTagSelector);
+        var showAltCount = AttachmentStrip.Attachments.Count(a => a.ShowAlternativeSelector);
+        WorkflowDebugTrace.Step(
+            "Email.TagUI",
+            $"done inbox={inboxMessageId} project={projectId} sqlAtt={inboxAttachments.Count} taggableSql={inboxAttachments.Count(a => a.IsTaggable)} altCount={alternatives.Count} applied={appliedTaggable} skippedNotTaggable={skippedNotTaggable} unmatchedStrip={unmatchedStrip} appendedAcc={appendedAcc} showTag={showTagCount} showAlt={showAltCount}");
+        // #endregion
     }
 
     private async Task TagAttachmentAsync(EmailDetailAttachmentItem item)
@@ -952,9 +1000,17 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 alternativeId,
                 _currentUser?.UserId ?? 0)).ConfigureAwait(true);
 
+        // #region agent log
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step(
+            "Email.TagUI",
+            $"SetTag att={item.InboxAttachmentId} file='{item.FileName}' projectFileId={projectFileId} alt={alternativeId} ok={result.Succeeded} err={result.ErrorMessage ?? "(none)"}");
+        // #endregion
+
         if (!result.Succeeded)
         {
             SetStatus(result.ErrorMessage ?? "תיוג הצרופה נכשל.");
+            PresentMoveOutcomeDialog(result.ErrorMessage ?? "תיוג הצרופה נכשל.", succeeded: false);
             return;
         }
 
@@ -1138,6 +1194,30 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         completionEventCode = _workSurfaceContext.CompletionEventCode;
         actingUserId = userId;
         return true;
+    }
+
+    private void PresentMoveOutcomeToUser(EmailMoveToProjectResult result)
+    {
+        SetStatus(result.Message);
+        PresentMoveOutcomeDialog(result.Message, result.AllFilesTransferred);
+    }
+
+    private void PresentMoveOutcomeDialog(string message, bool succeeded)
+    {
+        // Always show a modal summary for task-driven filing so the operator cannot miss
+        // deferred/failed reasons (status strip alone was closed with the work-item window).
+        if (_workSurfaceContext?.TaskId is null)
+            return;
+
+        // TEMP WF-DEBUG
+        WorkflowDebugTrace.Step("Email.Move",
+            $"outcome dialog succeeded={succeeded} len={message.Length}");
+
+        MessageBox.Show(
+            message,
+            succeeded ? "תוצאת העברה לפרויקט" : "ההעברה לא הושלמה",
+            MessageBoxButton.OK,
+            succeeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
     private void SetStatus(string message)

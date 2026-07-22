@@ -31,6 +31,9 @@ internal sealed class SqlEmailMoveToProjectService(IEmailMoveToProjectCoordinato
             result.Outcome == EmailMoveToProjectOutcome.Succeeded,
             result.Message,
             result.MovedCount,
-            result.AttachmentFailures);
+            result.AttachmentFailures,
+            result.FailedCount,
+            result.TotalCount,
+            result.AlreadySameSourceCount);
     }
 }

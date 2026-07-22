@@ -7,6 +7,7 @@ using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
@@ -545,6 +546,13 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (correlated)
         {
+            // #region agent log
+            // TEMP WF-DEBUG
+            var sel = EmailList.SelectedEmail;
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"task-select ok task={context.TaskId} primaryTarget={inboxMessageId} selectedInboxId={sel?.InboxMessageId?.ToString() ?? "null"} selectedGmail={sel?.Id ?? "(none)"} project={_currentProject.CurrentProject?.ProjectId.ToString() ?? "null"}");
+            // #endregion
             StatusMessage = context.TaskId is int openedTaskId
                 ? $"נפתח מתוך משימה #{openedTaskId} — נבחר מייל \"{inboxMessage.Subject}\"."
                 : $"נבחר מייל \"{inboxMessage.Subject}\".";

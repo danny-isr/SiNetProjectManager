@@ -11,10 +11,11 @@ public sealed class EmailMoveToProjectOutcomeDisplayTests
         var text = EmailMoveToProjectOutcomeDisplay.Build(2, 2, []);
         Assert.Equal("תויקו 2/2 קבצים לפרויקט.", text);
         Assert.DoesNotContain("•", text);
+        Assert.DoesNotContain("המשימה לא נסגרה", text);
     }
 
     [Fact]
-    public void Build_includes_per_file_hebrew_lines_for_known_kinds()
+    public void Build_partial_failure_lists_files_and_keeps_task_open_message()
     {
         var failures = new[]
         {
@@ -25,9 +26,10 @@ public sealed class EmailMoveToProjectOutcomeDisplayTests
 
         var text = EmailMoveToProjectOutcomeDisplay.Build(0, 2, failures);
 
-        Assert.StartsWith("תויקו 0/2 קבצים (2 נכשלו).", text);
+        Assert.StartsWith("לא כל הקבצים הועברו: 0/2 (2 נכשלו).", text);
         Assert.Contains("• נספחים.pdf — יעד Google Drive אינו נתמך בתיוק (אין fallback).", text);
         Assert.Contains("• פוליסה.pdf — הקובץ נעול לעריכה ב-ACC (כנראה כבר תויק בעבר).", text);
+        Assert.Contains("המשימה לא נסגרה", text);
     }
 
     [Fact]
@@ -41,7 +43,27 @@ public sealed class EmailMoveToProjectOutcomeDisplayTests
 
         Assert.Contains("• ועוד 2 כשלונות.", text);
         Assert.Equal(EmailMoveToProjectOutcomeDisplay.MaxFailureLines,
-            text.Split('\n').Count(l => l.StartsWith('•') && !l.Contains("ועוד")));
+            text.Split('\n').Count(l => l.TrimStart().StartsWith('•') && !l.Contains("ועוד")));
+    }
+
+    [Fact]
+    public void AllFilesTransferred_requires_full_count()
+    {
+        var partial = new EmailMoveToProjectCoordinatorResult(
+            EmailMoveToProjectOutcome.Failed,
+            "x",
+            MovedCount: 1,
+            FailedCount: 1,
+            TotalCount: 2);
+        Assert.False(partial.AllFilesTransferred);
+
+        var full = new EmailMoveToProjectCoordinatorResult(
+            EmailMoveToProjectOutcome.Succeeded,
+            "x",
+            MovedCount: 2,
+            FailedCount: 0,
+            TotalCount: 2);
+        Assert.True(full.AllFilesTransferred);
     }
 
     [Theory]
