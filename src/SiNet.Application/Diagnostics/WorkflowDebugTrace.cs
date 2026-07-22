@@ -88,7 +88,8 @@ public static class WorkflowDebugTrace
     // #region agent log
     private static string ResolveAgentHypothesis(string area)
     {
-        if (area.StartsWith("Review.", StringComparison.Ordinal)
+        if (area.StartsWith("Acc.Provision", StringComparison.Ordinal)
+            || area.StartsWith("Review.", StringComparison.Ordinal)
             || area.StartsWith("Email.File", StringComparison.Ordinal)
             || area.StartsWith("Email.Move", StringComparison.Ordinal))
             return "H3";

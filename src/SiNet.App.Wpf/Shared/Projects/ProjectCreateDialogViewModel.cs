@@ -176,6 +176,9 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
 
     public string? CreatedPlaceTitle { get; private set; }
 
+    /// <summary>Non-fatal warning from create (e.g. ACC mapping provision failed).</summary>
+    public string? CreatedWarningMessage { get; private set; }
+
     public ICommand CreateCommand { get; }
 
     public ICommand CancelCommand { get; }
@@ -280,6 +283,7 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
             CreatedProjectId = result.ProjectId;
             CreatedProjectTitle = result.ProjectTitle;
             CreatedPlaceTitle = result.PlaceTitle;
+            CreatedWarningMessage = result.WarningMessage;
             RequestClose?.Invoke(true);
         }
         catch (Exception ex)

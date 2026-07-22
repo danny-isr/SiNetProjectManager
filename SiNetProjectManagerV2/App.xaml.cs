@@ -890,6 +890,10 @@ namespace SiNetProjectManagerV2
                     "services=[AccProjectProvisioningService, LocalAccInboxProvisioner].");
             }
 
+            // Application port used by SqlProjectCreateService after DB insert (best-effort).
+            services.AddTransient<SiNet.Application.Projects.IProjectAccMappingProvisioner,
+                ProjectAccMappingProvisionerAdapter>();
+
             // ACC Membership Reconciler: Singleton (single background worker, debounced Channel).
             // Re-syncs every ACC project's members with the local Siuser table when triggered.
             services.AddSingleton<IAccMembershipReconciler, AccMembershipReconciler>();

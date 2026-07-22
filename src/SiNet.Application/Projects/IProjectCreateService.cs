@@ -17,3 +17,12 @@ public interface IProjectFolderBootstrapper
 {
     void CreateFolders(int projectId);
 }
+
+/// <summary>
+/// Optional host hook to provision <c>ProjectAccMapping</c> (ACC project + folders) after DB insert.
+/// Implemented by the host via AccService / <c>IAccProjectProvisioningService</c>.
+/// </summary>
+public interface IProjectAccMappingProvisioner
+{
+    Task EnsureMappingAsync(int projectId, CancellationToken cancellationToken = default);
+}

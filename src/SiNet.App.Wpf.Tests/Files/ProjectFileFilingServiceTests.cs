@@ -112,10 +112,101 @@ public sealed class ProjectFileFilingServiceTests : IDisposable
         return (service, sourcePath);
     }
 
+    [Fact]
+    public async Task Acc_missing_mapping_triggers_on_demand_provision_then_uploads()
+    {
+        Directory.CreateDirectory(_rootDir);
+        var sourcePath = Path.Combine(_rootDir, "src.pdf");
+        await File.WriteAllTextAsync(sourcePath, "content");
+
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase("filing_acc_" + Guid.NewGuid().ToString("N"))
+            .Options;
+        var factory = new PooledFactory(options);
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Projects.Add(new Project { Id = 7, Number = 700, NameAndNumber = "(700)P", Title = "P" });
+            db.ProjectFiles.Add(new ProjectFile
+            {
+                Id = 7,
+                Number = 1,
+                TypeProjId = 1,
+                Title = "Doc",
+                StorageDestination = FileStorageDestination.Acc,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var provisioner = new RecordingAccProvisioner(factory);
+        var upload = new CapturingAccUploadService();
+        var metadataStore = new FileServerMetadataStore();
+        var service = new ProjectFileFilingService(
+            factory,
+            new FolderPathResolver(),
+            metadataStore,
+            new FileServerVersionArchiver(metadataStore),
+            new FixedRootResolver(_rootDir),
+            upload,
+            provisioner);
+
+        var result = await service.FileAsync(new FileProjectFileRequest(
+            ProjectId: 7,
+            ProjectFileId: 7,
+            ProjectAlternativeId: null,
+            SourceLocalPath: sourcePath,
+            OriginalFileName: "a.pdf",
+            SourceType: FileInstanceSourceType.EmailAttachment));
+
+        Assert.Equal(7, provisioner.LastProjectId);
+        Assert.Equal(FileStorageDestination.Acc, result.StorageDestination);
+        Assert.Equal("acc-item", result.TargetAccItemId);
+        Assert.Equal("b.proj", upload.LastAccProjectId);
+    }
+
+    private sealed class RecordingAccProvisioner(IDbContextFactory<SiNetSQLDbContext> factory)
+        : SiNet.Application.Projects.IProjectAccMappingProvisioner
+    {
+        public int? LastProjectId { get; private set; }
+
+        public async Task EnsureMappingAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            LastProjectId = projectId;
+            await using var db = await factory.CreateDbContextAsync(cancellationToken);
+            db.ProjectAccMappings.Add(new ProjectAccMapping
+            {
+                ProjectId = projectId,
+                AccProjectId = "b.proj",
+                AccTargetFolderId = "folder-1",
+                DocsStatus = DocsStatus.Ready,
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private sealed class CapturingAccUploadService : IAccFileUploadService
+    {
+        public string? LastAccProjectId { get; private set; }
+
+        public Task<AccFileUploadResult> UploadAsync(AccFileUploadRequest request, CancellationToken cancellationToken = default)
+        {
+            LastAccProjectId = request.ProjectId;
+            return Task.FromResult(new AccFileUploadResult(
+                FolderId: "folder-1",
+                ItemId: "acc-item",
+                VersionId: "acc-ver",
+                FileName: request.DisplayName,
+                AlreadySameSource: false));
+        }
+    }
+
     private sealed class PooledFactory(DbContextOptions<SiNetSQLDbContext> options)
         : IDbContextFactory<SiNetSQLDbContext>
     {
         public SiNetSQLDbContext CreateDbContext() => new(options);
+
+        public Task<SiNetSQLDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(CreateDbContext());
     }
 
     private sealed class FixedRootResolver(string root) : IFileServerRootResolver

@@ -210,6 +210,16 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         // here — immediately on creation — instead of waiting for a manual "שייך לפרויקט" in the
         // FileMaterial stage. Best-effort: a Gmail failure must not block the task completion; the
         // FileMaterial stage surface remains the manual retry path.
+        if (!string.IsNullOrWhiteSpace(_createVm.CreatedWarningMessage))
+        {
+            StatusMessage = _createVm.CreatedWarningMessage;
+            MessageBox.Show(
+                _createVm.CreatedWarningMessage,
+                "אזהרה ביצירת פרויקט",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
         StatusMessage = $"נוצר פרויקט #{_createVm.CreatedProjectId} — מתייג את המייל לפרויקט…";
         await TryAutoFileEmailToCreatedProjectAsync(_createVm.CreatedProjectId.Value).ConfigureAwait(true);
 

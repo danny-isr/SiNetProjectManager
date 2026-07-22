@@ -48,6 +48,7 @@ public static class ProjectQueryServiceCollectionExtensions
             new SqlProjectCreateService(
                 sp.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>(),
                 sp.GetService<IProjectFolderBootstrapper>(),
+                sp.GetService<IProjectAccMappingProvisioner>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<SqlProjectCreateService>>()));
         services.AddTransient<IPlaceCatalogService, SqlPlaceCatalogService>();
         services.AddTransient<ICompanyCatalogService, SqlCompanyCatalogService>();

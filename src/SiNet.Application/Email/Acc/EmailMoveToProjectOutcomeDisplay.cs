@@ -106,6 +106,12 @@ public static class EmailMoveToProjectOutcomeDisplay
             return "יעד Google Drive אינו נתמך בתיוק (אין fallback).";
         }
 
+        if (detail.Contains("ProjectAccMapping", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("Provision the ACC project mapping", StringComparison.OrdinalIgnoreCase))
+        {
+            return "חסר מיפוי ACC לפרויקט — יש להשלים את מיפוי הפרויקט ב-ACC לפני תיוק.";
+        }
+
         // Strip noisy exception type prefixes if present: "NotSupportedException: ..."
         var colon = detail.IndexOf(':');
         if (colon > 0 && colon < 64 && detail.AsSpan(0, colon).Contains("Exception", StringComparison.Ordinal))

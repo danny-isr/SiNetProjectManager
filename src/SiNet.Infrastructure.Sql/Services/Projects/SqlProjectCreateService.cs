@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Projects;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -9,6 +10,7 @@ namespace SiNet.Infrastructure.Sql.Services.Projects;
 internal sealed class SqlProjectCreateService(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
     IProjectFolderBootstrapper? folderBootstrapper = null,
+    IProjectAccMappingProvisioner? accMappingProvisioner = null,
     ILogger<SqlProjectCreateService>? logger = null) : IProjectCreateService
 {
     public const int MaxTitleLength = 24;
@@ -19,6 +21,7 @@ internal sealed class SqlProjectCreateService(
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly IProjectFolderBootstrapper? _folderBootstrapper = folderBootstrapper;
+    private readonly IProjectAccMappingProvisioner? _accMappingProvisioner = accMappingProvisioner;
     private readonly ILogger<SqlProjectCreateService>? _logger = logger;
 
     public async Task<decimal> GetNextProjectNumberAsync(CancellationToken cancellationToken = default)
@@ -204,6 +207,46 @@ internal sealed class SqlProjectCreateService(
             _logger?.LogError(ex, "[SqlProjectCreate] Failed to create folders for Project {ProjectId}", project.Id);
         }
 
-        return CreateProjectResult.Ok(project.Id, title, place.Title);
+        // ACC ProjectAccMapping — required before native MoveToProject can file to ACC.
+        // Best-effort: project create must succeed even if ACC provision is unavailable.
+        string? warning = null;
+        if (_accMappingProvisioner is not null)
+        {
+            try
+            {
+                // #region agent log
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step("Acc.Provision", $"EnsureMapping START project={project.Id}");
+                // #endregion
+                await _accMappingProvisioner
+                    .EnsureMappingAsync(project.Id, cancellationToken)
+                    .ConfigureAwait(false);
+                // #region agent log
+                WorkflowDebugTrace.Step("Acc.Provision", $"EnsureMapping OK project={project.Id}");
+                // #endregion
+            }
+            catch (Exception ex)
+            {
+                warning =
+                    $"הפרויקט נוצר, אך מיפוי ACC נכשל: {ex.Message}. תיוק קבצים ל-ACC לא יהיה זמין עד להשלמת המיפוי.";
+                _logger?.LogError(
+                    ex,
+                    "[SqlProjectCreate] Failed to provision ACC mapping for Project {ProjectId}",
+                    project.Id);
+                // #region agent log
+                WorkflowDebugTrace.Step(
+                    "Acc.Provision",
+                    $"EnsureMapping FAILED project={project.Id} {ex.GetType().Name}: {ex.Message}");
+                // #endregion
+            }
+        }
+        else
+        {
+            // #region agent log
+            WorkflowDebugTrace.Step("Acc.Provision", $"EnsureMapping SKIPPED — provisioner not registered (project={project.Id})");
+            // #endregion
+        }
+
+        return CreateProjectResult.Ok(project.Id, title, place.Title, warning);
     }
 }

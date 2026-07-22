@@ -27,10 +27,11 @@ public sealed record CreateProjectResult(
     int? ProjectId = null,
     string? ProjectTitle = null,
     string? PlaceTitle = null,
-    string? ErrorMessage = null)
+    string? ErrorMessage = null,
+    string? WarningMessage = null)
 {
-    public static CreateProjectResult Ok(int projectId, string title, string? placeTitle) =>
-        new(true, projectId, title, placeTitle);
+    public static CreateProjectResult Ok(int projectId, string title, string? placeTitle, string? warningMessage = null) =>
+        new(true, projectId, title, placeTitle, WarningMessage: warningMessage);
 
     public static CreateProjectResult Fail(string errorMessage) =>
         new(false, ErrorMessage: errorMessage);

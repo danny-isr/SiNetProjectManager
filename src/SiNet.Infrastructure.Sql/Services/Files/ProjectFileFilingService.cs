@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Diagnostics;
+using SiNet.Application.Projects;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -11,10 +13,10 @@ namespace SiNet.Infrastructure.Sql.Services.Files;
 /// a single source file into a target <see cref="ProjectFile"/> slot, handling both FileServer and
 /// ACC destinations. Native port of the legacy <c>SiNetSQL.Services.Files.ProjectFileFilingService</c>.
 /// <para>
-/// ACC writes go through the native <see cref="IAccFileUploadService"/> port (subject to
-/// ACC-Write-Policy). The legacy optional <c>IAccProjectProvisioningService</c> dependency is omitted
-/// in the native port: the target <c>ProjectAccMapping</c> must already exist, otherwise the ACC
-/// branch fails closed with a clear error. Routing is driven exclusively by
+/// ACC writes go through the native <see cref="IAccFileUploadService"/> port. When
+/// <see cref="IProjectAccMappingProvisioner"/> is available, a missing/incomplete
+/// <c>ProjectAccMapping</c> triggers on-demand <c>EnsureMappingAsync</c> (same idea as legacy
+/// optional AccProvisioning) before failing closed. Routing is driven exclusively by
 /// <c>ProjectFile.StorageDestination</c> — no silent fallback between backends.
 /// </para>
 /// </summary>
@@ -26,6 +28,7 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
     private readonly IFileServerVersionArchiver _versionArchiver;
     private readonly IFileServerRootResolver _fileServerRootResolver;
     private readonly IAccFileUploadService _accUploadService;
+    private readonly IProjectAccMappingProvisioner? _accMappingProvisioner;
 
     public ProjectFileFilingService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
@@ -33,7 +36,8 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
         IFileServerMetadataStore metadataStore,
         IFileServerVersionArchiver versionArchiver,
         IFileServerRootResolver fileServerRootResolver,
-        IAccFileUploadService accUploadService)
+        IAccFileUploadService accUploadService,
+        IProjectAccMappingProvisioner? accMappingProvisioner = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _folderPathResolver = folderPathResolver ?? throw new ArgumentNullException(nameof(folderPathResolver));
@@ -41,6 +45,7 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
         _versionArchiver = versionArchiver ?? throw new ArgumentNullException(nameof(versionArchiver));
         _fileServerRootResolver = fileServerRootResolver ?? throw new ArgumentNullException(nameof(fileServerRootResolver));
         _accUploadService = accUploadService ?? throw new ArgumentNullException(nameof(accUploadService));
+        _accMappingProvisioner = accMappingProvisioner;
     }
 
     public async Task<FileProjectFileResult> FileAsync(FileProjectFileRequest request, CancellationToken ct = default)
@@ -177,15 +182,7 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
         IReadOnlyList<string> folderPath,
         CancellationToken ct)
     {
-        var mapping = await db.ProjectAccMappings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.ProjectId == request.ProjectId, ct)
-            ?? throw new InvalidOperationException(
-                $"No ProjectAccMapping for project #{request.ProjectId}. Provision the ACC project mapping before filing to ACC.");
-
-        if (string.IsNullOrEmpty(mapping.AccProjectId) || string.IsNullOrEmpty(mapping.AccTargetFolderId))
-            throw new InvalidOperationException(
-                $"ProjectAccMapping for project #{request.ProjectId} is incomplete (AccProjectId/AccTargetFolderId missing).");
+        var mapping = await ResolveAccMappingAsync(db, request.ProjectId, ct).ConfigureAwait(false);
 
         var uploadRequest = new AccFileUploadRequest(
             mapping.AccProjectId!,
@@ -218,6 +215,75 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
             TargetProjectAlternativeId = request.ProjectAlternativeId is > 0 ? request.ProjectAlternativeId : null,
             AlreadySameSource = uploadResult.AlreadySameSource,
         };
+    }
+
+    /// <summary>
+    /// Loads <see cref="ProjectAccMapping"/>; if missing/incomplete and a provisioner is wired,
+    /// runs on-demand EnsureMapping then reloads. Fails closed with a clear error if still absent.
+    /// </summary>
+    private async Task<ProjectAccMapping> ResolveAccMappingAsync(
+        SiNetSQLDbContext db,
+        int projectId,
+        CancellationToken ct)
+    {
+        var mapping = await db.ProjectAccMappings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ProjectId == projectId, ct)
+            .ConfigureAwait(false);
+
+        var needsProvision = mapping is null
+            || string.IsNullOrEmpty(mapping.AccProjectId)
+            || string.IsNullOrEmpty(mapping.AccTargetFolderId);
+
+        if (needsProvision && _accMappingProvisioner is not null)
+        {
+            // #region agent log
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Acc.Provision",
+                $"on-demand EnsureMapping START project={projectId} reason={(mapping is null ? "missing" : "incomplete")}");
+            // #endregion
+            try
+            {
+                await _accMappingProvisioner.EnsureMappingAsync(projectId, ct).ConfigureAwait(false);
+                // #region agent log
+                WorkflowDebugTrace.Step("Acc.Provision", $"on-demand EnsureMapping OK project={projectId}");
+                // #endregion
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning(
+                    $"[ProjectFileFiling] EnsureMappingAsync failed for project #{projectId}: {ex.Message}");
+                // #region agent log
+                WorkflowDebugTrace.Step(
+                    "Acc.Provision",
+                    $"on-demand EnsureMapping FAILED project={projectId} {ex.GetType().Name}: {ex.Message}");
+                // #endregion
+                throw new InvalidOperationException(
+                    $"חסר מיפוי ACC לפרויקט #{projectId}, וניסיון המיפוי האוטומטי נכשל: {ex.Message}",
+                    ex);
+            }
+
+            // Reload after provision (same DbContext may have stale AsNoTracking cache — re-query).
+            mapping = await db.ProjectAccMappings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.ProjectId == projectId, ct)
+                .ConfigureAwait(false);
+        }
+
+        if (mapping is null)
+        {
+            throw new InvalidOperationException(
+                $"חסר מיפוי ACC לפרויקט #{projectId}. יש להשלים את מיפוי הפרויקט ב-ACC לפני תיוק.");
+        }
+
+        if (string.IsNullOrEmpty(mapping.AccProjectId) || string.IsNullOrEmpty(mapping.AccTargetFolderId))
+        {
+            throw new InvalidOperationException(
+                $"מיפוי ACC לפרויקט #{projectId} חלקי (חסר AccProjectId/AccTargetFolderId).");
+        }
+
+        return mapping;
     }
 
     private static AccFileSourceIdentity? BuildSourceIdentity(FileProjectFileRequest request)
