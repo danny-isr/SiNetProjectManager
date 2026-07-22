@@ -110,7 +110,10 @@
                                FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"
                                VerticalAlignment="Center"
-                               TextWrapping="Wrap" />
+                               TextWrapping="Wrap"
+                               MaxHeight="120"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding StatusMessage}" />
                     <TextBlock Grid.Column="1"
                                Text="{Binding BackgroundWorkDisplay}"
                                Foreground="#E65100"

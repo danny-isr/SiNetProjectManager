@@ -131,7 +131,19 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     internal EmailDetailSelectionCoordinator SelectionCoordinator => _selectionCoordinator;
 
-    public string StatusMessage { get; private set; } = string.Empty;
+    private string _statusMessage = string.Empty;
+
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        private set
+        {
+            if (SetField(ref _statusMessage, value))
+                OnPropertyChanged(nameof(HasStatusMessage));
+        }
+    }
+
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(_statusMessage);
 
     private void SetSelectedEmailContent(
         string bodyText,

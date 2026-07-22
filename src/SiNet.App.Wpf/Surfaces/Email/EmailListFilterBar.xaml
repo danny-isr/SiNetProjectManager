@@ -86,11 +86,11 @@
     <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
             BorderThickness="1"
             CornerRadius="4"
-            Padding="8,6"
+            Padding="8,4"
             Background="{DynamicResource SiBackgroundBrush}">
         <StackPanel>
-            <!-- Account status -->
-            <Grid Margin="0,0,0,6">
+            <!-- Row 1: account status + paging actions (merged; details moved to tooltip) -->
+            <Grid Margin="0,0,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -111,8 +111,45 @@
                                    Foreground="#1565C0"
                                    FontSize="{DynamicResource SiTextTinyFontSize}" />
                     </ToggleButton>
+                    <TextBlock Text="{Binding PageInfo}"
+                               Foreground="#666"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"
+                               VerticalAlignment="Center"
+                               Margin="10,0,0,0"
+                               Visibility="{Binding ShowAllEmailsPaging, Converter={StaticResource BoolToVis}}">
+                        <TextBlock.ToolTip>
+                            <StackPanel>
+                                <TextBlock>
+                                    <Run Text="נטענו " />
+                                    <Run Text="{Binding DisplayedCount, Mode=OneWay}" />
+                                    <Run Text=" · הבא: " />
+                                    <Run Text="{Binding HasNextPage, Mode=OneWay}" />
+                                    <Run Text=" · הקודם: " />
+                                    <Run Text="{Binding HasPreviousPage, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Text="{Binding MailboxDiagnostics}"
+                                           Margin="0,2,0,0"
+                                           Visibility="{Binding ShowMailboxDiagnostics, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </TextBlock.ToolTip>
+                    </TextBlock>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding ShowAllEmailsPaging, Converter={StaticResource BoolToVis}}">
+                        <Button Content="&#x25B6; 50 הקודמים"
+                                Command="{Binding LoadPreviousPageCommand}"
+                                Style="{StaticResource ActionButton}"
+                                IsEnabled="{Binding HasPreviousPage}" />
+                        <Button Content="50 הבאים &#x25C0;"
+                                Command="{Binding LoadNextPageCommand}"
+                                Style="{StaticResource ActionButton}"
+                                IsEnabled="{Binding HasNextPage}" />
+                        <ToggleButton Content="קבץ label"
+                                      IsChecked="{Binding GroupByLabel, Mode=OneWay}"
+                                      Command="{Binding ToggleGroupByLabelCommand}"
+                                      Style="{StaticResource ToggleActionButton}" />
+                    </StackPanel>
                     <Button Content="חבר Gmail"
                             Command="{Binding ConnectCommand}"
                             Style="{StaticResource ActionButton}"
@@ -129,50 +166,8 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Paging (all-emails mode) -->
-            <Border Padding="0,4"
-                    BorderBrush="#EEE"
-                    BorderThickness="0,1,0,0"
-                    Visibility="{Binding ShowAllEmailsPaging, Converter={StaticResource BoolToVis}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding PageInfo}"
-                                   Foreground="#666"
-                                   FontSize="{DynamicResource SiTextSmallFontSize}" />
-                        <TextBlock Foreground="#999"
-                                   FontSize="{DynamicResource SiTextTinyFontSize}"
-                                   Margin="0,2,0,0">
-                            <Run Text="נטענו " />
-                            <Run Text="{Binding DisplayedCount, Mode=OneWay}" />
-                            <Run Text=" · הבא: " />
-                            <Run Text="{Binding HasNextPage, Mode=OneWay}" />
-                            <Run Text=" · הקודם: " />
-                            <Run Text="{Binding HasPreviousPage, Mode=OneWay}" />
-                        </TextBlock>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Content="&#x25B6; 50 הקודמים"
-                                Command="{Binding LoadPreviousPageCommand}"
-                                Style="{StaticResource ActionButton}"
-                                IsEnabled="{Binding HasPreviousPage}" />
-                        <Button Content="50 הבאים &#x25C0;"
-                                Command="{Binding LoadNextPageCommand}"
-                                Style="{StaticResource ActionButton}"
-                                IsEnabled="{Binding HasNextPage}" />
-                        <ToggleButton Content="קבץ label"
-                                      IsChecked="{Binding GroupByLabel, Mode=OneWay}"
-                                      Command="{Binding ToggleGroupByLabelCommand}"
-                                      Style="{StaticResource ToggleActionButton}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Filters -->
-            <Border Padding="0,6,0,0"
+            <!-- Row 2: filters -->
+            <Border Padding="0,4,0,0"
                     BorderBrush="#EEE"
                     BorderThickness="0,1,0,0">
                 <StackPanel>
@@ -223,12 +218,14 @@
                                   Command="{Binding ToggleAttachmentsOnlyCommand}"
                                   Style="{StaticResource ToggleActionButton}" />
                 </WrapPanel>
+                <!-- Deprecated inline diagnostics row (2026-07): moved to PageInfo tooltip above to keep the bar at two rows.
+                     Kept collapsed (not deleted) in case the inline display needs to return; safe to remove after verification. -->
                 <TextBlock Text="{Binding MailboxDiagnostics}"
                            Foreground="{DynamicResource SiSecondaryBrush}"
                            FontSize="{DynamicResource SiTextTinyFontSize}"
                            Margin="0,4,0,0"
                            TextWrapping="Wrap"
-                           Visibility="{Binding ShowMailboxDiagnostics, Converter={StaticResource BoolToVis}}" />
+                           Visibility="Collapsed" />
                 </StackPanel>
             </Border>
         </StackPanel>

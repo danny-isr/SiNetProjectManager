@@ -71,6 +71,8 @@
 
                     <RowDefinition Height="Auto" />
 
+                    <RowDefinition Height="Auto" />
+
                 </Grid.RowDefinitions>
 
 
@@ -100,6 +102,23 @@
                                                      BorderBrush="#E0E0E0"
 
                                                      BorderThickness="0,1,0,0" />
+
+                <!-- Explicit action feedback (MoveToProject failures, filing status). Visible in work-item window too. -->
+                <Border Grid.Row="4"
+                        Background="#FFF8E1"
+                        BorderBrush="#FFE082"
+                        BorderThickness="0,1,0,0"
+                        Padding="8,6"
+                        Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Foreground="#5D4037"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
+                               TextWrapping="Wrap"
+                               MaxHeight="120"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding StatusMessage}" />
+                </Border>
 
             </Grid>
 

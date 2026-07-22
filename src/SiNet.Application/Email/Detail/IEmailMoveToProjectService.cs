@@ -18,4 +18,5 @@ public sealed record EmailMoveToProjectDetailCommand(
 public sealed record EmailMoveToProjectResult(
     bool Succeeded,
     string Message,
-    int MovedCount);
+    int MovedCount,
+    IReadOnlyList<SiNet.Application.Email.Acc.EmailMoveToProjectAttachmentFailure>? AttachmentFailures = null);

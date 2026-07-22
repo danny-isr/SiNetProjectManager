@@ -18,13 +18,16 @@ public sealed class EmailListMigrationBoundaryTests
     [Fact]
     public void Email_list_view_extracted_from_email_window()
     {
+        // The window hosts EmailSurfaceView, which in turn hosts EmailListView.
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
         var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
         var listVmSource = EmailListImplementationSource.ReadCombined();
 
-        Assert.Contains("EmailListView", xaml, StringComparison.Ordinal);
-        Assert.Contains("Binding EmailList", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailSurfaceView", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListView", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("Binding EmailList", surfaceXaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding DisplayGroups}\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding FlatDisplayEmails}\"", listXaml, StringComparison.Ordinal);
         Assert.Contains("EmailListItemCard", listXaml, StringComparison.Ordinal);

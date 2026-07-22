@@ -13,4 +13,5 @@ public sealed record EmailMoveToProjectCoordinatorResult(
     EmailMoveToProjectOutcome Outcome,
     string Message,
     int MovedCount = 0,
-    int FailedCount = 0);
+    int FailedCount = 0,
+    IReadOnlyList<EmailMoveToProjectAttachmentFailure>? AttachmentFailures = null);
