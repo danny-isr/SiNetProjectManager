@@ -16,10 +16,27 @@ namespace SiNetProjectManagerV2.WPFUserControl;
 public partial class FloatingProjectTasksView : FloatingWindowBase
 {
     private bool _isSaving;
+    // #region agent log
+    private static int _debugInstanceCount;
+    // #endregion
 
     public FloatingProjectTasksView()
     {
         InitializeComponent();
+
+        // #region agent log
+        var instanceCount = System.Threading.Interlocked.Increment(ref _debugInstanceCount);
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "Tasks.FloatWindow",
+            $"ctor liveInstanceCount={instanceCount}");
+        Closed += (_, _) =>
+        {
+            var remaining = System.Threading.Interlocked.Decrement(ref _debugInstanceCount);
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "Tasks.FloatWindow",
+                $"closed remainingInstanceCount={remaining}");
+        };
+        // #endregion
 
         var viewModel = App.ServiceProvider.GetRequiredService<FloatingProjectTasksViewModel>();
         DataContext = viewModel;

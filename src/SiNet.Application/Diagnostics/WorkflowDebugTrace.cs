@@ -88,6 +88,23 @@ public static class WorkflowDebugTrace
     // #region agent log
     private static string ResolveAgentHypothesis(string area)
     {
+        if (area.StartsWith("ProjectWork.AccOpen", StringComparison.Ordinal)
+            || area.StartsWith("ProjectWork.AccUrl", StringComparison.Ordinal))
+            return "H-A";
+
+        if (area.StartsWith("ProjectWork.LoadTree", StringComparison.Ordinal))
+            return "H-B";
+
+        if (area.StartsWith("Tasks.FloatWindow", StringComparison.Ordinal))
+            return "H-C";
+
+        if (area.StartsWith("ProjectWork.Results", StringComparison.Ordinal))
+            return "H-D";
+
+        if (area.StartsWith("ProjectWork.AccTabUi", StringComparison.Ordinal)
+            || area.StartsWith("ProjectWork.AccPopOut", StringComparison.Ordinal))
+            return "H-E";
+
         if (area.StartsWith("Acc.Provision", StringComparison.Ordinal)
             || area.StartsWith("Review.", StringComparison.Ordinal)
             || area.StartsWith("Email.File", StringComparison.Ordinal)

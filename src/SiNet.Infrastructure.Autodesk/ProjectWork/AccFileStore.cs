@@ -115,6 +115,11 @@ public sealed class AccFileStore : IFileStore
             yield break;
 
         var viewerUrl = BuildFolderViewerUrl(accProjectId, accFolderId);
+        // #region agent log
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.AccUrl",
+            $"ListFiles folder-only url hasEntityId={viewerUrl.Contains("entityId=", StringComparison.Ordinal)} folderIdLen={accFolderId.Length}");
+        // #endregion
 
         foreach (var entry in result.Entries)
         {

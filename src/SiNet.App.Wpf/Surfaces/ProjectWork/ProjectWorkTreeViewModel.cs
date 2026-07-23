@@ -440,6 +440,15 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 if (string.IsNullOrEmpty(version.AccViewerUrl))
                     return new FileOpenResult(FileOpenOutcome.NotFound);
 
+                // #region agent log
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "ProjectWork.AccOpen",
+                    $"title='{version.Title}' itemIdLen={(version.AccItemId?.Length ?? 0)} hasEntityId={version.AccViewerUrl!.Contains("entityId=", StringComparison.Ordinal)} hostAvailable={_accViewerHost?.IsAvailable == true}");
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "ProjectWork.AccTabUi",
+                    "open-path has no IsAccTabOpen tree feedback on new ProjectWork surface");
+                // #endregion
+
                 // Prefer the embedded ACC viewer (host-seam); fall back to an external browser tab.
                 if (_accViewerHost is { IsAvailable: true })
                 {

@@ -230,6 +230,15 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             AllowedResultCodes.Add(code);
         SelectedResultCode = AllowedResultCodes.Count == 1 ? AllowedResultCodes[0] : null;
 
+        // #region agent log
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.Results",
+            $"task=#{context.TaskId} comboShowsRawCodes=[{string.Join(",", AllowedResultCodes)}]");
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.AccPopOut",
+            "new ProjectWork surface has no AccDock/PopOut control");
+        // #endregion
+
         TaskHeader = string.IsNullOrWhiteSpace(context.TaskTypeCode)
             ? $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId}"
             : $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u2014 {context.TaskTypeCode}";
@@ -273,9 +282,21 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
     private async Task LoadTreeAsync(int projectId, CancellationToken cancellationToken)
     {
         if (_tree is null || projectId <= 0 || projectId == _lastLoadedProjectId)
+        {
+            // #region agent log
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "ProjectWork.LoadTree",
+                $"SKIP tree=null={_tree is null} projectId={projectId} lastLoaded={_lastLoadedProjectId}");
+            // #endregion
             return;
+        }
 
         _lastLoadedProjectId = projectId;
+        // #region agent log
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.LoadTree",
+            $"LOAD projectId={projectId}");
+        // #endregion
         try
         {
             await _tree.LoadProjectAsync(projectId, cancellationToken).ConfigureAwait(true);
