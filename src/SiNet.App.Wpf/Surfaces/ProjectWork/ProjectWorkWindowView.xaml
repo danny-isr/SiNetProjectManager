@@ -90,14 +90,22 @@
             </StackPanel>
         </HierarchicalDataTemplate>
 
-        <!-- Folder: contains subfolders + files. -->
+        <!-- Folder: contains subfolders + files.
+             Gray = empty; Blue = project-type defs only; Green = physical scanned files. -->
         <HierarchicalDataTemplate DataType="{x:Type local:ProjectFolderNodeVm}" ItemsSource="{Binding Children}">
             <TextBlock FontWeight="SemiBold">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Foreground" Value="#FF9CA3AF" />
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding HasFiles}" Value="True">
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasDefinedFiles}" Value="True" />
+                                    <Condition Binding="{Binding HasPhysicalFiles}" Value="False" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Foreground" Value="#FF1565C0" />
+                            </MultiDataTrigger>
+                            <DataTrigger Binding="{Binding HasPhysicalFiles}" Value="True">
                                 <Setter Property="Foreground" Value="#FF047857" />
                             </DataTrigger>
                         </Style.Triggers>
@@ -127,7 +135,13 @@
             <!-- Header: project context -->
             <StackPanel Grid.Row="0" Margin="0,0,0,8">
                 <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Foreground="#FF1F2937" />
-                <TextBlock Text="{Binding ActiveProjectDisplay}" FontSize="13" Foreground="#FF4B5563" Margin="0,2,0,0" />
+                <TextBlock Text="{Binding ActiveProjectDisplay}"
+                           FontSize="13"
+                           Foreground="#FF4B5563"
+                           Margin="0,2,0,0"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding ActiveProjectDisplay}" />
             </StackPanel>
 
             <!-- Project selector (browse mode only — hidden in task mode) -->
@@ -156,9 +170,17 @@
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1" CornerRadius="6">
-                    <TreeView x:Name="FileTree" BorderThickness="0" Background="Transparent"
-                              ItemsSource="{Binding Tree.RootFolders}"
-                              ItemContainerStyle="{StaticResource TreeItemStyle}" />
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Margin="8,6,8,2"
+                                   FontSize="11"
+                                   Foreground="#FF6B7280"
+                                   TextWrapping="Wrap"
+                                   Text="ירוק = קבצים פיזיים · כחול = לפי סוג פרויקט · אפור = ריק" />
+                        <TreeView x:Name="FileTree" BorderThickness="0" Background="Transparent"
+                                  ItemsSource="{Binding Tree.RootFolders}"
+                                  ItemContainerStyle="{StaticResource TreeItemStyle}" />
+                    </DockPanel>
                 </Border>
 
                 <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center"

@@ -271,6 +271,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 node.Children.RemoveAt(i);
         }
         node.HasFiles = false;
+        node.HasDefinedFiles = false;
     }
 
     private async Task<int> ScanFolderAsync(
@@ -404,14 +405,20 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private static bool RefreshHasFiles(ProjectFolderNodeVm folder)
     {
-        var hasFiles = folder.Children.OfType<ProjectFileNodeVm>()
+        var hasPhysical = folder.Children.OfType<ProjectFileNodeVm>()
             .Any(f => f.Children.OfType<AlternativeNodeVm>().Any(a => a.Children.Count > 0));
+        var hasDefined = folder.Children.OfType<ProjectFileNodeVm>()
+            .Any(f => !f.IsUnfiled && f.FileId is not null);
 
         foreach (var child in folder.Children.OfType<ProjectFolderNodeVm>())
-            hasFiles |= RefreshHasFiles(child);
+        {
+            hasPhysical |= RefreshHasFiles(child);
+            hasDefined |= child.HasDefinedFiles;
+        }
 
-        folder.HasFiles = hasFiles;
-        return hasFiles;
+        folder.HasPhysicalFiles = hasPhysical;
+        folder.HasDefinedFiles = hasDefined;
+        return hasPhysical;
     }
 
     private static string FormatDetails(ScannedFile sf)

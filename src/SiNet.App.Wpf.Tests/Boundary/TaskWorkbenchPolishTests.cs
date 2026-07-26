@@ -21,11 +21,13 @@ public sealed class TaskWorkbenchPolishTests
         var dialogXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskCreateDialogView.xaml");
 
         Assert.Contains("SiBackgroundBrush", xaml, StringComparison.Ordinal);
+        Assert.Contains("TaskWorkbenchCompactButton", xaml, StringComparison.Ordinal);
         Assert.Contains("SiSecondaryButtonStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiPrimaryButtonStyle", dialogXaml, StringComparison.Ordinal);
         Assert.Contains("SiTextSmallStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiTextLargeStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiComboBoxStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("SiTextSmallFontSize", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("#F5F5F5", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Foreground=\"#333\"", xaml, StringComparison.OrdinalIgnoreCase);
     }

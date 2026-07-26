@@ -12,7 +12,7 @@ public sealed class TaskWorkbenchProjectFilterClearTests
     public void Project_filter_clear_button_visible_when_project_selected()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        var filterSection = ExtractSection(xaml, "<!-- Context / filter area -->", "<Border Grid.Row=\"3\"");
+        var filterSection = ExtractSection(xaml, "<!-- Context / filter area -->", "<Expander Grid.Row=\"3\"");
 
         Assert.Contains("ClearSelectedProjectCommand", filterSection, StringComparison.Ordinal);
         Assert.Contains("Content=\"נקה\"", filterSection, StringComparison.Ordinal);

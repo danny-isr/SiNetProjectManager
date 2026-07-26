@@ -78,6 +78,21 @@ public sealed class ProjectWorkTreeViewModelTests
         Assert.Equal(1, version.VersionNumber);
         Assert.False(string.IsNullOrEmpty(version.FullPath));
         Assert.True(folder.HasFiles);
+        Assert.True(folder.HasPhysicalFiles);
+        Assert.True(folder.HasDefinedFiles);
+    }
+
+    [Fact]
+    public async Task LoadProjectAsync_defs_without_scan_mark_defined_not_physical()
+    {
+        var sut = CreateSut();
+
+        await sut.LoadProjectAsync(5);
+
+        var folder = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(sut.RootFolders));
+        Assert.False(folder.HasPhysicalFiles);
+        Assert.False(folder.HasFiles);
+        Assert.True(folder.HasDefinedFiles);
     }
 
     [Fact]

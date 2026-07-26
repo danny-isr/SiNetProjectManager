@@ -20,13 +20,26 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
+        <Style x:Key="TaskWorkbenchCompactButton" TargetType="Button">
+            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Margin" Value="0,0,3,3" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
         <Style x:Key="TaskCardBorder" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="10,8" />
-            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="7,5" />
+            <Setter Property="Margin" Value="0,0,0,5" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
         </Style>
 
@@ -66,8 +79,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Queue position + created -->
-                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                    <Grid Grid.Row="0" Margin="0,0,0,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -75,8 +87,8 @@
                         <Border Grid.Column="0"
                                 Background="{DynamicResource SiSecondaryBrush}"
                                 CornerRadius="3"
-                                Padding="6,2"
-                                Margin="0,0,8,0"
+                                Padding="4,1"
+                                Margin="0,0,6,0"
                                 VerticalAlignment="Center"
                                 ToolTip="מיקום בתור">
                             <StackPanel Orientation="Horizontal">
@@ -97,39 +109,36 @@
                                    Opacity="0.75" />
                     </Grid>
 
-                    <!-- Title -->
                     <TextBlock Grid.Row="1"
                                Text="{Binding Title}"
-                               Style="{DynamicResource SiTextNormalStyle}"
+                               Style="{DynamicResource SiTextSmallStyle}"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap"
                                TextTrimming="CharacterEllipsis"
-                               MaxHeight="44"
+                               MaxHeight="36"
                                ToolTip="{Binding Title}"
-                               Margin="0,0,0,4" />
+                               Margin="0,0,0,2" />
 
-                    <!-- Type + status -->
-                    <Grid Grid.Row="2" Margin="0,0,0,4">
+                    <Grid Grid.Row="2" Margin="0,0,0,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
                                    Text="{Binding TaskTypeName}"
-                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
                                    TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding TaskTypeName}" />
                         <Border Grid.Column="1"
                                 Background="{DynamicResource SiSecondaryBrush}"
                                 CornerRadius="3"
-                                Padding="6,2"
-                                Margin="8,0,0,0">
+                                Padding="4,1"
+                                Margin="6,0,0,0">
                             <TextBlock Text="{Binding StatusName}"
                                        Style="{DynamicResource SiTextTinyStyle}" />
                         </Border>
                     </Grid>
 
-                    <!-- Project + assignee + due -->
                     <Grid Grid.Row="3">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -140,7 +149,7 @@
                                    Text="{Binding ProjectId, StringFormat=פרויקט {0}}"
                                    Style="{DynamicResource SiTextTinyStyle}"
                                    Foreground="{DynamicResource SiPrimaryBrush}"
-                                   Margin="0,0,8,0" />
+                                   Margin="0,0,6,0" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding AssignedToUserName}"
                                    Style="{DynamicResource SiTextTinyStyle}"
@@ -149,7 +158,7 @@
                         <TextBlock Grid.Column="2"
                                    Text="{Binding DueDate, StringFormat=יעד {0:dd/MM}}"
                                    Style="{DynamicResource SiTextTinyStyle}"
-                                   Margin="8,0,0,0"
+                                   Margin="6,0,0,0"
                                    Opacity="0.8" />
                     </Grid>
                 </Grid>
@@ -164,14 +173,13 @@
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Padding" Value="2,1" />
             <EventSetter Event="MouseDoubleClick" Handler="TaskList_OnMouseDoubleClick" />
         </Style>
     </Window.Resources>
 
-    <Grid Margin="8" Background="{DynamicResource SiBackgroundBrush}">
+    <Grid Margin="6" Background="{DynamicResource SiBackgroundBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -181,32 +189,46 @@
         </Grid.RowDefinitions>
 
         <!-- Title -->
-        <TextBlock Grid.Row="0"
-                   Text="{Binding Title}"
-                   Style="{DynamicResource SiTextLargeStyle}"
-                   Margin="0,0,0,6"
-                   TextWrapping="Wrap" />
+        <Grid Grid.Row="0" Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Title}"
+                       Style="{DynamicResource SiTextLargeStyle}"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding StatusMessage}"
+                       Style="{DynamicResource SiTextTinyStyle}"
+                       Margin="8,0,0,0"
+                       MaxWidth="160"
+                       TextWrapping="Wrap"
+                       Opacity="0.85"
+                       VerticalAlignment="Center" />
+        </Grid>
 
         <!-- Actions toolbar -->
-        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
-            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4" />
-            <Button Content="פתח משימה" Command="{Binding OpenTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4" />
-            <Button Content="הוסף משימה" Command="{Binding AddTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,4">
+            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{StaticResource TaskWorkbenchCompactButton}" />
+            <Button Content="פתח משימה" Command="{Binding OpenTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}" />
+            <Button Content="הוסף משימה" Command="{Binding AddTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+            <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="השבת משימה" Command="{Binding DeactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+            <Button Content="השבת משימה" Command="{Binding DeactivateTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     ToolTip="השבתת משימה מפעילת Workflow משהה את ה-Workflow ושומרת את המשימה להפעלה מחדש."
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="הפעל מחדש" Command="{Binding ReactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+            <Button Content="הפעל מחדש" Command="{Binding ReactivateTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     ToolTip="הפעלת משימה מושבתת מחדש ומחדשת את ה-Workflow המושהה."
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     ToolTip="{Binding QueueMoveStatusHint}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
+            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     ToolTip="{Binding QueueMoveStatusHint}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </WrapPanel>
@@ -215,32 +237,34 @@
         <Border Grid.Row="2"
                 BorderBrush="{DynamicResource SiSecondaryBrush}"
                 BorderThickness="1"
-                Padding="6"
-                Margin="0,0,0,6"
+                Padding="4"
+                Margin="0,0,0,4"
                 CornerRadius="4"
                 Background="{DynamicResource SiBackgroundBrush}">
             <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="מציג משימות:"
-                           Style="{DynamicResource SiTextNormalStyle}"
+                           Style="{DynamicResource SiTextSmallStyle}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Margin="0,0,8,4" />
+                           Margin="0,0,6,2" />
                 <ComboBox ItemsSource="{Binding AvailableScopes}"
                           SelectedValuePath="Scope"
                           DisplayMemberPath="DisplayName"
                           SelectedValue="{Binding SelectedScope}"
                           IsEnabled="{Binding CanSelectTaskScope}"
                           Style="{DynamicResource SiComboBoxStyle}"
-                          MinWidth="140"
+                          FontSize="{DynamicResource SiTextSmallFontSize}"
+                          MinWidth="120"
                           VerticalAlignment="Center"
-                          Margin="0,0,8,4" />
+                          Margin="0,0,6,2" />
                 <ComboBox ItemsSource="{Binding AvailableUsers}"
                           SelectedValuePath="UserId"
                           DisplayMemberPath="DisplayName"
                           SelectedValue="{Binding SelectedUserId}"
                           Style="{DynamicResource SiComboBoxStyle}"
-                          MinWidth="140"
-                          Margin="0,0,8,4"
+                          FontSize="{DynamicResource SiTextSmallFontSize}"
+                          MinWidth="120"
+                          Margin="0,0,6,2"
                           VerticalAlignment="Center"
                           Visibility="{Binding IsSpecificUserScope, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <ComboBox.ToolTip>
@@ -248,23 +272,22 @@
                     </ComboBox.ToolTip>
                 </ComboBox>
                 <TextBlock Text="פרויקט:"
-                           Style="{DynamicResource SiTextNormalStyle}"
+                           Style="{DynamicResource SiTextSmallStyle}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Margin="0,0,8,4"
+                           Margin="0,0,6,2"
                            Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <projects:ProjectSelectorView DataContext="{Binding LocalProjectFilterSelector}"
                                               CompactMode="True"
-                                              SearchBoxWidth="160"
+                                              SearchBoxWidth="140"
                                               ShowUserFilter="False"
                                               VerticalAlignment="Center"
-                                              Margin="0,0,8,4"
+                                              Margin="0,0,6,2"
                                               Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <Button Content="נקה"
                         Command="{Binding ClearSelectedProjectCommand}"
-                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                        Style="{StaticResource TaskWorkbenchCompactButton}"
                         VerticalAlignment="Center"
-                        Margin="0,0,8,4"
                         IsEnabled="{Binding CanClearSelectedProject}"
                         Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Button.ToolTip>
@@ -272,31 +295,23 @@
                     </Button.ToolTip>
                 </Button>
                 <TextBlock Text="{Binding ProjectFilterDisplayText}"
-                           Style="{DynamicResource SiTextSmallStyle}"
+                           Style="{DynamicResource SiTextTinyStyle}"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap"
-                           Margin="0,0,0,4" />
+                           Margin="0,0,0,2" />
             </WrapPanel>
         </Border>
 
-        <Border Grid.Row="3"
-                BorderBrush="{DynamicResource SiSecondaryBrush}"
-                BorderThickness="1"
-                Padding="6"
-                Margin="0,0,0,6"
-                CornerRadius="4"
-                Background="{DynamicResource SiBackgroundBrush}">
-            <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" Style="{DynamicResource SiTextSmallStyle}" TextWrapping="Wrap" />
-        </Border>
-
-        <TextBlock Grid.Row="4"
-                   Text="{Binding StatusMessage}"
-                   Style="{DynamicResource SiTextSmallStyle}"
-                   Margin="0,0,0,6"
-                   TextWrapping="Wrap" />
+        <Expander Grid.Row="3"
+                  Header="אבחון"
+                  IsExpanded="False"
+                  Margin="0,0,0,4"
+                  FontSize="{DynamicResource SiTextTinyFontSize}">
+            <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" Style="{DynamicResource SiTextTinyStyle}" TextWrapping="Wrap" Margin="4,2" />
+        </Expander>
 
         <!-- Task buckets: main content area -->
-        <TabControl Grid.Row="5"
+        <TabControl Grid.Row="4"
                     Background="{DynamicResource SiBackgroundBrush}"
                     VerticalAlignment="Stretch"
                     HorizontalAlignment="Stretch">
@@ -318,18 +333,18 @@
         </TabControl>
 
         <!-- Resolve preview: collapsed by default, limited height -->
-        <Expander Grid.Row="6"
+        <Expander Grid.Row="5"
                   Header="Resolve preview (WorkSurfaceContext)"
                   IsExpanded="False"
-                  Margin="0,6,0,0"
+                  Margin="0,4,0,0"
                   MaxHeight="160">
-            <Grid Margin="8">
+            <Grid Margin="6">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" MaxHeight="96" />
                 </Grid.RowDefinitions>
                 <Button Grid.Row="0" Content="בדוק פתיחה / Resolve" Command="{Binding ResolveCommand}"
-                        Style="{DynamicResource SiSecondaryButtonStyle}" HorizontalAlignment="Right" Margin="0,0,0,8" />
+                        Style="{DynamicResource SiSecondaryButtonStyle}" HorizontalAlignment="Right" Margin="0,0,0,6" />
                 <TextBox Grid.Row="1" Text="{Binding ResolvePreview, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Style="{DynamicResource SiTextBoxStyle}" />
             </Grid>

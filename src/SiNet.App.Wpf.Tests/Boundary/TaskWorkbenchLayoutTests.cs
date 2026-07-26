@@ -70,7 +70,7 @@ public sealed class TaskWorkbenchLayoutTests
         var tabSection = ExtractBetween(xaml, "<!-- Task buckets: main content area -->", "<!-- Resolve preview");
 
         Assert.Contains("Height=\"*\" MinHeight=\"200\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"5\"", tabSection, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"4\"", tabSection, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Stretch\"", tabSection, StringComparison.Ordinal);
         Assert.Contains("ListBox", tabSection, StringComparison.Ordinal);
         Assert.Contains("QuickTasks", tabSection, StringComparison.Ordinal);
@@ -95,7 +95,7 @@ public sealed class TaskWorkbenchLayoutTests
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
 
-        Assert.Contains("<Expander Grid.Row=\"6\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Expander Grid.Row=\"5\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsExpanded=\"False\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MaxHeight=\"160\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("GroupBox Grid.Row=\"6\" Header=\"Resolve preview", xaml, StringComparison.Ordinal);

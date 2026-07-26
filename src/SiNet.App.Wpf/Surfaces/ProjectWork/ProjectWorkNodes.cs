@@ -42,13 +42,32 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
     /// <summary>Resolved absolute file-server path, when known.</summary>
     public string? FullPath { get; set; }
 
-    private bool _hasFiles;
+    private bool _hasPhysicalFiles;
+    private bool _hasDefinedFiles;
 
-    /// <summary>True when this folder (or a descendant) contains at least one file — drives icon color.</summary>
+    /// <summary>True when this folder (or a descendant) has at least one scanned physical version.</summary>
+    public bool HasPhysicalFiles
+    {
+        get => _hasPhysicalFiles;
+        set
+        {
+            if (SetField(ref _hasPhysicalFiles, value))
+                OnPropertyChanged(nameof(HasFiles));
+        }
+    }
+
+    /// <summary>True when this folder (or a descendant) has project-type file definitions (non-unfiled).</summary>
+    public bool HasDefinedFiles
+    {
+        get => _hasDefinedFiles;
+        set => SetField(ref _hasDefinedFiles, value);
+    }
+
+    /// <summary>Alias for <see cref="HasPhysicalFiles"/> — kept for existing callers/tests.</summary>
     public bool HasFiles
     {
-        get => _hasFiles;
-        set => SetField(ref _hasFiles, value);
+        get => HasPhysicalFiles;
+        set => HasPhysicalFiles = value;
     }
 }
 

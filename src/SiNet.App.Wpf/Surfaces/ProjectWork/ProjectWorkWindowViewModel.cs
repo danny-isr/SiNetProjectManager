@@ -561,10 +561,35 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
     private static string FormatProjectDisplay(ProjectSummaryDto project)
     {
-        var number = string.IsNullOrWhiteSpace(project.ProjectNumber) ? null : project.ProjectNumber.Trim();
-        var name = string.IsNullOrWhiteSpace(project.ProjectName) ? null : project.ProjectName.Trim();
+        static string? Clean(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        var parts = new List<string>();
+        var number = Clean(project.ProjectNumber);
+        var name = Clean(project.ProjectName);
         if (number is not null && name is not null)
-            return $"{number} \u2014 {name}";
-        return name ?? number ?? $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {project.ProjectId}";
+            parts.Add($"{number} \u2014 {name}");
+        else if (name is not null)
+            parts.Add(name);
+        else if (number is not null)
+            parts.Add(number);
+        else
+            parts.Add($"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {project.ProjectId}");
+
+        void Add(string? label, string? value)
+        {
+            var v = Clean(value);
+            if (v is null)
+                return;
+            parts.Add(label is null ? v : $"{label} {v}");
+        }
+
+        Add(null, project.PlaceName);
+        Add(null, project.CompanyName);
+        Add("\u05E1\u05D5\u05D2", project.JobType);
+        Add("\u05E1\u05D8\u05D8\u05D5\u05E1", project.Status);
+        Add("\u05D0\u05D7\u05E8\u05D0\u05D9", project.AssignedUserName);
+
+        return string.Join(" \u00B7 ", parts);
     }
 }
