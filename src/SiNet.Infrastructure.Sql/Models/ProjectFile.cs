@@ -26,6 +26,12 @@ public partial  class ProjectFile
     public bool? OutSidData { get; set; }
 
     /// <summary>
+    /// When true, this catalog slot is mandatory for completion of tasks that gate on required files
+    /// (e.g. PrepareQuoteCalculation / תחשיב). Missing physical versions are shown as orange in ProjectWork.
+    /// </summary>
+    public bool IsRequired { get; set; }
+
+    /// <summary>
     /// Default storage destination for files of this type.
     /// FileServer = network share (legacy), Acc = Autodesk Construction Cloud.
     /// </summary>

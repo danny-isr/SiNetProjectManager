@@ -1,6 +1,7 @@
 using System.IO;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.ProjectWork;
+using SiNet.Infrastructure.Sql.Services.SeedData;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using DomainDest = SiNet.Domain.Files.FileStorageDestination;
@@ -109,13 +110,25 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
             Files: fileDtos);
     }
 
-    private static ProjectFileDefinitionDto ToFileDto(ProjectFile file) => new(
-        FileId: file.Id,
-        BaseName: file.Title ?? string.Empty,
-        Extension: string.IsNullOrEmpty(file.Title) ? string.Empty : Path.GetExtension(file.Title),
-        StorageDestination: (DomainDest)(int)file.StorageDestination,
-        FolderId: file.Folderid ?? 0,
-        ProjectType: file.TypeProjId,
-        Number: file.Number.HasValue ? (int)file.Number.Value : null,
-        TemplateLocation: string.IsNullOrWhiteSpace(file.TemplateLocation) ? null : file.TemplateLocation);
+    private static ProjectFileDefinitionDto ToFileDto(ProjectFile file)
+    {
+        var rawTitle = file.Title ?? string.Empty;
+        var baseName = file.IsRequired
+            && ProjectFileRequiredTachshivSeedData.IsTachshivCatalogTitle(rawTitle)
+                ? ProjectFileRequiredTachshivSeedData.DisplayTitle
+                : rawTitle;
+
+        return new(
+            FileId: file.Id,
+            BaseName: baseName,
+            Extension: string.IsNullOrEmpty(file.Typefile)
+                ? (string.IsNullOrEmpty(rawTitle) ? string.Empty : Path.GetExtension(rawTitle))
+                : (file.Typefile.StartsWith('.') ? file.Typefile : "." + file.Typefile.TrimStart('.')),
+            StorageDestination: (DomainDest)(int)file.StorageDestination,
+            FolderId: file.Folderid ?? 0,
+            ProjectType: file.TypeProjId,
+            Number: file.Number.HasValue ? (int)file.Number.Value : null,
+            TemplateLocation: string.IsNullOrWhiteSpace(file.TemplateLocation) ? null : file.TemplateLocation,
+            IsRequired: file.IsRequired);
+    }
 }

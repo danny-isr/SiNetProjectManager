@@ -440,6 +440,12 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        if (RequiresTachshivPhysicalFile(context) && !HasRequiredTachshivSatisfied())
+        {
+            StatusMessage = "יש להעלות את קובץ התחשיב לפני סיום המשימה.";
+            return false;
+        }
+
         IsBusy = true;
         try
         {
@@ -518,6 +524,14 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             : $"Cannot complete: no single completion event maps to result '{resolvedResultCode}' for this task.";
         return false;
     }
+
+    private const string PrepareQuoteCalculationTaskType = "PrepareQuoteCalculation";
+
+    private static bool RequiresTachshivPhysicalFile(WorkSurfaceContext context) =>
+        string.Equals(context.TaskTypeCode, PrepareQuoteCalculationTaskType, StringComparison.Ordinal);
+
+    private bool HasRequiredTachshivSatisfied() =>
+        _tree is not null && _tree.HasAllRequiredPhysicalFiles();
 
     private static bool TryResolveResultCode(
         WorkSurfaceContext context,

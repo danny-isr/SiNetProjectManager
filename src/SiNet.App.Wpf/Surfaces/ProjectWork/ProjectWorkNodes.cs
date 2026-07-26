@@ -44,6 +44,7 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
 
     private bool _hasPhysicalFiles;
     private bool _hasDefinedFiles;
+    private bool _hasRequiredMissing;
 
     /// <summary>True when this folder (or a descendant) has at least one scanned physical version.</summary>
     public bool HasPhysicalFiles
@@ -61,6 +62,15 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
     {
         get => _hasDefinedFiles;
         set => SetField(ref _hasDefinedFiles, value);
+    }
+
+    /// <summary>
+    /// True when this folder (or a descendant) has a required catalog file without a physical version.
+    /// </summary>
+    public bool HasRequiredMissing
+    {
+        get => _hasRequiredMissing;
+        set => SetField(ref _hasRequiredMissing, value);
     }
 
     /// <summary>Alias for <see cref="HasPhysicalFiles"/> — kept for existing callers/tests.</summary>
@@ -89,6 +99,42 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
     /// <summary>DB id of the folder that owns this file (used to resolve the storage folder handle).</summary>
     public int ParentFolderId { get; init; }
 
+    /// <summary>True when the catalog marks this slot as required (e.g. תחשיב).</summary>
+    public bool IsRequired { get; init; }
+
+    private bool _hasPhysicalVersions;
+    private bool _isRequiredMissing;
+
+    /// <summary>True when at least one physical version exists under any alternative.</summary>
+    public bool HasPhysicalVersions
+    {
+        get => _hasPhysicalVersions;
+        set
+        {
+            if (!SetField(ref _hasPhysicalVersions, value))
+                return;
+            OnPropertyChanged(nameof(ShowAddFileButton));
+            RefreshRequiredMissing();
+        }
+    }
+
+    /// <summary>True when <see cref="IsRequired"/> and no physical version has been scanned yet.</summary>
+    public bool IsRequiredMissing
+    {
+        get => _isRequiredMissing;
+        private set
+        {
+            if (SetField(ref _isRequiredMissing, value))
+                OnPropertyChanged(nameof(ShowAddFileButton));
+        }
+    }
+
+    /// <summary>
+    /// Shows an inline «הוסף קובץ…» action for empty definitions (required or regular).
+    /// </summary>
+    public bool ShowAddFileButton =>
+        !IsUnfiled && FileId is not null && !HasPhysicalVersions;
+
     /// <summary>Adds a new alternative/version to this file from a picked source file. Set by the tree view model.</summary>
     public ICommand? AddVersionCommand { get; set; }
 
@@ -102,6 +148,9 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
         FileStorageDestination.GoogleDrive => "Drive",
         _ => "FS",
     };
+
+    internal void RefreshRequiredMissing() =>
+        IsRequiredMissing = IsRequired && !IsUnfiled && !HasPhysicalVersions;
 }
 
 /// <summary>An alternative (variant) under a file. Children are its versions.</summary>

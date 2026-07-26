@@ -3039,6 +3039,11 @@ namespace SiNetSQL.Migrations
                     b.Property<bool?>("OutSidData")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("StorageDestination")
                         .HasColumnType("int");
 

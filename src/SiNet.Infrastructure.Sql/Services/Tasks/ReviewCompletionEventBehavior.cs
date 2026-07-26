@@ -392,29 +392,37 @@ public static class ReviewCompletionEventBehavior
             // the matching ReviewTaskInteractionRegistry entry. Project-status
             // updates are driven by the seed transition SetStatus actions, so
             // NewProjectStatusCode stays null here.
+            // QuoteCalculationCompleted — operator finished PrepareQuoteCalculation in ProjectWork.
+            // ClosesAssociatedTask: without it, a Pending ProjectWork WorkTarget blocks close
+            // (taskClosed=False / willAutoAdvance=False / closureReason=work-targets-pending) —
+            // seen in manual test 2026-07-26 task #19.
             new(ReviewCompletionEvents.QuoteCalculationCompleted,
                 new[] { TaskTypeCodes.PrepareQuoteCalculation },
                 new[] { TaskResultCodes.QuoteCalculationCompleted },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             new(ReviewCompletionEvents.QuoteDocumentPrepared,
                 new[] { TaskTypeCodes.PrepareQuoteDocument },
                 new[] { TaskResultCodes.QuotePrepared },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             new(ReviewCompletionEvents.QuoteInternallyApproved,
                 new[] { TaskTypeCodes.ApproveQuoteInternal },
                 new[] { TaskResultCodes.QuoteApprovedInternally, TaskResultCodes.QuoteRequiresRevision },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             new(ReviewCompletionEvents.QuoteApprovalTracked,
                 new[] { TaskTypeCodes.FollowQuoteApproval },
                 new[] { TaskResultCodes.QuoteApprovedByClient, TaskResultCodes.QuoteRejectedByClient },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // ProjectCloseDecided — generic CloseProject task (REV.Close /
             // PLN.Close). Distinct from CloseProjectTask/ReviewProjectClosed.

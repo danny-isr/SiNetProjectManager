@@ -257,7 +257,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 ProjectType = fileDto.ProjectType,
                 Number = fileDto.Number,
                 ParentFolderId = node.FolderId,
+                IsRequired = fileDto.IsRequired,
             };
+            fileNode.RefreshRequiredMissing();
             WireFileCommands(fileNode);
             node.Children.Add(fileNode);
         }
@@ -272,6 +274,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         }
         node.HasFiles = false;
         node.HasDefinedFiles = false;
+        node.HasRequiredMissing = false;
     }
 
     private async Task<int> ScanFolderAsync(
@@ -386,7 +389,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             ProjectType = def.ProjectType,
             Number = def.Number,
             ParentFolderId = folder.FolderId,
+            IsRequired = def.IsRequired,
         };
+        created.RefreshRequiredMissing();
         WireFileCommands(created);
         folder.Children.Add(created);
         return created;
@@ -405,20 +410,53 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private static bool RefreshHasFiles(ProjectFolderNodeVm folder)
     {
-        var hasPhysical = folder.Children.OfType<ProjectFileNodeVm>()
-            .Any(f => f.Children.OfType<AlternativeNodeVm>().Any(a => a.Children.Count > 0));
-        var hasDefined = folder.Children.OfType<ProjectFileNodeVm>()
-            .Any(f => !f.IsUnfiled && f.FileId is not null);
+        var hasPhysical = false;
+        var hasDefined = false;
+        var hasRequiredMissing = false;
+
+        foreach (var file in folder.Children.OfType<ProjectFileNodeVm>())
+        {
+            var physical = file.Children.OfType<AlternativeNodeVm>().Any(a => a.Children.Count > 0);
+            file.HasPhysicalVersions = physical;
+            file.RefreshRequiredMissing();
+
+            if (physical)
+                hasPhysical = true;
+            if (!file.IsUnfiled && file.FileId is not null)
+                hasDefined = true;
+            if (file.IsRequiredMissing)
+                hasRequiredMissing = true;
+        }
 
         foreach (var child in folder.Children.OfType<ProjectFolderNodeVm>())
         {
             hasPhysical |= RefreshHasFiles(child);
             hasDefined |= child.HasDefinedFiles;
+            hasRequiredMissing |= child.HasRequiredMissing;
         }
 
         folder.HasPhysicalFiles = hasPhysical;
         folder.HasDefinedFiles = hasDefined;
+        folder.HasRequiredMissing = hasRequiredMissing;
         return hasPhysical;
+    }
+
+    /// <summary>
+    /// Returns <see langword="false"/> when any required catalog file under the loaded tree
+    /// is missing a physical version (or when no required slot is present at all for the gate caller).
+    /// </summary>
+    public bool HasAllRequiredPhysicalFiles()
+    {
+        var required = EnumerateFileNodes(RootFolders)
+            .Where(f => f.IsRequired && !f.IsUnfiled)
+            .ToList();
+        return required.Count > 0 && required.All(f => f.HasPhysicalVersions);
+    }
+
+    /// <summary>True when at least one required catalog file is missing a physical version.</summary>
+    public bool HasRequiredFilesMissing()
+    {
+        return EnumerateFileNodes(RootFolders).Any(f => f.IsRequiredMissing);
     }
 
     private static string FormatDetails(ScannedFile sf)

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.DevTools;
 using SiNet.Application.Identity;
+using SiNet.Infrastructure.Sql.Services.SeedData;
 using SiNetSQL.Data;
 
 namespace SiNet.Infrastructure.Sql.Services.DevTools;
@@ -96,12 +97,32 @@ public sealed class SqlStaticSeedService : IStaticSeedService
         var wfResult = await SeedWorkflowDefinitionsAsync(ct).ConfigureAwait(false);
         if (!wfResult.Succeeded) errors.AddRange(wfResult.Errors);
 
+        var tachshivResult = await SeedRequiredTachshivCatalogAsync(ct).ConfigureAwait(false);
+        if (!tachshivResult.Succeeded) errors.AddRange(tachshivResult.Errors);
+
         return new SeedResult
         {
             Succeeded = errors.Count == 0,
-            Summary = $"Core seed: static={staticResult.Succeeded}, mappings={mapResult.Succeeded}, workflow={wfResult.Succeeded}",
+            Summary =
+                $"Core seed: static={staticResult.Succeeded}, mappings={mapResult.Succeeded}, " +
+                $"workflow={wfResult.Succeeded}, tachshiv={tachshivResult.Succeeded}",
             Errors = errors,
         };
+    }
+
+    public async ValueTask<SeedResult> SeedRequiredTachshivCatalogAsync(CancellationToken ct = default)
+    {
+        EnsureSeedAuthorized();
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+            var summary = await ProjectFileRequiredTachshivSeedData.EnsureAsync(db, ct).ConfigureAwait(false);
+            return Ok(summary);
+        }
+        catch (Exception ex)
+        {
+            return Fail(ex);
+        }
     }
 
     private void EnsureSeedAuthorized()

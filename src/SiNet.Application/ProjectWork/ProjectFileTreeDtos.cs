@@ -46,6 +46,7 @@ public sealed record ProjectFolderDto(
 /// <param name="ProjectType">Project type id (legacy <c>TypeProjId</c>) used to match scanned files.</param>
 /// <param name="Number">File number used to match scanned files; <see langword="null"/> when unset.</param>
 /// <param name="TemplateLocation">Template source path, when a template exists; <see langword="null"/> otherwise.</param>
+/// <param name="IsRequired">True when a physical version is required before gated task completion.</param>
 public sealed record ProjectFileDefinitionDto(
     int FileId,
     string BaseName,
@@ -54,4 +55,5 @@ public sealed record ProjectFileDefinitionDto(
     int FolderId,
     int? ProjectType,
     int? Number,
-    string? TemplateLocation);
+    string? TemplateLocation,
+    bool IsRequired = false);

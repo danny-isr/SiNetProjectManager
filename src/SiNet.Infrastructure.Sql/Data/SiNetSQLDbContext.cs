@@ -1196,6 +1196,8 @@ public partial class SiNetSQLDbContext : DbContext
                 .HasMaxLength(255)
                 .UseCollation("Hebrew_100_CI_AS")
                 .HasColumnName("TYPEFILE");
+            entity.Property(e => e.IsRequired)
+                .HasDefaultValue(false);
 
             entity.HasOne(d => d.Author).WithMany(p => p.ProjectFileAuthors)
                 .HasForeignKey(d => d.AuthorId)
