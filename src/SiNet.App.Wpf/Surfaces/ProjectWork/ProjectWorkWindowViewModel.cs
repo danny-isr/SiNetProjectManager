@@ -343,11 +343,21 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         try
         {
             await _tree.LoadProjectAsync(projectId, cancellationToken).ConfigureAwait(true);
+            if (_tree.RootFolders.Count == 0)
+            {
+                StatusMessage = string.IsNullOrWhiteSpace(_tree.ScanStatus)
+                    ? "עץ הקבצים ריק — לא נמצאו תיקיות לפרויקט."
+                    : _tree.ScanStatus;
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // A failed tree load must not break the task shell; the status bar reflects scan state.
+            // A failed tree load must not break the task shell; surface the cause in the status bar.
             _lastLoadedProjectId = 0;
+            StatusMessage = $"טעינת עץ הקבצים נכשלה: {ex.Message}";
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "ProjectWork.LoadTree",
+                $"FAIL projectId={projectId} {ex.GetType().Name}: {ex.Message}");
         }
     }
 

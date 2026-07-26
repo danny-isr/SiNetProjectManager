@@ -112,7 +112,7 @@ public sealed class ProjectWorkWindowViewModelTaskModeTests
         Assert.Equal("ReviewMaterialCheckCompleted", completion.LastCommand?.CompletionEventCode);
         Assert.Equal("MaterialComplete", completion.LastCommand?.TaskResultCode);
         Assert.Equal(7, completion.LastCommand?.UserId);
-        Assert.Contains("Completed task #10", sut.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("המשימה #10 הושלמה", sut.StatusMessage, StringComparison.Ordinal);
     }
 
     private static WorkSurfaceContext CreateContext() =>

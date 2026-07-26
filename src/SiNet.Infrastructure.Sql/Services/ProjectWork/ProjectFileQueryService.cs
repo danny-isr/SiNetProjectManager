@@ -32,6 +32,8 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
+        await ProjectFileSchemaPatches.EnsureIsRequiredColumnAsync(db, cancellationToken).ConfigureAwait(false);
+
         var project = await db.Projects.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken)
             .ConfigureAwait(false);

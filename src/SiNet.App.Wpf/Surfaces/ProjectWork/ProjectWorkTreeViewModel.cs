@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shell;
 using SiNet.Application.ProjectWork;
 using SiNet.Domain.Files;
 
@@ -111,29 +112,45 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _foldersById.Clear();
         _scanTargets.Clear();
 
-        var tree = await _query.GetProjectFileTreeAsync(projectId, token).ConfigureAwait(true);
-        if (tree is null)
+        try
         {
-            _currentProjectNumber = null;
+            var tree = await _query.GetProjectFileTreeAsync(projectId, token).ConfigureAwait(true);
+            if (tree is null)
+            {
+                _currentProjectNumber = null;
+                ScanStatus = "הפרויקט לא נמצא או שאין לו עץ קבצים.";
+                RegisterProviders();
+                return;
+            }
+
+            _currentProjectNumber = tree.ProjectNumber;
+
+            foreach (var rootDto in tree.RootFolders)
+            {
+                var node = BuildFolder(rootDto);
+                node.IsExpanded = true;
+                RootFolders.Add(node);
+            }
+
+            await ResolveFolderPathsAsync(projectId, token).ConfigureAwait(true);
             RegisterProviders();
-            return;
+
+            await RunScanAsync(projectId, token).ConfigureAwait(true);
+
+            if (!token.IsCancellationRequested)
+                await StartWatchingAsync(projectId, token).ConfigureAwait(true);
         }
-
-        _currentProjectNumber = tree.ProjectNumber;
-
-        foreach (var rootDto in tree.RootFolders)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            var node = BuildFolder(rootDto);
-            node.IsExpanded = true;
-            RootFolders.Add(node);
+            ScanStatus = "הסריקה בוטלה";
+            RegisterProviders();
         }
-
-        RegisterProviders();
-
-        await RunScanAsync(projectId, token).ConfigureAwait(true);
-
-        if (!token.IsCancellationRequested)
-            await StartWatchingAsync(projectId, token).ConfigureAwait(true);
+        catch (Exception ex)
+        {
+            ScanStatus = $"טעינת עץ הקבצים נכשלה: {ex.Message}";
+            RegisterProviders();
+            throw;
+        }
     }
 
     /// <summary>
@@ -188,21 +205,15 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private async Task StartWatchingAsync(int projectId, CancellationToken token)
     {
-        if (_watcher is null || _folderPathResolver is null)
+        if (_watcher is null)
             return;
 
-        var paths = new List<string>();
-        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
-        {
-            var path = await _folderPathResolver
-                .ResolveFileServerFolderPathAsync(projectId, root.FolderId, token)
-                .ConfigureAwait(true);
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                root.FullPath = path;
-                paths.Add(path!);
-            }
-        }
+        var paths = EnumerateFolders(RootFolders)
+            .Select(f => f.FullPath)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (paths.Count == 0)
             return;
@@ -216,6 +227,43 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             else
                 dispatcher.BeginInvoke(Rescan);
         });
+    }
+
+    private async Task ResolveFolderPathsAsync(int projectId, CancellationToken token)
+    {
+        if (_folderPathResolver is null)
+            return;
+
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (token.IsCancellationRequested)
+                break;
+            try
+            {
+                var path = await _folderPathResolver
+                    .ResolveFileServerFolderPathAsync(projectId, folder.FolderId, token)
+                    .ConfigureAwait(true);
+                if (!string.IsNullOrWhiteSpace(path))
+                    folder.FullPath = path;
+            }
+            catch
+            {
+                // Path resolution failures leave FullPath null; open/copy commands surface that.
+            }
+        }
+    }
+
+    private static IEnumerable<ProjectFolderNodeVm> EnumerateFolders(IEnumerable<ProjectWorkNodeVm> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is ProjectFolderNodeVm folder)
+            {
+                yield return folder;
+                foreach (var child in EnumerateFolders(folder.Children))
+                    yield return child;
+            }
+        }
     }
 
     private void RegisterProviders()
@@ -233,6 +281,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             FolderId = dto.FolderId,
             Title = dto.Name,
         };
+        WireFolderCommands(node);
         _foldersById[dto.FolderId] = node;
 
         foreach (var childDto in dto.Children)
@@ -907,10 +956,114 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         file.AddVersionCommand = new AsyncRelayCommand(() => PickAndAddVersionAsync(file, alternativeName: null));
     }
 
+    private void WireFolderCommands(ProjectFolderNodeVm folder)
+    {
+        folder.OpenFolderCommand = new AsyncRelayCommand(() => OpenFolderInExplorerAsync(folder));
+        folder.CopyPathCommand = new RelayCommand(_ => CopyTextToClipboard(folder.FullPath, requireExistingDirectory: true));
+        folder.CopyFolderNameCommand = new RelayCommand(_ => CopyTextToClipboard(folder.Title));
+        folder.CopyProjectNameCommand = new RelayCommand(_ => CopyProjectNameToClipboard());
+    }
+
     private void WireVersionCommands(VersionNodeVm version)
     {
         version.ReplaceCommand = new AsyncRelayCommand(() => PickAndReplaceAsync(version));
         version.DeleteCommand = new AsyncRelayCommand(() => ConfirmAndDeleteAsync(version));
+        version.CopyPathCommand = new RelayCommand(_ => CopyVersionPathToClipboard(version));
+    }
+
+    private async Task OpenFolderInExplorerAsync(ProjectFolderNodeVm folder)
+    {
+        var path = folder.FullPath;
+        if (string.IsNullOrWhiteSpace(path) && _folderPathResolver is not null && _currentProjectId > 0)
+        {
+            path = await _folderPathResolver
+                .ResolveFileServerFolderPathAsync(_currentProjectId, folder.FolderId)
+                .ConfigureAwait(true);
+            folder.FullPath = path;
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            ScanStatus = "לא ניתן לפתוח תיקייה — הנתיב לא זוהה.";
+            return;
+        }
+
+        if (!Directory.Exists(path))
+        {
+            ScanStatus = $"התיקייה לא קיימת בדיסק: {path}";
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true,
+                Verb = "open",
+            });
+        }
+        catch (Exception ex)
+        {
+            ScanStatus = $"פתיחת תיקייה נכשלה: {ex.Message}";
+        }
+    }
+
+    private void CopyProjectNameToClipboard()
+    {
+        var text = _currentProjectNumber is { } n && n > 0
+            ? $"({n.ToString(System.Globalization.CultureInfo.InvariantCulture)})"
+            : null;
+        CopyTextToClipboard(text);
+    }
+
+    private void CopyVersionPathToClipboard(VersionNodeVm version)
+    {
+        if (version.IsAcc && !string.IsNullOrWhiteSpace(version.AccViewerUrl))
+        {
+            CopyTextToClipboard(version.AccViewerUrl);
+            return;
+        }
+
+        CopyTextToClipboard(version.FullPath, requireExistingFile: true);
+    }
+
+    private void CopyTextToClipboard(
+        string? text,
+        bool requireExistingDirectory = false,
+        bool requireExistingFile = false)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ScanStatus = "אין ערך להעתקה ללוח.";
+            return;
+        }
+
+        if (requireExistingDirectory && !Directory.Exists(text))
+        {
+            ScanStatus = $"התיקייה לא קיימת בדיסק: {text}";
+            return;
+        }
+
+        if (requireExistingFile && !File.Exists(text))
+        {
+            ScanStatus = $"הקובץ לא קיים בדיסק: {text}";
+            return;
+        }
+
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess())
+                System.Windows.Clipboard.SetText(text);
+            else
+                dispatcher.Invoke(() => System.Windows.Clipboard.SetText(text));
+            ScanStatus = "הועתק ללוח.";
+        }
+        catch (Exception ex)
+        {
+            ScanStatus = $"העתקה ללוח נכשלה: {ex.Message}";
+        }
     }
 
     private async Task PickAndAddVersionAsync(ProjectFileNodeVm file, string? alternativeName)

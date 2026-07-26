@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Infrastructure.Sql.Services.ProjectWork;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -23,6 +24,8 @@ public static class ProjectFileRequiredTachshivSeedData
     public static async Task<string> EnsureAsync(SiNetSQLDbContext db, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(db);
+
+        await ProjectFileSchemaPatches.EnsureIsRequiredColumnAsync(db, ct).ConfigureAwait(false);
 
         var typeIds = await db.TypeOfProjectInProjects.AsNoTracking()
             .Where(t => t.ProjectTypeId != null)

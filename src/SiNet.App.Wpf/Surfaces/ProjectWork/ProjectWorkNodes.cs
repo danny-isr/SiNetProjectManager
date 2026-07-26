@@ -79,6 +79,18 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
         get => HasPhysicalFiles;
         set => HasPhysicalFiles = value;
     }
+
+    /// <summary>Opens this folder in Windows Explorer. Set by the tree view model.</summary>
+    public ICommand? OpenFolderCommand { get; set; }
+
+    /// <summary>Copies the folder full path to the clipboard («שמור לזיכרון»).</summary>
+    public ICommand? CopyPathCommand { get; set; }
+
+    /// <summary>Copies the folder display title to the clipboard («שמור לזיכרון תיקייה»).</summary>
+    public ICommand? CopyFolderNameCommand { get; set; }
+
+    /// <summary>Copies the project name/number to the clipboard («שמור לזיכרון פרויקט» / «שמור שם פרויקט»).</summary>
+    public ICommand? CopyProjectNameCommand { get; set; }
 }
 
 /// <summary>A logical project file node. Children are its alternatives.</summary>
@@ -292,4 +304,7 @@ public sealed class VersionNodeVm : ProjectWorkNodeVm
 
     /// <summary>Deletes this version. Set by the tree view model.</summary>
     public ICommand? DeleteCommand { get; set; }
+
+    /// <summary>Copies the version full path (or ACC URL) to the clipboard («שמור לזיכרון»).</summary>
+    public ICommand? CopyPathCommand { get; set; }
 }

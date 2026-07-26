@@ -102,7 +102,7 @@ public sealed class ProjectWorkWindowViewModelTests
         Assert.Equal("CompleteMaterial", captured.CompletionEventCode);
         Assert.Equal("MaterialComplete", captured.TaskResultCode);
         Assert.Equal(7, captured.UserId);
-        Assert.Contains("Completed task #55", sut.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("המשימה #55 הושלמה", sut.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
