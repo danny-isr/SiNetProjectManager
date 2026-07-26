@@ -20,6 +20,8 @@ But Copilot must NOT:
 - Run `Add-Migration`
 - Run `Update-Database`
 - Modify the database schema automatically
+- **Create, edit, rewrite, patch, or delete any file under `Migrations/`**
+  (including Designer and ModelSnapshot). Existing migration files are immutable.
 
 ## If Schema Changes Are Required
 
@@ -30,6 +32,10 @@ Copilot must:
 3. Clearly state:
 
 "Database migration must be created manually by the developer."
+
+4. Give the developer the `dotnet ef migrations add` / `database update` commands.
+5. **Stop.** Do not touch migration files even if apply fails — diagnose only;
+   the developer chooses the fix.
 
 Example:
 

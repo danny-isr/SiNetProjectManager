@@ -4,8 +4,15 @@ using SiNetSQL.Data;
 namespace SiNet.Infrastructure.Sql.Services.ProjectWork;
 
 /// <summary>
-/// Idempotent schema patches for <c>ProjectFile</c> that must run even when automatic
-/// <c>Database.Migrate()</c> is disabled (production uses efbundle).
+/// Runtime DDL for <c>ProjectFile</c> catalog columns.
+/// <para>
+/// Status: <b>paused / inactive</b> (2026-07-26).
+/// Why: competing with the normal EF migration workflow — it added <c>IsRequired</c>/<c>Code</c>
+/// outside <c>__EFMigrationsHistory</c>, so <c>dotnet ef database update</c> failed with
+/// "Column name 'IsRequired' … specified more than once".
+/// Schema changes for these columns must come only from user-run EF migrations / efbundle.
+/// May return later only if explicitly re-approved as a temporary bridge when Migrate is disabled.
+/// </para>
 /// </summary>
 internal static class ProjectFileSchemaPatches
 {
@@ -13,26 +20,33 @@ internal static class ProjectFileSchemaPatches
     private static int _schemaEnsured; // 0 = not yet, 1 = done this process
 
     /// <summary>
-    /// Ensures <c>ProjectFile.IsRequired</c> and <c>ProjectFile.Code</c> exist. Safe to call repeatedly.
+    /// No-op while paused. Kept so call sites compile; does not alter the database.
     /// </summary>
-    public static async Task EnsureCatalogColumnsAsync(SiNetSQLDbContext db, CancellationToken ct = default)
+    public static Task EnsureCatalogColumnsAsync(SiNetSQLDbContext db, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(db);
-        if (Interlocked.CompareExchange(ref _schemaEnsured, 0, 0) == 1)
-            return;
+        // Paused: do not run DDL. User-owned EF migrations own ProjectFile.IsRequired / Code.
+        Interlocked.Exchange(ref _schemaEnsured, 1);
+        return Task.CompletedTask;
+    }
 
+    /// <summary>Backward-compatible alias.</summary>
+    public static Task EnsureIsRequiredColumnAsync(SiNetSQLDbContext db, CancellationToken ct = default)
+        => EnsureCatalogColumnsAsync(db, ct);
+
+    /// <summary>Test-only: reset the process-wide "ensured" flag.</summary>
+    internal static void ResetForTests() => Interlocked.Exchange(ref _schemaEnsured, 0);
+
+    // --- Original DDL kept below for reference / possible future reactivation (do not delete) ---
+    // Separate batches were required: CREATE INDEX on [Code] cannot share a batch with ALTER ADD [Code].
+#pragma warning disable IDE0051 // Kept for reactivation; currently unused while paused.
+    private static async Task EnsureCatalogColumns_ActiveAsync(SiNetSQLDbContext db, CancellationToken ct)
+    {
         await Gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (Volatile.Read(ref _schemaEnsured) == 1)
-                return;
-
-            // InMemory / non-relational providers used in tests have no SQL DDL surface.
             if (!db.Database.IsRelational())
-            {
-                Interlocked.Exchange(ref _schemaEnsured, 1);
                 return;
-            }
 
             await db.Database.ExecuteSqlRawAsync(
                     """
@@ -42,14 +56,25 @@ internal static class ProjectFileSchemaPatches
                         ADD [IsRequired] bit NOT NULL
                             CONSTRAINT [DF_ProjectFile_IsRequired] DEFAULT (CONVERT([bit],(0)));
                     END
+                    """,
+                    ct)
+                .ConfigureAwait(false);
 
+            await db.Database.ExecuteSqlRawAsync(
+                    """
                     IF COL_LENGTH(N'dbo.ProjectFile', N'Code') IS NULL
                     BEGIN
                         ALTER TABLE [dbo].[ProjectFile]
                         ADD [Code] nvarchar(64) NULL;
                     END
+                    """,
+                    ct)
+                .ConfigureAwait(false);
 
-                    IF NOT EXISTS (
+            await db.Database.ExecuteSqlRawAsync(
+                    """
+                    IF COL_LENGTH(N'dbo.ProjectFile', N'Code') IS NOT NULL
+                       AND NOT EXISTS (
                         SELECT 1 FROM sys.indexes
                         WHERE [name] = N'ux_ProjectFile_Code'
                           AND [object_id] = OBJECT_ID(N'dbo.ProjectFile'))
@@ -61,43 +86,11 @@ internal static class ProjectFileSchemaPatches
                     """,
                     ct)
                 .ConfigureAwait(false);
-
-            await db.Database.ExecuteSqlRawAsync(
-                    """
-                    IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NOT NULL
-                    BEGIN
-                        IF NOT EXISTS (
-                            SELECT 1 FROM [dbo].[__EFMigrationsHistory]
-                            WHERE [MigrationId] = N'20260726140000_AddProjectFileIsRequired')
-                        BEGIN
-                            INSERT INTO [dbo].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-                            VALUES (N'20260726140000_AddProjectFileIsRequired', N'10.0.7');
-                        END
-
-                        IF NOT EXISTS (
-                            SELECT 1 FROM [dbo].[__EFMigrationsHistory]
-                            WHERE [MigrationId] = N'20260726190000_AddProjectFileCode')
-                        BEGIN
-                            INSERT INTO [dbo].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-                            VALUES (N'20260726190000_AddProjectFileCode', N'10.0.7');
-                        END
-                    END
-                    """,
-                    ct)
-                .ConfigureAwait(false);
-
-            Interlocked.Exchange(ref _schemaEnsured, 1);
         }
         finally
         {
             Gate.Release();
         }
     }
-
-    /// <summary>Backward-compatible alias.</summary>
-    public static Task EnsureIsRequiredColumnAsync(SiNetSQLDbContext db, CancellationToken ct = default)
-        => EnsureCatalogColumnsAsync(db, ct);
-
-    /// <summary>Test-only: reset the process-wide "ensured" flag.</summary>
-    internal static void ResetForTests() => Interlocked.Exchange(ref _schemaEnsured, 0);
+#pragma warning restore IDE0051
 }

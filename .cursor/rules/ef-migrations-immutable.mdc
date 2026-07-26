@@ -1,0 +1,28 @@
+---
+description: EF migration files are immutable — never create/edit/run them
+globs: "**/Migrations/**/*.cs"
+alwaysApply: true
+---
+
+# EF migrations are immutable (user-owned)
+
+The developer owns all EF migrations. The agent must not touch them.
+
+## Forbidden
+
+- Create, edit, rewrite, patch, delete, or "fix" any file under `**/Migrations/**`
+  (migration `.cs`, `.Designer.cs`, `*ModelSnapshot.cs`)
+- Run `dotnet ef migrations add|remove`, `dotnet ef database update`,
+  `Add-Migration`, `Update-Database`, or apply efbundle
+- Hand-write migration SQL/`Up`/`Down` as a substitute for `migrations add`
+
+## Allowed
+
+- Change Entity models and EF configuration only
+- Tell the user the exact `dotnet ef ...` command to run (always include `--context` when multiple DbContexts exist)
+- Diagnose apply failures and suggest alternatives that do **not** edit migration files
+  (e.g. one-off SQL the user runs, or restoring a clean DB baseline)
+
+## Exception
+
+Only restore/copy a migration file when the user **explicitly** requests restoring that specific file from a known original in the same message.

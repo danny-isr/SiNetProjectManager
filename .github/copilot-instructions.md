@@ -42,8 +42,8 @@
 - **Background Work:** Offload CPU-intensive tasks using `Task.Run()`.
 
 ## 6. Database & Migrations (STRICT PROTOCOL)
-- **No Direct Migrations:** Copilot is strictly forbidden from executing migrations automatically.
-- **Manual Migration Files:** Never manually edit migration files. Only change model/configuration files and let EF Core generate the migration.
+- **No Direct Migrations:** Copilot/agents are strictly forbidden from executing migrations automatically (`Add-Migration`, `Update-Database`, `dotnet ef migrations *`, `dotnet ef database update`, efbundle).
+- **Migration files are immutable:** Never create, edit, rewrite, patch, delete, or "fix" files under `Migrations/` (including Designer and ModelSnapshot). Only change model/configuration; the developer runs `dotnet ef migrations add`. If apply fails, diagnose only — do not patch `Up`/`Down`.
 - **PMC Commands:** Provide the exact command for 'Package Manager Console' (e.g., `Add-Migration [Name] -Context [Context]`).
 - **Workflow:** Stop after providing the command and wait for user confirmation.
 

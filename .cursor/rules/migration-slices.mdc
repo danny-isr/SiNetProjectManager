@@ -7,7 +7,8 @@ alwaysApply: false
 # Migration slice guardrails
 
 - Documentation-first for meaningful behavior changes (`docs/PROJECTS.md`, migration docs).
-- No DB writes, schema changes, migrations, or ModelSnapshot edits unless explicitly requested.
+- No DB writes, schema changes, or running EF migrate/update unless explicitly requested.
+- **Never create or edit** EF migration files, Designers, or ModelSnapshot — user runs `dotnet ef` only.
 - WPF must not reference EF entities; use Application DTOs and ports.
 - `ProjectSelectorView` is shared — no Email/Task/Workflow logic inside it.
 - Preserve debounce, cancellation, and last-write-wins on project search reloads.
