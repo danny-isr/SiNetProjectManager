@@ -1,21 +1,24 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.ProjectWork;
 using SiNet.Application.WorkSurfaces;
 
 namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 
 /// <summary>
-/// NewShell host: caches <see cref="ProjectWorkWindowView"/> and navigates via
-/// <see cref="IShellContentHost"/> (same pattern as email — not disposed on switch).
+/// NewShell host: browse → shell content; task → floating singleton (never NavigateTo for tasks).
 /// </summary>
 public sealed class ProjectWorkSurfaceHost(
     IServiceProvider services,
-    IShellContentHost contentHost) : IProjectWorkSurfaceHost
+    IShellContentHost contentHost,
+    ProjectWorkTaskFloatingHost taskFloatingHost) : IProjectWorkSurfaceHost
 {
     private readonly IServiceProvider _services = services ?? throw new ArgumentNullException(nameof(services));
     private readonly IShellContentHost _contentHost = contentHost ?? throw new ArgumentNullException(nameof(contentHost));
+    private readonly ProjectWorkTaskFloatingHost _taskFloatingHost =
+        taskFloatingHost ?? throw new ArgumentNullException(nameof(taskFloatingHost));
 
     private ProjectWorkWindowView? _view;
 
@@ -37,17 +40,11 @@ public sealed class ProjectWorkSurfaceHost(
         WorkSurfaceContext context,
         CancellationToken cancellationToken = default)
     {
-        if (!_contentHost.IsAttached)
-            return false;
-
-        var surface = EnsureCreated();
-        var opened = await surface.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
-        if (!opened)
-            return false;
-
-        _contentHost.NavigateTo(surface);
-        ActivateMainWindow();
-        return true;
+        // #region agent log
+        WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
+            $"ProjectWorkSurfaceHost.TryOpenFromTaskAsync task={context.TaskId} (floating path)");
+        // #endregion
+        return await _taskFloatingHost.OpenOrRebindAsync(context, cancellationToken).ConfigureAwait(true);
     }
 
     private ProjectWorkWindowView EnsureCreated()

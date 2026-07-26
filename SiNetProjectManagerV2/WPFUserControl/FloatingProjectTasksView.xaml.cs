@@ -31,7 +31,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     {
         lock (LiveInstanceGate)
         {
-            if (_liveInstance is not null)
+                    if (_liveInstance is not null)
             {
                 try
                 {
@@ -40,10 +40,11 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                         // #region agent log
                         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
                             "Tasks.FloatWindow",
-                            "static-singleton activate-existing + refresh");
+                            "static-singleton activate-existing + refresh + tall-narrow");
                         // #endregion
                         if (_liveInstance.ViewModel.RefreshCommand.CanExecute(null))
                             _liveInstance.ViewModel.RefreshCommand.Execute(null);
+                        _liveInstance.ApplyTallNarrowLayout();
                         if (_liveInstance.WindowState == WindowState.Minimized)
                             _liveInstance.WindowState = WindowState.Normal;
                         _liveInstance.Activate();
@@ -821,7 +822,7 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                     var opened = await launcher.TryOpenFromTaskAsync(request.TaskId).ConfigureAwait(true);
                     if (opened)
                     {
-                        mainWindow?.Activate();
+                        // Keep the floating ProjectWork task window on top — do not Activate MainWindow.
                         return;
                     }
 

@@ -56,8 +56,12 @@ public sealed class NewShellProjectWorkMenuTests
             var services = new ServiceCollection();
             services.AddSingleton<IShellContentHost, ShellContentHost>();
             services.AddSingleton<IProjectWorkWindowFactory>(new StubFactory());
+            services.AddSingleton<ProjectWorkTaskFloatingHost>();
             var sp = services.BuildServiceProvider();
-            var host = new ProjectWorkSurfaceHost(sp, sp.GetRequiredService<IShellContentHost>());
+            var host = new ProjectWorkSurfaceHost(
+                sp,
+                sp.GetRequiredService<IShellContentHost>(),
+                sp.GetRequiredService<ProjectWorkTaskFloatingHost>());
 
             Assert.False(await host.TryOpenBrowseAsync());
         });
@@ -76,8 +80,12 @@ public sealed class NewShellProjectWorkMenuTests
             var services = new ServiceCollection();
             services.AddSingleton<IShellContentHost>(contentHost);
             services.AddSingleton<IProjectWorkWindowFactory>(factory);
+            services.AddSingleton<ProjectWorkTaskFloatingHost>();
             var sp = services.BuildServiceProvider();
-            var host = new ProjectWorkSurfaceHost(sp, contentHost);
+            var host = new ProjectWorkSurfaceHost(
+                sp,
+                contentHost,
+                sp.GetRequiredService<ProjectWorkTaskFloatingHost>());
 
             Assert.True(await host.TryOpenBrowseAsync());
             var first = shellVm.CurrentContent;
@@ -132,6 +140,7 @@ public sealed class NewShellProjectWorkMenuTests
             new StubAuthorization(projectWorkAuthorized, emailAuthorized));
         services.AddSingleton<IShellContentHost, ShellContentHost>();
         services.AddSingleton<IProjectWorkWindowFactory>(new StubFactory());
+        services.AddSingleton<ProjectWorkTaskFloatingHost>();
         services.AddSingleton<ProjectWorkSurfaceHost>();
         // Email menu only needs the host type present; Show is never invoked in these tests.
         services.AddSingleton<SiNet.App.Wpf.Surfaces.Email.IEmailSurfaceHost, StubEmailHost>();

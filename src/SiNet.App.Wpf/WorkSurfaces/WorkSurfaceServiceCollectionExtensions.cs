@@ -18,6 +18,7 @@ public static class WorkSurfaceServiceCollectionExtensions
         services.AddTransient<SiNet.App.Wpf.Shared.Projects.ProjectSelectorViewModel>();
         services.AddTransient<ProjectWorkWindowViewModel>();
         services.AddSingleton<IProjectWorkWindowFactory, ProjectWorkWindowFactory>();
+        services.AddSingleton<ProjectWorkTaskFloatingHost>();
         services.AddSingleton<ProjectWorkSurfaceHost>();
         services.AddSingleton<IWorkSurfaceLauncher, WorkSurfaceLauncher>();
 

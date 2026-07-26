@@ -41,8 +41,6 @@ namespace SiNetProjectManagerV2
         /// Task mode uses a separate floating window (<see cref="_projectWorkTaskView"/>).
         /// </summary>
         private ProjectWorkWindowView? _cachedProjectWorkView;
-        private Window? _projectWorkTaskWindow;
-        private ProjectWorkWindowView? _projectWorkTaskView;
 
         // New clean-architecture Current Project context (fake/in-memory this slice).
         // The shell is the single subscriber that renders the Current Project into the window
@@ -530,72 +528,23 @@ namespace SiNetProjectManagerV2
             => ShowNativeProjectWorkBrowseAsync(cancellationToken);
 
         /// <summary>
-        /// Task mode: dedicated floating singleton window (no project picker). Browse stays in main content.
+        /// Task mode: dedicated floating singleton (shared host — works for Legacy and NewShell).
         /// </summary>
         public async Task<bool> TryOpenProjectWorkFromTaskAsync(
             WorkSurfaceContext context,
             CancellationToken cancellationToken = default)
         {
             CloseInspectionTaskWindows();
-
-            if (_projectWorkTaskWindow is { IsLoaded: true } && _projectWorkTaskView is not null)
-            {
-                var rebound = await _projectWorkTaskView.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
-                if (!rebound)
-                    return false;
-                if (_projectWorkTaskWindow.WindowState == WindowState.Minimized)
-                    _projectWorkTaskWindow.WindowState = WindowState.Normal;
-                _projectWorkTaskWindow.Activate();
-                return true;
-            }
-
-            var factory = App.ServiceProvider?.GetService<IProjectWorkWindowFactory>();
-            if (factory is null)
+            var host = App.ServiceProvider?.GetService<ProjectWorkTaskFloatingHost>();
+            if (host is null)
                 return false;
-
-            var surface = factory.Create();
-            var opened = await surface.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
-            if (!opened)
-            {
-                surface.Dispose();
-                return false;
-            }
-
-            _projectWorkTaskView = surface;
-            _projectWorkTaskWindow = new Window
-            {
-                Title = "ביצוע משימה — סביבת עבודה",
-                Owner = this,
-                Content = surface,
-                Width = Math.Max(900, ActualWidth * 0.85),
-                Height = Math.Max(650, ActualHeight * 0.9),
-                MinWidth = 720,
-                MinHeight = 480,
-                FlowDirection = FlowDirection.RightToLeft,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ShowInTaskbar = true,
-                Topmost = true,
-            };
-            _projectWorkTaskWindow.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_projectWorkTaskView, surface))
-                {
-                    _projectWorkTaskView = null;
-                    _projectWorkTaskWindow = null;
-                    // Do not Dispose the browse-cached view; this instance is task-only.
-                    surface.Dispose();
-                }
-            };
-            _projectWorkTaskWindow.Show();
-            return true;
+            return await host.OpenOrRebindAsync(context, cancellationToken).ConfigureAwait(true);
         }
 
         /// <summary>Closes the floating ProjectWork task window if open (e.g. before opening Inspection).</summary>
         public void CloseProjectWorkTaskWindow()
         {
-            if (_projectWorkTaskWindow is not { IsLoaded: true } win)
-                return;
-            try { win.Close(); } catch { /* already closing */ }
+            App.ServiceProvider?.GetService<ProjectWorkTaskFloatingHost>()?.CloseIfOpen();
         }
 
         /// <summary>Closes native Inspection task windows before opening another task family.</summary>
