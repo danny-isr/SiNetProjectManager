@@ -91,14 +91,14 @@ namespace SiNetProjectManagerV2
             set { if (value == floatingTasksLeft) return; floatingTasksLeft = value; OnPropertyChanged(); }
         }
 
-        private double floatingTasksWidth = 420;
+        private double floatingTasksWidth = 380;
         public double FloatingTasksWidth
         {
             get => floatingTasksWidth;
             set { if (value == floatingTasksWidth) return; floatingTasksWidth = value; OnPropertyChanged(); }
         }
 
-        private double floatingTasksHeight = 560;
+        private double floatingTasksHeight = double.NaN;
         public double FloatingTasksHeight
         {
             get => floatingTasksHeight;

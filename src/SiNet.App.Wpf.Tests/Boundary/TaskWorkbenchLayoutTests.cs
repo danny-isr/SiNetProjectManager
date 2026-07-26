@@ -67,12 +67,27 @@ public sealed class TaskWorkbenchLayoutTests
     public void Task_workbench_task_grid_area_uses_star_height()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        var gridSection = ExtractBetween(xaml, "<Grid.RowDefinitions>", "</Grid.RowDefinitions>");
         var tabSection = ExtractBetween(xaml, "<!-- Task buckets: main content area -->", "<!-- Resolve preview");
 
-        Assert.Contains("Height=\"*\"", gridSection, StringComparison.Ordinal);
+        Assert.Contains("Height=\"*\" MinHeight=\"200\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Grid.Row=\"5\"", tabSection, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Stretch\"", tabSection, StringComparison.Ordinal);
+        Assert.Contains("ListBox", tabSection, StringComparison.Ordinal);
+        Assert.Contains("QuickTasks", tabSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Task_workbench_uses_tall_narrow_floating_shape()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
+        var cs = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml.cs");
+        var factory = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskPanelReadOnlyWindowFactory.cs");
+
+        Assert.Contains("Width=\"400\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"320\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ApplyTallNarrowLayout", cs, StringComparison.Ordinal);
+        Assert.Contains("ShowOrActivate", factory, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1200\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

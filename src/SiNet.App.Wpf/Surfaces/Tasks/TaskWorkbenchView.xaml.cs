@@ -5,6 +5,8 @@ namespace SiNet.App.Wpf.Surfaces.Tasks;
 
 public partial class TaskWorkbenchView : Window
 {
+    public const double DefaultNarrowWidth = 400;
+
     public TaskWorkbenchView(TaskWorkbenchViewModel viewModel)
     {
         InitializeComponent();
@@ -12,14 +14,26 @@ public partial class TaskWorkbenchView : Window
         Loaded += OnLoaded;
     }
 
+    /// <summary>Narrow + full work-area height, docked to the right (floating workbench shape).</summary>
+    public void ApplyTallNarrowLayout()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Width = DefaultNarrowWidth;
+        MinWidth = 320;
+        Height = workArea.Height;
+        Top = workArea.Top;
+        Left = workArea.Left + workArea.Width - Width;
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+        ApplyTallNarrowLayout();
         if (DataContext is TaskWorkbenchViewModel vm)
             await vm.InitializeAsync().ConfigureAwait(true);
     }
 
-    private async void TaskGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private async void TaskList_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is not TaskWorkbenchViewModel vm)
             return;

@@ -80,16 +80,6 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
         }
     }
 
-    /// <summary>Narrow + full work-area height, docked to the right (legacy floating-tasks shape).</summary>
-    public void ApplyTallNarrowLayout()
-    {
-        var workArea = SystemParameters.WorkArea;
-        Width = DefaultResetWidth;
-        Height = workArea.Height;
-        Top = workArea.Top;
-        Left = workArea.Left + workArea.Width - Width;
-    }
-
     protected override double DefaultResetWidth => 380;
 
     protected override void ApplyDefaultPosition() => ApplyTallNarrowLayout();
@@ -133,16 +123,34 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     private void OnLoadedEnforceTallNarrow(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoadedEnforceTallNarrow;
-        var workArea = SystemParameters.WorkArea;
-        // Migrate old short/wide saved layouts to the tall-narrow legacy shape.
-        if (Height < workArea.Height * 0.65 || Width > 500)
-            ApplyTallNarrowLayout();
+        // AppSettings restore runs in FloatingWindowBase_Loaded first and brings back the old
+        // short 420×560 geometry — always re-apply tall-narrow after that, then persist.
+        ApplyTallNarrowLayout();
+        PersistTallNarrowToSettings();
     }
 
-    /// <summary>
-    /// Last-resort guard: if somehow constructed outside <see cref="ShowOrActivate"/> while another
-    /// instance is live, close this duplicate immediately after the HWND exists.
-    /// </summary>
+    private void PersistTallNarrowToSettings()
+    {
+        var settings = App.AppSettings;
+        if (settings is null)
+            return;
+        settings.FloatingTasksTop = Top;
+        settings.FloatingTasksLeft = Left;
+        settings.FloatingTasksWidth = Width;
+        settings.FloatingTasksHeight = Height;
+    }
+
+    /// <summary>Narrow + full work-area height, docked to the right (legacy floating-tasks shape).</summary>
+    public void ApplyTallNarrowLayout()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Width = DefaultResetWidth;
+        MinWidth = 320;
+        Height = workArea.Height;
+        Top = workArea.Top;
+        Left = workArea.Left + workArea.Width - Width;
+    }
+
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);

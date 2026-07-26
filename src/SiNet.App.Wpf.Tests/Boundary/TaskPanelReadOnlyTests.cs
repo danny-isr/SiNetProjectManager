@@ -183,7 +183,7 @@ public sealed class TaskPanelReadOnlyTests
         Assert.Contains("ITaskPanelReadOnlyWindowFactory", source, StringComparison.Ordinal);
         Assert.Contains("Task Workbench", source, StringComparison.Ordinal);
         Assert.Contains("AppFeatureCodes.ShellOpenTaskPanelReadOnly", source, StringComparison.Ordinal);
-        Assert.Contains("taskPanelFactory.Create()", source, StringComparison.Ordinal);
+        Assert.Contains("taskPanelFactory.ShowOrActivate()", source, StringComparison.Ordinal);
     }
 
     [Fact]

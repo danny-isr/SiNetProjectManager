@@ -34,8 +34,10 @@ public sealed class TaskWorkbenchPolishTests
     public void WorkPriority_is_displayed_as_queue_position()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
-        Assert.Contains("Header=\"מיקום בתור\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding WorkPriority}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("מיקום בתור", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding WorkPriority}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataGrid", xaml, StringComparison.Ordinal);
+        Assert.Contains("TaskCardTemplate", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

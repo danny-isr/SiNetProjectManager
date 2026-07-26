@@ -7,57 +7,169 @@
         xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         mc:Ignorable="d"
         Title="{Binding Title}"
-        Width="1200" Height="780"
-        MinWidth="900" MinHeight="600"
+        Width="400"
+        Height="800"
+        MinWidth="320"
+        MinHeight="400"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="True"
+        Topmost="True"
         d:DataContext="{d:DesignInstance Type=local:TaskWorkbenchViewModel, IsDesignTimeCreatable=True}">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
-        <Style x:Key="TaskWorkbenchDataGridStyle" TargetType="DataGrid">
-            <Setter Property="AutoGenerateColumns" Value="False" />
-            <Setter Property="IsReadOnly" Value="True" />
-            <Setter Property="CanUserAddRows" Value="False" />
-            <Setter Property="CanUserDeleteRows" Value="False" />
-            <Setter Property="GridLinesVisibility" Value="None" />
+        <Style x:Key="TaskCardBorder" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
-            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
-            <Setter Property="AlternatingRowBackground" Value="{x:Null}" />
             <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="VerticalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="MinHeight" Value="120" />
-            <Setter Property="RowHeight" Value="28" />
-            <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-            <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
-            <EventSetter Event="MouseDoubleClick" Handler="TaskGrid_OnMouseDoubleClick" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
         </Style>
 
-        <Style x:Key="TaskWorkbenchDataGridCellStyle" TargetType="DataGridCell">
+        <Style x:Key="CardListBoxItem" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource SiSecondaryBrush}" />
-                    <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter HorizontalAlignment="Stretch"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style x:Key="TaskWorkbenchDataGridColumnHeaderStyle" TargetType="DataGridColumnHeader">
-            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
-            <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
-            <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="6,4" />
+        <DataTemplate x:Key="TaskCardTemplate">
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource TaskCardBorder}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource SiPrimaryBrush}" />
+                                <Setter Property="BorderThickness" Value="1.5" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Queue position + created -->
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Background="{DynamicResource SiSecondaryBrush}"
+                                CornerRadius="3"
+                                Padding="6,2"
+                                Margin="0,0,8,0"
+                                VerticalAlignment="Center"
+                                ToolTip="מיקום בתור">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="מיקום בתור "
+                                           Style="{DynamicResource SiTextTinyStyle}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding WorkPriority}"
+                                           FontWeight="Bold"
+                                           Style="{DynamicResource SiTextSmallStyle}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.75" />
+                    </Grid>
+
+                    <!-- Title -->
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding Title}"
+                               Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               TextTrimming="CharacterEllipsis"
+                               MaxHeight="44"
+                               ToolTip="{Binding Title}"
+                               Margin="0,0,0,4" />
+
+                    <!-- Type + status -->
+                    <Grid Grid.Row="2" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding TaskTypeName}"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding TaskTypeName}" />
+                        <Border Grid.Column="1"
+                                Background="{DynamicResource SiSecondaryBrush}"
+                                CornerRadius="3"
+                                Padding="6,2"
+                                Margin="8,0,0,0">
+                            <TextBlock Text="{Binding StatusName}"
+                                       Style="{DynamicResource SiTextTinyStyle}" />
+                        </Border>
+                    </Grid>
+
+                    <!-- Project + assignee + due -->
+                    <Grid Grid.Row="3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding ProjectId, StringFormat=פרויקט {0}}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="{DynamicResource SiPrimaryBrush}"
+                                   Margin="0,0,8,0" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding AssignedToUserName}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding AssignedToUserName}" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding DueDate, StringFormat=יעד {0:dd/MM}}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Margin="8,0,0,0"
+                                   Opacity="0.8" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <Style x:Key="TaskCardListBoxStyle" TargetType="ListBox">
+            <Setter Property="ItemTemplate" Value="{StaticResource TaskCardTemplate}" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource CardListBoxItem}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,2" />
+            <EventSetter Event="MouseDoubleClick" Handler="TaskList_OnMouseDoubleClick" />
         </Style>
     </Window.Resources>
 
-    <Grid Margin="12" Background="{DynamicResource SiBackgroundBrush}">
+    <Grid Margin="8" Background="{DynamicResource SiBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -72,38 +184,39 @@
         <TextBlock Grid.Row="0"
                    Text="{Binding Title}"
                    Style="{DynamicResource SiTextLargeStyle}"
-                   Margin="0,0,0,8" />
+                   Margin="0,0,0,6"
+                   TextWrapping="Wrap" />
 
         <!-- Actions toolbar -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" />
-            <Button Content="פתח משימה" Command="{Binding OpenTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0" />
-            <Button Content="הוסף משימה" Command="{Binding AddTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
+            <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4" />
+            <Button Content="פתח משימה" Command="{Binding OpenTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4" />
+            <Button Content="הוסף משימה" Command="{Binding AddTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+            <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="השבת משימה" Command="{Binding DeactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+            <Button Content="השבת משימה" Command="{Binding DeactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     ToolTip="השבתת משימה מפעילת Workflow משהה את ה-Workflow ושומרת את המשימה להפעלה מחדש."
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="הפעל מחדש" Command="{Binding ReactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+            <Button Content="הפעל מחדש" Command="{Binding ReactivateTaskCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     ToolTip="הפעלת משימה מושבתת מחדש ומחדשת את ה-Workflow המושהה."
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+            <Button Content="תקן תור" Command="{Binding RepairQueueCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+            <Button Content="העבר למעלה" Command="{Binding MoveUpCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     ToolTip="{Binding QueueMoveStatusHint}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="8,0,0,0"
+            <Button Content="העבר למטה" Command="{Binding MoveDownCommand}" Style="{DynamicResource SiSecondaryButtonStyle}" Margin="0,0,4,4"
                     ToolTip="{Binding QueueMoveStatusHint}"
                     Visibility="{Binding CanManageQueue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-        </StackPanel>
+        </WrapPanel>
 
         <!-- Context / filter area -->
         <Border Grid.Row="2"
                 BorderBrush="{DynamicResource SiSecondaryBrush}"
                 BorderThickness="1"
-                Padding="8"
-                Margin="0,0,0,8"
+                Padding="6"
+                Margin="0,0,0,6"
                 CornerRadius="4"
                 Background="{DynamicResource SiBackgroundBrush}">
             <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -111,23 +224,23 @@
                            Style="{DynamicResource SiTextNormalStyle}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Margin="0,0,8,0" />
+                           Margin="0,0,8,4" />
                 <ComboBox ItemsSource="{Binding AvailableScopes}"
                           SelectedValuePath="Scope"
                           DisplayMemberPath="DisplayName"
                           SelectedValue="{Binding SelectedScope}"
                           IsEnabled="{Binding CanSelectTaskScope}"
                           Style="{DynamicResource SiComboBoxStyle}"
-                          MinWidth="160"
+                          MinWidth="140"
                           VerticalAlignment="Center"
-                          Margin="0,0,12,0" />
+                          Margin="0,0,8,4" />
                 <ComboBox ItemsSource="{Binding AvailableUsers}"
                           SelectedValuePath="UserId"
                           DisplayMemberPath="DisplayName"
                           SelectedValue="{Binding SelectedUserId}"
                           Style="{DynamicResource SiComboBoxStyle}"
-                          MinWidth="180"
-                          Margin="0,0,12,0"
+                          MinWidth="140"
+                          Margin="0,0,8,4"
                           VerticalAlignment="Center"
                           Visibility="{Binding IsSpecificUserScope, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <ComboBox.ToolTip>
@@ -138,20 +251,20 @@
                            Style="{DynamicResource SiTextNormalStyle}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Margin="0,0,8,0"
+                           Margin="0,0,8,4"
                            Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <projects:ProjectSelectorView DataContext="{Binding LocalProjectFilterSelector}"
                                               CompactMode="True"
-                                              SearchBoxWidth="220"
+                                              SearchBoxWidth="160"
                                               ShowUserFilter="False"
                                               VerticalAlignment="Center"
-                                              Margin="0,0,8,0"
+                                              Margin="0,0,8,4"
                                               Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <Button Content="נקה"
                         Command="{Binding ClearSelectedProjectCommand}"
                         Style="{DynamicResource SiSecondaryButtonStyle}"
                         VerticalAlignment="Center"
-                        Margin="0,0,12,0"
+                        Margin="0,0,8,4"
                         IsEnabled="{Binding CanClearSelectedProject}"
                         Visibility="{Binding HasLocalProjectFilter, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Button.ToolTip>
@@ -162,15 +275,15 @@
                            Style="{DynamicResource SiTextSmallStyle}"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap"
-                           MaxWidth="420" />
+                           Margin="0,0,0,4" />
             </WrapPanel>
         </Border>
 
         <Border Grid.Row="3"
                 BorderBrush="{DynamicResource SiSecondaryBrush}"
                 BorderThickness="1"
-                Padding="8"
-                Margin="0,0,0,8"
+                Padding="6"
+                Margin="0,0,0,6"
                 CornerRadius="4"
                 Background="{DynamicResource SiBackgroundBrush}">
             <TextBlock Text="{Binding DiagnosticsText}" FontFamily="Consolas" Style="{DynamicResource SiTextSmallStyle}" TextWrapping="Wrap" />
@@ -179,7 +292,7 @@
         <TextBlock Grid.Row="4"
                    Text="{Binding StatusMessage}"
                    Style="{DynamicResource SiTextSmallStyle}"
-                   Margin="0,0,0,8"
+                   Margin="0,0,0,6"
                    TextWrapping="Wrap" />
 
         <!-- Task buckets: main content area -->
@@ -188,58 +301,19 @@
                     VerticalAlignment="Stretch"
                     HorizontalAlignment="Stretch">
             <TabItem Header="קצר">
-                <DataGrid ItemsSource="{Binding QuickTasks}"
-                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
-                          Style="{StaticResource TaskWorkbenchDataGridStyle}"
-                          CellStyle="{StaticResource TaskWorkbenchDataGridCellStyle}"
-                          ColumnHeaderStyle="{StaticResource TaskWorkbenchDataGridColumnHeaderStyle}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
-                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
-                        <DataGridTextColumn Header="Project" Binding="{Binding ProjectId}" Width="70" />
-                        <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
-                        <DataGridTextColumn Header="Task type" Binding="{Binding TaskTypeName}" Width="120" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding StatusName}" Width="100" />
-                        <DataGridTextColumn Header="נפתחה" Binding="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}" Width="130" />
-                        <DataGridTextColumn Header="Due" Binding="{Binding DueDate, StringFormat=d}" Width="90" />
-                    </DataGrid.Columns>
-                </DataGrid>
+                <ListBox ItemsSource="{Binding QuickTasks}"
+                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                         Style="{StaticResource TaskCardListBoxStyle}" />
             </TabItem>
             <TabItem Header="בינוני">
-                <DataGrid ItemsSource="{Binding MediumTasks}"
-                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
-                          Style="{StaticResource TaskWorkbenchDataGridStyle}"
-                          CellStyle="{StaticResource TaskWorkbenchDataGridCellStyle}"
-                          ColumnHeaderStyle="{StaticResource TaskWorkbenchDataGridColumnHeaderStyle}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
-                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
-                        <DataGridTextColumn Header="Project" Binding="{Binding ProjectId}" Width="70" />
-                        <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
-                        <DataGridTextColumn Header="Task type" Binding="{Binding TaskTypeName}" Width="120" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding StatusName}" Width="100" />
-                        <DataGridTextColumn Header="נפתחה" Binding="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}" Width="130" />
-                        <DataGridTextColumn Header="Due" Binding="{Binding DueDate, StringFormat=d}" Width="90" />
-                    </DataGrid.Columns>
-                </DataGrid>
+                <ListBox ItemsSource="{Binding MediumTasks}"
+                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                         Style="{StaticResource TaskCardListBoxStyle}" />
             </TabItem>
             <TabItem Header="ארוך">
-                <DataGrid ItemsSource="{Binding LongTasks}"
-                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
-                          Style="{StaticResource TaskWorkbenchDataGridStyle}"
-                          CellStyle="{StaticResource TaskWorkbenchDataGridCellStyle}"
-                          ColumnHeaderStyle="{StaticResource TaskWorkbenchDataGridColumnHeaderStyle}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="מיקום בתור" Binding="{Binding WorkPriority}" Width="90" />
-                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
-                        <DataGridTextColumn Header="Project" Binding="{Binding ProjectId}" Width="70" />
-                        <DataGridTextColumn Header="Assigned" Binding="{Binding AssignedToUserName}" Width="100" />
-                        <DataGridTextColumn Header="Task type" Binding="{Binding TaskTypeName}" Width="120" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding StatusName}" Width="100" />
-                        <DataGridTextColumn Header="נפתחה" Binding="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}" Width="130" />
-                        <DataGridTextColumn Header="Due" Binding="{Binding DueDate, StringFormat=d}" Width="90" />
-                    </DataGrid.Columns>
-                </DataGrid>
+                <ListBox ItemsSource="{Binding LongTasks}"
+                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                         Style="{StaticResource TaskCardListBoxStyle}" />
             </TabItem>
         </TabControl>
 
@@ -247,7 +321,7 @@
         <Expander Grid.Row="6"
                   Header="Resolve preview (WorkSurfaceContext)"
                   IsExpanded="False"
-                  Margin="0,8,0,0"
+                  Margin="0,6,0,0"
                   MaxHeight="160">
             <Grid Margin="8">
                 <Grid.RowDefinitions>

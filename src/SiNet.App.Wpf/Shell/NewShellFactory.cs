@@ -127,12 +127,13 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         // ── משימות ────────────────────────────────────────────────────────
         var tasks = new List<NewShellMenuItem>();
+        // Task Workbench (לוח משימות) — personal Quick/Medium/Long queues
         if (_services.GetService<ITaskPanelReadOnlyWindowFactory>() is { } taskPanelFactory
             && CanAccessFeature(AppFeatureCodes.ShellOpenTaskPanelReadOnly))
         {
             tasks.Add(new NewShellMenuItem(
                 "לוח משימות",
-                () => ShowWindow(taskPanelFactory.Create()),
+                () => taskPanelFactory.ShowOrActivate(),
                 "תורים אישיים Quick / Medium / Long"));
         }
 
