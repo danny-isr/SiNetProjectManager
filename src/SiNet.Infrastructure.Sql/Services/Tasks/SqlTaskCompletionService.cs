@@ -31,13 +31,16 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly IWorkflowCommandService _workflowCommands;
+    private readonly ITaskListChangeNotifier? _taskListNotifier;
 
     public SqlTaskCompletionService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        IWorkflowCommandService workflowCommands)
+        IWorkflowCommandService workflowCommands,
+        ITaskListChangeNotifier? taskListNotifier = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workflowCommands = workflowCommands ?? throw new ArgumentNullException(nameof(workflowCommands));
+        _taskListNotifier = taskListNotifier;
     }
 
     public async ValueTask<TaskCompletionResultDto> CompleteAsync(CompleteTaskCommand command, CancellationToken ct)
@@ -298,6 +301,7 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                 if (sharedTx is not null)
                     await sharedTx.CommitAsync(ct).ConfigureAwait(false);
 
+                NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: true);
                 return success with
                 {
                     TaskClosed = taskClosed,
@@ -330,6 +334,7 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                     command.TaskId,
                     advanceError);
 
+                NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: false);
                 return success with
                 {
                     TaskClosed = taskClosed,
@@ -344,6 +349,7 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             fallbackAdvanceResult = result;
         }
 
+        NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance);
         return success with
         {
             TaskClosed = taskClosed,
@@ -352,6 +358,31 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             NewProjectStatusCode = newProjectStatusCode,
             StageAdvanceResult = fallbackAdvanceResult,
         };
+    }
+
+    /// <summary>
+    /// Pushes a UI refresh signal so floating/task panels reload after native completion.
+    /// ProjectWork completes through this service (not the legacy coordinator), so without this
+    /// the floating task list stays stale until the window is closed and reopened.
+    /// </summary>
+    private void NotifyUiTaskListChanged(int taskId, bool taskClosed, bool willAutoAdvance)
+    {
+        try
+        {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Tasks.FloatWindow",
+                $"NotifyTaskDataChanged after complete task={taskId} closed={taskClosed} advanced={willAutoAdvance} notifier={_taskListNotifier is not null}");
+            // #endregion
+            _taskListNotifier?.NotifyTaskListChanged();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                "[SqlTaskCompletionService] NotifyTaskListChanged failed for task {0}: {1}",
+                taskId,
+                ex.Message);
+        }
     }
 
     /// <summary>

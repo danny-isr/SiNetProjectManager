@@ -453,10 +453,21 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             }
 
             var closed = result.TaskClosed ? " המשימה נסגרה." : string.Empty;
-            var advanced = result.WorkflowAdvanced ? " התהליך התקדם." : " התהליך לא התקדם.";
-            StatusMessage = result.TaskClosed
-                ? $"המשימה #{taskId} הושלמה.{closed}{advanced}"
-                : $"התוצאה נרשמה למשימה #{taskId}, אך המשימה לא נסגרה — התהליך לא התקדם.";
+            if (string.Equals(resolvedResultCode, "MaterialMissing", StringComparison.Ordinal))
+            {
+                StatusMessage =
+                    $"נרשם חסר חומר.{closed} נשארים בשלב בדיקת חומר (לולאה מכוונת) ונוצרת משימת בדיקה חדשה — רשימת המשימות אמורה להתעדכן.";
+            }
+            else if (result.WorkflowAdvanced)
+            {
+                StatusMessage = $"המשימה #{taskId} הושלמה.{closed} התהליך התקדם.";
+            }
+            else
+            {
+                StatusMessage = result.TaskClosed
+                    ? $"המשימה #{taskId} הושלמה.{closed} התהליך לא התקדם."
+                    : $"התוצאה נרשמה למשימה #{taskId}, אך המשימה לא נסגרה — התהליך לא התקדם.";
+            }
             return true;
         }
         finally

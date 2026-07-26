@@ -439,50 +439,11 @@ namespace SiNetProjectManagerV2
             => ShowOrActivateFloatingTasks();
 
         /// <summary>
-        /// Singleton entry for the floating project-tasks window. Reuses any already-open instance
-        /// (field or Application.Windows) so menu / email / task-panel paths cannot spawn duplicates.
+        /// Singleton entry for the floating project-tasks window (delegates to process-wide static).
         /// </summary>
         public void ShowOrActivateFloatingTasks()
         {
-            var existing = _floatingTasksWindow;
-            if (existing is null || !existing.IsLoaded)
-            {
-                existing = System.Windows.Application.Current?.Windows
-                    .OfType<FloatingProjectTasksView>()
-                    .FirstOrDefault(w => w.IsLoaded);
-                if (existing is not null)
-                    _floatingTasksWindow = existing;
-            }
-
-            if (existing is not null)
-            {
-                // #region agent log
-                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
-                    "Tasks.FloatWindow",
-                    $"activate-existing + refresh isLoaded={existing.IsLoaded}");
-                // #endregion
-                if (existing.ViewModel.RefreshCommand.CanExecute(null))
-                    existing.ViewModel.RefreshCommand.Execute(null);
-                if (existing.WindowState == WindowState.Minimized)
-                    existing.WindowState = WindowState.Normal;
-                existing.Activate();
-                return;
-            }
-
-            // #region agent log
-            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
-                "Tasks.FloatWindow",
-                "create-new singleton instance");
-            // #endregion
-            var created = new FloatingProjectTasksView();
-            _floatingTasksWindow = created;
-            created.Owner = this;
-            created.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_floatingTasksWindow, created))
-                    _floatingTasksWindow = null;
-            };
-            created.Show();
+            _floatingTasksWindow = FloatingProjectTasksView.ShowOrActivate(this);
         }
 
         private void OpenFloatingInspection_Click(object sender, RoutedEventArgs e)

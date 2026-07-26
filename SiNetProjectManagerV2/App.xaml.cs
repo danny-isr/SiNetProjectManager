@@ -228,6 +228,9 @@ namespace SiNetProjectManagerV2
             services.AddTransient<SiNet.Application.Email.Detail.IEmailBodyRenderer, SiNetProjectManagerV2.Services.Email.WebView2EmailBodyRenderer>();
             // Embedded ACC document viewer for the ProjectWork surface (host-seam; WebView2 lives here).
             services.AddSingleton<SiNet.Application.ProjectWork.IAccViewerHost, SiNetProjectManagerV2.Services.ProjectWork.WebView2AccViewerHost>();
+            // After native task completion, refresh floating/task-panel lists via ActiveProjectContext.
+            services.AddSingleton<SiNet.Application.Tasks.ITaskListChangeNotifier,
+                SiNetProjectManagerV2.Services.ActiveProjectTaskListChangeNotifier>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailAttachmentProjectFilePickerHost,
                 SiNetProjectManagerV2.Services.Email.EmailAttachmentProjectFilePickerHost>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailFilingProjectPickerHost,

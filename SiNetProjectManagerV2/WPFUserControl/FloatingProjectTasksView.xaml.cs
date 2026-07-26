@@ -20,6 +20,64 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
     private static int _debugInstanceCount;
     // #endregion
 
+    private static readonly object LiveInstanceGate = new();
+    private static FloatingProjectTasksView? _liveInstance;
+
+    /// <summary>
+    /// Process-wide singleton: activates + refreshes an existing window, or creates one.
+    /// All open paths must use this — never <c>new FloatingProjectTasksView().Show()</c>.
+    /// </summary>
+    public static FloatingProjectTasksView ShowOrActivate(Window? owner)
+    {
+        lock (LiveInstanceGate)
+        {
+            if (_liveInstance is not null)
+            {
+                try
+                {
+                    if (_liveInstance.IsLoaded)
+                    {
+                        // #region agent log
+                        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                            "Tasks.FloatWindow",
+                            "static-singleton activate-existing + refresh");
+                        // #endregion
+                        if (_liveInstance.ViewModel.RefreshCommand.CanExecute(null))
+                            _liveInstance.ViewModel.RefreshCommand.Execute(null);
+                        if (_liveInstance.WindowState == WindowState.Minimized)
+                            _liveInstance.WindowState = WindowState.Normal;
+                        _liveInstance.Activate();
+                        return _liveInstance;
+                    }
+                }
+                catch
+                {
+                    _liveInstance = null;
+                }
+            }
+
+            // #region agent log
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "Tasks.FloatWindow",
+                "static-singleton create-new");
+            // #endregion
+            var created = new FloatingProjectTasksView();
+            _liveInstance = created;
+            if (owner is not null)
+                created.Owner = owner;
+            created.Closed += (_, _) =>
+            {
+                lock (LiveInstanceGate)
+                {
+                    if (ReferenceEquals(_liveInstance, created))
+                        _liveInstance = null;
+                }
+            };
+            created.Show();
+            return created;
+        }
+    }
+
     public FloatingProjectTasksView()
     {
         InitializeComponent();
@@ -52,6 +110,35 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
+    }
+
+    /// <summary>
+    /// Last-resort guard: if somehow constructed outside <see cref="ShowOrActivate"/> while another
+    /// instance is live, close this duplicate immediately after the HWND exists.
+    /// </summary>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        lock (LiveInstanceGate)
+        {
+            if (_liveInstance is not null
+                && !ReferenceEquals(_liveInstance, this)
+                && _liveInstance.IsLoaded)
+            {
+                // #region agent log
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "Tasks.FloatWindow",
+                    "duplicate OnSourceInitialized — closing self");
+                // #endregion
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try { Close(); } catch { /* already closing */ }
+                }));
+                return;
+            }
+
+            _liveInstance = this;
+        }
     }
 
     /// <summary>Gets the ViewModel for external access.</summary>
