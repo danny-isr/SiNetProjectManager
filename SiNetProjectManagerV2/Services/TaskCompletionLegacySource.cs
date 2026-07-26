@@ -79,7 +79,7 @@ internal sealed class TaskCompletionLegacySource : ILegacyTaskCompletionSource
                 StageAdvanceResult: null);
         }
 
-        return new LegacyTaskCompletionResultDto(
+        var mapped = new LegacyTaskCompletionResultDto(
             Success: result.Success,
             TaskClosed: result.TaskClosed,
             WorkflowAdvanced: result.WorkflowAdvanced,
@@ -88,5 +88,10 @@ internal sealed class TaskCompletionLegacySource : ILegacyTaskCompletionSource
             NewProjectStatusCode: result.NewProjectStatusCode,
             RecordedTaskResultCode: result.RecordedTaskResultCode,
             StageAdvanceResult: result.StageAdvanceResult);
+
+        if (result.Success)
+            SiNetSQL.Services.ActiveProjectContext.Instance.NotifyTaskDataChanged();
+
+        return mapped;
     }
 }

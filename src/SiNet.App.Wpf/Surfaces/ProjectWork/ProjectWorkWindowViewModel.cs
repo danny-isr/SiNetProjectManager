@@ -51,6 +51,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         _taskHeader = "\u05DE\u05E9\u05D9\u05DE\u05EA \u05E2\u05D1\u05D5\u05D3\u05D4 (\u05EA\u05E6\u05D5\u05D2\u05EA \u05E2\u05D9\u05E6\u05D5\u05D1)";
         AllowedResultCodes.Add("MaterialComplete");
         AllowedResultCodes.Add("MaterialMissing");
+        RebuildResultOptions();
     }
 
     public ProjectWorkWindowViewModel(
@@ -71,6 +72,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         _selector = selector;
 
         AllowedResultCodes = new ObservableCollection<string>();
+        AllowedResultOptions = new ObservableCollection<TaskResultOption>();
 
         CompleteTaskCommand = new AsyncRelayCommand(
             async () => { _ = await CompleteFromTaskAsync().ConfigureAwait(true); },
@@ -135,13 +137,36 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<string> AllowedResultCodes { get; }
 
+    /// <summary>Hebrew display rows for the completion ComboBox (Code stays English for completion).</summary>
+    public ObservableCollection<TaskResultOption> AllowedResultOptions { get; }
+
+    private TaskResultOption? _selectedResultOption;
+
+    public TaskResultOption? SelectedResultOption
+    {
+        get => _selectedResultOption;
+        set
+        {
+            if (SetField(ref _selectedResultOption, value))
+                SelectedResultCode = value?.Code;
+        }
+    }
+
     public string? SelectedResultCode
     {
         get => _selectedResultCode;
         set
         {
             if (SetField(ref _selectedResultCode, value))
+            {
+                if (_selectedResultOption?.Code != value)
+                {
+                    _selectedResultOption = AllowedResultOptions.FirstOrDefault(o => o.Code == value);
+                    OnPropertyChanged(nameof(SelectedResultOption));
+                }
+
                 (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
         }
     }
 
@@ -178,6 +203,8 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         _loaded = true;
         AllowedResultCodes.Clear();
         SelectedResultCode = null;
+        AllowedResultOptions.Clear();
+        SelectedResultOption = null;
         TaskHeader = string.Empty;
         StatusMessage = "\u05DE\u05D5\u05DB\u05DF";
         OnPropertyChanged(nameof(IsTaskMode));
@@ -228,15 +255,16 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         AllowedResultCodes.Clear();
         foreach (var code in context.AllowedResultCodes)
             AllowedResultCodes.Add(code);
+        RebuildResultOptions();
         SelectedResultCode = AllowedResultCodes.Count == 1 ? AllowedResultCodes[0] : null;
 
         // #region agent log
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
             "ProjectWork.Results",
-            $"task=#{context.TaskId} comboShowsRawCodes=[{string.Join(",", AllowedResultCodes)}]");
+            $"task=#{context.TaskId} comboShowsRawCodes=[{string.Join(",", AllowedResultCodes)}] display=[{string.Join(",", AllowedResultOptions.Select(o => o.DisplayName))}]");
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
             "ProjectWork.AccPopOut",
-            "new ProjectWork surface has no AccDock/PopOut control");
+            "ProjectWork AccDock/PopOut control available on surface");
         // #endregion
 
         TaskHeader = string.IsNullOrWhiteSpace(context.TaskTypeCode)
@@ -244,7 +272,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             : $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u2014 {context.TaskTypeCode}";
 
         await BindProjectAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
-        await LoadTreeAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
+        await LoadTreeAsync(context.ProjectId, cancellationToken, forceReload: true).ConfigureAwait(true);
 
         _loaded = true;
         StatusMessage = $"\u05E0\u05E4\u05EA\u05D7\u05D4 \u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u05E2\u05D1\u05D5\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId}.";
@@ -279,14 +307,24 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             : $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {projectId}";
     }
 
-    private async Task LoadTreeAsync(int projectId, CancellationToken cancellationToken)
+    private async Task LoadTreeAsync(int projectId, CancellationToken cancellationToken, bool forceReload = false)
     {
-        if (_tree is null || projectId <= 0 || projectId == _lastLoadedProjectId)
+        if (_tree is null || projectId <= 0)
         {
             // #region agent log
             SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
                 "ProjectWork.LoadTree",
-                $"SKIP tree=null={_tree is null} projectId={projectId} lastLoaded={_lastLoadedProjectId}");
+                $"SKIP tree=null={_tree is null} projectId={projectId} lastLoaded={_lastLoadedProjectId} force={forceReload}");
+            // #endregion
+            return;
+        }
+
+        if (!forceReload && projectId == _lastLoadedProjectId)
+        {
+            // #region agent log
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "ProjectWork.LoadTree",
+                $"SKIP tree=null=False projectId={projectId} lastLoaded={_lastLoadedProjectId} force={forceReload}");
             // #endregion
             return;
         }
@@ -295,7 +333,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         // #region agent log
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
             "ProjectWork.LoadTree",
-            $"LOAD projectId={projectId}");
+            $"LOAD projectId={projectId} force={forceReload}");
         // #endregion
         try
         {
@@ -306,6 +344,13 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             // A failed tree load must not break the task shell; the status bar reflects scan state.
             _lastLoadedProjectId = 0;
         }
+    }
+
+    private void RebuildResultOptions()
+    {
+        AllowedResultOptions.Clear();
+        foreach (var code in AllowedResultCodes)
+            AllowedResultOptions.Add(new TaskResultOption(code, TaskResultDisplayNames.For(code)));
     }
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)

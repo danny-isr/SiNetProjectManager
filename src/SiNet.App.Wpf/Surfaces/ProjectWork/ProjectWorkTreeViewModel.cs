@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.Application.ProjectWork;
@@ -62,6 +63,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _folderPathResolver = folderPathResolver;
         _writePolicy = writePolicy;
         _index.InFlightChanged += OnInFlightChanged;
+        if (_accViewerHost is not null)
+            _accViewerHost.TabClosed += OnAccTabClosed;
     }
 
     /// <summary>True when ACC write operations are enabled by the ACC-write gate.</summary>
@@ -349,6 +352,12 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 Details = FormatDetails(sf),
             };
             version.OpenCommand = new AsyncRelayCommand(() => OpenVersionAsync(version));
+            if (version.IsAcc)
+            {
+                version.AccTabOpenChanged = OnVersionAccTabToggled;
+                if (_accViewerHost is not null && !string.IsNullOrEmpty(version.AccItemId))
+                    version.SetAccTabOpenSilent(_accViewerHost.IsTabOpen(version.AccItemId));
+            }
             WireVersionCommands(version);
             alt.Children.Add(version);
             folder.HasFiles = true;
@@ -437,31 +446,39 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         {
             if (version.IsAcc)
             {
-                if (string.IsNullOrEmpty(version.AccViewerUrl))
+                if (string.IsNullOrEmpty(version.AccViewerUrl) && string.IsNullOrEmpty(version.AccItemId))
+                    return new FileOpenResult(FileOpenOutcome.NotFound);
+
+                var viewerUrl = ResolveAccViewerUrl(version);
+                if (string.IsNullOrEmpty(viewerUrl))
                     return new FileOpenResult(FileOpenOutcome.NotFound);
 
                 // #region agent log
                 SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
                     "ProjectWork.AccOpen",
-                    $"title='{version.Title}' itemIdLen={(version.AccItemId?.Length ?? 0)} hasEntityId={version.AccViewerUrl!.Contains("entityId=", StringComparison.Ordinal)} hostAvailable={_accViewerHost?.IsAvailable == true}");
+                    $"title='{version.Title}' itemIdLen={(version.AccItemId?.Length ?? 0)} hasEntityId={viewerUrl.Contains("entityId=", StringComparison.Ordinal)} hostAvailable={_accViewerHost?.IsAvailable == true}");
                 SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
                     "ProjectWork.AccTabUi",
-                    "open-path has no IsAccTabOpen tree feedback on new ProjectWork surface");
+                    "open-path sets IsAccTabOpen on VersionNodeVm");
                 // #endregion
 
                 // Prefer the embedded ACC viewer (host-seam); fall back to an external browser tab.
                 if (_accViewerHost is { IsAvailable: true })
                 {
-                    var tabKey = string.IsNullOrEmpty(version.AccItemId) ? version.AccViewerUrl! : version.AccItemId!;
+                    var tabKey = string.IsNullOrEmpty(version.AccItemId) ? viewerUrl : version.AccItemId!;
                     var opened = await _accViewerHost
-                        .OpenOrActivateTabAsync(new AccViewerTabRequest(tabKey, version.Title, version.AccViewerUrl!))
+                        .OpenOrActivateTabAsync(new AccViewerTabRequest(tabKey, version.Title, viewerUrl))
                         .ConfigureAwait(true);
                     if (opened)
-                        return new FileOpenResult(FileOpenOutcome.OpenedInAcc, AccViewerUrl: version.AccViewerUrl);
+                    {
+                        version.SetAccTabOpenSilent(true);
+                        return new FileOpenResult(FileOpenOutcome.OpenedInAcc, AccViewerUrl: viewerUrl);
+                    }
                 }
 
-                Process.Start(new ProcessStartInfo(version.AccViewerUrl) { UseShellExecute = true });
-                return new FileOpenResult(FileOpenOutcome.OpenedInAcc, AccViewerUrl: version.AccViewerUrl);
+                Process.Start(new ProcessStartInfo(viewerUrl) { UseShellExecute = true });
+                version.SetAccTabOpenSilent(true);
+                return new FileOpenResult(FileOpenOutcome.OpenedInAcc, AccViewerUrl: viewerUrl);
             }
 
             if (version.IsDrive)
@@ -1002,6 +1019,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _disposed = true;
 
         _index.InFlightChanged -= OnInFlightChanged;
+        if (_accViewerHost is not null)
+            _accViewerHost.TabClosed -= OnAccTabClosed;
         _loadCts?.Cancel();
         _loadCts?.Dispose();
         _watcher?.Dispose();
@@ -1010,5 +1029,81 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         // must not be cleared when a floating/task surface disposes).
         _activeHub.UnregisterProvider(this);
         _openHub.UnregisterProvider(this);
+    }
+
+    private void OnAccTabClosed(string tabKey)
+    {
+        foreach (var version in EnumerateVersions())
+        {
+            var key = string.IsNullOrEmpty(version.AccItemId) ? version.AccViewerUrl : version.AccItemId;
+            if (string.Equals(key, tabKey, StringComparison.Ordinal))
+                version.SetAccTabOpenSilent(false);
+        }
+    }
+
+    private void OnVersionAccTabToggled(VersionNodeVm version, bool isOpen)
+    {
+        if (!version.IsAcc)
+            return;
+
+        if (isOpen)
+        {
+            _ = OpenVersionAsync(version);
+            return;
+        }
+
+        var tabKey = string.IsNullOrEmpty(version.AccItemId) ? version.AccViewerUrl : version.AccItemId;
+        if (!string.IsNullOrEmpty(tabKey))
+            _accViewerHost?.CloseTab(tabKey!);
+    }
+
+    private IEnumerable<VersionNodeVm> EnumerateVersions()
+        => RootFolders.OfType<ProjectFolderNodeVm>()
+            .SelectMany(EnumerateFolderVersions);
+
+    private static IEnumerable<VersionNodeVm> EnumerateFolderVersions(ProjectFolderNodeVm folder)
+    {
+        foreach (var file in folder.Children.OfType<ProjectFileNodeVm>())
+        {
+            foreach (var alt in file.Children.OfType<AlternativeNodeVm>())
+            {
+                foreach (var version in alt.Children.OfType<VersionNodeVm>())
+                    yield return version;
+            }
+        }
+
+        foreach (var child in folder.Children.OfType<ProjectFolderNodeVm>())
+        {
+            foreach (var version in EnumerateFolderVersions(child))
+                yield return version;
+        }
+    }
+
+    private static string? ResolveAccViewerUrl(VersionNodeVm version)
+    {
+        var existing = version.AccViewerUrl;
+        if (!string.IsNullOrEmpty(existing)
+            && existing.Contains("entityId=", StringComparison.Ordinal))
+            return existing;
+
+        if (string.IsNullOrEmpty(version.AccItemId) || string.IsNullOrEmpty(version.AccProjectId))
+            return existing;
+
+        var folderId = TryExtractFolderUrn(existing);
+        return AccResolvedDocsUrlBuilder.Build(version.AccProjectId, folderId ?? string.Empty, version.AccItemId);
+    }
+
+    private static string? TryExtractFolderUrn(string? viewerUrl)
+    {
+        if (string.IsNullOrEmpty(viewerUrl))
+            return null;
+        const string marker = "folderUrn=";
+        var idx = viewerUrl.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return null;
+        var start = idx + marker.Length;
+        var end = viewerUrl.IndexOf('&', start);
+        var raw = end < 0 ? viewerUrl[start..] : viewerUrl[start..end];
+        return Uri.UnescapeDataString(raw);
     }
 }

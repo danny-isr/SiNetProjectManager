@@ -114,11 +114,8 @@ public sealed class AccFileStore : IFileStore
         if (result is null)
             yield break;
 
-        var viewerUrl = BuildFolderViewerUrl(accProjectId, accFolderId);
         // #region agent log
-        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
-            "ProjectWork.AccUrl",
-            $"ListFiles folder-only url hasEntityId={viewerUrl.Contains("entityId=", StringComparison.Ordinal)} folderIdLen={accFolderId.Length}");
+        var sampleLogged = false;
         // #endregion
 
         foreach (var entry in result.Entries)
@@ -128,6 +125,17 @@ public sealed class AccFileStore : IFileStore
 
             if (entry.Kind != AccFolderEntryKind.Item)
                 continue;
+
+            var viewerUrl = BuildItemViewerUrl(accProjectId, accFolderId, entry.Id);
+            // #region agent log
+            if (!sampleLogged)
+            {
+                sampleLogged = true;
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "ProjectWork.AccUrl",
+                    $"ListFiles item url hasEntityId={viewerUrl.Contains("entityId=", StringComparison.Ordinal)} itemIdLen={entry.Id.Length}");
+            }
+            // #endregion
 
             yield return new ScannedFile(
                 Source: FileStorageDestination.Acc,
@@ -183,7 +191,7 @@ public sealed class AccFileStore : IFileStore
             SizeBytes: 0,
             LastModified: DateTime.UtcNow,
             Parsed: ProjectFileNameParser.TryParse(targetFileName),
-            AccViewerUrl: BuildFolderViewerUrl(accProjectId, accFolderId),
+            AccViewerUrl: BuildItemViewerUrl(accProjectId, accFolderId, result.ItemId),
             AccProjectId: accProjectId);
     }
 
@@ -255,9 +263,16 @@ public sealed class AccFileStore : IFileStore
         return true;
     }
 
-    private static string BuildFolderViewerUrl(string accProjectId, string accFolderId)
+    /// <summary>
+    /// ACC Docs URL that opens a specific file (entityId) inside its folder.
+    /// Folder-only URLs open the directory listing — not the document the user clicked.
+    /// </summary>
+    private static string BuildItemViewerUrl(string accProjectId, string accFolderId, string itemId)
     {
         var guid = accProjectId.StartsWith("b.", StringComparison.Ordinal) ? accProjectId[2..] : accProjectId;
-        return $"https://acc.autodesk.com/docs/files/projects/{guid}?folderUrn={Uri.EscapeDataString(accFolderId)}";
+        var url = $"https://acc.autodesk.com/docs/files/projects/{guid}";
+        if (!string.IsNullOrWhiteSpace(accFolderId))
+            return $"{url}?folderUrn={Uri.EscapeDataString(accFolderId)}&entityId={Uri.EscapeDataString(itemId)}";
+        return $"{url}?entityId={Uri.EscapeDataString(itemId)}";
     }
 }

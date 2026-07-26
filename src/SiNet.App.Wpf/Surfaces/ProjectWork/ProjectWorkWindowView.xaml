@@ -29,6 +29,10 @@
                         <MenuItem Header="&#x05DE;&#x05D7;&#x05E7;&#x05D2;&#x05E8;&#x05E1;&#x05D4;&#x2026;" Command="{Binding DeleteCommand}" />
                     </ContextMenu>
                 </StackPanel.ContextMenu>
+                <CheckBox IsChecked="{Binding IsAccTabOpen, Mode=TwoWay}"
+                          Visibility="{Binding IsAcc, Converter={StaticResource BoolToVis}}"
+                          VerticalAlignment="Center" Margin="0,0,4,0"
+                          ToolTip="&#x05E4;&#x05EA;&#x05D5;&#x05D7;/&#x05E1;&#x05D2;&#x05D5;&#x05E8; &#x05D8;&#x05D0;&#x05D1; ACC"/>
                 <TextBlock Text="&#x26A0;" Foreground="#FFD32F2F" VerticalAlignment="Center" Margin="0,0,4,0"
                            ToolTip="&#x05D4;&#x05EA;&#x05E0;&#x05D2;&#x05E9;&#x05D5;&#x05EA; &#x05E1;&#x05D9;&#x05D5;&#x05DE;&#x05D5;&#x05EA;"
                            Visibility="{Binding HasExtensionConflict, Converter={StaticResource BoolToVis}}" />
@@ -159,16 +163,23 @@
                 <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center"
                               VerticalAlignment="Stretch" Background="Transparent" />
 
-                <Border Grid.Column="2" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1" CornerRadius="6">
-                    <!-- The embedded ACC viewer host (WebView2, provided by the host via IAccViewerHost)
-                         replaces this ContentControl's content on attach. Until then / when unavailable,
-                         the placeholder explains the external-browser fallback. -->
-                    <ContentControl x:Name="AccViewerHost">
-                        <Border Background="#FFFDF6EC" Padding="14">
-                            <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="#FF7A5B12" VerticalAlignment="Top"
-                                       Text="&#x05E6;&#x05D5;&#x05E4;&#x05D4; &#x05D4;-ACC &#x05D4;&#x05DE;&#x05D5;&#x05D8;&#x05DE;&#x05E2; &#x05D9;&#x05D5;&#x05E4;&#x05D9;&#x05E2; &#x05DB;&#x05D0;&#x05DF;. &#x05D1;&#x05D3;&#x05E4;&#x05D3;&#x05E4;&#x05DF; &#x05D6;&#x05D4; &#x05D0;&#x05D9;&#x05DF; &#x05E6;&#x05D5;&#x05E4;&#x05D4; &#x05DE;&#x05D5;&#x05D8;&#x05DE;&#x05E2; &#x2014; &#x05E7;&#x05D1;&#x05E6;&#x05D9; ACC &#x05D9;&#x05D9;&#x05E4;&#x05EA;&#x05D7;&#x05D5; &#x05D1;&#x05D3;&#x05E4;&#x05D3;&#x05E4;&#x05DF; &#x05D7;&#x05D9;&#x05E6;&#x05D5;&#x05E0;&#x05D9;." />
-                        </Border>
-                    </ContentControl>
+                <Border x:Name="AccViewerDockHost" Grid.Column="2" Background="White" BorderBrush="#FFE5E7EB" BorderThickness="1" CornerRadius="6">
+                    <DockPanel>
+                        <Button x:Name="AccDockToggleButton" DockPanel.Dock="Top"
+                                HorizontalAlignment="Left" Margin="6,6,6,0" Padding="10,4"
+                                Click="AccDockToggleButton_Click"
+                                Content="&#x05E0;&#x05EA;&#x05E7; &#x05DC;&#x05D7;&#x05DC;&#x05D5;&#x05DF; &#x05E6;&#x05E3;"
+                                ToolTip="&#x05E0;&#x05EA;&#x05E7; &#x05D0;&#x05EA; &#x05E6;&#x05D5;&#x05E4;&#x05D4; ACC &#x05DC;&#x05D7;&#x05DC;&#x05D5;&#x05DF; &#x05E8;&#x05D7;&#x05D1; &#x05DE;&#x05E2;&#x05DC; &#x05D4;&#x05DE;&#x05E1;&#x05DA;"/>
+                        <!-- The embedded ACC viewer host (WebView2, provided by the host via IAccViewerHost)
+                             replaces this ContentControl's content on attach. Until then / when unavailable,
+                             the placeholder explains the external-browser fallback. -->
+                        <ContentControl x:Name="AccViewerHost">
+                            <Border Background="#FFFDF6EC" Padding="14">
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="#FF7A5B12" VerticalAlignment="Top"
+                                           Text="&#x05E6;&#x05D5;&#x05E4;&#x05D4; &#x05D4;-ACC &#x05D4;&#x05DE;&#x05D5;&#x05D8;&#x05DE;&#x05E2; &#x05D9;&#x05D5;&#x05E4;&#x05D9;&#x05E2; &#x05DB;&#x05D0;&#x05DF;. &#x05D1;&#x05D3;&#x05E4;&#x05D3;&#x05E4;&#x05DF; &#x05D6;&#x05D4; &#x05D0;&#x05D9;&#x05DF; &#x05E6;&#x05D5;&#x05E4;&#x05D4; &#x05DE;&#x05D5;&#x05D8;&#x05DE;&#x05E2; &#x2014; &#x05E7;&#x05D1;&#x05E6;&#x05D9; ACC &#x05D9;&#x05D9;&#x05E4;&#x05EA;&#x05D7;&#x05D5; &#x05D1;&#x05D3;&#x05E4;&#x05D3;&#x05E4;&#x05DF; &#x05D7;&#x05D9;&#x05E6;&#x05D5;&#x05E0;&#x05D9;." />
+                            </Border>
+                        </ContentControl>
+                    </DockPanel>
                 </Border>
             </Grid>
 
@@ -185,8 +196,9 @@
                            VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13" Foreground="#FF374151" />
 
                 <ComboBox Grid.Column="1"
-                          ItemsSource="{Binding AllowedResultCodes}"
-                          SelectedItem="{Binding SelectedResultCode, Mode=TwoWay}"
+                          ItemsSource="{Binding AllowedResultOptions}"
+                          SelectedItem="{Binding SelectedResultOption, Mode=TwoWay}"
+                          DisplayMemberPath="DisplayName"
                           MinWidth="180" VerticalAlignment="Center" />
 
                 <Button Grid.Column="2"

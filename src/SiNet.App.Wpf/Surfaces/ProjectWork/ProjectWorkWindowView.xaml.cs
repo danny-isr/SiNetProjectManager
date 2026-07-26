@@ -18,6 +18,8 @@ public partial class ProjectWorkWindowView : UserControl, IDisposable
     private IAccViewerHost? _accViewerHost;
     private Point _dragStart;
     private bool _disposed;
+    private Window? _accFloatWindow;
+    private ContentControl? _accFloatHost;
 
     /// <summary>Design/standalone constructor.</summary>
     public ProjectWorkWindowView()
@@ -129,6 +131,64 @@ public partial class ProjectWorkWindowView : UserControl, IDisposable
             accViewerHost.AttachHost(AccViewerHost);
     }
 
+    private void AccDockToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_accFloatWindow is null)
+            PopOutAccViewer();
+        else
+            DockAccViewer();
+    }
+
+    private void PopOutAccViewer()
+    {
+        if (_accViewerHost is not { IsAvailable: true })
+            return;
+
+        var owner = Window.GetWindow(this);
+        _accFloatHost = new ContentControl();
+        _accViewerHost.AttachHost(_accFloatHost);
+
+        _accFloatWindow = new Window
+        {
+            Title = "ACC - \u05EA\u05E6\u05D5\u05D2\u05EA \u05E7\u05D1\u05E6\u05D9\u05DD",
+            Owner = owner,
+            Width = Math.Max(900, (owner?.ActualWidth ?? 1200) * 0.85),
+            Height = Math.Max(650, (owner?.ActualHeight ?? 800) * 0.9),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Topmost = true,
+            Content = _accFloatHost,
+        };
+        AccDockToggleButton.Content = "החזר לפאנל";
+        _accFloatWindow.Closed += (_, _) =>
+        {
+            if (_accFloatWindow != null)
+                DockAccViewer();
+        };
+        // #region agent log
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.AccPopOut",
+            "pop-out opened Topmost=true");
+        // #endregion
+        _accFloatWindow.Show();
+    }
+
+    private void DockAccViewer()
+    {
+        if (_accFloatWindow is null)
+            return;
+
+        _accFloatWindow.Content = null;
+        _accFloatHost = null;
+        if (_accViewerHost is { IsAvailable: true })
+            _accViewerHost.AttachHost(AccViewerHost);
+
+        AccDockToggleButton.Content = "נתק לחלון צף";
+        var win = _accFloatWindow;
+        _accFloatWindow = null;
+        if (win.IsLoaded)
+            win.Close();
+    }
+
     /// <summary>The bound view model.</summary>
     public ProjectWorkWindowViewModel ViewModel { get; }
 
@@ -152,6 +212,8 @@ public partial class ProjectWorkWindowView : UserControl, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        if (_accFloatWindow is not null)
+            DockAccViewer();
         _accViewerHost?.Clear();
         ViewModel.Dispose();
     }

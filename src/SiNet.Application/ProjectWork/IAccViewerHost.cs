@@ -18,6 +18,9 @@ public interface IAccViewerHost
     /// <summary>Maximum number of concurrently open tabs the viewer allows.</summary>
     int MaxTabs { get; }
 
+    /// <summary>Raised after a tab is closed (X on the strip or explicit <see cref="CloseTab"/>).</summary>
+    event Action<string>? TabClosed;
+
     /// <summary>Attaches the viewer to a WPF host element (e.g. a <c>ContentControl</c> or panel).</summary>
     void AttachHost(object hostElement);
 
@@ -27,6 +30,9 @@ public interface IAccViewerHost
     /// reached or the host is not ready.
     /// </summary>
     Task<bool> OpenOrActivateTabAsync(AccViewerTabRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>True when a tab with <paramref name="tabKey"/> is currently open.</summary>
+    bool IsTabOpen(string tabKey);
 
     /// <summary>Closes the tab identified by <paramref name="tabKey"/>, if open.</summary>
     void CloseTab(string tabKey);

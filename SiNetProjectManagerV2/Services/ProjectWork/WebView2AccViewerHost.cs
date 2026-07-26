@@ -33,6 +33,8 @@ internal sealed class WebView2AccViewerHost : IAccViewerHost
 
     public int MaxTabs => DefaultMaxTabs;
 
+    public event Action<string>? TabClosed;
+
     public void AttachHost(object hostElement)
     {
         if (hostElement is not ContentControl host)
@@ -47,6 +49,9 @@ internal sealed class WebView2AccViewerHost : IAccViewerHost
         _host = host;
         host.Content = _root;
     }
+
+    public bool IsTabOpen(string tabKey)
+        => !string.IsNullOrEmpty(tabKey) && _tabs.ContainsKey(tabKey);
 
     public async Task<bool> OpenOrActivateTabAsync(AccViewerTabRequest request, CancellationToken cancellationToken = default)
     {
@@ -112,6 +117,8 @@ internal sealed class WebView2AccViewerHost : IAccViewerHost
             if (next is not null)
                 Activate(next);
         }
+
+        TabClosed?.Invoke(tabKey);
     }
 
     public void Clear()

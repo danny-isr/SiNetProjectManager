@@ -153,6 +153,45 @@ public sealed class VersionNodeVm : ProjectWorkNodeVm
     /// <summary>True when the version lives in Google Drive.</summary>
     public bool IsDrive => StorageDestination == FileStorageDestination.GoogleDrive;
 
+    private bool _isAccTabOpen;
+    private bool _suppressAccTabToggle;
+
+    /// <summary>
+    /// Checked when this ACC version's viewer tab is open. Two-way: uncheck closes the tab.
+    /// </summary>
+    public bool IsAccTabOpen
+    {
+        get => _isAccTabOpen;
+        set
+        {
+            if (_suppressAccTabToggle || _isAccTabOpen == value)
+                return;
+            if (!SetField(ref _isAccTabOpen, value))
+                return;
+            AccTabOpenChanged?.Invoke(this, value);
+        }
+    }
+
+    /// <summary>Raised when the user toggles <see cref="IsAccTabOpen"/> (not when set programmatically via <see cref="SetAccTabOpenSilent"/>).</summary>
+    public Action<VersionNodeVm, bool>? AccTabOpenChanged { get; set; }
+
+    /// <summary>Updates the checkbox without raising <see cref="AccTabOpenChanged"/>.</summary>
+    public void SetAccTabOpenSilent(bool isOpen)
+    {
+        _suppressAccTabToggle = true;
+        try
+        {
+            if (_isAccTabOpen == isOpen)
+                return;
+            _isAccTabOpen = isOpen;
+            OnPropertyChanged(nameof(IsAccTabOpen));
+        }
+        finally
+        {
+            _suppressAccTabToggle = false;
+        }
+    }
+
     /// <summary>Formatted size/date for display; may be empty.</summary>
     public string? Details { get; init; }
 

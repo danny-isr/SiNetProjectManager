@@ -465,9 +465,15 @@ namespace SiNetProjectManagerV2.WPFUserControl
 
                 case ActionFollowUp.TaskCreationDialog:
                 {
-                    var tasksWindow = new FloatingProjectTasksView();
-                    if (owner != null) tasksWindow.Owner = owner;
-                    tasksWindow.Show();
+                    var mainWindow = owner as MainWindow ?? Application.Current.MainWindow as MainWindow;
+                    if (mainWindow is not null)
+                        mainWindow.ShowOrActivateFloatingTasks();
+                    else
+                    {
+                        var tasksWindow = new FloatingProjectTasksView();
+                        if (owner != null) tasksWindow.Owner = owner;
+                        tasksWindow.Show();
+                    }
                     break;
                 }
 

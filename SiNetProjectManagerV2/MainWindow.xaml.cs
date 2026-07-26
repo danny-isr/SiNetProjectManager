@@ -435,10 +435,23 @@ namespace SiNetProjectManagerV2
         // ─────────────────────────────────────────────────────────────
 
         private void OpenFloatingTaskPanel_Click(object sender, RoutedEventArgs e)
+            => ShowOrActivateFloatingTasks();
+
+        /// <summary>
+        /// Singleton entry for the floating project-tasks window. Reuses the existing instance when
+        /// still open, refreshes its list, and never creates a second window.
+        /// </summary>
+        public void ShowOrActivateFloatingTasks()
         {
-            // Singleton: reuse existing window if still open
             if (_floatingTasksWindow is { IsLoaded: true })
             {
+                // #region agent log
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "Tasks.FloatWindow",
+                    "activate-existing + refresh");
+                // #endregion
+                if (_floatingTasksWindow.ViewModel.RefreshCommand.CanExecute(null))
+                    _floatingTasksWindow.ViewModel.RefreshCommand.Execute(null);
                 _floatingTasksWindow.Activate();
                 return;
             }
