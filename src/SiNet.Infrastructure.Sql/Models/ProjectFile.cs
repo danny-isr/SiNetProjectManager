@@ -27,9 +27,15 @@ public partial  class ProjectFile
 
     /// <summary>
     /// When true, this catalog slot is mandatory for completion of tasks that gate on required files
-    /// (e.g. PrepareQuoteCalculation / תחשיב). Missing physical versions are shown as orange in ProjectWork.
+    /// (e.g. PrepareQuoteCalculation / אומדן הצעת מחיר). Missing physical versions are shown as orange in ProjectWork.
     /// </summary>
     public bool IsRequired { get; set; }
+
+    /// <summary>
+    /// Stable machine catalog key (e.g. <c>QuoteEstimate</c>). Display <see cref="Title"/> may change;
+    /// bootstrap and runtime resolve required slots by this code.
+    /// </summary>
+    public string? Code { get; set; }
 
     /// <summary>
     /// Default storage destination for files of this type.

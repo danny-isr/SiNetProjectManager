@@ -32,7 +32,7 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        await ProjectFileSchemaPatches.EnsureIsRequiredColumnAsync(db, cancellationToken).ConfigureAwait(false);
+        await ProjectFileSchemaPatches.EnsureCatalogColumnsAsync(db, cancellationToken).ConfigureAwait(false);
 
         var project = await db.Projects.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken)
@@ -41,6 +41,11 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
             return null;
 
         var projectNumber = (int)(project.Number ?? 0);
+        var projectNameAndNumber = !string.IsNullOrWhiteSpace(project.NameAndNumber)
+            ? project.NameAndNumber.Trim()
+            : projectNumber > 0
+                ? $"({projectNumber}){(project.Title ?? string.Empty).Trim()}"
+                : project.Title?.Trim();
 
         var allFolders = await db.ProjectFolders.AsNoTracking()
             .ToListAsync(cancellationToken)
@@ -77,7 +82,7 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
 
         var rootDtos = roots.Select(r => BuildFolder(r, childrenByParent, filesByFolder, syntheticRootIds)).ToList();
 
-        return new ProjectFileTreeDto(projectId, projectNumber, rootDtos);
+        return new ProjectFileTreeDto(projectId, projectNumber, rootDtos, projectNameAndNumber);
     }
 
     private static ProjectFolderDto BuildFolder(
@@ -115,10 +120,14 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
     private static ProjectFileDefinitionDto ToFileDto(ProjectFile file)
     {
         var rawTitle = file.Title ?? string.Empty;
-        var baseName = file.IsRequired
-            && ProjectFileRequiredTachshivSeedData.IsTachshivCatalogTitle(rawTitle)
-                ? ProjectFileRequiredTachshivSeedData.DisplayTitle
-                : rawTitle;
+        var catalogDefault = ProjectFileCatalogSeedData.DefaultTitleForCode(file.Code);
+        var baseName = !string.IsNullOrEmpty(catalogDefault) && string.IsNullOrWhiteSpace(rawTitle)
+            ? catalogDefault
+            : rawTitle;
+
+        // Prefer current Title; if empty and Code is known, show bootstrap default.
+        if (string.IsNullOrWhiteSpace(baseName) && !string.IsNullOrEmpty(catalogDefault))
+            baseName = catalogDefault;
 
         return new(
             FileId: file.Id,
@@ -131,6 +140,7 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
             ProjectType: file.TypeProjId,
             Number: file.Number.HasValue ? (int)file.Number.Value : null,
             TemplateLocation: string.IsNullOrWhiteSpace(file.TemplateLocation) ? null : file.TemplateLocation,
-            IsRequired: file.IsRequired);
+            IsRequired: file.IsRequired,
+            Code: file.Code);
     }
 }

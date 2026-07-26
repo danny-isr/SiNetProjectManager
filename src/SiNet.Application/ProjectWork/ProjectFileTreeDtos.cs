@@ -11,10 +11,14 @@ namespace SiNet.Application.ProjectWork;
 /// <param name="ProjectId">Owning project id.</param>
 /// <param name="ProjectNumber">Owning project number (used to match scanned filenames).</param>
 /// <param name="RootFolders">Top-level project folders (children of the synthetic project-root folder).</param>
+/// <param name="ProjectNameAndNumber">
+/// Legacy folder label <c>(number)name</c> (from <c>Project.NameAndNumber</c>), used by «שמור שם פרויקט».
+/// </param>
 public sealed record ProjectFileTreeDto(
     int ProjectId,
     int ProjectNumber,
-    IReadOnlyList<ProjectFolderDto> RootFolders);
+    IReadOnlyList<ProjectFolderDto> RootFolders,
+    string? ProjectNameAndNumber = null);
 
 /// <summary>
 /// DB-defined folder node with its subfolders and file definitions. Folder identity comes from the
@@ -47,6 +51,7 @@ public sealed record ProjectFolderDto(
 /// <param name="Number">File number used to match scanned files; <see langword="null"/> when unset.</param>
 /// <param name="TemplateLocation">Template source path, when a template exists; <see langword="null"/> otherwise.</param>
 /// <param name="IsRequired">True when a physical version is required before gated task completion.</param>
+/// <param name="Code">Stable catalog code (e.g. QuoteEstimate); <see langword="null"/> for uncoded legacy rows.</param>
 public sealed record ProjectFileDefinitionDto(
     int FileId,
     string BaseName,
@@ -56,4 +61,5 @@ public sealed record ProjectFileDefinitionDto(
     int? ProjectType,
     int? Number,
     string? TemplateLocation,
-    bool IsRequired = false);
+    bool IsRequired = false,
+    string? Code = null);

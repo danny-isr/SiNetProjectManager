@@ -67,16 +67,19 @@ public class SqlTaskManagementSeedService
                 var projectStatusesInserted = ReconcileProjectStatusesToCanonical();
                 var taskResultsInserted = EnsureTaskResultDefinitions_CreateMissingOnly();
                 var (inspectionStatusesInserted, inspectionStatusesUpdated) = UpsertInspectionNoteStatuses();
+                var catalogSummary = EnsureProjectFileCatalog();
 
                 _seedingCompleted = true;
 
-                if (taskTypesInserted > 0 || statusesInserted > 0 || projectStatusesInserted > 0 || taskResultsInserted > 0 || inspectionStatusesInserted > 0 || inspectionStatusesUpdated > 0)
+                if (taskTypesInserted > 0 || statusesInserted > 0 || projectStatusesInserted > 0 || taskResultsInserted > 0 || inspectionStatusesInserted > 0 || inspectionStatusesUpdated > 0
+                    || catalogSummary.Contains("inserted", StringComparison.Ordinal)
+                    || catalogSummary.Contains("updated", StringComparison.Ordinal))
                 {
-                    DevToolsLog.Info($"[SeedService] Static lookup seeding complete: {taskTypesInserted} TaskTypes, {statusesInserted} Statuses, {projectStatusesInserted} ProjectStatuses, {taskResultsInserted} TaskResultDefinitions created, InspectionNoteStatuses: {inspectionStatusesInserted} inserted / {inspectionStatusesUpdated} updated");
+                    DevToolsLog.Info($"[SeedService] Static lookup seeding complete: {taskTypesInserted} TaskTypes, {statusesInserted} Statuses, {projectStatusesInserted} ProjectStatuses, {taskResultsInserted} TaskResultDefinitions created, InspectionNoteStatuses: {inspectionStatusesInserted} inserted / {inspectionStatusesUpdated} updated; ProjectFileCatalog: {catalogSummary}");
                 }
                 else
                 {
-                    DevToolsLog.Info("[SeedService] Static lookup seeding complete: All data already exists");
+                    DevToolsLog.Info($"[SeedService] Static lookup seeding complete: All data already exists; ProjectFileCatalog: {catalogSummary}");
                 }
             }
             catch (Exception ex)
@@ -438,6 +441,22 @@ public class SqlTaskManagementSeedService
         }
 
         return inserted;
+    }
+
+    /// <summary>
+    /// Ensures curated <c>ProjectFile</c> catalog slots exist and are linked by stable <c>Code</c>.
+    /// </summary>
+    private string EnsureProjectFileCatalog()
+    {
+        try
+        {
+            return ProjectFileCatalogSeedData.Ensure(_context);
+        }
+        catch (Exception ex)
+        {
+            DevToolsLog.Error(ex, "[SeedService] ProjectFile catalog bootstrap failed");
+            throw;
+        }
     }
 
     /// <summary>

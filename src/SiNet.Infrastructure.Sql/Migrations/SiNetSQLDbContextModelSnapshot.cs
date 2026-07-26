@@ -3044,6 +3044,11 @@ namespace SiNetSQL.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("Code")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Hebrew_100_CI_AS");
+
                     b.Property<int>("StorageDestination")
                         .HasColumnType("int");
 
@@ -3084,6 +3089,10 @@ namespace SiNetSQL.Migrations
                     b.HasIndex(new[] { "Title" }, "uc_Title")
                         .IsUnique()
                         .HasFilter("[Title] IS NOT NULL");
+
+                    b.HasIndex(new[] { "Code" }, "ux_ProjectFile_Code")
+                        .IsUnique()
+                        .HasFilter("[Code] IS NOT NULL");
 
                     b.ToTable("ProjectFile", null, t =>
                         {

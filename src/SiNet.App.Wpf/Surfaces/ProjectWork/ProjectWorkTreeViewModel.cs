@@ -40,6 +40,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private string _scanStatus = string.Empty;
     private int _currentProjectId;
     private int? _currentProjectNumber;
+    private string? _currentProjectNameAndNumber;
 
     public ProjectWorkTreeViewModel(
         IProjectFileQueryService query,
@@ -118,12 +119,14 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             if (tree is null)
             {
                 _currentProjectNumber = null;
+                _currentProjectNameAndNumber = null;
                 ScanStatus = "הפרויקט לא נמצא או שאין לו עץ קבצים.";
                 RegisterProviders();
                 return;
             }
 
             _currentProjectNumber = tree.ProjectNumber;
+            _currentProjectNameAndNumber = tree.ProjectNameAndNumber;
 
             foreach (var rootDto in tree.RootFolders)
             {
@@ -307,6 +310,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 Number = fileDto.Number,
                 ParentFolderId = node.FolderId,
                 IsRequired = fileDto.IsRequired,
+                Code = fileDto.Code,
             };
             fileNode.RefreshRequiredMissing();
             WireFileCommands(fileNode);
@@ -439,6 +443,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             Number = def.Number,
             ParentFolderId = folder.FolderId,
             IsRequired = def.IsRequired,
+            Code = def.Code,
         };
         created.RefreshRequiredMissing();
         WireFileCommands(created);
@@ -960,7 +965,6 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     {
         folder.OpenFolderCommand = new AsyncRelayCommand(() => OpenFolderInExplorerAsync(folder));
         folder.CopyPathCommand = new RelayCommand(_ => CopyTextToClipboard(folder.FullPath, requireExistingDirectory: true));
-        folder.CopyFolderNameCommand = new RelayCommand(_ => CopyTextToClipboard(folder.Title));
         folder.CopyProjectNameCommand = new RelayCommand(_ => CopyProjectNameToClipboard());
     }
 
@@ -1011,9 +1015,11 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private void CopyProjectNameToClipboard()
     {
-        var text = _currentProjectNumber is { } n && n > 0
-            ? $"({n.ToString(System.Globalization.CultureInfo.InvariantCulture)})"
-            : null;
+        var text = !string.IsNullOrWhiteSpace(_currentProjectNameAndNumber)
+            ? _currentProjectNameAndNumber.Trim()
+            : _currentProjectNumber is { } n && n > 0
+                ? $"({n.ToString(System.Globalization.CultureInfo.InvariantCulture)})"
+                : null;
         CopyTextToClipboard(text);
     }
 

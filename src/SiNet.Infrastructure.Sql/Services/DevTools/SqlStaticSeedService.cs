@@ -97,26 +97,26 @@ public sealed class SqlStaticSeedService : IStaticSeedService
         var wfResult = await SeedWorkflowDefinitionsAsync(ct).ConfigureAwait(false);
         if (!wfResult.Succeeded) errors.AddRange(wfResult.Errors);
 
-        var tachshivResult = await SeedRequiredTachshivCatalogAsync(ct).ConfigureAwait(false);
-        if (!tachshivResult.Succeeded) errors.AddRange(tachshivResult.Errors);
+        var catalogResult = await SeedProjectFileCatalogAsync(ct).ConfigureAwait(false);
+        if (!catalogResult.Succeeded) errors.AddRange(catalogResult.Errors);
 
         return new SeedResult
         {
             Succeeded = errors.Count == 0,
             Summary =
                 $"Core seed: static={staticResult.Succeeded}, mappings={mapResult.Succeeded}, " +
-                $"workflow={wfResult.Succeeded}, tachshiv={tachshivResult.Succeeded}",
+                $"workflow={wfResult.Succeeded}, projectFileCatalog={catalogResult.Succeeded}",
             Errors = errors,
         };
     }
 
-    public async ValueTask<SeedResult> SeedRequiredTachshivCatalogAsync(CancellationToken ct = default)
+    public async ValueTask<SeedResult> SeedProjectFileCatalogAsync(CancellationToken ct = default)
     {
         EnsureSeedAuthorized();
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
-            var summary = await ProjectFileRequiredTachshivSeedData.EnsureAsync(db, ct).ConfigureAwait(false);
+            var summary = await ProjectFileCatalogSeedData.EnsureAsync(db, ct).ConfigureAwait(false);
             return Ok(summary);
         }
         catch (Exception ex)

@@ -4,6 +4,7 @@ using SiNet.Application.ProjectWork;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 using SiNet.Domain.Files;
+using SiNet.Infrastructure.Sql.Constants;
 using SiNet.Infrastructure.Sql.Services.SeedData;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -13,9 +14,9 @@ using FileStorageDestination = SiNet.Domain.Files.FileStorageDestination;
 
 namespace SiNet.App.Wpf.Tests.ProjectWork;
 
-public sealed class ProjectWorkRequiredTachshivTests
+public sealed class ProjectWorkRequiredOmdanTests
 {
-    private const string RequiredMessage = "יש להעלות את קובץ התחשיב לפני סיום המשימה.";
+    private const string RequiredMessage = "יש להעלות את קובץ אומדן הצעת מחיר לפני סיום המשימה.";
 
     private static ProjectFileTreeDto BuildRequiredTree(bool isRequired = true) => new(
         ProjectId: 5,
@@ -24,23 +25,25 @@ public sealed class ProjectWorkRequiredTachshivTests
         {
             new ProjectFolderDto(
                 FolderId: 10,
-                Name: "Docs",
+                Name: "ניהול כספי",
                 ParentFolderId: null,
                 Children: Array.Empty<ProjectFolderDto>(),
                 Files: new[]
                 {
                     new ProjectFileDefinitionDto(
                         FileId: 100,
-                        BaseName: "תחשיב",
+                        BaseName: "אומדן הצעת מחיר",
                         Extension: ".xlsx",
                         StorageDestination: FileStorageDestination.FileServer,
                         FolderId: 10,
-                        ProjectType: 3,
+                        ProjectType: 9,
                         Number: 7,
                         TemplateLocation: null,
-                        IsRequired: isRequired),
+                        IsRequired: isRequired,
+                        Code: "QuoteEstimate"),
                 }),
-        });
+        },
+        ProjectNameAndNumber: "(5)בדיקה");
 
     private static ProjectWorkTreeViewModel CreateTree(ProjectFileTreeDto tree, params ScannedFile[] scanned)
     {
@@ -70,7 +73,6 @@ public sealed class ProjectWorkRequiredTachshivTests
         Assert.True(file.IsRequired);
         Assert.True(file.IsRequiredMissing);
         Assert.False(file.HasPhysicalVersions);
-        Assert.True(file.ShowAddFileButton);
         Assert.True(folder.HasRequiredMissing);
         Assert.False(folder.HasPhysicalFiles);
         Assert.True(folder.HasDefinedFiles);
@@ -82,7 +84,7 @@ public sealed class ProjectWorkRequiredTachshivTests
     {
         var sut = CreateTree(
             BuildRequiredTree(),
-            FakeFileStore.FileServerFile("(5)-3-7-1-1-Tachshiv.xlsx"));
+            FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
 
         await sut.LoadProjectAsync(5);
 
@@ -90,14 +92,13 @@ public sealed class ProjectWorkRequiredTachshivTests
         var file = folder.Children.OfType<ProjectFileNodeVm>().Single(n => n.FileId == 100);
         Assert.True(file.HasPhysicalVersions);
         Assert.False(file.IsRequiredMissing);
-        Assert.False(file.ShowAddFileButton);
         Assert.False(folder.HasRequiredMissing);
         Assert.True(folder.HasPhysicalFiles);
         Assert.True(sut.HasAllRequiredPhysicalFiles());
     }
 
     [Fact]
-    public async Task CompleteFromTaskAsync_blocks_PrepareQuoteCalculation_when_tachshiv_missing()
+    public async Task CompleteFromTaskAsync_blocks_PrepareQuoteCalculation_when_omdan_missing()
     {
         var completion = new RecordingCompletion();
         var tree = CreateTree(BuildRequiredTree());
@@ -113,12 +114,12 @@ public sealed class ProjectWorkRequiredTachshivTests
     }
 
     [Fact]
-    public async Task CompleteFromTaskAsync_allows_PrepareQuoteCalculation_when_tachshiv_physical_exists()
+    public async Task CompleteFromTaskAsync_allows_PrepareQuoteCalculation_when_omdan_physical_exists()
     {
         var completion = new RecordingCompletion();
         var tree = CreateTree(
             BuildRequiredTree(),
-            FakeFileStore.FileServerFile("(5)-3-7-1-1-Tachshiv.xlsx"));
+            FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
         var sut = new ProjectWorkWindowViewModel(completion, tree: tree);
         var context = CreateCalcContext();
 
@@ -133,7 +134,7 @@ public sealed class ProjectWorkRequiredTachshivTests
     public async Task CompleteFromTaskAsync_does_not_gate_non_calc_tasks()
     {
         var completion = new RecordingCompletion();
-        var tree = CreateTree(BuildRequiredTree()); // required missing, but task is not calc
+        var tree = CreateTree(BuildRequiredTree());
         var sut = new ProjectWorkWindowViewModel(completion, tree: tree);
         var context = CreateCalcContext() with
         {
@@ -151,34 +152,38 @@ public sealed class ProjectWorkRequiredTachshivTests
     }
 
     [Fact]
-    public async Task Tachshiv_seed_is_idempotent_by_type()
+    public async Task Omdan_seed_is_idempotent_for_general_material_job_type()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
 
         await using var db = new SiNetSQLDbContext(options);
-        db.JobTypes.Add(new JobType { Id = 3, Title = "בדיקה" });
-        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "מסמכים" });
-        db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject
-        {
-            Id = 1,
-            ProjectId = 5,
-            ProjectTypeId = 3,
-        });
+        db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "ניהול כספי" });
         await db.SaveChangesAsync();
 
-        var first = await ProjectFileRequiredTachshivSeedData.EnsureAsync(db);
-        var second = await ProjectFileRequiredTachshivSeedData.EnsureAsync(db);
+        var first = await ProjectFileCatalogSeedData.EnsureAsync(db);
+        var second = await ProjectFileCatalogSeedData.EnsureAsync(db);
 
-        Assert.Contains("inserted=", first, StringComparison.Ordinal);
-        Assert.Contains("inserted=0", second, StringComparison.Ordinal);
+        Assert.Contains("inserted", first, StringComparison.Ordinal);
+        Assert.Contains("unchanged", second, StringComparison.Ordinal);
 
         var rows = await db.ProjectFiles.Where(f => f.IsRequired).ToListAsync();
         Assert.Single(rows);
-        Assert.Equal(3, rows[0].TypeProjId);
-        Assert.True(ProjectFileRequiredTachshivSeedData.IsTachshivCatalogTitle(rows[0].Title));
+        Assert.Equal(9, rows[0].TypeProjId);
         Assert.Equal(10, rows[0].Folderid);
+        Assert.Equal(ProjectFileCatalogCodes.QuoteEstimate, rows[0].Code);
+        Assert.Equal(ProjectFileRequiredOmdanSeedData.DisplayTitle, rows[0].Title);
+
+        // Title rename must not break Code identity on second ensure.
+        rows[0].Title = "שם מותאם";
+        await db.SaveChangesAsync();
+        var afterRename = await ProjectFileCatalogSeedData.EnsureAsync(db);
+        Assert.Contains("unchanged", afterRename, StringComparison.Ordinal);
+        var again = Assert.Single(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate).ToListAsync());
+        Assert.Equal("שם מותאם", again.Title);
+        Assert.True(again.IsRequired);
     }
 
     private static WorkSurfaceContext CreateCalcContext() =>

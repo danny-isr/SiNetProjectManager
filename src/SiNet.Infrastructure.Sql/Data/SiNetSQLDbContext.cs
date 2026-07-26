@@ -1176,6 +1176,10 @@ public partial class SiNetSQLDbContext : DbContext
 
             entity.HasIndex(e => e.Title, "uc_Title").IsUnique();
 
+            entity.HasIndex(e => e.Code, "ux_ProjectFile_Code")
+                .IsUnique()
+                .HasFilter("[Code] IS NOT NULL");
+
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.AuthorId).HasColumnName("AuthorID");
             entity.Property(e => e.Created).HasColumnType("datetime");
@@ -1190,6 +1194,9 @@ public partial class SiNetSQLDbContext : DbContext
                 .UseCollation("Hebrew_100_CI_AS");
             entity.Property(e => e.Title)
                 .HasMaxLength(255)
+                .UseCollation("Hebrew_100_CI_AS");
+            entity.Property(e => e.Code)
+                .HasMaxLength(64)
                 .UseCollation("Hebrew_100_CI_AS");
             entity.Property(e => e.TypeProjId).HasColumnName("TypeProjID");
             entity.Property(e => e.Typefile)

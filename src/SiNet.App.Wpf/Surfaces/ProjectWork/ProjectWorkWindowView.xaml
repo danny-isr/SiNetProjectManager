@@ -76,12 +76,11 @@
             </TextBlock>
         </HierarchicalDataTemplate>
 
-        <!-- File (logical): contains alternatives. Right-click or inline button to add. -->
+        <!-- File (logical): contains alternatives. Right-click for «אלטרנטיבה נוספת». -->
         <HierarchicalDataTemplate DataType="{x:Type local:ProjectFileNodeVm}" ItemsSource="{Binding Children}">
             <StackPanel Orientation="Horizontal">
                 <StackPanel.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="&#x05D4;&#x05D5;&#x05E1;&#x05E3; &#x05E7;&#x05D5;&#x05D1;&#x05E5;&#x2026;" Command="{Binding AddVersionCommand}" />
                         <MenuItem Header="&#x05D0;&#x05DC;&#x05D8;&#x05E8;&#x05E0;&#x05D8;&#x05D9;&#x05D1;&#x05D4; &#x05E0;&#x05D5;&#x05E1;&#x05E4;&#x05EA;&#x2026;" Command="{Binding AddVersionCommand}" />
                     </ContextMenu>
                 </StackPanel.ContextMenu>
@@ -107,14 +106,6 @@
                 <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="3" Background="#FFEEF2FF" VerticalAlignment="Center">
                     <TextBlock Text="{Binding StorageLabel}" FontSize="10" Foreground="#FF4338CA" />
                 </Border>
-                <Button Margin="8,0,0,0"
-                        Padding="6,1"
-                        FontSize="11"
-                        VerticalAlignment="Center"
-                        Content="&#x05D4;&#x05D5;&#x05E1;&#x05E3; &#x05E7;&#x05D5;&#x05D1;&#x05E5;&#x2026;"
-                        Command="{Binding AddVersionCommand}"
-                        Visibility="{Binding ShowAddFileButton, Converter={StaticResource BoolToVis}}"
-                        ToolTip="&#x05D4;&#x05E2;&#x05DC;&#x05D0;&#x05EA; &#x05E7;&#x05D5;&#x05D1;&#x05E5; &#x05E4;&#x05D9;&#x05D6;&#x05D9; &#x05DC;&#x05D4;&#x05D2;&#x05D3;&#x05E8;&#x05D4; &#x05D6;&#x05D5;" />
             </StackPanel>
         </HierarchicalDataTemplate>
 
@@ -128,8 +119,6 @@
                         <Separator />
                         <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05E9;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;" Command="{Binding CopyProjectNameCommand}" />
                         <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05DC;&#x05D6;&#x05D9;&#x05DB;&#x05E8;&#x05D5;&#x05DF;" Command="{Binding CopyPathCommand}" />
-                        <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05DC;&#x05D6;&#x05D9;&#x05DB;&#x05E8;&#x05D5;&#x05DF; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;" Command="{Binding CopyProjectNameCommand}" />
-                        <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05DC;&#x05D6;&#x05D9;&#x05DB;&#x05E8;&#x05D5;&#x05DF; &#x05EA;&#x05D9;&#x05E7;&#x05D9;&#x05D9;&#x05D4;" Command="{Binding CopyFolderNameCommand}" />
                     </ContextMenu>
                 </TextBlock.ContextMenu>
                 <TextBlock.Style>

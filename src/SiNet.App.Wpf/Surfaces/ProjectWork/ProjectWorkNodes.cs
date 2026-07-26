@@ -86,10 +86,7 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
     /// <summary>Copies the folder full path to the clipboard («שמור לזיכרון»).</summary>
     public ICommand? CopyPathCommand { get; set; }
 
-    /// <summary>Copies the folder display title to the clipboard («שמור לזיכרון תיקייה»).</summary>
-    public ICommand? CopyFolderNameCommand { get; set; }
-
-    /// <summary>Copies the project name/number to the clipboard («שמור לזיכרון פרויקט» / «שמור שם פרויקט»).</summary>
+    /// <summary>Copies the project folder label <c>(number)name</c> to the clipboard («שמור שם פרויקט»).</summary>
     public ICommand? CopyProjectNameCommand { get; set; }
 }
 
@@ -111,8 +108,11 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
     /// <summary>DB id of the folder that owns this file (used to resolve the storage folder handle).</summary>
     public int ParentFolderId { get; init; }
 
-    /// <summary>True when the catalog marks this slot as required (e.g. תחשיב).</summary>
+    /// <summary>True when the catalog marks this slot as required (e.g. אומדן הצעת מחיר).</summary>
     public bool IsRequired { get; init; }
+
+    /// <summary>Stable catalog code (e.g. QuoteEstimate); null for uncoded rows.</summary>
+    public string? Code { get; init; }
 
     private bool _hasPhysicalVersions;
     private bool _isRequiredMissing;
@@ -125,7 +125,6 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
         {
             if (!SetField(ref _hasPhysicalVersions, value))
                 return;
-            OnPropertyChanged(nameof(ShowAddFileButton));
             RefreshRequiredMissing();
         }
     }
@@ -134,18 +133,8 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
     public bool IsRequiredMissing
     {
         get => _isRequiredMissing;
-        private set
-        {
-            if (SetField(ref _isRequiredMissing, value))
-                OnPropertyChanged(nameof(ShowAddFileButton));
-        }
+        private set => SetField(ref _isRequiredMissing, value);
     }
-
-    /// <summary>
-    /// Shows an inline «הוסף קובץ…» action for empty definitions (required or regular).
-    /// </summary>
-    public bool ShowAddFileButton =>
-        !IsUnfiled && FileId is not null && !HasPhysicalVersions;
 
     /// <summary>Adds a new alternative/version to this file from a picked source file. Set by the tree view model.</summary>
     public ICommand? AddVersionCommand { get; set; }
