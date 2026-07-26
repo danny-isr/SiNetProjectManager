@@ -231,9 +231,11 @@ public partial class TaskPanelView : UserControl
                     mainWindow.ShowOrActivateFloatingTasks();
                 else
                 {
-                    var tasksWindow = new FloatingProjectTasksView();
-                    if (owner != null) tasksWindow.Owner = owner;
-                    tasksWindow.Show();
+                    // #region agent log
+                    SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                        "Tasks.FloatWindow",
+                        "TaskPanel: MainWindow missing — cannot open tasks");
+                    // #endregion
                 }
                 break;
             }

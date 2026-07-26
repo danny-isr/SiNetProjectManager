@@ -4,6 +4,7 @@ using SiNetProjectManagerV2.WPFUserControl;
 using SiNetProjectManagerV2.Dialogs;
 using SiNetProjectManagerV2.WPF_Window;
 using System.ComponentModel;
+using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
@@ -438,28 +439,50 @@ namespace SiNetProjectManagerV2
             => ShowOrActivateFloatingTasks();
 
         /// <summary>
-        /// Singleton entry for the floating project-tasks window. Reuses the existing instance when
-        /// still open, refreshes its list, and never creates a second window.
+        /// Singleton entry for the floating project-tasks window. Reuses any already-open instance
+        /// (field or Application.Windows) so menu / email / task-panel paths cannot spawn duplicates.
         /// </summary>
         public void ShowOrActivateFloatingTasks()
         {
-            if (_floatingTasksWindow is { IsLoaded: true })
+            var existing = _floatingTasksWindow;
+            if (existing is null || !existing.IsLoaded)
+            {
+                existing = System.Windows.Application.Current?.Windows
+                    .OfType<FloatingProjectTasksView>()
+                    .FirstOrDefault(w => w.IsLoaded);
+                if (existing is not null)
+                    _floatingTasksWindow = existing;
+            }
+
+            if (existing is not null)
             {
                 // #region agent log
                 SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
                     "Tasks.FloatWindow",
-                    "activate-existing + refresh");
+                    $"activate-existing + refresh isLoaded={existing.IsLoaded}");
                 // #endregion
-                if (_floatingTasksWindow.ViewModel.RefreshCommand.CanExecute(null))
-                    _floatingTasksWindow.ViewModel.RefreshCommand.Execute(null);
-                _floatingTasksWindow.Activate();
+                if (existing.ViewModel.RefreshCommand.CanExecute(null))
+                    existing.ViewModel.RefreshCommand.Execute(null);
+                if (existing.WindowState == WindowState.Minimized)
+                    existing.WindowState = WindowState.Normal;
+                existing.Activate();
                 return;
             }
 
-            _floatingTasksWindow = new FloatingProjectTasksView();
-            _floatingTasksWindow.Owner = this;
-            _floatingTasksWindow.Closed += (_, _) => _floatingTasksWindow = null;
-            _floatingTasksWindow.Show();
+            // #region agent log
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "Tasks.FloatWindow",
+                "create-new singleton instance");
+            // #endregion
+            var created = new FloatingProjectTasksView();
+            _floatingTasksWindow = created;
+            created.Owner = this;
+            created.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_floatingTasksWindow, created))
+                    _floatingTasksWindow = null;
+            };
+            created.Show();
         }
 
         private void OpenFloatingInspection_Click(object sender, RoutedEventArgs e)

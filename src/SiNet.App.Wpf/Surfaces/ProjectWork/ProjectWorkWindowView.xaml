@@ -198,8 +198,37 @@
                 <ComboBox Grid.Column="1"
                           ItemsSource="{Binding AllowedResultOptions}"
                           SelectedItem="{Binding SelectedResultOption, Mode=TwoWay}"
-                          DisplayMemberPath="DisplayName"
-                          MinWidth="180" VerticalAlignment="Center" />
+                          MinWidth="180" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#FF111827" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Code}" Value="MaterialMissing">
+                                                <Setter Property="Foreground" Value="#FFDC2626" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Code}" Value="MaterialComplete">
+                                                <Setter Property="Foreground" Value="#FF059669" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Code}" Value="QuoteMaterialMissing">
+                                                <Setter Property="Foreground" Value="#FFDC2626" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Code}" Value="QuoteMaterialComplete">
+                                                <Setter Property="Foreground" Value="#FF059669" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
 
                 <Button Grid.Column="2"
                         Content="&#x05E1;&#x05D9;&#x05D9;&#x05DD; &#x05DE;&#x05E9;&#x05D9;&#x05DE;&#x05D4;"

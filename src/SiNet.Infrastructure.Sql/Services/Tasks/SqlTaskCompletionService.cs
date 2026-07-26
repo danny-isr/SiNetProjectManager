@@ -256,8 +256,10 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
         var nativeCommands = _workflowCommands as NativeWorkflowCommandService;
 
         // TEMP WF-DEBUG
+        // #region agent log
         WorkflowDebugTrace.Step("TaskCompletion.Closure",
-            $"task={command.TaskId} recordedResult={taskResultCode ?? "(none)"} taskClosed={taskClosed} requestAdvance={behavior.RequestWorkflowAdvance} willAutoAdvance={willAutoAdvance} path={(willAutoAdvance && nativeCommands is not null ? "atomic" : "fallback")} newProjectStatus={newProjectStatusCode ?? "(unchanged)"}");
+            $"task={command.TaskId} recordedResult={taskResultCode ?? "(none)"} taskClosed={taskClosed} closureReason={closure.Reason ?? "(none)"} closesAssociated={behavior.ClosesAssociatedTask} requestAdvance={behavior.RequestWorkflowAdvance} willAutoAdvance={willAutoAdvance} path={(willAutoAdvance && nativeCommands is not null ? "atomic" : "fallback")} newProjectStatus={newProjectStatusCode ?? "(unchanged)"}");
+        // #endregion
 
         // Atomic path (Phase 1d): when the native command service is in effect, run the auto-advance on
         // this same DbContext so it sees the not-yet-committed close and, on relational providers,

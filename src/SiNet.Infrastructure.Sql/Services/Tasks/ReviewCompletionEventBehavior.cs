@@ -205,12 +205,16 @@ public static class ReviewCompletionEventBehavior
                 RequestWorkflowAdvance: true,
                 ClosesAssociatedTask: true),
 
-            // MaterialCheck: dual outcome — coordinator inspects taskResultCode.
+            // MaterialCheck: dual outcome — the operator's Completeness decision IS the work.
+            // ClosesAssociatedTask: without it, a Pending MaterialChecklist WorkTarget blocks
+            // close (taskClosed=False → willAutoAdvance=False) even though AutoCloseOnCompletion
+            // is true — seen in manual ProjectWork completion (result recorded, workflow stuck).
             new(ReviewCompletionEvents.ReviewMaterialCheckCompleted,
                 new[] { TaskTypeCodes.CheckQuoteMaterialCompleteness },
                 new[] { TaskResultCodes.MaterialComplete, TaskResultCodes.MaterialMissing },
                 NewProjectStatusCode: null, // resolved by result branch
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             new(ReviewCompletionEvents.ReviewProfessionalReviewCompleted,
                 new[] { TaskTypeCodes.PerformProfessionalReview, TaskTypeCodes.FixReportPerManager },

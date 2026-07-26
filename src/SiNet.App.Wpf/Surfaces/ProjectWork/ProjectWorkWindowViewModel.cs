@@ -452,9 +452,11 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
                 return false;
             }
 
-            var closed = result.TaskClosed ? " Task closed." : string.Empty;
-            var advanced = result.WorkflowAdvanced ? " Workflow advanced." : string.Empty;
-            StatusMessage = $"Completed task #{taskId}.{closed}{advanced}";
+            var closed = result.TaskClosed ? " המשימה נסגרה." : string.Empty;
+            var advanced = result.WorkflowAdvanced ? " התהליך התקדם." : " התהליך לא התקדם.";
+            StatusMessage = result.TaskClosed
+                ? $"המשימה #{taskId} הושלמה.{closed}{advanced}"
+                : $"התוצאה נרשמה למשימה #{taskId}, אך המשימה לא נסגרה — התהליך לא התקדם.";
             return true;
         }
         finally
