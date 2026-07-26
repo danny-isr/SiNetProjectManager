@@ -6,8 +6,9 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNetProjectManagerV2.Services;
 
 /// <summary>
-/// Prefers legacy <see cref="MainWindow"/> content hosting when that shell is open;
-/// otherwise delegates to NewShell <see cref="ProjectWorkSurfaceHost"/> (cached UserControl).
+/// Prefers legacy <see cref="MainWindow"/> hosting when that shell is open:
+/// browse → main content; task → floating singleton window.
+/// Otherwise delegates to NewShell <see cref="ProjectWorkSurfaceHost"/>.
 /// </summary>
 internal sealed class V2ProjectWorkSurfaceHost(ProjectWorkSurfaceHost newShellHost) : IProjectWorkSurfaceHost
 {

@@ -172,6 +172,9 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
     public bool IsTaskMode => _taskContext is not null;
 
+    /// <summary>Browse-only: project picker is hidden while a task context is bound.</summary>
+    public bool ShowProjectSelector => !IsTaskMode && Selector is not null;
+
     public WorkSurfaceContext? TaskContext => _taskContext;
 
     public bool CanCompleteTask =>
@@ -208,6 +211,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         TaskHeader = string.Empty;
         StatusMessage = "\u05DE\u05D5\u05DB\u05DF";
         OnPropertyChanged(nameof(IsTaskMode));
+        OnPropertyChanged(nameof(ShowProjectSelector));
         OnPropertyChanged(nameof(TaskContext));
         OnPropertyChanged(nameof(CanCompleteTask));
         (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -232,6 +236,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         _taskContext = context;
         _loaded = false;
         OnPropertyChanged(nameof(IsTaskMode));
+        OnPropertyChanged(nameof(ShowProjectSelector));
         OnPropertyChanged(nameof(TaskContext));
         OnPropertyChanged(nameof(CanCompleteTask));
         (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -350,11 +355,15 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
     {
         AllowedResultOptions.Clear();
         foreach (var code in AllowedResultCodes)
-            AllowedResultOptions.Add(new TaskResultOption(code, TaskResultDisplayNames.For(code)));
+            AllowedResultOptions.Add(TaskResultOption.FromCode(code));
     }
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
+        // Task mode is locked to the task's project — ignore shell project switches.
+        if (IsTaskMode)
+            return;
+
         var projectId = e.Project?.ProjectId ?? 0;
         if (_tree is null || projectId <= 0)
             return;

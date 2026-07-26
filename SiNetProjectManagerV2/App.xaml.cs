@@ -231,6 +231,8 @@ namespace SiNetProjectManagerV2
             // After native task completion, refresh floating/task-panel lists via ActiveProjectContext.
             services.AddSingleton<SiNet.Application.Tasks.ITaskListChangeNotifier,
                 SiNetProjectManagerV2.Services.ActiveProjectTaskListChangeNotifier>();
+            services.AddSingleton<SiNet.App.Wpf.WorkSurfaces.ITaskFamilyWindowGate,
+                SiNetProjectManagerV2.Services.MainWindowTaskFamilyWindowGate>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailAttachmentProjectFilePickerHost,
                 SiNetProjectManagerV2.Services.Email.EmailAttachmentProjectFilePickerHost>();
             services.AddTransient<SiNet.Application.Email.Detail.IEmailFilingProjectPickerHost,

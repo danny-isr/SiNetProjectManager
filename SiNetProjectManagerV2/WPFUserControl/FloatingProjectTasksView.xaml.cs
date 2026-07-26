@@ -73,10 +73,25 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
                         _liveInstance = null;
                 }
             };
+            created.ApplyTallNarrowLayout();
             created.Show();
             return created;
         }
     }
+
+    /// <summary>Narrow + full work-area height, docked to the right (legacy floating-tasks shape).</summary>
+    public void ApplyTallNarrowLayout()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Width = DefaultResetWidth;
+        Height = workArea.Height;
+        Top = workArea.Top;
+        Left = workArea.Left + workArea.Width - Width;
+    }
+
+    protected override double DefaultResetWidth => 380;
+
+    protected override void ApplyDefaultPosition() => ApplyTallNarrowLayout();
 
     public FloatingProjectTasksView()
     {
@@ -110,6 +125,17 @@ public partial class FloatingProjectTasksView : FloatingWindowBase
 
         // Initialize common floating behavior (opacity, settings, collapse)
         InitializeFloatingBehavior();
+
+        Loaded += OnLoadedEnforceTallNarrow;
+    }
+
+    private void OnLoadedEnforceTallNarrow(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedEnforceTallNarrow;
+        var workArea = SystemParameters.WorkArea;
+        // Migrate old short/wide saved layouts to the tall-narrow legacy shape.
+        if (Height < workArea.Height * 0.65 || Width > 500)
+            ApplyTallNarrowLayout();
     }
 
     /// <summary>

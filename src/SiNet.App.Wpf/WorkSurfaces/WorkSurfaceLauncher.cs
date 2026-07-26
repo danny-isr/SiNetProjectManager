@@ -207,6 +207,9 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 return false;
             }
 
+            // Close ProjectWork task window when switching task family (approved plan D).
+            _services.GetService<ITaskFamilyWindowGate>()?.CloseProjectWorkTaskWindows();
+
             inspectionWindow.Show();
             return true;
         }

@@ -130,8 +130,9 @@
                 <TextBlock Text="{Binding ActiveProjectDisplay}" FontSize="13" Foreground="#FF4B5563" Margin="0,2,0,0" />
             </StackPanel>
 
-            <!-- Project selector (browse mode) -->
-            <ContentControl Grid.Row="1" Content="{Binding Selector}" Margin="0,0,0,8">
+            <!-- Project selector (browse mode only — hidden in task mode) -->
+            <ContentControl Grid.Row="1" Content="{Binding Selector}" Margin="0,0,0,8"
+                            Visibility="{Binding ShowProjectSelector, Converter={StaticResource BoolToVis}}">
                 <ContentControl.ContentTemplate>
                     <DataTemplate>
                         <proj:ProjectSelectorView />
@@ -206,20 +207,12 @@
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="#FF111827" />
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Code}" Value="MaterialMissing">
-                                                <Setter Property="Foreground" Value="#FFDC2626" />
-                                                <Setter Property="FontWeight" Value="SemiBold" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Code}" Value="MaterialComplete">
+                                            <DataTrigger Binding="{Binding ColorKind}" Value="Positive">
                                                 <Setter Property="Foreground" Value="#FF059669" />
                                                 <Setter Property="FontWeight" Value="SemiBold" />
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding Code}" Value="QuoteMaterialMissing">
+                                            <DataTrigger Binding="{Binding ColorKind}" Value="Negative">
                                                 <Setter Property="Foreground" Value="#FFDC2626" />
-                                                <Setter Property="FontWeight" Value="SemiBold" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Code}" Value="QuoteMaterialComplete">
-                                                <Setter Property="Foreground" Value="#FF059669" />
                                                 <Setter Property="FontWeight" Value="SemiBold" />
                                             </DataTrigger>
                                         </Style.Triggers>

@@ -13,8 +13,8 @@
         ResizeMode="CanResizeWithGrip"
         Topmost="{Binding IsTopmost, Mode=OneWay}"
         ShowInTaskbar="False"
-        Width="420" Height="560"
-        MinWidth="340" MinHeight="360"
+        Width="380" Height="800"
+        MinWidth="320" MinHeight="400"
         FlowDirection="RightToLeft">
 
     <Window.Resources>
