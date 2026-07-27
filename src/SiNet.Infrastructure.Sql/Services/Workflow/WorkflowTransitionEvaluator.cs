@@ -69,7 +69,14 @@ internal sealed class WorkflowTransitionEvaluator(IDbContextFactory<SiNetSQLDbCo
         foreach (var rule in rules)
         {
             if (!TriggerMatches(rule.TriggerType, triggerEvent))
+            {
+                // #region agent log
+                // TEMP WF-DEBUG — confirms Manual/mismatched triggers are why auto-advance sees matchedTransitions=0
+                WorkflowDebugTrace.Step("Evaluator.SkipTrigger",
+                    $"instance={instanceId} event={triggerEvent} rule={rule.Id} ruleTrigger={rule.TriggerType} evalMode={rule.EvaluationMode} (stage {rule.FromStageId}→{rule.ToStageId}) json={rule.ConditionJson ?? "(none)"}");
+                // #endregion
                 continue;
+            }
 
             var conditionMet = await EvaluateConditionAsync(db, rule, instance, context, ct)
                 .ConfigureAwait(false);

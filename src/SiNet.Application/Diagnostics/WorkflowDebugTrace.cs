@@ -119,7 +119,9 @@ public static class WorkflowDebugTrace
         if (area.StartsWith("TaskCompletion.", StringComparison.Ordinal)
             || area.StartsWith("Evaluator.", StringComparison.Ordinal)
             || area.StartsWith("Orchestrator.", StringComparison.Ordinal)
-            || area.StartsWith("Engine.Advance", StringComparison.Ordinal))
+            || area.StartsWith("Engine.Advance", StringComparison.Ordinal)
+            || area.StartsWith("WorkflowSeed.", StringComparison.Ordinal)
+            || area.StartsWith("Watchdog.", StringComparison.Ordinal))
             return "H2";
 
         if (area.StartsWith("Workbench.", StringComparison.Ordinal)

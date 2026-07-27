@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -53,6 +54,12 @@ public class SqlWorkflowSeedService
         //    CreatePriceQuote email action) find an active definition. Proposal
         //    is started email-driven and is NOT auto-mapped to any ProjectType.
         await SeedProposalWorkflowAsync(ct);
+
+        // 5a. Upgrade legacy PRP.MaterialCheck transitions that were seeded as
+        //     Manual + QuoteMaterialComplete/Missing (never match auto-advance;
+        //     UI emits MaterialComplete/MaterialMissing). Must run after Proposal
+        //     seed so the canonical TaskStatusChanged rules exist or get fixed.
+        await ReconcileProposalMaterialCheckTransitionsAsync(ct);
 
         // 5b. Diagnostic dump for the Proposal workflow shape that the runtime
         //     actually sees AFTER seeding. This is read-only and runs against the
@@ -324,6 +331,133 @@ public class SqlWorkflowSeedService
             subWorkflowDefinitionCode: null,
             ct,
             stageTasks: ProposalWorkflowSeedData.StageTasks);
+    }
+
+    /// <summary>
+    /// Fixes office DBs seeded before MaterialCheck shared the generic
+    /// <c>MaterialComplete</c>/<c>MaterialMissing</c> codes with MAT.Check.
+    /// Those DBs keep <c>Manual</c> + <c>QuoteMaterial*</c> rules whose unique
+    /// key differs from the current seed, so <see cref="SeedWorkflowDefinitionAsync"/>
+    /// neither updates nor removes them — and auto-advance never matches Manual.
+    /// </summary>
+    private async ValueTask ReconcileProposalMaterialCheckTransitionsAsync(CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var defId = await db.WorkflowDefinitions
+            .Where(d => d.Code == WorkflowCodes.Proposal)
+            .Select(d => (int?)d.Id)
+            .FirstOrDefaultAsync(ct);
+        if (defId is null) return;
+
+        var materialCheckId = await db.WorkflowStageDefinitions
+            .Where(s => s.WorkflowDefinitionId == defId.Value
+                     && s.Code == ProposalStageCodes.MaterialCheck)
+            .Select(s => (int?)s.Id)
+            .FirstOrDefaultAsync(ct);
+        if (materialCheckId is null) return;
+
+        var rules = await db.WorkflowTransitionRules
+            .Where(r => r.WorkflowDefinitionId == defId.Value
+                     && r.FromStageId == materialCheckId.Value)
+            .ToListAsync(ct);
+
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [TaskResultCodes.QuoteMaterialComplete] = TaskResultCodes.MaterialComplete,
+            [TaskResultCodes.QuoteMaterialMissing] = TaskResultCodes.MaterialMissing,
+        };
+
+        int updated = 0;
+        int removed = 0;
+
+        foreach (var rule in rules.ToList())
+        {
+            var json = rule.ConditionJson ?? string.Empty;
+            string? mappedFrom = null;
+            string? desiredCode = null;
+
+            foreach (var (legacy, modern) in aliases)
+            {
+                if (json.Contains(legacy, StringComparison.Ordinal))
+                {
+                    mappedFrom = legacy;
+                    desiredCode = modern;
+                    break;
+                }
+            }
+
+            if (desiredCode is null
+                && rule.ConditionType == WorkflowTransitionConditionType.TaskResultEquals
+                && (json.Contains(TaskResultCodes.MaterialComplete, StringComparison.Ordinal)
+                    || json.Contains(TaskResultCodes.MaterialMissing, StringComparison.Ordinal)))
+            {
+                desiredCode = json.Contains(TaskResultCodes.MaterialMissing, StringComparison.Ordinal)
+                    ? TaskResultCodes.MaterialMissing
+                    : TaskResultCodes.MaterialComplete;
+            }
+
+            var needsTriggerUpgrade =
+                rule.TriggerType == WorkflowTransitionTriggerType.Manual
+                && rule.ConditionType == WorkflowTransitionConditionType.TaskResultEquals
+                && desiredCode is not null;
+
+            var needsCodeUpgrade = mappedFrom is not null;
+
+            if (!needsTriggerUpgrade && !needsCodeUpgrade)
+                continue;
+
+            var desiredJson = $"{{\"TaskResultCode\":\"{desiredCode}\"}}";
+            var desiredHash = WorkflowTransitionRule.ComputeConditionHash(desiredJson);
+            const WorkflowTransitionTriggerType desiredTrigger = WorkflowTransitionTriggerType.TaskStatusChanged;
+            const WorkflowEvaluationMode desiredMode = WorkflowEvaluationMode.Auto;
+
+            var correctAlreadyExists = rules.Any(r =>
+                r.Id != rule.Id
+                && r.FromStageId == rule.FromStageId
+                && r.ToStageId == rule.ToStageId
+                && r.TriggerType == desiredTrigger
+                && r.ConditionType == WorkflowTransitionConditionType.TaskResultEquals
+                && string.Equals(r.ConditionHash, desiredHash, StringComparison.Ordinal));
+
+            if (correctAlreadyExists)
+            {
+                db.WorkflowTransitionRules.Remove(rule);
+                rules.Remove(rule);
+                removed++;
+                // #region agent log
+                DevToolsLog.Info(
+                    $"[WorkflowSeed] Proposal MaterialCheck: removed legacy rule Id={rule.Id} " +
+                    $"(trigger={rule.TriggerType} json={rule.ConditionJson}) — canonical TaskStatusChanged rule already present.");
+                // #endregion
+                continue;
+            }
+
+            rule.ConditionJson = desiredJson;
+            rule.ConditionHash = desiredHash;
+            rule.TriggerType = desiredTrigger;
+            rule.EvaluationMode = desiredMode;
+            if (mappedFrom is not null && !string.IsNullOrEmpty(rule.Name))
+                rule.Name = rule.Name.Replace(mappedFrom, desiredCode!, StringComparison.Ordinal);
+            updated++;
+            // #region agent log
+            DevToolsLog.Info(
+                $"[WorkflowSeed] Proposal MaterialCheck: upgraded rule Id={rule.Id} " +
+                $"→ Trigger={desiredTrigger} Eval={desiredMode} json={desiredJson}");
+            // #endregion
+        }
+
+        if (updated == 0 && removed == 0)
+            return;
+
+        await db.SaveChangesAsync(ct);
+        DevToolsLog.Info(
+            $"[WorkflowSeed] Proposal: reconciled MaterialCheck transitions (updated={updated}, removedLegacy={removed}).");
+        // #region agent log
+        WorkflowDebugTrace.Step(
+            "WorkflowSeed.ReconcileMaterialCheck",
+            $"updated={updated} removedLegacy={removed} hypothesis=H1-H2");
+        // #endregion
     }
 
     /// <summary>

@@ -54,7 +54,8 @@ public static class ProposalWorkflowSeedData
     };
 
     /// <summary>
-    /// Transitions between PRP.* stages. Reuses existing Quote* task results.
+    /// Transitions between PRP.* stages. MaterialCheck uses shared MaterialComplete /
+    /// MaterialMissing (not the legacy QuoteMaterial* codes).
     /// </summary>
     public static readonly PlanningWorkflowSeedData.StageTransitionDefinition[] Transitions = new[]
     {
