@@ -38,6 +38,8 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
             WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
                 $"rebind task={context.TaskId} project={context.ProjectId}");
             // #endregion
+            existingView.ViewModel.CloseRequested -= CloseIfOpen;
+            existingView.ViewModel.CloseRequested += CloseIfOpen;
             var rebound = await existingView.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
             if (!rebound)
                 return false;
@@ -54,6 +56,8 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
             surface.Dispose();
             return false;
         }
+
+        surface.ViewModel.CloseRequested += CloseIfOpen;
 
         var owner = System.Windows.Application.Current?.MainWindow;
         var host = new Window
@@ -75,6 +79,7 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
 
         host.Closed += (_, _) =>
         {
+            surface.ViewModel.CloseRequested -= CloseIfOpen;
             lock (Gate)
             {
                 if (ReferenceEquals(_window, host))

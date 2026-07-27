@@ -186,6 +186,9 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
     public ICommand CompleteTaskCommand { get; }
 
+    /// <summary>Raised when the task window should close after a successful task-closing completion.</summary>
+    public event Action? CloseRequested;
+
     /// <summary>
     /// Task-mode entry. Validates the component key + project, binds the project as current context,
     /// and prepares the completion strip. Returns <see langword="false"/> (so the launcher does not
@@ -493,6 +496,10 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
                     ? $"המשימה #{taskId} הושלמה.{closed} התהליך לא התקדם."
                     : $"התוצאה נרשמה למשימה #{taskId}, אך המשימה לא נסגרה — התהליך לא התקדם.";
             }
+
+            if (result.TaskClosed)
+                CloseRequested?.Invoke();
+
             return true;
         }
         finally

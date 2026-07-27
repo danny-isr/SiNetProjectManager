@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Workflow;
+using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -228,8 +229,32 @@ internal sealed class WorkflowTaskOrchestrator(
 
             if (evaluated.Count == 0)
             {
-                await LogNoTransitionDiagnosticAsync(db, instanceId, taskId, task, evalContext, ct).ConfigureAwait(false);
-                continue;
+                var repaired = await RepairLegacyProposalMaterialCheckRulesAsync(db, instanceId, ct)
+                    .ConfigureAwait(false);
+                if (repaired > 0)
+                {
+                    // #region agent log
+                    WorkflowDebugTrace.Step(
+                        "Orchestrator.AutoAdvance",
+                        $"instance={instanceId} repairedLegacyMaterialCheckRules={repaired} — re-evaluate");
+                    // #endregion
+
+                    evaluated = await _evaluator.EvaluateAsync(
+                        instanceId, WorkflowTransitionTriggerType.AllRequiredTasksClosed, evalContext, ct).ConfigureAwait(false);
+                    statusEvaluated = await _evaluator.EvaluateAsync(
+                        instanceId, WorkflowTransitionTriggerType.TaskStatusChanged, evalContext, ct).ConfigureAwait(false);
+                    evaluated.AddRange(statusEvaluated);
+
+                    WorkflowDebugTrace.Step("Orchestrator.AutoAdvance",
+                        $"instance={instanceId} matchedTransitions={evaluated.Count} afterRepair" +
+                        (evaluated.Count > 0 ? $" best→stage={evaluated[0].Rule.ToStageId} mode={evaluated[0].EvaluationMode}" : " (none)"));
+                }
+
+                if (evaluated.Count == 0)
+                {
+                    await LogNoTransitionDiagnosticAsync(db, instanceId, taskId, task, evalContext, ct).ConfigureAwait(false);
+                    continue;
+                }
             }
 
             var best = evaluated[0];
@@ -487,7 +512,31 @@ internal sealed class WorkflowTaskOrchestrator(
                 (evaluated.Count > 0 ? $" best→stage={evaluated[0].Rule.ToStageId} mode={evaluated[0].EvaluationMode}" : " (none)"));
 
             if (evaluated.Count == 0)
-                continue;
+            {
+                var repaired = await RepairLegacyProposalMaterialCheckRulesAsync(db, instanceId, ct)
+                    .ConfigureAwait(false);
+                if (repaired > 0)
+                {
+                    // #region agent log
+                    WorkflowDebugTrace.Step(
+                        "Orchestrator.AutoAdvance.Shared",
+                        $"instance={instanceId} repairedLegacyMaterialCheckRules={repaired} — re-evaluate");
+                    // #endregion
+
+                    evaluated = await _evaluator.EvaluateAsync(
+                        db, instanceId, WorkflowTransitionTriggerType.AllRequiredTasksClosed, evalContext, ct).ConfigureAwait(false);
+                    statusEvaluated = await _evaluator.EvaluateAsync(
+                        db, instanceId, WorkflowTransitionTriggerType.TaskStatusChanged, evalContext, ct).ConfigureAwait(false);
+                    evaluated.AddRange(statusEvaluated);
+
+                    WorkflowDebugTrace.Step("Orchestrator.AutoAdvance.Shared",
+                        $"instance={instanceId} matchedTransitions={evaluated.Count} afterRepair" +
+                        (evaluated.Count > 0 ? $" best→stage={evaluated[0].Rule.ToStageId} mode={evaluated[0].EvaluationMode}" : " (none)"));
+                }
+
+                if (evaluated.Count == 0)
+                    continue;
+            }
 
             var best = evaluated[0];
 
@@ -810,6 +859,101 @@ internal sealed class WorkflowTaskOrchestrator(
                     $"יש להגדיר משתמש ברירת מחדל או חברות פעילה בקבוצה.");
             }
         }
+    }
+
+    /// <summary>
+    /// Runtime repair for office DBs that still have Manual + QuoteMaterial* rules on
+    /// PRP.MaterialCheck. Seed reconcile should have fixed these; when it did not run,
+    /// auto-advance sees matchedTransitions=0 and leaves the workflow without an open task.
+    /// Upgrades in-place on the ambient <paramref name="db"/> so atomic completion can continue.
+    /// </summary>
+    private static async ValueTask<int> RepairLegacyProposalMaterialCheckRulesAsync(
+        SiNetSQLDbContext db,
+        int instanceId,
+        CancellationToken ct)
+    {
+        var instance = await db.WorkflowInstances
+            .AsNoTracking()
+            .Include(i => i.CurrentStage)
+            .Include(i => i.WorkflowDefinition)
+            .FirstOrDefaultAsync(i => i.Id == instanceId, ct)
+            .ConfigureAwait(false);
+
+        if (instance?.CurrentStageId is null
+            || instance.WorkflowDefinition?.Code != WorkflowCodes.Proposal
+            || instance.CurrentStage?.Code != ProposalStageCodes.MaterialCheck)
+        {
+            return 0;
+        }
+
+        var rules = await db.WorkflowTransitionRules
+            .Where(r => r.WorkflowDefinitionId == instance.WorkflowDefinitionId
+                     && r.FromStageId == instance.CurrentStageId.Value)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [TaskResultCodes.QuoteMaterialComplete] = TaskResultCodes.MaterialComplete,
+            [TaskResultCodes.QuoteMaterialMissing] = TaskResultCodes.MaterialMissing,
+        };
+
+        var repaired = 0;
+        foreach (var rule in rules)
+        {
+            var json = rule.ConditionJson ?? string.Empty;
+            string? mappedFrom = null;
+            string? desiredCode = null;
+
+            foreach (var (legacy, modern) in aliases)
+            {
+                if (json.Contains(legacy, StringComparison.Ordinal))
+                {
+                    mappedFrom = legacy;
+                    desiredCode = modern;
+                    break;
+                }
+            }
+
+            if (desiredCode is null)
+                continue;
+
+            if (rule.TriggerType != WorkflowTransitionTriggerType.Manual
+                && mappedFrom is null)
+            {
+                continue;
+            }
+
+            var desiredJson = $"{{\"TaskResultCode\":\"{desiredCode}\"}}";
+            var desiredHash = WorkflowTransitionRule.ComputeConditionHash(desiredJson);
+
+            if (rule.TriggerType == WorkflowTransitionTriggerType.TaskStatusChanged
+                && rule.EvaluationMode == WorkflowEvaluationMode.Auto
+                && string.Equals(rule.ConditionJson, desiredJson, StringComparison.Ordinal)
+                && string.Equals(rule.ConditionHash, desiredHash, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Orchestrator.RepairMaterialCheck",
+                $"rule={rule.Id} fromTrigger={rule.TriggerType} fromJson={rule.ConditionJson} → TaskStatusChanged/{desiredCode}");
+            // #endregion
+
+            rule.ConditionJson = desiredJson;
+            rule.ConditionHash = desiredHash;
+            rule.TriggerType = WorkflowTransitionTriggerType.TaskStatusChanged;
+            rule.EvaluationMode = WorkflowEvaluationMode.Auto;
+            if (mappedFrom is not null && !string.IsNullOrEmpty(rule.Name))
+                rule.Name = rule.Name.Replace(mappedFrom, desiredCode, StringComparison.Ordinal);
+            repaired++;
+        }
+
+        if (repaired > 0)
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return repaired;
     }
 }
 

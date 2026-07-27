@@ -301,11 +301,11 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                 if (sharedTx is not null)
                     await sharedTx.CommitAsync(ct).ConfigureAwait(false);
 
-                NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: true);
+                NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: stageAdvanceResult is not null);
                 return success with
                 {
                     TaskClosed = taskClosed,
-                    WorkflowAdvanced = true,
+                    WorkflowAdvanced = stageAdvanceResult is not null,
                     NewProjectStatusId = newProjectStatusId,
                     NewProjectStatusCode = newProjectStatusCode,
                     StageAdvanceResult = stageAdvanceResult,
