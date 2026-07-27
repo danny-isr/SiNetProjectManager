@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -128,6 +131,13 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
             SelectedAlternativeId = null;
         }
 
+        // #region agent log
+        AgentDebugLog(
+            "H-ALT1",
+            "EmailDetailAttachmentItem.ApplyTag",
+            $"att={InboxAttachmentId} pf={ProjectFileId} title='{TaggedProjectFileTitle}' inAlt={projectAlternativeId?.ToString() ?? "null"} resolved={resolvedAlternativeId?.ToString() ?? "null"} selected={SelectedAlternativeId?.ToString() ?? "null"} alts={AvailableAlternatives.Count}");
+        // #endregion
+
         (TagCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (AlternativeChangedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(IsTagged));
@@ -170,19 +180,54 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
         }
 
         // After alternatives appear (e.g. project remembered, tags restored), ensure a selection.
+        var beforeSelect = SelectedAlternativeId;
+        var fallback = EmailProjectAlternativeOption.ResolveDefaultId(AvailableAlternatives);
+        var appliedFallback = false;
         if (IsTagged && SelectedAlternativeId is not > 0)
         {
-            var fallback = EmailProjectAlternativeOption.ResolveDefaultId(AvailableAlternatives);
             if (fallback is > 0)
             {
                 SelectedAlternativeId = fallback;
                 _previousAlternativeId = fallback;
+                appliedFallback = true;
             }
         }
+
+        // #region agent log
+        AgentDebugLog(
+            "H-ALT1",
+            "EmailDetailAttachmentItem.SetAlternatives",
+            $"att={InboxAttachmentId} isTagged={IsTagged} before={beforeSelect?.ToString() ?? "null"} after={SelectedAlternativeId?.ToString() ?? "null"} fallback={fallback?.ToString() ?? "null"} appliedFallback={appliedFallback} alts={AvailableAlternatives.Count} names=[{string.Join(",", AvailableAlternatives.Where(a => !a.IsCreateNew).Select(a => $"{a.Id}:{a.Name}:def={a.IsDefault}"))}]");
+        // #endregion
 
         OnPropertyChanged(nameof(ShowAlternativeSelector));
         (AlternativeChangedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
+
+    // #region agent log
+    private static void AgentDebugLog(string hypothesisId, string location, string detail)
+    {
+        try
+        {
+            WorkflowDebugTrace.Step("Email.TagUI", $"{hypothesisId} {detail}");
+            var payload = JsonSerializer.Serialize(new
+            {
+                sessionId = "cbfc8f",
+                runId = "quote-file-tag-pre",
+                hypothesisId,
+                location,
+                message = detail,
+                data = new { detail },
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            });
+            File.AppendAllText(@"D:\repos2026\debug-cbfc8f.log", payload + Environment.NewLine);
+        }
+        catch
+        {
+            // diagnostics only
+        }
+    }
+    // #endregion
 
     public void RestorePreviousAlternativeSelection()
     {

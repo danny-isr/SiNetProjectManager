@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email.Detail;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -70,6 +71,26 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        // Corrupt/legacy rows with Id=0 break tagging: ResolveDefaultId and SetTag require Id > 0.
+        // Observed after DB restore when ProjectAlternative had a single "1" row with ID=0.
+        var invalidIdRows = alternatives.Where(static a => a.Id <= 0).ToList();
+        if (invalidIdRows.Count > 0)
+        {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"H-ALT2 repair-invalid-alt-ids project={projectId} count={invalidIdRows.Count} ids=[{string.Join(",", invalidIdRows.Select(a => a.Id))}]");
+            // #endregion
+            db.ProjectAlternatives.RemoveRange(invalidIdRows);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            alternatives = await db.ProjectAlternatives
+                .Where(a => a.ProjectId == projectId && a.IsActive)
+                .OrderBy(a => a.SortOrder)
+                .ThenBy(a => a.Name)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         if (alternatives.Count == 0)
         {
             var defaultAlt = new ProjectAlternative
@@ -85,6 +106,11 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
             db.ProjectAlternatives.Add(defaultAlt);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             alternatives = [defaultAlt];
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"H-ALT2 created-default-alt project={projectId} id={defaultAlt.Id}");
+            // #endregion
         }
 
         return alternatives

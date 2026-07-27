@@ -957,6 +957,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             .PickProjectFileAsync(projectId, item.ProjectFileId)
             .ConfigureAwait(true);
 
+        // #region agent log
+        WorkflowDebugTrace.Step(
+            "Email.TagUI",
+            $"H-TAG1 pick att={item.InboxAttachmentId} picked={pickedProjectFileId?.ToString() ?? "null"} selectedAlt={item.SelectedAlternativeId?.ToString() ?? "null"} alts={item.AvailableAlternatives.Count}");
+        // #endregion
+
         if (pickedProjectFileId is not int projectFileId || projectFileId <= 0)
         {
             return;
@@ -968,6 +974,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         if (alternativeId is not > 0)
         {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"H-ALT2 no-default-alt att={item.InboxAttachmentId} pf={projectFileId}");
+            // #endregion
             SetStatus("לא נמצאה אלטרנטיבה לפרויקט (צפוי «1»). רענן ונסה שוב.");
             return;
         }
@@ -1016,6 +1027,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         item.ApplyTag(projectFileId, targetTitle, alternativeId);
         item.RememberCurrentAlternativeAsPrevious();
+        // #region agent log
+        WorkflowDebugTrace.Step(
+            "Email.TagUI",
+            $"H-TAG2 after-ApplyTag att={item.InboxAttachmentId} pf={item.ProjectFileId} selectedAlt={item.SelectedAlternativeId?.ToString() ?? "null"} showAlt={item.ShowAlternativeSelector}");
+        // #endregion
         SetStatus("הצרופה תויגה לקובץ הפרויקט.");
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         RefreshActionBarState();
@@ -1041,6 +1057,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             || item.InboxAttachmentId <= 0
             || item.SelectedAlternativeId is not > 0)
         {
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"H-ALT3 alt-change-skip att={item.InboxAttachmentId} pf={item.ProjectFileId?.ToString() ?? "null"} selectedAlt={item.SelectedAlternativeId?.ToString() ?? "null"} hasSvc={_attachmentTaggingService is not null}");
+            // #endregion
             return;
         }
 
