@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
+using SiNet.Infrastructure.Autodesk;
 using SiNetProjectManagerV2.Services;
 using SiNetSQL.Services;
 
@@ -696,51 +697,58 @@ public partial class SecretSetupWindow : Window
                 return;
             }
 
-            // Compute local key hash prefix
+            // Compute local key metadata (for display only — server no longer returns hash)
             var localKey = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
-            var localHashPrefix = "(none)";
-            var localKeyLength = 0;
-            if (!string.IsNullOrEmpty(localKey))
+            var localKeyLength = localKey?.Length ?? 0;
+
+            var pinnedThumbprints = AppConfiguration.Configuration
+                .GetSection("AccService:PinnedCertificateThumbprints")
+                .GetChildren()
+                .Select(child => child.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToArray();
+            var tlsOptions = new AccServiceControlPlaneOptions
             {
-                localKeyLength = localKey.Length;
-                var hashBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(localKey));
-                localHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+                PinnedCertificateThumbprints = pinnedThumbprints,
+            };
+
+            if (string.IsNullOrWhiteSpace(localKey))
+            {
+                MessageBox.Show(
+                    "AccService API Key לא מוגדר ב-Vault.\n" +
+                    "הגדר מפתח לפני בדיקת diag.",
+                    "AccService API Key חסר", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
 
-            // Approved internal hosts for self-signed certificate acceptance
-            var baseUri = new Uri(baseUrl.TrimEnd('/') + "/");
-            var targetHost = baseUri.Host;
-            var approvedHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "SI-WIN-2K19", "localhost", "127.0.0.1"
-            };
-            bool IsApprovedHost(string? host) =>
-                !string.IsNullOrEmpty(host) &&
-                (approvedHosts.Contains(host) ||
-                 host.EndsWith(".si-eng.local", StringComparison.OrdinalIgnoreCase) ||
-                 host.StartsWith("192.168.", StringComparison.Ordinal));
-
-            // Call the diagnostic endpoint
-            // Accept self-signed certs ONLY for approved internal hosts
+            // Call the diagnostic endpoint (requires X-AccService-Key)
             using var handler = new HttpClientHandler
             {
-                ServerCertificateCustomValidationCallback = (msg, _, _, errors) =>
-                {
-                    if (errors == System.Net.Security.SslPolicyErrors.None)
-                        return true;
-                    if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
-                    {
-                        var host = msg?.RequestUri?.Host;
-                        return msg?.RequestUri?.IsLoopback == true || IsApprovedHost(host);
-                    }
-                    return false;
-                }
+                ServerCertificateCustomValidationCallback = (msg, certificate, _, errors) =>
+                    AccServiceHttpClientConfigurator.ValidateServerCertificate(
+                        msg, certificate, errors, tlsOptions),
             };
             using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
 
             var diagUrl = baseUrl.TrimEnd('/') + "/v1/acc/diag";
-            var response = await httpClient.GetAsync(diagUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, diagUrl);
+            request.Headers.Add(
+                SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiKeyHeader,
+                localKey);
+            var response = await httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                MessageBox.Show(
+                    $"השרת דחה את מפתח ה-API (HTTP 401).\n\n" +
+                    "ייתכן שהמפתח בלקוח שונה מהמפתח בשרת, או שהשירות רץ תחת משתמש אחר.",
+                    "בדיקת AccService — מפתח לא תואם", MessageBoxButton.OK, MessageBoxImage.Warning);
+                StatusAccServiceApiKey.Fill = _orangeBrush;
+                StatusAccServiceApiKey.ToolTip = "⚠ HTTP 401 — מפתח נדחה על ידי השרת";
+                return;
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -754,11 +762,8 @@ public partial class SecretSetupWindow : Window
             // Parse the diagnostic response
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
-            var serverUser = root.TryGetProperty("windowsUser", out var u) ? u.GetString() : "(unknown)";
             var serverHasKey = root.TryGetProperty("hasApiKey", out var h) && h.GetBoolean();
             var serverKeySource = root.TryGetProperty("keySource", out var s) ? s.GetString() : "(unknown)";
-            var serverKeyLength = root.TryGetProperty("keyLength", out var l) ? l.GetInt32() : 0;
-            var serverHashPrefix = root.TryGetProperty("keyHashPrefix", out var p) ? p.GetString() : "(none)";
             var buildVersion = root.TryGetProperty("buildVersion", out var v) ? v.GetString() : "?";
 
             // Server active integration health statuses
@@ -767,8 +772,7 @@ public partial class SecretSetupWindow : Window
             var serverDbOk = root.TryGetProperty("dbStatus", out var dbOkProp) && dbOkProp.GetBoolean();
             var serverDbDetail = root.TryGetProperty("dbDetail", out var dbDetProp) ? dbDetProp.GetString() : "(none)";
 
-            // Compare
-            var keysMatch = localHashPrefix == serverHashPrefix && localHashPrefix != "(none)";
+            var keysMatch = response.IsSuccessStatusCode && serverHasKey;
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"═══ AccService Diagnostic ═══");
@@ -776,29 +780,21 @@ public partial class SecretSetupWindow : Window
             sb.AppendLine($"Build: {buildVersion}");
             sb.AppendLine();
             sb.AppendLine($"── שרת (AccService) ──");
-            sb.AppendLine($"  Windows User: {serverUser}");
             sb.AppendLine($"  Has API Key: {serverHasKey}");
             sb.AppendLine($"  Key Source: {serverKeySource}");
-            sb.AppendLine($"  Key Hash Prefix: {serverHashPrefix}");
             sb.AppendLine($"  Autodesk Connection: {(serverAutodeskOk ? "✅ תקין" : $"❌ שגיאה: {serverAutodeskDetail}")}");
             sb.AppendLine($"  Database Connection: {(serverDbOk ? "✅ תקין" : $"❌ שגיאה: {serverDbDetail}")}");
             sb.AppendLine();
             sb.AppendLine($"── לקוח (WPF) ──");
             sb.AppendLine($"  Has API Key: {!string.IsNullOrEmpty(localKey)}");
             sb.AppendLine($"  Key Length: {localKeyLength}");
-            sb.AppendLine($"  Key Hash Prefix: {localHashPrefix}");
             sb.AppendLine();
 
             if (keysMatch)
             {
-                sb.AppendLine("✅ המפתחות תואמים!");
+                sb.AppendLine("✅ אימות מפתח הצליח!");
                 StatusAccServiceApiKey.Fill = _greenBrush;
-                StatusAccServiceApiKey.ToolTip = $"✅ מפתח תואם לשרת (hash: {localHashPrefix})";
-            }
-            else if (string.IsNullOrEmpty(localKey))
-            {
-                sb.AppendLine("❌ מפתח לא מוגדר בלקוח.");
-                StatusAccServiceApiKey.Fill = _redBrush;
+                StatusAccServiceApiKey.ToolTip = "✅ מפתח מאומת מול השרת";
             }
             else if (!serverHasKey)
             {
@@ -809,11 +805,8 @@ public partial class SecretSetupWindow : Window
             }
             else
             {
-                sb.AppendLine("❌ המפתחות לא תואמים!");
-                sb.AppendLine("   ייתכן שה-Credential Manager בשרת לא עודכן");
-                sb.AppendLine("   או שהשירות רץ תחת משתמש שונה מזה שייבא את הסודות.");
+                sb.AppendLine("❌ בדיקת diag לא הצליחה.");
                 StatusAccServiceApiKey.Fill = _orangeBrush;
-                StatusAccServiceApiKey.ToolTip = $"⚠ Hash mismatch: local={localHashPrefix}, server={serverHashPrefix}";
             }
 
             MessageBox.Show(sb.ToString(), "בדיקת AccService",

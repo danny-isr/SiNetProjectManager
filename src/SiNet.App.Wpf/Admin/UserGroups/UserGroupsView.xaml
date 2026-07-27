@@ -1,0 +1,154 @@
+<UserControl x:Class="SiNet.App.Wpf.Admin.UserGroups.UserGroupsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:SiNet.App.Wpf.Admin.UserGroups"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="260"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Groups list -->
+        <DockPanel Grid.Column="0" Margin="0,0,12,0">
+            <TextBlock DockPanel.Dock="Top" Text="קבוצות" FontWeight="SemiBold" Margin="0,0,0,8"
+                       Style="{DynamicResource SiTextNormalStyle}"/>
+            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                <TextBlock Text="קבוצה חדשה" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding NewGroupCode, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,0,4" FlowDirection="LeftToRight"
+                         ToolTip="קוד (אנגלית)"/>
+                <TextBox Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,0,4"
+                         ToolTip="שם תצוגה"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="חדש" Command="{Binding CreateGroupCommand}"
+                            Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,6,0" Padding="10,4"/>
+                    <Button Content="מחק" Command="{Binding SoftDeleteCommand}"
+                            Style="{DynamicResource SiSecondaryButtonStyle}" Padding="10,4"/>
+                </StackPanel>
+            </StackPanel>
+            <ListBox ItemsSource="{Binding Groups}"
+                     SelectedItem="{Binding SelectedGroup}"
+                     DisplayMemberPath="Name"
+                     BorderBrush="{DynamicResource SiSecondaryBrush}"
+                     BorderThickness="1"/>
+        </DockPanel>
+
+        <!-- Details + members -->
+        <DockPanel Grid.Column="1" Margin="0,0,12,0">
+            <StackPanel DockPanel.Dock="Top">
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Left" Content="רענון" Command="{Binding RefreshCommand}"
+                            Style="{DynamicResource SiSecondaryButtonStyle}" Padding="10,4" Margin="0,0,8,0"/>
+                    <Button DockPanel.Dock="Left" Content="שמור פרטים" Command="{Binding SaveMetadataCommand}"
+                            Style="{DynamicResource SiPrimaryButtonStyle}" Padding="10,4" Margin="0,0,8,0"/>
+                    <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                               Style="{DynamicResource SiTextSmallStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" TextWrapping="Wrap"/>
+                </DockPanel>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="70"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="קוד:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding EditCode, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,6" FlowDirection="LeftToRight"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שם:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,6"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="תיאור:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EditDescription, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,6"/>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="ברירת מחדל:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                    <ComboBox Width="220"
+                              ItemsSource="{Binding Members}"
+                              SelectedItem="{Binding SelectedDefaultAssignee}"
+                              DisplayMemberPath="DisplayName"
+                              VerticalContentAlignment="Center"/>
+                    <Button Content="החל" Command="{Binding SetDefaultAssigneeCommand}"
+                            Style="{DynamicResource SiSecondaryButtonStyle}" Margin="6,0,0,0" Padding="8,3"/>
+                    <Button Content="נקה" Command="{Binding ClearDefaultAssigneeCommand}"
+                            Style="{DynamicResource SiSecondaryButtonStyle}" Margin="6,0,0,0" Padding="8,3"/>
+                </StackPanel>
+
+                <Separator Margin="0,0,0,8"/>
+                <DockPanel Margin="0,0,0,6">
+                    <TextBlock Text="חברי קבוצה" FontWeight="SemiBold" DockPanel.Dock="Right"/>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" HorizontalAlignment="Left">
+                        <ComboBox Width="200"
+                                  ItemsSource="{Binding AvailableUsers}"
+                                  SelectedItem="{Binding SelectedAvailableUser}"
+                                  DisplayMemberPath="DisplayName"
+                                  VerticalContentAlignment="Center"/>
+                        <Button Content="הוסף חבר" Command="{Binding AddMemberCommand}"
+                                Style="{DynamicResource SiPrimaryButtonStyle}" Margin="6,0,0,0" Padding="8,3"/>
+                    </StackPanel>
+                </DockPanel>
+            </StackPanel>
+
+            <DockPanel>
+                <Button DockPanel.Dock="Bottom" Content="הסר חבר מהקבוצה"
+                        Command="{Binding RemoveMemberCommand}"
+                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                        HorizontalAlignment="Right" Margin="0,8,0,0" Padding="10,4"/>
+                <DataGrid ItemsSource="{Binding Members}"
+                          SelectedItem="{Binding SelectedMember}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          SelectionMode="Single"
+                          HeadersVisibility="Column"
+                          BorderBrush="{DynamicResource SiSecondaryBrush}"
+                          BorderThickness="1">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="שם" Binding="{Binding DisplayName}" Width="*"/>
+                        <DataGridTextColumn Header="מזהה" Binding="{Binding UserId}" Width="80"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </DockPanel>
+
+        <!-- Dependent stages (read-only) -->
+        <DockPanel Grid.Column="2">
+            <TextBlock DockPanel.Dock="Top" Text="שלבים שתלויים בקבוצה"
+                       FontWeight="SemiBold" Margin="0,0,0,8"
+                       Style="{DynamicResource SiTextNormalStyle}" TextWrapping="Wrap"/>
+            <TextBlock DockPanel.Dock="Top"
+                       Text="קריאה בלבד — AssignedGroupId נקבע ב-seed/designer."
+                       Style="{DynamicResource SiTextSmallStyle}"
+                       Foreground="{DynamicResource SiSecondaryBrush}"
+                       Margin="0,0,0,8" TextWrapping="Wrap"/>
+            <ListBox ItemsSource="{Binding DependentStages}"
+                     BorderBrush="{DynamicResource SiSecondaryBrush}"
+                     BorderThickness="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="2">
+                            <TextBlock FontWeight="SemiBold">
+                                <Run Text="{Binding WorkflowCode, Mode=OneWay}"/>
+                                <Run Text="."/>
+                                <Run Text="{Binding StageCode, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Text="{Binding StageName}" Opacity="0.8"
+                                       Style="{DynamicResource SiTextSmallStyle}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -1,24 +1,35 @@
+using System.Diagnostics;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Common;
 using SiNet.Application.Email.Acc;
+using SiNet.Application.Notifications;
 using SiNet.Application.Runtime;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Runtime;
 
 /// <summary>
-/// Aggregates external health, ACC, Gmail, ACC-ingest background work, and startup tasks.
+/// Aggregates external health, ACC, Gmail, ACC-ingest background work, startup tasks,
+/// and workflow assignee readiness.
 /// </summary>
 public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusService, IDisposable
 {
+    internal const string WorkflowAssigneeConfigMissingTemplate = "workflow-assignee-config-missing";
+    internal const string WorkflowAssigneesKey = "workflow-assignees";
+
     private readonly IExternalHealthCheckSource? _externalHealth;
     private readonly IAccServiceModeProvider? _accMode;
     private readonly IAccServiceHealthProbe? _accHealth;
     private readonly IEmailAccBackgroundWorkTracker? _accIngest;
     private readonly IEnumerable<IConnectorAuthService> _connectors;
     private readonly IStartupTaskRegistry _startupTasks;
+    private readonly IWorkflowAssigneeReadinessQueryService? _assigneeReadiness;
+    private readonly INotificationDeliveryService? _notifications;
     private readonly object _gate = new();
     private IReadOnlyList<SubsystemRuntimeStatus> _current = [];
     private AccServiceHealthResult? _cachedAccHealth;
+    private IReadOnlyList<WorkflowAssigneeReadinessIssueDto>? _cachedAssigneeIssues;
+    private bool _assigneeProbeAttempted;
 
     public RuntimeSubsystemStatusService(
         IStartupTaskRegistry startupTasks,
@@ -26,7 +37,9 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
         IAccServiceModeProvider? accMode = null,
         IAccServiceHealthProbe? accHealth = null,
         IEmailAccBackgroundWorkTracker? accIngest = null,
-        IEnumerable<IConnectorAuthService>? connectors = null)
+        IEnumerable<IConnectorAuthService>? connectors = null,
+        IWorkflowAssigneeReadinessQueryService? assigneeReadiness = null,
+        INotificationDeliveryService? notifications = null)
     {
         _startupTasks = startupTasks ?? throw new ArgumentNullException(nameof(startupTasks));
         _externalHealth = externalHealth;
@@ -34,6 +47,8 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
         _accHealth = accHealth;
         _accIngest = accIngest;
         _connectors = connectors ?? [];
+        _assigneeReadiness = assigneeReadiness;
+        _notifications = notifications;
 
         _startupTasks.Changed += OnDependencyChanged;
         if (_externalHealth is not null)
@@ -82,6 +97,8 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
             _cachedAccHealth = null;
         }
 
+        await RefreshAssigneeReadinessAsync(cancellationToken).ConfigureAwait(false);
+
         Rebuild();
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -95,6 +112,68 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
             _accIngest.ActiveCountChanged -= OnAccIngestCountChanged;
         foreach (var c in _connectors)
             c.AuthStateChanged -= OnAuthStateChanged;
+    }
+
+    private async Task RefreshAssigneeReadinessAsync(CancellationToken cancellationToken)
+    {
+        if (_assigneeReadiness is null)
+        {
+            _cachedAssigneeIssues = null;
+            _assigneeProbeAttempted = false;
+            return;
+        }
+
+        try
+        {
+            var issues = await _assigneeReadiness.GetIssuesAsync(cancellationToken).ConfigureAwait(false);
+            _cachedAssigneeIssues = issues;
+            _assigneeProbeAttempted = true;
+
+            if (issues.Count > 0)
+                await NotifyAssigneeConfigMissingAsync(issues, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError(
+                "[RuntimeStatus] Failed to probe workflow assignee readiness (non-fatal): {0}",
+                ex);
+            _cachedAssigneeIssues = null;
+            _assigneeProbeAttempted = true;
+        }
+    }
+
+    private async Task NotifyAssigneeConfigMissingAsync(
+        IReadOnlyList<WorkflowAssigneeReadinessIssueDto> issues,
+        CancellationToken cancellationToken)
+    {
+        if (_notifications is null)
+            return;
+
+        try
+        {
+            await _notifications.DeliverAsync(
+                    new NotificationDeliveryRequest(
+                        Template: WorkflowAssigneeConfigMissingTemplate,
+                        Recipients: Array.Empty<string>(),
+                        RawConfigJson: null,
+                        ProjectId: null,
+                        WorkflowInstanceId: null,
+                        TaskId: null,
+                        UserId: null),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            Trace.TraceWarning(
+                "[RuntimeStatus] Workflow assignee config missing: {0} stage issue(s). First: {1}",
+                issues.Count,
+                issues[0].SummaryHe);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError(
+                "[RuntimeStatus] Failed to emit workflow-assignee-config-missing notification (non-fatal): {0}",
+                ex);
+        }
     }
 
     private void OnDependencyChanged(object? sender, EventArgs e)
@@ -137,13 +216,15 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
         rows.Add(BuildAccRow(now));
         rows.Add(BuildGmailRow(now));
         rows.Add(BuildAccIngestRow(now));
+        rows.Add(BuildWorkflowAssigneesRow(now));
 
         foreach (var task in _startupTasks.Current)
         {
             // Avoid duplicating keys already covered by dedicated rows.
             if (string.Equals(task.Key, "gmail", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(task.Key, "acc", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(task.Key, "acc-ingest", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(task.Key, "acc-ingest", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(task.Key, WorkflowAssigneesKey, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -162,6 +243,77 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
 
         lock (_gate)
             _current = rows.OrderBy(r => r.DisplayNameHe, StringComparer.Ordinal).ToList();
+    }
+
+    private SubsystemRuntimeStatus BuildWorkflowAssigneesRow(DateTimeOffset now)
+    {
+        if (_assigneeReadiness is null)
+        {
+            return new SubsystemRuntimeStatus(
+                WorkflowAssigneesKey,
+                "הקצאות workflow",
+                SubsystemRuntimeState.NotConfigured,
+                null,
+                "שירות מוכנות הקצאות לא רשום",
+                now);
+        }
+
+        if (!_assigneeProbeAttempted)
+        {
+            return new SubsystemRuntimeStatus(
+                WorkflowAssigneesKey,
+                "הקצאות workflow",
+                SubsystemRuntimeState.Idle,
+                null,
+                "טרם נבדק — רענן",
+                now);
+        }
+
+        var issues = _cachedAssigneeIssues;
+        if (issues is null)
+        {
+            return new SubsystemRuntimeStatus(
+                WorkflowAssigneesKey,
+                "הקצאות workflow",
+                SubsystemRuntimeState.Degraded,
+                null,
+                "בדיקת הקצאות נכשלה",
+                now);
+        }
+
+        if (issues.Count == 0)
+        {
+            return new SubsystemRuntimeStatus(
+                WorkflowAssigneesKey,
+                "הקצאות workflow",
+                SubsystemRuntimeState.Idle,
+                null,
+                "הקצאות workflow תקינות",
+                now);
+        }
+
+        var groupCount = issues
+            .Select(i => i.GroupCode)
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        var hasMissingGroup = issues.Any(i =>
+            i.IssueKind is WorkflowAssigneeIssueKind.MissingAssignedGroup
+                or WorkflowAssigneeIssueKind.GroupMissing);
+        var state = hasMissingGroup
+            ? SubsystemRuntimeState.NotConfigured
+            : SubsystemRuntimeState.Degraded;
+        var summary =
+            $"{issues.Count} שלבים ללא assignee ניתן לפתרון" +
+            (groupCount > 0 ? $" · {groupCount} קבוצות" : string.Empty);
+
+        return new SubsystemRuntimeStatus(
+            WorkflowAssigneesKey,
+            "הקצאות workflow",
+            state,
+            null,
+            summary,
+            now);
     }
 
     private SubsystemRuntimeStatus BuildAccRow(DateTimeOffset now)

@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Autodesk;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
+using SiNet.Infrastructure.Sql.AutodeskLocal;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using Xunit;
@@ -93,39 +94,44 @@ public sealed class AccControlPlaneTests
         const string body = """
             {
               "status": "ok",
-              "windowsUser": "DOMAIN\\user",
               "hasApiKey": true,
               "keySource": "CredentialManager",
-              "keyLength": 44,
-              "keyHashPrefix": "abc123def456",
               "autodeskStatus": true,
-              "autodeskDetail": "Autodesk token retrieved successfully.",
+              "autodeskDetail": "OK",
               "dbStatus": false,
-              "dbDetail": "DB failed"
+              "dbDetail": "SqlException"
             }
             """;
 
+        string? apiKeyHeader = null;
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "native-api-key");
         var sut = new HttpAccServiceDiagnosticsProbe(
-            new HttpClient(new StubHttpMessageHandler((_, _) =>
-                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            new HttpClient(new StubHttpMessageHandler((request, _) =>
+            {
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                    ? values.Single()
+                    : null;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(body),
-                }))),
+                });
+            })),
             new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com")),
+            vault,
             new AccServiceControlPlaneOptions());
 
         var result = await sut.ProbeAsync();
 
+        Assert.Equal("native-api-key", apiKeyHeader);
         Assert.True(result.Reachable);
-        Assert.Equal("DOMAIN\\user", result.WindowsUser);
         Assert.True(result.HasApiKey);
         Assert.Equal("CredentialManager", result.KeySource);
-        Assert.Equal(44, result.KeyLength);
-        Assert.Equal("abc123def456", result.KeyHashPrefix);
         Assert.True(result.AutodeskOk);
-        Assert.Equal("Autodesk token retrieved successfully.", result.AutodeskDetail);
+        Assert.Equal("OK", result.AutodeskDetail);
         Assert.False(result.DbOk);
-        Assert.Equal("DB failed", result.DbDetail);
+        Assert.Equal("SqlException", result.DbDetail);
     }
 
     [Fact]
@@ -144,7 +150,7 @@ public sealed class AccControlPlaneTests
     }
 
     [Fact]
-    public void AddSiNetAutodesk_registers_acc_runtime_services_without_legacy_write_side_services()
+    public void AddSiNetAutodesk_registers_acc_runtime_services_without_sql_local_services()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISecretSetupHostConfiguration>(new StubSecretSetupHostConfiguration("https://acc.example.com"));
@@ -166,10 +172,25 @@ public sealed class AccControlPlaneTests
         Assert.Contains(services, d => d.ServiceType == typeof(IAccFolderBrowserService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccProjectTreeSearchService));
         Assert.Contains(services, d => d.ServiceType == typeof(IAccInboxBootstrapService));
-        Assert.Contains(services, d => d.ServiceType == typeof(IAccLookupSeedService));
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IAccLookupSeedService));
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccProjectProvisioningService");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner");
         Assert.DoesNotContain(services, d => d.ServiceType.FullName == "SiNetSQL.Services.Files.IProjectFileFilingService");
+    }
+
+    [Fact]
+    public void Autodesk_project_does_not_reference_sql_infrastructure()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var projectFile = Path.Combine(
+            repositoryRoot,
+            "src",
+            "SiNet.Infrastructure.Autodesk",
+            "SiNet.Infrastructure.Autodesk.csproj");
+
+        var projectXml = File.ReadAllText(projectFile);
+
+        Assert.DoesNotContain("SiNet.Infrastructure.Sql", projectXml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -917,6 +938,22 @@ public sealed class AccControlPlaneTests
             string folderId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(_items);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "SiNet.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the repository root containing SiNet.sln.");
     }
 
     private sealed class StubFolderContentsReader(IReadOnlyList<AccFolderBrowseEntry> entries) : IAccFolderContentsReader

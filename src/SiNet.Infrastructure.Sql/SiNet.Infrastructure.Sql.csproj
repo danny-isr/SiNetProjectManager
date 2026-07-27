@@ -10,15 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-	<PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.1" />
-	<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
-	<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
-	<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
-	<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+	<PackageReference Include="Microsoft.Data.SqlClient" />
+	<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+	<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+	<PackageReference Include="Microsoft.EntityFrameworkCore.Design">
 	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 	  <PrivateAssets>all</PrivateAssets>
 	</PackageReference>
-	<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7">
+	<PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
 	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 	  <PrivateAssets>all</PrivateAssets>
 	</PackageReference>
@@ -27,6 +27,7 @@
   <ItemGroup>
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
+	<ProjectReference Include="..\..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,9 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Runtime;
 
 namespace SiNet.App.Wpf.Admin.SystemStatus;
@@ -11,14 +15,21 @@ namespace SiNet.App.Wpf.Admin.SystemStatus;
 public sealed class SystemStatusViewModel : ObservableObject
 {
     private readonly IRuntimeSubsystemStatusService _runtime;
+    private readonly IUserGroupsWindowFactory? _userGroupsWindowFactory;
     private bool _isBusy;
     private string _summary = "טוען…";
 
-    public SystemStatusViewModel(IRuntimeSubsystemStatusService runtime)
+    public SystemStatusViewModel(
+        IRuntimeSubsystemStatusService runtime,
+        IUserGroupsWindowFactory? userGroupsWindowFactory = null)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        _userGroupsWindowFactory = userGroupsWindowFactory;
         Rows = new ObservableCollection<SystemStatusRowViewModel>();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
+        OpenUserGroupsCommand = new RelayCommand(
+            _ => OpenUserGroups(),
+            _ => _userGroupsWindowFactory is not null);
         _runtime.Changed += OnRuntimeChanged;
         ApplySnapshot(_runtime.Current);
     }
@@ -43,6 +54,7 @@ public sealed class SystemStatusViewModel : ObservableObject
     }
 
     public ICommand RefreshCommand { get; }
+    public RelayCommand OpenUserGroupsCommand { get; }
 
     public async Task LoadAsync() => await RefreshAsync().ConfigureAwait(true);
 
@@ -85,6 +97,32 @@ public sealed class SystemStatusViewModel : ObservableObject
         var bg = statuses.Sum(s => s.ActiveWorkCount ?? 0);
         var ok = statuses.Count(s => s.State is SubsystemRuntimeState.Idle or SubsystemRuntimeState.Running);
         Summary = $"{ok} פעילים/מוכנים · {running} רצים ברקע · {degraded} בתקלה · עבודת רקע: {bg}";
+    }
+
+    private void OpenUserGroups()
+    {
+        if (_userGroupsWindowFactory is null)
+            return;
+
+        try
+        {
+            ThemeResourceLoader.EnsureApplicationResourcesMerged();
+            var window = _userGroupsWindowFactory.Create();
+            var owner = System.Windows.Application.Current?.Windows
+                .OfType<Window>()
+                .FirstOrDefault(w => w.IsActive);
+            if (owner is not null)
+                window.Owner = owner;
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"פתיחת הקצאות נכשלה: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 }
 

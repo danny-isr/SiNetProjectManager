@@ -20,7 +20,21 @@ msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccServi
 - רישום השירות `SiOfficeAccService` (auto-start; בחירת החשבון בפועל נקבעת לפי פרטי ההתקנה/התצורה)
 - עצירה/הפעלה של השירות בכל עדכון
 - פתיחת פורט 8443 בחומת האש
-- יצירת תעודת SSL self-signed בהפעלה ראשונה (`accservice.pfx` ליד ה-exe)
+
+### תעודת TLS (HTTPS)
+
+Production **חייב** לספק תעודה — אין יצירה אוטומטית של self-signed בפרודקשן.
+
+| אפשרות | הגדרות |
+|---|---|
+| **Windows Certificate Store** | `AccService:Certificate:StoreName` + `AccService:Certificate:Thumbprint` |
+| **PFX file** | `AccService:Certificate:Path` + `AccService:Certificate:Password` (או vault `SiNet/AccService/CertificatePassword`) |
+| **Dev only** | `AccService:AllowSelfSignedDevCert=true` + סיסמת PFX ב-config/vault — יוצר `accservice.pfx` ליד ה-exe |
+
+לקוחות WPF יכולים לסמוך על self-signed רק דרך **thumbprint pin**:
+`AccService:PinnedCertificateThumbprints` ב-`appsettings.json` של הלקוח.
+
+`/v1/acc/diag` דורש `X-AccService-Key` — רק `/v1/acc/health` פטור מאימות.
 
 ## מצב ACC Inbox נוכחי
 

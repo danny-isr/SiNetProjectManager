@@ -117,8 +117,51 @@ Canonical contract for task-driven opens and completion:
 Production envelope for V2 New System mode:
 [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
 
-- Allowed: Email read-only, ACC status/operator read-only, native admin/settings.
-- Not allowed in release shell menu: InspectionShell harness, stub write actions, GmailSend, ACC write.
+- Allowed: Email read-only, ACC status/operator read-only, native admin/settings, and feature-gated
+  work surfaces (**מיילים**, **בעבודה 2**, **לוח משימות**, **דוחות ביקורת**, **צפייה בתהליכים (סגור)**).
+- Not allowed in release shell menu: InspectionShell DEBUG harness, stub write actions, GmailSend, ACC write.
+
+## Stage 4 HostMode target state (2026-07-27)
+
+`SiNet.App.Composition` defines `SiNetHostMode` to make the intended host boundary explicit:
+
+| Host mode | Intended host | Legacy bridge |
+| --- | --- | --- |
+| `StandaloneNew` | `src/SiNet.App.Wpf` harness and clean native hosts | Not registered |
+| `V2Hybrid` | `SiNetProjectManagerV2` while its shared container remains transitional | Registered explicitly |
+| `Service` | Non-WPF/background hosts | Not registered |
+
+`AddSiNet` accepts this mode, defaulting to `StandaloneNew`; `AddSiNetLegacyBridge()` is invoked only
+for `V2Hybrid`. The standalone WPF harness passes `StandaloneNew` explicitly. The V2 host may retain
+its large existing registration graph during this transition, but must document its hybrid composition
+boundary and must not add an unconditional bridge through a new composition path.
+
+For `StartupMode.NewSystem`, startup must first perform a non-UI vault/connection check and run the same
+database schema gate used by the legacy path before `LaunchNewSystemShell`. If secrets are absent and a
+native setup surface can be resolved, it is the only allowed UI setup surface. If an unavoidable
+transitional legacy dialog remains, it is an explicit fallback that logs:
+
+```text
+DEPRECATED: legacy dialog on New System path — Stage 4 partial
+```
+
+The fallback must be visible to operators and must not be a silent route. If neither native setup nor a
+safe explicit fallback is available, startup fails closed with an actionable message; it must not launch
+the shell with an unvalidated database state.
+
+`NewShellFactory` development watchdog commands remain asynchronous through their UI event handler, so
+the shell does not synchronously block on watchdog I/O.
+
+### Prior state and transition status
+
+Before Stage 4, `RunNewSystemStartup` routes vault setup and DB connection retry through
+`WPF_Window.ProvisioningPasswordDialog` and `WPF_Window.SecretSetupWindow`. These are legacy V2
+surfaces, not native `SiNet.App.Wpf` windows. They are deprecated on the New System startup path but
+remain active for `StartupMode.Legacy` and may remain an explicit, logged New System fallback until
+native startup provisioning parity is verified. Final removal requires verification of native provisioning
+import, first-run vault creation, and connection-string repair.
+
+See also: [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) §5.3.
 
 ## Native logging (Stage 4, 2026-07-03)
 

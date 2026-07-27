@@ -1,11 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.ProjectWork;
+using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.FileSystem;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Sql;
+using SiNet.Infrastructure.Sql.AutodeskLocal;
 using SiNet.Infrastructure.Sql.Services.DevTools;
 using SiNet.LegacyBridge;
 
@@ -19,19 +21,30 @@ namespace SiNet.App.Composition;
 public static class SiNetCompositionExtensions
 {
     public static IServiceCollection AddSiNet(this IServiceCollection services)
-        => services.AddSiNet(static _ => { });
+        => services.AddSiNet(SiNetHostMode.StandaloneNew, static _ => { });
+
+    /// <summary>
+    /// Aggregates the modular registrations for <see cref="SiNetHostMode.StandaloneNew"/>.
+    /// </summary>
+    public static IServiceCollection AddSiNet(
+        this IServiceCollection services,
+        Action<GmailOptions> configureGmail)
+        => services.AddSiNet(SiNetHostMode.StandaloneNew, configureGmail);
 
     /// <summary>
     /// Aggregates the modular registrations and lets the host configure the Gmail module
     /// (client secrets path, token store, application name, interactive sign-in).
+    /// <see cref="SiNetHostMode.V2Hybrid"/> is the only mode that registers LegacyBridge.
     /// </summary>
     public static IServiceCollection AddSiNet(
         this IServiceCollection services,
+        SiNetHostMode hostMode,
         Action<GmailOptions> configureGmail)
     {
         services.AddSiNetLogging();
         services.AddSiNetSql();
         services.AddSiNetProcessBackbone();
+        services.AddTransient<IOpenQuoteProjectDecisionService, OpenQuoteProjectDecisionService>();
         services.AddSiNetProjectQuerySql();
         services.AddSiNetProjectCreateSql();
         services.AddSiNetEmailReadSql();
@@ -41,7 +54,13 @@ public static class SiNetCompositionExtensions
         services.AddSiNetUserManagementSql();
         services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();
-        services.AddSiNetLegacyBridge();
+        services.AddSiNetAutodeskLocalSql();
+
+        if (hostMode == SiNetHostMode.V2Hybrid)
+        {
+            services.AddSiNetLegacyBridge();
+        }
+
         services.AddSiNetInspectionSql();
         services.AddSiNetDevTools();
 
@@ -72,9 +91,9 @@ public static class SiNetCompositionExtensions
 
         if (!services.Any(d =>
                 d.ServiceType == typeof(IFileStore)
-                && d.ImplementationType == typeof(SiNet.Infrastructure.Autodesk.ProjectWork.AccFileStore)))
+                && d.ImplementationType == typeof(SiNet.Infrastructure.Sql.ProjectWork.AccFileStore)))
         {
-            services.AddSingleton<IFileStore, SiNet.Infrastructure.Autodesk.ProjectWork.AccFileStore>();
+            services.AddSingleton<IFileStore, SiNet.Infrastructure.Sql.ProjectWork.AccFileStore>();
         }
 
         services.TryAddSingleton<IFileIndexService, FileIndexService>();

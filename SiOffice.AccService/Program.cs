@@ -88,31 +88,17 @@ MyOffice.AutodeskConnector.TokenProvider.LogWarn = msg => Log.Warning("{Msg}", m
 MyOffice.AutodeskConnector.TokenProvider.LogError = msg => Log.Error("{Msg}", msg);
 
 // ─── Kestrel HTTPS ──────────────────────────────────────────────────────────
-// Internal-network service. HTTPS port + optional cert path/password are
-// driven from configuration so production can swap in a real PFX without
-// touching code. When no cert is configured Kestrel falls back to the dev
-// certificate (developer machine only).
+// Internal-network service. HTTPS port and certificate are driven from
+// configuration / vault. Production must supply a real certificate (PFX path
+// or Windows store thumbprint). Self-signed auto-generation is dev-only.
 builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
 {
     var port = ctx.Configuration.GetValue<int?>("AccService:HttpsPort") ?? 8443;
-    var certPath = ctx.Configuration["AccService:Certificate:Path"];
-    var certPassword = ctx.Configuration["AccService:Certificate:Password"];
 
     kestrel.ListenAnyIP(port, listen =>
     {
-        if (!string.IsNullOrWhiteSpace(certPath) && File.Exists(certPath))
-        {
-            listen.UseHttps(certPath, certPassword);
-        }
-        else
-        {
-            // Production fallback: persist a self-signed cert next to the
-            // executable so the service boots cleanly on Windows Server where
-            // the ASP.NET Core dev-cert is not available. Replace with a real
-            // cert by setting AccService:Certificate:Path/Password.
-            var cert = LoadOrCreateSelfSignedCertificate();
-            listen.UseHttps(cert);
-        }
+        var cert = LoadTlsCertificate(ctx.Configuration);
+        listen.UseHttps(cert);
     });
 });
 
@@ -286,14 +272,75 @@ finally
 
 return 0;
 
-static X509Certificate2 LoadOrCreateSelfSignedCertificate()
+static X509Certificate2 LoadTlsCertificate(IConfiguration configuration)
+{
+    const string certificatePasswordVaultKey = "SiNet/AccService/CertificatePassword";
+    var certSection = configuration.GetSection("AccService:Certificate");
+    var storeName = certSection["StoreName"];
+    var thumbprint = certSection["Thumbprint"];
+    var certPath = certSection["Path"];
+    var certPassword =
+        CredentialVaultService.GetSecret(certificatePasswordVaultKey)
+        ?? certSection["Password"];
+
+    if (!string.IsNullOrWhiteSpace(storeName) && !string.IsNullOrWhiteSpace(thumbprint))
+    {
+        using var store = new X509Store(storeName, StoreLocation.LocalMachine);
+        store.Open(OpenFlags.ReadOnly);
+        var normalizedThumbprint = thumbprint.Replace(" ", string.Empty, StringComparison.Ordinal);
+        var matches = store.Certificates.Find(X509FindType.FindByThumbprint, normalizedThumbprint, validOnly: false);
+        if (matches.Count > 0)
+        {
+            return matches[0];
+        }
+
+        throw new InvalidOperationException(
+            $"TLS certificate with thumbprint '{normalizedThumbprint}' was not found in store '{storeName}'.");
+    }
+
+    if (!string.IsNullOrWhiteSpace(certPath) && File.Exists(certPath))
+    {
+        if (string.IsNullOrWhiteSpace(certPassword))
+        {
+            throw new InvalidOperationException(
+                "AccService:Certificate:Password (or vault key 'SiNet/AccService/CertificatePassword') " +
+                "is required when AccService:Certificate:Path points to a PFX file.");
+        }
+
+        return X509CertificateLoader.LoadPkcs12FromFile(
+            certPath,
+            certPassword,
+            X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    if (configuration.GetValue<bool>("AccService:AllowSelfSignedDevCert"))
+    {
+        return LoadOrCreateDevSelfSignedCertificate(certPassword);
+    }
+
+    throw new InvalidOperationException(
+        "No TLS certificate configured for SiOffice.AccService. " +
+        "Set AccService:Certificate:StoreName + Thumbprint, or AccService:Certificate:Path + Password " +
+        "(password may also live in vault key 'SiNet/AccService/CertificatePassword'). " +
+        "For local development only, set AccService:AllowSelfSignedDevCert=true.");
+}
+
+static X509Certificate2 LoadOrCreateDevSelfSignedCertificate(string? certPassword)
 {
     var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
-    const string password = "siofficeaccservice"; // local-only, file is ACL'd to LocalSystem
+    if (string.IsNullOrWhiteSpace(certPassword))
+    {
+        throw new InvalidOperationException(
+            "AccService:Certificate:Password (or vault key 'SiNet/AccService/CertificatePassword') " +
+            "is required when AccService:AllowSelfSignedDevCert=true.");
+    }
+
     if (File.Exists(certFile))
     {
         return X509CertificateLoader.LoadPkcs12FromFile(
-            certFile, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+            certFile,
+            certPassword,
+            X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
     }
 
     using var rsa = RSA.Create(2048);
@@ -317,9 +364,11 @@ static X509Certificate2 LoadOrCreateSelfSignedCertificate()
         DateTimeOffset.UtcNow.AddDays(-1),
         DateTimeOffset.UtcNow.AddYears(10));
 
-    var pfxBytes = generated.Export(X509ContentType.Pfx, password);
+    var pfxBytes = generated.Export(X509ContentType.Pfx, certPassword);
     File.WriteAllBytes(certFile, pfxBytes);
 
     return X509CertificateLoader.LoadPkcs12(
-        pfxBytes, password, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+        pfxBytes,
+        certPassword,
+        X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
 }

@@ -103,9 +103,9 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             WorkflowDebugTrace.Step("Launcher.Open",
                 $"task={context.TaskId} → routing to OpenQuoteProject combined dialog (email={context.PrimaryWorkTargetEntityId})");
 
-            if (_services.GetService<ITaskCompletionService>() is not { } openQuoteCompletion)
+            if (_services.GetService<IOpenQuoteProjectDecisionService>() is not { } openQuoteDecisionService)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                Trace.TraceWarning("[WorkSurfaceLauncher] IOpenQuoteProjectDecisionService is not registered.");
                 return false;
             }
 
@@ -119,7 +119,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
             var openQuoteDialog = new OpenQuoteProjectDecisionDialog(
                 context,
-                openQuoteCompletion,
+                openQuoteDecisionService,
                 createVm,
                 places,
                 companies,

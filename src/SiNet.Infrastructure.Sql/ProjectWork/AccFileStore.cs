@@ -5,7 +5,7 @@ using SiNet.Application.ProjectWork;
 using SiNet.Domain.Files;
 using SiNetSQL.Data;
 
-namespace SiNet.Infrastructure.Autodesk.ProjectWork;
+namespace SiNet.Infrastructure.Sql.ProjectWork;
 
 /// <summary>
 /// Read-only <see cref="IFileStore"/> over Autodesk Construction Cloud, built on the clean ACC ports
@@ -81,7 +81,6 @@ public sealed class AccFileStore : IFileStore
         var accFolderId = mapping.AccTargetFolderId!;
         if (segments.Count > 0)
         {
-            // Read-only walk: do NOT create missing folders (that is a gated write operation).
             var resolved = await _folderPathService
                 .TryResolvePathAsync(mapping.AccProjectId!, accFolderId, segments, cancellationToken)
                 .ConfigureAwait(false);
@@ -114,10 +113,7 @@ public sealed class AccFileStore : IFileStore
         if (result is null)
             yield break;
 
-        // #region agent log
         var sampleLogged = false;
-        // #endregion
-
         foreach (var entry in result.Entries)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -127,7 +123,6 @@ public sealed class AccFileStore : IFileStore
                 continue;
 
             var viewerUrl = BuildItemViewerUrl(accProjectId, accFolderId, entry.Id);
-            // #region agent log
             if (!sampleLogged)
             {
                 sampleLogged = true;
@@ -135,7 +130,6 @@ public sealed class AccFileStore : IFileStore
                     "ProjectWork.AccUrl",
                     $"ListFiles item url hasEntityId={viewerUrl.Contains("entityId=", StringComparison.Ordinal)} itemIdLen={entry.Id.Length}");
             }
-            // #endregion
 
             yield return new ScannedFile(
                 Source: FileStorageDestination.Acc,
@@ -204,7 +198,6 @@ public sealed class AccFileStore : IFileStore
         if (string.IsNullOrEmpty(file.AccProjectId))
             throw new InvalidOperationException("ACC delete requires the owning ACC project id on the scanned file.");
 
-        // ACC "delete" is a soft hide of the item lineage (parity with the legacy file-tree delete).
         await _itemService.HideAsync(file.AccProjectId, file.NativeId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -263,10 +256,6 @@ public sealed class AccFileStore : IFileStore
         return true;
     }
 
-    /// <summary>
-    /// ACC Docs URL that opens a specific file (entityId) inside its folder.
-    /// Folder-only URLs open the directory listing — not the document the user clicked.
-    /// </summary>
     private static string BuildItemViewerUrl(string accProjectId, string accFolderId, string itemId)
     {
         var guid = accProjectId.StartsWith("b.", StringComparison.Ordinal) ? accProjectId[2..] : accProjectId;

@@ -45,6 +45,7 @@ public class ApiDailySyncService
     private readonly string? _siDataConnectionString;
     private readonly ILogger<ApiDailySyncService> _logger;
     private readonly RawCaptureService? _captureService;
+    private SqlConnection? _lockConnection;
 
     // Entity configuration: table name, watermark column, whether it supports lastUpdated filter
     // Schema source: 20260213_010939/*.ndjson dump files
@@ -1710,26 +1711,59 @@ public class ApiDailySyncService
 
     private async Task<bool> TryAcquireLockAsync()
     {
-        await using var connection = new SqlConnection(_replicaConnectionString);
-        var lockTimeout = DateTime.UtcNow.AddHours(-1); // Consider locks older than 1 hour as stale
+        if (_lockConnection is not null)
+            throw new InvalidOperationException("The daily-sync application lock is already held by this service instance.");
 
-        var result = await connection.ExecuteAsync(@"
-            UPDATE Sync_Lock 
-            SET AcquiredAt = GETUTCDATE(), AcquiredBy = @MachineName
-            WHERE LockName = 'DailySync' 
-              AND (AcquiredAt IS NULL OR AcquiredAt < @LockTimeout)",
-            new { MachineName = Environment.MachineName, LockTimeout = lockTimeout });
+        var connection = new SqlConnection(_replicaConnectionString);
+        try
+        {
+            await connection.OpenAsync().ConfigureAwait(false);
+            var result = await connection.ExecuteScalarAsync<int>(
+                """
+                DECLARE @result int;
+                EXEC @result = sp_getapplock
+                    @Resource = 'SiNetDailySync',
+                    @LockMode = 'Exclusive',
+                    @LockOwner = 'Session',
+                    @LockTimeout = 0;
+                SELECT @result;
+                """).ConfigureAwait(false);
 
-        return result > 0;
+            if (result < 0)
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+                return false;
+            }
+
+            _lockConnection = connection;
+            return true;
+        }
+        catch
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private async Task ReleaseLockAsync()
     {
-        await using var connection = new SqlConnection(_replicaConnectionString);
-        await connection.ExecuteAsync(@"
-            UPDATE Sync_Lock 
-            SET AcquiredAt = NULL, AcquiredBy = NULL
-            WHERE LockName = 'DailySync'");
+        var connection = Interlocked.Exchange(ref _lockConnection, null);
+        if (connection is null)
+            return;
+
+        try
+        {
+            await connection.ExecuteAsync(
+                """
+                EXEC sp_releaseapplock
+                    @Resource = 'SiNetDailySync',
+                    @LockOwner = 'Session';
+                """).ConfigureAwait(false);
+        }
+        finally
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     private async Task RecordRunHistoryAsync(DailySyncResult result)

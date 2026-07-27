@@ -13,20 +13,11 @@ public sealed class AccServiceControlPlaneOptions
     /// </summary>
     public TimeSpan FileTransferTimeout { get; set; } = Timeout.InfiniteTimeSpan;
 
-    public IReadOnlyList<string> ApprovedSelfSignedHosts { get; set; } =
-    [
-        "SI-WIN-2K19",
-        "localhost",
-        "127.0.0.1",
-    ];
-
-    public IReadOnlyList<string> ApprovedSelfSignedHostSuffixes { get; set; } =
-    [
-        ".si-eng.local",
-    ];
-
-    public IReadOnlyList<string> ApprovedSelfSignedIpPrefixes { get; set; } =
-    [
-        "192.168.",
-    ];
+    /// <summary>
+    /// Optional TLS thumbprint pins for SiOffice.AccService HTTPS endpoints.
+    /// When non-empty, chain errors are accepted only when the server certificate
+    /// thumbprint matches one of these values. When empty, only valid CA chains
+    /// or loopback hosts are accepted on chain errors.
+    /// </summary>
+    public IReadOnlyList<string> PinnedCertificateThumbprints { get; set; } = [];
 }

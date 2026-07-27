@@ -4,11 +4,11 @@ namespace SiNet.Infrastructure.Autodesk;
 
 internal sealed class ModeSwitchingAccProjectCatalogService(
     IAccServiceModeProvider serviceModeProvider,
-    LocalAccProjectCatalogService localProjectCatalogService,
+    ILocalAccProjectCatalogService localProjectCatalogService,
     RemoteAccProjectCatalogService remoteProjectCatalogService) : IAccProjectCatalogService
 {
     private readonly IAccServiceModeProvider _serviceModeProvider = serviceModeProvider;
-    private readonly LocalAccProjectCatalogService _localProjectCatalogService = localProjectCatalogService;
+    private readonly ILocalAccProjectCatalogService _localProjectCatalogService = localProjectCatalogService;
     private readonly RemoteAccProjectCatalogService _remoteProjectCatalogService = remoteProjectCatalogService;
 
     public Task<IReadOnlyList<AccProjectCatalogEntry>> GetProjectsAsync(CancellationToken cancellationToken = default) =>

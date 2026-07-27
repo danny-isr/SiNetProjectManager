@@ -32,27 +32,15 @@ internal static class AccEndpoints
             utcNow = DateTime.UtcNow
         }));
 
-        // ── Diagnostics (auth-exempt — see ApiKeyMiddleware) ─────────────────
-        // Safe metadata for cross-machine API key mismatch debugging.
-        // NEVER returns the actual key value. Returns: hasApiKey, keyLength, keySource, keyHashPrefix.
-        // Clients can compare their keyHashPrefix with this to verify key match.
-        // Also performs active database and Autodesk connectivity checks.
+        // ── Diagnostics (requires X-AccService-Key — see ApiKeyMiddleware) ───
+        // Safe metadata for cross-machine API key and integration checks.
+        // NEVER returns the actual key value, hash, or length.
         v1.MapGet("/diag", async (IConfiguration configuration, IDbContextFactory<SiNetSQLDbContext> dbContextFactory) =>
         {
             var apiKeyFromVault = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
             var apiKeyFromConfig = configuration["AccService:ApiKey"];
             var effectiveKey = apiKeyFromVault ?? apiKeyFromConfig;
             var keySource = apiKeyFromVault != null ? "CredentialManager" : (apiKeyFromConfig != null ? "appsettings" : "none");
-            var keyLength = effectiveKey?.Length ?? 0;
-            var keyHashPrefix = "(none)";
-            if (!string.IsNullOrEmpty(effectiveKey))
-            {
-                var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(effectiveKey));
-                keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
-            }
-            string windowsUser;
-            try { windowsUser = Environment.UserDomainName + "\\" + Environment.UserName; }
-            catch { windowsUser = "(unknown)"; }
 
             // Active Autodesk Check
             var autodeskOk = false;
@@ -62,7 +50,7 @@ internal static class AccEndpoints
 
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
             {
-                autodeskDetail = "Autodesk credentials are not provisioned in the server vault.";
+                autodeskDetail = "Autodesk credentials not provisioned.";
             }
             else
             {
@@ -81,17 +69,16 @@ internal static class AccEndpoints
                     if (resp.IsSuccessStatusCode)
                     {
                         autodeskOk = true;
-                        autodeskDetail = "Autodesk token retrieved successfully.";
+                        autodeskDetail = "OK";
                     }
                     else
                     {
-                        var body = await resp.Content.ReadAsStringAsync();
-                        autodeskDetail = $"HTTP {(int)resp.StatusCode}: {body}";
+                        autodeskDetail = $"HTTP {(int)resp.StatusCode}";
                     }
                 }
                 catch (Exception ex)
                 {
-                    autodeskDetail = ex.Message;
+                    autodeskDetail = ex.GetType().Name;
                 }
             }
 
@@ -104,21 +91,18 @@ internal static class AccEndpoints
                 await db.Database.OpenConnectionAsync();
                 await db.Database.CloseConnectionAsync();
                 dbOk = true;
-                dbDetail = "Database connection successful.";
+                dbDetail = "OK";
             }
             catch (Exception ex)
             {
-                dbDetail = ex.Message;
+                dbDetail = ex.GetType().Name;
             }
 
             return Results.Ok(new
             {
                 status = "ok",
-                windowsUser,
                 hasApiKey = effectiveKey != null,
                 keySource,
-                keyLength,
-                keyHashPrefix,
                 autodeskStatus = autodeskOk,
                 autodeskDetail,
                 dbStatus = dbOk,

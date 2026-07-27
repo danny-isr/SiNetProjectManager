@@ -222,7 +222,12 @@
                     <TextBox Text="{Binding AccProjectTemplateName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                     <TextBlock Text="סיומות העלאה ידנית"/>
                     <TextBox Text="{Binding AccManualUploadAllowedExtensions, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="ניהול קבוצות משתמשים — deferred (legacy UserGroupManagementWindow)" Opacity="0.6" TextWrapping="Wrap"/>
+                    <Button Content="פתח ניהול קבוצות"
+                            Command="{Binding OpenUserGroupsCommand}"
+                            Style="{DynamicResource SiPrimaryButtonStyle}"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"
+                            Margin="0,4,0,12"/>
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>

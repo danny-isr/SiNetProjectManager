@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - SiWorkNet10
+  pull_request:
+    branches:
+      - main
+      - master
+      - SiWorkNet10
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore SiNet.sln
+
+      - name: Build (Debug)
+        run: dotnet build SiNet.sln --configuration Debug --no-restore
+
+      - name: Build (Release)
+        run: dotnet build SiNet.sln --configuration Release --no-restore
+
+      - name: Test SiNet.App.Wpf.Tests
+        run: dotnet test src/SiNet.App.Wpf.Tests/SiNet.App.Wpf.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Test SiNet.Infrastructure.Google.Tests
+        run: dotnet test src/SiNet.Infrastructure.Google.Tests/SiNet.Infrastructure.Google.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Test SiNet.LegacyBridge.Tests
+        run: dotnet test src/SiNet.LegacyBridge.Tests/SiNet.LegacyBridge.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Secret scan (tracked appsettings.json ApiKey)
+        shell: pwsh
+        run: |
+          $pattern = '"ApiKey"\s*:\s*"[^"]+"'
+          $tracked = git ls-files '**/appsettings.json'
+          if (-not $tracked) {
+            Write-Host 'No tracked appsettings.json files found.'
+            exit 0
+          }
+
+          $violations = @()
+          foreach ($file in $tracked) {
+            $matches = Select-String -Path $file -Pattern $pattern -AllMatches
+            if ($matches) {
+              $violations += $file
+            }
+          }
+
+          if ($violations.Count -gt 0) {
+            Write-Error "Non-empty ApiKey found in tracked appsettings.json:`n$($violations -join "`n")"
+            exit 1
+          }
+
+          Write-Host 'Secret scan passed: no non-empty ApiKey in tracked appsettings.json.'

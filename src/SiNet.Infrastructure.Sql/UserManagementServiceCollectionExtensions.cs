@@ -44,6 +44,10 @@ public static class UserManagementServiceCollectionExtensions
         services.AddTransient<IUserManagementService>(sp => sp.GetRequiredService<SqlUserManagementService>());
         services.AddTransient<SqlUserLookupService>();
         services.AddTransient<IUserLookupService>(sp => sp.GetRequiredService<SqlUserLookupService>());
+        services.AddTransient<SqlUserGroupQueryService>();
+        services.AddTransient<IUserGroupQueryService>(sp => sp.GetRequiredService<SqlUserGroupQueryService>());
+        services.AddTransient<SqlUserGroupCommandService>();
+        services.AddTransient<IUserGroupCommandService>(sp => sp.GetRequiredService<SqlUserGroupCommandService>());
         services.AddTransient<SqlActionPermissionAdminService>();
         services.AddTransient<IActionPermissionAdminService>(sp => sp.GetRequiredService<SqlActionPermissionAdminService>());
         services.AddTransient<SqlMasterPlanEmployeeLookupService>();

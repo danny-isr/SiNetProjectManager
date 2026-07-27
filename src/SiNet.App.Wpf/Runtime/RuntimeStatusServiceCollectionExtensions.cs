@@ -2,7 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Common;
 using SiNet.Application.Email.Acc;
+using SiNet.Application.Notifications;
 using SiNet.Application.Runtime;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Runtime;
 
@@ -20,7 +22,9 @@ public static class RuntimeStatusServiceCollectionExtensions
                 sp.GetService<IAccServiceModeProvider>(),
                 sp.GetService<IAccServiceHealthProbe>(),
                 sp.GetService<IEmailAccBackgroundWorkTracker>(),
-                sp.GetServices<IConnectorAuthService>()));
+                sp.GetServices<IConnectorAuthService>(),
+                sp.GetService<IWorkflowAssigneeReadinessQueryService>(),
+                sp.GetService<INotificationDeliveryService>()));
 
         return services;
     }

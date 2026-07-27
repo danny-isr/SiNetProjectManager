@@ -15,15 +15,29 @@ This file is the **entry point for Cursor / AI agents** working in this reposito
 
 **Rule of thumb:** put **repeatable** constraints in `.cursor/rules/`. Put **domain behavior** in `docs/`. Put **one slice** details in the chat (or a migration doc section).
 
-## Build must pass before “done”
+## Build contract (CI vs local)
 
-Every code slice ends with a green build of the host app:
+| Solution | Role | Notes |
+| --- | --- | --- |
+| **`SiNet.sln`** | **Official CI solution** (self-contained) | GitHub Actions (`.github/workflows/ci.yml`) restores, builds Debug + Release, runs all three test projects under `src/`, and secret-scans tracked `appsettings.json`. |
+| **`SiNetProjectManager.sln`** | Hybrid legacy + new stack | Requires sibling-repo pins (`SiNetSQL`, `AutodeskIntegration`) and is **not** the CI gate. |
+
+Local agent gate (host app + primary test project):
 
 ```powershell
 cd SiNetProjectManager_GitHub
 dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
 dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
 ```
+
+Full CI-equivalent check locally:
+
+```powershell
+dotnet build SiNet.sln --configuration Release
+dotnet test SiNet.sln --configuration Release --no-build
+```
+
+**Do not** treat historical **955/955** test counts (2026-07-05 snapshot in `docs/NEW_SYSTEM_PRODUCTION_READINESS.md`) as evidence for current HEAD — run tests on the branch you are changing.
 
 Report in the final message: build result, test result, and whether DB/schema changed.
 

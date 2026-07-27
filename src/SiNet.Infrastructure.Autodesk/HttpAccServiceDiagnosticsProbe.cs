@@ -1,16 +1,20 @@
+using System.Net.Http;
 using System.Text.Json;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Autodesk;
 
-/// <summary>HTTP probe over the auth-exempt <c>/v1/acc/diag</c> endpoint.</summary>
+/// <summary>HTTP probe over the authenticated <c>/v1/acc/diag</c> endpoint.</summary>
 public sealed class HttpAccServiceDiagnosticsProbe(
     HttpClient httpClient,
     IAccServiceModeProvider modeProvider,
+    ISecretVaultStore secretVaultStore,
     AccServiceControlPlaneOptions options) : IAccServiceDiagnosticsProbe
 {
     private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     private readonly IAccServiceModeProvider _modeProvider = modeProvider ?? throw new ArgumentNullException(nameof(modeProvider));
+    private readonly ISecretVaultStore _secretVaultStore = secretVaultStore ?? throw new ArgumentNullException(nameof(secretVaultStore));
     private readonly AccServiceControlPlaneOptions _options = options ?? throw new ArgumentNullException(nameof(options));
 
     public async Task<AccServiceDiagnosticsResult> ProbeAsync(CancellationToken cancellationToken = default)
@@ -31,21 +35,55 @@ public sealed class HttpAccServiceDiagnosticsProbe(
                 DbDetail: "AccService:BaseUrl is not configured.");
         }
 
+        var apiKey = _secretVaultStore.GetSecret(SecretCatalog.AccServiceApiKey);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new AccServiceDiagnosticsResult(
+                Reachable: false,
+                WindowsUser: null,
+                HasApiKey: false,
+                KeySource: null,
+                KeyLength: 0,
+                KeyHashPrefix: null,
+                AutodeskOk: false,
+                AutodeskDetail: "AccService API key is not configured in the client vault.",
+                DbOk: false,
+                DbDetail: "AccService API key is not configured in the client vault.");
+        }
+
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(_options.DiagnosticsTimeout);
 
-            using var response = await _httpClient.GetAsync(endpoint, cts.Token).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+
+            using var response = await _httpClient.SendAsync(request, cts.Token).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                return new AccServiceDiagnosticsResult(
+                    Reachable: false,
+                    WindowsUser: null,
+                    HasApiKey: true,
+                    KeySource: null,
+                    KeyLength: apiKey.Length,
+                    KeyHashPrefix: null,
+                    AutodeskOk: false,
+                    AutodeskDetail: "HTTP 401 — client API key rejected by server.",
+                    DbOk: false,
+                    DbDetail: "HTTP 401 — client API key rejected by server.");
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 return new AccServiceDiagnosticsResult(
                     Reachable: false,
                     WindowsUser: null,
-                    HasApiKey: false,
+                    HasApiKey: true,
                     KeySource: null,
-                    KeyLength: 0,
+                    KeyLength: apiKey.Length,
                     KeyHashPrefix: null,
                     AutodeskOk: false,
                     AutodeskDetail: $"HTTP {(int)response.StatusCode}",
@@ -73,9 +111,9 @@ public sealed class HttpAccServiceDiagnosticsProbe(
             return new AccServiceDiagnosticsResult(
                 Reachable: false,
                 WindowsUser: null,
-                HasApiKey: false,
+                HasApiKey: true,
                 KeySource: null,
-                KeyLength: 0,
+                KeyLength: apiKey.Length,
                 KeyHashPrefix: null,
                 AutodeskOk: false,
                 AutodeskDetail: "Timeout",
@@ -87,9 +125,9 @@ public sealed class HttpAccServiceDiagnosticsProbe(
             return new AccServiceDiagnosticsResult(
                 Reachable: false,
                 WindowsUser: null,
-                HasApiKey: false,
+                HasApiKey: true,
                 KeySource: null,
-                KeyLength: 0,
+                KeyLength: apiKey.Length,
                 KeyHashPrefix: null,
                 AutodeskOk: false,
                 AutodeskDetail: ex.Message,

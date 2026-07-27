@@ -5,6 +5,7 @@ using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.Users;
+using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
@@ -34,6 +35,7 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();
         services.AddSiNetUserAdminWpf();
+        services.AddSiNetUserGroupsAdminWpf();
         services.AddSiNetPermissionAdminWpf();
         services.AddSiNetSecretAdminWpf();
         services.AddSiNetSettingsAdminWpf();

@@ -190,7 +190,7 @@ public sealed class TaskDemoSeedTests
     public void DevToolsCoordinator_demo_seed_failure_shows_error_not_crash()
     {
         var source = File.ReadAllText(CoordinatorPath);
-        Assert.Contains("DbUpdateException", source, StringComparison.Ordinal);
+        Assert.Contains("IsOpenTaskPersistenceConflict", source, StringComparison.Ordinal);
         Assert.Contains("IX_ProjectAssignment_UniqueOpenTask", source, StringComparison.Ordinal);
         Assert.Contains("!result.Succeeded", source, StringComparison.Ordinal);
         Assert.Contains("ShowError", source, StringComparison.Ordinal);

@@ -192,5 +192,6 @@ powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffic
 - ✅ DPAPI per-user → סודות לא נראים למשתמשים אחרים.
 - ✅ `.secrets` מוצפן AES-256 + PBKDF2(100K) → בטוח להעביר.
 - ✅ אין סודות ב-Git.
+- ✅ **MasterPlan API key** — רק vault (`SiNet/MasterPlanApi/ApiKey`) או env var `MASTERPLAN_API_KEY`. `MasterPlan.SyncEngine/appsettings.json` נשאר tracked עם `ApiKey` ריק; להעתקת מבנה השתמשו ב-`appsettings.template.json`.
 - ⚠️ `SiNet.secrets` + הסיסמה = שליטה מלאה. שמור בנפרד.
 - ⚠️ אחרי עזיבת איש צוות: ייצא חבילה חדשה עם מפתחות שהוחלפו.

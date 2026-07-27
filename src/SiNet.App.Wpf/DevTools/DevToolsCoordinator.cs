@@ -1,6 +1,5 @@
 using System.Text;
 using System.Windows;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.DevTools;
@@ -111,7 +110,7 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
 
             MessageBox.Show(owner, result.Summary, "משימות דמו", MessageBoxButton.OK, MessageBoxImage.Information);
         }
-        catch (DbUpdateException ex)
+        catch (Exception ex) when (IsOpenTaskPersistenceConflict(ex))
         {
             System.Diagnostics.Debug.WriteLine(ex);
             ShowError(owner,
@@ -158,4 +157,8 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
 
     private DemoTaskSeedOptions BuildDemoTaskSeedOptions() =>
         BuildDemoTaskSeedOptions(_services);
+
+    private static bool IsOpenTaskPersistenceConflict(Exception exception) =>
+        exception.GetType().Name.Contains("DbUpdate", StringComparison.Ordinal)
+        || exception.ToString().Contains("IX_ProjectAssignment_UniqueOpenTask", StringComparison.Ordinal);
 }

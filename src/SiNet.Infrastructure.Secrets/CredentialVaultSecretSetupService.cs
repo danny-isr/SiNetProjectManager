@@ -133,7 +133,7 @@ public sealed class CredentialVaultSecretSetupService(
         var ad = await Task.Run(
             () => SecretSetupValidators.TestAdFromVault(_vault, _hostConfiguration),
             cancellationToken).ConfigureAwait(false);
-        var accServiceDiag = await AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken)
+        var accServiceDiag = await AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var masterPlanApi = SecretSetupValidators.TestPresenceOnly(_vault, SecretCatalog.MasterPlanApiKey);
 
@@ -241,7 +241,7 @@ public sealed class CredentialVaultSecretSetupService(
     }
 
     public Task<AccServiceDiagnosticResultDto> TestAccServiceAsync(CancellationToken cancellationToken = default)
-        => AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken);
+        => AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken: cancellationToken);
 
     private SecretImportPreviewDto BuildImportPreview(IReadOnlyDictionary<string, string> decrypted)
     {

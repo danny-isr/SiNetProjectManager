@@ -27,7 +27,7 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
     public const string QuoteClassifiedEvent = "Review.QuoteRequestClassified";
 
     private readonly WorkSurfaceContext _context;
-    private readonly ITaskCompletionService _completion;
+    private readonly IOpenQuoteProjectDecisionService _decisionService;
     private readonly ProjectCreateDialogViewModel _createVm;
     private readonly IPlaceCatalogService _places;
     private readonly ICompanyCatalogService _companies;
@@ -47,7 +47,7 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
 
     public OpenQuoteProjectDecisionDialog(
         WorkSurfaceContext context,
-        ITaskCompletionService completion,
+        IOpenQuoteProjectDecisionService decisionService,
         ProjectCreateDialogViewModel createVm,
         IPlaceCatalogService places,
         ICompanyCatalogService companies,
@@ -57,7 +57,7 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
         IEmailGateway? emailGateway = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _completion = completion ?? throw new ArgumentNullException(nameof(completion));
+        _decisionService = decisionService ?? throw new ArgumentNullException(nameof(decisionService));
         _createVm = createVm ?? throw new ArgumentNullException(nameof(createVm));
         _places = places ?? throw new ArgumentNullException(nameof(places));
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
@@ -397,13 +397,12 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
 
         try
         {
-            var result = await _completion.CompleteAsync(
-                new CompleteTaskCommand(
+            var result = await _decisionService.CompleteDecisionAsync(
+                new OpenQuoteProjectDecisionCommand(
                     taskId,
+                    userId,
                     eventCode,
-                    resultCode,
-                    CompletedTaskLinkIds: null,
-                    userId),
+                    resultCode),
                 CancellationToken.None).ConfigureAwait(true);
 
             if (!result.Success)

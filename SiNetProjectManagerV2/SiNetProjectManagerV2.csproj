@@ -42,24 +42,24 @@
     <Content Include="Assets\si.ico" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Extended.Wpf.Toolkit" Version="5.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+    <PackageReference Include="Extended.Wpf.Toolkit" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.7" />
-    <PackageReference Include="PDFsharp" Version="6.2.4" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3719.77" />
-    <PackageReference Include="Serilog" Version="4.3.1" />
-    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
-    <PackageReference Include="System.DirectoryServices.AccountManagement" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="PDFsharp" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Serilog.Sinks.Async" />
+    <PackageReference Include="System.DirectoryServices.AccountManagement" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\SiNetSQL\SiNetSQL\SiNetSQL.csproj" />
@@ -74,6 +74,7 @@
          SiNetSQL -> SiNet.Infrastructure.Sql; this makes the dependency explicit (no new cycle). -->
     <ProjectReference Include="..\src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
+    <ProjectReference Include="..\src\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Logging\SiNet.Infrastructure.Logging.csproj" />
     <!-- Inspection migration (Phase 5): the new Inspection shell view + view-models live in the
          SiNet.App.Wpf preview harness. The main host references it ONLY to surface the new screen
@@ -97,7 +98,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- Content files MUST be marked as Content for ClickOnce -->
-    <Content Include="credentials.json">
+    <Content Include="credentials.json" Condition="Exists('credentials.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="appsettings.json">

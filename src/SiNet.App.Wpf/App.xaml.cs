@@ -38,7 +38,7 @@ public partial class App : System.Windows.Application
 
         var services = new ServiceCollection();
         services.AddSingleton(_configuration);
-        services.AddSiNet(ConfigureGmail);
+        services.AddSiNet(SiNetHostMode.StandaloneNew, ConfigureGmail);
         services.AddSiNetSecrets();
 
         // Vault-sourced SQL wiring: the native process backbone (workflow engine, task completion,

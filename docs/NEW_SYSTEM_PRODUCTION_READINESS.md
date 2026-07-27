@@ -1,12 +1,14 @@
 # New System — Limited Production Pilot Envelope
 
-> **Status:** Active (2026-07-05)  
+> **Status:** Active (2026-07-27)  
 > **Scope:** Defines what V2 New System mode may expose in a **limited production pilot**. This is
 > **not** full legacy replacement, **not** broad window migration, and **not** a production switch
 > away from `GoogleService` / legacy email management.
 >
 > Related:
 > [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
+> [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md),
+> [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md),
 > [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) (G-Startup closed; G-Policy pending),
 > [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),
 > [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md),
@@ -29,15 +31,25 @@ pilot** when:
 
 ## 2. Allowed in production pilot (now)
 
-| Surface | Mode | Notes |
-| --- | --- | --- |
-| **EmailWindowView** | Read-only Gmail | Summaries, body/details, attachment **metadata** only. Deferred write/workflow actions **hidden** and **disabled**. |
-| **AccControlPlaneStatusWindow** | Read-only / control-plane | Mode, health, diagnostics, browse, read-only reconciliation. No upload/provisioning UI. |
-| **SecretSetupWindow** | Native admin | Credential vault / keys (admin feature gate). |
-| **SettingsWindow** | Native | Personal + system admin settings (feature gates). |
-| **UserListWindow / AddUserDialogWindow** | Native admin | User management (admin gate). |
-| **ActionPermissionsWindow** | Native admin | Action permissions (admin gate). |
-| **NewShellWindow** | Host | Project selector + menu only; not a workflow actor. |
+| Surface | Menu label (Release) | Mode | Feature gate |
+| --- | --- | --- | --- |
+| **EmailWindowView** | **מיילים** | Read-only Gmail | `Shell.OpenEmailSurface` |
+| **ProjectWorkSurfaceHost** | **בעבודה 2** | Project files browse (in-memory host) | `Shell.OpenProjectWorkSurface` |
+| **TaskPanelReadOnly** | **לוח משימות** | Personal Quick/Medium/Long queues (read-only workbench) | `Shell.OpenTaskPanelReadOnly` |
+| **InspectionWindowView** | **דוחות ביקורת** | Native inspection reports surface | `Shell.OpenInspectionSurface` |
+| **WorkflowClosedViewer** | **צפייה בתהליכים (סגור)** | Read-only workflow canvas (legend + templates; no save) | `Shell.OpenWorkflowClosedViewer` |
+| **AccControlPlaneStatusWindow** | **סטטוס ACC** | Read-only / control-plane | `SystemSettingsWrite` (admin group) |
+| **SecretSetupWindow** | **מפתחות וסודות** | Native admin — credential vault / keys | `SystemSettingsWrite` |
+| **SettingsWindow** | **הגדרות אישיות / מערכת** | Native personal + system admin | Authenticated / `SystemSettingsWrite` |
+| **UserListWindow / AddUserDialogWindow** | **ניהול משתמשים / הוספת משתמש** | Native admin | `UsersManage` |
+| **ActionPermissionsWindow** | **הרשאות פעולה** | Native admin | `ActionPermissionsManage` |
+| **NewShellWindow** | (host) | Project selector + menu only; not a workflow actor | — |
+
+**EmailWindowView** — summaries, body/details, attachment **metadata** only. Deferred write/workflow actions
+**hidden** and **disabled**.
+
+**AccControlPlaneStatusWindow** — mode, health, diagnostics, browse, read-only reconciliation. No
+upload/provisioning UI.
 
 **Gmail read scope (allowed):**
 
@@ -55,10 +67,13 @@ pilot** when:
 
 | Surface | Why | Dev entry point |
 | --- | --- | --- |
-| **InspectionShellView** | Developer harness; task-mode pilot incomplete | V2 legacy `MainWindow` admin preview (`OpenInspectionFromTask_Click`); **DEBUG** shell menu only |
-| **InspectionWindowView** | Visual clone with fake/design data + stub commands | Not in production shell menu |
+| **InspectionShellView** | Developer harness; task-mode pilot incomplete | **DEBUG** shell menu only — **"ביקורת (מעטפת — DEBUG)"** |
 | **InboxViewModel / standalone `SiNet.App.Wpf` MainWindow** | Scaffold harness | Not V2 production entry |
 | **Legacy `EmailManagementView`** | Full production email (legacy) | Legacy `MainWindow` only — unchanged |
+| **כלי פיתוח** (dev tools group) | DEBUG-only admin submenu | `#if DEBUG` in `BuildMigratedOnlyMenu()` |
+
+**Note:** native **דוחות ביקורת** (`InspectionWindowView`) **is** in the Release menu when
+`Shell.OpenInspectionSurface` is granted. Only the **InspectionShellView** harness remains DEBUG-only.
 
 ---
 
@@ -73,23 +88,46 @@ pilot** when:
 | Drive / Sheets / Reports | Legacy/deferred | **Do not expose** |
 | ACC upload / provisioning / metadata write / folder ensure UI | ACC-Write-Policy | **Blocked** |
 | Production `GoogleService` switch | Host switch decision | **Blocked** |
-| TaskPanel / FloatingProjectTasks / WorkflowDashboard in New Shell | Not migrated | **Deferred** |
-| Broad task-aware window migration | Integration contract exists; pilot not started | **Deferred** |
+| FloatingProjectTasks / WorkflowDashboard in New Shell | Not migrated | **Deferred** |
+| Broad task-aware window migration (beyond read-only TaskPanel + closed viewer) | Integration contract exists; write/mutation paths not pilot-ready | **Deferred** |
 
 ---
 
 ## 5. Production shell menu rules
 
-Implemented in `NewShellFactory.BuildMigratedOnlyMenu()`:
+Implemented in `NewShellFactory.BuildMigratedOnlyMenu()` (`src/SiNet.App.Wpf/Shell/NewShellFactory.cs`):
 
-| Menu item | Production (Release) | DEBUG |
-| --- | --- | --- |
-| Email (read-only) | ✅ when `Shell.OpenEmailSurface` | ✅ |
-| Inspection harness | ❌ hidden | ✅ when `Shell.OpenInspectionSurface` |
-| Native admin / ACC status / settings | ✅ per feature codes | ✅ |
+### 5.1 Release menu (feature-gated)
 
-**No new feature-flag framework.** Temporary `#if DEBUG` guard for harness menu only; email/admin items
-use existing `AppFeatureCodes` + `IAuthorizationQueryService`.
+| Group | Menu label | Feature code | Host / factory |
+| --- | --- | --- | --- |
+| פרויקטים ותבניות | **מיילים** | `Shell.OpenEmailSurface` | `IEmailSurfaceHost` |
+| פרויקטים ותבניות | **בעבודה 2** | `Shell.OpenProjectWorkSurface` | `ProjectWorkSurfaceHost` |
+| משימות | **לוח משימות** | `Shell.OpenTaskPanelReadOnly` | `ITaskPanelReadOnlyWindowFactory` |
+| משימות | **דוחות ביקורת** | `Shell.OpenInspectionSurface` | `IInspectionWindowFactory` |
+| משימות | **צפייה בתהליכים (סגור)** | `Shell.OpenWorkflowClosedViewer` | `IWorkflowClosedViewerWindowFactory` |
+| משימות | *(admin / settings / ACC — unchanged)* | per existing gates | native admin surfaces |
+
+Additional groups (**משתמשים והרשאות**, **מנהלה**) unchanged — native admin, settings, ACC status, system
+status; all gated by existing `AppFeatureCodes` + `IAuthorizationQueryService`.
+
+### 5.2 DEBUG-only additions
+
+| Menu item | When |
+| --- | --- |
+| **ביקורת (מעטפת — DEBUG)** | `#if DEBUG` + `Shell.OpenInspectionSurface` |
+| **כלי פיתוח** subgroup | `#if DEBUG` dev-tools builder |
+
+**No new feature-flag framework.** `#if DEBUG` guards harness/dev-tools only; Release surfaces use
+existing `AppFeatureCodes` authorization.
+
+### 5.3 Known startup gap (Stage 4 / HostMode)
+
+`RunNewSystemStartup` in `SiNetProjectManagerV2/App.xaml.cs` may still open **legacy**
+`WPF_Window.SecretSetupWindow` and `WPF_Window.ProvisioningPasswordDialog` during vault setup and DB
+connection retry — **before** `NewShellWindow` appears. Native `SecretSetupWindow` is used from the
+shell menu only. Full removal of legacy startup dialogs is deferred to **Stage 4 (HostMode)**.
+See [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) § Known startup gap.
 
 ---
 
@@ -159,12 +197,12 @@ Key test classes:
 - `NewSystemBoundaryTests`
 - `WorkSurfaceWorkflowIntegrationBoundaryTests`
 
-### 9.2 Limited production smoke (2026-07-05)
+### 9.2 Limited production smoke (2026-07-27)
 
 | Field | Value |
 | --- | --- |
-| **Smoke status** | **Partial** — automated passed; interactive UI smoke requires manual run |
-| **Date** | 2026-07-05 |
+| **Smoke status** | **Not Run** — pending operator completion of [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) |
+| **Date** | 2026-07-27 |
 | **Environment** | Local workspace `d:\repos2026\SiNetProjectManager_GitHub`; Debug + Release build |
 | **User profile** | Agent/automated (no authenticated DB/Gmail session in smoke run) |
 | **Git** | `git.exe` not on PATH; verified via VS bundled git + GitHub API — see §9.3 |
@@ -176,29 +214,27 @@ Key test classes:
 
 - `RunNewSystemStartup` → vault → DB → DI → `ServiceLocator.Initialize` → `StartNewSystemConnectorAuthRestore` → `LaunchNewSystemShell` (no Legacy fallback on failure).
 - G-Startup: `TryRestoreSessionAsync` only — no `LoginAsync` in restore path.
-- NewShell menu: Email `"דוא\"ל — קריאה בלבד"`; Inspection wrapped in `#if DEBUG`; no ProjectWork/Reports/Drive/Sheets/WorkflowDashboard.
+- NewShell menu (Release): **מיילים**, **בעבודה 2**, **לוח משימות**, **דוחות ביקורת**, **צפייה בתהליכים (סגור)** — each feature-gated; InspectionShell harness `#if DEBUG` only; no Drive/Sheets/WorkflowDashboard write surfaces.
 - Email pilot: `ShowDeferredWriteActions` / `ShowDeferredVisualPlaceholders` false; `ProductionPilotNotice`; `ClearSearchCommand`; no `OpenAttachmentCommand` in XAML.
 - Release build succeeds (Inspection menu excluded from Release compilation).
 
 **Manual smoke still required (operator checklist):**
 
-1. Select **New System** at startup; confirm **NewShellWindow** opens and **MainWindow** does not.
-2. Open Email — verify read-only UI, Connect/Refresh/Search/Clear, summaries/body/attachment metadata (with valid project + Gmail token).
-3. Open ACC status — mode/health/diagnostics; read-only browse/reconciliation if data exists; confirm no upload/provisioning.
-4. Open Secret Setup / Settings / User Admin / Permissions per role.
+Use [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) — supersedes the inline §9.3.1 list for Stage 2 P0 surfaces (DB, Vault, Gmail restore, ACC health/diag, Email, ProjectWork, Task Workbench, Inspection, Workflow closed viewer).
 
 **Known issues:**
 
-- Interactive runtime smoke (New System path → Email/Gmail/ACC/admin) **not completed** in automated/agent run — requires operator with DB/vault/Gmail session (§9.3).
+- Interactive runtime smoke **Not Run** (2026-07-27) — requires operator with DB/vault/Gmail/ACC session.
+- `RunNewSystemStartup` may still show legacy SecretSetup/Provisioning dialogs before shell (Stage 4 HostMode fix) — see §5.3 and [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md).
 
 **Decision:** **Needs manual interactive smoke** before limited users. After operator passes checklist in §9.3 → **ready for 1–2 internal read-only pilot users**.
 
-### 9.3 Interactive smoke gate (2026-07-05)
+### 9.3 Interactive smoke gate (2026-07-27)
 
 | Field | Value |
 | --- | --- |
-| **Status** | **Blocked by environment/config** — until human operator completes checklist below |
-| **Date** | 2026-07-05 |
+| **Status** | **Not Run** — operator must complete [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) |
+| **Date** | 2026-07-27 |
 | **Required operator** | Human with V2 access, DB connection, credential vault, Gmail token/credentials, and ACC host/config |
 | **Branch / commit** | `SiWorkNet10` (see latest commit on GitHub after push) |
 | **Build / tests** | Debug + Release build ✅; `SiNet.App.Wpf.Tests` ✅ (see §9.2 automated run) |
@@ -242,10 +278,10 @@ Only a completed manual checklist with **Pass** on every required step may chang
 
 **Shell / menu**
 
-- [ ] Menu shows **"דוא\"ל — קריאה בלבד"**.
-- [ ] **InspectionShellView** menu item **absent** in **Release** build.
+- [ ] Menu shows **מיילים**, **בעבודה 2**, **לוח משימות**, **דוחות ביקורת**, **צפייה בתהליכים (סגור)** per role/feature gates.
+- [ ] **InspectionShellView** harness (**ביקורת (מעטפת — DEBUG)**) **absent** in **Release** build.
 - [ ] Inspection harness visible in **DEBUG** only (if feature gate allows).
-- [ ] No **ProjectWork**, **Reports**, **Drive**, **Sheets**, **WorkflowDashboard**, **WorkflowInstance** (unless explicitly approved elsewhere).
+- [ ] No **Reports**, **Drive**, **Sheets**, **WorkflowDashboard** write surfaces (unless explicitly approved elsewhere).
 - [ ] **Secret Setup**, **Settings**, **Users**, **Permissions** appear only per `AppFeatureCodes` / role.
 - [ ] No legacy admin windows open from NewShell.
 

@@ -12,6 +12,12 @@
                     Style="{DynamicResource SiPrimaryButtonStyle}"
                     Padding="14,6"
                     Margin="0,0,12,0" />
+            <Button DockPanel.Dock="Left"
+                    Content="פתח הקצאות"
+                    Command="{Binding OpenUserGroupsCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,12,0" />
             <TextBlock Text="{Binding Summary}"
                        Style="{DynamicResource SiTextSmallStyle}"
                        Foreground="{DynamicResource SiSecondaryBrush}"

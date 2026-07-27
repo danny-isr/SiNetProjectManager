@@ -4,6 +4,7 @@ using SiNet.App.Wpf.Autodesk;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
+using SiNet.App.Wpf.Admin.UserGroups;
 
 /// <summary>Opens native settings windows for personal or system-admin scope.</summary>
 public interface ISettingsWindowFactory
@@ -48,6 +49,7 @@ public sealed class SettingsViewModelFactory
     private readonly IClipboardTextWriter _clipboardTextWriter;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly IUserGroupsWindowFactory? _userGroupsWindowFactory;
 
     public SettingsViewModelFactory(
         IAppSettingsService appSettings,
@@ -66,7 +68,8 @@ public sealed class SettingsViewModelFactory
         IAccResolvedDocsUrlLauncher resolvedDocsUrlLauncher,
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        IUserGroupsWindowFactory? userGroupsWindowFactory = null)
     {
         _appSettings = appSettings;
         _systemQuery = systemQuery;
@@ -85,6 +88,7 @@ public sealed class SettingsViewModelFactory
         _clipboardTextWriter = clipboardTextWriter;
         _authorization = authorization;
         _currentUser = currentUser;
+        _userGroupsWindowFactory = userGroupsWindowFactory;
     }
 
     public SettingsViewModel Create(SettingsSurfaceScope scope)
@@ -106,5 +110,6 @@ public sealed class SettingsViewModelFactory
             _clipboardTextWriter,
             _authorization,
             _currentUser,
-            scope);
+            scope,
+            _userGroupsWindowFactory);
 }

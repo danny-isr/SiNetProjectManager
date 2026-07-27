@@ -9,6 +9,13 @@
 #
 # No installer is needed: the console app has no SCM registration, no per-user
 # state, no shortcuts. Files-on-a-share is the simplest correct deployment.
+#
+# SECRETS WARNING:
+#   appsettings.json is published alongside the exe but must NOT contain API keys.
+#   MasterPlan API key must live in Windows Credential Manager (SiNet/MasterPlanApi/ApiKey)
+#   or the MASTERPLAN_API_KEY env var on the server. Use appsettings.template.json as
+#   the reference structure when provisioning a new machine — never copy secrets to Git
+#   or to the network share.
 
 param(
     # Intermediate publish folder (local scratch - never run from here).
@@ -88,6 +95,26 @@ if (-not (Test-Path $DeployDir)) { New-Item -ItemType Directory -Path $DeployDir
 # /NFL /NDL = quiet output. Exit codes 0-7 are success, >=8 is failure.
 robocopy $OutputDir $DeployDir /MIR /R:3 /W:5 /NFL /NDL
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
+
+# Ensure template is present on the share; warn if deployed appsettings contains a non-empty ApiKey.
+$deployAppSettings = Join-Path $DeployDir "appsettings.json"
+$templatePath = Join-Path $PSScriptRoot "appsettings.template.json"
+if (Test-Path $templatePath) {
+    Copy-Item $templatePath (Join-Path $DeployDir "appsettings.template.json") -Force
+}
+if (Test-Path $deployAppSettings) {
+    try {
+        $settings = Get-Content $deployAppSettings -Raw | ConvertFrom-Json
+        $apiKey = $settings.MasterPlanApi.ApiKey
+        if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
+            Write-Host "`nWARNING: Deployed appsettings.json contains a non-empty MasterPlanApi:ApiKey." -ForegroundColor Red
+            Write-Host "         Remove the key from the file and provision via vault or MASTERPLAN_API_KEY env var." -ForegroundColor Red
+        }
+    }
+    catch {
+        Write-Host "`nWARNING: Could not validate deployed appsettings.json for embedded secrets." -ForegroundColor Yellow
+    }
+}
 
 Write-Host "`n=== Done. Task Scheduler on the server will pick up the new exe on its next run. ===" -ForegroundColor Green
 Get-ChildItem $DeployDir -Filter "MasterPlan.SyncEngine.exe" | Format-Table Name, Length, LastWriteTime

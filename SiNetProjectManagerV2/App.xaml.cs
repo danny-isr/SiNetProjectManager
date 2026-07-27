@@ -1,3 +1,4 @@
+using SiNet.Infrastructure.Autodesk;
 using SiNet.Application.Common;
 using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.Services.Composition;
@@ -320,6 +321,7 @@ namespace SiNetProjectManagerV2
             // does not replace or alter the legacy floating Inspection window.
             // IInspectionWorkspace -> LegacyInspectionWorkspace is registered via the bridge's own
             // public extension because LegacyInspectionWorkspace is internal to SiNet.LegacyBridge.
+            // HostMode = V2Hybrid: LegacyBridge is opt-in for the strangler host only (not StandaloneNew).
             SiNet.LegacyBridge.LegacyBridgeServiceCollectionExtensions.AddSiNetLegacyBridge(services);
             services.AddTransient<SiNet.App.Wpf.Inspection.InspectionTreeViewModel>();
             services.AddTransient<SiNet.App.Wpf.Inspection.InspectionNotesViewModel>();
@@ -800,43 +802,39 @@ namespace SiNetProjectManagerV2
                 }
 
                 // ─── SSL Certificate Validation for AccService ───────────────────
-                // SiOffice.AccService presents a self-signed cert (accservice.pfx, CN=<MachineName>)
-                // that is NOT in the local trust store. We accept self-signed certificates ONLY for:
-                //   1. Loopback addresses (localhost, 127.0.0.1)
-                //   2. Explicitly approved internal hosts (SI-WIN-2K19, *.si-eng.local, 192.168.x.x)
-                // This is a TEMPORARY rollout mechanism until a proper organizational certificate is deployed.
-                // Production deployments should set AccService:Certificate:Path on the service to a CA-issued cert.
+                // SiOffice.AccService may present a self-signed cert. Accept chain errors
+                // only for loopback or when the server cert thumbprint is explicitly pinned.
+                var pinnedThumbprints = AppConfiguration.Configuration
+                    .GetSection("AccService:PinnedCertificateThumbprints")
+                    .GetChildren()
+                    .Select(child => child.Value)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .ToArray();
+                var tlsOptions = new AccServiceControlPlaneOptions
+                {
+                    PinnedCertificateThumbprints = pinnedThumbprints,
+                };
                 var accServiceUri = new Uri(accServiceBaseUrl.TrimEnd('/') + "/");
                 var accServiceHost = accServiceUri.Host;
 
-                // Approved internal hosts for self-signed certificate acceptance
-                // TODO: Move to appsettings.json when ready for production configuration
-                var approvedInternalHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    "SI-WIN-2K19",
-                    "localhost",
-                    "127.0.0.1"
-                };
-
-                // Also allow any host in the si-eng.local domain or 192.168.x.x range
-                bool IsApprovedInternalHost(string host)
-                {
-                    if (approvedInternalHosts.Contains(host))
-                        return true;
-                    if (host.EndsWith(".si-eng.local", StringComparison.OrdinalIgnoreCase))
-                        return true;
-                    if (host.StartsWith("192.168.", StringComparison.Ordinal))
-                        return true;
-                    return false;
-                }
-
-                var isApprovedHost = accServiceUri.IsLoopback || IsApprovedInternalHost(accServiceHost);
-
-                if (isApprovedHost)
+                if (accServiceUri.IsLoopback)
                 {
                     Log.Warning(
-                        "[AccService] SSL: Accepting self-signed certificate for approved internal host '{Host}'. " +
-                        "This is a temporary rollout mechanism — deploy organizational certificate for production.",
+                        "[AccService] SSL: loopback host '{Host}' — chain errors accepted for local development.",
+                        accServiceHost);
+                }
+                else if (pinnedThumbprints.Length > 0)
+                {
+                    Log.Information(
+                        "[AccService] SSL: thumbprint pinning enabled for host '{Host}' ({Count} pin(s)).",
+                        accServiceHost, pinnedThumbprints.Length);
+                }
+                else
+                {
+                    Log.Warning(
+                        "[AccService] SSL: no thumbprint pins configured for host '{Host}'. " +
+                        "Only CA-trusted certificates will be accepted unless the host is loopback.",
                         accServiceHost);
                 }
 
@@ -845,45 +843,17 @@ namespace SiNetProjectManagerV2
                 {
                     b.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
                     {
-                        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
-                        {
-                            // No errors = valid certificate, always accept
-                            if (errors == System.Net.Security.SslPolicyErrors.None)
-                                return true;
-
-                            // Self-signed certificate (chain errors) — only accept for approved internal hosts
-                            if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
-                            {
-                                var requestHost = message?.RequestUri?.Host ?? "";
-                                if (IsApprovedInternalHost(requestHost))
-                                {
-                                    Log.Debug(
-                                        "[AccService] SSL: Accepted self-signed certificate for approved host '{Host}'.",
-                                        requestHost);
-                                    return true;
-                                }
-
-                                Log.Warning(
-                                    "[AccService] SSL: Rejected self-signed certificate for non-approved host '{Host}'. " +
-                                    "Add host to approved list or deploy valid certificate.",
-                                    requestHost);
-                                return false;
-                            }
-
-                            // Any other SSL error (name mismatch, expired, etc.) — reject
-                            Log.Warning(
-                                "[AccService] SSL: Certificate validation failed for '{Host}'. Errors: {Errors}.",
-                                message?.RequestUri?.Host ?? "(unknown)", errors);
-                            return false;
-                        }
+                        ServerCertificateCustomValidationCallback = (message, certificate, _, errors) =>
+                            AccServiceHttpClientConfigurator.ValidateServerCertificate(
+                                message, certificate, errors, tlsOptions),
                     });
                 };
 
                 configureHandler(services.AddHttpClient<IAccProjectProvisioningService, RemoteAccProjectProvisioningService>(configure));
                 configureHandler(services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure));
                 Log.Information(
-                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (host={Host}, approvedForSelfSigned={IsApproved}).",
-                    accServiceBaseUrl, accServiceHost, isApprovedHost);
+                    "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (host={Host}, loopback={IsLoopback}, pinnedThumbprints={PinCount}).",
+                    accServiceBaseUrl, accServiceHost, accServiceUri.IsLoopback, pinnedThumbprints.Length);
             }
             else
             {
@@ -1053,10 +1023,10 @@ namespace SiNetProjectManagerV2
         private void RunNewSystemStartup(StartupEventArgs e)
         {
             Log.Information("[STARTUP][NewSystem] Setting up credential vault (connection string)...");
-            SetupCredentialVault();
+            SetupCredentialVaultForNewSystem();
 
             Log.Information("[STARTUP][NewSystem] Ensuring database connection...");
-            if (!EnsureDatabaseConnection())
+            if (!EnsureDatabaseConnectionForNewSystem())
             {
                 Log.Warning("[STARTUP][NewSystem] Database connection failed. Shutting down.");
                 Shutdown();
@@ -1066,7 +1036,7 @@ namespace SiNetProjectManagerV2
             Log.Information("[STARTUP][NewSystem] Configuring logging...");
             ConfigureLoggingAndSettings();
 
-            Log.Information("[STARTUP][NewSystem] Configuring DI services...");
+            Log.Information("[STARTUP][NewSystem] Configuring DI services (HostMode=V2Hybrid)...");
             ServiceProvider = ConfigureServices();
             WireLegacyLocators();
             SiNetSQL.Services.ServiceLocator.Initialize(ServiceProvider);
@@ -1083,6 +1053,14 @@ namespace SiNetProjectManagerV2
             if (!AuthorizeCurrentUser())
             {
                 Log.Warning("[STARTUP][NewSystem] User authorization failed. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            Log.Information("[STARTUP][NewSystem] Schema gate (Task Management / connectivity)...");
+            if (!ValidateDatabaseSchema(out _))
+            {
+                Log.Warning("[STARTUP][NewSystem] Schema validation failed. Shutting down.");
                 Shutdown();
                 return;
             }
@@ -1132,8 +1110,8 @@ namespace SiNetProjectManagerV2
         }
 
         /// <summary>
-        /// New System skips ValidateDatabaseSchema; still warm DefaultProjectService cache
-        /// so the first ACC ingest does not rely on a cold static cache.
+        /// Warms DefaultProjectService cache so the first ACC ingest does not rely on a cold static cache.
+        /// Schema validation for New System runs in <see cref="RunNewSystemStartup"/> before shell launch.
         /// </summary>
         private static void WarmDefaultProjectCacheForNewSystem()
         {
@@ -1288,6 +1266,15 @@ namespace SiNetProjectManagerV2
         /// Non-fatal — continues even if user skips vault setup.
         /// </summary>
         private static void SetupCredentialVault()
+            => SetupCredentialVaultCore(allowLegacyDialogs: true, newSystemPath: false);
+
+        /// <summary>
+        /// New System vault setup: prefer silent vault; legacy dialogs only as explicit deprecated fallback.
+        /// </summary>
+        private static void SetupCredentialVaultForNewSystem()
+            => SetupCredentialVaultCore(allowLegacyDialogs: true, newSystemPath: true);
+
+        private static void SetupCredentialVaultCore(bool allowLegacyDialogs, bool newSystemPath)
         {
             CredentialProvider.GetSecret = CredentialVaultService.GetSecret;
 
@@ -1299,34 +1286,68 @@ namespace SiNetProjectManagerV2
             if (!CredentialVaultService.IsVaultConfigured()
                 && SecretProvisioningService.IsProvisioningFile(provisioningPath))
             {
-                // Found a provisioning package — prompt for password and import
-                var pwDialog = new WPF_Window.ProvisioningPasswordDialog
+                if (!allowLegacyDialogs)
                 {
-                    RequireConfirmation = false,
-                    Title = "נמצא קובץ הגדרות — הזן סיסמה לייבוא"
-                };
-
-                if (pwDialog.ShowDialog() == true)
+                    Log.Error(
+                        "[STARTUP][NewSystem] Provisioning file found but UI import is disabled. " +
+                        "Provision vault offline (Install-OnServer.ps1) before launch.");
+                }
+                else
                 {
-                    try
+                    if (newSystemPath)
                     {
-                        var imported = SecretProvisioningService.ImportFromFile(
-                            provisioningPath, pwDialog.EnteredPassword);
-                        Log.Information("Provisioning import: {Count} secrets imported from file.", imported);
+                        Log.Warning(
+                            "DEPRECATED: legacy dialog on New System path — Stage 4 partial " +
+                            "(ProvisioningPasswordDialog). Prefer offline vault provisioning.");
                     }
-                    catch (Exception ex)
+
+                    // Found a provisioning package — prompt for password and import
+                    var pwDialog = new WPF_Window.ProvisioningPasswordDialog
                     {
-                        Log.Warning(ex, "Provisioning import failed.");
-                        MessageBox.Show(
-                            $"ייבוא חבילת ההגדרות נכשל:\n{ex.Message}",
-                            "שגיאה בייבוא", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        RequireConfirmation = false,
+                        Title = "נמצא קובץ הגדרות — הזן סיסמה לייבוא"
+                    };
+
+                    if (pwDialog.ShowDialog() == true)
+                    {
+                        try
+                        {
+                            var imported = SecretProvisioningService.ImportFromFile(
+                                provisioningPath, pwDialog.EnteredPassword);
+                            Log.Information("Provisioning import: {Count} secrets imported from file.", imported);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "Provisioning import failed.");
+                            MessageBox.Show(
+                                $"ייבוא חבילת ההגדרות נכשל:\n{ex.Message}",
+                                "שגיאה בייבוא", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
                     }
                 }
             }
 
-            // Check if vault is provisioned — if not, open setup dialog
+            // Check if vault is provisioned — if not, open setup dialog (Legacy path) or fail closed (New System prefer)
             if (!CredentialVaultService.IsVaultConfigured())
             {
+                if (newSystemPath && !allowLegacyDialogs)
+                {
+                    Log.Fatal("[STARTUP][NewSystem] Credential vault is not configured. Fail closed.");
+                    MessageBox.Show(
+                        "כספת הסודות אינה מוגדרת. יש להגדיר את ה־Credential Vault לפני הפעלת New System.",
+                        "חסרה כספת סודות",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    return;
+                }
+
+                if (newSystemPath)
+                {
+                    Log.Warning(
+                        "DEPRECATED: legacy dialog on New System path — Stage 4 partial " +
+                        "(SecretSetupWindow). Native secret setup is preferred.");
+                }
+
                 var setupWindow = new WPF_Window.SecretSetupWindow();
                 if (setupWindow.ShowDialog() != true)
                 {
@@ -1341,6 +1362,12 @@ namespace SiNetProjectManagerV2
         /// </summary>
         /// <returns>True if connected successfully, false if user cancelled (app should shutdown).</returns>
         private static bool EnsureDatabaseConnection()
+            => EnsureDatabaseConnectionCore(newSystemPath: false);
+
+        private static bool EnsureDatabaseConnectionForNewSystem()
+            => EnsureDatabaseConnectionCore(newSystemPath: true);
+
+        private static bool EnsureDatabaseConnectionCore(bool newSystemPath)
         {
             while (true)
             {
@@ -1370,6 +1397,13 @@ namespace SiNetProjectManagerV2
                             MessageBoxButton.OK,
                             MessageBoxImage.Warning);
                     }
+                }
+
+                if (newSystemPath)
+                {
+                    Log.Warning(
+                        "DEPRECATED: legacy dialog on New System path — Stage 4 partial " +
+                        "(SecretSetupWindow for DB connection).");
                 }
 
                 // Either missing or unreachable — open SecretSetupWindow to fix

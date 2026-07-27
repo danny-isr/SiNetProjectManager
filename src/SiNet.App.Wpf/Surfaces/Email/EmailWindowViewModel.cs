@@ -487,7 +487,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
                     inboxMessage.MessageUniqueId,
                     inboxMessage.InternetMessageId,
                     inboxMessage.Subject,
-                    inboxMessage.FromAddress);
+                    inboxMessage.FromAddress,
+                    inboxMessage.Id);
             }
         }
 
@@ -550,12 +551,21 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (correlated)
         {
+            var patched = EmailList.PatchRowInboxMessageId(
+                EmailList.SelectedEmail?.Id ?? string.Empty,
+                inboxMessageId);
+            if (patched is not null)
+            {
+                // Ensure detail reloads attachments/tagging against the SQL inbox id.
+                await EmailDetail.ApplySelectionAsync(patched).ConfigureAwait(true);
+            }
+
             // #region agent log
             // TEMP WF-DEBUG
             var sel = EmailList.SelectedEmail;
             WorkflowDebugTrace.Step(
                 "Email.TagUI",
-                $"task-select ok task={context.TaskId} primaryTarget={inboxMessageId} selectedInboxId={sel?.InboxMessageId?.ToString() ?? "null"} selectedGmail={sel?.Id ?? "(none)"} project={_currentProject.CurrentProject?.ProjectId.ToString() ?? "null"}");
+                $"task-select ok task={context.TaskId} primaryTarget={inboxMessageId} selectedInboxId={sel?.InboxMessageId?.ToString() ?? "null"} selectedGmail={sel?.Id ?? "(none)"} project={_currentProject.CurrentProject?.ProjectId.ToString() ?? "null"} strip={EmailDetail.AttachmentStrip.Attachments.Count}");
             // #endregion
             StatusMessage = context.TaskId is int openedTaskId
                 ? $"נפתח מתוך משימה #{openedTaskId} — נבחר מייל \"{inboxMessage.Subject}\"."

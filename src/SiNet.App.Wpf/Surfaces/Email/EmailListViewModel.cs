@@ -676,8 +676,10 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         string? messageUniqueId,
         string? internetMessageId,
         string? subject,
-        string? fromAddress) =>
-        _pendingTaskSelection = new EmailTaskSelectionTarget(messageUniqueId, internetMessageId, subject, fromAddress);
+        string? fromAddress,
+        int? inboxMessageId = null) =>
+        _pendingTaskSelection = new EmailTaskSelectionTarget(
+            messageUniqueId, internetMessageId, subject, fromAddress, inboxMessageId);
 
     internal void ClearPendingTaskSelection() => _pendingTaskSelection = null;
 
@@ -685,7 +687,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         string? MessageUniqueId,
         string? InternetMessageId,
         string? Subject,
-        string? FromAddress);
+        string? FromAddress,
+        int? InboxMessageId = null);
 
     public string? GetContextMenuDisabledReason(EmailListRow? row, EmailContextMenuAction action) =>
         action == EmailContextMenuAction.UploadToAccInbox

@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNetSQL.Data;
 
-namespace SiNet.Infrastructure.Autodesk;
+namespace SiNet.Infrastructure.Sql.AutodeskLocal;
 
-internal sealed class LocalAccProjectRootFolderResolver(
+public sealed class LocalAccProjectRootFolderResolver(
     IDbContextFactory<SiNetSQLDbContext> dbContextFactory,
     ITokenProvider? tokenProvider) : IAccProjectRootFolderResolver
 {

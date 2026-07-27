@@ -1,6 +1,7 @@
 using System.Net.Http;
+using System.Net.Security;
 using System.Security.Cryptography;
-using System.Text;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using SiNet.Application.Configuration;
 
@@ -17,7 +18,8 @@ internal static class AccServiceSecretDiagnostics
     public static async Task<AccServiceDiagnosticResultDto> TestAsync(
         ISecretVaultStore vault,
         ISecretSetupHostConfiguration hostConfiguration,
-        CancellationToken cancellationToken)
+        IReadOnlyList<string>? pinnedCertificateThumbprints = null,
+        CancellationToken cancellationToken = default)
     {
         if (!vault.HasSecret(SecretCatalog.AccServiceApiKey))
         {
@@ -61,40 +63,44 @@ internal static class AccServiceSecretDiagnostics
                 "מוגדר ב-Vault");
         }
 
-        return await TestNetworkDiagnosticAsync(localKey, baseUrl, cancellationToken).ConfigureAwait(false);
+        return await TestNetworkDiagnosticAsync(
+            localKey,
+            baseUrl,
+            pinnedCertificateThumbprints ?? [],
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<AccServiceDiagnosticResultDto> TestNetworkDiagnosticAsync(
         string localKey,
         string baseUrl,
+        IReadOnlyList<string> pinnedCertificateThumbprints,
         CancellationToken cancellationToken)
     {
         try
         {
-            var localHashPrefix = ComputeHashPrefix(localKey);
             using var handler = new HttpClientHandler
             {
-                ServerCertificateCustomValidationCallback = (msg, _, _, errors) =>
-                {
-                    if (errors == System.Net.Security.SslPolicyErrors.None)
-                    {
-                        return true;
-                    }
-
-                    if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
-                    {
-                        var host = msg?.RequestUri?.Host;
-                        return msg?.RequestUri?.IsLoopback == true || IsApprovedHost(host);
-                    }
-
-                    return false;
-                },
+                ServerCertificateCustomValidationCallback = (msg, certificate, _, errors) =>
+                    ValidateServerCertificate(msg, certificate, errors, pinnedCertificateThumbprints),
             };
 
             using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
             var diagUrl = baseUrl.TrimEnd('/') + "/v1/acc/diag";
-            using var response = await httpClient.GetAsync(diagUrl, cancellationToken).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, diagUrl);
+            request.Headers.Add("X-AccService-Key", localKey);
+
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                return new AccServiceDiagnosticResultDto(
+                    false,
+                    SecretStatusLevel.Invalid,
+                    "AccService — המפתח בלקוח נדחה על ידי השרת (401).",
+                    IsNetworkTest: true,
+                    "HTTP 401");
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -109,35 +115,24 @@ internal static class AccServiceSecretDiagnostics
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
             var serverHasKey = root.TryGetProperty("hasApiKey", out var h) && h.GetBoolean();
-            var serverHashPrefix = root.TryGetProperty("keyHashPrefix", out var p) ? p.GetString() : "(none)";
-            var keysMatch = localHashPrefix == serverHashPrefix && localHashPrefix != "(none)";
-
-            if (keysMatch)
-            {
-                return new AccServiceDiagnosticResultDto(
-                    true,
-                    SecretStatusLevel.Valid,
-                    "AccService — המפתחות תואמים (network diag).",
-                    IsNetworkTest: true,
-                    $"hash: {localHashPrefix}");
-            }
+            var keySource = root.TryGetProperty("keySource", out var s) ? s.GetString() : "(unknown)";
 
             if (!serverHasKey)
             {
                 return new AccServiceDiagnosticResultDto(
                     false,
                     SecretStatusLevel.Incomplete,
-                    "AccService — מפתח קיים בלקוח, חסר בשרת.",
+                    "AccService — מפתח תקף בלקוח, חסר בשרת.",
                     IsNetworkTest: true,
-                    "server has no key");
+                    $"server keySource={keySource}");
             }
 
             return new AccServiceDiagnosticResultDto(
-                false,
-                SecretStatusLevel.Invalid,
-                "AccService — hash mismatch.",
+                true,
+                SecretStatusLevel.Valid,
+                "AccService — אימות מפתח הצליח (network diag).",
                 IsNetworkTest: true,
-                $"local={localHashPrefix}, server={serverHashPrefix}");
+                $"keySource={keySource}");
         }
         catch (Exception ex)
         {
@@ -150,19 +145,46 @@ internal static class AccServiceSecretDiagnostics
         }
     }
 
-    private static string ComputeHashPrefix(string key)
+    private static bool ValidateServerCertificate(
+        HttpRequestMessage? message,
+        X509Certificate2? certificate,
+        SslPolicyErrors errors,
+        IReadOnlyList<string> pinnedCertificateThumbprints)
     {
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        return Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
+        if (errors == SslPolicyErrors.None)
+        {
+            return true;
+        }
+
+        if (errors == SslPolicyErrors.RemoteCertificateChainErrors)
+        {
+            if (message?.RequestUri?.IsLoopback == true)
+            {
+                return true;
+            }
+
+            return IsPinnedThumbprint(certificate, pinnedCertificateThumbprints);
+        }
+
+        return false;
     }
 
-    private static bool IsApprovedHost(string? host) =>
-        !string.IsNullOrEmpty(host)
-        && (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("SI-WIN-2K19", StringComparison.OrdinalIgnoreCase)
-            || host.EndsWith(".si-eng.local", StringComparison.OrdinalIgnoreCase)
-            || host.StartsWith("192.168.", StringComparison.Ordinal));
+    private static bool IsPinnedThumbprint(
+        X509Certificate2? certificate,
+        IReadOnlyList<string> pinnedCertificateThumbprints)
+    {
+        if (certificate is null || pinnedCertificateThumbprints.Count == 0)
+        {
+            return false;
+        }
+
+        var serverThumbprint = NormalizeThumbprint(certificate.Thumbprint);
+        return pinnedCertificateThumbprints.Any(pin =>
+            string.Equals(NormalizeThumbprint(pin), serverThumbprint, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeThumbprint(string? thumbprint) =>
+        thumbprint?.Replace(" ", string.Empty, StringComparison.Ordinal) ?? string.Empty;
 
     private static string Truncate(string text, int max) =>
         text.Length <= max ? text : text[..max] + "…";

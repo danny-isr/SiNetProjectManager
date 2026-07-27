@@ -5,6 +5,7 @@ using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SiNet.Infrastructure.Sql.Services.SeedData;
 using SiNet.Infrastructure.Sql.Services.Tasks;
+using SiNet.Infrastructure.Sql.Services.Workflow;
 
 namespace SiNet.Infrastructure.Sql.Services.DevTools;
 
@@ -719,23 +720,10 @@ public class SqlWorkflowSeedService
                     }
                 }
 
-                // --- Assignee resolvability ---
-                if (s.AssignedGroupId is null)
-                {
-                    DevToolsLog.Warn($"[WorkflowDiag]   {def.Code}.{s.Code}: no AssignedGroupId.");
-                }
-                else if (!allGroups.TryGetValue(s.AssignedGroupId.Value, out var g) || g is null)
-                {
-                    DevToolsLog.Warn($"[WorkflowDiag]   {def.Code}.{s.Code}: AssignedGroupId={s.AssignedGroupId} points to a missing UserGroup.");
-                }
-                else
-                {
-                    var activeMembers = g.Memberships.Count(m => m.Siuser is { IsActive: true });
-                    if (activeMembers == 0)
-                        DevToolsLog.Warn($"[WorkflowDiag]   {def.Code}.{s.Code}: group '{g.Code}' has 0 active members — task creation will throw.");
-                    else if (activeMembers > 1 && g.DefaultAssigneeId is null)
-                        DevToolsLog.Warn($"[WorkflowDiag]   {def.Code}.{s.Code}: group '{g.Code}' has {activeMembers} members and no DefaultAssigneeId.");
-                }
+                // --- Assignee resolvability (same rules as runtime TryResolveAssigneeFromGroup) ---
+                var assigneeIssue = SqlWorkflowAssigneeReadinessQueryService.EvaluateStage(def.Code, s, allGroups);
+                if (assigneeIssue is not null)
+                    DevToolsLog.Warn($"[WorkflowDiag]   {assigneeIssue.SummaryHe}");
 
                 // --- Outgoing transitions ---
                 if (!transitionsFrom.TryGetValue(s.Id, out var outs) || outs.Count == 0)

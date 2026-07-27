@@ -1,8 +1,10 @@
 using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SiNet.Infrastructure.Autodesk;
 
-internal static class AccServiceHttpClientConfigurator
+public static class AccServiceHttpClientConfigurator
 {
     public static void ConfigureFileTransferClient(HttpClient client, AccServiceControlPlaneOptions options)
     {
@@ -17,48 +19,49 @@ internal static class AccServiceHttpClientConfigurator
 
         return new HttpClientHandler
         {
-            ServerCertificateCustomValidationCallback = (message, _, _, errors) =>
-            {
-                if (errors == System.Net.Security.SslPolicyErrors.None)
-                {
-                    return true;
-                }
-
-                if (errors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
-                {
-                    var requestUri = message?.RequestUri;
-                    if (requestUri?.IsLoopback == true)
-                    {
-                        return true;
-                    }
-
-                    return IsApprovedInternalHost(requestUri?.Host, options);
-                }
-
-                return false;
-            },
+            ServerCertificateCustomValidationCallback = (message, certificate, _, errors) =>
+                ValidateServerCertificate(message, certificate, errors, options),
         };
     }
 
-    private static bool IsApprovedInternalHost(string? host, AccServiceControlPlaneOptions options)
+    public static bool ValidateServerCertificate(
+        HttpRequestMessage? message,
+        X509Certificate2? certificate,
+        SslPolicyErrors errors,
+        AccServiceControlPlaneOptions options)
     {
-        if (string.IsNullOrWhiteSpace(host))
+        if (errors == SslPolicyErrors.None)
+        {
+            return true;
+        }
+
+        if (errors == SslPolicyErrors.RemoteCertificateChainErrors)
+        {
+            if (message?.RequestUri?.IsLoopback == true)
+            {
+                return true;
+            }
+
+            return IsPinnedThumbprint(certificate, options.PinnedCertificateThumbprints);
+        }
+
+        return false;
+    }
+
+    private static bool IsPinnedThumbprint(
+        X509Certificate2? certificate,
+        IReadOnlyList<string> pinnedThumbprints)
+    {
+        if (certificate is null || pinnedThumbprints.Count == 0)
         {
             return false;
         }
 
-        if (options.ApprovedSelfSignedHosts.Contains(host, StringComparer.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (options.ApprovedSelfSignedHostSuffixes.Any(suffix =>
-                host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
-        {
-            return true;
-        }
-
-        return options.ApprovedSelfSignedIpPrefixes.Any(prefix =>
-            host.StartsWith(prefix, StringComparison.Ordinal));
+        var serverThumbprint = NormalizeThumbprint(certificate.Thumbprint);
+        return pinnedThumbprints.Any(pin =>
+            string.Equals(NormalizeThumbprint(pin), serverThumbprint, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string NormalizeThumbprint(string? thumbprint) =>
+        thumbprint?.Replace(" ", string.Empty, StringComparison.Ordinal) ?? string.Empty;
 }

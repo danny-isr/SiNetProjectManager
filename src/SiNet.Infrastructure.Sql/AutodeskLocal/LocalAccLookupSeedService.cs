@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNetSQL.Data;
 
-namespace SiNet.Infrastructure.Autodesk;
+namespace SiNet.Infrastructure.Sql.AutodeskLocal;
 
-internal sealed class LocalAccLookupSeedService(IDbContextFactory<SiNetSQLDbContext> dbContextFactory) : IAccLookupSeedService
+public sealed class LocalAccLookupSeedService(IDbContextFactory<SiNetSQLDbContext> dbContextFactory) : IAccLookupSeedService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbContextFactory = dbContextFactory;
 

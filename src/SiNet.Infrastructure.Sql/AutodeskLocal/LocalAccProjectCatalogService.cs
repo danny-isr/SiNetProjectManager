@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNetSQL.Data;
 
-namespace SiNet.Infrastructure.Autodesk;
+namespace SiNet.Infrastructure.Sql.AutodeskLocal;
 
-internal sealed class LocalAccProjectCatalogService(IDbContextFactory<SiNetSQLDbContext> dbContextFactory) : IAccProjectCatalogService
+public sealed class LocalAccProjectCatalogService(IDbContextFactory<SiNetSQLDbContext> dbContextFactory) : ILocalAccProjectCatalogService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbContextFactory = dbContextFactory;
 

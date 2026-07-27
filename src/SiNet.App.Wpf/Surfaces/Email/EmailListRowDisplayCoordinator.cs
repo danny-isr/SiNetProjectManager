@@ -102,7 +102,13 @@ internal sealed class EmailListRowDisplayCoordinator
             return false;
         }
 
-        _owner.ClearPendingTaskSelection();
+        // Do not clear PendingTaskSelection here: a late ReplaceRows after project refresh
+        // must still re-apply the known InboxMessageId patch from the task target.
+        if (_owner.PendingTaskSelection?.InboxMessageId is int knownInboxId && knownInboxId > 0)
+        {
+            match = _owner.PatchRowInboxMessageId(match.Id, knownInboxId) ?? match;
+        }
+
         _owner.SelectedEmail = match;
         return true;
     }
@@ -181,7 +187,13 @@ internal sealed class EmailListRowDisplayCoordinator
 
             if (taskMatch is not null)
             {
-                _owner.ClearPendingTaskSelection();
+                if (pending.InboxMessageId is int knownInboxId && knownInboxId > 0)
+                {
+                    taskMatch = _owner.PatchRowInboxMessageId(taskMatch.Id, knownInboxId) ?? taskMatch;
+                }
+
+                // Keep pending until an explicit task-select clears it, so a late reload
+                // after TrySelectByInboxCorrelation still re-applies the inbox id patch.
                 _owner.SelectedEmail = taskMatch;
                 _owner.NotifyUnreadDisplayProperties();
                 return;

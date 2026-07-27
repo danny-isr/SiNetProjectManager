@@ -8,6 +8,7 @@ using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
+using SiNet.Infrastructure.Sql.AutodeskLocal;
 using SiNet.Infrastructure.Sql.Services.DevTools;
 using SiNetProjectManagerV2.Services;
 
@@ -17,6 +18,10 @@ namespace SiNetProjectManagerV2.Services.Composition;
 /// Modular DI for the New System shell graph (Project Context + shell menu + admin surfaces).
 /// Legacy host still shares the same container today; this extension documents the New System slice
 /// explicitly (P7 composition split stepping stone).
+/// <para>
+/// HostMode context: called from the V2 hybrid host (<see cref="SiNet.App.Composition.SiNetHostMode.V2Hybrid"/>).
+/// Prefer converging on <c>AddSiNet(SiNetHostMode.V2Hybrid, ...)</c> as registrations become idempotent.
+/// </para>
 /// </summary>
 public static class NewSystemServiceCollectionExtensions
 {
@@ -41,6 +46,7 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
         services.AddSiNetAutodesk();
+        services.AddSiNetAutodeskLocalSql();
         // Native centralized project-file filing (FileServer + ACC). Required by the
         // native MoveToProject executor and AddMaterial flows (Phase 3).
         SiNet.Infrastructure.Sql.FilingServiceCollectionExtensions.AddSiNetFilingServices(services);

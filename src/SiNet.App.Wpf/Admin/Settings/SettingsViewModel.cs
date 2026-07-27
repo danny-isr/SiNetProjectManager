@@ -8,7 +8,9 @@ using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Infrastructure;
+using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
@@ -28,6 +30,7 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly IAccProjectCatalogService _accProjectCatalogService;
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly IUserGroupsWindowFactory? _userGroupsWindowFactory;
 
     private UserLoggingSettingsDto _loadedLogging = null!;
     private UserAppearanceSettingsDto _loadedAppearance = null!;
@@ -63,7 +66,8 @@ public sealed class SettingsViewModel : ObservableObject
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser,
-        SettingsSurfaceScope scope)
+        SettingsSurfaceScope scope,
+        IUserGroupsWindowFactory? userGroupsWindowFactory = null)
     {
         _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
         _systemQuery = systemQuery ?? throw new ArgumentNullException(nameof(systemQuery));
@@ -76,6 +80,7 @@ public sealed class SettingsViewModel : ObservableObject
         _accProjectCatalogService = accProjectCatalogService ?? throw new ArgumentNullException(nameof(accProjectCatalogService));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
+        _userGroupsWindowFactory = userGroupsWindowFactory;
         Scope = scope;
 
         AvailableFonts = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(f => f).ToList();
@@ -97,6 +102,7 @@ public sealed class SettingsViewModel : ObservableObject
         CancelCommand = new RelayCommand(_ => CancelAndClose());
         BrowseLogDirectoryCommand = new RelayCommand(_ => BrowseLogDirectory(), _ => !AccBrowser.IsBusy && CanEditPersonalSettings);
         ProbeCentralLogPathCommand = new AsyncRelayCommand(ProbeCentralLogPathAsync, () => !IsBusy && !AccBrowser.IsBusy && CanEditSystemSettings);
+        OpenUserGroupsCommand = new RelayCommand(_ => OpenUserGroups(), _ => CanEditSystemSettings && _userGroupsWindowFactory is not null);
         BrowseAccFolderCommand = AccBrowser.BrowseFolderCommand;
         BrowseAccParentFolderCommand = AccBrowser.BrowseParentFolderCommand;
         OpenSelectedAccFolderCommand = AccBrowser.OpenSelectedFolderCommand;
@@ -831,6 +837,7 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand CancelCommand { get; }
     public RelayCommand BrowseLogDirectoryCommand { get; }
     public AsyncRelayCommand ProbeCentralLogPathCommand { get; }
+    public RelayCommand OpenUserGroupsCommand { get; }
     public AsyncRelayCommand BrowseAccFolderCommand { get; }
     public AsyncRelayCommand BrowseAccParentFolderCommand { get; }
     public AsyncRelayCommand OpenSelectedAccFolderCommand { get; }
@@ -933,6 +940,7 @@ public sealed class SettingsViewModel : ObservableObject
         SaveCommand.RaiseCanExecuteChanged();
         BrowseLogDirectoryCommand.RaiseCanExecuteChanged();
         ProbeCentralLogPathCommand.RaiseCanExecuteChanged();
+        OpenUserGroupsCommand.RaiseCanExecuteChanged();
         AccBrowser.NotifyHostStateChanged();
     }
 
@@ -1259,6 +1267,29 @@ public sealed class SettingsViewModel : ObservableObject
     {
         RollbackAppearanceIfNeeded();
         RequestClose?.Invoke(false);
+    }
+
+    private void OpenUserGroups()
+    {
+        if (_userGroupsWindowFactory is null || !CanEditSystemSettings)
+            return;
+
+        try
+        {
+            ThemeResourceLoader.EnsureApplicationResourcesMerged();
+            var window = _userGroupsWindowFactory.Create();
+            var owner = System.Windows.Application.Current?.Windows
+                .OfType<Window>()
+                .FirstOrDefault(w => w.IsActive);
+            if (owner is not null)
+                window.Owner = owner;
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            SummaryMessage = $"פתיחת ניהול קבוצות נכשלה: {ex.Message}";
+            MessageBox.Show(SummaryMessage, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OnAppearanceTypographyChanged()

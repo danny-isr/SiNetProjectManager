@@ -5,6 +5,7 @@ using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.SystemStatus;
+using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
@@ -20,7 +21,7 @@ using SiNet.Application.DevTools;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Projects;
 using SiNet.Application.Runtime;
-using SiNet.Infrastructure.Sql.Services.Workflow; // TEMP WF-DEBUG (Run Watchdog now dev trigger)
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Shell;
 
@@ -207,6 +208,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "הגדרות מערכת",
                 OpenNativeSystemSettings,
                 "הגדרות מערכת / שרת (Administrator)"));
+            admin.Add(new NewShellMenuItem(
+                "הקצאות משתמשים / קבוצות",
+                OpenNativeUserGroups,
+                "ניהול קבוצות מבצעים ומשתמש ברירת מחדל ל-workflow"));
             admin.Add(new NewShellMenuItem(
                 "מפתחות וסודות",
                 OpenNativeSecretSetup,
@@ -484,6 +489,26 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
     }
 
+    private void OpenNativeUserGroups()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var factory = _services.GetRequiredService<IUserGroupsWindowFactory>();
+            ShowDialog(factory.Create());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת הקצאות משתמשים: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
     private bool HasAuthenticatedUser()
         => _services.GetService<ICurrentUserContext>()?.UserId is not null;
 
@@ -550,19 +575,19 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         // TEMP WF-DEBUG — manual watchdog trigger. Remove with the rest of WF-DEBUG instrumentation.
         items.Add(new NewShellMenuItem(
             "הרץ Watchdog עכשיו",
-            RunWatchdogNow,
-            "סורק Workflows תקועים ומנסה שחזור (StalledWorkflowWatchdog)"));
+            () => _ = RunWatchdogNowAsync(),
+            "סורק Workflows תקועים ומנסה שחזור"));
 
         return items;
     }
 
     // TEMP WF-DEBUG
-    private void RunWatchdogNow()
+    private async Task RunWatchdogNowAsync()
     {
-        if (_services.GetService<StalledWorkflowWatchdog>() is not { } watchdog)
+        if (_services.GetService<IWorkflowRecoveryService>() is not { } workflowRecovery)
         {
             MessageBox.Show(
-                "StalledWorkflowWatchdog אינו רשום ב-DI.",
+                "IWorkflowRecoveryService אינו רשום ב-DI.",
                 "Watchdog",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -573,20 +598,18 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         try
         {
-            var (stalledCount, recoveredCount) = RunSync(async () =>
-            {
-                var stalled = await watchdog.DetectStalledAsync(CancellationToken.None).ConfigureAwait(false);
-                var recovered = await watchdog
-                    .AttemptRecoveryAsync(stalled, userId, CancellationToken.None)
-                    .ConfigureAwait(false);
-                return (stalled.Count, recovered);
-            });
+            var stalled = await workflowRecovery
+                .DetectStalledAsync(CancellationToken.None)
+                .ConfigureAwait(true);
+            var recoveredCount = await workflowRecovery
+                .AttemptRecoveryAsync(stalled, userId, CancellationToken.None)
+                .ConfigureAwait(true);
 
             WorkflowDebugTrace.Step("Watchdog.DevTrigger",
-                $"user={userId} detectedStalled={stalledCount} recovered={recoveredCount}");
+                $"user={userId} detectedStalled={stalled.Count} recovered={recoveredCount}");
 
             MessageBox.Show(
-                $"Watchdog הושלם.\n\nזוהו תקועים: {stalledCount}\nשוחזרו: {recoveredCount}\n\n" +
+                $"Watchdog הושלם.\n\nזוהו תקועים: {stalled.Count}\nשוחזרו: {recoveredCount}\n\n" +
                 $"פירוט מלא: {WorkflowDebugTrace.FilePath}",
                 "Watchdog",
                 MessageBoxButton.OK,

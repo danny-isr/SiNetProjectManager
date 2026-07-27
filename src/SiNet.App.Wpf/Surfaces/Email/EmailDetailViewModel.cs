@@ -825,27 +825,44 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private async Task RefreshInboxAttachmentsAsync(int loadVersion, string messageId)
     {
         // #region agent log
-        // TEMP WF-DEBUG — tagging UI visibility (ShowTagSelector)
         var taggingServicePresent = _attachmentTaggingService is not null;
-        var inboxIdOnRow = _selectedEmail?.InboxMessageId;
         var projectFromContext = _currentProject.CurrentProject?.ProjectId;
         var projectFromRow = _selectedEmail?.ProjectId;
-        WorkflowDebugTrace.Step(
-            "Email.TagUI",
-            $"refresh enter service={taggingServicePresent} inboxId={(inboxIdOnRow?.ToString() ?? "null")} projectCtx={projectFromContext?.ToString() ?? "null"} projectRow={projectFromRow?.ToString() ?? "null"} stripCount={AttachmentStrip.Attachments.Count} taskPrimary={_workSurfaceContext?.PrimaryWorkTargetEntityId?.ToString() ?? "null"}");
         // #endregion
 
-        if (_attachmentTaggingService is null || _selectedEmail?.InboxMessageId is not int inboxMessageId)
+        // Prefer the SQL inbox id on the list row; when a late reload stripped it, fall back to
+        // the task's PrimaryWorkTargetEntityId so Gmail-downloaded ACC attachments still tag.
+        var inboxMessageId = _selectedEmail?.InboxMessageId
+            ?? (_workSurfaceContext?.PrimaryWorkTargetEntityId is int primary && primary > 0
+                ? primary
+                : null);
+
+        // #region agent log
+        WorkflowDebugTrace.Step(
+            "Email.TagUI",
+            $"refresh enter service={taggingServicePresent} inboxId={(inboxMessageId?.ToString() ?? "null")} rowInbox={(_selectedEmail?.InboxMessageId?.ToString() ?? "null")} projectCtx={projectFromContext?.ToString() ?? "null"} projectRow={projectFromRow?.ToString() ?? "null"} stripCount={AttachmentStrip.Attachments.Count} taskPrimary={_workSurfaceContext?.PrimaryWorkTargetEntityId?.ToString() ?? "null"}");
+        // #endregion
+
+        if (_attachmentTaggingService is null || inboxMessageId is not int resolvedInboxId)
         {
             // #region agent log
             WorkflowDebugTrace.Step(
                 "Email.TagUI",
-                $"EARLY_EXIT no-inbox-id-or-service service={taggingServicePresent} inboxId={(inboxIdOnRow?.ToString() ?? "null")} — tagging chips stay hidden");
+                $"EARLY_EXIT no-inbox-id-or-service service={taggingServicePresent} inboxId={(inboxMessageId?.ToString() ?? "null")} — tagging chips stay hidden");
             // #endregion
             return;
         }
 
-        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
+        if (_selectedEmail is not null
+            && _selectedEmail.InboxMessageId != resolvedInboxId
+            && !string.IsNullOrWhiteSpace(_selectedEmail.Id))
+        {
+            var patched = _emailList.PatchRowInboxMessageId(_selectedEmail.Id, resolvedInboxId);
+            if (patched is not null)
+                _selectedEmail = patched;
+        }
+
+        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail?.ProjectId ?? 0;
         if (projectId <= 0)
         {
             // #region agent log
@@ -855,7 +872,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         var inboxAttachments = await _attachmentTaggingService
-            .LoadInboxAttachmentsAsync(inboxMessageId)
+            .LoadInboxAttachmentsAsync(resolvedInboxId)
             .ConfigureAwait(true);
 
         if (!IsCurrentSelection(messageId, loadVersion))
@@ -868,7 +885,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         if (_inboxQuery is not null)
         {
-            var inboxMessage = await _inboxQuery.GetByIdAsync(inboxMessageId).ConfigureAwait(true);
+            var inboxMessage = await _inboxQuery.GetByIdAsync(resolvedInboxId).ConfigureAwait(true);
             _inboxAccProjectId = inboxMessage?.InboxAccProjectId;
             _inboxAccFolderId = inboxMessage?.InboxAccFolderId;
         }
@@ -955,7 +972,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         var showAltCount = AttachmentStrip.Attachments.Count(a => a.ShowAlternativeSelector);
         WorkflowDebugTrace.Step(
             "Email.TagUI",
-            $"done inbox={inboxMessageId} project={projectId} sqlAtt={inboxAttachments.Count} taggableSql={inboxAttachments.Count(a => a.IsTaggable)} altCount={alternatives.Count} applied={appliedTaggable} skippedNotTaggable={skippedNotTaggable} unmatchedStrip={unmatchedStrip} appendedAcc={appendedAcc} showTag={showTagCount} showAlt={showAltCount}");
+            $"done inbox={resolvedInboxId} project={projectId} sqlAtt={inboxAttachments.Count} taggableSql={inboxAttachments.Count(a => a.IsTaggable)} altCount={alternatives.Count} applied={appliedTaggable} skippedNotTaggable={skippedNotTaggable} unmatchedStrip={unmatchedStrip} appendedAcc={appendedAcc} showTag={showTagCount} showAlt={showAltCount}");
         // #endregion
     }
 
