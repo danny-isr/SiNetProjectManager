@@ -4,11 +4,13 @@ using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.WorkSurfaces;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
@@ -31,7 +33,9 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private readonly IUserLookupService? _userLookup;
     private readonly ITaskCreateDialogFactory? _taskCreateDialogFactory;
     private readonly IWorkSurfaceLauncher? _workSurfaceLauncher;
+    private readonly ITaskListChangeNotifier? _taskListChangeNotifier;
     private readonly InMemoryCurrentProjectContext _localProjectFilterContext = new();
+    private readonly DispatcherTimer? _crossClientRefreshTimer;
 
     private TaskSummaryDto? _selectedTask;
     private string _statusMessage = "טוען משימות...";
@@ -44,6 +48,9 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private bool _scopeOptionsInitialized;
     private bool _suppressScopeReload;
     private bool _disposed;
+
+    /// <summary>Poll interval so lists pick up tasks created/closed by other users/clients.</summary>
+    private static readonly TimeSpan CrossClientRefreshInterval = TimeSpan.FromSeconds(30);
 
     public TaskWorkbenchViewModel()
         : this(
@@ -72,7 +79,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         IProjectQueryService? projectQuery = null,
         IProjectFilterOptionsService? projectFilterOptions = null,
         ITaskCreateDialogFactory? taskCreateDialogFactory = null,
-        IWorkSurfaceLauncher? workSurfaceLauncher = null)
+        IWorkSurfaceLauncher? workSurfaceLauncher = null,
+        ITaskListChangeNotifier? taskListChangeNotifier = null)
     {
         _taskQuery = taskQuery ?? throw new ArgumentNullException(nameof(taskQuery));
         _taskNavigation = taskNavigation ?? throw new ArgumentNullException(nameof(taskNavigation));
@@ -83,6 +91,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         _userLookup = userLookup;
         _taskCreateDialogFactory = taskCreateDialogFactory;
         _workSurfaceLauncher = workSurfaceLauncher;
+        _taskListChangeNotifier = taskListChangeNotifier;
 
         QuickTasks = [];
         MediumTasks = [];
@@ -109,6 +118,53 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         MoveUpCommand = new AsyncRelayCommand(MoveSelectedUpAsync, CanMoveSelectedUp);
         MoveDownCommand = new AsyncRelayCommand(MoveSelectedDownAsync, CanMoveSelectedDown);
         ClearSelectedProjectCommand = new RelayCommand(_ => ClearSelectedProject(), _ => CanClearSelectedProject && !IsBusy);
+
+        if (_taskListChangeNotifier is not null)
+            _taskListChangeNotifier.TaskListChanged += OnExternalTaskListChanged;
+
+        // Cross-client safety net: another user may create/close tasks without a local notify.
+        if (System.Windows.Application.Current?.Dispatcher is not null)
+        {
+            _crossClientRefreshTimer = new DispatcherTimer(
+                CrossClientRefreshInterval,
+                DispatcherPriority.Background,
+                OnCrossClientRefreshTick,
+                System.Windows.Application.Current.Dispatcher);
+            _crossClientRefreshTimer.Start();
+        }
+    }
+
+    private void OnExternalTaskListChanged()
+    {
+        // #region agent log
+        WorkflowDebugTrace.Step(
+            "Tasks.Workbench",
+            "OnExternalTaskListChanged → LoadAsync (local notify)");
+        // #endregion
+        void Reload()
+        {
+            if (_disposed || IsBusy || !_scopeOptionsInitialized)
+                return;
+            _ = LoadAsync();
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return;
+        if (dispatcher.CheckAccess())
+            Reload();
+        else
+            dispatcher.BeginInvoke(Reload);
+    }
+
+    private void OnCrossClientRefreshTick(object? sender, EventArgs e)
+    {
+        if (_disposed || IsBusy || !_scopeOptionsInitialized)
+            return;
+        // #region agent log
+        WorkflowDebugTrace.Step("Tasks.Workbench", "cross-client poll → LoadAsync");
+        // #endregion
+        _ = LoadAsync();
     }
 
     /// <summary>Local-only project selector for optional list filtering (does not touch app project context).</summary>
@@ -290,6 +346,15 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             return;
 
         _disposed = true;
+        if (_crossClientRefreshTimer is not null)
+        {
+            _crossClientRefreshTimer.Stop();
+            _crossClientRefreshTimer.Tick -= OnCrossClientRefreshTick;
+        }
+
+        if (_taskListChangeNotifier is not null)
+            _taskListChangeNotifier.TaskListChanged -= OnExternalTaskListChanged;
+
         _localProjectFilterContext.CurrentProjectChanged -= OnLocalProjectFilterChanged;
         LocalProjectFilterSelector?.Dispose();
     }

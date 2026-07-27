@@ -1,3 +1,4 @@
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -32,6 +33,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private readonly ITaskCompletionService? _taskCompletionService;
     private readonly IEmailBodyRenderer? _bodyRenderer;
     private readonly IShellContentHost? _shellContentHost;
+    private readonly IEmailInboxQueryService? _inboxQuery;
+    private readonly IAccResolvedDocsUrlLauncher? _accLauncher;
     private EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private EmailListRow? _selectedEmail;
@@ -44,6 +47,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private IReadOnlyList<EmailInlineImage> _selectedInlineImages = [];
     private string _selectedAccStatusDisplay = string.Empty;
     private bool _isBusy;
+    private string? _inboxAccProjectId;
+    private string? _inboxAccFolderId;
     private readonly EmailDetailSelectionCoordinator _selectionCoordinator;
 
     public EmailDetailViewModel(
@@ -63,7 +68,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null,
         IEmailFilingProjectPickerHost? filingProjectPicker = null,
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
-        IShellContentHost? shellContentHost = null)
+        IShellContentHost? shellContentHost = null,
+        IEmailInboxQueryService? inboxQuery = null,
+        IAccResolvedDocsUrlLauncher? accLauncher = null)
     {
         ArgumentNullException.ThrowIfNull(emailList);
         ArgumentNullException.ThrowIfNull(emailGateway);
@@ -83,6 +90,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _filingProjectPicker = filingProjectPicker;
         _alternativeNamePrompt = alternativeNamePrompt;
         _shellContentHost = shellContentHost;
+        _inboxQuery = inboxQuery;
+        _accLauncher = accLauncher;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
         ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync);
@@ -112,7 +121,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             size,
             isTaggable: false,
             TagAttachmentAsync,
-            AlternativeChangedAsync);
+            AlternativeChangedAsync,
+            OpenAttachmentInAccAsync);
 
     public EmailViewerPaneViewModel Viewer { get; }
     public EmailAttachmentStripViewModel AttachmentStrip { get; }
@@ -856,6 +866,16 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (_inboxQuery is not null)
+        {
+            var inboxMessage = await _inboxQuery.GetByIdAsync(inboxMessageId).ConfigureAwait(true);
+            _inboxAccProjectId = inboxMessage?.InboxAccProjectId;
+            _inboxAccFolderId = inboxMessage?.InboxAccFolderId;
+        }
+
+        if (!IsCurrentSelection(messageId, loadVersion))
+            return;
+
         var alternatives = await _attachmentTaggingService
             .LoadAlternativesAsync(projectId)
             .ConfigureAwait(true);
@@ -892,6 +912,14 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             if (!match.IsTaggable)
             {
                 skippedNotTaggable++;
+                item.ApplyInboxTagState(
+                    match.InboxAttachmentId,
+                    match.IsTaggable,
+                    match.ProjectFileId,
+                    match.ProjectFileTitle,
+                    match.ProjectAlternativeId,
+                    alternatives,
+                    match.AccItemId);
                 continue;
             }
 
@@ -901,7 +929,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 match.ProjectFileId,
                 match.ProjectFileTitle,
                 match.ProjectAlternativeId,
-                alternatives);
+                alternatives,
+                match.AccItemId);
             appliedTaggable++;
         }
 
@@ -915,7 +944,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 attachment.ProjectFileId,
                 attachment.ProjectFileTitle,
                 attachment.ProjectAlternativeId,
-                alternatives);
+                alternatives,
+                attachment.AccItemId);
             AttachmentStrip.Attachments.Add(item);
             appendedAcc++;
         }
@@ -927,6 +957,51 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             "Email.TagUI",
             $"done inbox={inboxMessageId} project={projectId} sqlAtt={inboxAttachments.Count} taggableSql={inboxAttachments.Count(a => a.IsTaggable)} altCount={alternatives.Count} applied={appliedTaggable} skippedNotTaggable={skippedNotTaggable} unmatchedStrip={unmatchedStrip} appendedAcc={appendedAcc} showTag={showTagCount} showAlt={showAltCount}");
         // #endregion
+    }
+
+    private async Task OpenAttachmentInAccAsync(EmailDetailAttachmentItem item)
+    {
+        if (!item.CanOpenInAcc)
+        {
+            MessageBox.Show("הקובץ עדיין לא הועלה ל-ACC.", "לא זמין",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_inboxAccProjectId))
+        {
+            MessageBox.Show("מזהה פרויקט ACC לא נמצא למייל זה.", "לא זמין",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (_accLauncher is null)
+        {
+            MessageBox.Show("שירות פתיחת ACC אינו זמין.", "לא זמין",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var url = AccResolvedDocsUrlBuilder.Build(
+                _inboxAccProjectId,
+                _inboxAccFolderId ?? string.Empty,
+                item.AccItemId!);
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"OpenInAcc att={item.InboxAttachmentId} canOpen={item.CanOpenInAcc} projectLen={_inboxAccProjectId.Length}");
+            // #endregion
+            _accLauncher.Open(url);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בפתיחת הקובץ: {ex.Message}", "שגיאה",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        await Task.CompletedTask.ConfigureAwait(true);
     }
 
     private async Task TagAttachmentAsync(EmailDetailAttachmentItem item)

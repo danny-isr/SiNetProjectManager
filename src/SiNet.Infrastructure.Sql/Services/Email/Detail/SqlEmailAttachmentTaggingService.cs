@@ -35,6 +35,7 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
                 a.ProjectFileId,
                 ProjectFileTitle = a.ProjectFile != null ? a.ProjectFile.Title : null,
                 a.ProjectAlternativeId,
+                a.AccItemId,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -47,7 +48,8 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
                 a.ProjectFileId,
                 a.ProjectFileTitle,
                 a.ProjectAlternativeId,
-                IsTaggableAttachment(a.AttachmentIndex, a.FileName)))
+                IsTaggableAttachment(a.AttachmentIndex, a.FileName),
+                a.AccItemId))
             .ToList();
     }
 

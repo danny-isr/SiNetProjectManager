@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using SiNet.Application.Diagnostics;
 using SiNet.Application.Email.Detail;
 
@@ -10,6 +11,19 @@ namespace SiNet.App.Wpf.Surfaces.Email.Detail;
 public partial class EmailAttachmentStripView : UserControl
 {
     public EmailAttachmentStripView() => InitializeComponent();
+
+    private void AttachmentLabel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount < 2)
+            return;
+        if (sender is not FrameworkElement { DataContext: EmailDetailAttachmentItem item })
+            return;
+        if (!item.OpenInAccCommand.CanExecute(null))
+            return;
+
+        item.OpenInAccCommand.Execute(null);
+        e.Handled = true;
+    }
 
     private async void AlternativeSelectionChanged(object sender, SelectionChangedEventArgs e)
     {

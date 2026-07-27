@@ -45,7 +45,11 @@ public sealed record EmailInboxAttachmentTagState(
     int? ProjectFileId,
     string? ProjectFileTitle,
     int? ProjectAlternativeId,
-    bool IsTaggable);
+    bool IsTaggable,
+    string? AccItemId = null)
+{
+    public bool CanOpenInAcc => !string.IsNullOrWhiteSpace(AccItemId);
+}
 
 public sealed record EmailProjectAlternativeOption(
     int Id,

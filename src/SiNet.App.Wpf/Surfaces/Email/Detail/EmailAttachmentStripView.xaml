@@ -52,7 +52,10 @@
                                        FontSize="{DynamicResource SiTextSmallFontSize}"
                                        Foreground="{DynamicResource SiForegroundBrush}"
                                        VerticalAlignment="Center"
-                                       Margin="0,0,6,0" />
+                                       Margin="0,0,6,0"
+                                       Cursor="Hand"
+                                       ToolTip="דאבל־קליק לפתיחה ב-ACC"
+                                       MouseLeftButtonDown="AttachmentLabel_MouseLeftButtonDown" />
                             <Button Content="{Binding TagButtonText}"
                                     Command="{Binding TagCommand}"
                                     MinWidth="80"

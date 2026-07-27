@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Collections.ObjectModel;
+using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Inbox;
@@ -140,7 +141,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailAttachmentProjectFilePickerHost? attachmentProjectFilePicker = null,
         IEmailFilingProjectPickerHost? filingProjectPicker = null,
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
-        IShellContentHost? shellContentHost = null)
+        IShellContentHost? shellContentHost = null,
+        IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -186,7 +188,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             attachmentProjectFilePicker,
             filingProjectPicker,
             alternativeNamePrompt,
-            shellContentHost);
+            shellContentHost,
+            emailInboxQuery,
+            accResolvedDocsUrlLauncher);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null
             ? new EmailExternalDownloadHandler(

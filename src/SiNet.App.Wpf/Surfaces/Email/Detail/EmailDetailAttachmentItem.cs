@@ -17,6 +17,7 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
     private int? _selectedAlternativeId;
     private string? _taggedProjectFileTitle;
     private int? _previousAlternativeId;
+    private string? _accItemId;
 
     public EmailDetailAttachmentItem(
         int inboxAttachmentId,
@@ -25,7 +26,8 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
         string size,
         bool isTaggable,
         Func<EmailDetailAttachmentItem, Task> tagAsync,
-        Func<EmailDetailAttachmentItem, Task> alternativeChangedAsync)
+        Func<EmailDetailAttachmentItem, Task> alternativeChangedAsync,
+        Func<EmailDetailAttachmentItem, Task>? openInAccAsync = null)
     {
         _inboxAttachmentId = inboxAttachmentId;
         FileName = fileName;
@@ -39,6 +41,9 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
         AlternativeChangedCommand = new AsyncRelayCommand(
             () => alternativeChangedAsync(this),
             () => IsTaggable && CanEditTarget && ShowAlternativeSelector);
+        OpenInAccCommand = new AsyncRelayCommand(
+            () => openInAccAsync is null ? Task.CompletedTask : openInAccAsync(this),
+            () => CanOpenInAcc && openInAccAsync is not null);
     }
 
     public int InboxAttachmentId => _inboxAttachmentId;
@@ -111,6 +116,22 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
 
     public ICommand TagCommand { get; }
     public ICommand AlternativeChangedCommand { get; }
+    public ICommand OpenInAccCommand { get; }
+
+    public string? AccItemId
+    {
+        get => _accItemId;
+        private set
+        {
+            if (SetField(ref _accItemId, value))
+            {
+                OnPropertyChanged(nameof(CanOpenInAcc));
+                (OpenInAccCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool CanOpenInAcc => !string.IsNullOrWhiteSpace(AccItemId);
 
     public void ApplyTag(int? projectFileId, string? projectFileTitle, int? projectAlternativeId)
     {
@@ -150,11 +171,13 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
         int? projectFileId,
         string? projectFileTitle,
         int? projectAlternativeId,
-        IReadOnlyList<EmailProjectAlternativeOption> alternatives)
+        IReadOnlyList<EmailProjectAlternativeOption> alternatives,
+        string? accItemId = null)
     {
         _inboxAttachmentId = inboxAttachmentId;
         OnPropertyChanged(nameof(InboxAttachmentId));
         IsTaggable = isTaggable;
+        AccItemId = accItemId;
         SetAlternatives(alternatives);
         ApplyTag(
             projectFileId,

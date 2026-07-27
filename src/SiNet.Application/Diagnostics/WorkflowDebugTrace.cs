@@ -95,7 +95,8 @@ public static class WorkflowDebugTrace
         if (area.StartsWith("ProjectWork.LoadTree", StringComparison.Ordinal))
             return "H-B";
 
-        if (area.StartsWith("Tasks.FloatWindow", StringComparison.Ordinal))
+        if (area.StartsWith("Tasks.FloatWindow", StringComparison.Ordinal)
+            || area.StartsWith("Tasks.Workbench", StringComparison.Ordinal))
             return "H-C";
 
         if (area.StartsWith("ProjectWork.Results", StringComparison.Ordinal))
