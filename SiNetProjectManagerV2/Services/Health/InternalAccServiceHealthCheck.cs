@@ -42,7 +42,7 @@ public sealed class InternalAccServiceHealthCheck : IServiceHealthCheck
         // Server maps the route as `<ApiVersionPrefix>/acc/health` (i.e. /v1/acc/health).
         // Using `/acc/health` returns 404 even when the service is up, which previously
         // pinned the indicator to Offline/Red after a recovery.
-        var url = baseUrl.TrimEnd('/') + SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiVersionPrefix + "/acc/health";
+        var url = baseUrl.TrimEnd('/') + SiOffice.AccService.Contracts.AccServiceContracts.ApiVersionPrefix + "/acc/health";
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);

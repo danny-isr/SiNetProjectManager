@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using SiOffice.AccService.Contracts;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 
@@ -38,7 +39,7 @@ internal sealed class RemoteAccProjectTreeSearchService(
 
         var requestUri = BuildRequestUri(baseUrl, projectId, fileName, folderId);
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -62,7 +63,7 @@ internal sealed class RemoteAccProjectTreeSearchService(
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
         var requestUri =
-            $"{trimmedBaseUrl}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/folders/search?fileName={Uri.EscapeDataString(fileName.Trim())}";
+            $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/folders/search?fileName={Uri.EscapeDataString(fileName.Trim())}";
         if (!string.IsNullOrWhiteSpace(folderId))
         {
             requestUri += $"&folderId={Uri.EscapeDataString(folderId.Trim())}";

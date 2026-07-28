@@ -1,4 +1,5 @@
 using System.Net;
+using SiOffice.AccService.Contracts;
 using System.Net.Http.Json;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
@@ -38,7 +39,7 @@ internal sealed class RemoteAccFolderBrowserService(
 
         var requestUri = BuildRequestUri(baseUrl, projectId, folderId);
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -72,7 +73,7 @@ internal sealed class RemoteAccFolderBrowserService(
     private static string BuildRequestUri(string baseUrl, string projectId, string? folderId)
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
-        var requestUri = $"{trimmedBaseUrl}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/folders/browse";
+        var requestUri = $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/folders/browse";
         if (!string.IsNullOrWhiteSpace(folderId))
         {
             requestUri += $"?folderId={Uri.EscapeDataString(folderId.Trim())}";

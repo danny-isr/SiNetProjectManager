@@ -1,4 +1,5 @@
 using SiNet.Application.Abstractions.Autodesk;
+using SiOffice.AccService.Contracts;
 
 namespace SiNet.Infrastructure.Autodesk;
 
@@ -70,6 +71,6 @@ public sealed class HttpAccServiceHealthProbe(
             return null;
         }
 
-        return _modeProvider.BaseUrl + AccServiceContractConstants.ApiVersionPrefix + relativePath;
+        return _modeProvider.BaseUrl + AccServiceContracts.ApiVersionPrefix + relativePath;
     }
 }

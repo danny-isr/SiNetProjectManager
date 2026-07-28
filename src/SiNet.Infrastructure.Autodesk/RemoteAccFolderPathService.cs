@@ -1,4 +1,5 @@
 using System.Net;
+using SiOffice.AccService.Contracts;
 using System.Net.Http.Json;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
@@ -70,7 +71,7 @@ internal sealed class RemoteAccFolderPathService(
                     .Select(static segment => segment.Trim())
                     .ToArray())),
         };
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!ensurePath && response.StatusCode == HttpStatusCode.NotFound)
@@ -95,7 +96,7 @@ internal sealed class RemoteAccFolderPathService(
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
         var action = ensurePath ? "ensure-path" : "resolve-path";
-        return $"{trimmedBaseUrl}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/folders/{action}";
+        return $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/folders/{action}";
     }
 
     private sealed record RemoteAccFolderPathRequest(

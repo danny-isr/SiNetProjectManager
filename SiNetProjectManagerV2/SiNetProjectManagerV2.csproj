@@ -68,6 +68,7 @@
          the legacy GoogleService and the new ports, so it binds the LegacyBridge seam here. -->
     <ProjectReference Include="..\src\SiNet.Domain\SiNet.Domain.csproj" />
     <ProjectReference Include="..\src\SiNet.Application\SiNet.Application.csproj" />
+    <ProjectReference Include="..\src\SiOffice.AccService.Contracts\SiOffice.AccService.Contracts.csproj" />
     <ProjectReference Include="..\src\SiNet.LegacyBridge\SiNet.LegacyBridge.csproj" />
     <!-- Composition adoption (Phase 1): direct reference so the host can delegate the Workflow
          read slice to the modular AddSiNetWorkflowReads(). Already reached transitively via

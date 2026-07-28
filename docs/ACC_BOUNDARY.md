@@ -279,8 +279,9 @@ Track **B** removes AccService's runtime/build dependence on `SiNetSQL` in slice
 Authoritative plan and status: [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md).
 
 - **B1 (done):** AccService vault + central logging use `SiNet.Infrastructure.Secrets` /
-  `SiNet.Infrastructure.Logging`. `ProjectReference` to SiNetSQL remains for bootstrap /
-  provisioning / EF. Temporary `CredentialProvider.GetSecret` bridge stays until B4.
+  `SiNet.Infrastructure.Logging`. Temporary `CredentialProvider.GetSecret` bridge stays until B4.
+- **B2 (done):** Wire contracts live in `src/SiOffice.AccService.Contracts`.
+  `ProjectReference` to SiNetSQL remains for bootstrap / provisioning / EF.
 
 ## 9. Immediate Next Step
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SiOffice.AccService.Contracts;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -94,7 +95,7 @@ internal sealed class RemoteAccFileUploadService(
         {
             Content = requestContent,
         };
-        message.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        message.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -144,7 +145,7 @@ internal sealed class RemoteAccFileUploadService(
     private static string BuildRequestUri(string baseUrl, string projectId)
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
-        return $"{trimmedBaseUrl}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/files/upload";
+        return $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/files/upload";
     }
 
     private sealed record RemoteAccFileUploadPayload(

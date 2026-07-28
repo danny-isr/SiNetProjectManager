@@ -251,26 +251,13 @@ Rules:
 
 ## 3. Contract Note
 
-The privileged-service contract is still the legacy/frozen `AccServiceContracts` surface.
-For now, the clean Autodesk module mirrors the `/v1` prefix and the API-key header internally in
-`AccServiceContractConstants`.
+The privileged-service wire contract lives in `src/SiOffice.AccService.Contracts`
+(`SiOffice.AccService.Contracts`) — extracted in AccService decoupling **B2**.
+`SiNet.Infrastructure.Autodesk`, AccService, and V2 remotes reference that assembly directly.
+The former `AccServiceContractConstants` mirror is deleted.
 
-Why this is mirrored instead of referenced directly:
-
-- `SiNet.Infrastructure.Autodesk` is `net10.0`
-- the canonical contract currently lives in a Windows-targeted graph
-- directly referencing that graph from the clean cross-platform module breaks restore/build
-
-Until the contract is extracted to a neutral assembly, keep the mirrored constant aligned with the
-legacy source of truth.
-
-Decision for the current foundation round:
-
-- **Do not** perform a thin contract extraction yet just to satisfy planning symmetry.
-- The current mirrored constants are acceptable temporary glue because they are small, isolated, and
-  already covered by tests/docs.
-- Revisit extraction only when a later write-heavy or broader service-consumer slice needs more than
-  the current API-version/header constants.
+HTTP JSON shapes / headers / `/v1` prefix are unchanged; bump the API version prefix only on
+breaking wire changes. See [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md).
 
 ## 4. What Is Still Deferred
 

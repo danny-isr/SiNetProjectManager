@@ -1,9 +1,10 @@
 # AccService ↔ SiNetSQL decoupling
 
-> Status: **B1 implemented (vault + central logging)**  
+> Status: **B2 implemented (contracts extraction)**  
 > Date: 2026-07-28  
 > Branch: `SiWorkNet10`  
-> Related: [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md), [`LOGGING.md`](./LOGGING.md), [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md)
+> Related: [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md), [`LOGGING.md`](./LOGGING.md),
+> [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md), [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md)
 
 ## Goal
 
@@ -11,39 +12,49 @@
 concerns, then for contracts/SQL/orchestration, until the `ProjectReference` can be removed
 and AccService no longer pulls GoogleConnector/WPF packages transitively.
 
-## Locked decisions (B1)
-
-1. **Scope:** vault + central logging only. `ProjectReference` to SiNetSQL **remains**.
-2. **Vault:** AccService uses `SiNet.Infrastructure.Secrets.CredentialVault` +
-   `SiNet.Application.Configuration.SecretCatalog` (same `SiNet/*` target strings).
-3. **Logging:** `CentralLogging*` lives in `SiNet.Infrastructure.Logging` (canonical).
-4. **Temporary bridge:** `CredentialProvider.GetSecret` is still wired to the clean vault so
-   SiNetSQL `AccBootstrap` / provisioning in-process keep working.
-5. **Out of B1:** contracts/DTOs move, direct Infrastructure.Sql, AccBootstrap extraction,
-   ProjectReference removal, SyncEngine Shared `CentralLogging` consolidation.
-
 ## Slice roadmap
 
-| Slice | Content |
-| --- | --- |
-| **B1** (this) | Vault + CentralLogging on clean modules; ProjectReference stays |
-| **B2** | Move `AccServiceContracts` / DTOs out of SiNetSQL |
-| **B3** | AccService → `Infrastructure.Sql` for DbContext / settings reads |
-| **B4** | Extract AccBootstrap + provisioning |
-| **B5** | Drop SiNetSQL `ProjectReference`; shrink AccService dependency graph |
+| Slice | Content | Status |
+| --- | --- | --- |
+| **B1** | Vault + CentralLogging on clean modules; ProjectReference stays | **Done** |
+| **B2** | Move `AccServiceContracts` / wire DTOs out of SiNetSQL | **Done** |
+| **B3** | AccService → `Infrastructure.Sql` for DbContext / settings reads | Planned |
+| **B4** | Extract AccBootstrap + provisioning | Planned |
+| **B5** | Drop SiNetSQL `ProjectReference`; shrink AccService dependency graph | Planned |
 
-## B1 success criteria
+---
 
-1. AccService source does not call `CredentialVaultService`, `SecretKeys`, or
-   `SiNetSQL.Services.Logging.*`.
-2. `--import-secret`, TLS password, API key, and DB connection use the clean vault.
-3. Central logging boots via `SiNet.Infrastructure.Logging`.
-4. Provisioning / inbox ensure still work via SiNetSQL + `CredentialProvider` bridge.
-5. Build/tests green; **no** DB schema changes.
+## B1 (done)
 
-## Temporary dual ownership
+Vault via `CredentialVault` + `SecretCatalog`; logging via `SiNet.Infrastructure.Logging`.
+Temporary `CredentialProvider.GetSecret` bridge remains until B4.
+SyncEngine Shared `CentralLogging` copy deferred (B1b).
+
+---
+
+## B2 (done) — contracts extraction
+
+### Locked decisions
+
+1. **Project:** `src/SiOffice.AccService.Contracts` (`net10.0`), namespace
+   `SiOffice.AccService.Contracts`.
+2. **Moved as-is:** API constants + wire DTOs (headers/JSON unchanged; no `/v1` bump).
+3. **Consumers:** AccService, V2 remotes/health/secret-setup, Infrastructure.Autodesk.
+4. **Deleted:** `AccServiceContractConstants` mirror.
+5. **SiNetSQL:** Contracts file removed; AccService still references SiNetSQL for bootstrap/EF.
+6. **Out of B2:** AccBootstrap services (B4); unifying Autodesk private `Remote*` DTOs;
+   dropping AccService→SiNetSQL `ProjectReference` (B5).
+
+### Success criteria
+
+1. No AccService / V2 / Autodesk source depends on `SiNetSQL.Services.AccBootstrap.Contracts`.
+2. `AccServiceContractConstants` gone; Autodesk uses `SiOffice.AccService.Contracts`.
+3. AccService still references SiNetSQL for bootstrap/provisioning/EF only.
+4. Build/tests green; **no** DB schema changes; HTTP wire unchanged.
+
+---
+
+## Temporary dual ownership (logging)
 
 - **Canonical:** `src/SiNet.Infrastructure.Logging` (`CentralLogging*`).
-- **SiNetSQL:** no longer owns the implementation; V2 host uses the clean module.
-- **MasterPlan.SyncEngine `Shared/Logging/CentralLogging.cs`:** still a separate copy until
-  a follow-up slice (B1b / B2). Marked deferred — do not treat as canonical.
+- **MasterPlan.SyncEngine `Shared/Logging`:** deferred until B1b — not canonical.

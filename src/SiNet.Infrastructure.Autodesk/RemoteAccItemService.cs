@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using SiOffice.AccService.Contracts;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 
@@ -94,9 +95,9 @@ internal sealed class RemoteAccItemService(
             throw new InvalidOperationException("ACC service API key is not configured in the native secret vault.");
         }
 
-        var requestUri = $"{baseUrl.TrimEnd('/')}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/items/{Uri.EscapeDataString(itemId.Trim())}/{action}";
+        var requestUri = $"{baseUrl.TrimEnd('/')}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId.Trim())}/items/{Uri.EscapeDataString(itemId.Trim())}/{action}";
         using var request = new HttpRequestMessage(method, requestUri);
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         return await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }

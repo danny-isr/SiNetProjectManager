@@ -1,4 +1,5 @@
 using System.Net;
+using SiOffice.AccService.Contracts;
 using System.Net.Http.Json;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
@@ -41,7 +42,7 @@ internal sealed class RemoteAccDocumentService(
 
         var requestUri = BuildRequestUri(baseUrl, projectId, folderId, fileName);
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -70,6 +71,6 @@ internal sealed class RemoteAccDocumentService(
     private static string BuildRequestUri(string baseUrl, string projectId, string folderId, string fileName)
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
-        return $"{trimmedBaseUrl}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/folders/{Uri.EscapeDataString(folderId)}/items/resolve?fileName={Uri.EscapeDataString(fileName)}";
+        return $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/folders/{Uri.EscapeDataString(folderId)}/items/resolve?fileName={Uri.EscapeDataString(fileName)}";
     }
 }

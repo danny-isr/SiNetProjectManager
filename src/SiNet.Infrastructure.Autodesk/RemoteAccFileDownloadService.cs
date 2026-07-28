@@ -1,4 +1,5 @@
 using System.Net;
+using SiOffice.AccService.Contracts;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 
@@ -38,7 +39,7 @@ internal sealed class RemoteAccFileDownloadService(
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
             BuildRequestUri(baseUrl, projectId, itemId));
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(
             request,
@@ -91,7 +92,7 @@ internal sealed class RemoteAccFileDownloadService(
     private static string BuildRequestUri(string baseUrl, string projectId, string itemId)
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
-        return $"{trimmedBaseUrl}{AccServiceContractConstants.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/items/{Uri.EscapeDataString(itemId)}/download";
+        return $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/items/{Uri.EscapeDataString(itemId)}/download";
     }
 
     private static string ResolveFileName(HttpResponseMessage response, string itemId)

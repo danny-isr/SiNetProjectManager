@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using Serilog;
 using SiNetSQL.Services.AccBootstrap;
-using SiNetSQL.Services.AccBootstrap.Contracts;
+using SiOffice.AccService.Contracts;
 
 namespace SiNetProjectManagerV2.Services;
 

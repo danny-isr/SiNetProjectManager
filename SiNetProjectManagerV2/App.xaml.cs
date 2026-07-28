@@ -788,7 +788,7 @@ namespace SiNetProjectManagerV2
                     if (!string.IsNullOrWhiteSpace(apiKey))
                     {
                         client.DefaultRequestHeaders.Add(
-                            SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiKeyHeader,
+                            SiOffice.AccService.Contracts.AccServiceContracts.ApiKeyHeader,
                             apiKey);
                     }
                     else

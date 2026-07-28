@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using SiOffice.AccService.Contracts;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 
@@ -32,7 +33,7 @@ internal sealed class RemoteAccInboxBootstrapService(
         {
             Content = JsonContent.Create(new EmptyAccInboxBootstrapRequest()),
         };
-        request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+        request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -53,7 +54,7 @@ internal sealed class RemoteAccInboxBootstrapService(
     }
 
     private static string BuildRequestUri(string baseUrl) =>
-        $"{baseUrl.TrimEnd('/')}{AccServiceContractConstants.ApiVersionPrefix}/acc/inbox/ensure";
+        $"{baseUrl.TrimEnd('/')}{AccServiceContracts.ApiVersionPrefix}/acc/inbox/ensure";
 
     private sealed record EmptyAccInboxBootstrapRequest;
 }

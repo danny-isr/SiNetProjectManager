@@ -1,4 +1,5 @@
 using System.Net;
+using SiOffice.AccService.Contracts;
 using System.Net.Http;
 using System.IO;
 using System.Linq;
@@ -109,7 +110,7 @@ public sealed class AccControlPlaneTests
         var sut = new HttpAccServiceDiagnosticsProbe(
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -282,7 +283,7 @@ public sealed class AccControlPlaneTests
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -322,7 +323,7 @@ public sealed class AccControlPlaneTests
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -450,7 +451,7 @@ public sealed class AccControlPlaneTests
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -553,7 +554,7 @@ public sealed class AccControlPlaneTests
             {
                 requestedUri = request.RequestUri;
                 requestedMethod = request.Method;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -638,7 +639,7 @@ public sealed class AccControlPlaneTests
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -792,7 +793,7 @@ public sealed class AccControlPlaneTests
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -873,7 +874,8 @@ public sealed class AccControlPlaneTests
         Assert.Contains("Authoritative server-only map", doc, StringComparison.Ordinal);
         Assert.Contains("ensure project", doc, StringComparison.Ordinal);
         Assert.Contains("upload file", doc, StringComparison.Ordinal);
-        Assert.Contains("perform a thin contract extraction yet", doc, StringComparison.Ordinal);
+        Assert.Contains("SiOffice.AccService.Contracts", doc, StringComparison.Ordinal);
+        Assert.Contains("AccServiceContractConstants", doc, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1045,3 +1047,4 @@ public sealed class AccControlPlaneTests
     private static string AppWpfRoot =>
         Path.Combine(Boundary.RepoPaths.RepoRoot, "src", "SiNet.App.Wpf");
 }
+

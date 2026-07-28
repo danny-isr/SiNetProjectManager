@@ -1,6 +1,6 @@
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Secrets;
-using SiNetSQL.Services.AccBootstrap.Contracts;
+using SiOffice.AccService.Contracts;
 
 namespace SiOffice.AccService.Auth;
 

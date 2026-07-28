@@ -1,4 +1,5 @@
 using System.Net;
+using SiOffice.AccService.Contracts;
 using System.Net.Http;
 using System.Text;
 using System.IO;
@@ -135,7 +136,7 @@ public sealed class AccFileTransferTests : IDisposable
             new HttpClient(new StubHttpMessageHandler(async (request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
                 body = await request.Content!.ReadAsStringAsync();
@@ -245,7 +246,7 @@ public sealed class AccFileTransferTests : IDisposable
             new HttpClient(new StubHttpMessageHandler(async (request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
                 body = await request.Content!.ReadAsStringAsync();
@@ -293,7 +294,7 @@ public sealed class AccFileTransferTests : IDisposable
             new HttpClient(new StubHttpMessageHandler((request, _) =>
             {
                 requestedUri = request.RequestUri;
-                apiKeyHeader = request.Headers.TryGetValues(AccServiceContractConstants.ApiKeyHeader, out var values)
+                apiKeyHeader = request.Headers.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values)
                     ? values.Single()
                     : null;
 
@@ -458,3 +459,4 @@ public sealed class AccFileTransferTests : IDisposable
             handler(request, cancellationToken);
     }
 }
+

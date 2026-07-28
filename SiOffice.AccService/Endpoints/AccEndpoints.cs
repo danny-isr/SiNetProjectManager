@@ -6,7 +6,7 @@ using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
-using SiNetSQL.Services.AccBootstrap.Contracts;
+using SiOffice.AccService.Contracts;
 using SiOffice.AccService;
 using System.Text.Json;
 

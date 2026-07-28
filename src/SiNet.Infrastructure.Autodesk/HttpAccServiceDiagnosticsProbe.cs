@@ -1,4 +1,5 @@
 using System.Net.Http;
+using SiOffice.AccService.Contracts;
 using System.Text.Json;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
@@ -57,7 +58,7 @@ public sealed class HttpAccServiceDiagnosticsProbe(
             cts.CancelAfter(_options.DiagnosticsTimeout);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
-            request.Headers.Add(AccServiceContractConstants.ApiKeyHeader, apiKey);
+            request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
             using var response = await _httpClient.SendAsync(request, cts.Token).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
@@ -145,7 +146,7 @@ public sealed class HttpAccServiceDiagnosticsProbe(
             return null;
         }
 
-        return _modeProvider.BaseUrl + AccServiceContractConstants.ApiVersionPrefix + relativePath;
+        return _modeProvider.BaseUrl + AccServiceContracts.ApiVersionPrefix + relativePath;
     }
 
     private static bool GetBool(JsonElement root, string propertyName)

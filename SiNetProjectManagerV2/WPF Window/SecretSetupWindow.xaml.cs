@@ -734,7 +734,7 @@ public partial class SecretSetupWindow : Window
             var diagUrl = baseUrl.TrimEnd('/') + "/v1/acc/diag";
             using var request = new HttpRequestMessage(HttpMethod.Get, diagUrl);
             request.Headers.Add(
-                SiNetSQL.Services.AccBootstrap.Contracts.AccServiceContracts.ApiKeyHeader,
+                SiOffice.AccService.Contracts.AccServiceContracts.ApiKeyHeader,
                 localKey);
             var response = await httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
