@@ -13,6 +13,7 @@ using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
+using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf;
@@ -47,6 +48,9 @@ public static class NewSystemWpfServiceCollectionExtensions
 
         // Transient per email surface — WebView2 must not be reparented across hosts.
         services.AddTransient<IEmailBodyRenderer, WebView2EmailBodyRenderer>();
+
+        // Jumbo/WeTransfer download capture → ACC (N2). Singleton: one active download window.
+        services.AddSingleton<IEmailExternalDownloadBrowserHost, WpfEmailExternalDownloadBrowserHost>();
 
         return services;
     }

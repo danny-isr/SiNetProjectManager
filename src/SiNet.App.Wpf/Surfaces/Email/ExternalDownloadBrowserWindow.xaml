@@ -1,0 +1,57 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Email.ExternalDownloadBrowserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="הורדה חיצונית"
+        Width="1100"
+        Height="750"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="LeftToRight">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#F5F5F5" Padding="8,6"
+                BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+            <TextBlock x:Name="UrlText"
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       Foreground="#555"
+                       TextTrimming="CharacterEllipsis"/>
+        </Border>
+
+        <wv2:WebView2 x:Name="BrowserWebView" Grid.Row="1"/>
+
+        <Border x:Name="ProgressPanel"
+                Grid.Row="2"
+                Background="#E3F2FD"
+                BorderBrush="#90CAF9"
+                BorderThickness="0,1,0,0"
+                Padding="12,10"
+                Visibility="Collapsed"
+                FlowDirection="RightToLeft">
+            <StackPanel>
+                <TextBlock x:Name="ProgressStageText"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="#0D47A1"
+                           TextWrapping="Wrap"/>
+                <TextBlock x:Name="ProgressDetailText"
+                           Margin="0,4,0,0"
+                           FontSize="12"
+                           Foreground="#1565C0"
+                           TextWrapping="Wrap"/>
+                <ProgressBar x:Name="ProgressBar"
+                             Height="8"
+                             Margin="0,8,0,0"
+                             Minimum="0"
+                             Maximum="100"
+                             IsIndeterminate="True"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,8 +1,8 @@
 # Native Email → ACC Inbox ingest (standalone)
 
-> Status: **N1 implemented** · **N2 (Move + Jumbo) — pending approval**  
-> Date: 2026-07-28 (N1) / 2026-07-28 (N2 draft)  
-> Approved by: operator (N1 chat 2026-07-28)
+> Status: **N1 implemented** · **N2 (Move + Jumbo) — implemented (awaiting operator smoke)**  
+> Date: 2026-07-28 (N1) / 2026-07-28 (N2)  
+> Approved by: operator (N1 + N2 chat 2026-07-28)
 
 
 > Related: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
@@ -244,7 +244,7 @@ Jumbo:
 
 ### Approval notes (N2)
 
-- Approved by: *(pending)*
-- Date:
-- Scope tweaks:
+- Approved by: operator
+- Date: 2026-07-28
+- Scope tweaks: none
 

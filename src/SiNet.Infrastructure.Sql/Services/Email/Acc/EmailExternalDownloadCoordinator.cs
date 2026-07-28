@@ -4,8 +4,9 @@ using SiNet.Application.Email.Acc;
 namespace SiNet.Infrastructure.Sql.Services.Email.Acc;
 
 /// <summary>
-/// External-download ACC orchestration. <see cref="IEmailExternalDownloadExecutor"/> is host-supplied
-/// (V2 legacy bridge); when absent (standalone New System), uploads return BackendNotAvailable.
+/// External-download ACC orchestration. <see cref="IEmailExternalDownloadExecutor"/> is supplied by
+/// DI (<c>NativeEmailExternalDownloadExecutor</c> in standalone; V2 may override with Legacy).
+/// When absent, uploads return BackendNotAvailable.
 /// </summary>
 internal sealed class EmailExternalDownloadCoordinator(
     EmailAccInboxQueryService inboxQuery,

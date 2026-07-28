@@ -30,7 +30,8 @@ Self-contained Email Detail component: viewer, attachments, action bar, workflow
 - Source: `IEmailGateway.GetDetailsAsync(messageId)` → Gmail API `Messages.Get(format=full)` for **one** message id (not a thread).
 - Display: `IEmailBodyRenderer` / `SiNet.App.Wpf.Surfaces.Email.WebView2EmailBodyRenderer` → `NavigateToString(HtmlBody)`. Not a Gmail popout URL.
 - DI: **Transient** per email surface via `AddSiNetNewSystemWpf` (standalone) and V2 `App.xaml.cs` (same App.Wpf type) so WebView2 is not reparented across hosts.
-- External download chips: detected from plain text **and** HTML body; open uses the V2 browser host when available, otherwise the system browser (Jumbo→ACC upload still requires the full browser-host pipe).
+- External download chips: detected from plain text **and** HTML body.
+- Jumbo→ACC (N2): standalone registers `WpfEmailExternalDownloadBrowserHost` + `NativeEmailExternalDownloadExecutor`. V2 may override the executor with Legacy. System-browser open remains a fallback only when the browser host is missing.
 - Layout: `EmailViewerPaneView` gives `BodyHost` a star-sized Grid row so WebView2 gets real height (do not nest it in a StackPanel).
 - Embedded images (`<img src="cid:...">`): `GmailEmailGateway` fetches the referenced inline attachment bytes (`Messages.Attachments.Get`) into `EmailMessageDetails.InlineImages`. `WebView2EmailBodyRenderer` rewrites `cid:` to `https://sinet-mail-images.local/{content-id}` and serves the bytes via `WebResourceRequested`. Bytes are **not** inlined as Base64 data-URIs (crashes WebView2 with large images / hits the `NavigateToString` size limit). External `http(s)` images load normally.
 

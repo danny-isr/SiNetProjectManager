@@ -275,7 +275,7 @@ public sealed class EmailAccPipelineTests
     [Fact]
     public void EmailExternalDownloadCoordinator_resolves_without_host_download_executor()
     {
-        // Standalone New System does not register IEmailExternalDownloadExecutor (V2-only bridge).
+        // Coordinator still accepts optional executor (null → BackendNotAvailable).
         var source = ReadRepoFile(
             "src/SiNet.Infrastructure.Sql/Services/Email/Acc/EmailExternalDownloadCoordinator.cs");
         Assert.Contains(
@@ -290,6 +290,24 @@ public sealed class EmailAccPipelineTests
         var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
         Assert.Contains("IEmailAccIngestionExecutor", extensions, StringComparison.Ordinal);
         Assert.Contains("NativeEmailAccIngestionExecutor", extensions, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddSiNetEmailAccSql_registers_native_move_and_external_download_executors()
+    {
+        var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
+        Assert.Contains("IEmailMoveToProjectExecutor", extensions, StringComparison.Ordinal);
+        Assert.Contains("NativeEmailMoveToProjectExecutor", extensions, StringComparison.Ordinal);
+        Assert.Contains("IEmailExternalDownloadExecutor", extensions, StringComparison.Ordinal);
+        Assert.Contains("NativeEmailExternalDownloadExecutor", extensions, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddSiNetNewSystemWpf_registers_external_download_browser_host()
+    {
+        var wpfDi = ReadRepoFile("src/SiNet.App.Wpf/NewSystemWpfServiceCollectionExtensions.cs");
+        Assert.Contains("IEmailExternalDownloadBrowserHost", wpfDi, StringComparison.Ordinal);
+        Assert.Contains("WpfEmailExternalDownloadBrowserHost", wpfDi, StringComparison.Ordinal);
     }
 
     [Fact]
