@@ -1,4 +1,5 @@
 using SiNet.Application.Configuration;
+using SiNet.Infrastructure.Autodesk;
 using SiNetProjectManagerV2.Services;
 
 namespace SiNetProjectManagerV2.Services.Composition;
@@ -8,6 +9,9 @@ internal sealed class LegacySecretSetupHostConfiguration : ISecretSetupHostConfi
     public string? ActiveDirectoryDomainName => AppConfiguration.AdDomainName;
 
     public string? AccServiceBaseUrl => AppConfiguration.Configuration["AccService:BaseUrl"];
+
+    public IReadOnlyList<string> AccServicePinnedCertificateThumbprints =>
+        AccServiceControlPlaneConfiguration.ReadPinnedCertificateThumbprints(AppConfiguration.Configuration);
 }
 
 internal static class LegacyGoogleClientSecretsFallback

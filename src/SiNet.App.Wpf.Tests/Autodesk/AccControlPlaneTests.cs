@@ -916,6 +916,8 @@ public sealed class AccControlPlaneTests
         public string? ActiveDirectoryDomainName => null;
 
         public string? AccServiceBaseUrl { get; } = baseUrl;
+
+        public IReadOnlyList<string> AccServicePinnedCertificateThumbprints => [];
     }
 
     private sealed class InMemorySecretVaultStore : ISecretVaultStore

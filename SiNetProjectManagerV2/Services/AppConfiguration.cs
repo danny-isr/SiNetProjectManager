@@ -24,6 +24,8 @@ namespace SiNetProjectManagerV2.Services;
 public static class AppConfiguration
 {
     private const string AccServiceBaseUrlConfigurationKey = "AccService:BaseUrl";
+    private const string AccServicePinnedCertificateThumbprintsConfigurationKey =
+        "AccService:PinnedCertificateThumbprints";
 
     private static IConfiguration? _configuration;
     private static readonly object _lock = new();
@@ -93,6 +95,14 @@ public static class AppConfiguration
             if (accServiceBaseUrl is not null)
             {
                 values[AccServiceBaseUrlConfigurationKey] = accServiceBaseUrl.Trim();
+            }
+
+            var pinnedThumbprints = ReadSystemSetting(
+                connectionString,
+                SystemSettingKeys.AccServicePinnedCertificateThumbprints);
+            if (pinnedThumbprints is not null)
+            {
+                values[AccServicePinnedCertificateThumbprintsConfigurationKey] = pinnedThumbprints.Trim();
             }
         }
         catch (Exception ex)

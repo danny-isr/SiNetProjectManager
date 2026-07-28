@@ -9,5 +9,6 @@ public enum SecretValidationGroup
     GoogleOAuth,
     ActiveDirectory,
     AccServiceApiKey,
+    AccServiceCertificatePassword,
     MasterPlanApiKey,
 }

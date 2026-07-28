@@ -40,6 +40,8 @@ public sealed class SecretSetupViewModel : ObservableObject
         ImportCommand = new AsyncRelayCommand(ImportAsync, () => !IsBusy);
         BrowseGoogleCredentialsCommand = new RelayCommand(_ => BrowseGoogleCredentials());
         GenerateAccServiceKeyCommand = new AsyncRelayCommand(GenerateAccServiceKeyAsync, () => !IsBusy);
+        GenerateAccServiceCertificatePasswordCommand =
+            new AsyncRelayCommand(GenerateAccServiceCertificatePasswordAsync, () => !IsBusy);
         TestAccServiceCommand = new AsyncRelayCommand(TestAccServiceAsync, () => !IsBusy);
     }
 
@@ -63,6 +65,7 @@ public sealed class SecretSetupViewModel : ObservableObject
                 ExportCommand.RaiseCanExecuteChanged();
                 ImportCommand.RaiseCanExecuteChanged();
                 GenerateAccServiceKeyCommand.RaiseCanExecuteChanged();
+                GenerateAccServiceCertificatePasswordCommand.RaiseCanExecuteChanged();
                 TestAccServiceCommand.RaiseCanExecuteChanged();
             }
         }
@@ -77,6 +80,8 @@ public sealed class SecretSetupViewModel : ObservableObject
     public AsyncRelayCommand ImportCommand { get; }
 
     public AsyncRelayCommand GenerateAccServiceKeyCommand { get; }
+
+    public AsyncRelayCommand GenerateAccServiceCertificatePasswordCommand { get; }
 
     public AsyncRelayCommand TestAccServiceCommand { get; }
 
@@ -314,6 +319,30 @@ public sealed class SecretSetupViewModel : ObservableObject
             row.TextValue = key;
             await LoadAsync().ConfigureAwait(true);
             SummaryMessage = "נוצר AccService API Key חדש ונשמר ב-Vault.";
+        }
+        catch (Exception ex)
+        {
+            SummaryMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task GenerateAccServiceCertificatePasswordAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var password = await _secretSetupService
+                .GenerateAccServiceCertificatePasswordAsync()
+                .ConfigureAwait(true);
+            var row = Rows.First(r => r.Key == SecretCatalog.AccServiceCertificatePassword);
+            row.PasswordValue = password;
+            await LoadAsync().ConfigureAwait(true);
+            SummaryMessage =
+                "נוצרה סיסמת תעודה חדשה ונשמרה ב-Vault. אם AccService כבר רץ עם PFX ישן — מחק את accservice.pfx והפעל מחדש, ואז עדכן את ה-pin ב-Settings.";
         }
         catch (Exception ex)
         {

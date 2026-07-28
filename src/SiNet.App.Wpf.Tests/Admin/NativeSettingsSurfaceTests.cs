@@ -484,6 +484,7 @@ public sealed class NativeSettingsSurfaceTests
                 5),
             new AccSystemSettingsDto(
                 "https://acc.example.com",
+                string.Empty,
                 "admin@example.com",
                 "Template-X",
                 ".pdf,.dwg"),
@@ -686,7 +687,7 @@ public sealed class NativeSettingsSurfaceTests
                 SystemSettingsDefaults.InboxFolderNameFallback,
                 null,
                 10),
-            new AccSystemSettingsDto(string.Empty, string.Empty, string.Empty, SystemSettingsDefaults.AccManualUploadAllowedExtensions),
+            new AccSystemSettingsDto(string.Empty, string.Empty, string.Empty, string.Empty, SystemSettingsDefaults.AccManualUploadAllowedExtensions),
             new InspectionSystemSettingsDto(string.Empty, string.Empty, string.Empty, string.Empty),
             new InspectionStatusLabelsDto(
                 SystemSettingsDefaults.StatusLabelPassed,

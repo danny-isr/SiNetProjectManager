@@ -194,6 +194,10 @@
                 <StackPanel Margin="12" MaxWidth="640">
                     <TextBlock Text="AccService Base URL"/>
                     <TextBox Text="{Binding AccServiceBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
+                    <TextBlock Text="Pinned Certificate Thumbprints (מופרד ב-; )"/>
+                    <TextBox Text="{Binding AccServicePinnedCertificateThumbprints, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
+                    <TextBlock Text="Thumbprint של תעודת AccService (self-signed). מועתק מ-Secret Setup → Test או מלוג ההפעלה של השירות. לא סוד."
+                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <autodesk:AccControlPlaneStatusView Margin="0,0,0,12"
                                                          HintText="{Binding AccServiceRuntimeHint}"
                                                          ModeSummary="{Binding AccServiceRuntimeModeSummary}"

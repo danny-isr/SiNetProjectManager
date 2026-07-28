@@ -212,6 +212,7 @@ public sealed class SettingsViewModel : ObservableObject
     private int _accViewerMaxTabs = 10;
     private int _workflowMaxOpenChildInstances = SystemSettingsDefaults.WorkflowMaxOpenChildInstances;
     private string _accServiceBaseUrl = string.Empty;
+    private string _accServicePinnedCertificateThumbprints = string.Empty;
     private string _accBootstrapAdminEmail = string.Empty;
     private string _accProjectTemplateName = string.Empty;
     private string _accManualUploadAllowedExtensions = SystemSettingsDefaults.AccManualUploadAllowedExtensions;
@@ -505,6 +506,12 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _accServiceBaseUrl;
         set => SetField(ref _accServiceBaseUrl, value);
+    }
+
+    public string AccServicePinnedCertificateThumbprints
+    {
+        get => _accServicePinnedCertificateThumbprints;
+        set => SetField(ref _accServicePinnedCertificateThumbprints, value);
     }
 
     public string AccBootstrapAdminEmail
@@ -1141,6 +1148,7 @@ public sealed class SettingsViewModel : ObservableObject
             AccViewerMaxTabs),
         new AccSystemSettingsDto(
             NormalizeAccServiceBaseUrl(AccServiceBaseUrl),
+            NormalizePinnedCertificateThumbprints(AccServicePinnedCertificateThumbprints),
             AccBootstrapAdminEmail.Trim(),
             AccProjectTemplateName.Trim(),
             AccManualUploadAllowedExtensions.Trim()),
@@ -1204,6 +1212,7 @@ public sealed class SettingsViewModel : ObservableObject
         AccViewerMaxTabs = system.EmailOffice.AccViewerMaxTabs;
         WorkflowMaxOpenChildInstances = system.Workflow.MaxOpenChildInstances;
         AccServiceBaseUrl = system.Acc.AccServiceBaseUrl;
+        AccServicePinnedCertificateThumbprints = system.Acc.AccServicePinnedCertificateThumbprints;
         AccBootstrapAdminEmail = system.Acc.AccBootstrapAdminEmail;
         AccProjectTemplateName = system.Acc.AccProjectTemplateName;
         AccManualUploadAllowedExtensions = system.Acc.AccManualUploadAllowedExtensions;
@@ -1429,6 +1438,22 @@ public sealed class SettingsViewModel : ObservableObject
     {
         var trimmed = value.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? string.Empty : trimmed.TrimEnd('/');
+    }
+
+    private static string NormalizePinnedCertificateThumbprints(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var pins = value
+            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(pin => pin.Replace(" ", string.Empty, StringComparison.Ordinal))
+            .Where(pin => pin.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return string.Join(';', pins);
     }
 
     private static LogLevelDto ParseLevel(string value)

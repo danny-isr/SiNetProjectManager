@@ -19,6 +19,7 @@ public sealed class NativeSecretSetupCatalogTests
         "SiNet/ActiveDirectory/Username",
         "SiNet/ActiveDirectory/Password",
         "SiNet/AccService/ApiKey",
+        "SiNet/AccService/CertificatePassword",
         "SiNet/MasterPlanApi/ApiKey",
     ];
 
@@ -200,5 +201,7 @@ public sealed class NativeSecretSetupCatalogTests
         public string? ActiveDirectoryDomainName => null;
 
         public string? AccServiceBaseUrl => null;
+
+        public IReadOnlyList<string> AccServicePinnedCertificateThumbprints => [];
     }
 }

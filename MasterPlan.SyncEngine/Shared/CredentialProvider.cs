@@ -55,6 +55,10 @@ public static class SecretKeys
     // Same value on server (validates header) and clients (sends header).
     public const string AccServiceApiKey = "SiNet/AccService/ApiKey";
 
+    // Password that protects AccService's local self-signed PFX (accservice.pfx).
+    // Not the TLS trust pin — pins live in SystemSettings.
+    public const string AccServiceCertificatePassword = "SiNet/AccService/CertificatePassword";
+
     // MasterPlan Web API — X-API-Key header used by MasterPlan.SyncEngine.
     public const string MasterPlanApiKey = "SiNet/MasterPlanApi/ApiKey";
 
@@ -71,6 +75,7 @@ public static class SecretKeys
         ReplicaDatabase,
         MasterPlanDatabase,
         AccServiceApiKey,
+        AccServiceCertificatePassword,
         MasterPlanApiKey
     ];
 }

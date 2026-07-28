@@ -12,6 +12,7 @@ public sealed record EmailOfficeSystemSettingsDto(
 /// <summary>ACC integration globals.</summary>
 public sealed record AccSystemSettingsDto(
     string AccServiceBaseUrl,
+    string AccServicePinnedCertificateThumbprints,
     string AccBootstrapAdminEmail,
     string AccProjectTemplateName,
     string AccManualUploadAllowedExtensions);

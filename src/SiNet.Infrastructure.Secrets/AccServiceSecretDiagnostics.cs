@@ -15,6 +15,12 @@ internal static class AccServiceSecretDiagnostics
         return Convert.ToBase64String(bytes);
     }
 
+    public static string GenerateCertificatePassword()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(24);
+        return Convert.ToBase64String(bytes);
+    }
+
     public static async Task<AccServiceDiagnosticResultDto> TestAsync(
         ISecretVaultStore vault,
         ISecretSetupHostConfiguration hostConfiguration,
@@ -76,12 +82,20 @@ internal static class AccServiceSecretDiagnostics
         IReadOnlyList<string> pinnedCertificateThumbprints,
         CancellationToken cancellationToken)
     {
+        string? presentedThumbprint = null;
         try
         {
             using var handler = new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = (msg, certificate, _, errors) =>
-                    ValidateServerCertificate(msg, certificate, errors, pinnedCertificateThumbprints),
+                {
+                    if (certificate is not null)
+                    {
+                        presentedThumbprint = NormalizeThumbprint(certificate.Thumbprint);
+                    }
+
+                    return ValidateServerCertificate(msg, certificate, errors, pinnedCertificateThumbprints);
+                },
             };
 
             using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
@@ -116,6 +130,9 @@ internal static class AccServiceSecretDiagnostics
             var root = doc.RootElement;
             var serverHasKey = root.TryGetProperty("hasApiKey", out var h) && h.GetBoolean();
             var keySource = root.TryGetProperty("keySource", out var s) ? s.GetString() : "(unknown)";
+            var certThumbprint = root.TryGetProperty("certificateThumbprint", out var t)
+                ? t.GetString()
+                : presentedThumbprint;
 
             if (!serverHasKey)
             {
@@ -127,21 +144,28 @@ internal static class AccServiceSecretDiagnostics
                     $"server keySource={keySource}");
             }
 
+            var detail = string.IsNullOrWhiteSpace(certThumbprint)
+                ? $"keySource={keySource}"
+                : $"keySource={keySource}; certificateThumbprint={certThumbprint}";
+
             return new AccServiceDiagnosticResultDto(
                 true,
                 SecretStatusLevel.Valid,
-                "AccService — אימות מפתח הצליח (network diag).",
+                "AccService — אימות מפתח הצליח (network diag). העתק את ה-thumbprint ל-Settings אם עדיין לא מוגדר pin.",
                 IsNetworkTest: true,
-                $"keySource={keySource}");
+                detail);
         }
         catch (Exception ex)
         {
+            var hint = string.IsNullOrWhiteSpace(presentedThumbprint)
+                ? ex.Message
+                : $"{ex.Message} (presented thumbprint={presentedThumbprint}; add it to AccService.PinnedCertificateThumbprints if missing)";
             return new AccServiceDiagnosticResultDto(
                 false,
                 SecretStatusLevel.Invalid,
                 "AccService network test failed.",
                 IsNetworkTest: true,
-                ex.Message);
+                hint);
         }
     }
 

@@ -29,5 +29,7 @@ public interface ISecretSetupService
 
     Task<string> GenerateAccServiceApiKeyAsync(CancellationToken cancellationToken = default);
 
+    Task<string> GenerateAccServiceCertificatePasswordAsync(CancellationToken cancellationToken = default);
+
     Task<AccServiceDiagnosticResultDto> TestAccServiceAsync(CancellationToken cancellationToken = default);
 }

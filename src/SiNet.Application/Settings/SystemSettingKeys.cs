@@ -14,6 +14,13 @@ public static class SystemSettingKeys
     public const string InboxProjectName = "InboxProjectName";
     public const string InboxFolderName = "InboxFolderName";
     public const string AccServiceBaseUrl = "AccService.BaseUrl";
+
+    /// <summary>
+    /// Semicolon-separated TLS certificate thumbprints that clients may trust for AccService
+    /// when the server presents a self-signed certificate. Not a secret.
+    /// </summary>
+    public const string AccServicePinnedCertificateThumbprints = "AccService.PinnedCertificateThumbprints";
+
     public const string AccProjectTemplateName = "AccProjectTemplateName";
     public const string AccBootstrapAdminEmail = "AccBootstrapAdminEmail";
     public const string StatusLabelPassed = "StatusLabel_Passed";
@@ -47,6 +54,7 @@ public static class SystemSettingKeys
         InboxProjectName,
         InboxFolderName,
         AccServiceBaseUrl,
+        AccServicePinnedCertificateThumbprints,
         AccProjectTemplateName,
         AccBootstrapAdminEmail,
         StatusLabelPassed,

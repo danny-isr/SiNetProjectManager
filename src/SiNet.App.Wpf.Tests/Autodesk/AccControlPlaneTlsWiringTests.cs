@@ -75,6 +75,19 @@ public sealed class AccControlPlaneTlsWiringTests
     }
 
     [Fact]
+    public void WhenPinsAreSemicolonSeparatedScalarThenTheyAreParsed()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["AccService:PinnedCertificateThumbprints"] = " AA11BB ; CC22DD , EE33FF ",
+        });
+
+        var pins = AccServiceControlPlaneConfiguration.ReadPinnedCertificateThumbprints(configuration);
+
+        Assert.Equal(["AA11BB", "CC22DD", "EE33FF"], pins);
+    }
+
+    [Fact]
     public void LegacyV2GraphPublishesConfigurationSoTheAccModuleCanReadPins()
     {
         var source = File.ReadAllText(Path.Combine(

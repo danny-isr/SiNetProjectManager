@@ -16,6 +16,7 @@ public static class SecretCatalog
     public const string ReplicaDatabase = "SiNet/ConnectionStrings/ReplicaDatabase";
     public const string MasterPlanDatabase = "SiNet/ConnectionStrings/MasterPlanDatabase";
     public const string AccServiceApiKey = "SiNet/AccService/ApiKey";
+    public const string AccServiceCertificatePassword = "SiNet/AccService/CertificatePassword";
     public const string MasterPlanApiKey = "SiNet/MasterPlanApi/ApiKey";
 
     public static IReadOnlyList<SecretCatalogEntry> All { get; } =
@@ -30,6 +31,7 @@ public static class SecretCatalog
         new(AdUsername, "Active Directory Username", SecretKind.Text, false, true, SecretValidationGroup.ActiveDirectory, PairKey: AdPassword),
         new(AdPassword, "Active Directory Password", SecretKind.Password, true, false, SecretValidationGroup.ActiveDirectory, PairKey: AdUsername),
         new(AccServiceApiKey, "AccService API Key", SecretKind.ApiKey, false, true, SecretValidationGroup.AccServiceApiKey),
+        new(AccServiceCertificatePassword, "AccService Certificate Password", SecretKind.Password, true, false, SecretValidationGroup.AccServiceCertificatePassword),
         new(MasterPlanApiKey, "MasterPlan API Key", SecretKind.ApiKey, false, true, SecretValidationGroup.MasterPlanApiKey),
     ];
 

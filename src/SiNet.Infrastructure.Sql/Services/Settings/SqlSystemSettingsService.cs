@@ -118,6 +118,7 @@ public sealed class SqlSystemSettingsService
                 ParseInt(Get(SystemSettingKeys.AccViewerMaxTabs, SystemSettingsDefaults.AccViewerMaxTabs), 10)),
             new AccSystemSettingsDto(
                 Get(SystemSettingKeys.AccServiceBaseUrl, string.Empty),
+                Get(SystemSettingKeys.AccServicePinnedCertificateThumbprints, string.Empty),
                 Get(SystemSettingKeys.AccBootstrapAdminEmail, string.Empty),
                 Get(SystemSettingKeys.AccProjectTemplateName, string.Empty),
                 Get(SystemSettingKeys.AccManualUploadAllowedExtensions, SystemSettingsDefaults.AccManualUploadAllowedExtensions)),
@@ -179,6 +180,7 @@ public sealed class SqlSystemSettingsService
             (SystemSettingKeys.InboxFolderName, settings.EmailOffice.InboxFolderName.Trim()),
             (SystemSettingKeys.AccViewerMaxTabs, settings.EmailOffice.AccViewerMaxTabs.ToString()),
             (SystemSettingKeys.AccServiceBaseUrl, settings.Acc.AccServiceBaseUrl.Trim()),
+            (SystemSettingKeys.AccServicePinnedCertificateThumbprints, settings.Acc.AccServicePinnedCertificateThumbprints.Trim()),
             (SystemSettingKeys.AccBootstrapAdminEmail, settings.Acc.AccBootstrapAdminEmail.Trim()),
             (SystemSettingKeys.AccProjectTemplateName, settings.Acc.AccProjectTemplateName.Trim()),
             (SystemSettingKeys.AccManualUploadAllowedExtensions, settings.Acc.AccManualUploadAllowedExtensions.Trim()),

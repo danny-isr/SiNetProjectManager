@@ -6,4 +6,9 @@ public interface ISecretSetupHostConfiguration
     string? ActiveDirectoryDomainName { get; }
 
     string? AccServiceBaseUrl { get; }
+
+    /// <summary>
+    /// TLS thumbprint pins for AccService self-signed certificates (from System Settings / host config).
+    /// </summary>
+    IReadOnlyList<string> AccServicePinnedCertificateThumbprints { get; }
 }

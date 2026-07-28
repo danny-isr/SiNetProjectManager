@@ -135,6 +135,9 @@ public sealed class NativeSecretSetupControlPlaneTests
         public Task<string> GenerateAccServiceApiKeyAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<string> GenerateAccServiceCertificatePasswordAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<AccServiceDiagnosticResultDto> TestAccServiceAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

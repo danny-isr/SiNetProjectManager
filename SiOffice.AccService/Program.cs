@@ -8,6 +8,7 @@ using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
 using SiNetSQL.Services.Logging;
+using SiOffice.AccService;
 using SiOffice.AccService.Auth;
 using SiOffice.AccService.Endpoints;
 
@@ -88,9 +89,9 @@ MyOffice.AutodeskConnector.TokenProvider.LogWarn = msg => Log.Warning("{Msg}", m
 MyOffice.AutodeskConnector.TokenProvider.LogError = msg => Log.Error("{Msg}", msg);
 
 // ─── Kestrel HTTPS ──────────────────────────────────────────────────────────
-// Internal-network service. HTTPS port and certificate are driven from
-// configuration / vault. Production must supply a real certificate (PFX path
-// or Windows store thumbprint). Self-signed auto-generation is dev-only.
+// Internal-network service. Resolution order (see LoadTlsCertificate):
+// store thumbprint → explicit PFX path → vault-backed self-signed PFX
+// (SiNet/AccService/CertificatePassword). No purchased CA required.
 builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
 {
     var port = ctx.Configuration.GetValue<int?>("AccService:HttpsPort") ?? 8443;
@@ -98,6 +99,8 @@ builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
     kestrel.ListenAnyIP(port, listen =>
     {
         var cert = LoadTlsCertificate(ctx.Configuration);
+        AccServiceRuntimeTlsState.CertificateThumbprint = cert.Thumbprint?
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
         listen.UseHttps(cert);
     });
 });
@@ -164,12 +167,13 @@ try
     // file. Warning guarantees they reach \\si-win-2k19\AutoCAD Data\log\…
     // even with the default DB settings.
     Log.Warning(
-        "SiOffice.AccService starting — version {Version}, machine {Machine}, user {User}, https port {Port}, api key configured: {HasApiKey}.",
+        "SiOffice.AccService starting — version {Version}, machine {Machine}, user {User}, https port {Port}, api key configured: {HasApiKey}, certificate thumbprint: {CertThumbprint}.",
         typeof(Program).Assembly.GetName().Version?.ToString() ?? "?",
         Environment.MachineName,
         Environment.UserName,
         listenPort,
-        hasApiKey);
+        hasApiKey,
+        AccServiceRuntimeTlsState.CertificateThumbprint ?? "(unknown)");
 
     // Resolved log targets — always emitted so the local log states exactly
     // which network folder/file the central log is being written to. Makes
@@ -267,13 +271,12 @@ return 0;
 
 static X509Certificate2 LoadTlsCertificate(IConfiguration configuration)
 {
-    const string certificatePasswordVaultKey = "SiNet/AccService/CertificatePassword";
     var certSection = configuration.GetSection("AccService:Certificate");
     var storeName = certSection["StoreName"];
     var thumbprint = certSection["Thumbprint"];
     var certPath = certSection["Path"];
     var certPassword =
-        CredentialVaultService.GetSecret(certificatePasswordVaultKey)
+        CredentialVaultService.GetSecret(SecretKeys.AccServiceCertificatePassword)
         ?? certSection["Password"];
 
     if (!string.IsNullOrWhiteSpace(storeName) && !string.IsNullOrWhiteSpace(thumbprint))
@@ -300,40 +303,37 @@ static X509Certificate2 LoadTlsCertificate(IConfiguration configuration)
                 "is required when AccService:Certificate:Path points to a PFX file.");
         }
 
-        return X509CertificateLoader.LoadPkcs12FromFile(
-            certPath,
-            certPassword,
-            X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+        return OpenPfx(certPath, certPassword);
     }
 
-    if (configuration.GetValue<bool>("AccService:AllowSelfSignedDevCert"))
+    // Supported path for Dev and office server without a purchased CA:
+    // vault password present (or explicit AllowSelfSignedDevCert) ⇒ load/create accservice.pfx.
+    if (!string.IsNullOrWhiteSpace(certPassword)
+        || configuration.GetValue<bool>("AccService:AllowSelfSignedDevCert"))
     {
-        return LoadOrCreateDevSelfSignedCertificate(certPassword);
+        return LoadOrCreateSelfSignedCertificate(certPassword);
     }
 
     throw new InvalidOperationException(
         "No TLS certificate configured for SiOffice.AccService. " +
-        "Set AccService:Certificate:StoreName + Thumbprint, or AccService:Certificate:Path + Password " +
-        "(password may also live in vault key 'SiNet/AccService/CertificatePassword'). " +
-        "For local development only, set AccService:AllowSelfSignedDevCert=true.");
+        "Provision vault key 'SiNet/AccService/CertificatePassword' via Secret Setup (preferred), " +
+        "or set AccService:Certificate:StoreName + Thumbprint / Path + Password. " +
+        "Optional override: AccService:AllowSelfSignedDevCert=true.");
 }
 
-static X509Certificate2 LoadOrCreateDevSelfSignedCertificate(string? certPassword)
+static X509Certificate2 LoadOrCreateSelfSignedCertificate(string? certPassword)
 {
     var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
     if (string.IsNullOrWhiteSpace(certPassword))
     {
         throw new InvalidOperationException(
-            "AccService:Certificate:Password (or vault key 'SiNet/AccService/CertificatePassword') " +
-            "is required when AccService:AllowSelfSignedDevCert=true.");
+            "Vault key 'SiNet/AccService/CertificatePassword' (or AccService:Certificate:Password) " +
+            "is required to load or create the AccService self-signed PFX.");
     }
 
     if (File.Exists(certFile))
     {
-        return X509CertificateLoader.LoadPkcs12FromFile(
-            certFile,
-            certPassword,
-            X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+        return OpenPfx(certFile, certPassword);
     }
 
     using var rsa = RSA.Create(2048);
@@ -364,4 +364,23 @@ static X509Certificate2 LoadOrCreateDevSelfSignedCertificate(string? certPasswor
         pfxBytes,
         certPassword,
         X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+}
+
+static X509Certificate2 OpenPfx(string certFile, string certPassword)
+{
+    try
+    {
+        return X509CertificateLoader.LoadPkcs12FromFile(
+            certFile,
+            certPassword,
+            X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+    }
+    catch (CryptographicException ex)
+    {
+        throw new InvalidOperationException(
+            $"Failed to open '{certFile}' with the configured CertificatePassword. " +
+            "If the password was rotated in Secret Setup, delete the PFX so AccService can create a new one, " +
+            "then update AccService.PinnedCertificateThumbprints on clients.",
+            ex);
+    }
 }

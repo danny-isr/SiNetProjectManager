@@ -118,6 +118,18 @@ public sealed class NativeSecretSetupGapTests
     }
 
     [Fact]
+    public async Task GenerateAccServiceCertificatePasswordAsync_saves_password_to_vault()
+    {
+        var vault = new InMemorySecretVaultStore();
+        var service = new CredentialVaultSecretSetupService(vault, NullHost.Instance);
+
+        var password = await service.GenerateAccServiceCertificatePasswordAsync();
+
+        Assert.False(string.IsNullOrWhiteSpace(password));
+        Assert.Equal(password, vault.GetSecret(SecretCatalog.AccServiceCertificatePassword));
+    }
+
+    [Fact]
     public async Task TestAccServiceAsync_validates_presence_when_base_url_missing()
     {
         var vault = new InMemorySecretVaultStore();
@@ -302,6 +314,8 @@ public sealed class NativeSecretSetupGapTests
         public string? ActiveDirectoryDomainName => null;
 
         public string? AccServiceBaseUrl => null;
+
+        public IReadOnlyList<string> AccServicePinnedCertificateThumbprints => [];
     }
 
     private sealed class HostWithBaseUrl : ISecretSetupHostConfiguration
@@ -311,5 +325,7 @@ public sealed class NativeSecretSetupGapTests
         public string? ActiveDirectoryDomainName => null;
 
         public string? AccServiceBaseUrl => "http://127.0.0.1:9";
+
+        public IReadOnlyList<string> AccServicePinnedCertificateThumbprints => [];
     }
 }

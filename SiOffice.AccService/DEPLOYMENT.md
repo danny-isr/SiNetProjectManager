@@ -23,16 +23,22 @@ msiexec /i "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccServi
 
 ### תעודת TLS (HTTPS)
 
-Production **חייב** לספק תעודה — אין יצירה אוטומטית של self-signed בפרודקשן.
+אין צורך בתעודה קנויה. המסלול הנתמך הוא self-signed דרך Secret Setup:
+
+1. במחשב פיתוח: Secret Setup → Generate ל-`SiNet/AccService/CertificatePassword` → Export `SiNet.secrets`
+2. בשרת: `Install-OnServer.ps1` מייבא ל-vault של `SI-ENG\sieng`
+3. AccService יוצר/טוען `accservice.pfx` ליד ה-exe כשיש סיסמה ב-vault ואין Store/Path
+4. מעתיקים את ה-thumbprint (לוג הפעלה / Secret Setup → Test / `/diag`) ל-System Setting
+   `AccService.PinnedCertificateThumbprints`
 
 | אפשרות | הגדרות |
 |---|---|
+| **Vault-backed self-signed (מומלץ)** | `SiNet/AccService/CertificatePassword` ב-vault; Store/Path ריקים |
 | **Windows Certificate Store** | `AccService:Certificate:StoreName` + `AccService:Certificate:Thumbprint` |
-| **PFX file** | `AccService:Certificate:Path` + `AccService:Certificate:Password` (או vault `SiNet/AccService/CertificatePassword`) |
-| **Dev only** | `AccService:AllowSelfSignedDevCert=true` + סיסמת PFX ב-config/vault — יוצר `accservice.pfx` ליד ה-exe |
+| **PFX file מפורש** | `AccService:Certificate:Path` + vault password |
+| **Override ישן** | `AccService:AllowSelfSignedDevCert=true` (לא נדרש כשיש סיסמה ב-vault) |
 
-לקוחות WPF יכולים לסמוך על self-signed רק דרך **thumbprint pin**:
-`AccService:PinnedCertificateThumbprints` ב-`appsettings.json` של הלקוח.
+פירוט מלא: `docs/ACC_SERVICE_TLS_VIA_VAULT.md`.
 
 `/v1/acc/diag` דורש `X-AccService-Key` — רק `/v1/acc/health` פטור מאימות.
 

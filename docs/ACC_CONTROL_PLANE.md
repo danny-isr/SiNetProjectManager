@@ -177,8 +177,9 @@ Current rules, evaluated in order:
 | Chain error with no matching pin | rejected |
 | Name mismatch, or name mismatch combined with a chain error | rejected |
 
-Pins come from `AccService:PinnedCertificateThumbprints` in host configuration and are bound in one
-place, `AccServiceControlPlaneConfiguration.Bind`, which:
+Pins come from `AccService:PinnedCertificateThumbprints` in host configuration (System Setting
+`AccService.PinnedCertificateThumbprints`, semicolon-separated, or an indexed appsettings array)
+and are bound in one place, `AccServiceControlPlaneConfiguration.Bind`, which:
 
 - feeds `AccServiceControlPlaneOptions` for every HTTP client created by `AddSiNetAutodesk`
   (health, diagnostics, project/document/folder/file clients) by reading `IConfiguration` from the

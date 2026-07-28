@@ -47,9 +47,13 @@ powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffic
 | `SiNet/ConnectionStrings/ReplicaDatabase` | DB Replica |
 | `SiNet/ConnectionStrings/MasterPlanDatabase` | DB MasterPlan |
 | `SiNet/AccService/ApiKey` | אימות client ↔ service |
+| `SiNet/AccService/CertificatePassword` | סיסמת ה-PFX (self-signed) של AccService |
 | `SiNet/MasterPlanApi/ApiKey` | header X-API-Key ל-MasterPlan API |
 
-**11 מפתחות סך הכל.** אם בייצוא רואים פחות → חסר משהו ב-vault שלך.
+**12 מפתחות סך הכל.** אם בייצוא רואים פחות → חסר משהו ב-vault שלך.
+
+Thumbprint pins של AccService **אינם** ב-vault — הם ב-System Settings
+(`AccService.PinnedCertificateThumbprints`). ראה `docs/ACC_SERVICE_TLS_VIA_VAULT.md`.
 
 ---
 
@@ -167,7 +171,7 @@ powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffic
 | לוג: `MasterPlan API key not found` | Task רץ כ-`sieng` אבל מפתחות יובאו ל-Admin | Install-OnServer (תמיד מייבא ל-`sieng`) |
 | WPF פותח SecretSetup בכל פעם | חסרים מפתחות מקומית | מלא ושמור הכל בירוק |
 | ייבוא: "סיסמה שגויה או קובץ פגום" | Package password שגוי | ייצא מחדש |
-| בייצוא רואים פחות מ-11 מפתחות | חסר מפתח ב-vault או ב-`SecretKeys.All` | הוסף לקוד / מלא ב-WPF |
+| בייצוא רואים פחות מ-12 מפתחות | חסר מפתח ב-vault או ב-`SecretKeys.All` | הוסף לקוד / מלא ב-WPF |
 | `Install-OnServer.ps1` לא מוצא MSI | publish-all נכשל בערוץ Service | הרץ publish-all מחדש |
 
 ---

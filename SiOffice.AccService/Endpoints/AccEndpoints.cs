@@ -5,6 +5,7 @@ using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
+using SiOffice.AccService;
 using System.Text.Json;
 
 namespace SiOffice.AccService.Endpoints;
@@ -103,6 +104,7 @@ internal static class AccEndpoints
                 status = "ok",
                 hasApiKey = effectiveKey != null,
                 keySource,
+                certificateThumbprint = AccServiceRuntimeTlsState.CertificateThumbprint,
                 autodeskStatus = autodeskOk,
                 autodeskDetail,
                 dbStatus = dbOk,

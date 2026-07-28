@@ -40,4 +40,6 @@ internal sealed class NullSecretSetupHostConfiguration : ISecretSetupHostConfigu
     public string? ActiveDirectoryDomainName => null;
 
     public string? AccServiceBaseUrl => null;
+
+    public IReadOnlyList<string> AccServicePinnedCertificateThumbprints => [];
 }

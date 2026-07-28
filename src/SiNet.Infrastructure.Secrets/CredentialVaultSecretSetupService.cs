@@ -133,8 +133,15 @@ public sealed class CredentialVaultSecretSetupService(
         var ad = await Task.Run(
             () => SecretSetupValidators.TestAdFromVault(_vault, _hostConfiguration),
             cancellationToken).ConfigureAwait(false);
-        var accServiceDiag = await AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken: cancellationToken)
+        var accServiceDiag = await AccServiceSecretDiagnostics.TestAsync(
+                _vault,
+                _hostConfiguration,
+                _hostConfiguration.AccServicePinnedCertificateThumbprints,
+                cancellationToken)
             .ConfigureAwait(false);
+        var accCertPassword = SecretSetupValidators.TestPresenceOnly(
+            _vault,
+            SecretCatalog.AccServiceCertificatePassword);
         var masterPlanApi = SecretSetupValidators.TestPresenceOnly(_vault, SecretCatalog.MasterPlanApiKey);
 
         return
@@ -154,6 +161,12 @@ public sealed class CredentialVaultSecretSetupService(
                 _vault.HasSecret(SecretCatalog.AccServiceApiKey),
                 accServiceDiag.Success,
                 accServiceDiag.Detail),
+            ToResult(
+                SecretCatalog.AccServiceCertificatePassword,
+                "AccService Certificate Password",
+                accCertPassword.Exists,
+                accCertPassword.Success,
+                accCertPassword.Detail),
             ToResult(SecretCatalog.MasterPlanApiKey, "MasterPlan API Key", masterPlanApi.Exists, masterPlanApi.Success, masterPlanApi.Detail),
         ];
     }
@@ -240,8 +253,20 @@ public sealed class CredentialVaultSecretSetupService(
         return Task.FromResult(key);
     }
 
+    public Task<string> GenerateAccServiceCertificatePasswordAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var password = AccServiceSecretDiagnostics.GenerateCertificatePassword();
+        _vault.SetSecret(SecretCatalog.AccServiceCertificatePassword, password);
+        return Task.FromResult(password);
+    }
+
     public Task<AccServiceDiagnosticResultDto> TestAccServiceAsync(CancellationToken cancellationToken = default)
-        => AccServiceSecretDiagnostics.TestAsync(_vault, _hostConfiguration, cancellationToken: cancellationToken);
+        => AccServiceSecretDiagnostics.TestAsync(
+            _vault,
+            _hostConfiguration,
+            _hostConfiguration.AccServicePinnedCertificateThumbprints,
+            cancellationToken);
 
     private SecretImportPreviewDto BuildImportPreview(IReadOnlyDictionary<string, string> decrypted)
     {

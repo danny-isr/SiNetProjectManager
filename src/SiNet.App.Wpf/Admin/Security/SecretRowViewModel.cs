@@ -32,6 +32,8 @@ public sealed class SecretRowViewModel : ObservableObject
 
     public bool IsAccServiceApiKey => Key == SecretCatalog.AccServiceApiKey;
 
+    public bool IsAccServiceCertificatePassword => Key == SecretCatalog.AccServiceCertificatePassword;
+
     public string TextValue
     {
         get => _textValue;

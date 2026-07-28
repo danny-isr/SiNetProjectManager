@@ -29,6 +29,12 @@ public static class SystemSettingKeys
     public const string AccServiceBaseUrl = "AccService.BaseUrl";
 
     /// <summary>
+    /// Semicolon-separated TLS certificate thumbprints that clients may trust for AccService
+    /// when the server presents a self-signed certificate. Not a secret.
+    /// </summary>
+    public const string AccServicePinnedCertificateThumbprints = "AccService.PinnedCertificateThumbprints";
+
+    /// <summary>
     /// Exact name of the ACC project TEMPLATE used as the source for newly-created
     /// per-Place ACC projects. When non-empty, <c>EnsureProjectMappingAsync</c>
     /// resolves the template by name and creates the new project FROM it. Templates

@@ -239,7 +239,7 @@ Implemented capabilities in this surface:
 
 | Capability | Port / service | Notes |
 | --- | --- | --- |
-| Vault read/write + validation | `ISecretSetupService.SaveAndValidateAsync` | 11 keys from `SecretCatalog`; post-save validators |
+| Vault read/write + validation | `ISecretSetupService.SaveAndValidateAsync` | 12 keys from `SecretCatalog` (includes AccService Certificate Password); post-save validators |
 | **Export** `.secrets` | `ExportAsync` | AES-256-CBC + PBKDF2 encrypted file (legacy-compatible `SNET` format); never plain-text JSON |
 | **Import** `.secrets` | `PreviewImportAsync`, `ImportAsync` | Preview shows key names only (no secret values); unknown keys skipped; overwrite requires confirmation |
 | **AccService Generate** | `GenerateAccServiceApiKeyAsync` | 32-byte cryptographic random → Base64; saved to `SecretCatalog.AccServiceApiKey` |

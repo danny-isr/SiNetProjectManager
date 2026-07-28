@@ -256,7 +256,7 @@ public sealed class SqlInspectionWorkspaceTests
                     SystemSettingsDefaults.InboxFolderNameFallback,
                     null,
                     10),
-                new AccSystemSettingsDto(string.Empty, string.Empty, string.Empty, SystemSettingsDefaults.AccManualUploadAllowedExtensions),
+                new AccSystemSettingsDto(string.Empty, string.Empty, string.Empty, string.Empty, SystemSettingsDefaults.AccManualUploadAllowedExtensions),
                 new InspectionSystemSettingsDto(string.Empty, string.Empty, string.Empty, string.Empty),
                 new InspectionStatusLabelsDto(
                     SystemSettingsDefaults.StatusLabelPassed,
