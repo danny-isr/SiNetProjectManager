@@ -19,6 +19,7 @@
 	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Google\SiNet.Infrastructure.Google.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />
+	<ProjectReference Include="..\SiNet.Infrastructure.AccBootstrap\SiNet.Infrastructure.AccBootstrap.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.FileSystem\SiNet.Infrastructure.FileSystem.csproj" />
 	<ProjectReference Include="..\SiNet.Infrastructure.Logging\SiNet.Infrastructure.Logging.csproj" />
 	<ProjectReference Include="..\SiNet.LegacyBridge\SiNet.LegacyBridge.csproj" />

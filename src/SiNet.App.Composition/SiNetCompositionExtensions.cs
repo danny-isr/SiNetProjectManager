@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Tasks;
+using SiNet.Infrastructure.AccBootstrap;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.FileSystem;
 using SiNet.Infrastructure.Google;
@@ -58,6 +59,13 @@ public static class SiNetCompositionExtensions
         services.AddSiNetGoogle(configureGmail);
         services.AddSiNetAutodesk();
         services.AddSiNetAutodeskLocalSql();
+
+        // Local inbox ensure only for StandaloneNew. V2Hybrid registers
+        // LegacyHostLocalAccInboxBootstrapExecutor in the V2 composition graph instead.
+        if (hostMode == SiNetHostMode.StandaloneNew)
+        {
+            services.AddSiNetAccInboxBootstrapLocal();
+        }
 
         if (hostMode == SiNetHostMode.V2Hybrid)
         {

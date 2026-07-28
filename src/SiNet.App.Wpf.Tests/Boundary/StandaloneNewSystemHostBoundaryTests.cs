@@ -78,4 +78,17 @@ public sealed class StandaloneNewSystemHostBoundaryTests
         Assert.Contains("DEPRECATED", source, StringComparison.Ordinal);
         Assert.Contains("STANDALONE_NEW_SYSTEM_HOST.md", source, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void App_Wpf_csproj_does_not_reference_AccBootstrap_directly()
+    {
+        var references = XDocument.Load(AppWpfCsprojPath)
+            .Descendants("ProjectReference")
+            .Select(e => e.Attribute("Include")?.Value ?? string.Empty)
+            .ToList();
+
+        Assert.DoesNotContain(
+            references,
+            r => r.Contains("SiNet.Infrastructure.AccBootstrap", StringComparison.OrdinalIgnoreCase));
+    }
 }

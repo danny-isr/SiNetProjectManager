@@ -62,18 +62,33 @@ without V2 runtime adapters:
 
 **Risk / effort:** Medium; no DB schema changes; V2 New System path unchanged.
 
-**ACC inbox ensure:** use AccService **Remote** mode when bootstrap is required. Local mode
-keeps the existing closed behavior when `IAccInboxBootstrapLocalExecutor` is absent
-(not ported — depends on SiNetSQL `AccBootstrapService`).
+**ACC inbox ensure (slice 2):** prefer AccService **Remote** (default `AccService:BaseUrl`).
+
+## Slice 2b — Local ACC Inbox bootstrap (opt-in)
+
+Single-machine / offline-friendly Local mode for inbox ensure without AccService HTTP:
+
+1. `AccBootstrapLocalInboxBootstrapExecutor` in `SiNet.Infrastructure.AccBootstrap`
+   (same `AccBootstrapService.EnsureOfficeInboxAsync` path as V2 / AccService in-process).
+2. Registered only from `AddSiNet(SiNetHostMode.StandaloneNew)` via
+   `AddSiNetAccInboxBootstrapLocal()` — **not** from `V2Hybrid` (V2 keeps
+   `LegacyHostLocalAccInboxBootstrapExecutor`).
+3. **Remote remains default** — standalone `appsettings.json` keeps
+   `AccService:BaseUrl = https://localhost:8443`. Local activates only when BaseUrl is
+   empty/whitespace (`ConfigurationAccServiceModeProvider`).
+4. No new feature flag. App.Wpf still has **no** ProjectReference to SiNetSQL / V2;
+   Composition references AccBootstrap.
+
+**Risk / effort:** Low–medium; no DB schema; MultiStart Remote path unchanged.
 
 ## Slice 2 — out of scope
 
-- Port `LegacyHostLocalAccInboxBootstrapExecutor` / `AccBootstrapService`
 - Inspection Sheets create/export parity
 - `IExternalHealthCheckSource`, `AddSiNetAi`
 - AccService ProjectReference removal from SiNetSQL (track **B**; B1 vault/logging done — see [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md))
-- Delete V2 New System startup
+- Delete V2 New System startup / delete `LegacyHostLocalAccInboxBootstrapExecutor`
 - MasterPlan Shared de-vendor / rename `SiNetSQL.*` namespaces
+- Changing standalone default BaseUrl to empty (Local-by-default)
 
 ## Parallel track — AccService decoupling (B)
 
@@ -87,7 +102,8 @@ clean Infrastructure modules while keeping SiNetSQL for provisioning/EF.
 | --- | --- |
 | Already have SQL/native impl | Register those |
 | Pilot-needed (token, AD, template list, ProjectWork iface) | Native/vault implementations |
-| Local Acc inbox bootstrap / Inspection export | Deferred — Remote AccService / stub |
+| Local Acc inbox bootstrap | Slice 2b — registered on StandaloneNew; active when BaseUrl empty |
+| Inspection export | Deferred — stub / menu-gated |
 | Other V2-only | Keep no-op / menu-gated |
 
 Pilot menu surfaces from `NEW_SYSTEM_BOUNDARY.md` remain the acceptance bar.
@@ -105,4 +121,6 @@ Pilot menu surfaces from `NEW_SYSTEM_BOUNDARY.md` remain the acceptance bar.
 1. **Exe strategy:** New System = only `SiNet.App.Wpf.exe`; Legacy = only V2.exe.
 2. **V2 New System path:** deprecate + log; remove in a later slice after pilot.
 3. **Missing native adapters:** hide those menu entries until a native implementation exists.
-4. **Local AccBootstrap:** not in App.Wpf; prefer AccService Remote for inbox ensure.
+4. **Local AccBootstrap:** prefer AccService Remote by default; StandaloneNew registers
+   `IAccInboxBootstrapLocalExecutor` from AccBootstrap so Local works when BaseUrl is cleared.
+   App.Wpf does not reference AccBootstrap directly (Composition does).

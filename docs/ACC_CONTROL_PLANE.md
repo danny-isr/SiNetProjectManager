@@ -80,10 +80,14 @@ orchestration.
   - `AddSiNetAutodesk()`
   - `AddSiNetNewSystemWpf()`
   into the legacy production host graph.
-- The host-local `IAccInboxBootstrapLocalExecutor` now lives in
-  `SiNetProjectManagerV2/Services/LegacyHostLocalAccInboxBootstrapExecutor.cs` on purpose, so
-  `src/SiNet.App.Wpf` no longer references `SiNetSQL` or `SiOffice.AutodeskConnector` just to
-  support a temporary privileged bootstrap path.
+- `IAccInboxBootstrapLocalExecutor` has two host registrations (same ACC bootstrap behavior):
+  - **V2 Hybrid:** `SiNetProjectManagerV2/Services/LegacyHostLocalAccInboxBootstrapExecutor.cs`
+  - **Standalone New:** `SiNet.Infrastructure.AccBootstrap` →
+    `AccBootstrapLocalInboxBootstrapExecutor`, registered only from
+    `AddSiNet(SiNetHostMode.StandaloneNew)` so `src/SiNet.App.Wpf` still has no
+    ProjectReference to `SiNetSQL` / V2 (Composition references AccBootstrap).
+  - Mode remains config-driven: empty `AccService:BaseUrl` → Local (uses executor);
+    non-empty → Remote HTTP `POST /v1/acc/inbox/ensure`.
 - `src/SiNet.App.Wpf/App.xaml.cs` explicitly calls `AddSiNetSecrets()` after `AddSiNet()` so the
   WPF harness can resolve vault-backed ACC key diagnostics and any vault-backed host configuration
   used by the native ACC status surface.
