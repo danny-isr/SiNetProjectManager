@@ -1,359 +1,210 @@
 # New System — Limited Production Pilot Envelope
 
-> **Status:** Active (2026-07-27)  
-> **Scope:** Defines what V2 New System mode may expose in a **limited production pilot**. This is
-> **not** full legacy replacement, **not** broad window migration, and **not** a production switch
-> away from `GoogleService` / legacy email management.
+> **Status:** Active (2026-07-28) — rewritten for **standalone** host  
+> **Scope:** Defines what **`SiNet.App.Wpf.exe`** may expose in a **limited production pilot**.
+> This is **not** full legacy replacement, **not** broad window migration, and **not** approval
+> of GmailSend / Reply / Forward (G-Policy still open).
+>
+> Locked host decision: New System = `SiNet.App.Wpf.exe` only; Legacy = `SiNetProjectManagerV2.exe`
+> only. See [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md).
 >
 > Related:
 > [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
-> [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md),
-> [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md),
-> [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) (G-Startup closed; G-Policy pending),
-> [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),
-> [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md),
-> [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md).
+> [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
+> [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md),
+> [`manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md`](./manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md),
+> [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) (G-Policy = Send/Reply/Forward only),
+> [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md),
+> [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md),
+> [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md),
+> [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
 
 ---
 
-## 1. Pilot intent
+## 1. Purpose & status
 
-V2 can launch **New System** (`RunNewSystemStartup` → `NewShellWindow`) as a **controlled production
-pilot** when:
+`SiNet.App.Wpf` (`AddSiNetStandaloneHost` / `SiNetHostMode.StandaloneNew`) is the **production New
+System host** for a controlled internal pilot when:
 
-- Gmail silent restore runs at startup (G-Startup ✅).
-- Only **read-only / operator** surfaces are menu-exposed.
-- **No** stub or deferred action appears as an active production button.
-- **No** harness window is exposed to regular users in release builds.
-- Legacy production paths (`MainWindow`, `GoogleService`, `EmailManagementView`) remain unchanged.
+- Vault + SQL schema gates and Windows-user auth succeed at startup.
+- Gmail silent restore runs via `IConnectorAuthService.TryRestoreSessionAsync`.
+- Shell menu exposes only **feature-gated** native surfaces (no DEBUG harness in Release).
+- Email is an **ACC-filing pilot** (N1–N3), not a send/reply client.
+- AccService **Remote** is the default MultiStart path (`AccService:BaseUrl`); Local inbox bootstrap
+  is available only when BaseUrl is empty (slice 2b).
+
+**Interactive smoke status:** **Not Run** — see §9. Agent/build/tests do **not** authorize pilot users.
 
 ---
 
-## 2. Allowed in production pilot (now)
+## 2. Host model
 
-| Surface | Menu label (Release) | Mode | Feature gate |
+| Process | Role |
+| --- | --- |
+| **`SiNet.App.Wpf.exe`** | **Production New System** — this pilot envelope |
+| **`SiNetProjectManagerV2.exe`** | **Legacy** mode only |
+| V2 “New System” startup | **Deprecated + logged** — not part of this pilot envelope, checklist, or smoke gate |
+
+Composition: `AddSiNetStandaloneHost` → `AddSiNet(StandaloneNew)` + vault SQL + native WPF surfaces.
+Launch: `dotnet run --project src/SiNet.App.Wpf`, or VS MultiStart **New System + AccService**.
+
+---
+
+## 3. Allowed production surfaces & feature gates
+
+Implemented in `NewShellFactory.BuildMigratedOnlyMenuAsync`
+(`src/SiNet.App.Wpf/Shell/NewShellFactory.cs`).
+
+| Group | Menu label (Release) | Mode | Feature gate |
 | --- | --- | --- | --- |
-| **EmailWindowView** | **מיילים** | Read-only Gmail | `Shell.OpenEmailSurface` |
-| **ProjectWorkSurfaceHost** | **בעבודה 2** | Project files browse (in-memory host) | `Shell.OpenProjectWorkSurface` |
-| **TaskPanelReadOnly** | **לוח משימות** | Personal Quick/Medium/Long queues (read-only workbench) | `Shell.OpenTaskPanelReadOnly` |
-| **InspectionWindowView** | **דוחות ביקורת** | Native inspection reports surface | `Shell.OpenInspectionSurface` |
-| **WorkflowClosedViewer** | **צפייה בתהליכים (סגור)** | Read-only workflow canvas (legend + templates; no save) | `Shell.OpenWorkflowClosedViewer` |
-| **AccControlPlaneStatusWindow** | **סטטוס ACC** | Read-only / control-plane | `SystemSettingsWrite` (admin group) |
-| **SecretSetupWindow** | **מפתחות וסודות** | Native admin — credential vault / keys | `SystemSettingsWrite` |
-| **SettingsWindow** | **הגדרות אישיות / מערכת** | Native personal + system admin | Authenticated / `SystemSettingsWrite` |
-| **UserListWindow / AddUserDialogWindow** | **ניהול משתמשים / הוספת משתמש** | Native admin | `UsersManage` |
-| **ActionPermissionsWindow** | **הרשאות פעולה** | Native admin | `ActionPermissionsManage` |
-| **NewShellWindow** | (host) | Project selector + menu only; not a workflow actor | — |
+| פרויקטים ותבניות | **פתיחת פרויקט חדש** | Native create | `ProjectCreate` |
+| פרויקטים ותבניות | **מיילים** | Gmail + ACC-filing (N1–N3) | `Shell.OpenEmailSurface` |
+| פרויקטים ותבניות | **בעבודה 2** | Project files browse | `Shell.OpenProjectWorkSurface` |
+| משימות | **לוח משימות** | Personal queues (read-only workbench) | `Shell.OpenTaskPanelReadOnly` |
+| משימות | **דוחות ביקורת** | Native inspection reports | `Shell.OpenInspectionSurface` |
+| משימות | **צפייה בתהליכים (סגור)** | Read-only workflow canvas | `Shell.OpenWorkflowClosedViewer` |
+| דוחות | **R01 / R02 / R03** | MasterPlan → Google Sheets | `ReportsManagement` |
+| משתמשים והרשאות | **ניהול / הוספת משתמש / הרשאות פעולה** | Native admin | `UsersManage` / `ActionPermissionsManage` |
+| מנהלה | **הגדרות / מפתחות / מיפוי MasterPlan / סטטוס ACC / מצב מערכת** | Native admin / operator | Authenticated / `SystemSettingsWrite` |
+| (host) | **NewShellWindow** | Project selector + menu | — |
 
-**EmailWindowView** — summaries, body/details, attachment **metadata** only. Deferred write/workflow actions
-**hidden** and **disabled**.
+### Dev-only / harness (not production menu)
 
-**AccControlPlaneStatusWindow** — mode, health, diagnostics, browse, read-only reconciliation. No
-upload/provisioning UI.
-
-**Gmail read scope (allowed):**
-
-- Silent restore via `IConnectorAuthService.TryRestoreSessionAsync` at V2 New System startup.
-- Explicit connect (`Connect`) when session missing.
-- Refresh / search / load details.
-
-**ACC read scope (allowed):**
-
-- Control-plane display, catalog/discovery browse, item lookup, read-only inbox reconciliation display.
-
----
-
-## 3. Dev-only / harness-only (not production menu)
-
-| Surface | Why | Dev entry point |
+| Surface | Why | Entry |
 | --- | --- | --- |
-| **InspectionShellView** | Developer harness; task-mode pilot incomplete | **DEBUG** shell menu only — **"ביקורת (מעטפת — DEBUG)"** |
-| **InboxViewModel / standalone `SiNet.App.Wpf` MainWindow** | Scaffold harness | Not V2 production entry |
-| **Legacy `EmailManagementView`** | Full production email (legacy) | Legacy `MainWindow` only — unchanged |
-| **כלי פיתוח** (dev tools group) | DEBUG-only admin submenu | `#if DEBUG` in `BuildMigratedOnlyMenu()` |
-
-**Note:** native **דוחות ביקורת** (`InspectionWindowView`) **is** in the Release menu when
-`Shell.OpenInspectionSurface` is granted. Only the **InspectionShellView** harness remains DEBUG-only.
+| **ביקורת (מעטפת — DEBUG)** | Developer harness | `#if DEBUG` + `Shell.OpenInspectionSurface` |
+| **כלי פיתוח** | DEBUG admin tools | `#if DEBUG` |
+| Legacy `EmailManagementView` / `MainWindow` | Full legacy email | V2 Legacy only |
 
 ---
 
-## 4. Deferred / blocked until policy slice
+## 4. Email — ACC-filing pilot
+
+Title in UI: **"ניהול דואר — Gmail + ACC Inbox"**.
+
+| Allowed | Blocked until policy / later slice |
+| --- | --- |
+| Gmail read (summaries, body, attachment metadata) | **GmailSend / Reply / Forward** (G-Policy) |
+| Silent restore + explicit Connect | Broad outbound mail windows |
+| ACC Inbox **ingest** (N1) | Unapproved ACC writes outside filing path |
+| **Move to project** + Jumbo / external download (N2) | Workflow task completion from Email (unless via approved coordinator path) |
+| ACC Inbox **recovery** (N3) | Full legacy EmailManagement parity |
+| HTML viewer / open-after-upload where wired | — |
+
+Sources of truth: Gmail label = mailbox filed; ACC = physical file; DB = helper cache.
+See [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) and
+[`EMAIL_ACC_STANDALONE_SMOKE.md`](./manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md).
+
+Deferred UI still hidden/disabled where retained (pagination/calendar/help placeholders, stub
+LinkToProject / CreateTask / Archive / CompleteTask commands that are not on the N1–N3 path).
+**Do not delete** suspended markup — mark inactive until a follow-up slice.
+
+---
+
+## 5. MasterPlan & Reports
+
+| Slice | Status |
+| --- | --- |
+| S2 company/contact mapping | **Done** — מנהלה → **מיפוי MasterPlan** |
+| S3 native R01 / R02 / R03 | **Done** — תפריט **דוחות** (`ReportsManagement`); User OAuth + Spreadsheets |
+| S4 SyncEngine namespaces + logging | **Done** — `SiNet.Infrastructure.Logging` |
+| Ops MasterPlan API key rotation | **Open** — [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) |
+| Retire V2 R0x dual path | **After soak** — not this pilot gate |
+
+UI parity vs V2 dialogs may be simplified (filters / R02 pivot); dual path retained until soak.
+
+---
+
+## 6. ACC host checklist (StandaloneNew)
+
+| Check | Standalone |
+| --- | --- |
+| `AddSiNetAutodesk()` via `AddSiNet(StandaloneNew)` | Yes |
+| Vault `ITokenProvider` | Yes (slice 2) |
+| `AccService:BaseUrl` / mode (`IAccServiceModeProvider`) | Yes — default Remote `https://localhost:8443`; DB override |
+| API key / vault diagnostics | Yes |
+| Local inbox bootstrap (`AccBootstrapLocalInboxBootstrapExecutor`) | Yes when BaseUrl empty (slice 2b) |
+| Remote `POST /v1/acc/inbox/ensure` | Yes when Remote |
+| Email ACC N1–N3 ports / executors | Yes — see Email docs |
+| Broad ACC write UI (provisioning screens, arbitrary metadata write) | **Blocked** until ACC-Write-Policy beyond approved filing |
+| Prefer MultiStart AccService for pilot smoke | **Yes** |
+
+---
+
+## 7. Explicitly suspended (narrow)
 
 | Area | Blocker | Status |
 | --- | --- | --- |
-| GmailSend / Reply / Forward | G-Policy | **Suspended** — not wired in New System WPF |
-| Gmail modify / labels | Policy | **Deferred** |
-| Attachment open/download | Read slice gap | **Deferred** — metadata only in pilot |
-| Email filing / MoveToProject / task completion from Email window | Workflow/filing slice + coordinator path | **Deferred** |
-| Drive / Sheets / Reports | Legacy/deferred | **Do not expose** |
-| ACC upload / provisioning / metadata write / folder ensure UI | ACC-Write-Policy | **Blocked** |
-| Production `GoogleService` switch | Host switch decision | **Blocked** |
-| FloatingProjectTasks / WorkflowDashboard in New Shell | Not migrated | **Deferred** |
-| Broad task-aware window migration (beyond read-only TaskPanel + closed viewer) | Integration contract exists; write/mutation paths not pilot-ready | **Deferred** |
+| GmailSend / Reply / Forward in New System WPF | G-Policy | **Suspended** |
+| Inspection Sheets create/export / screenshot Drive upload | Google / Inspection slice | **Deferred** |
+| ACC write beyond approved Email filing / inbox ensure | ACC-Write-Policy | **Blocked** |
+| Production switch of all legacy `GoogleService` consumers | Host cutover | **Blocked** |
+| FloatingProjectTasks / WorkflowDashboard write in New Shell | Not migrated | **Deferred** |
+| Broad task-aware window mutation | Integration contract | **Deferred** |
+| V2 New System as pilot host | Standalone decision | **Out of envelope** |
 
 ---
 
-## 5. Production shell menu rules
-
-Implemented in `NewShellFactory.BuildMigratedOnlyMenu()` (`src/SiNet.App.Wpf/Shell/NewShellFactory.cs`):
-
-### 5.1 Release menu (feature-gated)
-
-| Group | Menu label | Feature code | Host / factory |
-| --- | --- | --- | --- |
-| פרויקטים ותבניות | **מיילים** | `Shell.OpenEmailSurface` | `IEmailSurfaceHost` |
-| פרויקטים ותבניות | **בעבודה 2** | `Shell.OpenProjectWorkSurface` | `ProjectWorkSurfaceHost` |
-| משימות | **לוח משימות** | `Shell.OpenTaskPanelReadOnly` | `ITaskPanelReadOnlyWindowFactory` |
-| משימות | **דוחות ביקורת** | `Shell.OpenInspectionSurface` | `IInspectionWindowFactory` |
-| משימות | **צפייה בתהליכים (סגור)** | `Shell.OpenWorkflowClosedViewer` | `IWorkflowClosedViewerWindowFactory` |
-| משימות | *(admin / settings / ACC — unchanged)* | per existing gates | native admin surfaces |
-
-Additional groups (**משתמשים והרשאות**, **מנהלה**) unchanged — native admin, settings, ACC status, system
-status; all gated by existing `AppFeatureCodes` + `IAuthorizationQueryService`.
-
-### 5.2 DEBUG-only additions
-
-| Menu item | When |
-| --- | --- |
-| **ביקורת (מעטפת — DEBUG)** | `#if DEBUG` + `Shell.OpenInspectionSurface` |
-| **כלי פיתוח** subgroup | `#if DEBUG` dev-tools builder |
-
-**No new feature-flag framework.** `#if DEBUG` guards harness/dev-tools only; Release surfaces use
-existing `AppFeatureCodes` authorization.
-
-### 5.3 Known startup gap (Stage 4 / HostMode)
-
-`RunNewSystemStartup` in `SiNetProjectManagerV2/App.xaml.cs` may still open **legacy**
-`WPF_Window.SecretSetupWindow` and `WPF_Window.ProvisioningPasswordDialog` during vault setup and DB
-connection retry — **before** `NewShellWindow` appears. Native `SecretSetupWindow` is used from the
-shell menu only. Full removal of legacy startup dialogs is deferred to **Stage 4 (HostMode)**.
-See [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) § Known startup gap.
-
----
-
-## 6. EmailWindowView production guardrails
-
-| Rule | Implementation |
-| --- | --- |
-| No stub buttons visible | `ShowDeferredWriteActions == false` hides write/workflow UI |
-| Deferred commands disabled | `DeferredProductionPilotAction` → `CanExecute` always `false` |
-| Code preserved | Commands remain for future slices — **not deleted** |
-| Title / menu | "ניהול דואר — קריאה בלבד" |
-| Visual placeholders hidden | `ShowDeferredVisualPlaceholders == false` hides pagination (`1 / 3`), calendar, help, date pickers |
-| Clear search | `ClearSearchCommand` clears `SearchText` and reloads (real, minimal) |
-| Production notice | `ProductionPilotNotice` in sidebar + viewer footer (replaces "שלד ויזואלי" copy) |
-| Unread badge | Shown only when `ShowUnreadCount` (`UnreadEmailCount > 0`) |
-
-Deferred actions (hidden + disabled): LinkToProject, CreateTaskFromEmail, MarkHandled, Archive,
-Reply, Forward, OpenAttachment, CompleteTask.
-
-**Still suspended (markup retained, hidden/disabled):** real pagination, Gmail date-range filtering,
-calendar integration, help system. No new `IEmailGateway` query wiring in this polish slice.
-
----
-
-## 7. Workflow / Task guardrails (production)
-
-- ViewModels **must not** mutate `WorkflowStage` or `ProjectStatus` directly.
-- Business task completion **must not** run from New System email/inspection surfaces in this pilot.
-- Task open path (when added later): `TaskNavigationResolver` / `ITaskNavigationService` only — **no new router**.
-- No first/last entity fallback when work target missing.
-
-See [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
-
----
-
-## 8. ACC host production checklist
-
-ACC read/operator surfaces in New System **require V2 host** registration. Before expanding ACC beyond
-status/operator read-only:
-
-| Check | V2 host |
-| --- | --- |
-| `AddSiNetAutodesk()` in New System graph | ✅ `NewSystemServiceCollectionExtensions` |
-| `AccService:BaseUrl` / mode via `IAccServiceModeProvider` | ✅ DB setting + config |
-| API key / vault via `VaultAccServiceKeyDiagnostics` | ✅ Secret Setup |
-| `ITokenProvider` for local mode | ✅ V2 `App.xaml.cs` host glue |
-| `LegacyHostLocalAccInboxBootstrapExecutor` | ✅ host-only privileged local bootstrap |
-| `IAccInboxReconciliationService` impl | Legacy `SiNetSQL` — port native, impl host-bound |
-| Standalone `SiNet.App.Wpf` harness alone | ❌ incomplete ACC — not production representative |
-| ACC write/upload/provisioning from New System WPF | ❌ **blocked** until ACC-Write-Policy |
-
-**ACC-Host contract:** partially closed for read/operator; **not** closed for write/provisioning.
-
----
-
-## 9. Verification (smoke)
+## 8. Verification (automated)
 
 ```powershell
-dotnet build SiNetProjectManagerV2/SiNetProjectManagerV2.csproj
-dotnet test src/SiNet.App.Wpf.Tests/SiNet.App.Wpf.Tests.csproj
+dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
+dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
 ```
 
-Key test classes:
+Optional full CI-equivalent: `dotnet build SiNet.sln --configuration Release` then
+`dotnet test SiNet.sln --configuration Release --no-build`.
 
-- `ProductionPilotBoundaryTests`
-- `GoogleFoundationClosureTests`
-- `NewSystemBoundaryTests`
-- `WorkSurfaceWorkflowIntegrationBoundaryTests`
+**Do not** treat historical counts (e.g. **955/955** from 2026-07-05, or any older §9.2.1 table) as
+evidence for current HEAD — always re-run tests on the branch under review.
 
-### 9.2 Limited production smoke (2026-07-27)
+Useful boundary classes (non-exhaustive): `ProductionPilotBoundaryTests`,
+`StandaloneNewSystemHostBoundaryTests`, `StandaloneLocalAccInboxBootstrapTests`,
+`NewSystemBoundaryTests`, `GoogleFoundationClosureTests`.
 
-| Field | Value |
-| --- | --- |
-| **Smoke status** | **Not Run** — pending operator completion of [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) |
-| **Date** | 2026-07-27 |
-| **Environment** | Local workspace `d:\repos2026\SiNetProjectManager_GitHub`; Debug + Release build |
-| **User profile** | Agent/automated (no authenticated DB/Gmail session in smoke run) |
-| **Git** | `git.exe` not on PATH; verified via VS bundled git + GitHub API — see §9.3 |
-| **Build** | ✅ Debug + Release — 0 errors (263–274 pre-existing warnings, unrelated to pilot) |
-| **Tests** | ⚠️ Snapshot only — see §9.2.1 for the current HEAD run. The "955/955" figure previously recorded here was a 2026-07-05 snapshot and no longer matches the suite. |
+---
 
-### 9.2.1 Test run on current HEAD (2026-07-28)
-
-Measured with `dotnet test SiNet.sln --configuration Release --no-build` on branch
-`SiWorkNet10` (working tree at commit `22e7458` plus the audit-remediation changes).
-
-| Test project | Total | Passed | Failed | Skipped |
-| --- | --- | --- | --- | --- |
-| `SiNet.App.Wpf.Tests` | 2464 | 2457 | **7** | 0 |
-| `SiNet.Infrastructure.Google.Tests` | 89 | 89 | 0 | 0 |
-| `SiNet.LegacyBridge.Tests` | 20 | 20 | 0 | 0 |
-| **Solution total** | **2573** | **2566** | **7** | **0** |
-
-The `SiNet.App.Wpf.Tests` total grew from 2448 to 2464 because remediation round 2 added
-boundary/wiring tests (`LocalAccProjectRootFolderResolverTests`, `AccControlPlaneTlsWiringTests`,
-`V2CompositionGraphTests`, `WpfSecretsBoundaryTests`).
-
-The seven failures are pre-existing at HEAD and unrelated to the remediation work:
-
-| Failing test | Reason |
-| --- | --- |
-| `WorkflowClosedViewerBoundaryTests.NewShell_opens_native_workflow_viewer_not_legacy_management_window` | Asserts a literal caption ("תהליכים — קנבס") that the source no longer contains |
-| `NewShellNativeUserAdminMenuTests` (2 tests) | Menu-tree shape assertions out of date after the user-admin menu was regrouped |
-| `NewShellAccStatusMenuTests.NewShell_shows_acc_status_menu_only_for_system_settings_admin` | Same menu-grouping change |
-| `InfrastructureSqlBoundaryTests.Infrastructure_Sql_source_does_not_contain_legacy_SiNetSQL_identifiers` (2 cases) | `SqlUserGroupQueryService` / `SqlUserGroupCommandService` still use `SiNetSQL.Data` |
-| `EmailListMigrationBoundaryTests.Email_list_component_is_standalone` | Asserts `EmailListFilterBar` in XAML that has since been restructured |
-
-They are tracked in [`P2-TECH-DEBT-BACKLOG.md`](./P2-TECH-DEBT-BACKLOG.md). **A green pilot claim
-requires this count to be 0** - do not read "2566 passed" as "suite green". Because `ci.yml` runs
-these projects, the GitHub Actions workflow is also red until they are fixed; see
-[`AUDIT-REMEDIATION-MATRIX-2026-07-28.md`](./AUDIT-REMEDIATION-MATRIX-2026-07-28.md) §3.
-| **Process launch** | ✅ V2 exe starts (brief run); full New System path not exercised to shell (requires mode/vault/DB UI) |
-
-**Automated / static verification (passed):**
-
-- `RunNewSystemStartup` → vault → DB → DI → `ServiceLocator.Initialize` → `StartNewSystemConnectorAuthRestore` → `LaunchNewSystemShell` (no Legacy fallback on failure).
-- G-Startup: `TryRestoreSessionAsync` only — no `LoginAsync` in restore path.
-- NewShell menu (Release): **מיילים**, **בעבודה 2**, **לוח משימות**, **דוחות ביקורת**, **צפייה בתהליכים (סגור)** — each feature-gated; InspectionShell harness `#if DEBUG` only; no Drive/Sheets/WorkflowDashboard write surfaces.
-- Email pilot: `ShowDeferredWriteActions` / `ShowDeferredVisualPlaceholders` false; `ProductionPilotNotice`; `ClearSearchCommand`; no `OpenAttachmentCommand` in XAML.
-- Release build succeeds (Inspection menu excluded from Release compilation).
-
-**Manual smoke still required (operator checklist):**
-
-Use [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) — supersedes the inline §9.3.1 list for Stage 2 P0 surfaces (DB, Vault, Gmail restore, ACC health/diag, Email, ProjectWork, Task Workbench, Inspection, Workflow closed viewer).
-
-**Known issues:**
-
-- Interactive runtime smoke **Not Run** (2026-07-27) — requires operator with DB/vault/Gmail/ACC session.
-- `RunNewSystemStartup` may still show legacy SecretSetup/Provisioning dialogs before shell (Stage 4 HostMode fix) — see §5.3 and [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md).
-
-**Decision:** **Needs manual interactive smoke** before limited users. After operator passes checklist in §9.3 → **ready for 1–2 internal read-only pilot users**.
-
-### 9.3 Interactive smoke gate (2026-07-27)
+## 9. Manual smoke (operator)
 
 | Field | Value |
 | --- | --- |
-| **Status** | **Not Run** — operator must complete [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) |
-| **Date** | 2026-07-27 |
-| **Required operator** | Human with V2 access, DB connection, credential vault, Gmail token/credentials, and ACC host/config |
-| **Branch / commit** | `SiWorkNet10` (see latest commit on GitHub after push) |
-| **Build / tests** | Release build of `SiNet.sln` ✅ 0 errors; tests ⚠️ 2566/2573 with 7 pre-existing failures (see §9.2.1) |
+| **Interactive smoke** | **Not Run** |
+| **Primary host** | `SiNet.App.Wpf.exe` + AccService MultiStart |
+| **Shell / Stage-2 surfaces** | [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) — interpret launch steps as **standalone App.Wpf**, not V2 New System |
+| **Email ACC N1–N3** | [`manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md`](./manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md) |
+| **Pilot after Pass** | 1–2 internal **ACC-filing** pilot users (not send/reply) |
 
-**No automatic approval:** Agent/static tests and boundary guards **do not** authorize pilot users.
-Only a completed manual checklist with **Pass** on every required step may change status to ready.
+### 9.1 Operator focus (standalone)
 
-**Decision rules:**
+**Startup**
 
-| Outcome | When | Pilot decision |
-| --- | --- | --- |
-| **Ready for 1–2 internal read-only pilot users only** | Every checklist section **Pass** (or N/A where noted) | Approved for limited internal pilot |
-| **Needs fix before pilot** | Any section **Fail** | Not ready — fix and re-run |
-| **Blocked by environment/config** | Missing DB/vault/Gmail/ACC credentials or config | Not ready — resolve blockers first |
-
-**GitHub / file audit (passed on `SiWorkNet10`):**
-
-- `docs/NEW_SYSTEM_PRODUCTION_READINESS.md` (this doc, including §9.3)
-- `docs/UI_WINDOW_MIGRATION_MAP.md`
-- `docs/NEW_SYSTEM_BOUNDARY.md`
-- `docs/ACC_CONTROL_PLANE.md`
-- `src/SiNet.App.Wpf/Shell/NewShellFactory.cs`
-- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs`
-- `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml`
-- `src/SiNet.App.Wpf.Tests/Boundary/ProductionPilotBoundaryTests.cs`
-
-#### 9.3.1 Operator checklist (manual — required)
-
-**Startup / mode**
-
-- [ ] Launch V2 (`SiNetProjectManagerV2`).
-- [ ] Startup mode selection appears (if configured).
-- [ ] Select **New System**.
-- [ ] `RunNewSystemStartup` path runs (vault → DB → DI → auth → shell).
-- [ ] **NewShellWindow** opens.
-- [ ] **Legacy MainWindow** does **not** open.
-- [ ] No silent fallback to Legacy on failure.
-- [ ] Credential vault setup works or shows a clear setup screen.
-- [ ] DB connection works or shows a clear error (no silent continue).
-- [ ] `StartNewSystemConnectorAuthRestore` runs silently — **no** interactive Google login at startup.
+- [ ] MultiStart AccService then `SiNet.App.Wpf` (or equivalent Remote AccService).
+- [ ] Vault / schema / Windows auth gates succeed.
+- [ ] `NewShellWindow` opens; Legacy `MainWindow` does **not**.
+- [ ] Gmail silent restore — no forced interactive login at startup.
 
 **Shell / menu**
 
-- [ ] Menu shows **מיילים**, **בעבודה 2**, **לוח משימות**, **דוחות ביקורת**, **צפייה בתהליכים (סגור)** per role/feature gates.
-- [ ] **InspectionShellView** harness (**ביקורת (מעטפת — DEBUG)**) **absent** in **Release** build.
-- [ ] Inspection harness visible in **DEBUG** only (if feature gate allows).
-- [ ] No **Reports**, **Drive**, **Sheets**, **WorkflowDashboard** write surfaces (unless explicitly approved elsewhere).
-- [ ] **Secret Setup**, **Settings**, **Users**, **Permissions** appear only per `AppFeatureCodes` / role.
-- [ ] No legacy admin windows open from NewShell.
+- [ ] Feature-gated: מיילים, בעבודה 2, לוח משימות, דוחות ביקורת, צפייה בתהליכים (סגור).
+- [ ] When permitted: **דוחות** R01–R03, **מיפוי MasterPlan**, סטטוס ACC, admin surfaces.
+- [ ] Release: no InspectionShell DEBUG harness / כלי פיתוח.
 
-**Email read-only**
+**Email ACC-filing**
 
-- [ ] Open Email from NewShell.
-- [ ] Title: **"ניהול דואר — קריאה בלבד"**.
-- [ ] No visible **"שלד ויזואלי"** text.
-- [ ] Production pilot notice visible.
-- [ ] Project selector visible; select a real project → **ActiveProjectDisplay** updates.
-- [ ] **Connect Google** works only when user clicks (not auto at startup).
-- [ ] If valid token exists, session restores without extra login.
-- [ ] **Refresh** loads Gmail summaries for project label.
-- [ ] **Search** works; **ClearSearch** clears and reloads.
-- [ ] Select email → body/details load.
-- [ ] Attachments shown as **metadata only**.
-- [ ] **Absent / disabled:** OpenAttachment, Reply, Forward, Send, MoveToProject, LinkToProject, CreateTask, MarkHandled, Archive, CompleteTask.
-- [ ] Pagination / date / calendar / help placeholders not active.
-- [ ] No Gmail modify / labels / mark-read from this window.
+- [ ] Title reflects Gmail + ACC Inbox (not “קריאה בלבד” only).
+- [ ] Connect / refresh / search / details work.
+- [ ] Ingest / Move / Jumbo-or-external / recovery per Email ACC smoke checklist when AccService up.
+- [ ] **Absent:** Reply, Forward, Send as production actions.
 
 **ACC status**
 
-- [ ] Open **AccControlPlaneStatusWindow** (סטטוס ACC).
-- [ ] Mode displayed correctly.
-- [ ] Health and diagnostics displayed.
-- [ ] Key diagnostics show hash/prefix only — **no** raw secret.
-- [ ] Read-only browse/lookup works if data exists.
-- [ ] Read-only reconciliation works if sample exists.
-- [ ] **Absent:** upload, provisioning, folder ensure as normal UI, metadata write, direct `Bim360Service` from WPF.
+- [ ] Mode / health / diagnostics; no raw API key.
+- [ ] Remote mode when BaseUrl set.
 
-**Native admin / settings**
+**Decision rules:** every required checklist section **Pass** (or N/A) → limited internal ACC-filing
+pilot; any **Fail** → fix and re-run; missing credentials → blocked by environment.
 
-- [ ] **SecretSetupWindow** (native) opens.
-- [ ] **SettingsWindow** (native) opens.
-- [ ] **UserListWindow** / **AddUserDialogWindow** open per permission.
-- [ ] **ActionPermissionsWindow** opens per permission.
-- [ ] No legacy `UserManagementWindow`, `AddUserWindow`, `ActionPermissionWindow`, or legacy `SecretSetupWindow` from NewShell.
-
-#### 9.3.2 Manual smoke result template
-
-Copy into §9.3 (or a team log) after the operator run:
+### 9.2 Result template
 
 ```text
 Date:
@@ -361,80 +212,42 @@ Operator:
 Environment:
 Branch:
 Commit:
-DB status:        OK / Fail / Blocked
-Vault status:     OK / Fail / Blocked
-Gmail status:     OK / Fail / Blocked
-ACC status:       OK / Fail / Blocked
+Host: SiNet.App.Wpf (+ AccService Remote Y/N)
 
-Startup:          Pass / Fail / Blocked
-Notes:
-
-Shell/menu:       Pass / Fail / Blocked
-Notes:
-
-Email read-only:  Pass / Fail / Blocked
-Notes:
-
-ACC status:       Pass / Fail / Blocked
-Notes:
-
-Admin/settings:   Pass / Fail / Blocked
-Notes:
-
-Known issues:
+Startup:            Pass / Fail / Blocked
+Shell/menu:         Pass / Fail / Blocked
+Email ACC-filing:   Pass / Fail / Blocked
+MasterPlan/Reports: Pass / Fail / Blocked / N/A
+ACC status:         Pass / Fail / Blocked
+Admin/settings:     Pass / Fail / Blocked
 
 Final decision:
-  [ ] Ready for 1–2 internal read-only pilot users only
+  [ ] Ready for 1–2 internal ACC-filing pilot users
   [ ] Needs fix before pilot
   [ ] Blocked by environment/config
 ```
 
-**After manual pass:** update §9.3 **Status** to **Passed**, fill template above, then open to 1–2 internal read-only users.
+---
 
-**Next documentation slice (after manual smoke pass):** **Email Composite Work Surface Contract** — docs only; defines component breakdown (project selector, search/filter, list, viewer, attachments/status, calendar/context, action panel, task completion) **before** any composite business logic.
+## 10. Open decisions & next slices
 
-### 9.1 SiWorkNet10 file checklist (audit)
-
-These paths must exist on branch `SiWorkNet10` for the production pilot envelope to be considered
-**closed on GitHub** (not only in a local workspace):
-
-| Path | Purpose |
-| --- | --- |
-| `docs/NEW_SYSTEM_PRODUCTION_READINESS.md` | This envelope |
-| `src/SiNet.App.Wpf.Tests/Boundary/ProductionPilotBoundaryTests.cs` | Pilot guard tests |
-| `src/SiNet.App.Wpf/Shell/NewShellFactory.cs` | Email read-only menu; Inspection `#if DEBUG` only |
-| `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` | `ShowDeferredWriteActions`, disabled deferred commands |
-| `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml` | Hidden write UI; read-only attachment chips |
-| `docs/ACC_CONTROL_PLANE.md` | §5.1 Production host checklist |
-| `docs/NEW_SYSTEM_BOUNDARY.md` | Cross-ref to this doc |
+1. **Operator live smoke** (shell + Email ACC + optional Reports) — gate for pilot users.
+2. **G-Policy** — whether native `GmailSend` / Reply / Forward may appear in New System WPF.
+3. After smoke pass: **Email Composite Work Surface Contract** (docs only).
+4. Ops: MasterPlan API key rotation (`OPS-P0-SECRET-ROTATION.md`).
+5. Later: retire V2 R0x dual path; remove deprecated V2 New System startup after soak.
 
 ---
 
-## 10. Recommended next production slice
+## 11. Related docs index
 
-**Email read-only production polish** — **closed** in this slice: visual placeholders hidden/disabled,
-production-friendly notice copy, `ClearSearchCommand`, Hebrew empty state, unread badge when count > 0.
-No write/send/workflow wiring.
-
-**Option B (higher value, higher risk):** Email filing task-aware slice — only via existing
-`MoveToProject` → handler → `ITaskCompletionCoordinator` path; no new ACC write from WPF.
-
-**Do not** start with Option B until G-Policy + filing slice are explicitly approved.
-
-**After polish:** run real smoke on V2 New System with limited users before expanding pilot audience.
-
-**After manual smoke pass (§9.3):** publish **Email Composite Work Surface Contract** (docs only — no business logic).
-
----
-
-## 11. Suspended / not deleted
-
-| Item | Status |
+| Doc | Role |
 | --- | --- |
-| Full production replacement | **Suspended** |
-| Broad legacy window migration | **Suspended** |
-| InspectionShellView in production menu | **Suspended** (DEBUG/dev only) |
-| Stub visual-clone actions | **Hidden/disabled**, code retained |
-| Email visual placeholders (pagination, calendar, help, dates) | **Hidden/disabled**, markup retained — real integration deferred |
-| GmailSend / Drive / Sheets / ACC write | **Suspended** |
-| Legacy windows / GoogleService / old tasking model | **Retained** — not deleted |
+| [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md) | Host composition & slices 1–2b |
+| [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) | Layer / host-mode boundaries |
+| [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) | Email ACC N1–N3 |
+| [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) | Google scopes & G-Policy |
+| [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md) | Mapping + Reports + SyncEngine |
+| [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md) | AccService Local/Remote |
+| [`APP_SHELL.md`](./APP_SHELL.md) | Shell / startup modes |
+| [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md) | DB recovery baseline |

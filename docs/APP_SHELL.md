@@ -12,6 +12,8 @@ then the code (see [`README`](./README.md) documentation-driven workflow).
 
 > Related target docs: [`PROJECTS.md`](./PROJECTS.md) (Project Context, reused by the shell),
 > implemented by [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md).
+> Limited production pilot envelope (standalone host): [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
+> Standalone host target: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md).
 
 ---
 

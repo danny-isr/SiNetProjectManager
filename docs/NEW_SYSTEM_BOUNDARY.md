@@ -112,14 +112,17 @@ Canonical contract for task-driven opens and completion:
 - Completion: `ITaskCompletionCoordinator` → `IWorkflowCommandService` — **no direct UI mutation**.
 - Window readiness map: Email, Inspection, ProjectWork, Tasks, Workflow, ACC operator surfaces.
 
-## Limited production pilot (2026-07-05)
+## Limited production pilot (2026-07-28)
 
-Production envelope for V2 New System mode:
+Production envelope for **standalone** New System (`SiNet.App.Wpf.exe`):
 [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
 
-- Allowed: Email read-only, ACC status/operator read-only, native admin/settings, and feature-gated
-  work surfaces (**מיילים**, **בעבודה 2**, **לוח משימות**, **דוחות ביקורת**, **צפייה בתהליכים (סגור)**).
-- Not allowed in release shell menu: InspectionShell DEBUG harness, stub write actions, GmailSend, ACC write.
+- Host: `SiNetHostMode.StandaloneNew` only. V2 New System startup is deprecated and outside this envelope.
+- Allowed: Email **ACC-filing** (N1–N3), ACC status/operator, MasterPlan mapping + R01–R03 reports,
+  native admin/settings, and feature-gated work surfaces (**מיילים**, **בעבודה 2**, **לוח משימות**,
+  **דוחות ביקורת**, **צפייה בתהליכים (סגור)**, **דוחות**).
+- Not allowed in release shell menu: InspectionShell DEBUG harness, GmailSend/Reply/Forward (G-Policy),
+  unapproved ACC write beyond filing.
 
 ## Stage 4 HostMode target state (2026-07-27)
 
@@ -127,12 +130,12 @@ Production envelope for V2 New System mode:
 
 | Host mode | Intended host | Legacy bridge |
 | --- | --- | --- |
-| `StandaloneNew` | `src/SiNet.App.Wpf` harness and clean native hosts | Not registered |
+| `StandaloneNew` | `src/SiNet.App.Wpf` production New System host | Not registered |
 | `V2Hybrid` | `SiNetProjectManagerV2` while its shared container remains transitional | Registered explicitly |
 | `Service` | Non-WPF/background hosts | Not registered |
 
 `AddSiNet` accepts this mode, defaulting to `StandaloneNew`; `AddSiNetLegacyBridge()` is invoked only
-for `V2Hybrid`. The standalone WPF harness passes `StandaloneNew` explicitly. The V2 host may retain
+for `V2Hybrid`. The standalone WPF host (`SiNet.App.Wpf.exe`) passes `StandaloneNew` explicitly. The V2 host may retain
 its large existing registration graph during this transition, but must document its hybrid composition
 boundary and must not add an unconditional bridge through a new composition path.
 

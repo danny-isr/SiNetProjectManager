@@ -6,8 +6,12 @@
 This document records the **current code truth** for Google/Gmail/Drive/Sheets across the clean stack
 and the legacy host. It exists to prevent doc/code drift while the refactor is split between:
 
-- the native **module + harness** path (`SiNet.App.Wpf` + `SiNet.Infrastructure.Google`), and
-- the legacy **production host** (`SiNetProjectManagerV2` + `SiOffice.GoogleConnector`).
+- the native **standalone New System** path (`SiNet.App.Wpf` + `SiNet.Infrastructure.Google`), and
+- the legacy host (`SiNetProjectManagerV2` + `SiOffice.GoogleConnector`).
+
+Pilot envelope (what may ship to limited users): [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
+**G-Policy** in that envelope means **GmailSend / Reply / Forward** only — it does **not** block
+approved MasterPlan Sheets R01–R03 or Email ACC filing (N1–N3).
 
 When this document and the code disagree, fix the document first, then make an explicit follow-up
 decision for any behavior change.
@@ -36,7 +40,7 @@ decision for any behavior change.
 | Capability | Active implementation | Stack | Current status |
 | --- | --- | --- | --- |
 | Gmail inbox read (project label scoped) | `InboxViewModel` -> `IEmailGateway` -> `GmailEmailGateway` -> `GmailClientProvider` | Native | Active |
-| First real email window (read-only content/details) | `EmailWindowViewModel` -> `IEmailGateway` + `IConnectorAuthService` | Native | Active, read-only body + attachment metadata |
+| First real email window (Gmail + ACC-filing) | `EmailWindowViewModel` -> `IEmailGateway` + ACC ports / executors | Native | Active ACC-filing pilot (N1–N3); Send/Reply/Forward still G-Policy |
 | Gmail auth/health bridge | `IConnectorAuthService` -> `GmailConnectorAuthService` | Native | Active |
 | Gmail send capability | `IEmailSender` -> `GmailEmailSender` | Native module | Implemented in code; host adoption is still separate |
 | Gmail outbound send used by legacy flows | `GmailOutboundMailService` / `GoogleService` | Legacy host | Active |
@@ -53,11 +57,11 @@ decision for any behavior change.
 | Host | Google runtime path | `AddSiNetGoogle()` | `AddSiNetSecrets()` | Result |
 | --- | --- | --- | --- | --- |
 | `SiNetProjectManagerV2` production host | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` for active legacy flows; native Gmail module is registered only for future New System consumers | Yes, via `AddSiNetNewSystemGraph()` | Yes, via `AddSiNetNewSystemGraph()` | Vault and native Gmail auth/session services are available to the New System graph, but production Google behavior remains legacy until a window/runtime slice explicitly adopts them |
-| `SiNet.App.Wpf` standalone harness | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` | Yes | Yes | Native Gmail is wired with vault-first client-secrets resolution when the secrets provider can resolve them; config fallback remains available only when the provider cannot supply a path |
+| `SiNet.App.Wpf` standalone New System | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` (+ Drive/Sheets for ProjectWork / Reports) | Yes | Yes | Production New System host for the limited pilot; vault-first client-secrets; GmailSend adoption still gated by G-Policy |
 
-Implication: the clean Gmail module is real and testable, but it is **not** the production-host
-implementation today. The standalone harness is now secrets-aware, yet production Gmail/Drive/Sheets
-behavior still belongs to the legacy host.
+Implication: native Gmail/Drive/Sheets on standalone are the **New System pilot** path. Legacy
+`GoogleService` remains the V2 Legacy production path until cutover. G-Policy still blocks broad
+Send/Reply/Forward window adoption in New System WPF.
 
 ## 3. Native Gmail Module Boundary
 

@@ -14,11 +14,12 @@ public sealed class ProductionPilotBoundaryTests
         var doc = ReadRepoFile("docs/NEW_SYSTEM_PRODUCTION_READINESS.md");
 
         Assert.Contains("Limited Production Pilot", doc, StringComparison.Ordinal);
-        Assert.Contains("EmailWindowView", doc, StringComparison.Ordinal);
-        Assert.Contains("InspectionShellView", doc, StringComparison.Ordinal);
-        Assert.Contains("Read-only", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SiNet.App.Wpf.exe", doc, StringComparison.Ordinal);
+        Assert.Contains("ACC-filing", doc, StringComparison.Ordinal);
+        Assert.Contains("InspectionShell", doc, StringComparison.Ordinal);
         Assert.Contains("GmailSend", doc, StringComparison.Ordinal);
-        Assert.Contains("ACC upload", doc, StringComparison.Ordinal);
+        Assert.Contains("ReportsManagement", doc, StringComparison.Ordinal);
+        Assert.Contains("StandaloneNew", doc, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,13 +80,13 @@ public sealed class ProductionPilotBoundaryTests
     {
         var doc = ReadRepoFile("docs/NEW_SYSTEM_PRODUCTION_READINESS.md");
 
-        Assert.Contains("9.3 Interactive smoke gate", doc, StringComparison.Ordinal);
+        Assert.Contains("## 9. Manual smoke", doc, StringComparison.Ordinal);
+        Assert.Contains("Not Run", doc, StringComparison.Ordinal);
         Assert.Contains("Blocked by environment/config", doc, StringComparison.Ordinal);
-        Assert.Contains("No automatic approval", doc, StringComparison.Ordinal);
-        Assert.Contains("9.3.1 Operator checklist", doc, StringComparison.Ordinal);
-        Assert.Contains("9.3.2 Manual smoke result template", doc, StringComparison.Ordinal);
-        Assert.Contains("Ready for 1–2 internal read-only pilot users only", doc, StringComparison.Ordinal);
+        Assert.Contains("EMAIL_ACC_STANDALONE_SMOKE.md", doc, StringComparison.Ordinal);
+        Assert.Contains("Ready for 1–2 internal ACC-filing pilot users", doc, StringComparison.Ordinal);
         Assert.Contains("Email Composite Work Surface Contract", doc, StringComparison.Ordinal);
+        Assert.Contains("G-Policy", doc, StringComparison.Ordinal);
     }
 
     [Fact]
