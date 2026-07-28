@@ -1,4 +1,4 @@
-namespace SiNetSQL.Services;
+namespace MasterPlan.SyncEngine.Shared;
 
 /// <summary>
 /// Well-known setting keys used across the application.

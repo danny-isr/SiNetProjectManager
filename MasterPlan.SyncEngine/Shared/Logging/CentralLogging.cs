@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  DEPRECATED PENDING REMOVAL (AccService decoupling B1b / B2):
-//  Canonical implementation is src/SiNet.Infrastructure.Logging/CentralLogging.cs.
-//  This Shared copy remains only for MasterPlan.SyncEngine until that host is cut over.
+//  PENDING: ProjectReference cut-over to src/SiNet.Infrastructure.Logging/CentralLogging.cs.
+//  Namespace hygiene (S4): MasterPlan.SyncEngine.Shared.Logging — no longer SiNetSQL.Services.Logging.
 // ─────────────────────────────────────────────────────────────────────────────
 //  CentralLogging — shared logging configuration for every SiNet app.
 //
@@ -20,6 +19,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 using System.Data;
+using MasterPlan.SyncEngine.Shared;
 using Microsoft.Data.SqlClient;
 using Serilog;
 using Serilog.Configuration;
@@ -27,7 +27,7 @@ using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
 
-namespace SiNetSQL.Services.Logging;
+namespace MasterPlan.SyncEngine.Shared.Logging;
 
 /// <summary>
 /// Logical name of an application — drives the sub-folder under the central

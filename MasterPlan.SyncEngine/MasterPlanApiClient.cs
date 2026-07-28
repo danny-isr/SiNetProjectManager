@@ -66,11 +66,12 @@ public class MasterPlanApiClient : IDisposable
         // API key precedence:
         //   1) Windows Credential Manager  (SecretKeys.MasterPlanApiKey) — preferred, per-user encrypted
         //   2) MASTERPLAN_API_KEY env var  — for ad-hoc/test runs on servers without WPF vault
-        var apiKey = SiNetSQL.Services.CredentialVaultService.GetSecret(SiNetSQL.Services.SecretKeys.MasterPlanApiKey)
+        var apiKey = MasterPlan.SyncEngine.Shared.CredentialVaultService.GetSecret(
+                MasterPlan.SyncEngine.Shared.SecretKeys.MasterPlanApiKey)
             ?? Environment.GetEnvironmentVariable("MASTERPLAN_API_KEY")
             ?? throw new InvalidOperationException(
                 "MasterPlan API key not found. Provision via WPF SecretSetupWindow " +
-                $"(vault key '{SiNetSQL.Services.SecretKeys.MasterPlanApiKey}'), " +
+                $"(vault key '{MasterPlan.SyncEngine.Shared.SecretKeys.MasterPlanApiKey}'), " +
                 "or set the MASTERPLAN_API_KEY environment variable. " +
                 "Do not store API keys in appsettings.json.");
 

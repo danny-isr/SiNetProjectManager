@@ -1,6 +1,6 @@
 # Master Plan → Standalone New System
 
-> Status: **Approved — S2 mapping implemented (awaiting operator smoke)**  
+> Status: **Approved — S2 mapping done · S4 namespace hygiene done**  
 > Date: 2026-07-28  
 > Approved by: operator (chat 2026-07-28)  
 
@@ -89,14 +89,16 @@ MasterPlan.SyncEngine (Task Scheduler)
 
 ### S4 — SyncEngine hygiene (parallel ops track)
 
-**In:**
-- De-vendor Shared off `SiNetSQL.*` namespaces toward Application / Infrastructure.Logging
-- Keep **console host + Task Scheduler** (do not embed in App.Wpf)
-- Ops: document schedule; complete MasterPlan API key rotation ([`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) — still Not done)
+**In (delivered — namespace hygiene):**
+- Renamed Shared off `SiNetSQL.Services*` → `MasterPlan.SyncEngine.Shared` (+ `.Logging`)
+- Console host + Task Scheduler unchanged (not embedded in App.Wpf)
+- Vault key strings unchanged (`SecretCatalog` parity for MasterPlan API key)
+
+**Still open:**
+- Cut over Shared logging copy to `SiNet.Infrastructure.Logging` ProjectReference
+- Ops: MasterPlan API key rotation ([`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) — still Not done)
 
 **Out:** Rewriting daily/monthly sync algorithms unless a defect requires it.
-
-**Risk / effort:** Medium — deploy path on `SI-WIN-2K19`; CrossSync lock already hardened.
 
 ## Suggested order
 

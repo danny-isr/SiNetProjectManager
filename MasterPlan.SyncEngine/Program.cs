@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
-using SiNetSQL.Services.Logging;
+using MasterPlan.SyncEngine.Shared.Logging;
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // Register Dapper type handlers for SQL Server compatibility

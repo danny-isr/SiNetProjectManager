@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
 
-namespace SiNetSQL.Services;
+namespace MasterPlan.SyncEngine.Shared;
 
 /// <summary>
 /// Provides secure storage for application secrets using Windows Credential Manager.

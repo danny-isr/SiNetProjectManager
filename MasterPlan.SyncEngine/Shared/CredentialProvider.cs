@@ -1,4 +1,4 @@
-namespace SiNetSQL.Services;
+namespace MasterPlan.SyncEngine.Shared;
 
 /// <summary>
 /// Static bridge for accessing application secrets from the credential vault.
@@ -57,7 +57,7 @@ public static class SecretKeys
 
     // Password that protects AccService's local self-signed PFX (accservice.pfx).
     // Not the TLS trust pin — pins live in SystemSettings.
-    // Host-only: see SecretKeys.OptionalAtClientStartup in SiNetSQL.
+    // Host-only: see SecretKeys.OptionalAtClientStartup.
     public const string AccServiceCertificatePassword = "SiNet/AccService/CertificatePassword";
 
     // MasterPlan Web API — X-API-Key header used by MasterPlan.SyncEngine.
