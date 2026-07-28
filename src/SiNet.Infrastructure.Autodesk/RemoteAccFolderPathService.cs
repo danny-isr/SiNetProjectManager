@@ -3,6 +3,7 @@ using SiOffice.AccService.Contracts;
 using System.Net.Http.Json;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
+using SiNet.Application.Diagnostics;
 
 namespace SiNet.Infrastructure.Autodesk;
 
@@ -74,6 +75,22 @@ internal sealed class RemoteAccFolderPathService(
         request.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        // #region agent log
+        if (ensurePath)
+        {
+            AgentDebugNdjson.Write(
+                "H4",
+                "RemoteAccFolderPathService.SendAsync",
+                "ensure-path response",
+                new Dictionary<string, object?>
+                {
+                    ["statusCode"] = (int)response.StatusCode,
+                    ["isSuccess"] = response.IsSuccessStatusCode,
+                    ["segmentCount"] = pathSegments.Count,
+                    ["segments"] = string.Join("/", pathSegments.Take(4)),
+                });
+        }
+        // #endregion
         if (!ensurePath && response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;

@@ -205,6 +205,22 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
                 () => EmailDetail.BumpLoadVersion())
             : null;
 
+        // #region agent log
+        SiNet.Application.Diagnostics.AgentDebugNdjson.Write(
+            "H3",
+            "EmailWindowViewModel.ctor",
+            "external-download wiring",
+            new Dictionary<string, object?>
+            {
+                ["hasCoordinator"] = externalDownloadCoordinator is not null,
+                ["hasBrowserHost"] = externalDownloadBrowserHost is not null,
+                ["handlerCreated"] = _externalDownloadHandler is not null,
+                ["hasBodyRenderer"] = bodyRenderer is not null,
+                ["bodyRendererType"] = bodyRenderer?.GetType().FullName,
+            },
+            runId: "email-viewer-debug");
+        // #endregion
+
         if (_externalDownloadHandler is not null)
         {
             EmailDetail.SetExternalDownloadHandler(_externalDownloadHandler);
@@ -441,8 +457,18 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         await EmailDetail.ApplySelectionAsync(value).ConfigureAwait(true);
     }
 
-    private void OnAccStatusPatched(object? sender, string display) =>
+    private async void OnAccStatusPatched(object? sender, string display)
+    {
         EmailDetail.Viewer.AccStatusDisplay = display;
+        try
+        {
+            await EmailDetail.SyncSelectedRowFromListAndRefreshAttachmentsAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"רענון צרופות אחרי העלאה ל-ACC נכשל: {ex.Message}";
+        }
+    }
 
     private async Task ApplyTaskContextAsync(WorkSurfaceContext context)
     {

@@ -419,6 +419,13 @@ internal sealed class EmailAccSelectionHandler
             AccUploadStatusText = null,
         };
 
+        // Native ingest returns InboxMessageId even when ACC status sync has not yet
+        // populated finalStatus — bind it so the detail strip can load AccItemId for open.
+        if (upload.InboxMessageId is int uploadedInboxId && uploadedInboxId > 0)
+        {
+            patched = patched with { InboxMessageId = uploadedInboxId };
+        }
+
         if (upload.Succeeded
             && patched.AccProcessingStatus is EmailAccProcessingStatus.UploadInProgress
                 or EmailAccProcessingStatus.ReconciliationRequired)

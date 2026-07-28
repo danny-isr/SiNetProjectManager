@@ -350,9 +350,32 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     private void RefreshExternalDownloadLinks()
     {
-        var urls = _selectedEmail is not null && _externalDownloadHandler?.IsAvailable == true
-            ? EmailExternalDownloadLinkDetector.ExtractUrls(SelectedEmailBody)
+        var handlerAvailable = _externalDownloadHandler?.IsAvailable == true;
+        var bodyUrls = EmailExternalDownloadLinkDetector.ExtractUrls(SelectedEmailBody);
+        var htmlUrls = EmailExternalDownloadLinkDetector.ExtractUrls(_selectedEmailHtmlBody);
+        var urls = _selectedEmail is not null && handlerAvailable
+            ? bodyUrls
             : Array.Empty<string>();
+
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H3",
+            "EmailDetailViewModel.RefreshExternalDownloadLinks",
+            "external-link refresh",
+            new Dictionary<string, object?>
+            {
+                ["hasSelectedEmail"] = _selectedEmail is not null,
+                ["handlerNull"] = _externalDownloadHandler is null,
+                ["handlerAvailable"] = handlerAvailable,
+                ["bodyUrlCount"] = bodyUrls.Count,
+                ["htmlUrlCount"] = htmlUrls.Count,
+                ["appliedUrlCount"] = urls.Count,
+                ["bodyLen"] = SelectedEmailBody?.Length ?? 0,
+                ["htmlLen"] = _selectedEmailHtmlBody?.Length ?? 0,
+            },
+            runId: "email-viewer-debug");
+        // #endregion
+
         AttachmentStrip.SetExternalDownloadLinks(urls);
     }
 
@@ -822,6 +845,35 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             ? Task.CompletedTask
             : RefreshInboxAttachmentsAsync(_selectedEmailLoadVersion, _selectedEmail.Id);
 
+    /// <summary>
+    /// After ACC upload patches the list row (same Gmail id), sync detail state and reload
+    /// AccItemId so double-click open-in-ACC works without re-selecting the email.
+    /// </summary>
+    public async Task SyncSelectedRowFromListAndRefreshAttachmentsAsync()
+    {
+        var listRow = _emailList.SelectedEmail;
+        if (listRow is null
+            || _selectedEmail is null
+            || !string.Equals(listRow.Id, _selectedEmail.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _selectedEmail = listRow;
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H-O3",
+            "EmailDetailViewModel.SyncSelectedRowFromListAndRefreshAttachmentsAsync",
+            "sync after list ACC patch",
+            new Dictionary<string, object?>
+            {
+                ["inboxMessageId"] = listRow.InboxMessageId,
+                ["accStatus"] = listRow.AccStatusDisplay,
+            });
+        // #endregion
+        await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
+    }
+
     private async Task RefreshInboxAttachmentsAsync(int loadVersion, string messageId)
     {
         // #region agent log
@@ -863,13 +915,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail?.ProjectId ?? 0;
-        if (projectId <= 0)
-        {
-            // #region agent log
-            WorkflowDebugTrace.Step("Email.TagUI", "EARLY_EXIT projectId<=0 — tagging chips stay hidden");
-            // #endregion
-            return;
-        }
 
         var inboxAttachments = await _attachmentTaggingService
             .LoadInboxAttachmentsAsync(resolvedInboxId)
@@ -893,16 +938,38 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         if (!IsCurrentSelection(messageId, loadVersion))
             return;
 
-        var alternatives = await _attachmentTaggingService
-            .LoadAlternativesAsync(projectId)
-            .ConfigureAwait(true);
+        // Alternatives/tagging need a project; AccItemId open-in-ACC must still work without one.
+        IReadOnlyList<EmailProjectAlternativeOption> alternatives = [];
+        if (projectId > 0)
+        {
+            alternatives = await _attachmentTaggingService
+                .LoadAlternativesAsync(projectId)
+                .ConfigureAwait(true);
 
-        if (!IsCurrentSelection(messageId, loadVersion))
+            if (!IsCurrentSelection(messageId, loadVersion))
+            {
+                // #region agent log
+                WorkflowDebugTrace.Step("Email.TagUI", "EARLY_EXIT selection-stale after LoadAlternatives");
+                // #endregion
+                return;
+            }
+        }
+        else
         {
             // #region agent log
-            WorkflowDebugTrace.Step("Email.TagUI", "EARLY_EXIT selection-stale after LoadAlternatives");
+            WorkflowDebugTrace.Step("Email.TagUI", "projectId<=0 — applying AccItemId open state without tagging alternatives");
+            AgentDebugNdjson.Write(
+                "H-O2",
+                "EmailDetailViewModel.RefreshInboxAttachmentsAsync",
+                "open-state without project",
+                new Dictionary<string, object?>
+                {
+                    ["inboxMessageId"] = resolvedInboxId,
+                    ["hasInboxAccProjectId"] = !string.IsNullOrWhiteSpace(_inboxAccProjectId),
+                    ["attachmentCount"] = inboxAttachments.Count,
+                    ["withAccItemId"] = inboxAttachments.Count(a => !string.IsNullOrWhiteSpace(a.AccItemId)),
+                });
             // #endregion
-            return;
         }
 
         var matchedInboxIds = new HashSet<int>();
@@ -978,6 +1045,22 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     private async Task OpenAttachmentInAccAsync(EmailDetailAttachmentItem item)
     {
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H-O1",
+            "EmailDetailViewModel.OpenAttachmentInAccAsync",
+            "open requested",
+            new Dictionary<string, object?>
+            {
+                ["canOpen"] = item.CanOpenInAcc,
+                ["hasAccItemId"] = !string.IsNullOrWhiteSpace(item.AccItemId),
+                ["hasInboxAccProjectId"] = !string.IsNullOrWhiteSpace(_inboxAccProjectId),
+                ["hasAccLauncher"] = _accLauncher is not null,
+                ["inboxAttachmentId"] = item.InboxAttachmentId,
+                ["fileName"] = item.FileName,
+            });
+        // #endregion
+
         if (!item.CanOpenInAcc)
         {
             MessageBox.Show("הקובץ עדיין לא הועלה ל-ACC.", "לא זמין",
@@ -1009,11 +1092,31 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             WorkflowDebugTrace.Step(
                 "Email.TagUI",
                 $"OpenInAcc att={item.InboxAttachmentId} canOpen={item.CanOpenInAcc} projectLen={_inboxAccProjectId.Length}");
+            AgentDebugNdjson.Write(
+                "H-O4",
+                "EmailDetailViewModel.OpenAttachmentInAccAsync",
+                "launching ACC docs url",
+                new Dictionary<string, object?>
+                {
+                    ["urlHost"] = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : null,
+                    ["hasFolderId"] = !string.IsNullOrWhiteSpace(_inboxAccFolderId),
+                });
             // #endregion
             _accLauncher.Open(url);
         }
         catch (Exception ex)
         {
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H-O4",
+                "EmailDetailViewModel.OpenAttachmentInAccAsync",
+                "open failed",
+                new Dictionary<string, object?>
+                {
+                    ["exceptionType"] = ex.GetType().Name,
+                    ["message"] = ex.Message,
+                });
+            // #endregion
             MessageBox.Show($"שגיאה בפתיחת הקובץ: {ex.Message}", "שגיאה",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }

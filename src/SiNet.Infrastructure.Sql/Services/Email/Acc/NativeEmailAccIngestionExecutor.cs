@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Settings;
@@ -50,6 +51,18 @@ public sealed class NativeEmailAccIngestionExecutor(
             ? Environment.UserName
             : command.ActingUserLogin.Trim();
 
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H3",
+            "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+            "ingest start",
+            new Dictionary<string, object?>
+            {
+                ["gmailMessageIdLen"] = command.GmailMessageId.Length,
+                ["hasInternetMessageId"] = !string.IsNullOrWhiteSpace(command.InternetMessageId),
+            });
+        // #endregion
+
         EmailMessageDetails? details;
         try
         {
@@ -59,6 +72,13 @@ public sealed class NativeEmailAccIngestionExecutor(
         }
         catch (Exception ex)
         {
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H3",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "gmail details exception",
+                new Dictionary<string, object?> { ["exceptionType"] = ex.GetType().Name, ["message"] = ex.Message });
+            // #endregion
             var authMessage = EmailAccIngestGates.MapAuthFailureMessage(ex.Message);
             var mid = EmailMessageIdentity.GetMessageUniqueId(command.InternetMessageId, command.GmailMessageId);
             return Failed(mid, null, authMessage ?? ex.Message, stopwatch.ElapsedMilliseconds);
@@ -66,6 +86,9 @@ public sealed class NativeEmailAccIngestionExecutor(
 
         if (details is null)
         {
+            // #region agent log
+            AgentDebugNdjson.Write("H3", "NativeEmailAccIngestionExecutor.IngestToInboxAsync", "gmail details null");
+            // #endregion
             var mid = EmailMessageIdentity.GetMessageUniqueId(command.InternetMessageId, command.GmailMessageId);
             return Failed(
                 mid,
@@ -77,6 +100,9 @@ public sealed class NativeEmailAccIngestionExecutor(
         var internetMessageId = FirstNonEmpty(details.InternetMessageId, command.InternetMessageId);
         if (string.IsNullOrWhiteSpace(internetMessageId))
         {
+            // #region agent log
+            AgentDebugNdjson.Write("H3", "NativeEmailAccIngestionExecutor.IngestToInboxAsync", "missing Message-ID");
+            // #endregion
             return Failed(
                 null,
                 null,
@@ -86,6 +112,17 @@ public sealed class NativeEmailAccIngestionExecutor(
 
         var messageUniqueId = EmailMessageIdentity.GetMessageUniqueId(internetMessageId, details.MessageId);
         var attachments = details.Attachments ?? [];
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H3",
+            "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+            "gmail details loaded",
+            new Dictionary<string, object?>
+            {
+                ["attachmentCount"] = attachments.Count,
+                ["hasInternetMessageId"] = true,
+            });
+        // #endregion
         if (attachments.Count == 0)
         {
             return new EmailAccUploadResult(
@@ -196,8 +233,36 @@ public sealed class NativeEmailAccIngestionExecutor(
             }
         }
 
-        if (!await TryAcquireLeaseAsync(db, existing, actingLogin, cancellationToken).ConfigureAwait(false))
+        bool leaseAcquired;
+        try
         {
+            leaseAcquired = await TryAcquireLeaseAsync(db, existing, actingLogin, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H6",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "lease acquire threw",
+                new Dictionary<string, object?>
+                {
+                    ["exceptionType"] = ex.GetType().Name,
+                    ["message"] = ex.Message,
+                });
+            // #endregion
+            throw;
+        }
+
+        if (!leaseAcquired)
+        {
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H6",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "lease not acquired — InProgress");
+            // #endregion
             return new EmailAccUploadResult(
                 EmailAccUploadOutcome.InProgress,
                 messageUniqueId,
@@ -210,10 +275,23 @@ public sealed class NativeEmailAccIngestionExecutor(
 
         try
         {
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H2",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "calling inbox bootstrap",
+                new Dictionary<string, object?> { ["messageDbId"] = existing.Id });
+            // #endregion
             var bootstrap = await _inboxBootstrap.EnsureAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(bootstrap.AccProjectId)
                 || string.IsNullOrWhiteSpace(bootstrap.AccInboxFolderId))
             {
+                // #region agent log
+                AgentDebugNdjson.Write(
+                    "H2",
+                    "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                    "bootstrap returned empty ids");
+                // #endregion
                 return await FailAndReleaseAsync(
                         db,
                         existing,
@@ -230,12 +308,33 @@ public sealed class NativeEmailAccIngestionExecutor(
             var messageKey = EmailMessageIdentity.GetMessageKey(messageUniqueId);
             var pathSegments = AccInboxLayout.BuildMessageFolderPath(existing.ThreadKey, messageKey);
 
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H4",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "ensuring MSG folder path",
+                new Dictionary<string, object?>
+                {
+                    ["pathSegments"] = string.Join("/", pathSegments),
+                });
+            // #endregion
             var msgFolderId = await _folderPathService
                 .EnsurePathAsync(inboxProjectId, inboxRootFolderId, pathSegments, cancellationToken)
                 .ConfigureAwait(false);
             var attachmentsFolderId = await _folderPathService
                 .EnsurePathAsync(inboxProjectId, msgFolderId, [AccInboxLayout.AttachmentsFolderName], cancellationToken)
                 .ConfigureAwait(false);
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H4",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "folder path ensured",
+                new Dictionary<string, object?>
+                {
+                    ["hasMsgFolderId"] = !string.IsNullOrWhiteSpace(msgFolderId),
+                    ["hasAttachmentsFolderId"] = !string.IsNullOrWhiteSpace(attachmentsFolderId),
+                });
+            // #endregion
 
             existing.InboxAccProjectId = inboxProjectId;
             existing.InboxAccFolderId = msgFolderId;
@@ -323,6 +422,18 @@ public sealed class NativeEmailAccIngestionExecutor(
                 }
                 catch (Exception ex)
                 {
+                    // #region agent log
+                    AgentDebugNdjson.Write(
+                        "H5",
+                        "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                        "attachment upload failed",
+                        new Dictionary<string, object?>
+                        {
+                            ["fileName"] = attachment.FileName,
+                            ["exceptionType"] = ex.GetType().Name,
+                            ["message"] = ex.Message,
+                        });
+                    // #endregion
                     _logger.Warn($"[NativeAccIngest] Attachment failed '{attachment.FileName}': {ex.Message}");
                 }
                 finally
@@ -369,6 +480,20 @@ public sealed class NativeEmailAccIngestionExecutor(
             _logger.Info(
                 $"[NativeAccIngest] Uploaded {uploadedCount}/{attachments.Count} for MessageUniqueId={messageUniqueId}");
 
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H6",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "ingest succeeded",
+                new Dictionary<string, object?>
+                {
+                    ["uploadedCount"] = uploadedCount,
+                    ["totalAttachments"] = attachments.Count,
+                    ["durationMs"] = stopwatch.ElapsedMilliseconds,
+                    ["inboxMessageId"] = existing.Id,
+                });
+            // #endregion
+
             return new EmailAccUploadResult(
                 EmailAccUploadOutcome.Succeeded,
                 messageUniqueId,
@@ -380,6 +505,18 @@ public sealed class NativeEmailAccIngestionExecutor(
         }
         catch (Exception ex)
         {
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H6",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "ingest failed",
+                new Dictionary<string, object?>
+                {
+                    ["exceptionType"] = ex.GetType().Name,
+                    ["message"] = ex.Message,
+                    ["durationMs"] = stopwatch.ElapsedMilliseconds,
+                });
+            // #endregion
             _logger.Warn($"[NativeAccIngest] Failed: {ex.Message}");
             return await FailAndReleaseAsync(
                     db,
@@ -439,6 +576,8 @@ public sealed class NativeEmailAccIngestionExecutor(
         var now = DateTime.UtcNow;
         var staleThreshold = now.AddMinutes(-EmailAccLeasePolicy.LeaseTtlMinutes);
 
+        // Named args required: positional CancellationToken is captured by params object[]
+        // and EF then throws "no store type mapping for CancellationToken".
         var rowsAffected = await db.Database.ExecuteSqlRawAsync(
             @"UPDATE EmailInboxMessage 
               SET Status = {0}, 
@@ -448,16 +587,31 @@ public sealed class NativeEmailAccIngestionExecutor(
               WHERE Id = {4} 
                 AND (Status = {5} OR Status = {6} 
                      OR (Status = {7} AND ProcessingStartedAtUtc < {8}))",
-            cancellationToken,
-            (int)EmailInboxStatus.Processing,
-            currentLogin,
-            now,
-            now,
-            message.Id,
-            (int)EmailInboxStatus.Pending,
-            (int)EmailInboxStatus.Error,
-            (int)EmailInboxStatus.Processing,
-            staleThreshold).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            parameters:
+            [
+                (int)EmailInboxStatus.Processing,
+                currentLogin,
+                now,
+                now,
+                message.Id,
+                (int)EmailInboxStatus.Pending,
+                (int)EmailInboxStatus.Error,
+                (int)EmailInboxStatus.Processing,
+                staleThreshold,
+            ]).ConfigureAwait(false);
+
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H6",
+            "NativeEmailAccIngestionExecutor.TryAcquireLeaseAsync",
+            "lease update completed",
+            new Dictionary<string, object?>
+            {
+                ["rowsAffected"] = rowsAffected,
+                ["messageId"] = message.Id,
+            });
+        // #endregion
 
         if (rowsAffected <= 0)
         {

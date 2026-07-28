@@ -1,4 +1,5 @@
 using SiNet.App.Wpf.Inspection;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -108,6 +109,26 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         var hasHtml = !string.IsNullOrWhiteSpace(_htmlBody);
         var hasBody = !string.IsNullOrWhiteSpace(BodyText) && BodyText != "טוען תוכן מייל...";
 
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H1",
+            "EmailViewerPaneViewModel.TryRenderRichBodyAsync",
+            "rich-body gate",
+            new Dictionary<string, object?>
+            {
+                ["hasRenderer"] = hasRenderer,
+                ["rendererType"] = _bodyRenderer?.GetType().FullName,
+                ["hasGmailId"] = hasGmailId,
+                ["hasHtml"] = hasHtml,
+                ["htmlLen"] = _htmlBody?.Length ?? 0,
+                ["hasBody"] = hasBody,
+                ["bodyLen"] = BodyText?.Length ?? 0,
+                ["inlineImageCount"] = _inlineImages.Count,
+                ["useRichBefore"] = UseRichBodyRenderer,
+            },
+            runId: "email-viewer-debug");
+        // #endregion
+
         if (!hasRenderer || !hasGmailId || !hasHtml || !hasBody)
         {
             if (UseRichBodyRenderer)
@@ -131,6 +152,20 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         var loaded = await _bodyRenderer!.LoadAsync(
             new EmailBodyRenderRequest(BodyText, _htmlBody, _gmailMessageId, _inlineImages),
             CancellationToken.None).ConfigureAwait(true);
+
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H2",
+            "EmailViewerPaneViewModel.TryRenderRichBodyAsync",
+            "rich-body LoadAsync result",
+            new Dictionary<string, object?>
+            {
+                ["loaded"] = loaded,
+                ["selectionStillMatches"] = string.Equals(_gmailMessageId, messageId, StringComparison.Ordinal)
+                    && string.Equals(BodyText, bodySnapshot, StringComparison.Ordinal),
+            },
+            runId: "email-viewer-debug");
+        // #endregion
 
         if (!loaded
             || !string.Equals(_gmailMessageId, messageId, StringComparison.Ordinal)

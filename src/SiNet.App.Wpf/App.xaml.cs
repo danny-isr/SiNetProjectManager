@@ -224,12 +224,37 @@ public partial class App : System.Windows.Application
 
             StandaloneHostLoggingBootstrap.Info(
                 $"[STARTUP] Acc host config applied. BaseUrl={(hostConfig.AccServiceBaseUrl ?? "(local)")}");
+            // #region agent log
+            SiNet.Application.Diagnostics.AgentDebugNdjson.Write(
+                "H1",
+                "App.ApplyAccHostConfigFromSystemSettingsAsync",
+                "acc host config after system settings",
+                new Dictionary<string, object?>
+                {
+                    ["hasBaseUrl"] = !string.IsNullOrWhiteSpace(hostConfig.AccServiceBaseUrl),
+                    ["dbHadBaseUrl"] = !string.IsNullOrWhiteSpace(settings.Acc.AccServiceBaseUrl),
+                    ["baseUrlHost"] = Uri.TryCreate(hostConfig.AccServiceBaseUrl, UriKind.Absolute, out var uri)
+                        ? uri.Host
+                        : null,
+                });
+            // #endregion
         }
         catch (Exception ex)
         {
             StandaloneHostLoggingBootstrap.Warning(
                 ex,
                 "[STARTUP] Failed to load AccService settings from DB; using appsettings/vault defaults.");
+            // #region agent log
+            SiNet.Application.Diagnostics.AgentDebugNdjson.Write(
+                "H1",
+                "App.ApplyAccHostConfigFromSystemSettingsAsync",
+                "acc host config load failed",
+                new Dictionary<string, object?>
+                {
+                    ["exceptionType"] = ex.GetType().Name,
+                    ["message"] = ex.Message,
+                });
+            // #endregion
         }
     }
 

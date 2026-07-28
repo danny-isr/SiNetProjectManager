@@ -97,6 +97,7 @@ Infrastructure.Sql implementation over `IAcc*` ports. Ingest follows that shape.
 | Behavior drift | High risk vs 98KB legacy `EmailIngestionService` — mitigate with SoT rules + outcome parity tests |
 | Auth dualism | Gmail token store for New System vs legacy `GoogleService` — must use native auth path already used by Email list |
 | AccService | Requires AccService running (Remote) for inbox ensure/upload — already assumed by MultiStart profile |
+| Host BaseUrl | Standalone `appsettings.json` defaults to `https://localhost:8443` (AccService launch profile). DB system setting `AccServiceBaseUrl` overrides when set. Empty BaseUrl → Local mode → bootstrap fails without local executor. |
 | DB/schema | **None** expected for N1 |
 | Breaking V2 | Low if Legacy executor stays registered in V2 |
 
