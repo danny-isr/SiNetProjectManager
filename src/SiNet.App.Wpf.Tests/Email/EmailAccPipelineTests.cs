@@ -260,6 +260,19 @@ public sealed class EmailAccPipelineTests
     }
 
     [Fact]
+    public void EmailAccUploadCoordinator_resolves_without_host_ingestion_executor()
+    {
+        // Standalone New System does not register IEmailAccIngestionExecutor (V2-only bridge).
+        // DI must still activate the coordinator; uploads then return BackendNotAvailable.
+        var source = ReadRepoFile(
+            "src/SiNet.Infrastructure.Sql/Services/Email/Acc/EmailAccUploadCoordinator.cs");
+        Assert.Contains(
+            "IEmailAccIngestionExecutor? ingestionExecutor = null",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SyncStatusWithRecovery_declared_on_acc_status_service()
     {
         var source = ReadRepoFile("src/SiNet.Application/Email/Acc/IEmailAccStatusService.cs");

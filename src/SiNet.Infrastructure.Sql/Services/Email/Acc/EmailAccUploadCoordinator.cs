@@ -2,10 +2,14 @@ using SiNet.Application.Email.Acc;
 
 namespace SiNet.Infrastructure.Sql.Services.Email.Acc;
 
+/// <summary>
+/// ACC inbox upload orchestration. <see cref="IEmailAccIngestionExecutor"/> is host-supplied
+/// (V2 legacy bridge); when absent (standalone New System), uploads return BackendNotAvailable.
+/// </summary>
 internal sealed class EmailAccUploadCoordinator(
-    IEmailAccIngestionExecutor? ingestionExecutor,
     IEmailAccStatusService statusService,
-    EmailAccInboxQueryService inboxQuery)
+    EmailAccInboxQueryService inboxQuery,
+    IEmailAccIngestionExecutor? ingestionExecutor = null)
     : IEmailAccUploadCoordinator
 {
     private readonly IEmailAccIngestionExecutor? _ingestionExecutor = ingestionExecutor;
