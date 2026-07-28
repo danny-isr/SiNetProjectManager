@@ -10,8 +10,10 @@ using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
+using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf;
 
@@ -42,6 +44,9 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetShell();
         services.AddSiNetTaskPanelReadOnly();
         services.AddSiNetWorkflowClosedViewer();
+
+        // Transient per email surface — WebView2 must not be reparented across hosts.
+        services.AddTransient<IEmailBodyRenderer, WebView2EmailBodyRenderer>();
 
         return services;
     }

@@ -1,4 +1,4 @@
-using SiNetProjectManagerV2.Services.Email;
+using SiNet.App.Wpf.Surfaces.Email;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Surfaces.Email;

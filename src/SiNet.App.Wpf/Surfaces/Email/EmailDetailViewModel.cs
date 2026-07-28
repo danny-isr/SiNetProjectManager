@@ -353,40 +353,68 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         var handlerAvailable = _externalDownloadHandler?.IsAvailable == true;
         var bodyUrls = EmailExternalDownloadLinkDetector.ExtractUrls(SelectedEmailBody);
         var htmlUrls = EmailExternalDownloadLinkDetector.ExtractUrls(_selectedEmailHtmlBody);
-        var urls = _selectedEmail is not null && handlerAvailable
-            ? bodyUrls
-            : Array.Empty<string>();
-
-        // #region agent log
-        AgentDebugNdjson.Write(
-            "H3",
-            "EmailDetailViewModel.RefreshExternalDownloadLinks",
-            "external-link refresh",
-            new Dictionary<string, object?>
-            {
-                ["hasSelectedEmail"] = _selectedEmail is not null,
-                ["handlerNull"] = _externalDownloadHandler is null,
-                ["handlerAvailable"] = handlerAvailable,
-                ["bodyUrlCount"] = bodyUrls.Count,
-                ["htmlUrlCount"] = htmlUrls.Count,
-                ["appliedUrlCount"] = urls.Count,
-                ["bodyLen"] = SelectedEmailBody?.Length ?? 0,
-                ["htmlLen"] = _selectedEmailHtmlBody?.Length ?? 0,
-            },
-            runId: "email-viewer-debug");
-        // #endregion
+        // Show chips whenever URLs are found (HTML or plain text). Full Jumbo→ACC pipe
+        // still needs the browser host; open falls back to the system browser otherwise.
+        var urls = _selectedEmail is null
+            ? Array.Empty<string>()
+            : MergeDistinctUrls(bodyUrls, htmlUrls);
 
         AttachmentStrip.SetExternalDownloadLinks(urls);
     }
 
     private void OpenExternalDownloadLink(string url)
     {
-        if (_selectedEmail is null || _externalDownloadHandler is null || string.IsNullOrWhiteSpace(url))
+        if (_selectedEmail is null || string.IsNullOrWhiteSpace(url))
         {
             return;
         }
 
-        _externalDownloadHandler.OpenDownloadLink(url, _selectedEmail);
+        if (_externalDownloadHandler?.IsAvailable == true)
+        {
+            _externalDownloadHandler.OpenDownloadLink(url, _selectedEmail);
+            return;
+        }
+
+        if (!EmailExternalDownloadLinkDetector.IsExternalDownloadUrl(url))
+        {
+            SetStatus("קישור ההורדה אינו תקין.");
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true,
+            });
+            SetStatus($"נפתח בדפדפן: {url}");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"פתיחת קישור נכשלה: {ex.Message}");
+        }
+    }
+
+    private static IReadOnlyList<string> MergeDistinctUrls(
+        IReadOnlyList<string> first,
+        IReadOnlyList<string> second)
+    {
+        if (first.Count == 0 && second.Count == 0)
+        {
+            return [];
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var merged = new List<string>(first.Count + second.Count);
+        foreach (var url in first.Concat(second))
+        {
+            if (seen.Add(url))
+            {
+                merged.Add(url);
+            }
+        }
+
+        return merged;
     }
 
     private async Task FileSelectedEmailAsync()
@@ -860,17 +888,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         _selectedEmail = listRow;
-        // #region agent log
-        AgentDebugNdjson.Write(
-            "H-O3",
-            "EmailDetailViewModel.SyncSelectedRowFromListAndRefreshAttachmentsAsync",
-            "sync after list ACC patch",
-            new Dictionary<string, object?>
-            {
-                ["inboxMessageId"] = listRow.InboxMessageId,
-                ["accStatus"] = listRow.AccStatusDisplay,
-            });
-        // #endregion
         await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
     }
 
@@ -958,17 +975,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         {
             // #region agent log
             WorkflowDebugTrace.Step("Email.TagUI", "projectId<=0 — applying AccItemId open state without tagging alternatives");
-            AgentDebugNdjson.Write(
-                "H-O2",
-                "EmailDetailViewModel.RefreshInboxAttachmentsAsync",
-                "open-state without project",
-                new Dictionary<string, object?>
-                {
-                    ["inboxMessageId"] = resolvedInboxId,
-                    ["hasInboxAccProjectId"] = !string.IsNullOrWhiteSpace(_inboxAccProjectId),
-                    ["attachmentCount"] = inboxAttachments.Count,
-                    ["withAccItemId"] = inboxAttachments.Count(a => !string.IsNullOrWhiteSpace(a.AccItemId)),
-                });
             // #endregion
         }
 
@@ -1045,22 +1051,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
     private async Task OpenAttachmentInAccAsync(EmailDetailAttachmentItem item)
     {
-        // #region agent log
-        AgentDebugNdjson.Write(
-            "H-O1",
-            "EmailDetailViewModel.OpenAttachmentInAccAsync",
-            "open requested",
-            new Dictionary<string, object?>
-            {
-                ["canOpen"] = item.CanOpenInAcc,
-                ["hasAccItemId"] = !string.IsNullOrWhiteSpace(item.AccItemId),
-                ["hasInboxAccProjectId"] = !string.IsNullOrWhiteSpace(_inboxAccProjectId),
-                ["hasAccLauncher"] = _accLauncher is not null,
-                ["inboxAttachmentId"] = item.InboxAttachmentId,
-                ["fileName"] = item.FileName,
-            });
-        // #endregion
-
         if (!item.CanOpenInAcc)
         {
             MessageBox.Show("הקובץ עדיין לא הועלה ל-ACC.", "לא זמין",
@@ -1092,31 +1082,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             WorkflowDebugTrace.Step(
                 "Email.TagUI",
                 $"OpenInAcc att={item.InboxAttachmentId} canOpen={item.CanOpenInAcc} projectLen={_inboxAccProjectId.Length}");
-            AgentDebugNdjson.Write(
-                "H-O4",
-                "EmailDetailViewModel.OpenAttachmentInAccAsync",
-                "launching ACC docs url",
-                new Dictionary<string, object?>
-                {
-                    ["urlHost"] = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : null,
-                    ["hasFolderId"] = !string.IsNullOrWhiteSpace(_inboxAccFolderId),
-                });
             // #endregion
             _accLauncher.Open(url);
         }
         catch (Exception ex)
         {
-            // #region agent log
-            AgentDebugNdjson.Write(
-                "H-O4",
-                "EmailDetailViewModel.OpenAttachmentInAccAsync",
-                "open failed",
-                new Dictionary<string, object?>
-                {
-                    ["exceptionType"] = ex.GetType().Name,
-                    ["message"] = ex.Message,
-                });
-            // #endregion
             MessageBox.Show($"שגיאה בפתיחת הקובץ: {ex.Message}", "שגיאה",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }

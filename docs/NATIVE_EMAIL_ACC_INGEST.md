@@ -1,12 +1,13 @@
 # Native Email → ACC Inbox ingest (standalone)
 
-> Status: **Approved — N1 implemented (awaiting operator smoke)**  
-> Date: 2026-07-28  
-> Approved by: operator (chat 2026-07-28)  
+> Status: **N1 implemented** · **N2 (Move + Jumbo) — pending approval**  
+> Date: 2026-07-28 (N1) / 2026-07-28 (N2 draft)  
+> Approved by: operator (N1 chat 2026-07-28)
 
 
 > Related: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
 > [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md),
+> [`EMAIL_DETAIL_COMPONENT.md`](./EMAIL_DETAIL_COMPONENT.md),
 > [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md)
 
 ## Problem (verified)
@@ -137,8 +138,113 @@ Proposed code order:
 **Do not implement N1 until this document is explicitly approved** (and any scope tweaks
 recorded below).
 
-### Approval notes
+### Approval notes (N1)
 
 - Approved by: operator
 - Date: 2026-07-28
 - Scope tweaks: none
+
+---
+
+## Slice N2 — MoveToProject + Jumbo/external download (standalone)
+
+### Problem (verified)
+
+| Gap | Standalone today | V2 |
+| --- | --- | --- |
+| **Move** | `NativeEmailMoveToProjectExecutor` exists but is registered **only in V2** `App.xaml.cs` → coordinator returns unavailable | Registered Transient |
+| **Jumbo → ACC** | Link chips can open system browser; **no** `IEmailExternalDownloadBrowserHost` + **no** `IEmailExternalDownloadExecutor` → no download capture / ACC upload | `V2EmailExternalDownloadBrowserHost` + `LegacyEmailExternalDownloadExecutor` (SiNetSQL) |
+| **Recovery** | Still V2-only | `LegacyEmailAccRecoveryExecutor` |
+
+N1 already uploads Gmail attachments via AccService Remote. Move and Jumbo need the same host registration / native upload path without SiNetSQL.
+
+### Principles (same as N1 — locked)
+
+1. ACC physical SoT; DB helper; Gmail label = mailbox filed.
+2. No new AccService “Gmail orchestrator” API.
+3. No `ProjectReference` from App.Wpf → SiNetSQL / V2.
+4. Reuse `IAcc*` ports + existing coordinators (`EmailMoveToProjectCoordinator`, `EmailExternalDownloadCoordinator`, `EmailExternalDownloadHandler`).
+
+### Target state
+
+```text
+Move:
+  ActionBar / Workbench
+    → IEmailMoveToProjectService / Coordinator  (already registered)
+    → IEmailMoveToProjectExecutor ← register NativeEmailMoveToProjectExecutor in AddSiNetEmailAccSql
+
+Jumbo:
+  Email body link chip
+    → IEmailExternalDownloadBrowserHost  ← NEW App.Wpf WebView2 download window
+         (DownloadStarting → local temp path → DownloadCompleted event)
+    → EmailExternalDownloadHandler (already)
+    → IEmailExternalDownloadCoordinator (already)
+    → IEmailExternalDownloadExecutor ← NEW NativeEmailExternalDownloadExecutor
+         → ensure inbox layout (same as N1) + IAccFileUploadService
+         → DB attachment row with IsExternalDownload = true
+         → ZIP: extract + multi-file upload (parity with Legacy)
+```
+
+### In scope — N2
+
+| Sub-slice | Work |
+| --- | --- |
+| **N2-Move** | Register `NativeEmailMoveToProjectExecutor` in `AddSiNetEmailAccSql` (standalone + V2 last-wins OK). Confirm deps already in standalone DI (`IProjectFileFilingService`, ACC download/upload/browser/metadata, `ITaskCompletionService`). Update tests that assert “Move executor V2-only”. Smoke: tagged attachments → Move → project folder. |
+| **N2-Jumbo-Executor** | `NativeEmailExternalDownloadExecutor` in Infrastructure.Sql over same ACC/layout/lease helpers as N1. Single file + ZIP extract. Map to `EmailExternalDownloadResult`. Register Transient in `AddSiNetEmailAccSql`. Keep V2 Legacy executor registration for V2 host (last wins). |
+| **N2-Jumbo-Browser** | App.Wpf `IEmailExternalDownloadBrowserHost`: dedicated WebView2 window, intercept downloads, raise `DownloadCompleted`, `ReportProgress`. Register Singleton in `AddSiNetNewSystemWpf` / standalone host. Wire `EmailWindowViewModel` handler (coordinator + host both present). |
+| **Docs/UI** | Update `EMAIL_DETAIL_COMPONENT.md`: full pipe on standalone; system-browser fallback only when host missing. |
+
+### Explicitly out of scope for N2
+
+- `IEmailAccRecoveryExecutor` native (N3)
+- Porting entire `WebView2Helper` / shared Gmail cookie profile (N2 browser may use a dedicated user-data folder; operator may need to log into Jumbo/WeTransfer in that window)
+- Perfect parity with V2 `DownloadAssociationDialog` project-file association UI (N2 associates to the **current email’s ACC inbox**, then Move tags as today)
+- Deleting V2 Legacy/bridge types
+- Master Plan, G-Policy send/reply
+
+### Options
+
+| Option | Decision |
+| --- | --- |
+| **A. Register existing Native Move + new native Jumbo executor/host** | **Selected** |
+| B. Keep opening system browser only (no ACC upload) | Rejected — not production Move/Jumbo |
+| C. Call Legacy via SiNetSQL from App.Wpf | Rejected — host boundary |
+
+### Risk & complexity (pre-code)
+
+| Item | Assessment |
+| --- | --- |
+| **N2-Move complexity** | **Low** — code exists; mainly DI + smoke |
+| **N2-Jumbo complexity** | **Medium–High** — new browser host + native upload/ZIP + DB external-download rows |
+| Effort | Prefer **two PRs**: (1) Move registration, (2) Jumbo executor+browser |
+| Behavior drift | ZIP / subfolder naming vs Legacy — match Legacy where possible; document deltas |
+| WebView2 downloads | Must use `DownloadStarting` / path override; test Jumbo + WeTransfer manually |
+| AccService | Same Remote requirement as N1 |
+| DB/schema | **None** (`IsExternalDownload` already exists) |
+| Breaking V2 | Low if V2 keeps registering Legacy Jumbo + same Native Move |
+
+### Implementation order (after approval)
+
+1. **N2-Move** — DI + tests + operator smoke Move  
+2. **N2-Jumbo-Executor** — native upload from local path (unit-testable without UI)  
+3. **N2-Jumbo-Browser** — App.Wpf host + DI + end-to-end smoke  
+4. Build gate + update this doc status to implemented  
+
+### Acceptance criteria (N2)
+
+1. Standalone: Move on a filed message with tagged ACC attachments does **not** return BackendNotAvailable; files land under project filing rules (ACC Move/Lock SoT).  
+2. Standalone: Jumbo/WeTransfer chip opens in-app browser; after download, file uploads to ACC Inbox and appears on the attachment strip as external download.  
+3. ZIP: multi-file upload or clear failure message (Legacy parity).  
+4. V2 Legacy Jumbo path still works.  
+5. Build gate green; no EF migrations.
+
+### Approval gate (N2)
+
+**Do not implement N2 until this section is explicitly approved.**
+
+### Approval notes (N2)
+
+- Approved by: *(pending)*
+- Date:
+- Scope tweaks:
+

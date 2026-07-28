@@ -64,19 +64,6 @@ public sealed class EmailSurfaceHost(
         _viewModel = _services.GetRequiredService<EmailWindowViewModel>();
         _view = new EmailSurfaceView(_viewModel);
         var bodyRenderer = _services.GetService<IEmailBodyRenderer>();
-        // #region agent log
-        SiNet.Application.Diagnostics.AgentDebugNdjson.Write(
-            "H1",
-            "EmailSurfaceHost.EnsureCreated",
-            "IEmailBodyRenderer resolve",
-            new Dictionary<string, object?>
-            {
-                ["resolved"] = bodyRenderer is not null,
-                ["rendererType"] = bodyRenderer?.GetType().FullName,
-                ["isAvailable"] = bodyRenderer?.IsAvailable,
-            },
-            runId: "email-viewer-debug");
-        // #endregion
         _view.SetBodyRenderer(bodyRenderer);
     }
 }

@@ -19,20 +19,6 @@ public partial class EmailAttachmentStripView : UserControl
         if (sender is not FrameworkElement { DataContext: EmailDetailAttachmentItem item })
             return;
 
-        // #region agent log
-        AgentDebugNdjson.Write(
-            "H-O1",
-            "EmailAttachmentStripView.AttachmentLabel_MouseLeftButtonDown",
-            "double-click attachment",
-            new Dictionary<string, object?>
-            {
-                ["fileName"] = item.FileName,
-                ["canOpen"] = item.CanOpenInAcc,
-                ["hasAccItemId"] = !string.IsNullOrWhiteSpace(item.AccItemId),
-                ["commandCanExecute"] = item.OpenInAccCommand.CanExecute(null),
-            });
-        // #endregion
-
         if (!item.OpenInAccCommand.CanExecute(null))
             return;
 

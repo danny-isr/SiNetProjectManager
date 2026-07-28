@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
-using SiNet.Application.Diagnostics;
 
 namespace SiNet.Infrastructure.Autodesk;
 
@@ -98,97 +97,49 @@ internal sealed class RemoteAccFileUploadService(
         };
         message.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
+        using var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content
+            .ReadFromJsonAsync<RemoteAccFileUploadResponse>(cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (body is null)
+        {
+            throw new InvalidOperationException("ACC service returned an empty upload response.");
+        }
+
+        stopwatch.Stop();
+
+        // #region agent log
         try
         {
-            using var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
-            // #region agent log
-            AgentDebugNdjson.Write(
-                "H5",
-                "RemoteAccFileUploadService.UploadAsync",
-                "remote upload HTTP response",
-                new Dictionary<string, object?>
-                {
-                    ["displayName"] = request.DisplayName,
-                    ["fileSizeBytes"] = fileSizeBytes,
-                    ["statusCode"] = (int)response.StatusCode,
-                    ["isSuccess"] = response.IsSuccessStatusCode,
-                    ["durationMs"] = stopwatch.ElapsedMilliseconds,
-                });
-            // #endregion
-            response.EnsureSuccessStatusCode();
-
-            var body = await response.Content
-                .ReadFromJsonAsync<RemoteAccFileUploadResponse>(cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            if (body is null)
+            var dbg = JsonSerializer.Serialize(new
             {
-                throw new InvalidOperationException("ACC service returned an empty upload response.");
-            }
-
-            stopwatch.Stop();
-
-            // #region agent log
-            try
-            {
-                var dbg = JsonSerializer.Serialize(new
+                sessionId = "487a8a",
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                runId = "upload-timeout-fix",
+                hypothesisId = "H-A",
+                location = "RemoteAccFileUploadService.UploadAsync",
+                message = "remote upload completed",
+                data = new
                 {
-                    sessionId = "487a8a",
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    runId = "upload-timeout-fix",
-                    hypothesisId = "H-A",
-                    location = "RemoteAccFileUploadService.UploadAsync",
-                    message = "remote upload completed",
-                    data = new
-                    {
-                        displayName = request.DisplayName,
-                        fileSizeBytes,
-                        durationMs = stopwatch.ElapsedMilliseconds,
-                        itemId = body.ItemId,
-                    },
-                });
-                File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
-            }
-            catch { }
-
-            AgentDebugNdjson.Write(
-                "H5",
-                "RemoteAccFileUploadService.UploadAsync",
-                "remote upload completed",
-                new Dictionary<string, object?>
-                {
-                    ["displayName"] = request.DisplayName,
-                    ["fileSizeBytes"] = fileSizeBytes,
-                    ["durationMs"] = stopwatch.ElapsedMilliseconds,
-                    ["hasItemId"] = !string.IsNullOrWhiteSpace(body.ItemId),
-                    ["alreadySameSource"] = body.AlreadySameSource,
-                });
-            // #endregion
-
-            return new AccFileUploadResult(
-                body.FolderId,
-                body.ItemId,
-                body.VersionId,
-                body.FileName,
-                body.AlreadySameSource);
+                    displayName = request.DisplayName,
+                    fileSizeBytes,
+                    durationMs = stopwatch.ElapsedMilliseconds,
+                    itemId = body.ItemId,
+                },
+            });
+            File.AppendAllText(@"d:\repos2026\debug-487a8a.log", dbg + Environment.NewLine);
         }
-        catch (Exception ex)
-        {
-            // #region agent log
-            AgentDebugNdjson.Write(
-                "H5",
-                "RemoteAccFileUploadService.UploadAsync",
-                "remote upload failed",
-                new Dictionary<string, object?>
-                {
-                    ["displayName"] = request.DisplayName,
-                    ["fileSizeBytes"] = fileSizeBytes,
-                    ["durationMs"] = stopwatch.ElapsedMilliseconds,
-                    ["exceptionType"] = ex.GetType().Name,
-                    ["message"] = ex.Message,
-                });
-            // #endregion
-            throw;
-        }
+        catch { }
+        // #endregion
+
+        return new AccFileUploadResult(
+            body.FolderId,
+            body.ItemId,
+            body.VersionId,
+            body.FileName,
+            body.AlreadySameSource);
     }
 
     private static string BuildRequestUri(string baseUrl, string projectId)

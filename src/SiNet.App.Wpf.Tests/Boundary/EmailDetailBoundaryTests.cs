@@ -213,7 +213,8 @@ public sealed class EmailDetailBoundaryTests
         var gateway = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
         var viewerXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailViewerPaneView.xaml");
         var app = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
-        var renderer = ReadRepoFile("SiNetProjectManagerV2/Services/Email/WebView2EmailBodyRenderer.cs");
+        var wpfDi = ReadRepoFile("src/SiNet.App.Wpf/NewSystemWpfServiceCollectionExtensions.cs");
+        var renderer = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/WebView2EmailBodyRenderer.cs");
 
         Assert.Contains("Messages.Get(\"me\", messageId)", gateway, StringComparison.Ordinal);
         Assert.Contains("FormatEnum.Full", gateway, StringComparison.Ordinal);
@@ -233,6 +234,10 @@ public sealed class EmailDetailBoundaryTests
             "BodyHost must not be nested inside an open StackPanel.");
 
         Assert.Contains(
+            "AddTransient<IEmailBodyRenderer, WebView2EmailBodyRenderer>",
+            wpfDi,
+            StringComparison.Ordinal);
+        Assert.Contains(
             "AddTransient<SiNet.Application.Email.Detail.IEmailBodyRenderer",
             app,
             StringComparison.Ordinal);
@@ -251,7 +256,7 @@ public sealed class EmailDetailBoundaryTests
     public void Inline_images_served_via_virtual_host_not_base64_data_uri()
     {
         var gateway = ReadRepoFile("src/SiNet.Infrastructure.Google/GmailEmailGateway.cs");
-        var renderer = ReadRepoFile("SiNetProjectManagerV2/Services/Email/WebView2EmailBodyRenderer.cs");
+        var renderer = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/WebView2EmailBodyRenderer.cs");
 
         // Gateway fetches inline image bytes for cids referenced in the HTML body.
         Assert.Contains("Messages.Attachments.Get", gateway, StringComparison.Ordinal);

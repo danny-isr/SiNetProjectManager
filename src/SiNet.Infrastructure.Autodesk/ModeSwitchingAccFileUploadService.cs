@@ -1,5 +1,4 @@
 using SiNet.Application.Abstractions.Autodesk;
-using SiNet.Application.Diagnostics;
 
 namespace SiNet.Infrastructure.Autodesk;
 
@@ -16,22 +15,6 @@ internal sealed class ModeSwitchingAccFileUploadService(
         AccFileUploadRequest request,
         CancellationToken cancellationToken = default)
     {
-        // #region agent log
-        AgentDebugNdjson.Write(
-            "H5",
-            "ModeSwitchingAccFileUploadService.UploadAsync",
-            "upload routed",
-            new Dictionary<string, object?>
-            {
-                ["mode"] = _serviceModeProvider.Mode.ToString(),
-                ["displayName"] = request.DisplayName,
-                ["hasTargetFolderId"] = !string.IsNullOrWhiteSpace(request.TargetFolderId),
-                ["projectIdPrefix"] = string.IsNullOrEmpty(request.ProjectId)
-                    ? null
-                    : request.ProjectId.Length <= 12 ? request.ProjectId : request.ProjectId[..12] + "…",
-            });
-        // #endregion
-
         return _serviceModeProvider.Mode == AccServiceMode.Remote
             ? _remoteUploadService.UploadAsync(request, cancellationToken)
             : _localUploadService.UploadAsync(request, cancellationToken);
