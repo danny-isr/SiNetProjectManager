@@ -247,7 +247,7 @@ public sealed class GoogleFoundationClosureTests
     {
         var source = ReadRepoFile("docs/GOOGLE_BOUNDARY.md");
 
-        Assert.Contains("First real email window (read-only content/details)", source, StringComparison.Ordinal);
+        Assert.Contains("First real email window (Gmail + ACC-filing)", source, StringComparison.Ordinal);
         Assert.Contains("now consumes the same shared", source, StringComparison.Ordinal);
         Assert.Contains("must not consume `GmailClientProvider` or", source, StringComparison.Ordinal);
         Assert.Contains("`IEmailSender` directly", source, StringComparison.Ordinal);

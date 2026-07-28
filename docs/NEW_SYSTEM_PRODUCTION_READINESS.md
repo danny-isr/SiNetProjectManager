@@ -9,10 +9,11 @@
 > only. See [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md).
 >
 > Related:
+> [`TEST_STRATEGY.md`](./TEST_STRATEGY.md),
 > [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
 > [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
 > [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md),
-> [`manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md`](./manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md),
+> [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md),
 > [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) (G-Policy = Send/Reply/Forward only),
 > [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md),
 > [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md),
@@ -147,20 +148,45 @@ UI parity vs V2 dialogs may be simplified (filters / R02 pivot); dual path retai
 
 ## 8. Verification (automated)
 
+Full strategy: [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) (L1–L4 offline + optional Live).
+
 ```powershell
 dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
 dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
+dotnet test src\SiNet.Infrastructure.Google.Tests\SiNet.Infrastructure.Google.Tests.csproj
+dotnet test src\SiNet.LegacyBridge.Tests\SiNet.LegacyBridge.Tests.csproj
+```
+
+Optional Live (local secrets / AccService):
+
+```powershell
+$env:SINET_LIVE_SMOKE = "1"
+dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --filter "Category=LiveSmoke"
 ```
 
 Optional full CI-equivalent: `dotnet build SiNet.sln --configuration Release` then
 `dotnet test SiNet.sln --configuration Release --no-build`.
 
-**Do not** treat historical counts (e.g. **955/955** from 2026-07-05, or any older §9.2.1 table) as
-evidence for current HEAD — always re-run tests on the branch under review.
+**Do not** treat historical counts (e.g. **955/955** from 2026-07-05) as evidence for current HEAD —
+always re-run tests on the branch under review.
 
-Useful boundary classes (non-exhaustive): `ProductionPilotBoundaryTests`,
-`StandaloneNewSystemHostBoundaryTests`, `StandaloneLocalAccInboxBootstrapTests`,
-`NewSystemBoundaryTests`, `GoogleFoundationClosureTests`.
+Useful classes (non-exhaustive): `StandaloneHostCompositionTests`,
+`NewShellReleaseMenuGatingTests`, `StandaloneStartupSequenceTests`,
+`EmailAccSelectionHandlerStatusTests`, `ProductionPilotBoundaryTests`,
+`StandaloneLocalAccInboxBootstrapTests`.
+
+### 8.1 Automated run snapshot (2026-07-29)
+
+Measured on branch `SiWorkNet10` after the test-strategy slice (offline + Live skipped):
+
+| Project | Passed | Failed | Skipped |
+| --- | --- | --- | --- |
+| `SiNet.App.Wpf.Tests` | 2635 | 0 | 6 (LiveSmoke, no `SINET_LIVE_SMOKE`) |
+| `SiNet.Infrastructure.Google.Tests` | 89 | 0 | 0 |
+| `SiNet.LegacyBridge.Tests` | 20 | 0 | 0 |
+| **Build** `SiNetProjectManagerV2` | ✅ | | |
+
+Live layer (`Category=LiveSmoke`) was **Not Run** here (no AccService/DB session in the agent). Operators should run it locally before manual UI smoke.
 
 ---
 
@@ -170,8 +196,7 @@ Useful boundary classes (non-exhaustive): `ProductionPilotBoundaryTests`,
 | --- | --- |
 | **Interactive smoke** | **Not Run** |
 | **Primary host** | `SiNet.App.Wpf.exe` + AccService MultiStart |
-| **Shell / Stage-2 surfaces** | [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md) — interpret launch steps as **standalone App.Wpf**, not V2 New System |
-| **Email ACC N1–N3** | [`manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md`](./manual-tests/EMAIL_ACC_STANDALONE_SMOKE.md) |
+| **Operator checklist** | [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md) |
 | **Pilot after Pass** | 1–2 internal **ACC-filing** pilot users (not send/reply) |
 
 ### 9.1 Operator focus (standalone)
@@ -250,4 +275,5 @@ Final decision:
 | [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md) | Mapping + Reports + SyncEngine |
 | [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md) | AccService Local/Remote |
 | [`APP_SHELL.md`](./APP_SHELL.md) | Shell / startup modes |
+| [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) | Automated + Live + manual layers |
 | [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md) | DB recovery baseline |

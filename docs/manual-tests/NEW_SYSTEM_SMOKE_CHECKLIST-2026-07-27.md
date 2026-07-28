@@ -1,8 +1,11 @@
 # New System — Stage 2 P0 smoke checklist (2026-07-27)
 
-> **Status:** Not Run  
-> **Scope:** Interactive smoke for V2 **New System** release menu surfaces and startup prerequisites.  
-> **Supersedes:** Inline §9.3.1 in [`NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md) for Stage 2 P0.
+> **Status:** **Superseded** (2026-07-29)  
+> **Replacement:** [`STANDALONE_PILOT_SMOKE.md`](./STANDALONE_PILOT_SMOKE.md)  
+> **Strategy:** [`docs/TEST_STRATEGY.md`](../TEST_STRATEGY.md)  
+>
+> Kept for history only. Do **not** use this checklist for the standalone pilot
+> (`SiNet.App.Wpf.exe`). Original scope was V2 New System startup.
 
 Related: [`NEW_SYSTEM_BOUNDARY.md`](../NEW_SYSTEM_BOUNDARY.md),
 [`DATABASE_RECOVERY_BASELINE.md`](../DATABASE_RECOVERY_BASELINE.md).
