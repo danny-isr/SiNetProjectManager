@@ -1,26 +1,27 @@
 using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SiNet.App.Wpf.Autodesk;
-using SiNet.App.Composition;
+using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Infrastructure;
-using SiNet.App.Wpf.Inbox;
-using SiNet.App.Wpf.Inspection;
-using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
+using SiNet.Application.Data;
+using SiNet.Application.Settings;
 using SiNet.Infrastructure.Google;
+using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using SiNet.Infrastructure.Sql;
+using SiNet.Infrastructure.Sql.Services.Identity;
 
 namespace SiNet.App.Wpf;
 
 /// <summary>
-/// WPF host scaffold. Demonstrates the intended startup shape for the App-startup migration
-/// round: build configuration, build the service graph with the single <c>AddSiNet()</c>
-/// composition call, then resolve the shell window from DI. This scaffold is NOT yet the
-/// production entry point and does not replace the existing application.
+/// Production New System host (<c>SiNet.App.Wpf.exe</c>). See
+/// <c>docs/STANDALONE_NEW_SYSTEM_HOST.md</c>. Does not reference SiNetSQL or SiNetProjectManagerV2.
+/// Vault Google client secrets resolve via <see cref="IGoogleClientSecretsPathProvider"/>
+/// (registered by <c>AddSiNetSecrets</c>) — not from env/appsettings as the primary source.
 /// </summary>
 // Base type is fully qualified: this project references the SiNet.Application namespace, so an
 // unqualified "Application" would bind to that namespace instead of System.Windows.Application.
@@ -28,90 +29,216 @@ public partial class App : System.Windows.Application
 {
     private ServiceProvider? _services;
     private IConfiguration? _configuration;
+    private readonly CancellationTokenSource _shutdownCts = new();
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         AppGlobalExceptionHandling.Configure(this);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        StandaloneHostLoggingBootstrap.ConfigureDefault();
         base.OnStartup(e);
 
+        try
+        {
+            await RunStartupAsync(e).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StandaloneHostLoggingBootstrap.Fatal(ex, "[STARTUP] Standalone New System failed.");
+            MessageBox.Show(
+                $"הפעלת המערכת החדשה נכשלה:\n\n{ex.Message}",
+                "שגיאת הפעלה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(-1);
+        }
+    }
+
+    private async Task RunStartupAsync(StartupEventArgs e)
+    {
+        _ = e;
         _configuration = BuildConfiguration();
 
-        var services = new ServiceCollection();
-        services.AddSingleton(_configuration);
-        services.AddSiNet(SiNetHostMode.StandaloneNew, ConfigureGmail);
-        services.AddSiNetSecrets();
+        StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System host starting (SiNet.App.Wpf).");
 
-        // Vault-sourced SQL wiring: the native process backbone (workflow engine, task completion,
-        // action handlers) and the identity/settings services need a real IDbContextFactory. The
-        // connection string is the single-source-of-truth secret in the Credential Vault; when it is
-        // absent the host degrades gracefully (SQL-backed features simply stay unavailable) rather
-        // than crashing at startup — mirroring the Gmail no-secrets behavior.
-        var sqlConnectionString = TryResolveSqlConnectionStringFromVault();
-        if (!string.IsNullOrWhiteSpace(sqlConnectionString))
+        if (!await EnsureVaultDatabaseReadyAsync().ConfigureAwait(true))
         {
-            services.AddSiNetSql(sqlConnectionString, ConfigureSqlDiagnostics);
-            services.AddSiNetSystemSettingsSql();
-            services.AddSiNetAuthorizationSql();
+            StandaloneHostLoggingBootstrap.Warning("[STARTUP] Vault/DB secret not configured. Shutting down.");
+            Shutdown();
+            return;
         }
 
-        services.AddSiNetNewSystemWpf();
-        services.AddSingleton<InboxViewModel>();
-        services.AddSingleton<MainWindow>();
+        var sqlConnectionString = ResolveSqlConnectionStringFromVault()
+            ?? throw new InvalidOperationException(
+                "SiNet database connection string is missing from the Credential Vault after setup.");
 
-        // New Inspection screen foundation (now surfaced as a safe Inbox/Inspection tab switch).
-        services.AddSingleton<InspectionTreeViewModel>();
-        services.AddSingleton<InspectionNotesViewModel>();
-        services.AddSingleton<InspectionDrawingsViewModel>();
-        services.AddSingleton<InspectionReviewedPlanViewModel>();
-        services.AddSingleton<InspectionReportViewModel>();
-        services.AddSingleton<InspectionShellViewModel>();
-        services.AddSingleton<InspectionShellView>();
-        services.AddSingleton<MainViewModel>();
+        var services = new ServiceCollection();
+        services.AddSiNetStandaloneHost(
+            _configuration,
+            sqlConnectionString,
+            ConfigureGmail,
+            ConfigureSqlDiagnostics);
 
         _services = services.BuildServiceProvider();
 
-        // Attempt a silent (no-browser) restore for any connector auth services registered in the
-        // New System graph. This keeps startup independent of concrete providers such as
-        // GmailClientProvider and scales to future connector-auth consumers without adding more
-        // WPF-side service knowledge.
-        var connectorAuthServices = _services.GetServices<IConnectorAuthService>().ToArray();
+        StartConnectorAuthRestore();
+
+        StandaloneHostLoggingBootstrap.Info("[STARTUP] Schema gate...");
+        if (!await ValidateSchemaAsync().ConfigureAwait(true))
+        {
+            Shutdown();
+            return;
+        }
+
+        StandaloneHostLoggingBootstrap.Info("[STARTUP] Authorizing Windows user...");
+        var authenticator = _services.GetRequiredService<SqlWindowsCurrentUserAuthenticator>();
+        if (!await authenticator.TryAuthenticateAsync(_shutdownCts.Token).ConfigureAwait(true))
+        {
+            MessageBox.Show(
+                "המשתמש הנוכחי אינו מורשה להשתמש במערכת.\nנא לפנות למנהל המערכת.",
+                "אין הרשאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown();
+            return;
+        }
+
+        await ApplySavedUserSettingsAsync().ConfigureAwait(true);
+
+        StandaloneHostLoggingBootstrap.Info("[STARTUP] Opening NewShell...");
+        var factory = _services.GetRequiredService<INewShellFactory>();
+        var shell = await factory.CreateShellAsync(_shutdownCts.Token).ConfigureAwait(true);
+
+        MainWindow = shell;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
+        shell.Show();
+
+        StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System ready.");
+    }
+
+    private async Task<bool> EnsureVaultDatabaseReadyAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(ResolveSqlConnectionStringFromVault()))
+        {
+            return true;
+        }
+
+        StandaloneHostLoggingBootstrap.Info(
+            "[STARTUP] Opening native Secret Setup (database connection required).");
+
+        var bootstrap = new ServiceCollection();
+        bootstrap.AddSiNetVaultBootstrap();
+        await using var provider = bootstrap.BuildServiceProvider();
+
+        var window = provider.GetRequiredService<SecretSetupWindow>();
+        // DialogResult may stay false when other optional secrets fail validation; accept any close
+        // once the SiNet DB connection string is present in the vault.
+        _ = window.ShowDialog();
+
+        if (!string.IsNullOrWhiteSpace(ResolveSqlConnectionStringFromVault()))
+        {
+            return true;
+        }
+
+        MessageBox.Show(
+            "נדרש מפתח חיבור למסד הנתונים (Credential Vault) כדי להפעיל את המערכת החדשה.",
+            "חסרה כספת סודות",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        return false;
+    }
+
+    private async Task<bool> ValidateSchemaAsync()
+    {
+        var gate = _services!.GetRequiredService<IDatabaseSchemaGate>();
+        var result = await gate.ValidateAsync(_shutdownCts.Token).ConfigureAwait(true);
+
+        if (!result.CanConnect)
+        {
+            StandaloneHostLoggingBootstrap.Fatal("[STARTUP] Cannot connect to database.");
+            MessageBox.Show(
+                "לא ניתן להתחבר למסד הנתונים.\nנא לוודא שהשרת זמין ושמחרוזת החיבור ב-Vault תקינה.",
+                "שגיאת חיבור",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
+
+        if (!result.IsSchemaPresent)
+        {
+            var tableList = string.Join(", ", result.MissingTables);
+            StandaloneHostLoggingBootstrap.Fatal(
+                $"Database schema is outdated. Missing tables: {tableList}");
+            MessageBox.Show(
+                "מבנה מסד הנתונים אינו עדכני.\n\n" +
+                $"טבלאות חסרות: {tableList}\n\n" +
+                "יש להריץ את efbundle.exe לעדכון המבנה.\n" +
+                "פרטים נוספים: scripts\\README.md",
+                "נדרש עדכון מסד נתונים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task ApplySavedUserSettingsAsync()
+    {
+        try
+        {
+            var appSettings = _services!.GetRequiredService<IAppSettingsService>();
+            var loggingApplier = _services.GetRequiredService<ILoggingRuntimeApplier>();
+            var logging = await appSettings.GetUserLoggingSettingsAsync(_shutdownCts.Token).ConfigureAwait(true);
+            loggingApplier.ApplyUserLogging(logging);
+
+            var theme = _services.GetRequiredService<ThemeStartupInitializer>();
+            await theme.ApplySavedThemeAsync(_shutdownCts.Token).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StandaloneHostLoggingBootstrap.Warning(
+                ex,
+                "[STARTUP] Failed to apply saved user settings; continuing with defaults.");
+        }
+    }
+
+    private void StartConnectorAuthRestore()
+    {
+        var connectorAuthServices = _services!.GetServices<IConnectorAuthService>().ToArray();
         _ = Task.Run(async () =>
         {
             foreach (var authService in connectorAuthServices)
             {
-                await authService.TryRestoreSessionAsync().ConfigureAwait(false);
+                try
+                {
+                    await authService.TryRestoreSessionAsync(_shutdownCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    StandaloneHostLoggingBootstrap.Debug(
+                        ex,
+                        "[STARTUP] Connector auth restore failed for {Type}",
+                        authService.GetType().Name);
+                }
             }
-        });
-
-        var window = _services.GetRequiredService<MainWindow>();
-        window.Show();
+        }, _shutdownCts.Token);
     }
 
-    /// <summary>
-    /// Builds the host configuration from <c>appsettings.json</c> (the real config source) with
-    /// environment variables layered on top. The new stack owns its own configuration and has no
-    /// dependency on the legacy <c>SiNetProjectManagerV2.AppConfiguration</c>.
-    /// </summary>
     private static IConfiguration BuildConfiguration() => new ConfigurationBuilder()
         .SetBasePath(AppContext.BaseDirectory)
         .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
         .AddEnvironmentVariables()
         .Build();
 
-    /// <summary>
-    /// Configures the native Gmail integration. Values are bound from the <c>Gmail</c> section of
-    /// <c>appsettings.json</c>; the legacy <c>SINET_GOOGLE_*</c> environment variables, when set,
-    /// override the file so existing developer setups keep working. When no client secrets are
-    /// configured, <see cref="GmailOptions.ClientSecretsPath"/> stays empty and the gateway
-    /// degrades gracefully (no sign-in, empty inbox) instead of throwing.
-    /// When <see cref="IGoogleClientSecretsPathProvider"/> is registered (AddSiNetSecrets), the
-    /// vault is the source of truth; config/env paths are fallback only.
-    /// </summary>
     private void ConfigureGmail(GmailOptions options)
     {
         _configuration?.GetSection("Gmail").Bind(options);
 
-        // ProjectWork Drive base folder (Shared Drive + projects root) — same keys as V2 host.
         var drive = _configuration?.GetSection("GoogleDrive");
         if (drive is not null)
         {
@@ -119,7 +246,6 @@ public partial class App : System.Windows.Application
             options.ProjectsRootFolderId ??= drive["ProjectsRootFolderId"];
         }
 
-        // Token store env override only — client secrets come from Vault via IGoogleClientSecretsPathProvider.
         var tokenStore = Environment.GetEnvironmentVariable("SINET_GOOGLE_TOKEN_STORE");
         if (!string.IsNullOrWhiteSpace(tokenStore))
         {
@@ -127,13 +253,7 @@ public partial class App : System.Windows.Application
         }
     }
 
-    /// <summary>
-    /// Reads the SiNet database connection string from the Credential Vault (the single source of
-    /// truth). Uses a throwaway bootstrap provider so the vault store can be resolved before the main
-    /// service graph is built. Returns <see langword="null"/> when the secret is missing or the vault
-    /// is unavailable, so the host can degrade gracefully instead of failing startup.
-    /// </summary>
-    private static string? TryResolveSqlConnectionStringFromVault()
+    private static string? ResolveSqlConnectionStringFromVault()
     {
         try
         {
@@ -147,16 +267,13 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[App] Failed to read SiNet DB connection string from the Credential Vault: {ex}");
+            StandaloneHostLoggingBootstrap.Warning(
+                ex,
+                "[STARTUP] Failed to read SiNet DB connection string from Credential Vault.");
             return null;
         }
     }
 
-    /// <summary>
-    /// Enables EF diagnostics only in Debug builds, matching the legacy host's development-time
-    /// behavior. Release behavior is unchanged (diagnostics stay off).
-    /// </summary>
     private static void ConfigureSqlDiagnostics(SiNetSqlOptions options)
     {
 #if DEBUG
@@ -166,7 +283,10 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _shutdownCts.Cancel();
+        _shutdownCts.Dispose();
         _services?.Dispose();
+        StandaloneHostLoggingBootstrap.CloseAndFlush();
         base.OnExit(e);
     }
 }

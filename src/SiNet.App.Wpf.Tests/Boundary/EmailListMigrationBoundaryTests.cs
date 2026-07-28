@@ -298,11 +298,11 @@ public sealed class EmailListMigrationBoundaryTests
     public void Email_list_component_is_standalone()
     {
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
-        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView.xaml");
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.DoesNotContain("ProjectSelectorView", listXaml, StringComparison.Ordinal);
-        Assert.Contains("EmailListFilterBar", windowXaml, StringComparison.Ordinal);
+        Assert.Contains("EmailListFilterBar", surfaceXaml, StringComparison.Ordinal);
         Assert.Contains("AccountStatusDisplay", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("ConnectCommand", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("DisconnectCommand", filterBarXaml, StringComparison.Ordinal);

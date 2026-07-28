@@ -14,14 +14,20 @@ namespace SiNet.App.Wpf.Tests.Boundary;
 /// </para>
 /// <para>
 /// What is enforced instead is the property the boundary exists for: only this project's own
-/// composition root (<c>App.xaml.cs</c>, the standalone WinExe entry point) may touch the
-/// infrastructure namespace. Every UI surface consumes the vault through
+/// composition roots (<c>App.xaml.cs</c>, <c>StandaloneHostServiceCollectionExtensions.cs</c>)
+/// may touch the infrastructure namespace. Every UI surface consumes the vault through
 /// <c>SiNet.Application.Configuration</c> abstractions.
 /// </para>
 /// </summary>
 public sealed class WpfSecretsBoundaryTests
 {
     private const string SecretsInfrastructureNamespace = "SiNet.Infrastructure.Secrets";
+
+    private static readonly HashSet<string> AllowedCompositionRootFiles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "App.xaml.cs",
+        "StandaloneHostServiceCollectionExtensions.cs",
+    };
 
     [Fact]
     public void WhenScanningWpfSourcesThenOnlyTheCompositionRootReferencesTheSecretsInfrastructure()
@@ -30,7 +36,7 @@ public sealed class WpfSecretsBoundaryTests
 
         var offenders = Directory
             .EnumerateFiles(projectRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.EndsWith("App.xaml.cs", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !AllowedCompositionRootFiles.Contains(Path.GetFileName(path)))
             .Where(path => File.ReadAllText(path)
                 .Contains(SecretsInfrastructureNamespace, StringComparison.Ordinal))
             .Select(path => Path.GetRelativePath(projectRoot, path))

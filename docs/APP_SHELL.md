@@ -66,8 +66,12 @@ Rules:
 
 ## 3. Startup flow
 
-The legacy host (`SiNetProjectManagerV2`) remains the process entry point and the composition root
-for now. Startup is **code-driven** (no XAML `StartupUri`) in `App.xaml.cs`.
+**Production New System entry (slice 1):** `SiNet.App.Wpf.exe` — see
+[`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md). The V2 New System path is
+**deprecated** (still runnable for pilot fallback; logs a deprecation warning).
+
+The legacy host (`SiNetProjectManagerV2`) remains the process entry point for **Legacy mode**.
+Startup is **code-driven** (no XAML `StartupUri`) in each host's `App.xaml.cs`.
 
 ```plaintext
 App.OnStartup

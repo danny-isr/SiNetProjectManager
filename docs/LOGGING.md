@@ -16,7 +16,10 @@ SiNet.Application.Abstractions.Logging.IAppLogger   (port)
         ↓
 SiNet.Infrastructure.Logging.SerilogAppLogger       (adapter → Serilog Log.Logger)
         ↓
-Host bootstrap (SiNetProjectManagerV2 App.xaml.cs)  (central + local sinks, unchanged)
+Host bootstrap:
+  - Legacy / V2Hybrid: SiNetProjectManagerV2 App.xaml.cs (central + local sinks)
+  - Standalone New System: StandaloneHostLoggingBootstrap (SiNet.Infrastructure.Logging)
+    — Serilog stays out of SiNet.App.Wpf source; WpfLoggingRuntimeApplier calls the bootstrap
 ```
 
 ---

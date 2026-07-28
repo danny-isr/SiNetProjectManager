@@ -60,7 +60,7 @@ public sealed class NewShellNativeUserAdminMenuTests
         var sp = services.BuildServiceProvider();
         var factory = new NewShellFactory(sp);
 
-        return SiNet.App.Wpf.Tests.Shell.NewShellMenuReflection.Build(factory);
+        return SiNet.App.Wpf.Tests.Shell.NewShellMenuReflection.BuildFlattened(factory);
     }
 
     private static string ReadRepoFile(string relativePath)

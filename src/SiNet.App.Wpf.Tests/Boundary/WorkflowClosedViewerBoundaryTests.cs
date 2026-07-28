@@ -40,7 +40,7 @@ public sealed class WorkflowClosedViewerBoundaryTests
         Assert.Contains("AppFeatureCodes.ShellOpenWorkflowClosedViewer", source, StringComparison.Ordinal);
         Assert.Contains("workflowViewerFactory.Create()", source, StringComparison.Ordinal);
         Assert.Contains("ShowWindow(workflowViewerFactory.Create())", source, StringComparison.Ordinal);
-        Assert.Contains("תהליכים — קנבס", source, StringComparison.Ordinal);
+        Assert.Contains("צפייה בתהליכים (סגור)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("WorkflowManagementWindow", source, StringComparison.Ordinal);
         Assert.DoesNotContain("LegacyWorkflowClosedViewerWindowFactory", source, StringComparison.Ordinal);
     }

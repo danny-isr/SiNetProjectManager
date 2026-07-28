@@ -24,14 +24,15 @@ public sealed class SecretSetupViewModel : ObservableObject
     private string _accServiceHealthSummary = "בריאות שירות ACC: טוען...";
     private string _accServiceDiagnosticsSummary = "אבחון ACC: טוען...";
 
-    private readonly AccControlPlaneStatusPresenter _accControlPlaneStatusPresenter;
+    private readonly AccControlPlaneStatusPresenter? _accControlPlaneStatusPresenter;
 
     public SecretSetupViewModel(
         ISecretSetupService secretSetupService,
-        AccControlPlaneStatusPresenter accControlPlaneStatusPresenter)
+        AccControlPlaneStatusPresenter? accControlPlaneStatusPresenter = null)
     {
         _secretSetupService = secretSetupService ?? throw new ArgumentNullException(nameof(secretSetupService));
-        _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter ?? throw new ArgumentNullException(nameof(accControlPlaneStatusPresenter));
+        // Optional: vault bootstrap runs before SQL/ACC graph exists (standalone host gate).
+        _accControlPlaneStatusPresenter = accControlPlaneStatusPresenter;
         Rows = new ObservableCollection<SecretRowViewModel>(
             SecretCatalog.All.Select(e => new SecretRowViewModel(e)));
         SaveCommand = new AsyncRelayCommand(SaveAndValidateAsync, () => !IsBusy);
@@ -480,6 +481,16 @@ public sealed class SecretSetupViewModel : ObservableObject
 
     private async Task RefreshAccControlPlaneAsync()
     {
+        if (_accControlPlaneStatusPresenter is null)
+        {
+            AccServiceModeSummary = "מצב ACC: לא זמין עד שמוגדר מסד הנתונים";
+            AccServiceKeySummary = "מפתח ACC: —";
+            AccServiceProjectsSummary = "פרויקטי ACC: —";
+            AccServiceHealthSummary = "בריאות שירות ACC: —";
+            AccServiceDiagnosticsSummary = "אבחון ACC: —";
+            return;
+        }
+
         var presentation = await _accControlPlaneStatusPresenter
             .BuildAsync(AccControlPlaneStatusPresentationKind.SecretSetup)
             .ConfigureAwait(true);

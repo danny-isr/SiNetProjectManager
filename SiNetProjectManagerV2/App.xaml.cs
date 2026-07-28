@@ -1035,6 +1035,11 @@ namespace SiNetProjectManagerV2
 
         private async Task RunNewSystemStartupCoreAsync(StartupEventArgs e)
         {
+            Log.Warning(
+                "[STARTUP][NewSystem] DEPRECATED: New System hosted inside SiNetProjectManagerV2.exe. " +
+                "Prefer SiNet.App.Wpf.exe as the standalone New System host " +
+                "(see docs/STANDALONE_NEW_SYSTEM_HOST.md). This V2 path remains for pilot fallback only.");
+
             Log.Information("[STARTUP][NewSystem] Setting up credential vault (connection string)...");
             SetupCredentialVaultForNewSystem();
 

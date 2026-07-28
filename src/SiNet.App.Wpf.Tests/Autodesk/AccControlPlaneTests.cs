@@ -906,9 +906,14 @@ public sealed class AccControlPlaneTests
     [Fact]
     public void Wpf_harness_registers_native_secrets_before_startup()
     {
-        var source = File.ReadAllText(Path.Combine(AppWpfRoot, "App.xaml.cs"));
+        var appSource = File.ReadAllText(Path.Combine(AppWpfRoot, "App.xaml.cs"));
+        var hostSource = File.ReadAllText(
+            Path.Combine(AppWpfRoot, "StandaloneHostServiceCollectionExtensions.cs"));
 
-        Assert.Contains("services.AddSiNetSecrets();", source, StringComparison.Ordinal);
+        Assert.True(
+            appSource.Contains("AddSiNetSecrets", StringComparison.Ordinal)
+            || hostSource.Contains("AddSiNetSecrets", StringComparison.Ordinal),
+            "Standalone host must register AddSiNetSecrets (App.xaml.cs or StandaloneHost composition).");
     }
 
     private sealed class StubSecretSetupHostConfiguration(string? baseUrl) : ISecretSetupHostConfiguration
