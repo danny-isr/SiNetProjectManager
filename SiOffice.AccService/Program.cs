@@ -307,33 +307,49 @@ static X509Certificate2 LoadTlsCertificate(IConfiguration configuration)
     }
 
     // Supported path for Dev and office server without a purchased CA:
-    // vault password present (or explicit AllowSelfSignedDevCert) ⇒ load/create accservice.pfx.
-    if (!string.IsNullOrWhiteSpace(certPassword)
-        || configuration.GetValue<bool>("AccService:AllowSelfSignedDevCert"))
-    {
-        return LoadOrCreateSelfSignedCertificate(certPassword);
-    }
-
-    throw new InvalidOperationException(
-        "No TLS certificate configured for SiOffice.AccService. " +
-        "Provision vault key 'SiNet/AccService/CertificatePassword' via Secret Setup (preferred), " +
-        "or set AccService:Certificate:StoreName + Thumbprint / Path + Password. " +
-        "Optional override: AccService:AllowSelfSignedDevCert=true.");
+    // ensure a vault password exists (bootstrap if missing), then load/create accservice.pfx.
+    certPassword = EnsureAccServiceCertificatePassword(certPassword);
+    return LoadOrCreateSelfSignedCertificate(certPassword);
 }
 
-static X509Certificate2 LoadOrCreateSelfSignedCertificate(string? certPassword)
+static string EnsureAccServiceCertificatePassword(string? existingPassword)
 {
-    var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
-    if (string.IsNullOrWhiteSpace(certPassword))
+    if (!string.IsNullOrWhiteSpace(existingPassword))
     {
-        throw new InvalidOperationException(
-            "Vault key 'SiNet/AccService/CertificatePassword' (or AccService:Certificate:Password) " +
-            "is required to load or create the AccService self-signed PFX.");
+        return existingPassword;
     }
 
+    var generated = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
+    CredentialVaultService.SetSecret(SecretKeys.AccServiceCertificatePassword, generated);
+    Log.Warning(
+        "AccService CertificatePassword was missing in the vault for user {User}; " +
+        "generated a new value and stored it under '{Key}'. " +
+        "After startup, copy the certificate thumbprint into System Setting AccService.PinnedCertificateThumbprints.",
+        Environment.UserName,
+        SecretKeys.AccServiceCertificatePassword);
+    return generated;
+}
+
+static X509Certificate2 LoadOrCreateSelfSignedCertificate(string certPassword)
+{
+    ArgumentException.ThrowIfNullOrWhiteSpace(certPassword);
+
+    var certFile = Path.Combine(AppContext.BaseDirectory, "accservice.pfx");
     if (File.Exists(certFile))
     {
-        return OpenPfx(certFile, certPassword);
+        try
+        {
+            return OpenPfx(certFile, certPassword);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Typical after CertificatePassword was rotated or first-boot bootstrap replaced an old PFX password.
+            Log.Warning(
+                ex,
+                "Existing {CertFile} could not be opened with the current CertificatePassword; recreating the PFX.",
+                certFile);
+            File.Delete(certFile);
+        }
     }
 
     using var rsa = RSA.Create(2048);

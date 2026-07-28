@@ -128,12 +128,17 @@ public static class CredentialVaultService
     }
 
     /// <summary>
-    /// Returns true if all required secrets are configured in the vault.
+    /// Returns true if every secret required for WPF client launch is present.
+    /// Host-only secrets listed in <see cref="SecretKeys.OptionalAtClientStartup"/>
+    /// (e.g. AccService certificate password) do not block startup.
     /// </summary>
     public static bool IsVaultConfigured()
     {
         foreach (var key in SecretKeys.All)
         {
+            if (SecretKeys.OptionalAtClientStartup.Contains(key))
+                continue;
+
             if (!HasSecret(key))
                 return false;
         }

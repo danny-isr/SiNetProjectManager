@@ -57,12 +57,13 @@ public static class SecretKeys
 
     // Password that protects AccService's local self-signed PFX (accservice.pfx).
     // Not the TLS trust pin — pins live in SystemSettings.
+    // Host-only: see SecretKeys.OptionalAtClientStartup in SiNetSQL.
     public const string AccServiceCertificatePassword = "SiNet/AccService/CertificatePassword";
 
     // MasterPlan Web API — X-API-Key header used by MasterPlan.SyncEngine.
     public const string MasterPlanApiKey = "SiNet/MasterPlanApi/ApiKey";
 
-    /// <summary>All secret keys for vault status checking.</summary>
+    /// <summary>All secret keys for vault status checking and .secrets export.</summary>
     public static readonly string[] All =
     [
         GeminiApiKey,
@@ -77,5 +78,13 @@ public static class SecretKeys
         AccServiceApiKey,
         AccServiceCertificatePassword,
         MasterPlanApiKey
+    ];
+
+    /// <summary>
+    /// Keys that appear in <see cref="All"/> / export but are not required for WPF client launch.
+    /// </summary>
+    public static readonly string[] OptionalAtClientStartup =
+    [
+        AccServiceCertificatePassword,
     ];
 }

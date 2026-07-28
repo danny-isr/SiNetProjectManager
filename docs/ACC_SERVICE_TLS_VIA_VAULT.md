@@ -61,9 +61,12 @@ sequenceDiagram
 
 Same vault keys. AccService starts under the interactive user:
 
-1. Secret Setup → ensure `ApiKey` + `CertificatePassword` are green.
-2. AccService `appsettings.Development.json` (or host config) enables the self-signed PFX path
-   when Store/Path are empty and the vault password is present.
+1. WPF client launch does **not** require `CertificatePassword` (it is
+   `SecretKeys.OptionalAtClientStartup`) — otherwise the legacy startup SecretSetup
+   dialog would reopen forever, because that dialog cannot edit the new key.
+2. AccService, on first start without a vault password, **bootstraps** one into the
+   vault and creates `accservice.pfx`. Prefer Generate in native Secret Setup when
+   you want an explicit password before first start.
 3. Loopback clients may accept chain errors without a pin (existing TLS policy).
 4. Non-loopback clients need the pin in System Settings once the PFX exists.
 
