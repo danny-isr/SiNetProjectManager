@@ -6,7 +6,6 @@ using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using SiNet.Infrastructure.Sql;
-using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiOffice.AccService.Contracts;
 using SiOffice.AccService;
@@ -52,13 +51,6 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 // Run as a Windows Service when launched by the SCM. Harmless when launched
 // from a console (UseWindowsService no-ops in that case).
 builder.Host.UseWindowsService(o => o.ServiceName = "SiOffice.AccService");
-
-// ─── Credential vault bridge (Windows Credential Manager, same as WPF client) ─
-// All secrets — Autodesk client id/secret, connection strings, etc. — live in the
-// machine-scoped Windows Credential Manager (SiNet.Infrastructure.Secrets) under
-// SecretCatalog keys. Temporary bridge: SiNetSQL AccBootstrap/provisioning still
-// reads via CredentialProvider.GetSecret until decoupling slice B4.
-CredentialProvider.GetSecret = CredentialVault.GetSecret;
 
 // ─── Logging: Serilog with shared SiNet sinks layout ────────────────────────
 // Settings (central path, levels, retention) come from the SystemSettings table
@@ -121,23 +113,19 @@ builder.Services.AddSiNetSql(connectionString);
 builder.Services.AddSiNetAuthorizationSql();
 builder.Services.AddSiNetSystemSettingsSql();
 
-// ─── Application services from SiNetSQL (provisioning / bootstrap until B4) ──
-// Legacy SystemSettingsService stays registered only for AccProjectProvisioningService.
-// AccService-owned reads (/inbox/ensure) use ISystemSettingsQueryService (B3).
-builder.Services.AddSingleton<SystemSettingsService>();
+// ─── Application services (provisioning/bootstrap now decoupled from SiNetSQL, B4) ──
+// AccProjectProvisioningService and every AccService-owned settings/credential read use
+// the Application ports directly — ISystemSettingsQueryService (AddSiNetSystemSettingsSql
+// above) and CredentialVault + SecretCatalog. The legacy credential-provider and
+// system-settings-service bridges to the SiNetSQL assembly are gone.
 builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
 {
-    var clientId = SiNetSQL.Services.CredentialProvider.AutodeskClientId ?? string.Empty;
-    var clientSecret = SiNetSQL.Services.CredentialProvider.AutodeskClientSecret ?? string.Empty;
+    var clientId = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId) ?? string.Empty;
+    var clientSecret = CredentialVault.GetSecret(SecretCatalog.AutodeskClientSecret) ?? string.Empty;
     return new MyOffice.AutodeskConnector.TokenProvider(clientId, clientSecret);
 });
 builder.Services.AddSiNetAutodeskLocalFileTransfer();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
-
-// NOTE: CredentialProvider.GetSecret was already set to CredentialVault.GetSecret
-// above. That wiring is correct and must NOT be overwritten here.
-// The previous code (CredentialProvider.GetSecret = key => builder.Configuration[$"Secrets:{key}"])
-// was a BUG that caused the service to read from empty appsettings instead of the vault.
 
 var app = builder.Build();
 
@@ -220,7 +208,7 @@ try
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var tokenDir = System.IO.Path.Combine(localAppData, "SiNet", "Autodesk");
         var tokenPath = System.IO.Path.Combine(tokenDir, "refresh_token.json");
-        var clientIdRaw = CredentialProvider.AutodeskClientId ?? string.Empty;
+        var clientIdRaw = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId) ?? string.Empty;
         var clientIdTail = clientIdRaw.Length < 4 ? "(empty)" : "***" + clientIdRaw[^4..];
         string windowsUser;
         try { windowsUser = Environment.UserDomainName + "\\" + Environment.UserName; }

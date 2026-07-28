@@ -40,13 +40,15 @@ public sealed class AccServiceDecouplingB1BoundaryTests
     }
 
     [Fact]
-    public void AccService_wires_clean_vault_and_CredentialProvider_bridge()
+    public void AccService_wires_clean_vault_directly()
     {
+        // Superseded by B4: the temporary CredentialProvider.GetSecret bridge was closed —
+        // AccService now reads CredentialVault/SecretCatalog directly (see B4 boundary tests).
         var program = File.ReadAllText(Path.Combine(AccServiceDir, "Program.cs"));
         Assert.Contains("CredentialVault.GetSecret", program, StringComparison.Ordinal);
-        Assert.Contains("CredentialProvider.GetSecret = CredentialVault.GetSecret", program, StringComparison.Ordinal);
         Assert.Contains("SiNet.Infrastructure.Logging", program, StringComparison.Ordinal);
         Assert.Contains("SecretCatalog.", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("CredentialProvider.GetSecret = ", program, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -55,7 +57,6 @@ public sealed class AccServiceDecouplingB1BoundaryTests
         var csproj = File.ReadAllText(Path.Combine(AccServiceDir, "SiOffice.AccService.csproj"));
         Assert.Contains("SiNet.Infrastructure.Secrets", csproj, StringComparison.Ordinal);
         Assert.Contains("SiNet.Infrastructure.Logging", csproj, StringComparison.Ordinal);
-        Assert.Contains("SiNetSQL.csproj", csproj, StringComparison.Ordinal);
     }
 
     [Fact]

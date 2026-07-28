@@ -32,7 +32,9 @@ public sealed class AccServiceDecouplingB3BoundaryTests
     {
         var csproj = File.ReadAllText(Path.Combine(AccServiceDir, "SiOffice.AccService.csproj"));
         Assert.Contains("SiNet.Infrastructure.Sql", csproj, StringComparison.Ordinal);
-        Assert.Contains("SiNetSQL.csproj", csproj, StringComparison.Ordinal);
+        // B4 (see AccServiceDecouplingB4BoundaryTests) dropped the SiNetSQL.csproj reference entirely —
+        // AccBootstrap/provisioning types now come from SiNet.Infrastructure.AccBootstrap.
+        Assert.DoesNotContain("SiNetSQL.csproj", csproj, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -57,9 +59,11 @@ public sealed class AccServiceDecouplingB3BoundaryTests
     }
 
     [Fact]
-    public void Program_keeps_legacy_SystemSettingsService_for_provisioning()
+    public void Program_no_longer_registers_legacy_SystemSettingsService()
     {
+        // Superseded by B4: AccProjectProvisioningService now takes ISystemSettingsQueryService,
+        // so the legacy SiNetSQL.Services.SystemSettingsService singleton was removed entirely.
         var program = File.ReadAllText(Path.Combine(AccServiceDir, "Program.cs"));
-        Assert.Contains("AddSingleton<SystemSettingsService>", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddSingleton<SystemSettingsService>", program, StringComparison.Ordinal);
     }
 }

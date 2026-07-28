@@ -279,11 +279,16 @@ Track **B** removes AccService's runtime/build dependence on `SiNetSQL` in slice
 Authoritative plan and status: [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md).
 
 - **B1 (done):** AccService vault + central logging use `SiNet.Infrastructure.Secrets` /
-  `SiNet.Infrastructure.Logging`. Temporary `CredentialProvider.GetSecret` bridge stays until B4.
+  `SiNet.Infrastructure.Logging`.
 - **B2 (done):** Wire contracts live in `src/SiOffice.AccService.Contracts`.
 - **B3 (done):** AccService registers DbContext via `AddSiNetSql` and reads system settings
-  via `ISystemSettingsQueryService`. `ProjectReference` to SiNetSQL remains for bootstrap /
-  provisioning / `CredentialProvider`.
+  via `ISystemSettingsQueryService`.
+- **B4 (done):** AccBootstrap/provisioning types extracted from SiNetSQL into
+  `src/SiNet.Infrastructure.AccBootstrap`; `CredentialProvider.GetSecret` bridge closed
+  (`CredentialVault` + `SecretCatalog` read directly); legacy `SystemSettingsService`
+  registration removed from AccService. **`ProjectReference` to `SiNetSQL.csproj` dropped
+  entirely** (B5 goal reached as part of B4) — see
+  [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md).
 
 ## 9. Immediate Next Step
 

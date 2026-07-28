@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<Nullable>enable</Nullable>
+	<RootNamespace>SiNet.Infrastructure.AccBootstrap</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    B4 (docs/ACC_SERVICE_DECOUPLING.md): AccBootstrap/provisioning types extracted out of
+    SiNetSQL so SiOffice.AccService no longer needs a ProjectReference to SiNetSQL for them.
+    Moved files KEEP their original `SiNetSQL.Services.AccBootstrap` namespace (same pattern
+    as SiNetSQL.Models living in SiNet.Infrastructure.Sql) to minimize using-directive churn
+    in SiNetSQL / SiNetProjectManagerV2 consumers.
+  -->
+  <ItemGroup>
+	<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	<PackageReference Include="Microsoft.Data.SqlClient" />
+	<PackageReference Include="Serilog" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
+	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
+	<ProjectReference Include="..\..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
+  </ItemGroup>
+
+</Project>

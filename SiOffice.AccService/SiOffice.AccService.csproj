@@ -26,7 +26,12 @@
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\SiNetSQL\SiNetSQL\SiNetSQL.csproj" />
+    <!-- B4 (docs/ACC_SERVICE_DECOUPLING.md): AccBootstrap/provisioning types no longer come
+         from the legacy SiNetSQL project — that project reference was dropped entirely.
+         CredentialProvider and legacy SystemSettingsService bridges were removed from
+         Program.cs/AccEndpoints.cs in favor of CredentialVault + SecretCatalog and
+         ISystemSettingsQueryService. -->
+    <ProjectReference Include="..\src\SiNet.Infrastructure.AccBootstrap\SiNet.Infrastructure.AccBootstrap.csproj" />
     <ProjectReference Include="..\src\SiNet.Application\SiNet.Application.csproj" />
     <ProjectReference Include="..\src\SiOffice.AccService.Contracts\SiOffice.AccService.Contracts.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />

@@ -5,7 +5,6 @@ using SiNet.Application.Configuration;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Data;
-using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiOffice.AccService.Contracts;
 using SiOffice.AccService;
@@ -49,8 +48,8 @@ internal static class AccEndpoints
             // Active Autodesk Check
             var autodeskOk = false;
             string? autodeskDetail = null;
-            var clientId = CredentialProvider.AutodeskClientId;
-            var clientSecret = CredentialProvider.AutodeskClientSecret;
+            var clientId = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId);
+            var clientSecret = CredentialVault.GetSecret(SecretCatalog.AutodeskClientSecret);
 
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
             {
@@ -729,8 +728,8 @@ internal static class AccEndpoints
         {
             body ??= new EnsureInboxRequest();
 
-            var clientId = CredentialProvider.AutodeskClientId;
-            var clientSecret = CredentialProvider.AutodeskClientSecret;
+            var clientId = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId);
+            var clientSecret = CredentialVault.GetSecret(SecretCatalog.AutodeskClientSecret);
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
                 return Results.BadRequest(new ErrorDto(
                     "Autodesk credentials are not provisioned in the service vault."));

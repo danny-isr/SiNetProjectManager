@@ -1,6 +1,6 @@
 # AccService ↔ SiNetSQL decoupling
 
-> Status: **B3 implemented (DbContext + settings reads)**  
+> Status: **B4 done — SiNetSQL `ProjectReference` dropped from AccService (B5 goal reached early)**  
 > Date: 2026-07-28  
 > Branch: `SiWorkNet10`  
 > Related: [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md), [`LOGGING.md`](./LOGGING.md),
@@ -19,42 +19,93 @@ and AccService no longer pulls GoogleConnector/WPF packages transitively.
 | **B1** | Vault + CentralLogging on clean modules; ProjectReference stays | **Done** |
 | **B2** | Move `AccServiceContracts` / wire DTOs out of SiNetSQL | **Done** |
 | **B3** | AccService → `Infrastructure.Sql` for DbContext / settings reads | **Done** |
-| **B4** | Extract AccBootstrap + provisioning | Planned |
-| **B5** | Drop SiNetSQL `ProjectReference`; shrink AccService dependency graph | Planned |
+| **B4** | Extract AccBootstrap + provisioning; close `CredentialProvider` bridge | **Done** |
+| **B5** | Drop SiNetSQL `ProjectReference`; shrink AccService dependency graph | **Done (achieved as part of B4)** |
 
 ---
 
-## B1 / B2 (done)
+## B1–B3 (done)
 
-- **B1:** Vault (`CredentialVault` + `SecretCatalog`) + `CentralLogging` in clean modules;
-  temporary `CredentialProvider.GetSecret` bridge until B4.
-- **B2:** Wire contracts in `src/SiOffice.AccService.Contracts`; Autodesk mirror deleted.
+- **B1:** Vault + CentralLogging; temporary `CredentialProvider.GetSecret` bridge until B4.
+- **B2:** Wire contracts in `SiOffice.AccService.Contracts`.
+- **B3:** `AddSiNetSql` + `ISystemSettingsQueryService` for AccService-owned reads.
 - SyncEngine Shared `CentralLogging` still deferred (B1b).
 
 ---
 
-## B3 (done) — DbContext + settings reads
+## B4 — implemented (AccBootstrap + provisioning extract)
 
-### Locked decisions
+### Why not “ports-only”
 
-1. **DbContext:** AccService registers via `AddSiNetSql(connectionString)`
-   (`SiNetSQL.Data.SiNetSQLDbContext` in Infrastructure.Sql, compat-120).
-2. **Direct ProjectReference** to `SiNet.Infrastructure.Sql`.
-3. **AccService-owned settings reads** (`POST /inbox/ensure`): Application
-   `ISystemSettingsQueryService` via `AddSiNetSystemSettingsSql` + `AddSiNetAuthorizationSql`
-   (`NullCurrentUserContext`). Same string fallbacks as the previous
-   `SystemSettingsService.GetOrDefaultAsync` path.
-4. **Keep** SiNetSQL `SystemSettingsService` DI for `AccProjectProvisioningService` until B4.
-5. **Keep** SiNetSQL `ProjectReference` for AccBootstrap / provisioning / `CredentialProvider`.
-6. **Out of B3:** AccBootstrap/provisioning move (B4); drop SiNetSQL reference (B5);
-   TFM change; DB schema; HTTP wire changes.
+Clean `IAccInboxBootstrapService` / Autodesk remotes are **clients of AccService**. They do not
+replace the server-side orchestration that AccService constructs (`AccBootstrapService`,
+`AccProjectProvisioningService`) — that orchestration was extracted into its own project
+instead of being ported to a client abstraction.
 
-### Success criteria
+### What shipped
 
-1. AccService csproj references `SiNet.Infrastructure.Sql`.
-2. `Program.cs` uses `AddSiNetSql` (not inline `AddDbContextFactory`).
-3. `/inbox/ensure` uses `ISystemSettingsQueryService`, not `SiNetSQL.Services.SystemSettingsService`.
-4. Provisioning still resolves via SiNetSQL types; build/tests green; **no** schema changes.
+1. **New project:** `src/SiNet.Infrastructure.AccBootstrap` (`net10.0`). Moved files **kept**
+   their original `SiNetSQL.Services.AccBootstrap` namespace (same pattern as `SiNetSQL.Models`
+   living in `SiNet.Infrastructure.Sql`) to avoid using-directive churn in SiNetSQL/V2.
+   References: `SiNet.Infrastructure.Sql`, `SiNet.Application`, `SiOffice.AutodeskConnector`.
+2. **Moved (canonical, deleted from SiNetSQL):** `AccBootstrapService`, `IAccBootstrapService`,
+   `AccProjectProvisioningService`, `IAccProjectProvisioningService`, `OfficeInboxTargets`,
+   `ProjectAccTargets`, `CreateProjectPlatform`, `AccConstants`, `LocalAccInboxProvisioner`,
+   `IAccInboxProvisioner`, `AccUserBootstrapService`, `IAccUserBootstrapService`,
+   `AccMembershipReconciler`, `IAccMembershipReconciler`.
+3. **Adaptations to compile without SiNetSQL:**
+   - `AppLogger.Info/Warn/Error` → new `AccBootstrapLog` static Serilog facade.
+   - `SiNetSQL.FileIndex.SidecarMetadata` → `SiNet.Infrastructure.Sql.Services.Email.Acc.SidecarMetadata`.
+   - New `IAccMetadataStatusReporter` / `AccMetadataIssue` / `AccMetadataOperation` types owned
+     by AccBootstrap. SiNetSQL's `AccMetadataStatusReporter` singleton now implements **both**
+     its own `SiNetSQL.FileIndex.IAccMetadataStatusReporter` and the new AccBootstrap contract
+     (explicit interface impl mapping between the two structurally-identical shapes), so the UI
+     status badge and the decoupled provisioning service share one reporter instance.
+   - `AccProjectProvisioningService` / `LocalAccInboxProvisioner`: `SystemSettingsService?` →
+     `ISystemSettingsQueryService?`, reading `settings.Acc.AccProjectTemplateName` /
+     `settings.Acc.AccBootstrapAdminEmail` / `settings.EmailOffice.Inbox*` from
+     `GetSystemSettingsAsync`.
+   - `FixDirectoryName` inlined as `DirectoryNameExtensions` (was `SiNetSQL.MyExtensions.DataFunc`).
+   - `EmailIngestionServiceFactory`'s legacy in-process fallback (only path still holding a
+     `SystemSettingsService` reference) uses a small `LegacySystemSettingsQueryAdapter` to bridge
+     into `ISystemSettingsQueryService` for `LocalAccInboxProvisioner` — DI-driven call sites
+     (V2 `AddTransient<IAccProjectProvisioningService, ...>`, etc.) already resolve
+     `ISystemSettingsQueryService` from the container and needed no changes.
+4. **SiNetSQL:** deleted the moved files, added a `ProjectReference` to the new AccBootstrap
+   project.
+5. **AccService host wire (`SiOffice.AccService`):**
+   - Removed the `CredentialProvider.GetSecret = CredentialVault.GetSecret;` bridge and every
+     `CredentialProvider.Autodesk*` read; replaced with direct
+     `CredentialVault.GetSecret(SecretCatalog.AutodeskClientId/AutodeskClientSecret)` reads
+     (`Program.cs` TokenProvider registration + diagnostics, `AccEndpoints.cs` `/diag` and
+     `/inbox/ensure`).
+   - Removed `builder.Services.AddSingleton<SystemSettingsService>()` — nothing in AccService
+     needs the legacy type anymore (`AccProjectProvisioningService` gets
+     `ISystemSettingsQueryService` from `AddSiNetSystemSettingsSql`, already registered).
+   - **Dropped the `SiNetSQL.csproj` ProjectReference entirely** (B5 goal) — AccService now
+     references `SiNet.Infrastructure.AccBootstrap` instead; `SiNetSQLDbContext` /
+     `SiNetSQL.Data` / `SiNetSQL.Models` still resolve via the existing direct
+     `SiNet.Infrastructure.Sql` reference (unchanged from B3).
+6. **V2 / SiNetSQL consumers:** no DI/constructor changes needed — `AccProjectProvisioningService`
+   and `LocalAccInboxProvisioner` are registered via `AddTransient<TInterface, TImpl>()`, so the
+   container already resolves the new `ISystemSettingsQueryService` constructor parameter.
+   `LegacyHostLocalAccInboxBootstrapExecutor` (V2) already used `ISystemSettingsQueryService`
+   directly and needed no change.
+
+### Out of scope (unchanged)
+
+Rewriting AccService onto Application client ports; DB schema; HTTP wire breaks; SyncEngine
+CentralLogging (B1b).
+
+### Success criteria (B4) — met
+
+1. AccBootstrap/provisioning types live under `SiNet.Infrastructure.AccBootstrap`. ✅
+2. AccService does not use `CredentialProvider` / SiNetSQL `SystemSettingsService` /
+   SiNetSQL `AppLogger`. ✅
+3. AccService builds with **zero** `SiNetSQL.csproj` ProjectReference (B5 achieved early). ✅
+4. V2 / SiNetSQL consumers compile against the new project (no DI changes required). ✅
+5. Build/tests green; **no** schema changes; HTTP JSON shapes unchanged. ✅ (see
+   `AccServiceDecouplingB4BoundaryTests`).
 
 ---
 
