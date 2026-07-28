@@ -16,6 +16,10 @@
 > - Composition: `AddSiNetStandaloneHost` (`StandaloneHostServiceCollectionExtensions`)
 > - Identity/schema: `AddSiNetIdentitySql` in `SiNet.Infrastructure.Sql`
 > - Launch: `dotnet run --project src/SiNet.App.Wpf`
+>
+> Local MultiStart (Visual Studio): `SiNet.sln` includes `SiOffice.AccService`. Shared profile
+> `SiNet.slnLaunch` → **New System + AccService** starts AccService then `SiNet.App.Wpf`
+> (enable *Multi-Project Launch Profiles* in VS Preview Features if the dropdown is missing).
 
 ## Goal
 

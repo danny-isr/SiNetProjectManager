@@ -37,6 +37,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AccService.Contrac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNet.Infrastructure.AccBootstrap", "src\SiNet.Infrastructure.AccBootstrap\SiNet.Infrastructure.AccBootstrap.csproj", "{3F7A9C2E-6B1D-4A85-9E3C-7D4F1B8A2C90}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AccService", "SiOffice.AccService\SiOffice.AccService.csproj", "{DA4953A7-DA69-409D-804E-0D5DE7394C49}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AutodeskConnector", "..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj", "{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -239,6 +243,30 @@ Global
 		{3F7A9C2E-6B1D-4A85-9E3C-7D4F1B8A2C90}.Release|x64.Build.0 = Release|Any CPU
 		{3F7A9C2E-6B1D-4A85-9E3C-7D4F1B8A2C90}.Release|x86.ActiveCfg = Release|Any CPU
 		{3F7A9C2E-6B1D-4A85-9E3C-7D4F1B8A2C90}.Release|x86.Build.0 = Release|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Debug|x64.Build.0 = Debug|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Debug|x86.Build.0 = Debug|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Release|x64.ActiveCfg = Release|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Release|x64.Build.0 = Release|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Release|x86.ActiveCfg = Release|Any CPU
+		{DA4953A7-DA69-409D-804E-0D5DE7394C49}.Release|x86.Build.0 = Release|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Debug|x64.Build.0 = Debug|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Debug|x86.Build.0 = Debug|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x64.ActiveCfg = Release|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x64.Build.0 = Release|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x86.ActiveCfg = Release|Any CPU
+		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

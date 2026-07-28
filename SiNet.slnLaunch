@@ -1,0 +1,25 @@
+[
+  {
+    "Name": "New System + AccService",
+    "Projects": [
+      {
+        "Path": "SiOffice.AccService\\SiOffice.AccService.csproj",
+        "Action": "Start",
+        "DebugTarget": "SiOffice.AccService"
+      },
+      {
+        "Path": "src\\SiNet.App.Wpf\\SiNet.App.Wpf.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
+    "Name": "New System only (App.Wpf)",
+    "Projects": [
+      {
+        "Path": "src\\SiNet.App.Wpf\\SiNet.App.Wpf.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
