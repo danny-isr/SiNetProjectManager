@@ -31,6 +31,15 @@
 	<ProjectReference Include="..\SiNet.App.Composition\SiNet.App.Composition.csproj" />
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
+	<!--
+	  SiNet.Infrastructure.Secrets is referenced only by this project's own composition root
+	  (App.xaml.cs, the standalone WinExe entry point) for AddSiNetSecrets() and the vault bootstrap
+	  that reads the SQL connection string. It cannot move to SiNet.App.Composition: the Secrets module
+	  targets net10.0-windows (Windows Credential Manager) while Composition is platform-neutral
+	  net10.0. All UI code consumes the vault through SiNet.Application.Configuration abstractions
+	  (ISecretVaultStore / ISecretSetupService) — see the boundary test in
+	  src/SiNet.App.Wpf.Tests/Boundary/WpfSecretsBoundaryTests.cs.
+	-->
 	<ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
   </ItemGroup>
 

@@ -207,7 +207,38 @@ Key test classes:
 | **User profile** | Agent/automated (no authenticated DB/Gmail session in smoke run) |
 | **Git** | `git.exe` not on PATH; verified via VS bundled git + GitHub API — see §9.3 |
 | **Build** | ✅ Debug + Release — 0 errors (263–274 pre-existing warnings, unrelated to pilot) |
-| **Tests** | ✅ 955/955 `SiNet.App.Wpf.Tests`; ✅ 174/174 boundary filter |
+| **Tests** | ⚠️ Snapshot only — see §9.2.1 for the current HEAD run. The "955/955" figure previously recorded here was a 2026-07-05 snapshot and no longer matches the suite. |
+
+### 9.2.1 Test run on current HEAD (2026-07-28)
+
+Measured with `dotnet test SiNet.sln --configuration Release --no-build` on branch
+`SiWorkNet10` (working tree at commit `22e7458` plus the audit-remediation changes).
+
+| Test project | Total | Passed | Failed | Skipped |
+| --- | --- | --- | --- | --- |
+| `SiNet.App.Wpf.Tests` | 2464 | 2457 | **7** | 0 |
+| `SiNet.Infrastructure.Google.Tests` | 89 | 89 | 0 | 0 |
+| `SiNet.LegacyBridge.Tests` | 20 | 20 | 0 | 0 |
+| **Solution total** | **2573** | **2566** | **7** | **0** |
+
+The `SiNet.App.Wpf.Tests` total grew from 2448 to 2464 because remediation round 2 added
+boundary/wiring tests (`LocalAccProjectRootFolderResolverTests`, `AccControlPlaneTlsWiringTests`,
+`V2CompositionGraphTests`, `WpfSecretsBoundaryTests`).
+
+The seven failures are pre-existing at HEAD and unrelated to the remediation work:
+
+| Failing test | Reason |
+| --- | --- |
+| `WorkflowClosedViewerBoundaryTests.NewShell_opens_native_workflow_viewer_not_legacy_management_window` | Asserts a literal caption ("תהליכים — קנבס") that the source no longer contains |
+| `NewShellNativeUserAdminMenuTests` (2 tests) | Menu-tree shape assertions out of date after the user-admin menu was regrouped |
+| `NewShellAccStatusMenuTests.NewShell_shows_acc_status_menu_only_for_system_settings_admin` | Same menu-grouping change |
+| `InfrastructureSqlBoundaryTests.Infrastructure_Sql_source_does_not_contain_legacy_SiNetSQL_identifiers` (2 cases) | `SqlUserGroupQueryService` / `SqlUserGroupCommandService` still use `SiNetSQL.Data` |
+| `EmailListMigrationBoundaryTests.Email_list_component_is_standalone` | Asserts `EmailListFilterBar` in XAML that has since been restructured |
+
+They are tracked in [`P2-TECH-DEBT-BACKLOG.md`](./P2-TECH-DEBT-BACKLOG.md). **A green pilot claim
+requires this count to be 0** - do not read "2566 passed" as "suite green". Because `ci.yml` runs
+these projects, the GitHub Actions workflow is also red until they are fixed; see
+[`AUDIT-REMEDIATION-MATRIX-2026-07-28.md`](./AUDIT-REMEDIATION-MATRIX-2026-07-28.md) §3.
 | **Process launch** | ✅ V2 exe starts (brief run); full New System path not exercised to shell (requires mode/vault/DB UI) |
 
 **Automated / static verification (passed):**
@@ -237,7 +268,7 @@ Use [`manual-tests/NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./manual-tests/NEW
 | **Date** | 2026-07-27 |
 | **Required operator** | Human with V2 access, DB connection, credential vault, Gmail token/credentials, and ACC host/config |
 | **Branch / commit** | `SiWorkNet10` (see latest commit on GitHub after push) |
-| **Build / tests** | Debug + Release build ✅; `SiNet.App.Wpf.Tests` ✅ (see §9.2 automated run) |
+| **Build / tests** | Release build of `SiNet.sln` ✅ 0 errors; tests ⚠️ 2566/2573 with 7 pre-existing failures (see §9.2.1) |
 
 **No automatic approval:** Agent/static tests and boundary guards **do not** authorize pilot users.
 Only a completed manual checklist with **Pass** on every required step may change status to ready.

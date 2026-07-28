@@ -17,6 +17,15 @@ namespace SiNetProjectManagerV2.WPF_Window;
 /// Setup dialog for configuring application secrets in Windows Credential Manager.
 /// Shown on first launch or when secrets are missing.
 /// Each secret is encrypted per-user via DPAPI — only the current Windows user can access them.
+/// <para>
+/// <b>Pending replacement</b> (2026-07-28). The native equivalent is
+/// <c>SiNet.App.Wpf.Admin.Security.SecretSetupWindow</c>, and the New System shell menu already opens
+/// that one. This window is still the startup surface on <em>both</em> paths, because startup runs
+/// before the DI container exists: the native window is DI-resolved and its ACC status presenter
+/// needs <c>ILocalAccProjectService</c>, which needs the DbContext factory that the vault itself has
+/// to supply first. Do not delete before that ordering is resolved — see
+/// <c>docs/APP_SHELL.md</c> §"Legacy dialogs in the New System startup path".
+/// </para>
 /// </summary>
 public partial class SecretSetupWindow : Window
 {
@@ -701,17 +710,8 @@ public partial class SecretSetupWindow : Window
             var localKey = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
             var localKeyLength = localKey?.Length ?? 0;
 
-            var pinnedThumbprints = AppConfiguration.Configuration
-                .GetSection("AccService:PinnedCertificateThumbprints")
-                .GetChildren()
-                .Select(child => child.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value!)
-                .ToArray();
-            var tlsOptions = new AccServiceControlPlaneOptions
-            {
-                PinnedCertificateThumbprints = pinnedThumbprints,
-            };
+            var tlsOptions = new AccServiceControlPlaneOptions();
+            AccServiceControlPlaneConfiguration.Bind(tlsOptions, AppConfiguration.Configuration);
 
             if (string.IsNullOrWhiteSpace(localKey))
             {

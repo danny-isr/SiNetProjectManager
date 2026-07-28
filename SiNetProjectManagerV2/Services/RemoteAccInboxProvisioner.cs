@@ -94,22 +94,13 @@ public sealed class RemoteAccInboxProvisioner : IAccInboxProvisioner
     private void LogRequestStart(string operation, string method, string relativeUrl)
     {
         var baseAddress = _http.BaseAddress?.ToString() ?? "(null)";
+        // Header presence only — a key hash prefix is a secret fingerprint and stays out of the log.
         var hasApiKeyHeader = _http.DefaultRequestHeaders.Contains(AccServiceContracts.ApiKeyHeader);
-        var keyHashPrefix = "(none)";
-        if (hasApiKeyHeader && _http.DefaultRequestHeaders.TryGetValues(AccServiceContracts.ApiKeyHeader, out var values))
-        {
-            var key = values.FirstOrDefault();
-            if (!string.IsNullOrEmpty(key))
-            {
-                var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key));
-                keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
-            }
-        }
 
         Log.Information(
             "[AccService] {Operation} START — method={Method}, url={RelativeUrl}, baseAddress={BaseAddress}, " +
-            "hasApiKeyHeader={HasApiKeyHeader}, keyHashPrefix={KeyHashPrefix}.",
-            operation, method, relativeUrl, baseAddress, hasApiKeyHeader, keyHashPrefix);
+            "hasApiKeyHeader={HasApiKeyHeader}.",
+            operation, method, relativeUrl, baseAddress, hasApiKeyHeader);
     }
 
     private static void LogRequestSuccess(string operation, int statusCode)

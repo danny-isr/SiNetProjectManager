@@ -24,6 +24,12 @@ public static class AutodeskServiceCollectionExtensions
         services.AddSingleton(sp =>
         {
             var options = new AccServiceControlPlaneOptions();
+
+            // Configuration-driven defaults first (TLS pins), host overrides last.
+            AccServiceControlPlaneConfiguration.Bind(
+                options,
+                sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>());
+
             configure(options);
             return options;
         });
@@ -48,6 +54,8 @@ public static class AutodeskServiceCollectionExtensions
             new Bim360AccHubReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<IAccLiveProjectReader>(sp =>
             new Bim360AccLiveProjectReader(sp.GetService<ITokenProvider>()));
+        services.AddTransient<IAccProjectRootFolderIdReader>(sp =>
+            new Bim360AccProjectRootFolderIdReader(sp.GetService<ITokenProvider>()));
         services.AddTransient<LocalAccLiveProjectDiscoveryService>();
         services.AddTransient<LocalAccDocumentService>();
         services.AddTransient<LocalAccFolderPathService>();

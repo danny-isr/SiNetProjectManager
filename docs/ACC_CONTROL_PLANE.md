@@ -162,14 +162,32 @@ orchestration.
 
 ### TLS policy
 
-The HTTP handler accepts self-signed certificates only for approved internal hosts:
+Implemented by `AccServiceHttpClientConfigurator.ValidateServerCertificate`. There is **no**
+host-name allow list any more - the previous policy that trusted `SI-WIN-2K19`, any `.si-eng.local`
+name and the whole `192.168.` range was removed because it accepted any self-signed certificate on
+the office network.
 
-- exact hosts: `SI-WIN-2K19`, `localhost`, `127.0.0.1`
-- suffixes: `.si-eng.local`
-- IP prefixes: `192.168.`
+Current rules, evaluated in order:
 
-This list lives in `AccServiceControlPlaneOptions` and can be overridden by host code later if
-needed.
+| Condition | Result |
+| --- | --- |
+| `SslPolicyErrors.None` (certificate chains to a trusted CA and the name matches) | accepted |
+| Chain error **and** the request URI is loopback | accepted (local development) |
+| Chain error **and** the server thumbprint matches a configured pin | accepted |
+| Chain error with no matching pin | rejected |
+| Name mismatch, or name mismatch combined with a chain error | rejected |
+
+Pins come from `AccService:PinnedCertificateThumbprints` in host configuration and are bound in one
+place, `AccServiceControlPlaneConfiguration.Bind`, which:
+
+- feeds `AccServiceControlPlaneOptions` for every HTTP client created by `AddSiNetAutodesk`
+  (health, diagnostics, project/document/folder/file clients) by reading `IConfiguration` from the
+  container;
+- is also used by the legacy V2 provisioning clients and the legacy Secret Setup diag button, so a
+  pinned certificate behaves identically on both paths.
+
+A host may still override the pins programmatically via `AddSiNetAutodesk(options => ...)`; the host
+callback runs after the configuration binding.
 
 ### Capability map
 

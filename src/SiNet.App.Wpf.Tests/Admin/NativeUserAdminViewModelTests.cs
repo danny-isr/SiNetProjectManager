@@ -138,6 +138,116 @@ public sealed class NativeUserAdminViewModelTests
         await vm.SaveAsync();
         Assert.True(notified);
     }
+
+    [Fact]
+    public async Task UserManagementViewModel_manual_refresh_skips_when_unsaved_changes()
+    {
+        var service = new Mock<IUserManagementService>();
+        service.Setup(s => s.GetUsersAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new UserSummaryDto(1, "Alice", "a@x.com", "alice", false, true, AppAccUserType.NoAccUser, AppRole.Administrator, 0)]);
+
+        var vm = new UserManagementViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup());
+        await vm.LoadUsersAsync();
+        vm.Users[0].DisplayName = "Changed";
+        vm.NotifyRowChanged();
+
+        await vm.LoadUsersAsync(force: false);
+
+        Assert.True(vm.HasUnsavedChanges);
+        Assert.Equal("Changed", vm.Users[0].DisplayName);
+        Assert.Contains("שינויים שלא נשמרו", vm.StatusMessage, StringComparison.Ordinal);
+        service.Verify(s => s.GetUsersAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UserManagementViewModel_force_reload_includes_new_user_despite_unsaved_changes()
+    {
+        var call = 0;
+        var service = new Mock<IUserManagementService>();
+        service.Setup(s => s.GetUsersAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                call++;
+                if (call == 1)
+                {
+                    return
+                    [
+                        new UserSummaryDto(1, "Alice", "a@x.com", "alice", false, true, AppAccUserType.NoAccUser, AppRole.Administrator, 0),
+                    ];
+                }
+
+                return
+                [
+                    new UserSummaryDto(1, "Alice", "a@x.com", "alice", false, true, AppAccUserType.NoAccUser, AppRole.Administrator, 0),
+                    new UserSummaryDto(2, "Bob", "b@x.com", "bob", false, true, AppAccUserType.NoAccUser, AppRole.Employee, 0),
+                ];
+            });
+
+        var notifier = new UserAdminChangesNotifier();
+        var vm = new UserManagementViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), notifier);
+        await vm.LoadUsersAsync();
+        vm.Users[0].DisplayName = "Changed";
+        vm.NotifyRowChanged();
+        Assert.True(vm.HasUnsavedChanges);
+
+        await vm.LoadUsersAsync(force: true);
+
+        Assert.Equal(2, vm.Users.Count);
+        Assert.Contains(vm.Users, u => u.DisplayName == "Bob");
+        Assert.False(vm.HasUnsavedChanges);
+        Assert.Equal("Alice", vm.Users[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task UserManagementViewModel_UsersChanged_triggers_force_reload()
+    {
+        var call = 0;
+        var service = new Mock<IUserManagementService>();
+        service.Setup(s => s.GetUsersAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                call++;
+                if (call == 1)
+                {
+                    return
+                    [
+                        new UserSummaryDto(1, "Alice", "a@x.com", "alice", false, true, AppAccUserType.NoAccUser, AppRole.Administrator, 0),
+                    ];
+                }
+
+                return
+                [
+                    new UserSummaryDto(1, "Alice", "a@x.com", "alice", false, true, AppAccUserType.NoAccUser, AppRole.Administrator, 0),
+                    new UserSummaryDto(2, "Bob", "b@x.com", "bob", false, true, AppAccUserType.NoAccUser, AppRole.Employee, 0),
+                ];
+            });
+
+        var notifier = new UserAdminChangesNotifier();
+        var vm = new UserManagementViewModel(service.Object, UserAdminTestDoubles.EmptyMasterPlanLookup(), notifier);
+        await vm.LoadUsersAsync();
+        vm.Users[0].DisplayName = "Changed";
+        vm.NotifyRowChanged();
+
+        notifier.NotifyUsersChanged();
+        await WaitUntilAsync(() => vm.Users.Count == 2 && !vm.IsLoading, TimeSpan.FromSeconds(3));
+
+        Assert.Equal(2, vm.Users.Count);
+        Assert.Contains(vm.Users, u => u.DisplayName == "Bob");
+        Assert.False(vm.HasUnsavedChanges);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+                return;
+            await Task.Delay(20);
+        }
+
+        Assert.True(condition(), "Timed out waiting for condition.");
+    }
 }
 
 public sealed class SqlUserManagementServiceAuthorizationTests

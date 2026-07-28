@@ -723,7 +723,9 @@ namespace SiNetProjectManagerV2
                     AppConfiguration.Configuration,
                     sp.GetService<ILoggerFactory>()?.CreateLogger<SiNetSQL.Services.OllamaService>());
 
-                // Apply DB overrides if available (non-blocking — DB is already cached by this point)
+                // Apply DB overrides if available (DB is already cached by this point). This blocks on
+                // Task.Run because IServiceProvider factory delegates are synchronous by contract; the
+                // detour through the thread pool keeps it off the UI SynchronizationContext.
                 var settings = sp.GetRequiredService<SystemSettingsService>();
                 var dbUrl = Task.Run(() => settings.GetAsync(SystemSettingKeys.OllamaBaseUrl).AsTask()).GetAwaiter().GetResult();
                 if (!string.IsNullOrWhiteSpace(dbUrl))
@@ -765,20 +767,14 @@ namespace SiNetProjectManagerV2
                 string clientUser;
                 try { clientUser = Environment.UserDomainName + "\\" + Environment.UserName; }
                 catch { clientUser = "(unknown)"; }
+                // Presence only. Key length and hash prefixes are secret fingerprints and must not
+                // reach the central log (see docs/OPS-P0-SECRET-ROTATION.md).
                 var hasApiKey = !string.IsNullOrWhiteSpace(apiKey);
-                var keyLength = apiKey?.Length ?? 0;
-                var keyHashPrefix = "(none)";
-                if (hasApiKey)
-                {
-                    var hashBytes = System.Security.Cryptography.SHA256.HashData(
-                        System.Text.Encoding.UTF8.GetBytes(apiKey!));
-                    keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
-                }
                 Log.Warning(
                     "[AccService] DI registration — mode=REMOTE, baseUrl={BaseUrl}, " +
-                    "clientUser={ClientUser}, hasApiKey={HasApiKey}, keyLength={KeyLength}, keyHashPrefix={KeyHashPrefix}, " +
+                    "clientUser={ClientUser}, hasApiKey={HasApiKey}, " +
                     "services=[RemoteAccProjectProvisioningService, RemoteAccInboxProvisioner].",
-                    accServiceBaseUrl, clientUser, hasApiKey, keyLength, keyHashPrefix);
+                    accServiceBaseUrl, clientUser, hasApiKey);
 
                 // Shared HttpClient configurator — same base address, header and
                 // infinite timeout for both the project-provisioning and the
@@ -804,13 +800,8 @@ namespace SiNetProjectManagerV2
                 // ─── SSL Certificate Validation for AccService ───────────────────
                 // SiOffice.AccService may present a self-signed cert. Accept chain errors
                 // only for loopback or when the server cert thumbprint is explicitly pinned.
-                var pinnedThumbprints = AppConfiguration.Configuration
-                    .GetSection("AccService:PinnedCertificateThumbprints")
-                    .GetChildren()
-                    .Select(child => child.Value)
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
-                    .Select(value => value!)
-                    .ToArray();
+                var pinnedThumbprints = AccServiceControlPlaneConfiguration
+                    .ReadPinnedCertificateThumbprints(AppConfiguration.Configuration);
                 var tlsOptions = new AccServiceControlPlaneOptions
                 {
                     PinnedCertificateThumbprints = pinnedThumbprints,
@@ -824,11 +815,11 @@ namespace SiNetProjectManagerV2
                         "[AccService] SSL: loopback host '{Host}' — chain errors accepted for local development.",
                         accServiceHost);
                 }
-                else if (pinnedThumbprints.Length > 0)
+                else if (pinnedThumbprints.Count > 0)
                 {
                     Log.Information(
                         "[AccService] SSL: thumbprint pinning enabled for host '{Host}' ({Count} pin(s)).",
-                        accServiceHost, pinnedThumbprints.Length);
+                        accServiceHost, pinnedThumbprints.Count);
                 }
                 else
                 {
@@ -853,7 +844,7 @@ namespace SiNetProjectManagerV2
                 configureHandler(services.AddHttpClient<SiNetSQL.Services.AccBootstrap.IAccInboxProvisioner, RemoteAccInboxProvisioner>(configure));
                 Log.Information(
                     "ACC Provisioning: using REMOTE SiOffice.AccService at {Url} (host={Host}, loopback={IsLoopback}, pinnedThumbprints={PinCount}).",
-                    accServiceBaseUrl, accServiceHost, accServiceUri.IsLoopback, pinnedThumbprints.Length);
+                    accServiceBaseUrl, accServiceHost, accServiceUri.IsLoopback, pinnedThumbprints.Count);
             }
             else
             {
@@ -976,8 +967,10 @@ namespace SiNetProjectManagerV2
 
                 if (SiNet.App.Wpf.Shell.StartupModeRouter.OpensNewShell(selectedMode.Value))
                 {
-                    RunNewSystemStartup(e);
-                    Log.Information("[STARTUP] ═══ Application startup completed (New System) ═══");
+                    // The New System pipeline awaits async ports (system settings, saved theme, shell
+                    // authorization), so it is queued on the dispatcher and owns the same fatal-error
+                    // handling as this method rather than running inside this try block.
+                    _ = Dispatcher.InvokeAsync(() => RunNewSystemStartupAsync(e));
                     return;
                 }
 
@@ -986,31 +979,38 @@ namespace SiNetProjectManagerV2
             }
             catch (Exception ex)
             {
-                // CRITICAL: Unhandled exception during startup
-                // This is the LAST line of defense before silent crash
-                var errorId = Guid.NewGuid().ToString("N");
-
-                try
-                {
-                    Log.Fatal(ex, "[STARTUP FATAL] Application failed to start. ErrorId={ErrorId}", errorId);
-                    Log.CloseAndFlush();
-                }
-                catch { }
-
-                try
-                {
-                    var logPath = GetLogDirectory();
-                    var msg = $"האפליקציה נכשלה בהפעלה:\n\n{ex.Message}\n\n" +
-                              $"קוד שגיאה: {errorId}\n" +
-                              $"לוגים: {logPath}\n\n" +
-                              $"פרטים טכניים:\n{ex.GetType().Name}";
-
-                    MessageBox.Show(msg, "שגיאת הפעלה קריטית", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                catch { }
-
-                Shutdown();
+                HandleFatalStartupFailure(ex);
             }
+        }
+
+        /// <summary>
+        /// Last line of defense before a silent startup crash: logs, tells the user where the logs are,
+        /// and shuts down. Shared by <see cref="OnStartup"/> and <see cref="RunNewSystemStartupAsync"/>.
+        /// </summary>
+        private void HandleFatalStartupFailure(Exception ex)
+        {
+            var errorId = Guid.NewGuid().ToString("N");
+
+            try
+            {
+                Log.Fatal(ex, "[STARTUP FATAL] Application failed to start. ErrorId={ErrorId}", errorId);
+                Log.CloseAndFlush();
+            }
+            catch { }
+
+            try
+            {
+                var logPath = GetLogDirectory();
+                var msg = $"האפליקציה נכשלה בהפעלה:\n\n{ex.Message}\n\n" +
+                          $"קוד שגיאה: {errorId}\n" +
+                          $"לוגים: {logPath}\n\n" +
+                          $"פרטים טכניים:\n{ex.GetType().Name}";
+
+                MessageBox.Show(msg, "שגיאת הפעלה קריטית", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { }
+
+            Shutdown();
         }
 
         #region Startup Pipeline Steps
@@ -1020,7 +1020,20 @@ namespace SiNetProjectManagerV2
         /// debug role selector → <see cref="AuthorizeCurrentUser"/> → <see cref="NewShellWindow"/>.
         /// No legacy schema gate or <see cref="MainWindow"/>. No silent fallback to Legacy on failure.
         /// </summary>
-        private void RunNewSystemStartup(StartupEventArgs e)
+        private async Task RunNewSystemStartupAsync(StartupEventArgs e)
+        {
+            try
+            {
+                await RunNewSystemStartupCoreAsync(e).ConfigureAwait(true);
+                Log.Information("[STARTUP] ═══ Application startup completed (New System) ═══");
+            }
+            catch (Exception ex)
+            {
+                HandleFatalStartupFailure(ex);
+            }
+        }
+
+        private async Task RunNewSystemStartupCoreAsync(StartupEventArgs e)
         {
             Log.Information("[STARTUP][NewSystem] Setting up credential vault (connection string)...");
             SetupCredentialVaultForNewSystem();
@@ -1066,17 +1079,17 @@ namespace SiNetProjectManagerV2
             }
 
             Log.Information("[STARTUP][NewSystem] Loading management settings + default project cache...");
-            LoadManagementSettingsFromDb();
+            await LoadManagementSettingsFromDbAsync().ConfigureAwait(true);
             WarmDefaultProjectCacheForNewSystem();
 
             Log.Information("[STARTUP][NewSystem] Initializing status colors...");
             InitializeStatusColors();
 
-            ApplyNewSystemThemeFromSavedSettings();
+            await ApplyNewSystemThemeFromSavedSettingsAsync().ConfigureAwait(true);
             SchedulePdfRendererInit();
 
             base.OnStartup(e);
-            LaunchNewSystemShell();
+            await LaunchNewSystemShellAsync().ConfigureAwait(true);
         }
 
         /// <summary>
@@ -1134,13 +1147,15 @@ namespace SiNetProjectManagerV2
 
         /// <summary>
         /// Opens the clean New System shell. On failure shows an error and shuts down — no Legacy fallback.
+        /// Awaited on the UI thread: shell construction resolves the current user profile and the
+        /// per-surface authorization decisions through async ports.
         /// </summary>
-        private static void LaunchNewSystemShell()
+        private static async Task LaunchNewSystemShellAsync()
         {
             try
             {
                 var factory = ServiceProvider.GetRequiredService<SiNet.App.Wpf.Shell.INewShellFactory>();
-                var shell = factory.CreateShell();
+                var shell = await factory.CreateShellAsync(_appShutdownCts.Token).ConfigureAwait(true);
 
                 Current.MainWindow = shell;
                 Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
@@ -1208,7 +1223,10 @@ namespace SiNetProjectManagerV2
             }
 
             Log.Information("[STARTUP][Legacy] Step 4b: Loading management settings from DB...");
-            LoadManagementSettingsFromDb();
+            // The Legacy pipeline is still synchronous end to end (RunLegacyStartup is called inline from
+            // OnStartup). Only the New System path was converted to await this; making Legacy async is
+            // tracked in docs/P2-TECH-DEBT-BACKLOG.md rather than done here.
+            Task.Run(LoadManagementSettingsFromDbAsync).GetAwaiter().GetResult();
 
             Log.Information("[STARTUP][Legacy] Step 5: Scheduling background services...");
             SchedulePdfRendererInit();
@@ -1270,6 +1288,14 @@ namespace SiNetProjectManagerV2
 
         /// <summary>
         /// New System vault setup: prefer silent vault; legacy dialogs only as explicit deprecated fallback.
+        /// <para>
+        /// The provisioning password prompt is served by the native
+        /// <see cref="SiNet.App.Wpf.Admin.Security.ProvisioningPasswordWindow"/>. The vault/DB setup
+        /// surface still falls back to <c>WPF_Window.SecretSetupWindow</c>: the native window is
+        /// DI-resolved and its ACC status presenter needs <c>ILocalAccProjectService</c>, which needs a
+        /// DbContext factory that only exists once the vault has produced the connection string. See
+        /// <c>docs/APP_SHELL.md</c> §"Legacy dialogs in the New System startup path".
+        /// </para>
         /// </summary>
         private static void SetupCredentialVaultForNewSystem()
             => SetupCredentialVaultCore(allowLegacyDialogs: true, newSystemPath: true);
@@ -1294,26 +1320,18 @@ namespace SiNetProjectManagerV2
                 }
                 else
                 {
-                    if (newSystemPath)
-                    {
-                        Log.Warning(
-                            "DEPRECATED: legacy dialog on New System path — Stage 4 partial " +
-                            "(ProvisioningPasswordDialog). Prefer offline vault provisioning.");
-                    }
+                    // The password prompt has no container dependencies, so the New System path uses the
+                    // native window and the legacy dialog stays on the Legacy path only.
+                    var enteredPassword = newSystemPath
+                        ? PromptProvisioningPasswordNative()
+                        : PromptProvisioningPasswordLegacy();
 
-                    // Found a provisioning package — prompt for password and import
-                    var pwDialog = new WPF_Window.ProvisioningPasswordDialog
-                    {
-                        RequireConfirmation = false,
-                        Title = "נמצא קובץ הגדרות — הזן סיסמה לייבוא"
-                    };
-
-                    if (pwDialog.ShowDialog() == true)
+                    if (enteredPassword is not null)
                     {
                         try
                         {
                             var imported = SecretProvisioningService.ImportFromFile(
-                                provisioningPath, pwDialog.EnteredPassword);
+                                provisioningPath, enteredPassword);
                             Log.Information("Provisioning import: {Count} secrets imported from file.", imported);
                         }
                         catch (Exception ex)
@@ -1355,6 +1373,35 @@ namespace SiNetProjectManagerV2
                     Log.Warning("Credential vault setup was skipped. Falling back to configuration files.");
                 }
             }
+        }
+
+        /// <summary>
+        /// Native provisioning password prompt used by the New System startup path.
+        /// Returns <c>null</c> when the user cancels.
+        /// </summary>
+        private static string? PromptProvisioningPasswordNative()
+        {
+            var dialog = new SiNet.App.Wpf.Admin.Security.ProvisioningPasswordWindow(
+                requireConfirmation: false,
+                title: "נמצא קובץ הגדרות — הזן סיסמה לייבוא");
+
+            return dialog.ShowDialog() == true ? dialog.EnteredPassword : null;
+        }
+
+        /// <summary>
+        /// Legacy provisioning password prompt. Deprecated for the New System path (replaced by
+        /// <see cref="PromptProvisioningPasswordNative"/>); retained for the Legacy startup path.
+        /// Returns <c>null</c> when the user cancels.
+        /// </summary>
+        private static string? PromptProvisioningPasswordLegacy()
+        {
+            var dialog = new WPF_Window.ProvisioningPasswordDialog
+            {
+                RequireConfirmation = false,
+                Title = "נמצא קובץ הגדרות — הזן סיסמה לייבוא",
+            };
+
+            return dialog.ShowDialog() == true ? dialog.EnteredPassword : null;
         }
 
         /// <summary>
@@ -1440,11 +1487,12 @@ namespace SiNetProjectManagerV2
         /// Loads admin-level settings from the DB (SystemSettings table) and configures DefaultProjectService.
         /// Must be called after DI is configured (SystemSettingsService is registered as singleton).
         /// </summary>
-        private static void LoadManagementSettingsFromDb()
+        private static async Task LoadManagementSettingsFromDbAsync()
         {
             var settingsService = ServiceProvider.GetRequiredService<SystemSettingsService>();
-            var title = Task.Run(() => settingsService.GetOrDefaultAsync(
-                SystemSettingKeys.DefaultProjectTitle, string.Empty).AsTask()).GetAwaiter().GetResult();
+            var title = await settingsService
+                .GetOrDefaultAsync(SystemSettingKeys.DefaultProjectTitle, string.Empty)
+                .ConfigureAwait(true);
 
             SiNetSQL.Services.DefaultProjectService.ConfiguredTitle =
                 string.IsNullOrWhiteSpace(title)
@@ -1883,12 +1931,12 @@ namespace SiNetProjectManagerV2
             }
         }
 
-        private static void ApplyNewSystemThemeFromSavedSettings()
+        private static async Task ApplyNewSystemThemeFromSavedSettingsAsync()
         {
             try
             {
                 var initializer = ServiceProvider.GetRequiredService<SiNet.App.Wpf.Theme.ThemeStartupInitializer>();
-                initializer.ApplySavedThemeAsync().GetAwaiter().GetResult();
+                await initializer.ApplySavedThemeAsync().ConfigureAwait(true);
                 AppLogger.Debug("[Theme] Applied saved user appearance to Application resources.");
             }
             catch (Exception themeEx)
@@ -1968,7 +2016,9 @@ namespace SiNetProjectManagerV2
                     return false;
                 }
 
-                // Reload settings from DB and retry with the updated title
+                // Reload settings from DB and retry with the updated title. Still synchronous: this
+                // recovery path is reached from the Legacy default-project flow, which has not been
+                // converted to async (see docs/P2-TECH-DEBT-BACKLOG.md).
                 var settingsService = ServiceProvider.GetRequiredService<SystemSettingsService>();
                 settingsService.InvalidateCache();
                 var newTitle = Task.Run(() => settingsService.GetOrDefaultAsync(

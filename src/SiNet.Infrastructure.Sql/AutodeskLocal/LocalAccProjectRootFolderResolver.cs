@@ -1,22 +1,26 @@
 using Microsoft.EntityFrameworkCore;
-using MyOffice.AutodeskConnector;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNetSQL.Data;
 
 namespace SiNet.Infrastructure.Sql.AutodeskLocal;
 
+/// <summary>
+/// Resolves the ACC hub for a project from the database and delegates the remote folder lookup to
+/// <see cref="IAccProjectRootFolderIdReader"/>. The reader is optional: when the Autodesk module is
+/// not wired (or has no token provider) the resolver reports "unknown" instead of failing.
+/// </summary>
 public sealed class LocalAccProjectRootFolderResolver(
     IDbContextFactory<SiNetSQLDbContext> dbContextFactory,
-    ITokenProvider? tokenProvider) : IAccProjectRootFolderResolver
+    IAccProjectRootFolderIdReader? rootFolderIdReader) : IAccProjectRootFolderResolver
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbContextFactory = dbContextFactory;
-    private readonly ITokenProvider? _tokenProvider = tokenProvider;
+    private readonly IAccProjectRootFolderIdReader? _rootFolderIdReader = rootFolderIdReader;
 
     public async Task<string?> ResolveProjectFilesRootFolderIdAsync(
         string projectId,
         CancellationToken cancellationToken = default)
     {
-        if (_tokenProvider is null || string.IsNullOrWhiteSpace(projectId))
+        if (_rootFolderIdReader is null || string.IsNullOrWhiteSpace(projectId))
         {
             return null;
         }
@@ -31,8 +35,8 @@ public sealed class LocalAccProjectRootFolderResolver(
             return null;
         }
 
-        return await new Bim360Service(_tokenProvider)
-            .GetProjectRootFolderIdAsync(hubId, normalizedProjectId)
+        return await _rootFolderIdReader
+            .GetProjectRootFolderIdAsync(hubId, normalizedProjectId, cancellationToken)
             .ConfigureAwait(false);
     }
 

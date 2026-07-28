@@ -72,14 +72,17 @@
                 </Grid>
 
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <TextBlock Text="ברירת מחדל:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                    <TextBlock Text="ברירת מחדל:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"
+                               ToolTip="נשמר אוטומטית בבחירה מהרשימה"/>
                     <ComboBox Width="220"
                               ItemsSource="{Binding Members}"
                               SelectedItem="{Binding SelectedDefaultAssignee}"
                               DisplayMemberPath="DisplayName"
-                              VerticalContentAlignment="Center"/>
+                              VerticalContentAlignment="Center"
+                              ToolTip="בחירה נשמרת אוטומטית"/>
                     <Button Content="החל" Command="{Binding SetDefaultAssigneeCommand}"
-                            Style="{DynamicResource SiSecondaryButtonStyle}" Margin="6,0,0,0" Padding="8,3"/>
+                            Style="{DynamicResource SiSecondaryButtonStyle}" Margin="6,0,0,0" Padding="8,3"
+                            ToolTip="שמירה מפורשת (גם בחירה ברשימה נשמרת אוטומטית)"/>
                     <Button Content="נקה" Command="{Binding ClearDefaultAssigneeCommand}"
                             Style="{DynamicResource SiSecondaryButtonStyle}" Margin="6,0,0,0" Padding="8,3"/>
                 </StackPanel>

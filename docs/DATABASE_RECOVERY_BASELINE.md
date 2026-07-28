@@ -14,11 +14,11 @@ Related: [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINES
 The following scripts may exist outside the repo or in archives. They reflect an **older** schema
 snapshot and **must not** be used to rebuild or recover production-like databases:
 
-| Script | Typical role | Why invalid today |
+| Script | What it actually is | Why invalid as a recovery path |
 | --- | --- | --- |
-| `01-scriptSiEng.sql` | Legacy SiEng baseline | ~**35** tables — far below current EF model |
-| `02-script.sql` | SiData companion / delta | Does not represent full current SiData schema |
-| `03-scriptReplica.sql` | Replica baseline (when supplied) | Missing tables present in live Replica (see §2) |
+| `01-scriptSiEng.sql` | Legacy **SiData** baseline | **35** tables — far below the current EF model (85) |
+| `02-script.sql` | Dump of **`Db_Mp_SiEng`** (the MasterPlan source database, ~305 tables) | Not a SiData script at all. An earlier revision of this document described it as a "SiData companion / delta"; that was wrong. |
+| `03-scriptReplica.sql` | Legacy **Replica_DB** baseline (13 tables) | Missing tables present in live Replica (see §2) |
 
 **Rule:** Treat these scripts as **historical artifacts only**. Do not run them against SiData or
 Replica expecting a working application.
@@ -33,8 +33,10 @@ Current authoritative schema for the New System SQL stack is captured in:
 
 `src/SiNet.Infrastructure.Sql/Migrations/SiNetSQLDbContextModelSnapshot.cs`
 
-- **~85–89** mapped tables (entity count varies with views/junction tables; `ToTable` count ≈ 89).
-- Old `01-scriptSiEng.sql` baseline: **~35** tables.
+- **85** mapped tables — 85 `ToTable(...)` calls, all distinct (counted at commit `22e7458`).
+- The `SiNetSQLDbContext` exposes **89** `DbSet<>` properties. The difference is owned/derived types
+  that map onto an existing table, not four extra tables. Do not use 89 as a table count.
+- Old `01-scriptSiEng.sql` baseline: **35** tables.
 
 Gap: workflow, email/ACC cache, MasterPlan sync, planning taxonomy, native user admin entities, and
 many other slices added via EF migrations since the SiEng script era.
@@ -50,6 +52,12 @@ When `03-scriptReplica.sql` (or equivalent archived replica baseline) is compare
 
 Live Replica also carries additional MP_* tables maintained by `MasterPlan.SyncEngine`. An old
 replica script produces a **partial** replica unusable for sync or reporting without manual repair.
+
+Both tables are created by `MasterPlan.SyncEngine/Migrations/001_AddHoursEndpointTables.sql`. Until
+now nothing recorded whether that script had been applied to a given Replica. Use
+[`scripts/db/apply-replica-migrations.ps1`](../scripts/db/apply-replica-migrations.ps1), which
+creates a `dbo.SchemaVersions` table and records script name, SHA-256 and apply time. It is dry-run
+by default.
 
 ### 2.3 AUTO_CLOSE ON warning
 
@@ -109,9 +117,14 @@ Recovery uses **backups** or **live schema export**, not migration rewrites.
 
 ## 5. Operator checklist (recovery validation)
 
+> **No baseline backup and no restore rehearsal have been performed yet.** Track them in
+> [`manual-tests/DB_RESTORE_REHEARSAL_CHECKLIST.md`](./manual-tests/DB_RESTORE_REHEARSAL_CHECKLIST.md),
+> which is currently `Not Run`. The scripts under [`scripts/db`](../scripts/db) automate the steps
+> below and are dry-run by default.
+
 | Step | Pass criteria |
 | --- | --- |
-| Table count vs ModelSnapshot | Within expected range (~85+ user tables) |
+| Table count vs ModelSnapshot | >= 85 user tables |
 | `__EFMigrationsHistory` | Matches deployed build |
 | `MP_TimeHourReports` / `MP_ProjectHoursExtended` | Present on Replica when sync engine is used |
 | `AUTO_CLOSE` | OFF for SiData and Replica |

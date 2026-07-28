@@ -26,8 +26,10 @@
 
   <ItemGroup>
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
+	<!-- Deliberately no reference to SiOffice.AutodeskConnector: the SQL layer talks to ACC only
+	     through SiNet.Application ports (see AutodeskLocal/LocalAccProjectRootFolderResolver).
+	     Guarded by SiNet.App.Wpf.Tests/Architecture/ProjectDependencyBoundaryTests. -->
 	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
-	<ProjectReference Include="..\..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
 
   <ItemGroup>

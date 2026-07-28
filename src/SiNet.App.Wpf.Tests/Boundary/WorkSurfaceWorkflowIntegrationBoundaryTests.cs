@@ -92,8 +92,8 @@ public sealed class WorkSurfaceWorkflowIntegrationBoundaryTests
     {
         var source = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
 
-        var runNewSystemStart = source.IndexOf("private void RunNewSystemStartup", StringComparison.Ordinal);
-        var runNewSystemEnd = source.IndexOf("private static void LaunchNewSystemShell", StringComparison.Ordinal);
+        var runNewSystemStart = source.IndexOf("private async Task RunNewSystemStartupCoreAsync", StringComparison.Ordinal);
+        var runNewSystemEnd = source.IndexOf("private static async Task LaunchNewSystemShellAsync", StringComparison.Ordinal);
         Assert.True(runNewSystemStart >= 0);
         Assert.True(runNewSystemEnd > runNewSystemStart);
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.App.Wpf.Autodesk;
 
 namespace SiNet.App.Wpf.Admin.Settings;
@@ -9,7 +10,7 @@ public static class SettingsAdminServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<AccControlPlaneStatusPresenter>();
+        services.TryAddSingleton<AccControlPlaneStatusPresenter>();
         services.AddSingleton<SettingsViewModelFactory>();
         services.AddSingleton<ISettingsWindowFactory, SettingsWindowFactory>();
         services.AddTransient<SettingsView>();

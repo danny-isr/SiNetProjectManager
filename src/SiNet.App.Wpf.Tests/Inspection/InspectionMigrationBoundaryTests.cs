@@ -1,4 +1,6 @@
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Abstractions.Inspection;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Inspection;
@@ -15,11 +17,20 @@ public sealed class InspectionMigrationBoundaryTests
     [Fact]
     public void New_system_graph_registers_inspection_and_ai()
     {
-        var source = ReadRepoFile("SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs");
-        Assert.Contains("AddSiNetInspectionSql", source, StringComparison.Ordinal);
-        Assert.Contains("AddSiNetAi", source, StringComparison.Ordinal);
-        Assert.Contains("V2InspectionFileTreePickerHost", source, StringComparison.Ordinal);
-        Assert.Contains("V2InspectionNoteLinkedFileHost", source, StringComparison.Ordinal);
+        // Asserted against the built graph rather than the source text: the V2 host reaches the SQL
+        // inspection module through AddSiNet(V2Hybrid), so no literal AddSiNetInspectionSql call remains.
+        var services = new ServiceCollection();
+        SiNetProjectManagerV2.Services.Composition.NewSystemServiceCollectionExtensions
+            .AddSiNetNewSystemGraph(services);
+
+        Assert.Contains(services, d => d.ServiceType == typeof(IInspectionWorkspace));
+        Assert.Contains(services, d => d.ServiceType == typeof(IInspectionNoteAiReviewer));
+        Assert.Equal(
+            "V2InspectionFileTreePickerHost",
+            services.Last(d => d.ServiceType == typeof(IInspectionFileTreePickerHost)).ImplementationType?.Name);
+        Assert.Equal(
+            "V2InspectionNoteLinkedFileHost",
+            services.Last(d => d.ServiceType == typeof(IInspectionNoteLinkedFileHost)).ImplementationType?.Name);
     }
 
     [Fact]

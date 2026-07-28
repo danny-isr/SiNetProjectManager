@@ -15,6 +15,7 @@ public sealed class UserManagementViewModel : ObservableObject
     private readonly IUserManagementService _userManagementService;
     private readonly IMasterPlanEmployeeLookupService _masterPlanEmployeeLookup;
     private readonly IUserAdminChangesNotifier? _changesNotifier;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
     private bool _isLoading;
     private bool _isSaving;
     private string _statusMessage = string.Empty;
@@ -40,13 +41,13 @@ public sealed class UserManagementViewModel : ObservableObject
         ];
         AvailableAccUserTypes = new ObservableCollection<AppAccUserType>(AppAccUserTypeDisplay.AllValues);
 
-        RefreshCommand = new AsyncRelayCommand(LoadUsersAsync, () => !IsLoading && !IsSaving);
+        RefreshCommand = new AsyncRelayCommand(() => LoadUsersAsync(force: false), () => !IsLoading && !IsSaving);
         SaveCommand = new AsyncRelayCommand(SaveChangesAsync, CanSave);
         CancelCommand = new RelayCommand(_ => CancelChanges(), _ => HasUnsavedChanges && !IsSaving);
 
         if (_changesNotifier is not null)
         {
-            _changesNotifier.UsersChanged += (_, _) => _ = LoadUsersAsync();
+            _changesNotifier.UsersChanged += (_, _) => _ = LoadUsersAsync(force: true);
         }
     }
 
@@ -119,60 +120,87 @@ public sealed class UserManagementViewModel : ObservableObject
 
     public RelayCommand CancelCommand { get; }
 
-    public async Task LoadUsersAsync()
+    /// <summary>
+    /// Loads users from the Application port.
+    /// When <paramref name="force"/> is true (e.g. after <see cref="IUserAdminChangesNotifier.UsersChanged"/>),
+    /// discards local dirty edits and reloads so newly added users appear immediately.
+    /// </summary>
+    public async Task LoadUsersAsync(bool force = false)
     {
-        if (HasUnsavedChanges)
-        {
-            StatusMessage = "יש שינויים שלא נשמרו — שמור או בטל לפני רענון.";
-            return;
-        }
-
-        IsLoading = true;
-        StatusMessage = "טוען משתמשים...";
-
+        await _loadGate.WaitAsync().ConfigureAwait(true);
         try
         {
-            var usersTask = _userManagementService.GetUsersAsync();
-            var employeesTask = _masterPlanEmployeeLookup.GetEmployeesAsync();
-            await Task.WhenAll(usersTask, employeesTask).ConfigureAwait(true);
-
-            var users = await usersTask.ConfigureAwait(true);
-            var employees = await employeesTask.ConfigureAwait(true);
-
-            MasterPlanEmployees.Clear();
-            foreach (var employee in employees)
+            if (!force && HasUnsavedChanges)
             {
-                MasterPlanEmployees.Add(employee);
+                StatusMessage = "יש שינויים שלא נשמרו — שמור או בטל לפני רענון.";
+                return;
             }
 
-            Users.Clear();
-            foreach (var user in users)
+            if (force && HasUnsavedChanges)
             {
-                var row = new UserEditRow(user);
-                row.PropertyChanged += OnUserRowPropertyChanged;
-                Users.Add(row);
+                DiscardDirtyRowsWithoutStatus();
             }
 
-            UpdateMasterPlanEmployeeNames();
-            ApplySearchFilter();
-            SelectedUser = FilteredUsers.FirstOrDefault() ?? Users.FirstOrDefault();
+            IsLoading = true;
+            StatusMessage = "טוען משתמשים...";
 
-            if (MasterPlanEmployees.Count <= 1)
+            try
             {
-                StatusMessage = $"נטענו {Users.Count} משתמשים. MasterPlan: אין חיבור DB מוגדר (ReplicaDatabase / MasterPlanDatabase).";
+                var usersTask = _userManagementService.GetUsersAsync();
+                var employeesTask = _masterPlanEmployeeLookup.GetEmployeesAsync();
+                await Task.WhenAll(usersTask, employeesTask).ConfigureAwait(true);
+
+                var users = await usersTask.ConfigureAwait(true);
+                var employees = await employeesTask.ConfigureAwait(true);
+
+                MasterPlanEmployees.Clear();
+                foreach (var employee in employees)
+                {
+                    MasterPlanEmployees.Add(employee);
+                }
+
+                foreach (var existing in Users)
+                {
+                    existing.PropertyChanged -= OnUserRowPropertyChanged;
+                }
+
+                Users.Clear();
+                foreach (var user in users)
+                {
+                    var row = new UserEditRow(user);
+                    row.PropertyChanged += OnUserRowPropertyChanged;
+                    Users.Add(row);
+                }
+
+                UpdateMasterPlanEmployeeNames();
+                ApplySearchFilter();
+                SelectedUser = FilteredUsers.FirstOrDefault() ?? Users.FirstOrDefault();
+
+                OnPropertyChanged(nameof(HasUnsavedChanges));
+                SaveCommand.RaiseCanExecuteChanged();
+                CancelCommand.RaiseCanExecuteChanged();
+
+                if (MasterPlanEmployees.Count <= 1)
+                {
+                    StatusMessage = $"נטענו {Users.Count} משתמשים. MasterPlan: אין חיבור DB מוגדר (ReplicaDatabase / MasterPlanDatabase).";
+                }
+                else
+                {
+                    StatusMessage = $"נטענו {Users.Count} משתמשים, {MasterPlanEmployees.Count - 1} עובדי MasterPlan.";
+                }
             }
-            else
+            catch (Exception ex)
             {
-                StatusMessage = $"נטענו {Users.Count} משתמשים, {MasterPlanEmployees.Count - 1} עובדי MasterPlan.";
+                StatusMessage = $"שגיאה בטעינה: {ex.Message}";
             }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"שגיאה בטעינה: {ex.Message}";
+            finally
+            {
+                IsLoading = false;
+            }
         }
         finally
         {
-            IsLoading = false;
+            _loadGate.Release();
         }
     }
 
@@ -263,16 +291,20 @@ public sealed class UserManagementViewModel : ObservableObject
 
     private void CancelChanges()
     {
-        foreach (var row in Users.Where(u => u.IsDirty))
-        {
-            row.RevertChanges();
-        }
-
+        DiscardDirtyRowsWithoutStatus();
         UpdateMasterPlanEmployeeNames();
         OnPropertyChanged(nameof(HasUnsavedChanges));
         SaveCommand.RaiseCanExecuteChanged();
         CancelCommand.RaiseCanExecuteChanged();
         StatusMessage = "שינויים בוטלו.";
+    }
+
+    private void DiscardDirtyRowsWithoutStatus()
+    {
+        foreach (var row in Users.Where(u => u.IsDirty))
+        {
+            row.RevertChanges();
+        }
     }
 
     public void NotifyRowChanged()

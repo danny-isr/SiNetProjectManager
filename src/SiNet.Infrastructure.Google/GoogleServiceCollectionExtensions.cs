@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
@@ -58,7 +59,7 @@ public static class GoogleServiceCollectionExtensions
 
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
         services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();
-        services.AddSingleton<IFileStore, GoogleDriveFileStore>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IFileStore, GoogleDriveFileStore>());
 
         return services;
     }

@@ -2,6 +2,43 @@
 
 Operational checklist for rotating the MasterPlan Web API key. **Do not record actual key values in this document or in Git.**
 
+## Status — `Manual Pending` (as of 2026-07-28)
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| Key removed from tracked files at HEAD | Done | Enforced on every CI run by `build/secret-scan.ps1` |
+| Key loaded from vault / `MASTERPLAN_API_KEY` only | Done | `appsettings.json` fallback was removed from `MasterPlanApiClient` |
+| Key fingerprints removed from central logs | Done | See "Logging policy" below |
+| **Rotation performed** | **Not done** | Requires MasterPlan admin action |
+| **Old key revoked** | **Not done** | Requires MasterPlan admin action |
+| Git history rewrite | **Will not be done** | Explicit owner decision, 2026-07-28 (see below) |
+
+Until rotation and revocation are actually performed and recorded in the log at the bottom of this
+document, audit finding #2 stays **open**. Removing the value from HEAD is containment, not
+remediation.
+
+### Git history decision (2026-07-28)
+
+The owner decided **not** to rewrite history: no `git filter-repo`, no BFG, no force-push, no
+deletion of commits. The commit that contained the key therefore remains reachable in the
+repository. The compensating controls are:
+
+1. the key must be rotated and the old value revoked (still pending, above);
+2. `build/secret-scan.ps1` runs in CI so the value cannot be reintroduced at HEAD;
+3. the value is loaded only from the credential vault or an environment variable.
+
+### Logging policy
+
+Key **fingerprints** (length, SHA-256 prefix) are no longer written to the central log. They were
+removed from `SiOffice.AccService/Program.cs`, `SiNetProjectManagerV2/App.xaml.cs`,
+`RemoteAccProjectProvisioningService`, `RemoteAccInboxProvisioner`, and the `/v1/acc/diag` response.
+Logs now record presence (`hasApiKey`) and source (`keySource`) only.
+
+One deliberate exception remains: the ACC control-plane **status screen** still shows key length and
+a hash prefix through `IAccServiceKeyDiagnostics`. That surface is operator-initiated, on-screen, and
+not persisted to the central log; it is the tool used to diagnose client/server key mismatches. It
+is kept intentionally and is not a logging path.
+
 ## Scope
 
 | Item | Value |
@@ -68,3 +105,10 @@ If the new key fails:
 
 - [ ] Document rotation date and operator (no key values).
 - [ ] If a team member had the old key outside vault, confirm they received the new package or updated vault locally.
+- [ ] Update the status table at the top of this document.
+
+## Rotation log
+
+| Date | Operator | Old key revoked? | Notes |
+| --- | --- | --- | --- |
+| _(empty)_ | | | No rotation has been performed yet. |

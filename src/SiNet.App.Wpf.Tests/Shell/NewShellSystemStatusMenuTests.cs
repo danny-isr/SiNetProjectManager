@@ -76,9 +76,7 @@ public sealed class NewShellSystemStatusMenuTests
 
         var sp = services.BuildServiceProvider();
         var factory = new NewShellFactory(sp);
-        var method = typeof(NewShellFactory).GetMethod("BuildMigratedOnlyMenu", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        return (IReadOnlyList<NewShellMenuItem>)method!.Invoke(factory, null)!;
+        return NewShellMenuReflection.Build(factory);
     }
 
     private static IEnumerable<NewShellMenuItem> Flatten(IEnumerable<NewShellMenuItem> items)

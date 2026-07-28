@@ -41,6 +41,9 @@ public static class SiNetCompositionExtensions
         SiNetHostMode hostMode,
         Action<GmailOptions> configureGmail)
     {
+        // The Credential Vault module (SiNet.Infrastructure.Secrets) is intentionally NOT wired here:
+        // it targets net10.0-windows and this project is platform-neutral net10.0. Hosts call
+        // AddSiNetSecrets() themselves; the call is idempotent.
         services.AddSiNetLogging();
         services.AddSiNetSql();
         services.AddSiNetProcessBackbone();

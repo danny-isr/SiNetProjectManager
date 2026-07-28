@@ -60,9 +60,7 @@ public sealed class NewShellNativeUserAdminMenuTests
         var sp = services.BuildServiceProvider();
         var factory = new NewShellFactory(sp);
 
-        var method = typeof(NewShellFactory).GetMethod("BuildMigratedOnlyMenu", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        return (IReadOnlyList<NewShellMenuItem>)method!.Invoke(factory, null)!;
+        return SiNet.App.Wpf.Tests.Shell.NewShellMenuReflection.Build(factory);
     }
 
     private static string ReadRepoFile(string relativePath)

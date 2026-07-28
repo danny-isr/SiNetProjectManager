@@ -21,10 +21,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # SiNet.sln is not self-contained: it reaches sibling repositories that are checked out
+      # next to this one. See docs/BUILD_SIBLING_PINS.md. Validate first so a bad pin fails in
+      # seconds instead of after a partial restore.
+      - name: Validate sibling pins
+        shell: pwsh
+        run: ./build/fetch-siblings.ps1 -ValidateOnly
+
+      - name: Fetch pinned sibling repositories
+        shell: pwsh
+        env:
+          SIBLING_REPOS_TOKEN: ${{ secrets.SIBLING_REPOS_TOKEN }}
+        run: ./build/fetch-siblings.ps1
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Restore
         run: dotnet restore SiNet.sln
@@ -44,27 +57,8 @@ jobs:
       - name: Test SiNet.LegacyBridge.Tests
         run: dotnet test src/SiNet.LegacyBridge.Tests/SiNet.LegacyBridge.Tests.csproj --configuration Release --no-build --verbosity normal
 
-      - name: Secret scan (tracked appsettings.json ApiKey)
+      # Runs last so a secret regression is reported even when the build is green.
+      - name: Secret scan
+        if: always()
         shell: pwsh
-        run: |
-          $pattern = '"ApiKey"\s*:\s*"[^"]+"'
-          $tracked = git ls-files '**/appsettings.json'
-          if (-not $tracked) {
-            Write-Host 'No tracked appsettings.json files found.'
-            exit 0
-          }
-
-          $violations = @()
-          foreach ($file in $tracked) {
-            $matches = Select-String -Path $file -Pattern $pattern -AllMatches
-            if ($matches) {
-              $violations += $file
-            }
-          }
-
-          if ($violations.Count -gt 0) {
-            Write-Error "Non-empty ApiKey found in tracked appsettings.json:`n$($violations -join "`n")"
-            exit 1
-          }
-
-          Write-Host 'Secret scan passed: no non-empty ApiKey in tracked appsettings.json.'
+        run: ./build/secret-scan.ps1

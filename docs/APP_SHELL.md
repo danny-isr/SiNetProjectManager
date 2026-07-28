@@ -94,6 +94,28 @@ helper (`StartupModeRouter`) so the decision can be tested without WPF.
 > **New system mode** skips legacy schema gates but **not** user authorization (see
 > [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md) P1).
 
+### Legacy dialogs in the New System startup path
+
+Status as of **2026-07-28**:
+
+| Startup surface | New System path uses | Status |
+| --- | --- | --- |
+| Provisioning password prompt | `SiNet.App.Wpf.Admin.Security.ProvisioningPasswordWindow` (native) | Migrated |
+| Vault setup / DB connection repair | `SiNetProjectManagerV2.WPF_Window.SecretSetupWindow` (legacy) | **Open** |
+
+The vault/DB surface has not migrated because of a startup ordering constraint, not a missing screen.
+The native `SecretSetupWindow` is DI-resolved; its `SecretSetupViewModel` requires
+`AccControlPlaneStatusPresenter`, which requires `IAccProjectService` →
+`ILocalAccProjectService` → `IDbContextFactory<SiNetSQLDbContext>`. That factory is registered in
+`ConfigureServices` from a connection string the vault has to provide first, so the container cannot
+exist at the moment the vault dialog needs to be shown.
+
+Closing this requires one of: making the ACC status presenter optional on the native
+`SecretSetupViewModel`, standing up a SQL-free bootstrap container for the pre-vault surface, or
+moving the vault/DB gates to run after DI is built. All three change approved behavior and are
+therefore tracked as an open decision rather than applied silently. Both legacy dialogs are marked
+deprecated in source and stay in place for the Legacy path.
+
 ---
 
 ## 4. What is allowed to load in New system mode

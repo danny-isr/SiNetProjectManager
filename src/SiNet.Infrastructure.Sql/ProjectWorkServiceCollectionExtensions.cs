@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.ProjectWork;
 using SiNet.Infrastructure.Sql.Services.Files;
 using SiNet.Infrastructure.Sql.Services.ProjectWork;
@@ -15,12 +16,14 @@ public static class ProjectWorkServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // Reused by the folder-path resolver; safe to register here even if the filing module also does.
-        services.AddTransient<IFileServerRootResolver, FileServerRootResolver>();
+        // TryAdd throughout: both AddSiNet and AddSiNetNewSystemWpf reach AddSiNetProjectWorkRuntime,
+        // and the filing module registers the root resolver as well. Each of these has a single
+        // implementation, so first-wins keeps the graph free of redundant descriptors.
+        services.TryAddTransient<IFileServerRootResolver, FileServerRootResolver>();
 
-        services.AddTransient<IProjectFileQueryService, ProjectFileQueryService>();
-        services.AddTransient<IProjectFolderPathResolver, ProjectFolderPathResolver>();
-        services.AddTransient<IProjectDriveFolderResolver, ProjectDriveFolderResolver>();
+        services.TryAddTransient<IProjectFileQueryService, ProjectFileQueryService>();
+        services.TryAddTransient<IProjectFolderPathResolver, ProjectFolderPathResolver>();
+        services.TryAddTransient<IProjectDriveFolderResolver, ProjectDriveFolderResolver>();
 
         return services;
     }

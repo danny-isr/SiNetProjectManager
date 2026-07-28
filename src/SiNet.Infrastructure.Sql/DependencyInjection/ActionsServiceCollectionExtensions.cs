@@ -26,14 +26,21 @@ public static class ActionsServiceCollectionExtensions
         // explicit registration wins) once G-Policy approves.
         services.TryAddTransient<INotificationDeliveryService, LogNotificationDeliveryService>();
 
-        services.AddTransient<IProcessActionHandler, SendNotificationProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, SetProjectStatusProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, RecordTaskResultProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, CreateStageTasksProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, SetBillingPendingProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, ClosePreviousStageTasksProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, StartSubWorkflowProcessActionHandler>();
-        services.AddTransient<IProcessActionHandler, CloseProjectProcessActionHandler>();
+        // TryAddEnumerable, not AddTransient: a host may reach this method twice (V2 calls
+        // AddSiNetProcessBackbone directly and again through AddSiNet). Plain AddTransient would put
+        // each handler in the container twice, and IEnumerable<IProcessActionHandler> would execute
+        // every process action twice.
+        services.TryAddEnumerable(
+        [
+            ServiceDescriptor.Transient<IProcessActionHandler, SendNotificationProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, SetProjectStatusProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, RecordTaskResultProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, CreateStageTasksProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, SetBillingPendingProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, ClosePreviousStageTasksProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, StartSubWorkflowProcessActionHandler>(),
+            ServiceDescriptor.Transient<IProcessActionHandler, CloseProjectProcessActionHandler>(),
+        ]);
 
         services.AddTransient<ProcessActionService>();
         services.AddTransient<IProcessActionService>(sp => sp.GetRequiredService<ProcessActionService>());

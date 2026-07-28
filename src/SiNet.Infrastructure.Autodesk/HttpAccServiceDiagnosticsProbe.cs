@@ -99,8 +99,10 @@ public sealed class HttpAccServiceDiagnosticsProbe(
                 WindowsUser: GetString(root, "windowsUser"),
                 HasApiKey: GetBool(root, "hasApiKey"),
                 KeySource: GetString(root, "keySource"),
-                KeyLength: GetInt(root, "keyLength"),
-                KeyHashPrefix: GetString(root, "keyHashPrefix"),
+                // /v1/acc/diag no longer returns key length or a hash prefix; the server-side
+                // response was reduced to safe status fields only.
+                KeyLength: 0,
+                KeyHashPrefix: null,
                 AutodeskOk: GetBool(root, "autodeskStatus"),
                 AutodeskDetail: GetString(root, "autodeskDetail"),
                 DbOk: GetBool(root, "dbStatus"),
@@ -155,11 +157,6 @@ public sealed class HttpAccServiceDiagnosticsProbe(
 
         return property.ValueKind == JsonValueKind.True;
     }
-
-    private static int GetInt(JsonElement root, string propertyName) =>
-        root.TryGetProperty(propertyName, out var property) && property.TryGetInt32(out var value)
-            ? value
-            : 0;
 
     private static string? GetString(JsonElement root, string propertyName) =>
         root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String

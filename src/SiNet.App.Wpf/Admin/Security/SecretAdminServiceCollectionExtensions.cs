@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.App.Wpf.Autodesk;
 
 namespace SiNet.App.Wpf.Admin.Security;
@@ -9,7 +10,7 @@ public static class SecretAdminServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<AccControlPlaneStatusPresenter>();
+        services.TryAddSingleton<AccControlPlaneStatusPresenter>();
         services.AddTransient<SecretSetupViewModel>();
         services.AddTransient<SecretSetupView>();
         services.AddTransient<SecretSetupWindow>();

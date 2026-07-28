@@ -19,8 +19,13 @@ This file is the **entry point for Cursor / AI agents** working in this reposito
 
 | Solution | Role | Notes |
 | --- | --- | --- |
-| **`SiNet.sln`** | **Official CI solution** (self-contained) | GitHub Actions (`.github/workflows/ci.yml`) restores, builds Debug + Release, runs all three test projects under `src/`, and secret-scans tracked `appsettings.json`. |
-| **`SiNetProjectManager.sln`** | Hybrid legacy + new stack | Requires sibling-repo pins (`SiNetSQL`, `AutodeskIntegration`) and is **not** the CI gate. |
+| **`SiNet.sln`** | **Official CI solution** | GitHub Actions (`.github/workflows/ci.yml`) fetches the pinned sibling repositories, restores, builds Debug + Release, runs all three test projects under `src/`, and secret-scans every tracked text file. |
+| **`SiNetProjectManager.sln`** | Hybrid legacy + new stack | Same sibling pins, plus the legacy projects. **Not** the CI gate. |
+
+**Neither solution is self-contained.** Both reach `SiNetSQL`, `SiOffice.AutodeskConnector` and
+`SiOffice.GoogleConnector`, which are checked out next to this repository at commits pinned in
+[build/sibling-pins.json](build/sibling-pins.json). On a clean machine run
+`pwsh .\build\fetch-siblings.ps1` before building. See `docs/BUILD_SIBLING_PINS.md`.
 
 Local agent gate (host app + primary test project):
 

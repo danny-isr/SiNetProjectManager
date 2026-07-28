@@ -886,9 +886,21 @@ public sealed class AccControlPlaneTests
             "Composition",
             "NewSystemServiceCollectionExtensions.cs"));
 
-        Assert.Contains("services.AddSiNetAutodesk();", source, StringComparison.Ordinal);
+        // The Autodesk core now arrives through AddSiNet(V2Hybrid); only the ordering relative to the
+        // status-window WPF module still matters, so it is asserted on the built graph.
+        Assert.Contains("services.AddSiNet(SiNetHostMode.V2Hybrid", source, StringComparison.Ordinal);
         Assert.Contains("services.AddSiNetNewSystemWpf();", source, StringComparison.Ordinal);
         Assert.Contains("services.AddTransient<IAccInboxBootstrapLocalExecutor, LegacyHostLocalAccInboxBootstrapExecutor>();", source, StringComparison.Ordinal);
+
+        var services = new ServiceCollection();
+        SiNetProjectManagerV2.Services.Composition.NewSystemServiceCollectionExtensions
+            .AddSiNetNewSystemGraph(services);
+
+        var coreIndex = services.ToList().FindIndex(d => d.ServiceType == typeof(IAccServiceDiagnosticsProbe));
+        var statusIndex = services.ToList().FindIndex(d => d.ServiceType == typeof(AccControlPlaneStatusPresenter));
+
+        Assert.True(coreIndex >= 0 && statusIndex >= 0, $"core={coreIndex}, status={statusIndex}");
+        Assert.True(coreIndex < statusIndex, $"core={coreIndex} must precede status={statusIndex}");
     }
 
     [Fact]

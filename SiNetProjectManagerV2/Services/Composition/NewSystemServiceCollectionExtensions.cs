@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using SiNet.App.Composition;
 using SiNet.App.Wpf;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
@@ -19,8 +21,9 @@ namespace SiNetProjectManagerV2.Services.Composition;
 /// Legacy host still shares the same container today; this extension documents the New System slice
 /// explicitly (P7 composition split stepping stone).
 /// <para>
-/// HostMode context: called from the V2 hybrid host (<see cref="SiNet.App.Composition.SiNetHostMode.V2Hybrid"/>).
-/// Prefer converging on <c>AddSiNet(SiNetHostMode.V2Hybrid, ...)</c> as registrations become idempotent.
+/// Composition converged on 2026-07-28: the shared modules now come from
+/// <c>AddSiNet(<see cref="SiNetHostMode.V2Hybrid"/>, ...)</c>. What remains here is what only the V2
+/// host can provide - legacy adapters, WPF surfaces and host-specific configuration.
 /// </para>
 /// </summary>
 public static class NewSystemServiceCollectionExtensions
@@ -33,11 +36,16 @@ public static class NewSystemServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectQuerySql(services);
-        SiNet.Infrastructure.Sql.ProjectQueryServiceCollectionExtensions.AddSiNetProjectCreateSql(services);
-        SiNet.Infrastructure.Sql.InspectionServiceCollectionExtensions.AddSiNetInspectionSql(services);
+        // Modules that read settings (ACC control-plane TLS pins) resolve IConfiguration from the
+        // container. The V2 host owns the configuration root, so publish it here.
+        services.TryAddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(AppConfiguration.Configuration);
+
+        // Single shared composition root. V2Hybrid is the only mode that adds LegacyBridge; SQL
+        // itself stays host-owned (AddSiNetSql() without a connection string is a no-op) because the
+        // V2 host registers IDbContextFactory from its own secret store earlier in ConfigureServices.
+        services.AddSiNet(SiNetHostMode.V2Hybrid, ConfigureNewSystemGmail);
+
         SiNet.Infrastructure.Sql.InspectionServiceCollectionExtensions.AddSiNetAi(services);
-        SiNet.Infrastructure.Sql.UserManagementServiceCollectionExtensions.AddSiNetUserManagementSql(services);
         services.AddSiNetSecrets();
         services.AddSiNetSerilogLogging();
         services.AddSiNetUserLoggingSettings();
@@ -45,19 +53,12 @@ public static class NewSystemServiceCollectionExtensions
         services.AddTransient<IAccInboxBootstrapLocalExecutor, LegacyHostLocalAccInboxBootstrapExecutor>();
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);
-        services.AddSiNetAutodesk();
-        services.AddSiNetAutodeskLocalSql();
         // Native centralized project-file filing (FileServer + ACC). Required by the
         // native MoveToProject executor and AddMaterial flows (Phase 3).
         SiNet.Infrastructure.Sql.FilingServiceCollectionExtensions.AddSiNetFilingServices(services);
+        // Resolved lazily by GmailClientProvider, so registering it after AddSiNet is fine.
         services.AddSingleton(LegacyGoogleClientSecretsFallback.Create());
-        services.AddSiNetGoogle(ConfigureNewSystemGmail);
-        SiNet.Infrastructure.Sql.EmailReadServiceCollectionExtensions.AddSiNetEmailReadSql(services);
-        SiNet.Infrastructure.Sql.EmailWriteServiceCollectionExtensions.AddSiNetEmailWriteSql(services);
-        SiNet.Infrastructure.Sql.EmailAccServiceCollectionExtensions.AddSiNetEmailAccSql(services);
-        SiNet.Infrastructure.Sql.EmailDetailServiceCollectionExtensions.AddSiNetEmailDetailSql(services);
         services.AddSiNetNewSystemWpf();
-        services.AddSiNetDevTools();
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();

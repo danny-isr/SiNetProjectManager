@@ -27,8 +27,8 @@ namespace SiNet.App.Wpf.Shell;
 
 /// <summary>
 /// Builds the clean New System shell (<see cref="NewShellWindow"/>) and its <b>migrated-only</b> menu
-/// (see <c>docs/APP_SHELL.md</c> §6/§7). The host calls <see cref="CreateShell"/> in New system mode
-/// instead of opening the legacy main window.
+/// (see <c>docs/APP_SHELL.md</c> §6/§7). The host calls <see cref="CreateShellAsync"/> in New system
+/// mode instead of opening the legacy main window.
 /// </summary>
 public interface INewShellFactory
 {
@@ -36,8 +36,13 @@ public interface INewShellFactory
     /// Creates a fully wired <see cref="NewShellWindow"/>: header + current user + shared Project
     /// Selector + a top menu whose items open migrated surfaces. Email is hosted in-shell via
     /// <see cref="IEmailSurfaceHost"/>; other surfaces may still open as windows. No legacy menu.
+    /// <para>
+    /// Asynchronous because building the menu needs the current user profile and one authorization
+    /// decision per migrated surface. Awaiting them keeps the startup thread free instead of blocking
+    /// it on the authorization port.
+    /// </para>
     /// </summary>
-    Window CreateShell();
+    Task<Window> CreateShellAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -49,19 +54,19 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     private readonly IServiceProvider _services = services ?? throw new ArgumentNullException(nameof(services));
 
     /// <inheritdoc />
-    public Window CreateShell()
+    public async Task<Window> CreateShellAsync(CancellationToken cancellationToken = default)
     {
         ThemeResourceLoader.EnsureApplicationResourcesMerged();
 
-        var currentUserDisplay = ResolveCurrentUserDisplay();
+        var currentUserDisplay = await ResolveCurrentUserDisplayAsync(cancellationToken).ConfigureAwait(true);
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
-        var menu = BuildMigratedOnlyMenu();
+        var menu = await BuildMigratedOnlyMenuAsync(cancellationToken).ConfigureAwait(true);
         Action? openNewProject = null;
         if (_services.GetService<IProjectCreateDialogFactory>() is { } projectCreateFactory
-            && CanAccessFeature(AppFeatureCodes.ProjectCreate))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ProjectCreate, cancellationToken).ConfigureAwait(true))
         {
-            openNewProject = () => OpenNewProject(projectCreateFactory);
+            openNewProject = () => _ = OpenNewProjectAsync(projectCreateFactory, cancellationToken);
         }
 
         var runtimeStatus = _services.GetService<IRuntimeSubsystemStatusService>();
@@ -91,23 +96,24 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// Builds a hierarchical shell menu (top groups + submenus), mirroring the legacy
     /// <c>MainWindow</c> layout. Only groups that have at least one available child are included.
     /// </summary>
-    private IReadOnlyList<NewShellMenuItem> BuildMigratedOnlyMenu()
+    private async Task<IReadOnlyList<NewShellMenuItem>> BuildMigratedOnlyMenuAsync(
+        CancellationToken cancellationToken = default)
     {
         var top = new List<NewShellMenuItem>();
 
         // ── פרויקטים ותבניות ──────────────────────────────────────────────
         var projects = new List<NewShellMenuItem>();
         if (_services.GetService<IProjectCreateDialogFactory>() is { } projectCreateFactory
-            && CanAccessFeature(AppFeatureCodes.ProjectCreate))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ProjectCreate, cancellationToken).ConfigureAwait(true))
         {
             projects.Add(new NewShellMenuItem(
                 "פתיחת פרויקט חדש",
-                () => OpenNewProject(projectCreateFactory),
+                () => _ = OpenNewProjectAsync(projectCreateFactory, cancellationToken),
                 "יצירת פרויקט חדש עם מקום, חברה, איש קשר וסוגי פרויקט"));
         }
 
         if (_services.GetService<IEmailSurfaceHost>() is { } emailSurfaceHost
-            && CanAccessFeature(AppFeatureCodes.ShellOpenEmailSurface))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenEmailSurface, cancellationToken).ConfigureAwait(true))
         {
             projects.Add(new NewShellMenuItem(
                 "מיילים",
@@ -116,7 +122,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         if (_services.GetService<ProjectWorkSurfaceHost>() is { } projectWorkHost
-            && CanAccessFeature(AppFeatureCodes.ShellOpenProjectWorkSurface))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenProjectWorkSurface, cancellationToken).ConfigureAwait(true))
         {
             projects.Add(new NewShellMenuItem(
                 "בעבודה 2",
@@ -130,7 +136,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         var tasks = new List<NewShellMenuItem>();
         // Task Workbench (לוח משימות) — personal Quick/Medium/Long queues
         if (_services.GetService<ITaskPanelReadOnlyWindowFactory>() is { } taskPanelFactory
-            && CanAccessFeature(AppFeatureCodes.ShellOpenTaskPanelReadOnly))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenTaskPanelReadOnly, cancellationToken).ConfigureAwait(true))
         {
             tasks.Add(new NewShellMenuItem(
                 "לוח משימות",
@@ -139,7 +145,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         if (_services.GetService<IInspectionWindowFactory>() is { } inspectionFactory
-            && CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenInspectionSurface, cancellationToken).ConfigureAwait(true))
         {
             tasks.Add(new NewShellMenuItem(
                 "דוחות ביקורת",
@@ -148,7 +154,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         if (_services.GetService<IWorkflowClosedViewerWindowFactory>() is { } workflowViewerFactory
-            && CanAccessFeature(AppFeatureCodes.ShellOpenWorkflowClosedViewer))
+            && await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenWorkflowClosedViewer, cancellationToken).ConfigureAwait(true))
         {
             tasks.Add(new NewShellMenuItem(
                 "צפייה בתהליכים (סגור)",
@@ -157,7 +163,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
 #if DEBUG
-        if (CanAccessFeature(AppFeatureCodes.ShellOpenInspectionSurface))
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenInspectionSurface, cancellationToken).ConfigureAwait(true))
         {
             tasks.Add(new NewShellMenuItem(
                 "ביקורת (מעטפת — DEBUG)",
@@ -170,7 +176,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         // ── משתמשים והרשאות ───────────────────────────────────────────────
         var users = new List<NewShellMenuItem>();
-        if (CanAccessFeature(AppFeatureCodes.UsersManage))
+        if (await CanAccessFeatureAsync(AppFeatureCodes.UsersManage, cancellationToken).ConfigureAwait(true))
         {
             users.Add(new NewShellMenuItem(
                 "ניהול משתמשים",
@@ -182,7 +188,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "הוספת משתמש חדש (מערכת חדשה)"));
         }
 
-        if (CanAccessFeature(AppFeatureCodes.ActionPermissionsManage))
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ActionPermissionsManage, cancellationToken).ConfigureAwait(true))
         {
             users.Add(new NewShellMenuItem(
                 "הרשאות פעולה",
@@ -202,7 +208,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "הגדרות אישיות (JSON מקומי)"));
         }
 
-        if (CanAccessFeature(AppFeatureCodes.SystemSettingsWrite))
+        if (await CanAccessFeatureAsync(AppFeatureCodes.SystemSettingsWrite, cancellationToken).ConfigureAwait(true))
         {
             admin.Add(new NewShellMenuItem(
                 "הגדרות מערכת",
@@ -231,7 +237,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
 #if DEBUG
-        var devTools = BuildDevToolsMenuItems();
+        var devTools = await BuildDevToolsMenuItemsAsync(cancellationToken).ConfigureAwait(true);
         if (devTools.Count > 0)
         {
             admin.Add(NewShellMenuItem.Group("כלי פיתוח", devTools));
@@ -256,7 +262,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     /// <summary>
     /// Fail-closed feature check via the Application authorization port (host supplies legacy adapter).
     /// </summary>
-    private bool CanAccessFeature(string featureCode)
+    private async Task<bool> CanAccessFeatureAsync(string featureCode, CancellationToken cancellationToken)
     {
         var authorization = _services.GetService<IAuthorizationQueryService>();
         if (authorization is null)
@@ -266,7 +272,9 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         try
         {
-            return RunSync(() => authorization.CanCurrentUserAccessFeatureAsync(featureCode));
+            return await authorization
+                .CanCurrentUserAccessFeatureAsync(featureCode, cancellationToken)
+                .ConfigureAwait(true);
         }
         catch (ArgumentException)
         {
@@ -274,7 +282,9 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
     }
 
-    private void OpenNewProject(IProjectCreateDialogFactory factory)
+    private async Task OpenNewProjectAsync(
+        IProjectCreateDialogFactory factory,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -292,10 +302,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 return;
             }
 
-            var summary = RunSync(() => query.GetProjectAsync(projectId));
+            var summary = await query.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(true);
             if (summary is not null)
             {
-                RunSync(() => context.SetCurrentProjectAsync(summary));
+                await context.SetCurrentProjectAsync(summary, cancellationToken).ConfigureAwait(true);
             }
         }
         catch (Exception ex)
@@ -540,7 +550,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
     }
 
-    private List<NewShellMenuItem> BuildDevToolsMenuItems()
+    private async Task<List<NewShellMenuItem>> BuildDevToolsMenuItemsAsync(CancellationToken cancellationToken)
     {
         var items = new List<NewShellMenuItem>();
         if (_services.GetService<IDevDataResetService>() is null
@@ -549,7 +559,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             return items;
         }
 
-        if (!CanAccessFeature(AppFeatureCodes.DevToolsReset))
+        if (!await CanAccessFeatureAsync(AppFeatureCodes.DevToolsReset, cancellationToken).ConfigureAwait(true))
         {
             return items;
         }
@@ -648,7 +658,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         window.ShowDialog();
     }
 
-    private string? ResolveCurrentUserDisplay()
+    private async Task<string?> ResolveCurrentUserDisplayAsync(CancellationToken cancellationToken)
     {
         var profileService = _services.GetService<ICurrentUserProfileService>();
         if (profileService is null)
@@ -656,20 +666,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             return null;
         }
 
-        // Shell construction is synchronous; profile is in-memory after startup auth.
-        var profile = RunSync(() => profileService.GetCurrentUserAsync());
+        var profile = await profileService.GetCurrentUserAsync(cancellationToken).ConfigureAwait(true);
         return CurrentUserProfileDisplay.Format(profile);
     }
-
-    /// <summary>
-    /// Bridges an async port into the synchronous shell/menu construction path (menu handlers are
-    /// <see cref="Action"/> by contract). Running the operation via <see cref="Task.Run{TResult}(Func{Task{TResult}})"/>
-    /// detaches it from the UI <see cref="System.Threading.SynchronizationContext"/>, so blocking on the
-    /// result cannot deadlock regardless of whether the callee uses <c>ConfigureAwait(false)</c> internally.
-    /// </summary>
-    private static T RunSync<T>(Func<Task<T>> asyncOperation) =>
-        Task.Run(asyncOperation).GetAwaiter().GetResult();
-
-    private static void RunSync(Func<Task> asyncOperation) =>
-        Task.Run(asyncOperation).GetAwaiter().GetResult();
 }

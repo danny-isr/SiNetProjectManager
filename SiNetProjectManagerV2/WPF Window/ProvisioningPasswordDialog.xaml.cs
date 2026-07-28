@@ -6,6 +6,12 @@ namespace SiNetProjectManagerV2.WPF_Window;
 /// <summary>
 /// Simple password prompt dialog for provisioning package export/import.
 /// Set <see cref="RequireConfirmation"/> = true for export (shows confirm field).
+/// <para>
+/// <b>DEPRECATED for the New System path</b> (2026-07-28). The New System startup and the native
+/// Secret Setup surface both use <c>SiNet.App.Wpf.Admin.Security.ProvisioningPasswordWindow</c>.
+/// This dialog stays active for the Legacy startup path and for the legacy
+/// <see cref="SecretSetupWindow"/>; it will only be removed once the Legacy path is retired.
+/// </para>
 /// </summary>
 public partial class ProvisioningPasswordDialog : Window
 {

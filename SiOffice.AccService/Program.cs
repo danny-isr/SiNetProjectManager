@@ -185,28 +185,21 @@ try
         Log.Warning("SiOffice.AccService: {Detail}", centralErr);
     }
 
-    // [AccService][ApiKey] startup diagnostics — safe metadata for cross-machine key mismatch debugging.
-    // NEVER logs the actual key value. Logs: hasKey, keyLength, SHA256 hash prefix (first 12 chars).
+    // [AccService][ApiKey] startup diagnostics — presence and source only.
+    // Key length and hash prefixes are secret fingerprints and are deliberately not logged.
     try
     {
         var apiKeyRaw = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
         var apiKeyFromConfig = builder.Configuration["AccService:ApiKey"];
         var effectiveKey = apiKeyRaw ?? apiKeyFromConfig;
         var keySource = apiKeyRaw != null ? "CredentialManager" : (apiKeyFromConfig != null ? "appsettings" : "none");
-        var keyLength = effectiveKey?.Length ?? 0;
-        var keyHashPrefix = "(none)";
-        if (!string.IsNullOrEmpty(effectiveKey))
-        {
-            var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(effectiveKey));
-            keyHashPrefix = Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
-        }
         string windowsUserForKey;
         try { windowsUserForKey = Environment.UserDomainName + "\\" + Environment.UserName; }
         catch { windowsUserForKey = "(unknown)"; }
         Log.Warning(
             "[AccService][ApiKey] startup diagnostics — windowsUser={WindowsUser}, hasApiKey={HasKey}, " +
-            "keySource={KeySource}, keyLength={KeyLength}, keyHashPrefix={KeyHashPrefix}.",
-            windowsUserForKey, effectiveKey != null, keySource, keyLength, keyHashPrefix);
+            "keySource={KeySource}.",
+            windowsUserForKey, effectiveKey != null, keySource);
     }
     catch (Exception apiKeyDiagEx)
     {

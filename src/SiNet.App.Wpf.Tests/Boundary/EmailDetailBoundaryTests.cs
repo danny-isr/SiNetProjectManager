@@ -1,4 +1,6 @@
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Email.Detail;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Boundary;
@@ -51,9 +53,19 @@ public sealed class EmailDetailBoundaryTests
         var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailDetailServiceCollectionExtensions.cs");
 
         Assert.Contains("AddSiNetEmailDetailSql", composition, StringComparison.Ordinal);
-        Assert.Contains("AddSiNetEmailDetailSql", v2Graph, StringComparison.Ordinal);
         Assert.Contains("IEmailMoveToProjectService", extensions, StringComparison.Ordinal);
         Assert.Contains("IEmailAccIngestionService", extensions, StringComparison.Ordinal);
+
+        // The V2 graph reaches the module through AddSiNet(V2Hybrid), so assert the resulting
+        // registrations instead of a literal call in the source.
+        Assert.Contains("AddSiNet(SiNetHostMode.V2Hybrid", v2Graph, StringComparison.Ordinal);
+
+        var services = new ServiceCollection();
+        SiNetProjectManagerV2.Services.Composition.NewSystemServiceCollectionExtensions
+            .AddSiNetNewSystemGraph(services);
+
+        Assert.Contains(services, d => d.ServiceType == typeof(IEmailMoveToProjectService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IEmailAccIngestionService));
     }
 
     [Fact]

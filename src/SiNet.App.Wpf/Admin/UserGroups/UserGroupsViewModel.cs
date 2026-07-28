@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
+using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.Application.Identity;
@@ -16,8 +17,11 @@ public sealed class UserGroupsViewModel : ObservableObject
     private readonly IUserGroupQueryService _query;
     private readonly IUserGroupCommandService _command;
     private readonly IUserLookupService _userLookup;
+    private readonly IUserAdminChangesNotifier? _changesNotifier;
 
     private bool _isBusy;
+    private bool _suppressDefaultAssigneeSave;
+    private int? _persistedDefaultAssigneeId;
     private string _statusMessage = string.Empty;
     private UserGroupSummaryDto? _selectedGroup;
     private UserGroupMemberDto? _selectedMember;
@@ -32,11 +36,13 @@ public sealed class UserGroupsViewModel : ObservableObject
     public UserGroupsViewModel(
         IUserGroupQueryService query,
         IUserGroupCommandService command,
-        IUserLookupService userLookup)
+        IUserLookupService userLookup,
+        IUserAdminChangesNotifier? changesNotifier = null)
     {
         _query = query ?? throw new ArgumentNullException(nameof(query));
         _command = command ?? throw new ArgumentNullException(nameof(command));
         _userLookup = userLookup ?? throw new ArgumentNullException(nameof(userLookup));
+        _changesNotifier = changesNotifier;
 
         Groups = [];
         Members = [];
@@ -51,6 +57,11 @@ public sealed class UserGroupsViewModel : ObservableObject
         RemoveMemberCommand = new AsyncRelayCommand(RemoveMemberAsync, () => !IsBusy && SelectedGroup is not null && SelectedMember is not null);
         SetDefaultAssigneeCommand = new AsyncRelayCommand(SetDefaultAssigneeAsync, () => !IsBusy && SelectedGroup is not null);
         ClearDefaultAssigneeCommand = new AsyncRelayCommand(ClearDefaultAssigneeAsync, () => !IsBusy && SelectedGroup is not null);
+
+        if (_changesNotifier is not null)
+        {
+            _changesNotifier.UsersChanged += (_, _) => _ = OnUsersChangedAsync();
+        }
     }
 
     public ObservableCollection<UserGroupSummaryDto> Groups { get; }
@@ -121,7 +132,20 @@ public sealed class UserGroupsViewModel : ObservableObject
     public UserGroupMemberDto? SelectedDefaultAssignee
     {
         get => _selectedDefaultAssignee;
-        set => SetField(ref _selectedDefaultAssignee, value);
+        set
+        {
+            if (!SetField(ref _selectedDefaultAssignee, value))
+                return;
+
+            if (_suppressDefaultAssigneeSave || IsBusy || SelectedGroup is null)
+                return;
+
+            var nextId = value?.UserId;
+            if (nextId == _persistedDefaultAssigneeId)
+                return;
+
+            _ = PersistDefaultAssigneeAsync();
+        }
     }
 
     public string EditCode
@@ -185,60 +209,82 @@ public sealed class UserGroupsViewModel : ObservableObject
         }
     }
 
+    private async Task OnUsersChangedAsync()
+    {
+        if (SelectedGroup is null)
+            return;
+
+        await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
+        StatusMessage = "רשימת המשתמשים הזמינים עודכנה.";
+    }
+
     private async Task LoadDetailAsync(bool manageBusy)
     {
-        Members.Clear();
-        AvailableUsers.Clear();
-        DependentStages.Clear();
-        SelectedMember = null;
-        SelectedAvailableUser = null;
-        SelectedDefaultAssignee = null;
-
-        if (SelectedGroup is null)
-        {
-            EditCode = string.Empty;
-            EditName = string.Empty;
-            EditDescription = string.Empty;
-            return;
-        }
-
-        if (manageBusy)
-            IsBusy = true;
+        _suppressDefaultAssigneeSave = true;
         try
         {
-            var detail = await _query.GetGroupDetailAsync(SelectedGroup.Id).ConfigureAwait(true);
-            if (detail is null)
+            Members.Clear();
+            AvailableUsers.Clear();
+            DependentStages.Clear();
+            SelectedMember = null;
+            SelectedAvailableUser = null;
+            SetField(ref _selectedDefaultAssignee, null);
+            OnPropertyChanged(nameof(SelectedDefaultAssignee));
+            _persistedDefaultAssigneeId = null;
+
+            if (SelectedGroup is null)
             {
-                StatusMessage = "הקבוצה לא נמצאה.";
+                EditCode = string.Empty;
+                EditName = string.Empty;
+                EditDescription = string.Empty;
                 return;
             }
 
-            EditCode = detail.Code;
-            EditName = detail.Name;
-            EditDescription = detail.Description ?? string.Empty;
+            if (manageBusy)
+                IsBusy = true;
+            try
+            {
+                var detail = await _query.GetGroupDetailAsync(SelectedGroup.Id).ConfigureAwait(true);
+                if (detail is null)
+                {
+                    StatusMessage = "הקבוצה לא נמצאה.";
+                    return;
+                }
 
-            foreach (var m in detail.Members)
-                Members.Add(m);
-            foreach (var s in detail.DependentStages)
-                DependentStages.Add(s);
+                EditCode = detail.Code;
+                EditName = detail.Name;
+                EditDescription = detail.Description ?? string.Empty;
 
-            SelectedDefaultAssignee = detail.DefaultAssigneeId is int defaultId
-                ? Members.FirstOrDefault(m => m.UserId == defaultId)
-                : null;
+                foreach (var m in detail.Members)
+                    Members.Add(m);
+                foreach (var s in detail.DependentStages)
+                    DependentStages.Add(s);
 
-            var allUsers = await _userLookup.GetActiveUsersAsync().ConfigureAwait(true);
-            var memberIds = Members.Select(m => m.UserId).ToHashSet();
-            foreach (var u in allUsers.Where(u => !memberIds.Contains(u.UserId)))
-                AvailableUsers.Add(u);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"שגיאה בטעינת פרטים: {ex.Message}";
+                _persistedDefaultAssigneeId = detail.DefaultAssigneeId;
+                var defaultMember = detail.DefaultAssigneeId is int defaultId
+                    ? Members.FirstOrDefault(m => m.UserId == defaultId)
+                    : null;
+                SetField(ref _selectedDefaultAssignee, defaultMember);
+                OnPropertyChanged(nameof(SelectedDefaultAssignee));
+
+                var allUsers = await _userLookup.GetActiveUsersAsync().ConfigureAwait(true);
+                var memberIds = Members.Select(m => m.UserId).ToHashSet();
+                foreach (var u in allUsers.Where(u => !memberIds.Contains(u.UserId)))
+                    AvailableUsers.Add(u);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"שגיאה בטעינת פרטים: {ex.Message}";
+            }
+            finally
+            {
+                if (manageBusy)
+                    IsBusy = false;
+            }
         }
         finally
         {
-            if (manageBusy)
-                IsBusy = false;
+            _suppressDefaultAssigneeSave = false;
         }
     }
 
@@ -334,8 +380,8 @@ public sealed class UserGroupsViewModel : ObservableObject
         {
             await _command.AddMemberAsync(SelectedGroup.Id, SelectedAvailableUser.UserId).ConfigureAwait(true);
             StatusMessage = "חבר נוסף לקבוצה.";
-            await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
             await ReloadSelectedSummaryAsync().ConfigureAwait(true);
+            await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -365,8 +411,8 @@ public sealed class UserGroupsViewModel : ObservableObject
         {
             await _command.RemoveMemberAsync(SelectedGroup.Id, SelectedMember.UserId).ConfigureAwait(true);
             StatusMessage = "חבר הוסר מהקבוצה.";
-            await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
             await ReloadSelectedSummaryAsync().ConfigureAwait(true);
+            await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -378,7 +424,28 @@ public sealed class UserGroupsViewModel : ObservableObject
         }
     }
 
-    private async Task SetDefaultAssigneeAsync()
+    private Task SetDefaultAssigneeAsync() => PersistDefaultAssigneeAsync();
+
+    private async Task ClearDefaultAssigneeAsync()
+    {
+        if (SelectedGroup is null)
+            return;
+
+        _suppressDefaultAssigneeSave = true;
+        try
+        {
+            SetField(ref _selectedDefaultAssignee, null);
+            OnPropertyChanged(nameof(SelectedDefaultAssignee));
+        }
+        finally
+        {
+            _suppressDefaultAssigneeSave = false;
+        }
+
+        await PersistDefaultAssigneeAsync().ConfigureAwait(true);
+    }
+
+    private async Task PersistDefaultAssigneeAsync()
     {
         if (SelectedGroup is null)
             return;
@@ -386,28 +453,26 @@ public sealed class UserGroupsViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            await _command.SetDefaultAssigneeAsync(SelectedGroup.Id, SelectedDefaultAssignee?.UserId)
+            var userId = SelectedDefaultAssignee?.UserId;
+            await _command.SetDefaultAssigneeAsync(SelectedGroup.Id, userId)
                 .ConfigureAwait(true);
-            StatusMessage = SelectedDefaultAssignee is null
+            _persistedDefaultAssigneeId = userId;
+            StatusMessage = userId is null
                 ? "ברירת מחדל נוקתה."
                 : "ברירת מחדל עודכנה.";
             await ReloadSelectedSummaryAsync().ConfigureAwait(true);
+            await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             StatusMessage = $"עדכון ברירת מחדל נכשל: {ex.Message}";
             MessageBox.Show(StatusMessage, "שגיאה", MessageBoxButton.OK, MessageBoxImage.Warning);
+            await LoadDetailAsync(manageBusy: false).ConfigureAwait(true);
         }
         finally
         {
             IsBusy = false;
         }
-    }
-
-    private async Task ClearDefaultAssigneeAsync()
-    {
-        SelectedDefaultAssignee = null;
-        await SetDefaultAssigneeAsync().ConfigureAwait(true);
     }
 
     private async Task ReloadSelectedSummaryAsync()

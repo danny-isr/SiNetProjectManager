@@ -4,7 +4,26 @@
 **Source audit:** [AUDIT-Architecture-Migration-2026-07-27.md](./AUDIT-Architecture-Migration-2026-07-27.md)  
 **Purpose:** Tracking board when `gh` CLI is unavailable locally. Create matching Milestones/Issues on GitHub when authenticated.
 
-**Local status (2026-07-27):** Implementation for S0–S7 landed in the working tree. `git`/`gh` were not on PATH in the agent shell, so remote Milestones/Issues/PRs were not created automatically — run the bootstrap commands below on a machine with GitHub CLI authenticated.
+**Local status (updated 2026-07-28).** The earlier claim that "S0–S7 landed" was too broad: several
+stages were only partially implemented, and two depend on operator action that has not happened.
+Per-stage status is now tracked in the table below and in
+[`AUDIT-REMEDIATION-MATRIX-2026-07-28.md`](./AUDIT-REMEDIATION-MATRIX-2026-07-28.md).
+
+`gh` is still not available in the agent shell, so no remote Milestones/Issues/PRs were created —
+run the bootstrap commands below on a machine with GitHub CLI authenticated.
+
+## Stage status
+
+| Stage | Status | What is actually done / missing |
+| --- | --- | --- |
+| S0 Persist audit + board | Done | Audit and board committed |
+| S1 P0 secrets + ACC TLS/diag | **Partial** | Key removed from HEAD, vault-only loading, fingerprints out of logs, TLS pins now wired into `AddSiNetAutodesk`. **Rotation and revocation of the MasterPlan key have not been performed** — see `OPS-P0-SECRET-ROTATION.md` |
+| S2 P0 readiness + DB freeze | **Partial** | Docs corrected and scripts + checklist added; baseline backup, restore rehearsal and the interactive smoke are all `Not Run` |
+| S3 CI SiNet.sln gate | **Build graph done, suite red** | Workflow fetches pinned siblings before restore and runs an expanded secret scan; a clean-checkout Release build was reproduced locally with 0 errors. The workflow will still report failure because 7 pre-existing tests fail. No GitHub Actions run has been observed from this machine |
+| S4 Composition HostMode | Done | `AddSiNetNewSystemGraph` now delegates to `AddSiNet(SiNetHostMode.V2Hybrid, ...)`; `V2CompositionGraphTests` guards the resulting descriptor list against duplicates |
+| S5 Infra/UI ports | **Partial** | `Infrastructure.Sql` → Autodesk connector removed via `IAccProjectRootFolderIdReader`. WPF → `Infrastructure.Secrets` cannot move (TFM mismatch) and is contained by a boundary test; three Legacy-path blocking calls remain by design |
+| S6 Sync lock + build hygiene | Done | `sp_getapplock` in both sync services; sibling pins, `global.json`, `NuGet.config` and CPM in place; `MasterPlan.SyncEngine.csproj` is 1.3 KB with no linked sources |
+| S7 P2 debt slices | Not started | Tracked in `P2-TECH-DEBT-BACKLOG.md` |
 
 ## Milestones
 

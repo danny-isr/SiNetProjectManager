@@ -1,4 +1,6 @@
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Email;
 using Xunit;
 using SiNet.App.Wpf.Tests.Surfaces.Email;
 
@@ -56,8 +58,17 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("↩️ בטל שיוך", listXaml, StringComparison.Ordinal);
         Assert.Contains("⏳ סמן כממתין לטיפול", listXaml, StringComparison.Ordinal);
         Assert.Contains("AddSiNetEmailWriteSql", composition, StringComparison.Ordinal);
-        Assert.Contains("AddSiNetEmailWriteSql", v2Graph, StringComparison.Ordinal);
-        Assert.Contains("AddSiNetEmailReadSql", v2Graph, StringComparison.Ordinal);
+
+        // The V2 graph reaches the email modules through AddSiNet(V2Hybrid), so the read/write ports
+        // are asserted on the built graph instead of a literal call in the source.
+        Assert.Contains("AddSiNet(SiNetHostMode.V2Hybrid", v2Graph, StringComparison.Ordinal);
+
+        var services = new ServiceCollection();
+        SiNetProjectManagerV2.Services.Composition.NewSystemServiceCollectionExtensions
+            .AddSiNetNewSystemGraph(services);
+
+        Assert.Contains(services, d => d.ServiceType == typeof(IEmailFilingService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IEmailStatusService));
     }
 
     [Fact]

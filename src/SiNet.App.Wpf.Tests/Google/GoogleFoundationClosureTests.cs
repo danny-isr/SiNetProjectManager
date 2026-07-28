@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
@@ -50,8 +51,8 @@ public sealed class GoogleFoundationClosureTests
     {
         var source = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
 
-        var runNewSystemStart = source.IndexOf("private void RunNewSystemStartup", StringComparison.Ordinal);
-        var runNewSystemEnd = source.IndexOf("private static void LaunchNewSystemShell", StringComparison.Ordinal);
+        var runNewSystemStart = source.IndexOf("private async Task RunNewSystemStartupCoreAsync", StringComparison.Ordinal);
+        var runNewSystemEnd = source.IndexOf("private static async Task LaunchNewSystemShellAsync", StringComparison.Ordinal);
         Assert.True(runNewSystemStart >= 0);
         Assert.True(runNewSystemEnd > runNewSystemStart);
 
@@ -76,9 +77,17 @@ public sealed class GoogleFoundationClosureTests
     {
         var source = ReadRepoFile("SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs");
 
-        Assert.Contains("services.AddSiNetGoogle(ConfigureNewSystemGmail);", source, StringComparison.Ordinal);
+        // The Gmail module is reached through AddSiNet(V2Hybrid), which forwards the host's
+        // ConfigureNewSystemGmail callback; the legacy host settings it applies are still asserted here.
+        Assert.Contains("services.AddSiNet(SiNetHostMode.V2Hybrid, ConfigureNewSystemGmail);", source, StringComparison.Ordinal);
         Assert.Contains("options.TokenStorePath = AppConfiguration.GoogleTokenStorePath;", source, StringComparison.Ordinal);
         Assert.Contains("options.ApplicationName = AppConfiguration.GoogleApplicationName;", source, StringComparison.Ordinal);
+
+        var services = new ServiceCollection();
+        SiNetProjectManagerV2.Services.Composition.NewSystemServiceCollectionExtensions
+            .AddSiNetNewSystemGraph(services);
+
+        Assert.Contains(services, d => d.ServiceType == typeof(IConnectorAuthService));
     }
 
     [Fact]

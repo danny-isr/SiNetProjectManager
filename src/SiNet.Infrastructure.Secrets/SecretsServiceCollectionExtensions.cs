@@ -1,10 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Secrets;
 
 public static class SecretsServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the Credential Vault module. Idempotent: <c>AddSiNet</c> calls this, and hosts that
+    /// need the vault before the full graph exists (bootstrap providers) call it again.
+    /// </summary>
     public static IServiceCollection AddSiNetSecrets(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -19,10 +24,10 @@ public static class SecretsServiceCollectionExtensions
             services.AddSingleton(new GoogleClientSecretsFallbackOptions());
         }
 
-        services.AddSingleton<ISecretVaultStore, WindowsCredentialVaultStore>();
-        services.AddSingleton<IGoogleClientSecretsMaterializer, GoogleClientSecretsMaterializer>();
-        services.AddSingleton<IGoogleClientSecretsPathProvider, VaultGoogleClientSecretsPathProvider>();
-        services.AddSingleton<ISecretSetupService, CredentialVaultSecretSetupService>();
+        services.TryAddSingleton<ISecretVaultStore, WindowsCredentialVaultStore>();
+        services.TryAddSingleton<IGoogleClientSecretsMaterializer, GoogleClientSecretsMaterializer>();
+        services.TryAddSingleton<IGoogleClientSecretsPathProvider, VaultGoogleClientSecretsPathProvider>();
+        services.TryAddSingleton<ISecretSetupService, CredentialVaultSecretSetupService>();
 
         return services;
     }
