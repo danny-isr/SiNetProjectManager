@@ -1,8 +1,8 @@
 # Native Email → ACC Inbox ingest (standalone)
 
-> Status: **N1 implemented** · **N2 (Move + Jumbo) — implemented (awaiting operator smoke)**  
-> Date: 2026-07-28 (N1) / 2026-07-28 (N2)  
-> Approved by: operator (N1 + N2 chat 2026-07-28)
+> Status: **N1 implemented** · **N2 implemented (awaiting operator smoke)** · **N3 recovery — implemented**  
+> Date: 2026-07-28 (N1/N2/N3)  
+> Approved by: operator (N1 + N2 + N3 chat 2026-07-28)
 
 
 > Related: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
@@ -154,7 +154,7 @@ recorded below).
 | --- | --- | --- |
 | **Move** | `NativeEmailMoveToProjectExecutor` exists but is registered **only in V2** `App.xaml.cs` → coordinator returns unavailable | Registered Transient |
 | **Jumbo → ACC** | Link chips can open system browser; **no** `IEmailExternalDownloadBrowserHost` + **no** `IEmailExternalDownloadExecutor` → no download capture / ACC upload | `V2EmailExternalDownloadBrowserHost` + `LegacyEmailExternalDownloadExecutor` (SiNetSQL) |
-| **Recovery** | Still V2-only | `LegacyEmailAccRecoveryExecutor` |
+| **Recovery** | Was V2-only → **N3** registers native executor | `LegacyEmailAccRecoveryExecutor` |
 
 N1 already uploads Gmail attachments via AccService Remote. Move and Jumbo need the same host registration / native upload path without SiNetSQL.
 
@@ -243,6 +243,79 @@ Jumbo:
 **Do not implement N2 until this section is explicitly approved.**
 
 ### Approval notes (N2)
+
+- Approved by: operator
+- Date: 2026-07-28
+- Scope tweaks: none
+
+---
+
+## Slice N3 — Native ACC inbox recovery (standalone)
+
+### Problem (verified)
+
+| Gap | Standalone today | V2 |
+| --- | --- | --- |
+| **Recovery** | `IEmailAccRecoveryExecutor` not registered in `AddSiNetEmailAccSql` → `SqlEmailAccStatusService` skips repair when reconciliation reports `MissingInAcc` | `LegacyEmailAccRecoveryExecutor` → SiNetSQL `AccInboxRecoveryService` |
+
+N1 already re-uploads Gmail attachments. Recovery only needs: clear stale Acc ids → call ingest → verify.
+
+### Target state
+
+```text
+EmailAccSelectionHandler
+  → SqlEmailAccStatusService.SyncStatusWithRecoveryAsync  (already)
+  → IEmailAccRecoveryExecutor
+       ├─ AddSiNetEmailAccSql → NativeEmailAccRecoveryExecutor
+       └─ V2 last-wins → LegacyEmailAccRecoveryExecutor (kept)
+```
+
+### In scope — N3
+
+1. `NativeEmailAccRecoveryExecutor` in Infrastructure.Sql:
+   - External-download-only guard (Hebrew message; no AccId clear / no ingest)
+   - Clear `AccItemId`/`AccVersionId` on missing rows; force message `Error` if Uploaded/Moved
+   - `IEmailAccIngestionExecutor.IngestToInboxAsync` (reuse N1)
+   - Verify requested ids regained `AccItemId`; log failures
+2. Register Transient in `AddSiNetEmailAccSql`
+3. Tests: DI registration + source/guard asserts
+4. Docs status update
+
+### Explicitly out of scope for N3
+
+- Progress events (`RecoveryProgressChanged`)
+- Deleting V2 Legacy / SiNetSQL `AccInboxRecoveryService`
+- Re-download of Jumbo/external files (use N2 path)
+- UI / selection-handler changes
+- EF migrations
+
+### Options
+
+| Option | Decision |
+| --- | --- |
+| **A. Native recovery over N1 ingest** | **Selected** |
+| B. Call SiNetSQL AccInboxRecoveryService from App.Wpf | Rejected — host boundary |
+| C. Leave standalone without recovery | Rejected — MissingInAcc never heals |
+
+### Risk & complexity
+
+| Item | Assessment |
+| --- | --- |
+| Complexity | **Medium** — short orchestration; upload already in N1 |
+| Effort | One focused PR |
+| Behavior drift | Full re-ingest may upload other AccId-less rows — Legacy parity |
+| AccService | Same Remote requirement as N1 |
+| DB/schema | **None** |
+| Breaking V2 | Low — Legacy registration last-wins |
+
+### Acceptance criteria (N3)
+
+1. Standalone: message with Gmail attachment `MissingInAcc` recovers AccItemId after sync (AccService + Gmail healthy).
+2. External-download-only missing set → no AccId clear / no ingest.
+3. V2 Legacy recovery still registered.
+4. Build gate green; no EF migrations.
+
+### Approval notes (N3)
 
 - Approved by: operator
 - Date: 2026-07-28

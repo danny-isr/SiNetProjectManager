@@ -303,6 +303,35 @@ public sealed class EmailAccPipelineTests
     }
 
     [Fact]
+    public void AddSiNetEmailAccSql_registers_native_recovery_executor()
+    {
+        var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
+        Assert.Contains("IEmailAccRecoveryExecutor", extensions, StringComparison.Ordinal);
+        Assert.Contains("NativeEmailAccRecoveryExecutor", extensions, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NativeEmailAccRecoveryExecutor_guards_external_download_and_reuses_ingest()
+    {
+        var source = ReadRepoFile(
+            "src/SiNet.Infrastructure.Sql/Services/Email/Acc/NativeEmailAccRecoveryExecutor.cs");
+        Assert.Contains("IsExternalDownload", source, StringComparison.Ordinal);
+        Assert.Contains("לא ניתן לשחזר מקבצי Gmail", source, StringComparison.Ordinal);
+        Assert.Contains("IngestToInboxAsync", source, StringComparison.Ordinal);
+        Assert.Contains("IEmailAccIngestionExecutor", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IAccInboxRecoveryService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GoogleService", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void V2_still_registers_legacy_recovery_executor()
+    {
+        var app = ReadRepoFile("SiNetProjectManagerV2/App.xaml.cs");
+        Assert.Contains("IEmailAccRecoveryExecutor", app, StringComparison.Ordinal);
+        Assert.Contains("LegacyEmailAccRecoveryExecutor", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AddSiNetNewSystemWpf_registers_external_download_browser_host()
     {
         var wpfDi = ReadRepoFile("src/SiNet.App.Wpf/NewSystemWpfServiceCollectionExtensions.cs");

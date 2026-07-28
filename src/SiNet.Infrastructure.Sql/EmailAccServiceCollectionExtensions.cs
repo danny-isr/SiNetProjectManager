@@ -23,6 +23,7 @@ public static class EmailAccServiceCollectionExtensions
         services.AddTransient<IEmailAccIngestionExecutor, NativeEmailAccIngestionExecutor>();
         services.AddTransient<IEmailMoveToProjectExecutor, NativeEmailMoveToProjectExecutor>();
         services.AddTransient<IEmailExternalDownloadExecutor, NativeEmailExternalDownloadExecutor>();
+        services.AddTransient<IEmailAccRecoveryExecutor, NativeEmailAccRecoveryExecutor>();
 
         return services;
     }
