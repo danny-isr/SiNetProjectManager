@@ -119,7 +119,8 @@ These files still control:
 
 Additional host note:
 
-- `src/SiNet.App.Wpf/App.xaml.cs` explicitly calls `AddSiNetSecrets()` after `AddSiNet()`.
+- Standalone host (`AddSiNetStandaloneHost`) calls `AddSiNetSecrets()` and
+  `AddSiNetAutodeskVaultTokenProvider()` from the App.Wpf composition root.
   This host-level wiring is intentional: `SiNet.App.Composition` remains `net10.0`, while
   `SiNet.Infrastructure.Secrets` is Windows-targeted. ACC control-plane diagnostics need vault
   access, but that dependency still cannot be pushed into the cross-platform composition project.
@@ -128,7 +129,7 @@ Additional host note:
 
 | Concern | Main runtime ownership today |
 | --- | --- |
-| Auth / token plumbing | `MyOffice.AutodeskConnector.ITokenProvider` wiring in `SiNetProjectManagerV2/App.xaml.cs` |
+| Auth / token plumbing | V2: `ITokenProvider` in `SiNetProjectManagerV2/App.xaml.cs`; Standalone: `AddSiNetAutodeskVaultTokenProvider` in `SiNet.Infrastructure.Autodesk` |
 | Remote/local provisioning split | `AccService:BaseUrl` block in `SiNetProjectManagerV2/App.xaml.cs` |
 | Remote provisioning adapters | `SiNetProjectManagerV2/Services/RemoteAccProjectProvisioningService.cs`, `SiNetProjectManagerV2/Services/RemoteAccInboxProvisioner.cs` |
 | Internal ACC service diagnostics | `SiNetProjectManagerV2/Services/Health/InternalAccServiceHealthCheck.cs` |

@@ -1,19 +1,22 @@
 using System.DirectoryServices.AccountManagement;
 using System.Runtime.InteropServices;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Identity;
-using SiNetSQL.Services;
 
-namespace SiNetProjectManagerV2.Services;
+namespace SiNet.Infrastructure.Secrets;
 
 /// <summary>
 /// Native New System AD user search. Uses <see cref="IDirectoryUserConnectionProvider"/> — not legacy MVVM.
+/// Shared by standalone App.Wpf and the V2 New System graph.
 /// </summary>
-public sealed class ActiveDirectoryUserLookupService(IDirectoryUserConnectionProvider connectionProvider)
-    : IDirectoryUserLookupService
+public sealed class ActiveDirectoryUserLookupService(
+    IDirectoryUserConnectionProvider connectionProvider,
+    IAppLogger? logger = null) : IDirectoryUserLookupService
 {
     private const int MaxResults = 100;
     private readonly IDirectoryUserConnectionProvider _connectionProvider =
         connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
+    private readonly IAppLogger? _logger = logger;
 
     private IReadOnlyList<DirectoryUserDto>? _cachedUsers;
 
@@ -115,7 +118,7 @@ public sealed class ActiveDirectoryUserLookupService(IDirectoryUserConnectionPro
                     Email: email));
             }
 
-            AppLogger.Info(
+            _logger?.Info(
                 $"[ActiveDirectoryUserLookupService] Loaded {users.Count} users from domain " +
                 $"(configured={configuredDomain ?? "auto-detect"})");
         }
@@ -124,7 +127,7 @@ public sealed class ActiveDirectoryUserLookupService(IDirectoryUserConnectionPro
             var hint = configuredDomain == null
                 ? "המחשב לא מחובר לדומיין. הגדר ActiveDirectory:DomainName ב-appsettings.json."
                 : $"לא ניתן להתחבר לדומיין '{configuredDomain}'. ודא שה-VPN פעיל ושהשם נכון.";
-            AppLogger.Error(ex, $"[ActiveDirectoryUserLookupService] Domain controller unreachable. {hint}");
+            _logger?.Error($"[ActiveDirectoryUserLookupService] Domain controller unreachable. {hint}", ex);
             throw new InvalidOperationException(hint, ex);
         }
         catch (COMException ex) when (ex.HResult == unchecked((int)0x8007052E))
@@ -133,7 +136,9 @@ public sealed class ActiveDirectoryUserLookupService(IDirectoryUserConnectionPro
             var hint = string.IsNullOrEmpty(vaultUser)
                 ? "לא הוגדרו פרטי התחברות ל-Active Directory. פתח 'הגדרת מפתחות ואישורים' והזן משתמש בדומיין."
                 : $"פרטי ההתחברות של '{vaultUser}' נדחו על ידי הדומיין. ודא שהשם והסיסמה נכונים.";
-            AppLogger.Error(ex, $"[ActiveDirectoryUserLookupService] Authentication failed. VaultUser={vaultUser ?? "(none)"}");
+            _logger?.Error(
+                $"[ActiveDirectoryUserLookupService] Authentication failed. VaultUser={vaultUser ?? "(none)"}",
+                ex);
             throw new InvalidOperationException(hint, ex);
         }
         catch (OperationCanceledException)
@@ -142,7 +147,7 @@ public sealed class ActiveDirectoryUserLookupService(IDirectoryUserConnectionPro
         }
         catch (Exception ex)
         {
-            AppLogger.Error(ex, "[ActiveDirectoryUserLookupService] Failed to query domain users");
+            _logger?.Error("[ActiveDirectoryUserLookupService] Failed to query domain users", ex);
             throw;
         }
 

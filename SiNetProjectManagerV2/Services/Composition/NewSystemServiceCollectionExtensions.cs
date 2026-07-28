@@ -62,7 +62,7 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSingleton<IMasterPlanEmployeeConnectionProvider, LegacyMasterPlanEmployeeConnectionProvider>();
         services.AddSingleton<IDirectoryUserConnectionProvider, LegacyDirectoryUserConnectionProvider>();
         services.AddSingleton<ISecretSetupHostConfiguration, LegacySecretSetupHostConfiguration>();
-        services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
+        services.AddTransient<IDirectoryUserLookupService, SiNet.Infrastructure.Secrets.ActiveDirectoryUserLookupService>();
 
         // Prefer V2 Inspection host adapters over App.Wpf no-ops / SQL placeholders.
         services.AddSingleton<SiNet.Application.Abstractions.Inspection.IInspectionFileTreePickerHost, V2InspectionFileTreePickerHost>();

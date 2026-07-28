@@ -116,7 +116,7 @@ public sealed class NativeUserManagementUiTests
     [Fact]
     public void ActiveDirectoryUserLookupService_does_not_reference_legacy_mvvm()
     {
-        var source = ReadRepoFile("SiNetProjectManagerV2/Services/ActiveDirectoryUserLookupService.cs");
+        var source = ReadRepoFile("src/SiNet.Infrastructure.Secrets/ActiveDirectoryUserLookupService.cs");
 
         Assert.DoesNotContain("SiNetSQL.MVVM", source, StringComparison.Ordinal);
     }

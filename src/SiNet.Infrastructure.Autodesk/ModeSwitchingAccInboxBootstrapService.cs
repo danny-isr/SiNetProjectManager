@@ -20,7 +20,9 @@ internal sealed class ModeSwitchingAccInboxBootstrapService(
 
         if (_localAccInboxBootstrapExecutor is null)
         {
-            throw new InvalidOperationException("ACC Inbox bootstrap local executor is not registered for local mode.");
+            throw new InvalidOperationException(
+                "ACC Inbox bootstrap in Local mode is not available without a local executor " +
+                "(standalone New System host). Configure AccService Remote (BaseUrl) or use the V2 host.");
         }
 
         return _localAccInboxBootstrapExecutor.EnsureAsync(cancellationToken);

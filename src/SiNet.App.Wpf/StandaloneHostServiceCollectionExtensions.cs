@@ -6,8 +6,11 @@ using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Theme;
+using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Configuration;
+using SiNet.Application.Identity;
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
@@ -38,9 +41,17 @@ public static class StandaloneHostServiceCollectionExtensions
         // Identity session must precede AddSiNet so NullCurrentUserContext is not registered.
         services.AddSiNetIdentitySql();
 
-        services.AddSingleton<ISecretSetupHostConfiguration, ConfigurationSecretSetupHostConfiguration>();
-        services.AddSiNet(SiNetHostMode.StandaloneNew, configureGmail);
+        // Vault / host config before AddSiNet so UserManagement does not register Null* providers.
+        services.AddSingleton<MutableSecretSetupHostConfiguration>();
+        services.AddSingleton<ISecretSetupHostConfiguration>(sp =>
+            sp.GetRequiredService<MutableSecretSetupHostConfiguration>());
         services.AddSiNetSecrets();
+        services.AddSingleton<IDirectoryUserConnectionProvider, VaultDirectoryUserConnectionProvider>();
+        services.AddTransient<IDirectoryUserLookupService, ActiveDirectoryUserLookupService>();
+        services.AddSingleton<IMasterPlanEmployeeConnectionProvider, VaultMasterPlanEmployeeConnectionProvider>();
+        services.AddSiNetAutodeskVaultTokenProvider();
+
+        services.AddSiNet(SiNetHostMode.StandaloneNew, configureGmail);
         services.AddSiNetSerilogLogging();
         services.AddSiNetUserLoggingSettings();
         services.AddSingleton<ILoggingRuntimeApplier, WpfLoggingRuntimeApplier>();
@@ -50,6 +61,9 @@ public static class StandaloneHostServiceCollectionExtensions
         services.AddSiNetSystemSettingsSql();
         services.AddSiNetAuthorizationSql();
         services.AddSiNetFilingServices();
+
+        // Prefer Drive catalog over EmptyInspectionTemplateCatalog (TryAdd in WorkSurfaces).
+        services.AddSingleton<IInspectionTemplateCatalog, GoogleDriveInspectionTemplateCatalog>();
 
         services.AddSiNetNewSystemWpf();
 

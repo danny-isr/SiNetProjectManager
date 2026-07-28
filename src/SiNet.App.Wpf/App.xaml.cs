@@ -9,6 +9,7 @@ using SiNet.Application.Common;
 using SiNet.Application.Configuration;
 using SiNet.Application.Data;
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
@@ -104,6 +105,7 @@ public partial class App : System.Windows.Application
         }
 
         await ApplySavedUserSettingsAsync().ConfigureAwait(true);
+        await ApplyAccHostConfigFromSystemSettingsAsync().ConfigureAwait(true);
 
         StandaloneHostLoggingBootstrap.Info("[STARTUP] Opening NewShell...");
         var factory = _services.GetRequiredService<INewShellFactory>();
@@ -200,6 +202,34 @@ public partial class App : System.Windows.Application
             StandaloneHostLoggingBootstrap.Warning(
                 ex,
                 "[STARTUP] Failed to apply saved user settings; continuing with defaults.");
+        }
+    }
+
+    private async Task ApplyAccHostConfigFromSystemSettingsAsync()
+    {
+        try
+        {
+            var query = _services!.GetRequiredService<ISystemSettingsQueryService>();
+            var settings = await query.GetSystemSettingsAsync(_shutdownCts.Token).ConfigureAwait(true);
+            var hostConfig = _services.GetRequiredService<MutableSecretSetupHostConfiguration>();
+            hostConfig.ApplySystemSettings(settings.Acc);
+
+            var controlPlane = _services.GetService<AccServiceControlPlaneOptions>();
+            if (controlPlane is not null
+                && !string.IsNullOrWhiteSpace(settings.Acc.AccServicePinnedCertificateThumbprints))
+            {
+                controlPlane.PinnedCertificateThumbprints = AccServiceControlPlaneConfiguration.SplitPins(
+                    settings.Acc.AccServicePinnedCertificateThumbprints);
+            }
+
+            StandaloneHostLoggingBootstrap.Info(
+                $"[STARTUP] Acc host config applied. BaseUrl={(hostConfig.AccServiceBaseUrl ?? "(local)")}");
+        }
+        catch (Exception ex)
+        {
+            StandaloneHostLoggingBootstrap.Warning(
+                ex,
+                "[STARTUP] Failed to load AccService settings from DB; using appsettings/vault defaults.");
         }
     }
 
