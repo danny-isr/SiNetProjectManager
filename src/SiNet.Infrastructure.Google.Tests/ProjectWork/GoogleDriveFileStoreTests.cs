@@ -174,6 +174,7 @@ public sealed class GoogleDriveFileStoreTests
     public void RequestedScopes_include_drive()
     {
         Assert.Contains(global::Google.Apis.Drive.v3.DriveService.Scope.Drive, GmailClientProvider.RequestedScopes);
+        Assert.Contains(global::Google.Apis.Sheets.v4.SheetsService.Scope.Spreadsheets, GmailClientProvider.RequestedScopes);
     }
 
     private sealed class NullLogger : IAppLogger

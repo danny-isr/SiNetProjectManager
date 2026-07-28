@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Identity;
 using SiNet.Application.MasterPlan;
+using SiNet.Application.MasterPlan.Reports;
 using SiNet.Infrastructure.Sql.Services.Identity;
 using SiNet.Infrastructure.Sql.Services.MasterPlan;
+using SiNet.Infrastructure.Sql.Services.MasterPlan.Reports;
 
 namespace SiNet.Infrastructure.Sql;
 
@@ -55,6 +57,9 @@ public static class UserManagementServiceCollectionExtensions
         services.AddTransient<IMasterPlanEmployeeLookupService>(sp => sp.GetRequiredService<SqlMasterPlanEmployeeLookupService>());
         services.AddTransient<SqlMasterPlanMappingService>();
         services.AddTransient<IMasterPlanMappingService>(sp => sp.GetRequiredService<SqlMasterPlanMappingService>());
+        services.AddTransient<IR03ReportDataSource, SqlR03ReportDataSource>();
+        services.AddTransient<IR01ReportDataSource, SqlR01ReportDataSource>();
+        services.AddTransient<IR02ReportDataSource, SqlR02ReportDataSource>();
 
         return services;
     }

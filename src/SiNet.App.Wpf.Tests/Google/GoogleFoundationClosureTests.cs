@@ -68,7 +68,7 @@ public sealed class GoogleFoundationClosureTests
         Assert.Contains("G-Startup closure", source, StringComparison.Ordinal);
         Assert.Contains("StartNewSystemConnectorAuthRestore", source, StringComparison.Ordinal);
         Assert.Contains("GmailSend** still requires a separate **G-Policy** decision", source, StringComparison.Ordinal);
-        Assert.Contains("Drive / Sheets / Reports** remain legacy/deferred", source, StringComparison.Ordinal);
+        Assert.Contains("MasterPlan Reports Sheets (R01–R03)** are approved native", source, StringComparison.Ordinal);
         Assert.Contains("Broad legacy window migration** remains blocked", source, StringComparison.Ordinal);
     }
 
@@ -237,8 +237,9 @@ public sealed class GoogleFoundationClosureTests
         Assert.Contains("Approved / native", source, StringComparison.Ordinal);
         Assert.Contains("SharedDriveId", source, StringComparison.Ordinal);
         Assert.Contains("ProjectsRootFolderId", source, StringComparison.Ordinal);
-        Assert.Contains("Google Sheets read/write/export", source, StringComparison.Ordinal);
-        Assert.Contains("Deferred", source, StringComparison.Ordinal);
+        Assert.Contains("Google Sheets MasterPlan R01–R03", source, StringComparison.Ordinal);
+        Assert.Contains("Approved / native", source, StringComparison.Ordinal);
+        Assert.Contains("Spreadsheets", source, StringComparison.Ordinal);
     }
 
     [Fact]

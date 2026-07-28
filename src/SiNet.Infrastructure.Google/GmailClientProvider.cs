@@ -4,6 +4,7 @@ using Google.Apis.Auth.OAuth2.Requests;
 using Google.Apis.Drive.v3;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
+using Google.Apis.Sheets.v4;
 using Google.Apis.Util.Store;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
@@ -12,10 +13,11 @@ using SiNet.Application.Configuration;
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>
-/// Owns the shared Google <b>user</b> OAuth session for the new stack (Gmail + Drive). One
-/// <see cref="UserCredential"/> (with automatic refresh) backs both <see cref="GmailService"/> and
-/// <see cref="DriveService"/>. Windows and feature surfaces must not sign in again per operation —
-/// they consume this singleton via <see cref="IConnectorAuthService"/> / the typed TryGet* APIs.
+/// Owns the shared Google <b>user</b> OAuth session for the new stack (Gmail + Drive + Sheets). One
+/// <see cref="UserCredential"/> (with automatic refresh) backs <see cref="GmailService"/>,
+/// <see cref="DriveService"/>, and <see cref="SheetsService"/>. Windows and feature surfaces must
+/// not sign in again per operation — they consume this singleton via
+/// <see cref="IConnectorAuthService"/> / the typed TryGet* APIs.
 /// <para>
 /// Auth strategy: try a <b>silent</b> restore from the token store first (no browser); refresh a
 /// stale token using the refresh token only. Interactive consent is attempted only when
@@ -26,14 +28,16 @@ namespace SiNet.Infrastructure.Google;
 /// </summary>
 public sealed class GmailClientProvider : IAsyncDisposable
 {
-    // Gmail read/send/modify + full Drive (ProjectWork read/write). Expanding scopes invalidates
-    // authorization for newly added capabilities until the user re-consents interactively.
+    // Gmail read/send/modify + Drive (ProjectWork/Reports) + Spreadsheets (MasterPlan R0x).
+    // Expanding scopes invalidates authorization for newly added capabilities until the user
+    // re-consents interactively.
     private static readonly string[] Scopes =
     {
         GmailService.Scope.GmailReadonly,
         GmailService.Scope.GmailSend,
         GmailService.Scope.GmailModify,
         DriveService.Scope.Drive,
+        SheetsService.Scope.Spreadsheets,
     };
 
     private const string TokenUser = "user";
@@ -46,6 +50,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
     private UserCredential? _credential;
     private GmailService? _gmailService;
     private DriveService? _driveService;
+    private SheetsService? _sheetsService;
 
     public GmailClientProvider(
         GmailOptions options,
@@ -57,7 +62,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
         _pathProvider = pathProvider;
     }
 
-    /// <summary>The OAuth scopes requested for the shared user session (Gmail + Drive).</summary>
+    /// <summary>The OAuth scopes requested for the shared user session (Gmail + Drive + Sheets).</summary>
     internal static IReadOnlyList<string> RequestedScopes => Scopes;
 
     /// <summary>The root Gmail label under which projects are filed.</summary>
@@ -127,6 +132,30 @@ public sealed class GmailClientProvider : IAsyncDisposable
             var credential = await EnsureCredentialLockedAsync(allowInteractive: false, cancellationToken)
                 .ConfigureAwait(false);
             return credential == null ? null : EnsureDriveServiceLocked(credential);
+        }
+        finally
+        {
+            _gate.Release();
+            RaiseIfAuthStateChanged(wasSignedIn);
+        }
+    }
+
+    /// <summary>
+    /// Returns a ready <see cref="SheetsService"/> from the shared credential, or <c>null</c>
+    /// when the user session is not available. Does not open a browser.
+    /// </summary>
+    public async Task<SheetsService?> TryGetSheetsServiceAsync(CancellationToken cancellationToken = default)
+    {
+        if (_sheetsService != null)
+            return _sheetsService;
+
+        var wasSignedIn = _credential != null;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var credential = await EnsureCredentialLockedAsync(allowInteractive: false, cancellationToken)
+                .ConfigureAwait(false);
+            return credential == null ? null : EnsureSheetsServiceLocked(credential);
         }
         finally
         {
@@ -296,6 +325,11 @@ public sealed class GmailClientProvider : IAsyncDisposable
             HttpClientInitializer = credential,
             ApplicationName = _options.ApplicationName,
         });
+        _sheetsService = new SheetsService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = _options.ApplicationName,
+        });
     }
 
     private GmailService EnsureGmailServiceLocked(UserCredential credential)
@@ -324,12 +358,27 @@ public sealed class GmailClientProvider : IAsyncDisposable
         return _driveService;
     }
 
+    private SheetsService EnsureSheetsServiceLocked(UserCredential credential)
+    {
+        if (_sheetsService != null)
+            return _sheetsService;
+
+        _sheetsService = new SheetsService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = _options.ApplicationName,
+        });
+        return _sheetsService;
+    }
+
     private void ClearCachedServicesLocked()
     {
         _gmailService?.Dispose();
         _gmailService = null;
         _driveService?.Dispose();
         _driveService = null;
+        _sheetsService?.Dispose();
+        _sheetsService = null;
         _credential = null;
     }
 

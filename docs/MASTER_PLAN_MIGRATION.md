@@ -1,6 +1,6 @@
 # Master Plan → Standalone New System
 
-> Status: **Approved — S2 mapping done · S4 hygiene done (namespaces + logging cut-over)**  
+> Status: **Approved — S2 mapping done · S3 reports native · S4 hygiene done**  
 > Date: 2026-07-28  
 > Approved by: operator (chat 2026-07-28)  
 
@@ -48,7 +48,7 @@ Mapping UI writes the mapping/flags; SyncEngine must not be folded into the WPF 
 SiNet.App.Wpf
   ├─ Users: employee link          ✅ done
   ├─ MasterPlan mapping surface    ← S2 native WPF + Application ports
-  ├─ Reports R01–R03               ← S3 (needs Google/Sheets boundary)
+  ├─ Reports R01–R03               ← S3 native (User OAuth + Spreadsheets)
   └─ (no SyncEngine inside WPF)
 
 MasterPlan.SyncEngine (Task Scheduler)
@@ -81,11 +81,21 @@ MasterPlan.SyncEngine (Task Scheduler)
 
 ### S3 — Reports R01 / R02 / R03
 
-**In:** Native surfaces (or thin hosts) for portfolio/hours/attendance → Google Sheets where product requires; vault CS; align Google auth with native module.
+**Boundary (approved):** Shared User OAuth on `GmailClientProvider` + `Spreadsheets` scope
+(see [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md)). No service account in this slice. No App.Wpf →
+V2 / SiNetSQL / GoogleConnector ProjectReference.
 
-**Out:** Changing Replica KPI schema; SyncEngine.
+**Phases:**
+- **S3a:** Sheets/Drive helpers + native R03 (Replica only)
+- **S3b:** Native R01 (Replica/MasterPlan + template)
+- **S3c:** Native R02 (merger + template/pivot as practical)
 
-**Risk / effort:** High — blocked/deferred by [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) Sheets ownership until approved. Prefer after S2.
+**In:** Application ports, Sql repos over vault Replica/MasterPlan CS, NewShell **דוחות** menu
+(`ReportsManagement`), GoogleReports folder/template ids from config.
+
+**Out:** Changing Replica KPI schema; SyncEngine; deleting V2 dialogs until soak; Inspection Sheets.
+
+**DB/schema:** None.
 
 ### S4 — SyncEngine hygiene (parallel ops track)
 

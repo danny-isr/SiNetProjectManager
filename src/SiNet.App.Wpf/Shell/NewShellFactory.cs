@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Admin.MasterPlan;
+using SiNet.App.Wpf.Admin.MasterPlan.Reports;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
@@ -199,6 +200,26 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         AddGroupIfAny(top, "משתמשים והרשאות", users);
 
+        // ── דוחות MasterPlan (R01–R03) ───────────────────────────────────
+        var reports = new List<NewShellMenuItem>();
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ReportsManagement, cancellationToken).ConfigureAwait(true))
+        {
+            reports.Add(new NewShellMenuItem(
+                "R01 — סיכום שעות",
+                OpenNativeR01Report,
+                "תיק פרויקטים → Google Sheets"));
+            reports.Add(new NewShellMenuItem(
+                "R02 — שעות עבודה",
+                OpenNativeR02Report,
+                "שעות עבודה → Google Sheets"));
+            reports.Add(new NewShellMenuItem(
+                "R03 — השוואת נוכחות",
+                OpenNativeR03Report,
+                "נוכחות מול דיווח → Google Sheets"));
+        }
+
+        AddGroupIfAny(top, "דוחות", reports);
+
         // ── מנהלה (הגדרות + כלי ניהול + מצב מערכת) ────────────────────────
         var admin = new List<NewShellMenuItem>();
         if (HasAuthenticatedUser())
@@ -385,6 +406,45 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+        }
+    }
+
+    private void OpenNativeR01Report()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            ShowWindow(_services.GetRequiredService<R01ReportWindow>());
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בפתיחת R01: {ex.Message}", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void OpenNativeR02Report()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            ShowWindow(_services.GetRequiredService<R02ReportWindow>());
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בפתיחת R02: {ex.Message}", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void OpenNativeR03Report()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            ShowWindow(_services.GetRequiredService<R03ReportWindow>());
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"שגיאה בפתיחת R03: {ex.Message}", "שגיאה", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

@@ -11,6 +11,7 @@
 
   <ItemGroup>
 	<PackageReference Include="Google.Apis.Drive.v3" />
+	<PackageReference Include="Google.Apis.Sheets.v4" />
 	<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
 	<!-- Native Gmail access. Versions aligned with the legacy SiOffice.GoogleConnector. -->
 	<PackageReference Include="Google.Apis.Auth" />

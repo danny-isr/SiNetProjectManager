@@ -276,6 +276,19 @@ public partial class App : System.Windows.Application
             options.ProjectsRootFolderId ??= drive["ProjectsRootFolderId"];
         }
 
+        var reports = _configuration?.GetSection("GoogleReports");
+        if (reports is not null)
+        {
+            options.ReportsSharedDriveId ??= reports["SharedDriveId"];
+            options.ReportsRootFolderId ??= reports["RootReportsFolderId"];
+            options.R01TemplateSpreadsheetId ??= reports["R01TemplateSpreadsheetId"];
+            options.R02TemplateSpreadsheetId ??= reports["R02TemplateSpreadsheetId"];
+            if (int.TryParse(reports["BatchSize"], out var batchSize) && batchSize > 0)
+                options.ReportsBatchSize = batchSize;
+            if (int.TryParse(reports["BatchDelayMs"], out var batchDelay) && batchDelay >= 0)
+                options.ReportsBatchDelayMs = batchDelay;
+        }
+
         var tokenStore = Environment.GetEnvironmentVariable("SINET_GOOGLE_TOKEN_STORE");
         if (!string.IsNullOrWhiteSpace(tokenStore))
         {

@@ -4,15 +4,18 @@ using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
+using SiNet.Application.MasterPlan.Reports;
 using SiNet.Application.ProjectWork;
 using SiNet.Infrastructure.Google.ProjectWork;
+using SiNet.Infrastructure.Google.Reports;
 
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>
 /// Modular DI registration for the native Google module: shared user OAuth
-/// (<see cref="GmailClientProvider"/>) for Gmail + Drive, Gmail gateway/send/modify,
-/// <see cref="IConnectorAuthService"/>, and ProjectWork <see cref="GoogleDriveFileStore"/>.
+/// (<see cref="GmailClientProvider"/>) for Gmail + Drive + Sheets, Gmail gateway/send/modify,
+/// <see cref="IConnectorAuthService"/>, ProjectWork <see cref="GoogleDriveFileStore"/>,
+/// and MasterPlan R01–R03 report services.
 /// </summary>
 public static class GoogleServiceCollectionExtensions
 {
@@ -60,6 +63,11 @@ public static class GoogleServiceCollectionExtensions
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
         services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IFileStore, GoogleDriveFileStore>());
+
+        // MasterPlan Reports (R01/R02/R03) — require IR0xReportDataSource from AddSiNetUserManagementSql.
+        services.AddTransient<IMasterPlanR03ReportService, NativeR03ReportService>();
+        services.AddTransient<IMasterPlanR01ReportService, NativeR01ReportService>();
+        services.AddTransient<IMasterPlanR02ReportService, NativeR02ReportService>();
 
         return services;
     }

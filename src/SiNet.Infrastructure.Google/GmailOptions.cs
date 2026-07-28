@@ -57,4 +57,31 @@ public sealed class GmailOptions
     public bool IsDriveConfigured =>
         !string.IsNullOrWhiteSpace(SharedDriveId) &&
         !string.IsNullOrWhiteSpace(ProjectsRootFolderId);
+
+    /// <summary>Shared Drive id for MasterPlan Reports (defaults to <see cref="SharedDriveId"/> when empty).</summary>
+    public string? ReportsSharedDriveId { get; set; }
+
+    /// <summary>Root folder id under which R01/R02/R03 report trees are created.</summary>
+    public string? ReportsRootFolderId { get; set; }
+
+    /// <summary>R01 portfolio template spreadsheet id (required for R01 generate).</summary>
+    public string? R01TemplateSpreadsheetId { get; set; }
+
+    /// <summary>R02 hours template spreadsheet id (optional — blank creates empty sheet).</summary>
+    public string? R02TemplateSpreadsheetId { get; set; }
+
+    /// <summary>Sheets write batch size for reports.</summary>
+    public int ReportsBatchSize { get; set; } = 1000;
+
+    /// <summary>Delay between Sheets write batches (ms).</summary>
+    public int ReportsBatchDelayMs { get; set; } = 100;
+
+    /// <summary>True when Reports Shared Drive + root folder are configured.</summary>
+    public bool IsReportsConfigured =>
+        !string.IsNullOrWhiteSpace(ReportsSharedDriveId ?? SharedDriveId) &&
+        !string.IsNullOrWhiteSpace(ReportsRootFolderId);
+
+    /// <summary>Effective Shared Drive id for Reports.</summary>
+    public string? EffectiveReportsSharedDriveId =>
+        string.IsNullOrWhiteSpace(ReportsSharedDriveId) ? SharedDriveId : ReportsSharedDriveId;
 }
