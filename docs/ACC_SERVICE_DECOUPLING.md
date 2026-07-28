@@ -1,6 +1,6 @@
 # AccService ↔ SiNetSQL decoupling
 
-> Status: **B2 implemented (contracts extraction)**  
+> Status: **B3 implemented (DbContext + settings reads)**  
 > Date: 2026-07-28  
 > Branch: `SiWorkNet10`  
 > Related: [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md), [`LOGGING.md`](./LOGGING.md),
@@ -18,43 +18,47 @@ and AccService no longer pulls GoogleConnector/WPF packages transitively.
 | --- | --- | --- |
 | **B1** | Vault + CentralLogging on clean modules; ProjectReference stays | **Done** |
 | **B2** | Move `AccServiceContracts` / wire DTOs out of SiNetSQL | **Done** |
-| **B3** | AccService → `Infrastructure.Sql` for DbContext / settings reads | Planned |
+| **B3** | AccService → `Infrastructure.Sql` for DbContext / settings reads | **Done** |
 | **B4** | Extract AccBootstrap + provisioning | Planned |
 | **B5** | Drop SiNetSQL `ProjectReference`; shrink AccService dependency graph | Planned |
 
 ---
 
-## B1 (done)
+## B1 / B2 (done)
 
-Vault via `CredentialVault` + `SecretCatalog`; logging via `SiNet.Infrastructure.Logging`.
-Temporary `CredentialProvider.GetSecret` bridge remains until B4.
-SyncEngine Shared `CentralLogging` copy deferred (B1b).
+- **B1:** Vault (`CredentialVault` + `SecretCatalog`) + `CentralLogging` in clean modules;
+  temporary `CredentialProvider.GetSecret` bridge until B4.
+- **B2:** Wire contracts in `src/SiOffice.AccService.Contracts`; Autodesk mirror deleted.
+- SyncEngine Shared `CentralLogging` still deferred (B1b).
 
 ---
 
-## B2 (done) — contracts extraction
+## B3 (done) — DbContext + settings reads
 
 ### Locked decisions
 
-1. **Project:** `src/SiOffice.AccService.Contracts` (`net10.0`), namespace
-   `SiOffice.AccService.Contracts`.
-2. **Moved as-is:** API constants + wire DTOs (headers/JSON unchanged; no `/v1` bump).
-3. **Consumers:** AccService, V2 remotes/health/secret-setup, Infrastructure.Autodesk.
-4. **Deleted:** `AccServiceContractConstants` mirror.
-5. **SiNetSQL:** Contracts file removed; AccService still references SiNetSQL for bootstrap/EF.
-6. **Out of B2:** AccBootstrap services (B4); unifying Autodesk private `Remote*` DTOs;
-   dropping AccService→SiNetSQL `ProjectReference` (B5).
+1. **DbContext:** AccService registers via `AddSiNetSql(connectionString)`
+   (`SiNetSQL.Data.SiNetSQLDbContext` in Infrastructure.Sql, compat-120).
+2. **Direct ProjectReference** to `SiNet.Infrastructure.Sql`.
+3. **AccService-owned settings reads** (`POST /inbox/ensure`): Application
+   `ISystemSettingsQueryService` via `AddSiNetSystemSettingsSql` + `AddSiNetAuthorizationSql`
+   (`NullCurrentUserContext`). Same string fallbacks as the previous
+   `SystemSettingsService.GetOrDefaultAsync` path.
+4. **Keep** SiNetSQL `SystemSettingsService` DI for `AccProjectProvisioningService` until B4.
+5. **Keep** SiNetSQL `ProjectReference` for AccBootstrap / provisioning / `CredentialProvider`.
+6. **Out of B3:** AccBootstrap/provisioning move (B4); drop SiNetSQL reference (B5);
+   TFM change; DB schema; HTTP wire changes.
 
 ### Success criteria
 
-1. No AccService / V2 / Autodesk source depends on `SiNetSQL.Services.AccBootstrap.Contracts`.
-2. `AccServiceContractConstants` gone; Autodesk uses `SiOffice.AccService.Contracts`.
-3. AccService still references SiNetSQL for bootstrap/provisioning/EF only.
-4. Build/tests green; **no** DB schema changes; HTTP wire unchanged.
+1. AccService csproj references `SiNet.Infrastructure.Sql`.
+2. `Program.cs` uses `AddSiNetSql` (not inline `AddDbContextFactory`).
+3. `/inbox/ensure` uses `ISystemSettingsQueryService`, not `SiNetSQL.Services.SystemSettingsService`.
+4. Provisioning still resolves via SiNetSQL types; build/tests green; **no** schema changes.
 
 ---
 
 ## Temporary dual ownership (logging)
 
-- **Canonical:** `src/SiNet.Infrastructure.Logging` (`CentralLogging*`).
-- **MasterPlan.SyncEngine `Shared/Logging`:** deferred until B1b — not canonical.
+- **Canonical:** `src/SiNet.Infrastructure.Logging`.
+- **MasterPlan.SyncEngine Shared/Logging:** deferred until B1b.

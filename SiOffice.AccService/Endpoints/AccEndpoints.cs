@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
+using SiNet.Application.Settings;
 using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Data;
 using SiNetSQL.Services;
@@ -722,7 +723,7 @@ internal static class AccEndpoints
         v1.MapPost("/inbox/ensure", async (
             EnsureInboxRequest? body,
             IDbContextFactory<SiNetSQLDbContext> dbFactory,
-            SystemSettingsService settings,
+            ISystemSettingsQueryService settingsQuery,
             HttpContext http,
             CancellationToken ct) =>
         {
@@ -734,12 +735,22 @@ internal static class AccEndpoints
                 return Results.BadRequest(new ErrorDto(
                     "Autodesk credentials are not provisioned in the service vault."));
 
+            // AccService-owned settings reads use Application ports (B3). Fallbacks match
+            // the previous SystemSettingsService.GetOrDefaultAsync behavior.
+            const string defaultInboxProjectName = "מיילים למשרד - POC 4";
+            var systemSettings = await settingsQuery.GetSystemSettingsAsync(ct);
             var projectName = body.ProjectName
-                ?? await settings.GetOrDefaultAsync(SystemSettingKeys.InboxProjectName, "מיילים למשרד - POC 4");
+                ?? (string.IsNullOrWhiteSpace(systemSettings.EmailOffice.InboxProjectName)
+                    ? defaultInboxProjectName
+                    : systemSettings.EmailOffice.InboxProjectName);
             var folderName = body.FolderName
-                ?? await settings.GetOrDefaultAsync(SystemSettingKeys.InboxFolderName, "_Inbox");
+                ?? (string.IsNullOrWhiteSpace(systemSettings.EmailOffice.InboxFolderName)
+                    ? SystemSettingsDefaults.InboxFolderNameFallback
+                    : systemSettings.EmailOffice.InboxFolderName);
             var templateName = body.TemplateName
-                ?? await settings.GetAsync(SystemSettingKeys.AccProjectTemplateName);
+                ?? (string.IsNullOrWhiteSpace(systemSettings.Acc.AccProjectTemplateName)
+                    ? null
+                    : systemSettings.Acc.AccProjectTemplateName);
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var tokenProvider = new TokenProvider(clientId, clientSecret);

@@ -281,7 +281,9 @@ Authoritative plan and status: [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOU
 - **B1 (done):** AccService vault + central logging use `SiNet.Infrastructure.Secrets` /
   `SiNet.Infrastructure.Logging`. Temporary `CredentialProvider.GetSecret` bridge stays until B4.
 - **B2 (done):** Wire contracts live in `src/SiOffice.AccService.Contracts`.
-  `ProjectReference` to SiNetSQL remains for bootstrap / provisioning / EF.
+- **B3 (done):** AccService registers DbContext via `AddSiNetSql` and reads system settings
+  via `ISystemSettingsQueryService`. `ProjectReference` to SiNetSQL remains for bootstrap /
+  provisioning / `CredentialProvider`.
 
 ## 9. Immediate Next Step
 

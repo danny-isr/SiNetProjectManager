@@ -1,12 +1,11 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
-using SiNetSQL.Data;
+using SiNet.Infrastructure.Sql;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiOffice.AccService.Contracts;
@@ -107,7 +106,7 @@ builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
     });
 });
 
-// ─── Database: shared SiNetSQL context, factory pattern (same as WPF client) ─
+// ─── Database: Infrastructure.Sql factory (same SiNetSQLDbContext / compat-120) ─
 // Resolution order matches AppConfiguration.GetConnectionString in the WPF app:
 //   1. Vault key  SiNet/ConnectionStrings/SiNetDatabase
 //   2. appsettings.json  ConnectionStrings:SiNetDatabase  (fallback / dev only)
@@ -118,14 +117,13 @@ var connectionString =
         "Missing connection string 'SiNetDatabase'. Provision it in Windows Credential Manager " +
         $"under target '{SecretCatalog.SiNetDatabase}' (use the WPF client's secret-setup dialog or SecretProvisioningService).");
 
-builder.Services.AddDbContextFactory<SiNetSQLDbContext>(options =>
-{
-    // UseCompatibilityLevel(120) matches the WPF client — the SQL Server
-    // database is below compat 130 so OPENJSON-based translation must be off.
-    options.UseSqlServer(connectionString, sql => sql.UseCompatibilityLevel(120));
-});
+builder.Services.AddSiNetSql(connectionString);
+builder.Services.AddSiNetAuthorizationSql();
+builder.Services.AddSiNetSystemSettingsSql();
 
-// ─── Application services from SiNetSQL ─────────────────────────────────────
+// ─── Application services from SiNetSQL (provisioning / bootstrap until B4) ──
+// Legacy SystemSettingsService stays registered only for AccProjectProvisioningService.
+// AccService-owned reads (/inbox/ensure) use ISystemSettingsQueryService (B3).
 builder.Services.AddSingleton<SystemSettingsService>();
 builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
 {
