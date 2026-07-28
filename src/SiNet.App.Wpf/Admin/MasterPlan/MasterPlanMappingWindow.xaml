@@ -1,0 +1,100 @@
+<Window x:Class="SiNet.App.Wpf.Admin.MasterPlan.MasterPlanMappingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="מיפוי MasterPlan"
+        Width="1280"
+        Height="800"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="RightToLeft">
+    <DockPanel Margin="8">
+        <ToolBar DockPanel.Dock="Top">
+            <Button Content="רענון" Command="{Binding LoadCommand}" Margin="0,0,6,0"/>
+            <Button Content="התאמה אוטומטית" Command="{Binding AutoMatchCommand}" Margin="0,0,6,0"/>
+            <Button Content="שמירה" Command="{Binding ApplyCommand}" Margin="0,0,6,0"/>
+            <Separator/>
+            <Button Content="השלמת חוסרים" Command="{Binding CompleteMissingCommand}" Margin="0,0,6,0"/>
+            <Button Content="Enable Full Sync" Command="{Binding EnableFullSyncCommand}" Margin="0,0,6,0"/>
+            <Separator/>
+            <Button Content="נקה הכל" Command="{Binding ClearAllCommand}" Margin="0,0,6,0"/>
+            <Button Content="ייצוא JSON" Command="{Binding ExportJsonCommand}" Margin="0,0,6,0"/>
+            <Button Content="ייבוא JSON" Command="{Binding ImportJsonCommand}" Margin="0,0,6,0"/>
+            <Button Content="הצג/הסתר לא פעילים" Command="{Binding ToggleShowInactiveCommand}"/>
+        </ToolBar>
+
+        <TextBlock DockPanel.Dock="Bottom"
+                   Text="{Binding StatusMessage}"
+                   Margin="0,8,0,0"
+                   TextWrapping="Wrap"/>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <GroupBox Header="חברות" Grid.Row="0" Margin="0,0,0,6">
+                <DataGrid ItemsSource="{Binding CompanyRows}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          IsReadOnly="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="SiNet Id" Binding="{Binding SiNetId}" IsReadOnly="True" Width="70"/>
+                        <DataGridTextColumn Header="שם" Binding="{Binding SiNetTitle}" IsReadOnly="True" Width="160"/>
+                        <DataGridTextColumn Header="אימייל" Binding="{Binding SiNetEmail}" IsReadOnly="True" Width="140"/>
+                        <DataGridTextColumn Header="טלפון" Binding="{Binding SiNetPhone}" IsReadOnly="True" Width="100"/>
+                        <DataGridTextColumn Header="קשרים" Binding="{Binding RelationInfo}" IsReadOnly="True" Width="140"/>
+                        <DataGridCheckBoxColumn Header="פעיל" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="50"/>
+                        <DataGridComboBoxColumn Header="MasterPlan"
+                                                SelectedItemBinding="{Binding SelectedOption, UpdateSourceTrigger=PropertyChanged}"
+                                                DisplayMemberPath="Name"
+                                                Width="220">
+                            <DataGridComboBoxColumn.ElementStyle>
+                                <Style TargetType="ComboBox">
+                                    <Setter Property="ItemsSource" Value="{Binding MpOptions}"/>
+                                </Style>
+                            </DataGridComboBoxColumn.ElementStyle>
+                            <DataGridComboBoxColumn.EditingElementStyle>
+                                <Style TargetType="ComboBox">
+                                    <Setter Property="ItemsSource" Value="{Binding MpOptions}"/>
+                                </Style>
+                            </DataGridComboBoxColumn.EditingElementStyle>
+                        </DataGridComboBoxColumn>
+                        <DataGridTextColumn Header="סטטוס" Binding="{Binding MatchStatus}" IsReadOnly="True" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </GroupBox>
+
+            <GroupBox Header="אנשי קשר" Grid.Row="1">
+                <DataGrid ItemsSource="{Binding ContactRows}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          IsReadOnly="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="SiNet Id" Binding="{Binding SiNetId}" IsReadOnly="True" Width="70"/>
+                        <DataGridTextColumn Header="שם" Binding="{Binding SiNetFullName}" IsReadOnly="True" Width="140"/>
+                        <DataGridTextColumn Header="חברה" Binding="{Binding SiNetCompanyTitle}" IsReadOnly="True" Width="140"/>
+                        <DataGridTextColumn Header="אימייל" Binding="{Binding SiNetEmail}" IsReadOnly="True" Width="140"/>
+                        <DataGridTextColumn Header="טלפון" Binding="{Binding SiNetPhone}" IsReadOnly="True" Width="100"/>
+                        <DataGridCheckBoxColumn Header="פעיל" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="50"/>
+                        <DataGridComboBoxColumn Header="MasterPlan"
+                                                SelectedItemBinding="{Binding SelectedOption, UpdateSourceTrigger=PropertyChanged}"
+                                                DisplayMemberPath="FullName"
+                                                Width="220">
+                            <DataGridComboBoxColumn.ElementStyle>
+                                <Style TargetType="ComboBox">
+                                    <Setter Property="ItemsSource" Value="{Binding MpOptions}"/>
+                                </Style>
+                            </DataGridComboBoxColumn.ElementStyle>
+                            <DataGridComboBoxColumn.EditingElementStyle>
+                                <Style TargetType="ComboBox">
+                                    <Setter Property="ItemsSource" Value="{Binding MpOptions}"/>
+                                </Style>
+                            </DataGridComboBoxColumn.EditingElementStyle>
+                        </DataGridComboBoxColumn>
+                        <DataGridTextColumn Header="סטטוס" Binding="{Binding MatchStatus}" IsReadOnly="True" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </GroupBox>
+        </Grid>
+    </DockPanel>
+</Window>

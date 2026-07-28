@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Autodesk;
+using SiNet.App.Wpf.Admin.MasterPlan;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
@@ -223,6 +224,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 OpenNativeSecretSetup,
                 "הגדרת מפתחות וסודות (Credential Vault)"));
             admin.Add(new NewShellMenuItem(
+                "מיפוי MasterPlan",
+                OpenNativeMasterPlanMapping,
+                "מיפוי חברות ואנשי קשר MasterPlan ↔ SiNet"));
+            admin.Add(new NewShellMenuItem(
                 "סטטוס ACC",
                 OpenNativeAccControlPlaneStatus,
                 "מצב ריצה / browse / reconciliation של ACC"));
@@ -361,6 +366,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             throw;
+        }
+    }
+
+    private void OpenNativeMasterPlanMapping()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<MasterPlanMappingWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת מיפוי MasterPlan: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

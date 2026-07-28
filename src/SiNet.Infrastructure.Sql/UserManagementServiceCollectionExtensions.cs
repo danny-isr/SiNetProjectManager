@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Identity;
+using SiNet.Application.MasterPlan;
 using SiNet.Infrastructure.Sql.Services.Identity;
 using SiNet.Infrastructure.Sql.Services.MasterPlan;
 
@@ -52,6 +53,8 @@ public static class UserManagementServiceCollectionExtensions
         services.AddTransient<IActionPermissionAdminService>(sp => sp.GetRequiredService<SqlActionPermissionAdminService>());
         services.AddTransient<SqlMasterPlanEmployeeLookupService>();
         services.AddTransient<IMasterPlanEmployeeLookupService>(sp => sp.GetRequiredService<SqlMasterPlanEmployeeLookupService>());
+        services.AddTransient<SqlMasterPlanMappingService>();
+        services.AddTransient<IMasterPlanMappingService>(sp => sp.GetRequiredService<SqlMasterPlanMappingService>());
 
         return services;
     }
