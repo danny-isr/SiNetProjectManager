@@ -19,6 +19,9 @@ public static class EmailAccServiceCollectionExtensions
         services.AddSingleton<IEmailAccIngestQueue, EmailAccIngestQueue>();
         services.AddSingleton<IEmailMoveToProjectCoordinator, EmailMoveToProjectCoordinator>();
 
+        // Standalone native ingest. V2 may register LegacyEmailAccIngestionExecutor later (last wins).
+        services.AddTransient<IEmailAccIngestionExecutor, NativeEmailAccIngestionExecutor>();
+
         return services;
     }
 }

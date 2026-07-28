@@ -15,7 +15,10 @@ public sealed record EmailMessageDetails(
     string BodyText,
     IReadOnlyList<EmailMessageAttachmentDetails> Attachments,
     string? HtmlBody = null,
-    IReadOnlyList<EmailInlineImage>? InlineImages = null)
+    IReadOnlyList<EmailInlineImage>? InlineImages = null,
+    string? InternetMessageId = null,
+    string? InReplyTo = null,
+    string? References = null)
 {
     public bool HasAttachments => Attachments.Count > 0;
 

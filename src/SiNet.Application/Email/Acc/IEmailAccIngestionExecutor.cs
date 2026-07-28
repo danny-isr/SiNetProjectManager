@@ -1,8 +1,8 @@
 namespace SiNet.Application.Email.Acc;
 
 /// <summary>
-/// Host-provided backend that performs ACC inbox ingestion using the legacy pipeline.
-/// Registered by the V2 host — not by the clean composition root alone.
+/// Host-provided backend that performs ACC inbox ingestion.
+/// Standalone registers <c>NativeEmailAccIngestionExecutor</c>; V2 may override with the legacy bridge.
 /// </summary>
 public interface IEmailAccIngestionExecutor
 {

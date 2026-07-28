@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.IO;
 
 namespace SiNet.Application.Email;
 
@@ -56,6 +57,50 @@ public static class EmailMessageIdentity
 
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(threadUniqueId));
         return Convert.ToHexString(hashBytes).ToLowerInvariant()[..16];
+    }
+
+    /// <summary>
+    /// Short ACC folder key from <paramref name="messageUniqueId"/> (first 16 hex chars of SHA256).
+    /// Ported from legacy <c>MessageKeyGenerator.GetMessageKey</c>.
+    /// </summary>
+    public static string GetMessageKey(string messageUniqueId)
+    {
+        if (string.IsNullOrEmpty(messageUniqueId))
+            throw new ArgumentNullException(nameof(messageUniqueId));
+
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(messageUniqueId));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant()[..16];
+    }
+
+    /// <summary>SHA-256 of <paramref name="data"/> as lowercase hex (64 chars).</summary>
+    public static string ComputeSha256Hex(byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length == 0)
+            throw new ArgumentException("Data must not be empty.", nameof(data));
+
+        return Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+    }
+
+    /// <summary>Sanitizes a filename for ACC / filesystem storage.</summary>
+    public static string SanitizeFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "unnamed_attachment";
+
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new StringBuilder(fileName);
+        foreach (var c in invalidChars)
+        {
+            sanitized.Replace(c, '_');
+        }
+
+        sanitized.Replace(':', '_');
+        sanitized.Replace(';', '_');
+        sanitized.Replace('#', '_');
+
+        var result = sanitized.ToString().Trim();
+        return string.IsNullOrWhiteSpace(result) ? "unnamed_attachment" : result;
     }
 
     private static string? ExtractFirstMessageId(string? references)

@@ -375,6 +375,40 @@ public sealed class GmailEmailGateway : IEmailGateway
         }
     }
 
+    public async Task<byte[]?> DownloadAttachmentAsync(
+        string messageId,
+        string attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(attachmentId))
+        {
+            return null;
+        }
+
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var attachment = await GmailRetry.ExecuteAsync(
+                ct => gmail.Users.Messages.Attachments.Get("me", messageId, attachmentId).ExecuteAsync(ct),
+                _logger,
+                $"Messages.Attachments.Get('{messageId}','{attachmentId}')",
+                cancellationToken).ConfigureAwait(false);
+
+            var bytes = DecodeBase64UrlSafeToBytes(attachment?.Data);
+            return bytes.Length == 0 ? null : bytes;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Gmail] Attachment download failed for '{messageId}' / '{attachmentId}': {ex.Message}");
+            return null;
+        }
+    }
+
     private static async Task<string?> ResolveLabelIdAsync(
         GmailService gmail,
         string labelPath,
@@ -740,6 +774,7 @@ public sealed class GmailEmailGateway : IEmailGateway
         var summary = Map(message);
         var (bodyText, htmlBody) = ExtractBodies(message.Payload);
         var attachments = ExtractAttachmentDetails(message.Payload);
+        var headers = message.Payload?.Headers;
 
         return new EmailMessageDetails(
             summary.MessageId,
@@ -749,7 +784,10 @@ public sealed class GmailEmailGateway : IEmailGateway
             summary.ReceivedAt,
             bodyText,
             attachments,
-            htmlBody);
+            htmlBody,
+            InternetMessageId: summary.InternetMessageId ?? GetHeader(headers, "Message-ID"),
+            InReplyTo: GetHeader(headers, "In-Reply-To"),
+            References: GetHeader(headers, "References"));
     }
 
     private static string? GetHeader(IList<MessagePartHeader>? headers, string name)

@@ -262,14 +262,42 @@ public sealed class EmailAccPipelineTests
     [Fact]
     public void EmailAccUploadCoordinator_resolves_without_host_ingestion_executor()
     {
-        // Standalone New System does not register IEmailAccIngestionExecutor (V2-only bridge).
-        // DI must still activate the coordinator; uploads then return BackendNotAvailable.
+        // Coordinator still accepts optional executor (null → BackendNotAvailable) for hosts
+        // that have not registered a native/legacy implementation.
         var source = ReadRepoFile(
             "src/SiNet.Infrastructure.Sql/Services/Email/Acc/EmailAccUploadCoordinator.cs");
         Assert.Contains(
             "IEmailAccIngestionExecutor? ingestionExecutor = null",
             source,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailExternalDownloadCoordinator_resolves_without_host_download_executor()
+    {
+        // Standalone New System does not register IEmailExternalDownloadExecutor (V2-only bridge).
+        var source = ReadRepoFile(
+            "src/SiNet.Infrastructure.Sql/Services/Email/Acc/EmailExternalDownloadCoordinator.cs");
+        Assert.Contains(
+            "IEmailExternalDownloadExecutor? downloadExecutor = null",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddSiNetEmailAccSql_registers_native_ingestion_executor()
+    {
+        var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
+        Assert.Contains("IEmailAccIngestionExecutor", extensions, StringComparison.Ordinal);
+        Assert.Contains("NativeEmailAccIngestionExecutor", extensions, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailMessageIdentity_GetMessageKey_is_stable_16_hex()
+    {
+        var key = EmailMessageIdentity.GetMessageKey("example@domain.com");
+        Assert.Equal(16, key.Length);
+        Assert.Equal(key, EmailMessageIdentity.GetMessageKey("example@domain.com"));
     }
 
     [Fact]

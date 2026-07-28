@@ -58,4 +58,14 @@ public interface IEmailGateway
     Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
         EmailMailboxQuery query,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Downloads raw attachment bytes for ACC ingest. Returns <c>null</c> when the mailbox is
+    /// unavailable or the attachment cannot be loaded. Default: not supported.
+    /// </summary>
+    Task<byte[]?> DownloadAttachmentAsync(
+        string messageId,
+        string attachmentId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<byte[]?>(null);
 }
