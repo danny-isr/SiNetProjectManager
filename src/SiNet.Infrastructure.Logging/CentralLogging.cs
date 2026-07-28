@@ -1,8 +1,4 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  DEPRECATED PENDING REMOVAL (AccService decoupling B1b / B2):
-//  Canonical implementation is src/SiNet.Infrastructure.Logging/CentralLogging.cs.
-//  This Shared copy remains only for MasterPlan.SyncEngine until that host is cut over.
-// ─────────────────────────────────────────────────────────────────────────────
 //  CentralLogging — shared logging configuration for every SiNet app.
 //
 //  Single source of truth: reads logging settings from the SystemSettings
@@ -15,8 +11,8 @@
 //  Local logs:
 //      <localDir>\<AppName>-yyyyMMdd.log
 //
-//  No Windows-only APIs are used here so this file can be shared via
-//  <Compile Include="..."/> by net10.0 console projects too.
+//  Canonical home: SiNet.Infrastructure.Logging (AccService decoupling B1).
+//  SyncEngine Shared/Logging copy remains until a follow-up slice.
 // ─────────────────────────────────────────────────────────────────────────────
 
 using System.Data;
@@ -27,7 +23,24 @@ using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
 
-namespace SiNetSQL.Services.Logging;
+namespace SiNet.Infrastructure.Logging;
+
+/// <summary>
+/// SystemSettings keys for central logging. String values must stay identical to
+/// SiNetSQL <c>SystemSettingKeys.Logging*</c> / SyncEngine Shared mirrors.
+/// </summary>
+file static class LoggingSettingKeys
+{
+    public const string LoggingCentralLogPath = "Logging.CentralLogPath";
+    public const string LoggingLocalRetentionDays = "Logging.LocalRetentionDays";
+    public const string LoggingCentralRetentionDays = "Logging.CentralRetentionDays";
+    public const string LoggingClientFileLevel = "Logging.Client.FileLevel";
+    public const string LoggingClientCentralLevel = "Logging.Client.CentralLevel";
+    public const string LoggingAccServiceFileLevel = "Logging.AccService.FileLevel";
+    public const string LoggingAccServiceCentralLevel = "Logging.AccService.CentralLevel";
+    public const string LoggingSyncEngineFileLevel = "Logging.SyncEngine.FileLevel";
+    public const string LoggingSyncEngineCentralLevel = "Logging.SyncEngine.CentralLevel";
+}
 
 /// <summary>
 /// Logical name of an application — drives the sub-folder under the central
@@ -461,27 +474,27 @@ public static class CentralLoggingSettings
 
         var fileLevelKey = app switch
         {
-            SiNetApp.Client     => SystemSettingKeys.LoggingClientFileLevel,
-            SiNetApp.AccService => SystemSettingKeys.LoggingAccServiceFileLevel,
-            SiNetApp.SyncEngine => SystemSettingKeys.LoggingSyncEngineFileLevel,
+            SiNetApp.Client     => LoggingSettingKeys.LoggingClientFileLevel,
+            SiNetApp.AccService => LoggingSettingKeys.LoggingAccServiceFileLevel,
+            SiNetApp.SyncEngine => LoggingSettingKeys.LoggingSyncEngineFileLevel,
             _ => string.Empty
         };
         var centralLevelKey = app switch
         {
-            SiNetApp.Client     => SystemSettingKeys.LoggingClientCentralLevel,
-            SiNetApp.AccService => SystemSettingKeys.LoggingAccServiceCentralLevel,
-            SiNetApp.SyncEngine => SystemSettingKeys.LoggingSyncEngineCentralLevel,
+            SiNetApp.Client     => LoggingSettingKeys.LoggingClientCentralLevel,
+            SiNetApp.AccService => LoggingSettingKeys.LoggingAccServiceCentralLevel,
+            SiNetApp.SyncEngine => LoggingSettingKeys.LoggingSyncEngineCentralLevel,
             _ => string.Empty
         };
 
         return defaults with
         {
-            CentralLogPath = TrimToNull(GetRow(rows, SystemSettingKeys.LoggingCentralLogPath))
+            CentralLogPath = TrimToNull(GetRow(rows, LoggingSettingKeys.LoggingCentralLogPath))
                               ?? defaults.CentralLogPath,
             LocalFileMinLevel = ParseLevel(GetRow(rows, fileLevelKey), defaults.LocalFileMinLevel),
             CentralMinLevel = ParseLevel(GetRow(rows, centralLevelKey), defaults.CentralMinLevel),
-            LocalRetentionDays = ParseInt(GetRow(rows, SystemSettingKeys.LoggingLocalRetentionDays), defaults.LocalRetentionDays),
-            CentralRetentionDays = ParseInt(GetRow(rows, SystemSettingKeys.LoggingCentralRetentionDays), defaults.CentralRetentionDays)
+            LocalRetentionDays = ParseInt(GetRow(rows, LoggingSettingKeys.LoggingLocalRetentionDays), defaults.LocalRetentionDays),
+            CentralRetentionDays = ParseInt(GetRow(rows, LoggingSettingKeys.LoggingCentralRetentionDays), defaults.CentralRetentionDays)
         };
     }
 

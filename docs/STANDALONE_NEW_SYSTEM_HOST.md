@@ -67,9 +67,15 @@ keeps the existing closed behavior when `IAccInboxBootstrapLocalExecutor` is abs
 - Port `LegacyHostLocalAccInboxBootstrapExecutor` / `AccBootstrapService`
 - Inspection Sheets create/export parity
 - `IExternalHealthCheckSource`, `AddSiNetAi`
-- AccService ProjectReference removal from SiNetSQL
+- AccService ProjectReference removal from SiNetSQL (track **B**; B1 vault/logging done — see [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md))
 - Delete V2 New System startup
 - MasterPlan Shared de-vendor / rename `SiNetSQL.*` namespaces
+
+## Parallel track — AccService decoupling (B)
+
+Standalone host slice 2 does **not** remove AccService's SiNetSQL reference. That work is
+track B (`ACC_SERVICE_DECOUPLING.md`). B1 moves AccService vault + central logging onto
+clean Infrastructure modules while keeping SiNetSQL for provisioning/EF.
 
 ## Host adapters — policy
 

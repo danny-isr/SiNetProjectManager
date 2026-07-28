@@ -1,4 +1,5 @@
-using SiNetSQL.Services;
+using SiNet.Application.Configuration;
+using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Services.AccBootstrap.Contracts;
 
 namespace SiOffice.AccService.Auth;
@@ -12,7 +13,7 @@ namespace SiOffice.AccService.Auth;
 /// Resolution order — same vault → appsettings fallback as the WPF client uses
 /// for every other secret:
 /// <list type="number">
-///   <item>Windows Credential Manager: <c>SiNet/AccService/ApiKey</c> (<see cref="SecretKeys.AccServiceApiKey"/>)</item>
+///   <item>Windows Credential Manager: <c>SiNet/AccService/ApiKey</c> (<see cref="SecretCatalog.AccServiceApiKey"/>)</item>
 ///   <item>appsettings: <c>AccService:ApiKey</c></item>
 /// </list>
 /// </remarks>
@@ -33,7 +34,7 @@ public sealed class ApiKeyMiddleware
         _next = next;
         _logger = logger;
         _expectedKey =
-            CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey)
+            CredentialVault.GetSecret(SecretCatalog.AccServiceApiKey)
             ?? configuration["AccService:ApiKey"];
 
         if (string.IsNullOrWhiteSpace(_expectedKey))
@@ -41,7 +42,7 @@ public sealed class ApiKeyMiddleware
             _logger.LogWarning(
                 "AccService API key is not configured (vault key '{VaultKey}' or appsettings 'AccService:ApiKey'). " +
                 "All non-health requests will be rejected with 401.",
-                SecretKeys.AccServiceApiKey);
+                SecretCatalog.AccServiceApiKey);
         }
     }
 

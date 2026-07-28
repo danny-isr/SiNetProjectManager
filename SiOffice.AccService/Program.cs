@@ -2,12 +2,14 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
+using SiNet.Infrastructure.Logging;
+using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap.Contracts;
-using SiNetSQL.Services.Logging;
 using SiOffice.AccService;
 using SiOffice.AccService.Auth;
 using SiOffice.AccService.Endpoints;
@@ -31,7 +33,7 @@ if (args.Length >= 1 && args[0] == "--import-secret")
     {
         var key = args[1];
         var value = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(args[2]));
-        CredentialVaultService.SetSecret(key, value);
+        CredentialVault.SetSecret(key, value);
         Console.WriteLine($"OK: '{key}' written to vault for user '{Environment.UserName}'.");
         return 0;
     }
@@ -54,17 +56,17 @@ builder.Host.UseWindowsService(o => o.ServiceName = "SiOffice.AccService");
 
 // ─── Credential vault bridge (Windows Credential Manager, same as WPF client) ─
 // All secrets — Autodesk client id/secret, connection strings, etc. — live in the
-// machine-scoped Windows Credential Manager and are looked up by the well-known
-// keys in SiNetSQL.Services.SecretKeys. Wiring this BEFORE building services so
-// any DI factory that resolves credentials at construction time gets them.
-CredentialProvider.GetSecret = CredentialVaultService.GetSecret;
+// machine-scoped Windows Credential Manager (SiNet.Infrastructure.Secrets) under
+// SecretCatalog keys. Temporary bridge: SiNetSQL AccBootstrap/provisioning still
+// reads via CredentialProvider.GetSecret until decoupling slice B4.
+CredentialProvider.GetSecret = CredentialVault.GetSecret;
 
 // ─── Logging: Serilog with shared SiNet sinks layout ────────────────────────
 // Settings (central path, levels, retention) come from the SystemSettings table
 // in SQL — single source of truth shared with the WPF client. Falls back to
 // compile-time defaults when the DB is unreachable so the service still boots.
 var loggingConnectionString =
-    CredentialVaultService.GetSecret(SecretKeys.SiNetDatabase)
+    CredentialVault.GetSecret(SecretCatalog.SiNetDatabase)
     ?? builder.Configuration.GetConnectionString("SiNetDatabase");
 
 var loggingConfig = CentralLoggingSettings.LoadFromDatabase(
@@ -110,11 +112,11 @@ builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
 //   1. Vault key  SiNet/ConnectionStrings/SiNetDatabase
 //   2. appsettings.json  ConnectionStrings:SiNetDatabase  (fallback / dev only)
 var connectionString =
-    CredentialVaultService.GetSecret(SecretKeys.SiNetDatabase)
+    CredentialVault.GetSecret(SecretCatalog.SiNetDatabase)
     ?? builder.Configuration.GetConnectionString("SiNetDatabase")
     ?? throw new InvalidOperationException(
         "Missing connection string 'SiNetDatabase'. Provision it in Windows Credential Manager " +
-        $"under target '{SecretKeys.SiNetDatabase}' (use the WPF client's secret-setup dialog or SecretProvisioningService).");
+        $"under target '{SecretCatalog.SiNetDatabase}' (use the WPF client's secret-setup dialog or SecretProvisioningService).");
 
 builder.Services.AddDbContextFactory<SiNetSQLDbContext>(options =>
 {
@@ -134,8 +136,8 @@ builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
 builder.Services.AddSiNetAutodeskLocalFileTransfer();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
 
-// NOTE: CredentialProvider.GetSecret was already set to CredentialVaultService.GetSecret
-// at line 58 above. That wiring is correct and must NOT be overwritten here.
+// NOTE: CredentialProvider.GetSecret was already set to CredentialVault.GetSecret
+// above. That wiring is correct and must NOT be overwritten here.
 // The previous code (CredentialProvider.GetSecret = key => builder.Configuration[$"Secrets:{key}"])
 // was a BUG that caused the service to read from empty appsettings instead of the vault.
 
@@ -159,7 +161,7 @@ try
     // operator can verify environment without attaching a debugger.
     var listenPort = builder.Configuration.GetValue<int?>("AccService:HttpsPort") ?? 8443;
     var hasApiKey = !string.IsNullOrWhiteSpace(
-        CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey)
+        CredentialVault.GetSecret(SecretCatalog.AccServiceApiKey)
         ?? builder.Configuration["AccService:ApiKey"]);
     // Lifecycle lines are emitted at Warning level on purpose: the central
     // log share's default minimum level for AccService is Warning, so logging
@@ -193,7 +195,7 @@ try
     // Key length and hash prefixes are secret fingerprints and are deliberately not logged.
     try
     {
-        var apiKeyRaw = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
+        var apiKeyRaw = CredentialVault.GetSecret(SecretCatalog.AccServiceApiKey);
         var apiKeyFromConfig = builder.Configuration["AccService:ApiKey"];
         var effectiveKey = apiKeyRaw ?? apiKeyFromConfig;
         var keySource = apiKeyRaw != null ? "CredentialManager" : (apiKeyFromConfig != null ? "appsettings" : "none");
@@ -276,7 +278,7 @@ static X509Certificate2 LoadTlsCertificate(IConfiguration configuration)
     var thumbprint = certSection["Thumbprint"];
     var certPath = certSection["Path"];
     var certPassword =
-        CredentialVaultService.GetSecret(SecretKeys.AccServiceCertificatePassword)
+        CredentialVault.GetSecret(SecretCatalog.AccServiceCertificatePassword)
         ?? certSection["Password"];
 
     if (!string.IsNullOrWhiteSpace(storeName) && !string.IsNullOrWhiteSpace(thumbprint))
@@ -320,13 +322,13 @@ static string EnsureAccServiceCertificatePassword(string? existingPassword)
     }
 
     var generated = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
-    CredentialVaultService.SetSecret(SecretKeys.AccServiceCertificatePassword, generated);
+    CredentialVault.SetSecret(SecretCatalog.AccServiceCertificatePassword, generated);
     Log.Warning(
         "AccService CertificatePassword was missing in the vault for user {User}; " +
         "generated a new value and stored it under '{Key}'. " +
         "After startup, copy the certificate thumbprint into System Setting AccService.PinnedCertificateThumbprints.",
         Environment.UserName,
-        SecretKeys.AccServiceCertificatePassword);
+        SecretCatalog.AccServiceCertificatePassword);
     return generated;
 }
 

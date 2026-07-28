@@ -12,7 +12,7 @@ using SiNetSQL.MVVM;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.AI;
-using SiNetSQL.Services.Logging;
+using SiNet.Infrastructure.Logging;
 using Serilog.Events;
 using SiOffice.GoogleConnector.Reports;
 

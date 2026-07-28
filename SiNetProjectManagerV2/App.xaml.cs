@@ -23,7 +23,7 @@ using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
 using SiNetSQL.Services.EmailIngestion;
 using SiNetSQL.Services.EmailOutbound;
-using SiNetSQL.Services.Logging;
+using SiNet.Infrastructure.Logging;
 using SiOffice.GoogleConnector.Logging;
 using SiOffice.GoogleConnector;
 using SiOffice.GoogleConnector.RateLimiting;

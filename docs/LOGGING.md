@@ -40,7 +40,10 @@ Host bootstrap:
 Settings UI is deferred; ports are in `SiNet.Application.Settings` — see [`SETTINGS.md`](./SETTINGS.md).
 
 **Global / central logging:** DB keys `Logging.*` are read/written via `ILoggingSettingsQueryService` /
-`ILoggingSettingsCommandService` (Stage 5). Bootstrap in SiNetSQL remains in the host for now.
+`ILoggingSettingsCommandService` (Stage 5). The shared Serilog sink layout
+(`CentralLoggingSettings` / `AddSiNetCentralLogging`) lives in
+`SiNet.Infrastructure.Logging` (B1 AccService decoupling). Hosts (V2, AccService) call that
+module at bootstrap. MasterPlan.SyncEngine still vendors a Shared copy until a follow-up slice.
 
 ---
 
@@ -108,7 +111,7 @@ Enforced by `NewSystemLoggingBoundaryTests.cs`, `ErrorHandlingSafetyNetTests.cs`
 
 | Item | Target |
 | --- | --- |
-| Extract `CentralLogging` bootstrap | `SiNet.Infrastructure.Logging` (optional host extension) |
+| Extract `CentralLogging` bootstrap | **Done (B1)** — `SiNet.Infrastructure.Logging`; SyncEngine Shared copy still pending |
 | Migrate `AppLogger.*` call sites | Gradual; or shim delegating to `IAppLogger` |
 | Native settings surface | `IAppSettingsService` for logging toggle / directory |
 | `IAppLogger.Debug` / structured context | Extend port when a consumer needs parity with `AppLogger.Debug` |

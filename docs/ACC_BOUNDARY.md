@@ -273,11 +273,21 @@ Until a separately approved slice says otherwise:
 5. **Do not** merge Drive/Google concerns into the ACC seam.
 6. **Do not** touch EF migrations / `ModelSnapshot` / `*.Designer.cs` while working through ACC cutovers.
 
-## 8. Immediate Next Step
+## 8. AccService ↔ SiNetSQL decoupling
+
+Track **B** removes AccService's runtime/build dependence on `SiNetSQL` in slices.
+Authoritative plan and status: [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md).
+
+- **B1 (done):** AccService vault + central logging use `SiNet.Infrastructure.Secrets` /
+  `SiNet.Infrastructure.Logging`. `ProjectReference` to SiNetSQL remains for bootstrap /
+  provisioning / EF. Temporary `CredentialProvider.GetSecret` bridge stays until B4.
+
+## 9. Immediate Next Step
 
 The next ACC work is no longer "finish the Wave 1 seams" - that boundary is now in place.
 The next useful slices are:
 
+- continue AccService decoupling (**B2+** in [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md)),
 - extract remaining orchestration/provisioning responsibilities out of `SiNetSQL` where it now makes sense architecturally,
 - keep moving reconciliation-adjacent consumers off local DB/cache assumptions and onto the Application reconciliation seam,
 - keep retiring orchestration-era compatibility code only after each replacement seam is verified and documented,

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Configuration;
+using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Data;
 using SiNetSQL.Services;
 using SiNetSQL.Services.AccBootstrap;
@@ -38,7 +40,7 @@ internal static class AccEndpoints
         // NEVER returns the actual key value, hash, or length.
         v1.MapGet("/diag", async (IConfiguration configuration, IDbContextFactory<SiNetSQLDbContext> dbContextFactory) =>
         {
-            var apiKeyFromVault = CredentialVaultService.GetSecret(SecretKeys.AccServiceApiKey);
+            var apiKeyFromVault = CredentialVault.GetSecret(SecretCatalog.AccServiceApiKey);
             var apiKeyFromConfig = configuration["AccService:ApiKey"];
             var effectiveKey = apiKeyFromVault ?? apiKeyFromConfig;
             var keySource = apiKeyFromVault != null ? "CredentialManager" : (apiKeyFromConfig != null ? "appsettings" : "none");
