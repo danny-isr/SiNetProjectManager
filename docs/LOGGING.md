@@ -42,10 +42,8 @@ Settings UI is deferred; ports are in `SiNet.Application.Settings` — see [`SET
 **Global / central logging:** DB keys `Logging.*` are read/written via `ILoggingSettingsQueryService` /
 `ILoggingSettingsCommandService` (Stage 5). The shared Serilog sink layout
 (`CentralLoggingSettings` / `AddSiNetCentralLogging`) lives in
-`SiNet.Infrastructure.Logging` (B1 AccService decoupling). Hosts (V2, AccService) call that
-module at bootstrap. MasterPlan.SyncEngine keeps a Shared logging copy under
-`MasterPlan.SyncEngine.Shared.Logging` (no longer `SiNetSQL.Services.Logging`);
-ProjectReference cut-over to this module is a follow-up.
+`SiNet.Infrastructure.Logging` (B1 AccService decoupling). Hosts (V2, AccService,
+MasterPlan.SyncEngine) call that module at bootstrap via ProjectReference.
 
 ---
 

@@ -1,13 +1,12 @@
 # SyncEngine Shared facilities
 
 Formerly vendored from SiNetSQL under the `SiNetSQL.Services*` namespaces.
-As of S4 (`docs/MASTER_PLAN_MIGRATION.md`) these types live under:
+As of S4 (`docs/MASTER_PLAN_MIGRATION.md`) vault/credential helpers live under:
 
 - `MasterPlan.SyncEngine.Shared`
-- `MasterPlan.SyncEngine.Shared.Logging`
 
-They remain **local copies** for the console host (Task Scheduler). Vault key names
-match `SiNet.Application.Configuration.SecretCatalog` (e.g. `SiNet/MasterPlanApi/ApiKey`).
+Central logging is **not** vendored here: `Program.cs` uses
+`SiNet.Infrastructure.Logging` via ProjectReference (same module as V2 / AccService).
 
-Follow-up (not this slice): cut over logging to `SiNet.Infrastructure.Logging` package
-reference and delete the Shared logging copy.
+Vault key names match `SiNet.Application.Configuration.SecretCatalog`
+(e.g. `SiNet/MasterPlanApi/ApiKey`).

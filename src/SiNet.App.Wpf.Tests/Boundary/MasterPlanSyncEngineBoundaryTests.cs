@@ -21,9 +21,29 @@ public sealed class MasterPlanSyncEngineBoundaryTests
     public void SyncEngine_shared_uses_MasterPlan_SyncEngine_Shared_namespace()
     {
         var provider = ReadRepoFile("MasterPlan.SyncEngine/Shared/CredentialProvider.cs");
-        var logging = ReadRepoFile("MasterPlan.SyncEngine/Shared/Logging/CentralLogging.cs");
         Assert.Contains("namespace MasterPlan.SyncEngine.Shared", provider, StringComparison.Ordinal);
-        Assert.Contains("namespace MasterPlan.SyncEngine.Shared.Logging", logging, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SyncEngine_references_Infrastructure_Logging_and_has_no_Shared_Logging_copy()
+    {
+        var csproj = ReadRepoFile("MasterPlan.SyncEngine/MasterPlan.SyncEngine.csproj");
+        Assert.Contains(
+            "SiNet.Infrastructure.Logging\\SiNet.Infrastructure.Logging.csproj",
+            csproj,
+            StringComparison.Ordinal);
+
+        var program = ReadRepoFile("MasterPlan.SyncEngine/Program.cs");
+        Assert.Contains("using SiNet.Infrastructure.Logging;", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("MasterPlan.SyncEngine.Shared.Logging", program, StringComparison.Ordinal);
+
+        var sharedLogging = Path.Combine(
+            FindRepoRoot(),
+            "MasterPlan.SyncEngine",
+            "Shared",
+            "Logging",
+            "CentralLogging.cs");
+        Assert.False(File.Exists(sharedLogging), "Shared/Logging/CentralLogging.cs must be removed after S4b cut-over.");
     }
 
     private static string ReadRepoFile(string relativePath)

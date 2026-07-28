@@ -128,8 +128,7 @@ public static class SystemSettingKeys
     // ═══════════════════════════════════════════════════════════════════
     //  Centralized Logging settings
     //  Read at startup by every app (Client / AccService / SyncEngine) via
-    //  SiNet.Infrastructure.Logging.CentralLoggingSettings.LoadFromDatabase
-    //  (SyncEngine still vendors Shared/Logging until B1b).
+    //  SiNet.Infrastructure.Logging.CentralLoggingSettings.LoadFromDatabase.
     //  Single source of truth — configured in the Admin UI, applies to all
     //  installations once they reconnect to the DB.
     // ═══════════════════════════════════════════════════════════════════

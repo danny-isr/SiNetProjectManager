@@ -1,6 +1,6 @@
 # Master Plan → Standalone New System
 
-> Status: **Approved — S2 mapping done · S4 namespace hygiene done**  
+> Status: **Approved — S2 mapping done · S4 hygiene done (namespaces + logging cut-over)**  
 > Date: 2026-07-28  
 > Approved by: operator (chat 2026-07-28)  
 
@@ -52,7 +52,7 @@ SiNet.App.Wpf
   └─ (no SyncEngine inside WPF)
 
 MasterPlan.SyncEngine (Task Scheduler)
-  └─ API → Replica → CrossSync     ← S4 hygiene (namespaces / logging); stay separate process
+  └─ API → Replica → CrossSync     ← S4 done (namespaces + Infrastructure.Logging); stay separate process
 ```
 
 ## Slice plan
@@ -89,13 +89,13 @@ MasterPlan.SyncEngine (Task Scheduler)
 
 ### S4 — SyncEngine hygiene (parallel ops track)
 
-**In (delivered — namespace hygiene):**
-- Renamed Shared off `SiNetSQL.Services*` → `MasterPlan.SyncEngine.Shared` (+ `.Logging`)
+**In (delivered):**
+- Renamed Shared off `SiNetSQL.Services*` → `MasterPlan.SyncEngine.Shared` (vault/credentials)
+- Cut over central logging to `SiNet.Infrastructure.Logging` ProjectReference; removed Shared/Logging copy
 - Console host + Task Scheduler unchanged (not embedded in App.Wpf)
 - Vault key strings unchanged (`SecretCatalog` parity for MasterPlan API key)
 
 **Still open:**
-- Cut over Shared logging copy to `SiNet.Infrastructure.Logging` ProjectReference
 - Ops: MasterPlan API key rotation ([`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) — still Not done)
 
 **Out:** Rewriting daily/monthly sync algorithms unless a defect requires it.

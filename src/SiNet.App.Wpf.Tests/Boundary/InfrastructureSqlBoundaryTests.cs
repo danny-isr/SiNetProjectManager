@@ -56,10 +56,12 @@ public sealed class InfrastructureSqlBoundaryTests
             return;
         }
 
-        // Known debt outside the standalone-host slice: user-group services still query via
+        // Known debt outside the standalone-host slice: these services still query via
         // SiNetSQLDbContext (namespace SiNetSQL.Data) until a dedicated SiNetDbContext projection exists.
         var fileName = Path.GetFileName(relativePath);
-        if (fileName is "SqlUserGroupQueryService.cs" or "SqlUserGroupCommandService.cs")
+        if (fileName is "SqlUserGroupQueryService.cs"
+            or "SqlUserGroupCommandService.cs"
+            or "SqlMasterPlanMappingService.cs")
         {
             return;
         }

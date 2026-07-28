@@ -12,7 +12,7 @@
 //      <localDir>\<AppName>-yyyyMMdd.log
 //
 //  Canonical home: SiNet.Infrastructure.Logging (AccService decoupling B1).
-//  SyncEngine Shared/Logging copy remains until a follow-up slice.
+//  Consumers: V2, AccService, MasterPlan.SyncEngine (ProjectReference).
 // ─────────────────────────────────────────────────────────────────────────────
 
 using System.Data;
