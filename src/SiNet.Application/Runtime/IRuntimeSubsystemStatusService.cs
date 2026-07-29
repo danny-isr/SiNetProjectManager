@@ -10,4 +10,10 @@ public interface IRuntimeSubsystemStatusService
     event EventHandler? Changed;
 
     Task RefreshAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts the background startup + periodic full probe (see <c>docs/SYSTEM_HEALTH.md</c> §2.6).
+    /// Idempotent. No-op for stubs that do not schedule work.
+    /// </summary>
+    void StartPeriodicRefresh();
 }

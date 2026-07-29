@@ -1,6 +1,7 @@
 # System Health / «מצב מערכת»
 
-Status: **approved target state — implementation in progress.** All eleven legacy checks are ported.
+Status: **implemented.** Eleven legacy checks ported; Drive write probes and MasterPlan Shared Drive
+row added after a false-green findings (report generation failed while the panel stayed Idle).
 
 Related: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
 [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
@@ -115,8 +116,9 @@ Each ported check becomes one contributor. Ownership follows the existing depend
 | `ollama` | שרת AI | `SiNet.Infrastructure.Sql` | `ISystemSettingsQueryService` (`OllamaBaseUrl`, `OllamaModel`); requires `AddSiNetAi()` in standalone |
 | `google-config` | הגדרות Google | `SiNet.Infrastructure.Google` | `IGoogleClientSecretsPathProvider` |
 | `google-account` | חשבון Google | `SiNet.Infrastructure.Google` | `IConnectorAuthService` |
-| `google-templates-folder` | תיקיית תבניות בדרייב | `SiNet.Infrastructure.Google` | **new port** `IGoogleDriveFolderDiagnostics` |
-| `google-reports-folder` | תיקיית דוחות בדרייב | `SiNet.Infrastructure.Google` | **new port** `IGoogleDriveFolderDiagnostics` |
+| `InspectionTemplatesFolderId` | תיקיית תבניות בדרייב | `SiNet.Infrastructure.Google` | `IGoogleDriveFolderDiagnostics` — readable + contains spreadsheet |
+| `InspectionReportsFolderId` | תיקיית דוחות בדרייב | `SiNet.Infrastructure.Google` | `IGoogleDriveFolderDiagnostics` — **writable** (`capabilities.canAddChildren`) |
+| `masterplan-reports-drive` | Shared Drive לדוחות MasterPlan | `SiNet.Infrastructure.Google` | `IGoogleDriveFolderDiagnostics.DiagnoseSharedDriveWriteAsync` — same probe as R01/R02/R03 (`Drives.Get` → `CanAddChildren`) |
 | `autodesk-acc` | Autodesk ACC (טוקן) | `SiNet.Infrastructure.Autodesk` | `ITokenProvider` (2-legged probe) |
 | `acc-service` | SiOffice.AccService (פנימי) | `SiNet.Infrastructure.Autodesk` | `IAccServiceHealthProbe`, probed in both Local and Remote |
 | `google` | Google / Gmail | `SiNet.Infrastructure.Google` | `IConnectorAuthService` + active Gmail probe |
@@ -134,27 +136,57 @@ All eleven legacy checks are ported. Two of them need a note:
 
 ### 2.3.1 Resulting panel
 
-Standalone shows **15 rows**: the 4 existing built-in rows plus the 11 ported rows — the same set the
-V2 hybrid host shows today through the legacy bridge.
+Standalone shows **16 rows**: the 4 built-in rows, the 11 ported legacy rows, plus
+`masterplan-reports-drive`. The MasterPlan row is standalone-only (legacy never had it); it exists
+because R01/R02/R03 fail with "אין הרשאות כתיבה ל-Shared Drive" when `CanAddChildren` is false, and
+the Inspection reports-folder row does **not** cover that Shared Drive id.
 
-### 2.4 New port: Google Drive folder diagnostics
+### 2.4 Google Drive / Shared Drive diagnostics
 
-The two Drive rows are the ones the pilot actually asked for, and they need a real abstraction
-because the legacy implementation sits in V2 and depends on `GoogleAuthService` directly.
+`SiNet.Application.Google.IGoogleDriveFolderDiagnostics`:
 
-`SiNet.Application.Google.IGoogleDriveFolderDiagnostics` returns a record carrying the folder status,
-the connected account, folder name and link, and a Hebrew user message. The status set mirrors the
-legacy `DiagnosticStatus` so behavior is preserved: `Ok`, `NotConfigured`, `NotAuthenticated`,
-`NoAccess`, `NotFound`, `InvalidType`, `EmptyFolder`, `ReadOnlyOrUnknownWrite`, `Error`.
+- `DiagnoseAsync(folderId, expectSpreadsheets, requireWriteAccess)` — folder probe.
+  - Templates: readable + at least one spreadsheet (`requireWriteAccess: false`).
+  - Inspection reports: readable **and** writable via `capabilities.canAddChildren`
+    (`requireWriteAccess: true`). Read-only access is `NoWriteAccess` → panel `Degraded`, not Idle.
+- `DiagnoseSharedDriveWriteAsync(sharedDriveId)` — same signal MasterPlan generation uses:
+  `Drives.Get(id).Capabilities.CanAddChildren`.
 
-Implementation lives in `SiNet.Infrastructure.Google` over the existing Drive service, and maps
-Google API failures the same way legacy does: HTTP 403 to `NoAccess`, HTTP 404 to `NotFound`.
+Statuses: `Ok`, `NotConfigured`, `NotAuthenticated`, `NoAccess`, `NoWriteAccess`, `NotFound`,
+`InvalidType`, `EmptyFolder`, `Error`. `ReadOnlyOrUnknownWrite` remains only as a fallback when the
+API omits capabilities while write was not required.
 
 ### 2.5 Behavior requirements
 
 Every contributor must be cancellable, must apply its own bounded timeout, and must never perform
-file-system or network I/O on the UI thread. `RefreshAsync` stays the only trigger; no polling timer
-is introduced. Rows report `LastCheckedUtc` so the panel can show staleness.
+file-system or network I/O on the UI thread. Rows report `LastCheckedUtc` so the panel can show
+staleness.
+
+### 2.6 Refresh schedule (standalone)
+
+`RefreshAsync` is **not** window-gated. `NewShellFactory` calls
+`IRuntimeSubsystemStatusService.StartPeriodicRefresh()` when the shell is created:
+
+1. **Startup probe** — first full refresh ~3 seconds later, so the footer already reflects real I/O
+   before the user opens «מצב מערכת».
+2. **Periodic probe** — every **5 minutes** thereafter, so a drive that loses write access mid-day
+   surfaces without requiring the user to open the status window.
+
+Concurrent refreshes coalesce (one in-flight at a time). Opening the status window still calls
+`RefreshAsync` for an on-demand update; it does not own the schedule. Composition/unit tests that
+only resolve the service do **not** start the loop until `StartPeriodicRefresh` is called.
+
+### 2.7 MasterPlan write probe (aligned with generation)
+
+The `masterplan-reports-drive` row must match what R01/R02/R03 actually need before creating files:
+
+1. Shared Drive `Capabilities.CanAddChildren` (same as `NativeReportsDriveHelper.CheckWriteAccessAsync`).
+2. **Also** `ReportsRootFolderId` folder `capabilities.canAddChildren` — Shared Drive write does not
+   imply write on the configured reports root folder. A green Shared Drive with a read-only root was
+   a documented false-green.
+
+Generation itself must check both signals and **log** a write-denied failure (not only return a UI
+string), so the next support investigation has a log trail even when the user never opens status.
 
 ---
 

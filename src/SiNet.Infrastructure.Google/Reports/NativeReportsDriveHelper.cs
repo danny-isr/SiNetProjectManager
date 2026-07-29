@@ -20,17 +20,70 @@ public sealed class NativeReportsDriveHelper
         _sharedDriveId = sharedDriveId;
     }
 
+    /// <summary>
+    /// Shared Drive can-add-children, matching the status-panel Shared Drive probe.
+    /// Does <b>not</b> prove write on <see cref="EnsureFolderPathAsync"/>'s root folder — callers that
+    /// write under a configured root should also call <see cref="CheckFolderWriteAccessAsync"/>.
+    /// </summary>
     public async Task<bool> CheckWriteAccessAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var drive = await _drive.Drives.Get(_sharedDriveId).ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var get = _drive.Drives.Get(_sharedDriveId);
+            get.Fields = "id,capabilities(canAddChildren)";
+            var drive = await get.ExecuteAsync(cancellationToken).ConfigureAwait(false);
             return drive.Capabilities?.CanAddChildren == true;
         }
         catch
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Folder-level write probe (<c>capabilities.canAddChildren</c>). Used for
+    /// <c>ReportsRootFolderId</c> — Shared Drive write does not imply write on that folder.
+    /// </summary>
+    public async Task<bool> CheckFolderWriteAccessAsync(
+        string folderId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(folderId))
+            return false;
+
+        try
+        {
+            var get = _drive.Files.Get(folderId.Trim());
+            get.SupportsAllDrives = true;
+            get.Fields = "id,mimeType,capabilities(canAddChildren)";
+            var file = await get.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(file.MimeType, FolderMime, StringComparison.Ordinal))
+                return false;
+            return file.Capabilities?.CanAddChildren == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Hebrew reason when Shared Drive or reports-root write is denied; <c>null</c> when both pass.
+    /// </summary>
+    public async Task<string?> GetWriteAccessFailureReasonAsync(
+        string? reportsRootFolderId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await CheckWriteAccessAsync(cancellationToken).ConfigureAwait(false))
+            return "אין הרשאות כתיבה ל-Shared Drive.";
+
+        if (string.IsNullOrWhiteSpace(reportsRootFolderId))
+            return "תיקיית שורש הדוחות לא הוגדרה.";
+
+        if (!await CheckFolderWriteAccessAsync(reportsRootFolderId, cancellationToken).ConfigureAwait(false))
+            return "אין הרשאת כתיבה לתיקיית שורש הדוחות.";
+
+        return null;
     }
 
     public async Task<string> EnsureFolderPathAsync(

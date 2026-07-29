@@ -36,8 +36,14 @@ public sealed class NativeR01ReportService(
             var sheets = new NativeGoogleSheetsWriter(sheetsApi, _options.ReportsBatchSize, _options.ReportsBatchDelayMs);
 
             progress?.Report(("access", "בודק הרשאות...", 10));
-            if (!await drive.CheckWriteAccessAsync(cancellationToken).ConfigureAwait(false))
-                return MasterPlanReportGenerationResult.Fail("אין הרשאות כתיבה ל-Shared Drive.");
+            var writeDenied = await drive
+                .GetWriteAccessFailureReasonAsync(_options.ReportsRootFolderId, cancellationToken)
+                .ConfigureAwait(false);
+            if (writeDenied is not null)
+            {
+                _logger.Warn($"[R01] {writeDenied}");
+                return MasterPlanReportGenerationResult.Fail(writeDenied);
+            }
 
             progress?.Report(("data", "מושך תיק פרויקטים...", 25));
             var rows = await _data.GetPortfolioAsync(request, cancellationToken).ConfigureAwait(false);
@@ -70,6 +76,13 @@ public sealed class NativeR01ReportService(
             }
 
             await sheets.EnsureSheetNamedDataAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
+
+            progress?.Report(("params", "יוצר גיליון פרמטרים...", 60));
+            await sheets.WriteParametersSheetAsync(spreadsheetId, request.HourPrice, cancellationToken)
+                .ConfigureAwait(false);
+
+            // Keep template header row 2 intact when possible; clear only data body A3:AZ
+            // then rewrite the full 31-column Hebrew header (legacy parity).
             await sheets.ClearRangeAsync(
                     spreadsheetId,
                     NativeGoogleSheetsWriter.BuildRange("Data", "A2:AZ"),
@@ -79,26 +92,16 @@ public sealed class NativeR01ReportService(
             await sheets.WriteHeadersAsync(
                     spreadsheetId,
                     NativeGoogleSheetsWriter.BuildRange("Data", "A2"),
-                    new List<object>
-                    {
-                        "ProjectID", "ProjectNum", "ProjectName", "Customer", "Status",
-                        "FeeSum", "HoursSum", "Active", "HourPrice",
-                    },
+                    R01PortfolioRow.GetHeaderRow(),
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var dataRows = rows.Select(r => (IList<object?>)new List<object?>
+            var dataRows = new List<IList<object?>>(rows.Count);
+            for (var i = 0; i < rows.Count; i++)
             {
-                r.ProjectId,
-                r.ProjectNum,
-                r.ProjectName,
-                r.CustomerName,
-                r.StatusName,
-                r.FeeSum,
-                r.HoursSum,
-                r.IsActive ? 1 : 0,
-                request.HourPrice,
-            }).ToList();
+                // Sheet data starts at row 3.
+                dataRows.Add(rows[i].ToSheetRow(rowNumber: i + 3));
+            }
 
             progress?.Report(("write", "כותב נתונים...", 80));
             await sheets.WriteDataBatchedAsync(
@@ -109,7 +112,7 @@ public sealed class NativeR01ReportService(
                 .ConfigureAwait(false);
 
             var url = await drive.GetFileUrlAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
-            _logger.Info($"[R01] completed rows={rows.Count} url={url}");
+            _logger.Info($"[R01] completed rows={rows.Count} cols={R01PortfolioRow.GetHeaderRow().Count} source={rows[0].DataSource} url={url}");
             return MasterPlanReportGenerationResult.Ok(spreadsheetId, fileName, url, rows.Count);
         }
         catch (OperationCanceledException)

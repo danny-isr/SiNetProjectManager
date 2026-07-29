@@ -10,7 +10,8 @@ namespace SiNet.App.Wpf.Runtime;
 
 /// <summary>
 /// Aggregates external health, ACC, Gmail, ACC-ingest background work, startup tasks,
-/// and workflow assignee readiness.
+/// contributors, and workflow assignee readiness. Optionally runs a startup + periodic refresh
+/// loop (see <c>docs/SYSTEM_HEALTH.md</c> §2.6).
 /// </summary>
 public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusService, IDisposable
 {
@@ -19,6 +20,12 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
 
     /// <summary>Default upper bound for a single contributor probe, so one unreachable share cannot stall the panel.</summary>
     internal static readonly TimeSpan DefaultContributorTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>Delay before the first automatic full probe after the service is constructed.</summary>
+    internal static readonly TimeSpan DefaultStartupRefreshDelay = TimeSpan.FromSeconds(3);
+
+    /// <summary>Interval between automatic full probes while the host is running.</summary>
+    internal static readonly TimeSpan DefaultPeriodicRefreshInterval = TimeSpan.FromMinutes(5);
 
     private readonly TimeSpan _contributorTimeout;
     private readonly IReadOnlyList<ISubsystemStatusContributor> _contributors;
@@ -32,6 +39,10 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
     private readonly IWorkflowAssigneeReadinessQueryService? _assigneeReadiness;
     private readonly INotificationDeliveryService? _notifications;
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly CancellationTokenSource _lifetime = new();
+    private Task? _periodicLoop;
+    private int _periodicStarted;
     private IReadOnlyList<SubsystemRuntimeStatus> _current = [];
     private AccServiceHealthResult? _cachedAccHealth;
     private IReadOnlyList<WorkflowAssigneeReadinessIssueDto>? _cachedAssigneeIssues;
@@ -71,6 +82,25 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
         Rebuild();
     }
 
+    /// <inheritdoc />
+    public void StartPeriodicRefresh() =>
+        StartPeriodicRefresh(DefaultStartupRefreshDelay, DefaultPeriodicRefreshInterval);
+
+    /// <summary>
+    /// Starts the startup + periodic full probe loop. Idempotent. Hosts call this once the shell is
+    /// up so composition/unit tests that only resolve the service do not open network I/O.
+    /// </summary>
+    internal void StartPeriodicRefresh(TimeSpan startupDelay, TimeSpan interval)
+    {
+        if (Interlocked.Exchange(ref _periodicStarted, 1) != 0)
+            return;
+
+        if (interval <= TimeSpan.Zero)
+            return;
+
+        _periodicLoop = RunPeriodicRefreshAsync(startupDelay, interval, _lifetime.Token);
+    }
+
     public IReadOnlyList<SubsystemRuntimeStatus> Current
     {
         get
@@ -84,34 +114,84 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        if (_externalHealth is not null)
-            await _externalHealth.RefreshAsync(cancellationToken).ConfigureAwait(false);
-
-        if (_accHealth is not null && _accMode?.Mode == AccServiceMode.Remote)
+        // Coalesce: a window open + periodic tick must not run two full probe waves in parallel.
+        if (!await _refreshGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
-            try
-            {
-                _cachedAccHealth = await _accHealth.CheckAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _cachedAccHealth = new AccServiceHealthResult(
-                    IsConfigured: true,
-                    AccServiceHealthState.Offline,
-                    _accMode.BaseUrl,
-                    ex.Message);
-            }
-        }
-        else
-        {
-            _cachedAccHealth = null;
+            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _refreshGate.Release();
+            return;
         }
 
-        await RefreshAssigneeReadinessAsync(cancellationToken).ConfigureAwait(false);
-        await RefreshContributorsAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_externalHealth is not null)
+                await _externalHealth.RefreshAsync(cancellationToken).ConfigureAwait(false);
 
-        Rebuild();
-        Changed?.Invoke(this, EventArgs.Empty);
+            if (_accHealth is not null && _accMode?.Mode == AccServiceMode.Remote)
+            {
+                try
+                {
+                    _cachedAccHealth = await _accHealth.CheckAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _cachedAccHealth = new AccServiceHealthResult(
+                        IsConfigured: true,
+                        AccServiceHealthState.Offline,
+                        _accMode.BaseUrl,
+                        ex.Message);
+                }
+            }
+            else
+            {
+                _cachedAccHealth = null;
+            }
+
+            await RefreshAssigneeReadinessAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshContributorsAsync(cancellationToken).ConfigureAwait(false);
+
+            Rebuild();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    private async Task RunPeriodicRefreshAsync(
+        TimeSpan startupDelay,
+        TimeSpan interval,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (startupDelay > TimeSpan.Zero)
+                await Task.Delay(startupDelay, cancellationToken).ConfigureAwait(false);
+
+            await RefreshAsync(cancellationToken).ConfigureAwait(false);
+
+            using var timer = new PeriodicTimer(interval);
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceError("[RuntimeStatus] Periodic refresh failed (non-fatal): {0}", ex);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Host shutting down.
+        }
     }
 
     /// <summary>
@@ -166,6 +246,8 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
 
     public void Dispose()
     {
+        _lifetime.Cancel();
+
         _startupTasks.Changed -= OnDependencyChanged;
         if (_externalHealth is not null)
             _externalHealth.Changed -= OnDependencyChanged;
@@ -173,6 +255,11 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
             _accIngest.ActiveCountChanged -= OnAccIngestCountChanged;
         foreach (var c in _connectors)
             c.AuthStateChanged -= OnAuthStateChanged;
+
+        _lifetime.Dispose();
+        _refreshGate.Dispose();
+        // _periodicLoop is fire-and-forget against _lifetime; do not block Dispose on I/O.
+        _ = _periodicLoop;
     }
 
     private async Task RefreshAssigneeReadinessAsync(CancellationToken cancellationToken)

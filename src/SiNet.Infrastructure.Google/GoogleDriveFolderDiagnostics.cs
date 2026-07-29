@@ -8,9 +8,8 @@ using SiNet.Application.Google;
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>
-/// Drive folder diagnostics over the shared Gmail/Drive credential. Ported from the legacy
-/// <c>GoogleDriveFolderDiagnosticService</c> so the standalone host can report folder permission
-/// problems without referencing V2 (see <c>docs/SYSTEM_HEALTH.md</c> §2.4).
+/// Drive folder / Shared Drive diagnostics over the shared Gmail/Drive credential
+/// (see <c>docs/SYSTEM_HEALTH.md</c> §2.4).
 /// </summary>
 public sealed class GoogleDriveFolderDiagnostics : IGoogleDriveFolderDiagnostics
 {
@@ -37,16 +36,16 @@ public sealed class GoogleDriveFolderDiagnostics : IGoogleDriveFolderDiagnostics
     public async Task<GoogleDriveFolderDiagnosticResult> DiagnoseAsync(
         string? folderId,
         bool expectSpreadsheets,
+        bool requireWriteAccess = false,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(folderId))
             return new GoogleDriveFolderDiagnosticResult(GoogleDriveFolderStatus.NotConfigured);
 
         var trimmed = folderId.Trim();
-        var snippet = trimmed.Length > 8 ? trimmed[..8] + "..." : trimmed;
+        var snippet = Snippet(trimmed);
         var email = _auth.ConnectedAccountEmail;
 
-        // TryGetDriveServiceAsync reuses the existing session and never prompts.
         var drive = await _clientProvider.TryGetDriveServiceAsync(cancellationToken).ConfigureAwait(false);
         if (drive is null)
         {
@@ -60,7 +59,7 @@ public sealed class GoogleDriveFolderDiagnostics : IGoogleDriveFolderDiagnostics
         {
             var get = drive.Files.Get(trimmed);
             get.SupportsAllDrives = true;
-            get.Fields = "id, name, mimeType, webViewLink";
+            get.Fields = "id, name, mimeType, webViewLink, capabilities(canAddChildren,canEdit)";
 
             var info = await get.ExecuteAsync(cancellationToken).ConfigureAwait(false);
 
@@ -74,22 +73,48 @@ public sealed class GoogleDriveFolderDiagnostics : IGoogleDriveFolderDiagnostics
                     info.WebViewLink);
             }
 
-            if (!expectSpreadsheets)
+            if (requireWriteAccess)
             {
+                var canAdd = info.Capabilities?.CanAddChildren;
+                if (canAdd != true)
+                {
+                    return new GoogleDriveFolderDiagnosticResult(
+                        GoogleDriveFolderStatus.NoWriteAccess,
+                        email,
+                        snippet,
+                        info.Name,
+                        info.WebViewLink,
+                        TechnicalDetails: canAdd is null
+                            ? "capabilities.canAddChildren omitted"
+                            : "capabilities.canAddChildren=false");
+                }
+            }
+
+            if (expectSpreadsheets)
+            {
+                var hasSheet = await HasAnySpreadsheetAsync(drive, trimmed, cancellationToken)
+                    .ConfigureAwait(false);
                 return new GoogleDriveFolderDiagnosticResult(
-                    GoogleDriveFolderStatus.ReadOnlyOrUnknownWrite,
+                    hasSheet ? GoogleDriveFolderStatus.Ok : GoogleDriveFolderStatus.EmptyFolder,
                     email,
                     snippet,
                     info.Name,
                     info.WebViewLink);
             }
 
-            var status = await HasAnySpreadsheetAsync(drive, trimmed, cancellationToken).ConfigureAwait(false)
-                ? GoogleDriveFolderStatus.Ok
-                : GoogleDriveFolderStatus.EmptyFolder;
+            // Writable path already returned Ok implicitly by not failing above.
+            if (requireWriteAccess)
+            {
+                return new GoogleDriveFolderDiagnosticResult(
+                    GoogleDriveFolderStatus.Ok,
+                    email,
+                    snippet,
+                    info.Name,
+                    info.WebViewLink);
+            }
 
             return new GoogleDriveFolderDiagnosticResult(
-                status,
+                GoogleDriveFolderStatus.ReadOnlyOrUnknownWrite,
                 email,
                 snippet,
                 info.Name,
@@ -102,6 +127,66 @@ public sealed class GoogleDriveFolderDiagnostics : IGoogleDriveFolderDiagnostics
         catch (Exception ex)
         {
             _logger?.Warn($"[DriveDiagnostics] Folder {snippet} probe failed: {ex.Message}");
+            return new GoogleDriveFolderDiagnosticResult(
+                MapException(ex),
+                email,
+                snippet,
+                TechnicalDetails: ex.Message);
+        }
+    }
+
+    public async Task<GoogleDriveFolderDiagnosticResult> DiagnoseSharedDriveWriteAsync(
+        string? sharedDriveId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sharedDriveId))
+            return new GoogleDriveFolderDiagnosticResult(GoogleDriveFolderStatus.NotConfigured);
+
+        var trimmed = sharedDriveId.Trim();
+        var snippet = Snippet(trimmed);
+        var email = _auth.ConnectedAccountEmail;
+
+        var drive = await _clientProvider.TryGetDriveServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (drive is null)
+        {
+            return new GoogleDriveFolderDiagnosticResult(
+                GoogleDriveFolderStatus.NotAuthenticated,
+                email,
+                snippet);
+        }
+
+        try
+        {
+            // Same probe as NativeReportsDriveHelper.CheckWriteAccessAsync — keep them aligned.
+            var get = drive.Drives.Get(trimmed);
+            get.Fields = "id, name, capabilities(canAddChildren)";
+            var shared = await get.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+
+            if (shared.Capabilities?.CanAddChildren == true)
+            {
+                return new GoogleDriveFolderDiagnosticResult(
+                    GoogleDriveFolderStatus.Ok,
+                    email,
+                    snippet,
+                    shared.Name);
+            }
+
+            return new GoogleDriveFolderDiagnosticResult(
+                GoogleDriveFolderStatus.NoWriteAccess,
+                email,
+                snippet,
+                shared.Name,
+                TechnicalDetails: shared.Capabilities?.CanAddChildren is null
+                    ? "capabilities.canAddChildren omitted"
+                    : "capabilities.canAddChildren=false");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[DriveDiagnostics] Shared Drive {snippet} write probe failed: {ex.Message}");
             return new GoogleDriveFolderDiagnosticResult(
                 MapException(ex),
                 email,
@@ -125,6 +210,8 @@ public sealed class GoogleDriveFolderDiagnostics : IGoogleDriveFolderDiagnostics
         var result = await list.ExecuteAsync(cancellationToken).ConfigureAwait(false);
         return result?.Files?.Count > 0;
     }
+
+    private static string Snippet(string id) => id.Length > 8 ? id[..8] + "..." : id;
 
     private static GoogleDriveFolderStatus MapException(Exception ex) => ex switch
     {

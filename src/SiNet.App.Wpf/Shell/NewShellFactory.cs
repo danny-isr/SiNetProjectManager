@@ -72,6 +72,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         var runtimeStatus = _services.GetService<IRuntimeSubsystemStatusService>();
+        // Kick the first full probe (and the 5-minute loop) as soon as the shell exists — do not wait
+        // for the user to open «מצב מערכת» (docs/SYSTEM_HEALTH.md §2.6).
+        runtimeStatus?.StartPeriodicRefresh();
+
         Action? openSystemStatus = HasAuthenticatedUser()
             ? OpenNativeSystemStatus
             : null;

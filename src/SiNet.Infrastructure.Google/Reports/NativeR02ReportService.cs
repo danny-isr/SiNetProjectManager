@@ -40,8 +40,14 @@ public sealed class NativeR02ReportService(
             var sheets = new NativeGoogleSheetsWriter(sheetsApi, _options.ReportsBatchSize, _options.ReportsBatchDelayMs);
 
             progress?.Report(("access", "בודק הרשאות...", 10));
-            if (!await drive.CheckWriteAccessAsync(cancellationToken).ConfigureAwait(false))
-                return MasterPlanReportGenerationResult.Fail("אין הרשאות כתיבה ל-Shared Drive.");
+            var writeDenied = await drive
+                .GetWriteAccessFailureReasonAsync(_options.ReportsRootFolderId, cancellationToken)
+                .ConfigureAwait(false);
+            if (writeDenied is not null)
+            {
+                _logger.Warn($"[R02] {writeDenied}");
+                return MasterPlanReportGenerationResult.Fail(writeDenied);
+            }
 
             progress?.Report(("data", "מושך שעות עבודה...", 25));
             var rows = await _data.GetMergedHoursAsync(request, cancellationToken).ConfigureAwait(false);

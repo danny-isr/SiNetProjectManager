@@ -115,7 +115,10 @@ public sealed class NativeGoogleSheetsWriter
                         Properties = new SheetProperties
                         {
                             Title = sheetName,
-                            GridProperties = new GridProperties { RowCount = 50_000, ColumnCount = 30 },
+                            // Keep the grid small: 50_000×30 ≈ 1.5M cells per tab and Google's
+                            // spreadsheet cap is 10M cells — a handful of R03 employee tabs then fails
+                            // addSheet with "exceeds 10000000 cells". Sheets grow automatically.
+                            GridProperties = new GridProperties { RowCount = 200, ColumnCount = 10 },
                         },
                     },
                 },
@@ -126,6 +129,29 @@ public sealed class NativeGoogleSheetsWriter
             .ExecuteAsync(cancellationToken)
             .ConfigureAwait(false);
         return true;
+    }
+
+    /// <summary>Creates/overwrites the Parameters sheet used by R01 formula columns (HourPrice in B1).</summary>
+    public async Task WriteParametersSheetAsync(
+        string spreadsheetId,
+        decimal hourPrice,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureSheetExistsAsync(spreadsheetId, "Parameters", cancellationToken).ConfigureAwait(false);
+        await ClearRangeAsync(
+                spreadsheetId,
+                BuildRange("Parameters", "A1:B10"),
+                cancellationToken)
+            .ConfigureAwait(false);
+        await WriteValuesAsync(
+                spreadsheetId,
+                BuildRange("Parameters", "A1"),
+                new List<IList<object>>
+                {
+                    new List<object> { "עלות שעה", hourPrice },
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task EnsureSheetNamedDataAsync(string spreadsheetId, CancellationToken cancellationToken = default)

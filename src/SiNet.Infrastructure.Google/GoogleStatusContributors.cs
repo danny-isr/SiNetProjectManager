@@ -114,8 +114,11 @@ public abstract class GoogleDriveFolderStatusContributorBase(
 
     public abstract string DisplayNameHe { get; }
 
-    /// <summary>Templates must contain at least one spreadsheet; reports only need to be reachable.</summary>
+    /// <summary>Templates must contain at least one spreadsheet.</summary>
     protected abstract bool ExpectSpreadsheets { get; }
+
+    /// <summary>Inspection reports folder must allow creating children (write).</summary>
+    protected abstract bool RequireWriteAccess { get; }
 
     protected abstract string ResolveFolderId(InspectionSystemSettingsDto inspection);
 
@@ -125,14 +128,14 @@ public abstract class GoogleDriveFolderStatusContributorBase(
         var folderId = ResolveFolderId(dto.Inspection);
 
         var result = await _diagnostics
-            .DiagnoseAsync(folderId, ExpectSpreadsheets, cancellationToken)
+            .DiagnoseAsync(folderId, ExpectSpreadsheets, RequireWriteAccess, cancellationToken)
             .ConfigureAwait(false);
 
         var (state, summary) = Describe(result);
         return new SubsystemRuntimeStatus(Key, DisplayNameHe, state, null, summary, DateTimeOffset.UtcNow);
     }
 
-    private static (SubsystemRuntimeState State, string Summary) Describe(GoogleDriveFolderDiagnosticResult r)
+    public static (SubsystemRuntimeState State, string Summary) Describe(GoogleDriveFolderDiagnosticResult r)
     {
         var name = string.IsNullOrWhiteSpace(r.FolderName) ? r.FolderIdSnippet : r.FolderName;
 
@@ -150,6 +153,8 @@ public abstract class GoogleDriveFolderStatusContributorBase(
                 (SubsystemRuntimeState.Stopped, "אין חשבון Google מחובר"),
             GoogleDriveFolderStatus.NoAccess =>
                 (SubsystemRuntimeState.Degraded, "לחשבון Google המחובר אין הרשאה לגשת אליה"),
+            GoogleDriveFolderStatus.NoWriteAccess =>
+                (SubsystemRuntimeState.Degraded, $"אין הרשאת כתיבה — {name}"),
             GoogleDriveFolderStatus.NotFound =>
                 (SubsystemRuntimeState.Degraded, "התיקייה לא נמצאה"),
             GoogleDriveFolderStatus.InvalidType =>
@@ -171,6 +176,8 @@ public sealed class GoogleTemplatesFolderStatusContributor(
 
     protected override bool ExpectSpreadsheets => true;
 
+    protected override bool RequireWriteAccess => false;
+
     protected override string ResolveFolderId(InspectionSystemSettingsDto inspection) =>
         inspection.InspectionTemplatesFolderId;
 }
@@ -186,6 +193,94 @@ public sealed class GoogleReportsFolderStatusContributor(
 
     protected override bool ExpectSpreadsheets => false;
 
+    protected override bool RequireWriteAccess => true;
+
     protected override string ResolveFolderId(InspectionSystemSettingsDto inspection) =>
         inspection.InspectionReportsFolderId;
+}
+
+/// <summary>
+/// MasterPlan R01/R02/R03 Shared Drive write access — the exact probe report generation runs before
+/// creating sheets. Distinct from <see cref="GoogleReportsFolderStatusContributor"/> which covers
+/// the Inspection reports folder id.
+/// </summary>
+public sealed class MasterPlanReportsDriveStatusContributor(
+    GmailOptions options,
+    IGoogleDriveFolderDiagnostics diagnostics) : ISubsystemStatusContributor
+{
+    public const string StatusKey = "masterplan-reports-drive";
+
+    private readonly GmailOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IGoogleDriveFolderDiagnostics _diagnostics =
+        diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+
+    public string Key => StatusKey;
+
+    public string DisplayNameHe => "Shared Drive לדוחות MasterPlan";
+
+    public async Task<SubsystemRuntimeStatus> ContributeAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_options.IsReportsConfigured)
+        {
+            return new SubsystemRuntimeStatus(
+                Key,
+                DisplayNameHe,
+                SubsystemRuntimeState.NotConfigured,
+                null,
+                "GoogleReports לא מוגדר (SharedDriveId / RootReportsFolderId)",
+                DateTimeOffset.UtcNow);
+        }
+
+        var driveResult = await _diagnostics
+            .DiagnoseSharedDriveWriteAsync(_options.EffectiveReportsSharedDriveId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (driveResult.Status != GoogleDriveFolderStatus.Ok)
+        {
+            var (driveState, driveSummary) = driveResult.Status switch
+            {
+                GoogleDriveFolderStatus.NoWriteAccess =>
+                    (SubsystemRuntimeState.Degraded, "אין הרשאות כתיבה ל-Shared Drive"),
+                GoogleDriveFolderStatus.NotAuthenticated =>
+                    (SubsystemRuntimeState.Stopped, "אין חשבון Google מחובר"),
+                GoogleDriveFolderStatus.NotConfigured =>
+                    (SubsystemRuntimeState.NotConfigured, "מזהה Shared Drive לא הוגדר"),
+                GoogleDriveFolderStatus.NoAccess or GoogleDriveFolderStatus.NotFound =>
+                    (SubsystemRuntimeState.Degraded, "אין גישה ל-Shared Drive"),
+                _ =>
+                    (SubsystemRuntimeState.Degraded, $"שגיאה: {driveResult.TechnicalDetails}"),
+            };
+            return new SubsystemRuntimeStatus(Key, DisplayNameHe, driveState, null, driveSummary, DateTimeOffset.UtcNow);
+        }
+
+        // Shared Drive write ≠ root-folder write. Generation creates under ReportsRootFolderId.
+        var rootResult = await _diagnostics
+            .DiagnoseAsync(
+                _options.ReportsRootFolderId,
+                expectSpreadsheets: false,
+                requireWriteAccess: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var (state, summary) = rootResult.Status switch
+        {
+            GoogleDriveFolderStatus.Ok =>
+                (SubsystemRuntimeState.Idle,
+                    string.IsNullOrWhiteSpace(driveResult.FolderName)
+                        ? "יש הרשאת כתיבה ל-Shared Drive ולתיקיית הדוחות"
+                        : $"יש הרשאת כתיבה — {driveResult.FolderName}"),
+            GoogleDriveFolderStatus.NoWriteAccess =>
+                (SubsystemRuntimeState.Degraded, "אין הרשאת כתיבה לתיקיית שורש הדוחות (RootReportsFolderId)"),
+            GoogleDriveFolderStatus.NotAuthenticated =>
+                (SubsystemRuntimeState.Stopped, "אין חשבון Google מחובר"),
+            GoogleDriveFolderStatus.NotConfigured =>
+                (SubsystemRuntimeState.NotConfigured, "RootReportsFolderId לא הוגדר"),
+            GoogleDriveFolderStatus.NoAccess or GoogleDriveFolderStatus.NotFound =>
+                (SubsystemRuntimeState.Degraded, "אין גישה לתיקיית שורש הדוחות"),
+            _ =>
+                (SubsystemRuntimeState.Degraded, $"שגיאה בתיקיית שורש הדוחות: {rootResult.TechnicalDetails}"),
+        };
+
+        return new SubsystemRuntimeStatus(Key, DisplayNameHe, state, null, summary, DateTimeOffset.UtcNow);
+    }
 }

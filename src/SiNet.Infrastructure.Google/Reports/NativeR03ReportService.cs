@@ -45,8 +45,14 @@ public sealed class NativeR03ReportService(
             var sheets = new NativeGoogleSheetsWriter(sheetsApi, _options.ReportsBatchSize, _options.ReportsBatchDelayMs);
 
             progress?.Report(("access", "בודק הרשאות...", 10));
-            if (!await drive.CheckWriteAccessAsync(cancellationToken).ConfigureAwait(false))
-                return MasterPlanReportGenerationResult.Fail("אין הרשאות כתיבה ל-Shared Drive.");
+            var writeDenied = await drive
+                .GetWriteAccessFailureReasonAsync(_options.ReportsRootFolderId, cancellationToken)
+                .ConfigureAwait(false);
+            if (writeDenied is not null)
+            {
+                _logger.Warn($"[R03] {writeDenied}");
+                return MasterPlanReportGenerationResult.Fail(writeDenied);
+            }
 
             progress?.Report(("data", "מושך נתוני נוכחות ודיווח...", 15));
             var attendanceTask = _data.GetAttendanceHoursAsync(request, cancellationToken);
@@ -145,7 +151,8 @@ public sealed class NativeR03ReportService(
     {
         var tab = string.IsNullOrWhiteSpace(emp.Name) ? $"Employee_{emp.Id}" : emp.Name;
         await sheets.EnsureSheetExistsAsync(spreadsheetId, tab, cancellationToken).ConfigureAwait(false);
-        await sheets.ClearRangeAsync(spreadsheetId, NativeGoogleSheetsWriter.BuildRange(tab, "A:F"), cancellationToken)
+        // Bound clear — do not clear A:F on a huge pre-allocated grid (API cell churn).
+        await sheets.ClearRangeAsync(spreadsheetId, NativeGoogleSheetsWriter.BuildRange(tab, "A1:F200"), cancellationToken)
             .ConfigureAwait(false);
         await sheets.WriteHeadersAsync(
                 spreadsheetId,
@@ -189,7 +196,7 @@ public sealed class NativeR03ReportService(
     {
         const string tab = "סיכום";
         await sheets.EnsureSheetExistsAsync(spreadsheetId, tab, cancellationToken).ConfigureAwait(false);
-        await sheets.ClearRangeAsync(spreadsheetId, NativeGoogleSheetsWriter.BuildRange(tab, "A:D"), cancellationToken)
+        await sheets.ClearRangeAsync(spreadsheetId, NativeGoogleSheetsWriter.BuildRange(tab, "A1:D200"), cancellationToken)
             .ConfigureAwait(false);
 
         await sheets.WriteValuesAsync(

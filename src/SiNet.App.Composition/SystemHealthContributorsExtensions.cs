@@ -34,6 +34,7 @@ public static class SystemHealthContributorsExtensions
         services.AddSingleton<ISubsystemStatusContributor, GmailReachabilityStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, GoogleTemplatesFolderStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, GoogleReportsFolderStatusContributor>();
+        services.AddSingleton<ISubsystemStatusContributor, MasterPlanReportsDriveStatusContributor>();
 
         services.AddSingleton<ISubsystemStatusContributor, AutodeskTokenStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, AccServiceStatusContributor>();

@@ -118,5 +118,6 @@ public sealed class NewShellSystemStatusMenuTests
         public IReadOnlyList<SubsystemRuntimeStatus> Current { get; } = current;
         public event EventHandler? Changed;
         public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void StartPeriodicRefresh() { }
     }
 }
