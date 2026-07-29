@@ -44,8 +44,35 @@ public sealed class R01PortfolioRowSheetLayoutTests
     [Fact]
     public void WhenReplicaTotalHoursIsTimeSpanThenConvertHoursRawReturnsDecimalHours()
     {
-        var converted = SiNet.Infrastructure.Sql.Services.MasterPlan.Reports.SqlR02ReportDataSource
-            .ConvertHoursRaw(TimeSpan.FromHours(2.5));
+        var converted = SqlR02ReportDataSource.ConvertHoursRaw(TimeSpan.FromHours(2.5));
         Assert.Equal(2.5m, converted);
+    }
+
+    [Fact]
+    public void WhenHoursRawIsMasterPlanMinutesThenConvertToDecimalHours()
+    {
+        // dbo.HoursReports.Hours stores minutes (120 → 2.00 hours).
+        Assert.Equal(2.00m, SqlR02ReportDataSource.ConvertHoursRaw(120m));
+    }
+
+    [Fact]
+    public void WhenHoursRawIsScaledTicksThenConvertToDecimalHours()
+    {
+        // Bug: 2h TimeSpan ticks / 1e6 leaked as 72_000 into the sheet.
+        Assert.Equal(2.00m, SqlR02ReportDataSource.ConvertHoursRaw(72_000m));
+    }
+
+    [Fact]
+    public void WhenHoursRawIsCorruptButStartEndExistThenPreferRange()
+    {
+        var start = TimeSpan.FromHours(9);
+        var end = TimeSpan.FromHours(11);
+        Assert.Equal(2.00m, SqlR02ReportDataSource.ConvertHoursRaw(72_000m, start, end));
+    }
+
+    [Fact]
+    public void WhenHoursRawIsDotNetTicksThenConvertToDecimalHours()
+    {
+        Assert.Equal(2.00m, SqlR02ReportDataSource.ConvertHoursRaw(TimeSpan.FromHours(2).Ticks));
     }
 }

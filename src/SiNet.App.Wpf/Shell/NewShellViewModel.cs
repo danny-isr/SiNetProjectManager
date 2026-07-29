@@ -107,7 +107,7 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Header branding inside the shell chrome (not the OS window title).</summary>
-    public string Title => "SiNet — מערכת חדשה";
+    public string Title => "שיא חדש בע״מ";
 
     /// <summary>OS window title; reflects the shared current project when selected.</summary>
     public string WindowTitle
@@ -116,8 +116,8 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
         private set => SetField(ref _windowTitle, value);
     }
 
-    /// <summary>Header sub-label describing this is the isolated new-system shell.</summary>
-    public string HeaderSubtitle => "מעטפת נקייה (ללא המערכת הישנה)";
+    /// <summary>Header sub-label — company product line for the New System shell.</summary>
+    public string HeaderSubtitle => "מנהל פרויקטים · המערכת החדשה";
 
     /// <summary>The migrated-only menu shown by the shell. Never the legacy menu.</summary>
     public ObservableCollection<NewShellMenuItem> MenuItems { get; }

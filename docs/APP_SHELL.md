@@ -72,6 +72,13 @@ Rules:
 [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md). The V2 New System path is
 **deprecated** (still runnable for pilot fallback; logs a deprecation warning).
 
+**Branding (standalone):** User-facing brand is Hebrew **שיא חדש בע״מ** (not English “SiNet” /
+“SI”). Assets: `logo_si.jpg` (full company logo), `shia-chadash-mark.png` (road-in-circle mark),
+`sinet.ico` (ApplicationIcon built from that mark). `StartupSplashWindow` shows the company logo
+during vault/schema/auth; `NewShellWindow` header uses the road circle + “שיא חדש בע״מ”.
+`StartupModeSelectionWindow` (V2 host) uses the same mark after
+`ThemeResourceLoader.EnsureApplicationResourcesMerged()`.
+
 The legacy host (`SiNetProjectManagerV2`) remains the process entry point for **Legacy mode**.
 Startup is **code-driven** (no XAML `StartupUri`) in each host's `App.xaml.cs`.
 

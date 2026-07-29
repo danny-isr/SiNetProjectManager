@@ -231,12 +231,12 @@ Logging applier remains separate — appearance preview/save does **not** call `
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow`, `ProjectSelectorView`, `ProjectWorkWindowView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
+`NewShellWindow`, `ProjectSelectorView`, `ProjectWorkWindowView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome), `StartupModeSelectionWindow` (theme buttons + SiNet mark). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
 
 **Intentional exceptions (keep hardcoded):**
 
-- `StartupModeSelectionWindow`
 - Email/Inspection **title-bar brand chrome** (`#1976D2` / `#2E7D32` + on-primary text)
+- Splash surfaces (`StartupSplashWindow`, V2 `SplashWindow`) use fixed SiNet brand teal `#0B6E99` (not live theme)
 - Semantic row tints in User Management DataGrid
 - Workflow **node/legend** colors and status chips (email / quote / inspection banners)
 - Tree state colors in ProjectWork (physical / missing / type / empty)

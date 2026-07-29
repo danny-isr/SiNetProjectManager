@@ -91,6 +91,8 @@
     </Resource>
     <Resource Include="Assets\folder_user.png" />
     <Resource Include="Assets\si.ico" />
+    <Resource Include="Assets\sinet.ico" />
+    <Resource Include="Assets\shia-chadash-mark.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\logo_si.jpg">

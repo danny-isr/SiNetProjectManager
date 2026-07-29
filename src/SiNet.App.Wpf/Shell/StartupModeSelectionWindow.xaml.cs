@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Shell;
 
@@ -11,6 +12,8 @@ public partial class StartupModeSelectionWindow : Window
 
     public StartupModeSelectionWindow()
     {
+        // V2 host App.xaml does not merge App.Wpf theme dictionaries — ensure Si* resources exist.
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
         InitializeComponent();
         DataContext = _viewModel;
     }

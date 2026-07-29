@@ -7,7 +7,17 @@
 	<Nullable>enable</Nullable>
 	<UseWPF>true</UseWPF>
 	<RootNamespace>SiNet.App.Wpf</RootNamespace>
+	<ApplicationIcon>Assets\sinet.ico</ApplicationIcon>
+	<AssemblyTitle>שיא חדש — מנהל פרויקטים</AssemblyTitle>
+	<Product>שיא חדש — מנהל פרויקטים</Product>
+	<Company>שיא חדש בע״מ</Company>
   </PropertyGroup>
+
+  <ItemGroup>
+	<Resource Include="Assets\sinet.ico" />
+	<Resource Include="Assets\shia-chadash-mark.png" />
+	<Resource Include="Assets\logo_si.jpg" />
+  </ItemGroup>
 
   <ItemGroup>
 	<InternalsVisibleTo Include="SiNet.App.Wpf.Tests" />

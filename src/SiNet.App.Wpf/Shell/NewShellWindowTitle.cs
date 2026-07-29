@@ -5,7 +5,7 @@ namespace SiNet.App.Wpf.Shell;
 /// <summary>Formats the New System shell window title from the shared project context.</summary>
 public static class NewShellWindowTitle
 {
-    public const string BaseTitle = "SiNet Project Manager — New System";
+    public const string BaseTitle = "שיא חדש — מנהל פרויקטים";
 
     public static string Format(ProjectSummaryDto? project)
     {

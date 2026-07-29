@@ -119,7 +119,6 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
                 start,
                 end.Date.AddDays(1),
                 "MasterPlan",
-                convertHours: false,
                 cancellationToken)
             .ConfigureAwait(false);
     }
@@ -138,10 +137,10 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
             .ConfigureAwait(false);
 
         string sql;
-        bool convertHours;
         if (useExtended)
         {
-            convertHours = false; // Duration is already decimal hours
+            // HoursRaw: valid Duration (decimal hours 0–24), else TotalHours (TIME/TimeSpan).
+            // Never ISNULL(Duration,0) — that hid TotalHours/start-end fallbacks.
             sql =
                 """
                 SELECT
@@ -149,7 +148,10 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
                   CAST(ph.ReportDate AS date),
                   ph.StartTime,
                   ph.EndTime,
-                  ISNULL(ph.Duration, 0),
+                  CASE
+                    WHEN ph.Duration IS NOT NULL AND ph.Duration >= 0 AND ph.Duration <= 24 THEN ph.Duration
+                    ELSE NULL
+                  END,
                   ph.Description,
                   ph.EmployeeID,
                   COALESCE(
@@ -164,7 +166,8 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
                   CAST(NULL AS nvarchar(50)),
                   ph.SubContractName,
                   ph.SubContractStepID,
-                  COALESCE(ph.SubContractStepName, ph.StepName)
+                  COALESCE(ph.SubContractStepName, ph.StepName),
+                  ph.TotalHours
                 FROM MP_ProjectHoursExtended ph
                 LEFT JOIN MP_Employees e ON ph.EmployeeID = e.ID
                 LEFT JOIN MP_Projects p ON ph.ProjectID = p.ID
@@ -174,7 +177,6 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         }
         else
         {
-            convertHours = true;
             sql =
                 """
                 SELECT
@@ -210,8 +212,8 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
                 start,
                 end.Date.AddDays(1),
                 "Replica",
-                convertHours,
-                cancellationToken)
+                cancellationToken,
+                totalHoursOrdinal: useExtended ? 18 : null)
             .ConfigureAwait(false);
     }
 
@@ -268,8 +270,8 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         DateTime start,
         DateTime endExclusive,
         string source,
-        bool convertHours,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? totalHoursOrdinal = null)
     {
         await using var conn = new SqlConnection(cs);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -280,15 +282,25 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         var list = new List<R02HoursRow>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var hours = convertHours
-                ? ConvertHoursRaw(reader.IsDBNull(4) ? null : reader.GetValue(4))
-                : reader.IsDBNull(4) ? 0m : Math.Round(Convert.ToDecimal(reader.GetValue(4)), 2);
+            var startTime = ReadTimeSpan(reader, 2);
+            var endTime = ReadTimeSpan(reader, 3);
+            var hoursRaw = reader.IsDBNull(4) ? null : reader.GetValue(4);
+            // Extended: when Duration out of range / null, fall back to TotalHours TIME.
+            if (hoursRaw is null
+                && totalHoursOrdinal is int thOrd
+                && thOrd < reader.FieldCount
+                && !reader.IsDBNull(thOrd))
+            {
+                hoursRaw = reader.GetValue(thOrd);
+            }
+
+            var hours = ConvertHoursRaw(hoursRaw, startTime, endTime);
 
             list.Add(new R02HoursRow(
                 HourReportId: reader.IsDBNull(0) ? 0 : reader.GetInt32(0),
                 ReportDate: reader.GetDateTime(1),
-                StartTime: ReadTimeSpan(reader, 2),
-                EndTime: ReadTimeSpan(reader, 3),
+                StartTime: startTime,
+                EndTime: endTime,
                 Hours: hours,
                 Description: reader.IsDBNull(5) ? null : reader.GetString(5),
                 EmployeeId: reader.IsDBNull(6) ? null : reader.GetInt32(6),
@@ -322,24 +334,99 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         };
     }
 
-    /// <summary>Replica TotalHours may be TimeSpan, ticks, or decimal — match GoogleConnector conversion.</summary>
-    internal static decimal ConvertHoursRaw(object? hoursRaw)
+    /// <summary>
+    /// Converts DB hours payloads to decimal hours (parity with GoogleConnector R02ReportService).
+    /// Handles TimeSpan, decimal hours, minutes, milliseconds, and .NET ticks; falls back to start/end.
+    /// </summary>
+    internal static decimal ConvertHoursRaw(
+        object? hoursRaw,
+        TimeSpan? startTime = null,
+        TimeSpan? endTime = null)
     {
         if (hoursRaw is null or DBNull)
-            return 0m;
+            return CalculateFromStartEnd(startTime, endTime);
+
         if (hoursRaw is TimeSpan ts)
             return Math.Round((decimal)ts.TotalHours, 2);
-        if (hoursRaw is decimal d)
-            return Math.Round(d, 2);
-        if (hoursRaw is double dbl)
-            return Math.Round((decimal)dbl, 2);
-        if (hoursRaw is float f)
-            return Math.Round((decimal)f, 2);
-        if (hoursRaw is long ticks)
-            return Math.Round((decimal)TimeSpan.FromTicks(ticks).TotalHours, 2);
-        if (hoursRaw is int i)
-            return Math.Round((decimal)TimeSpan.FromTicks(i).TotalHours, 2);
 
-        return Math.Round(Convert.ToDecimal(hoursRaw), 2);
+        var numericValue = hoursRaw switch
+        {
+            long l => l,
+            decimal d => d,
+            double dbl => (decimal)dbl,
+            float f => (decimal)f,
+            int i => i,
+            short s => s,
+            byte b => b,
+            _ => TryParseToDecimal(hoursRaw),
+        };
+
+        return ConvertNumericToHours(numericValue, startTime, endTime);
+    }
+
+    /// <summary>Heuristic conversion matching legacy GoogleConnector (plus start/end before ms).</summary>
+    private static decimal ConvertNumericToHours(decimal value, TimeSpan? startTime, TimeSpan? endTime)
+    {
+        const decimal MillisecondsPerHour = 3_600_000m;
+        const decimal TicksPerHour = 36_000_000_000m;
+        // TIME/ticks sometimes leak as Ticks/1e6 (2h → 72_000).
+        const decimal ScaledTicksPerHour = 36_000m;
+        const decimal MaxReasonableHours = 24m;
+        const decimal MinMilliseconds = 60_000m;
+        const decimal MaxMilliseconds = 86_400_000m;
+        const decimal MinTicks = 36_000_000_000m;
+
+        var absValue = Math.Abs(value);
+
+        if (absValue <= MaxReasonableHours)
+            return Math.Round(value, 2);
+
+        if (absValue >= MinTicks)
+            return Math.Round(value / TicksPerHour, 2);
+
+        // Prefer wall-clock duration when the raw number is clearly not decimal-hours.
+        var fromRange = CalculateFromStartEnd(startTime, endTime);
+        if (fromRange > 0)
+            return fromRange;
+
+        // Scaled ticks (Ticks / 1_000_000): 2h → 72_000. Check before ms (72_000 is also in ms range).
+        if (absValue >= ScaledTicksPerHour)
+        {
+            var scaledHours = absValue / ScaledTicksPerHour;
+            if (scaledHours <= MaxReasonableHours)
+                return Math.Round(value / ScaledTicksPerHour, 2);
+        }
+
+        if (absValue >= MinMilliseconds && absValue <= MaxMilliseconds)
+            return Math.Round(value / MillisecondsPerHour, 2);
+
+        // MasterPlan HoursReports.Hours is raw minutes.
+        if (absValue > MaxReasonableHours && absValue < MinMilliseconds)
+            return Math.Round(value / 60m, 2);
+
+        return Math.Round(value, 2);
+    }
+
+    private static decimal CalculateFromStartEnd(TimeSpan? startTime, TimeSpan? endTime)
+    {
+        if (!startTime.HasValue || !endTime.HasValue)
+            return 0m;
+
+        var duration = endTime.Value - startTime.Value;
+        if (duration < TimeSpan.Zero)
+            duration = duration.Add(TimeSpan.FromHours(24));
+
+        if (duration <= TimeSpan.Zero)
+            return 0m;
+
+        var hours = (decimal)duration.TotalHours;
+        return hours > 24m ? 0m : Math.Round(hours, 2);
+    }
+
+    private static decimal TryParseToDecimal(object? value)
+    {
+        if (value is null)
+            return 0m;
+        return decimal.TryParse(Convert.ToString(value), out var parsed) ? parsed : 0m;
     }
 }

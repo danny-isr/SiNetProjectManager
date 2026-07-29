@@ -19,7 +19,7 @@ public sealed class NewShellWindowTitleTests
     {
         var title = NewShellWindowTitle.Format(Project(1042, "1042", "מגדל השחר"));
 
-        Assert.Equal("SiNet Project Manager — New System — 1042 — מגדל השחר", title);
+        Assert.Equal("שיא חדש — מנהל פרויקטים — 1042 — מגדל השחר", title);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class NewShellWindowTitleTests
     {
         var title = NewShellWindowTitle.Format(Project(1, "", "  Alpha  "));
 
-        Assert.Equal("SiNet Project Manager — New System — Alpha", title);
+        Assert.Equal("שיא חדש — מנהל פרויקטים — Alpha", title);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class NewShellWindowTitleTests
     {
         var title = NewShellWindowTitle.Format(Project(2, " 5678 ", ""));
 
-        Assert.Equal("SiNet Project Manager — New System — 5678", title);
+        Assert.Equal("שיא חדש — מנהל פרויקטים — 5678", title);
     }
 
     [Fact]
@@ -45,10 +45,10 @@ public sealed class NewShellWindowTitleTests
         var vm = CreateViewModel(context);
 
         await context.SetCurrentProjectAsync(Project(1, "1001", "Alpha"));
-        Assert.Equal("SiNet Project Manager — New System — 1001 — Alpha", vm.WindowTitle);
+        Assert.Equal("שיא חדש — מנהל פרויקטים — 1001 — Alpha", vm.WindowTitle);
 
         await context.SetCurrentProjectAsync(Project(2, "2002", "Beta"));
-        Assert.Equal("SiNet Project Manager — New System — 2002 — Beta", vm.WindowTitle);
+        Assert.Equal("שיא חדש — מנהל פרויקטים — 2002 — Beta", vm.WindowTitle);
     }
 
     [Fact]

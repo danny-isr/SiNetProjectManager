@@ -65,66 +65,91 @@ public partial class App : System.Windows.Application
         _ = e;
         _configuration = BuildConfiguration();
 
-        StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System host starting (SiNet.App.Wpf).");
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        var splash = new StartupSplashWindow();
+        splash.Show();
+        splash.SetStatus("מתחיל את מנהל הפרויקטים של שיא חדש...");
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
 
-        if (!await EnsureVaultDatabaseReadyAsync().ConfigureAwait(true))
+        try
         {
-            StandaloneHostLoggingBootstrap.Warning("[STARTUP] Vault/DB secret not configured. Shutting down.");
-            Shutdown();
-            return;
+            StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System host starting (SiNet.App.Wpf).");
+
+            splash.SetStatus("בודק כספת סודות ומסד נתונים...");
+            // Vault setup may open a modal dialog — hide splash so it cannot cover the UI.
+            splash.Hide();
+            var vaultReady = await EnsureVaultDatabaseReadyAsync().ConfigureAwait(true);
+            if (!vaultReady)
+            {
+                StandaloneHostLoggingBootstrap.Warning("[STARTUP] Vault/DB secret not configured. Shutting down.");
+                Shutdown();
+                return;
+            }
+
+            splash.Show();
+            splash.SetStatus("מתחבר לשירותים...");
+
+            var sqlConnectionString = ResolveSqlConnectionStringFromVault()
+                ?? throw new InvalidOperationException(
+                    "SiNet database connection string is missing from the Credential Vault after setup.");
+
+            // Phase 2 logging: adds the central network sink from DB settings. Must run before the
+            // provider is built — the logging adapter captures the host logger in its constructor.
+            StandaloneHostLoggingBootstrap.ConfigureCentral(sqlConnectionString);
+
+            splash.SetStatus("טוען שירותים...");
+            var services = new ServiceCollection();
+            services.AddSiNetStandaloneHost(
+                _configuration,
+                sqlConnectionString,
+                ConfigureGmail,
+                ConfigureSqlDiagnostics);
+
+            _services = services.BuildServiceProvider();
+
+            StartConnectorAuthRestore();
+
+            splash.SetStatus("מאמת סכמת מסד...");
+            StandaloneHostLoggingBootstrap.Info("[STARTUP] Schema gate...");
+            if (!await ValidateSchemaAsync().ConfigureAwait(true))
+            {
+                Shutdown();
+                return;
+            }
+
+            splash.SetStatus("מאמת משתמש...");
+            StandaloneHostLoggingBootstrap.Info("[STARTUP] Authorizing Windows user...");
+            var authenticator = _services.GetRequiredService<SqlWindowsCurrentUserAuthenticator>();
+            if (!await authenticator.TryAuthenticateAsync(_shutdownCts.Token).ConfigureAwait(true))
+            {
+                MessageBox.Show(
+                    "המשתמש הנוכחי אינו מורשה להשתמש במערכת.\nנא לפנות למנהל המערכת.",
+                    "אין הרשאה",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown();
+                return;
+            }
+
+            splash.SetStatus("מחיל הגדרות...");
+            await ApplySavedUserSettingsAsync().ConfigureAwait(true);
+            await ApplyAccHostConfigFromSystemSettingsAsync().ConfigureAwait(true);
+
+            splash.SetStatus("פותח את המעטפת...");
+            StandaloneHostLoggingBootstrap.Info("[STARTUP] Opening NewShell...");
+            var factory = _services.GetRequiredService<INewShellFactory>();
+            var shell = await factory.CreateShellAsync(_shutdownCts.Token).ConfigureAwait(true);
+
+            MainWindow = shell;
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            shell.Show();
+
+            StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System ready.");
         }
-
-        var sqlConnectionString = ResolveSqlConnectionStringFromVault()
-            ?? throw new InvalidOperationException(
-                "SiNet database connection string is missing from the Credential Vault after setup.");
-
-        // Phase 2 logging: adds the central network sink from DB settings. Must run before the
-        // provider is built — the logging adapter captures the host logger in its constructor.
-        StandaloneHostLoggingBootstrap.ConfigureCentral(sqlConnectionString);
-
-        var services = new ServiceCollection();
-        services.AddSiNetStandaloneHost(
-            _configuration,
-            sqlConnectionString,
-            ConfigureGmail,
-            ConfigureSqlDiagnostics);
-
-        _services = services.BuildServiceProvider();
-
-        StartConnectorAuthRestore();
-
-        StandaloneHostLoggingBootstrap.Info("[STARTUP] Schema gate...");
-        if (!await ValidateSchemaAsync().ConfigureAwait(true))
+        finally
         {
-            Shutdown();
-            return;
+            splash.Close();
         }
-
-        StandaloneHostLoggingBootstrap.Info("[STARTUP] Authorizing Windows user...");
-        var authenticator = _services.GetRequiredService<SqlWindowsCurrentUserAuthenticator>();
-        if (!await authenticator.TryAuthenticateAsync(_shutdownCts.Token).ConfigureAwait(true))
-        {
-            MessageBox.Show(
-                "המשתמש הנוכחי אינו מורשה להשתמש במערכת.\nנא לפנות למנהל המערכת.",
-                "אין הרשאה",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            Shutdown();
-            return;
-        }
-
-        await ApplySavedUserSettingsAsync().ConfigureAwait(true);
-        await ApplyAccHostConfigFromSystemSettingsAsync().ConfigureAwait(true);
-
-        StandaloneHostLoggingBootstrap.Info("[STARTUP] Opening NewShell...");
-        var factory = _services.GetRequiredService<INewShellFactory>();
-        var shell = await factory.CreateShellAsync(_shutdownCts.Token).ConfigureAwait(true);
-
-        MainWindow = shell;
-        ShutdownMode = ShutdownMode.OnMainWindowClose;
-        shell.Show();
-
-        StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System ready.");
     }
 
     private async Task<bool> EnsureVaultDatabaseReadyAsync()
