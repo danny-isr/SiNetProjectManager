@@ -45,6 +45,26 @@ Settings UI is deferred; ports are in `SiNet.Application.Settings` — see [`SET
 `SiNet.Infrastructure.Logging` (B1 AccService decoupling). Hosts (V2, AccService,
 MasterPlan.SyncEngine) call that module at bootstrap via ProjectReference.
 
+### 2.1 Central sink per host — actual state (2026-07-29)
+
+| Process | Calls `AddSiNetCentralLogging` | Local sink | Central (network) sink |
+| --- | --- | --- | --- |
+| `SiNetProjectManagerV2` (Legacy) | Yes — `App.xaml.cs` | Level via `AppLogger.FileLevelSwitch` | Yes, own `CentralMinLevel` |
+| `SiOffice.AccService` | Yes — `Program.cs` | Yes | Yes |
+| `MasterPlan.SyncEngine` | Yes — `Program.cs` | Yes | Yes |
+| **`SiNet.App.Wpf` (standalone pilot)** | **No** | Only sink that exists | **None** |
+
+`StandaloneHostLoggingBootstrap` builds a **single local file sink** and no central sink. It also has
+**no level switch**: `ApplyUserLogging` rebuilds `Log.Logger` with `MinimumLevel.Is(Fatal)` when the
+user toggle is off, which silences the whole pipeline rather than only the local sink.
+
+Observed consequence (verified 2026-07-29): with the default `LoggingEnabled = false`
+(`UserAppSettingsDefaults`), the standalone log stops at `User authorized` — `Opening NewShell...`
+and `Standalone New System ready.` are never written even though startup succeeds. The log is
+indistinguishable from a crash after login, and a pilot user produces **no diagnostics at all**.
+
+Target state: [§9](#9-standalone-host-central-logging--target-state).
+
 ---
 
 ## 3. Application port
@@ -111,6 +131,7 @@ Enforced by `NewSystemLoggingBoundaryTests.cs`, `ErrorHandlingSafetyNetTests.cs`
 
 | Item | Target |
 | --- | --- |
+| Standalone host central sink + level switch | **Done (2026-07-29)** — see [§9](#9-standalone-host-central-logging--target-state) |
 | Extract `CentralLogging` bootstrap | **Done (B1)** — `SiNet.Infrastructure.Logging`; SyncEngine Shared copy still pending |
 | Migrate `AppLogger.*` call sites | Gradual; or shim delegating to `IAppLogger` |
 | Native settings surface | `IAppSettingsService` for logging toggle / directory |
@@ -125,3 +146,81 @@ No schema / migration changes in Stage 4.
 - [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) — no legacy logger in App.Wpf
 - [`APP_SHELL.md`](./APP_SHELL.md) §11 — settings mechanisms (logging toggle today in legacy `SettingsWindow`)
 - [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) — Logging domain / D2 composition gate
+- [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) — pilot envelope (diagnosability)
+
+---
+
+## 9. Standalone host central logging — target state
+
+> **Status:** Implemented (2026-07-29).
+> **Applies to:** `SiNet.App.Wpf` (`SiNetHostMode.StandaloneNew`).
+> **Guards:** `StandaloneHostLoggingBootstrapTests` (`src/SiNet.App.Wpf.Tests/Logging`).
+> **Verified live:** `CentralEnabled=true`, probe write into
+> `\\si-win-2k19\AutoCAD Data\log\Client\<machine>\<user>` succeeded.
+
+### 9.1 Principles
+
+1. **The central (network) sink is not user-controllable.** It is an operations channel. A per-user
+   toggle must never be able to silence it. Only the DB key `Logging.Client.CentralLevel` governs it.
+2. **The local sink is user-controllable.** `LoggingEnabled` / `LogDirectory` affect the local file only.
+3. **The toggle moves a level switch — it does not rebuild the pipeline.** Rebuilding `Log.Logger`
+   drops every other sink; that is the current defect.
+4. **Serilog stays out of `SiNet.App.Wpf`.** Enforced by `NewSystemLoggingBoundaryTests`
+   (`App_Wpf_csproj_does_not_reference_serilog_packages`). All wiring lives in
+   `SiNet.Infrastructure.Logging`; the host calls named bootstrap methods only.
+
+### 9.2 Two-phase bootstrap
+
+The central config is DB-driven, but the SQL connection string only becomes available after the
+vault gate. So the host logger boots twice, by design:
+
+| Phase | When | Sinks |
+| --- | --- | --- |
+| **1 — local fallback** | `App.xaml.cs` `OnStartup`, before the vault gate | Local file only, Debug — so vault/DB failures are still recorded |
+| **2 — full pipeline** | Right after the SQL connection string is resolved, before composition | Local (level switch) + central network, per `CentralLoggingSettings.LoadFromDatabase` |
+
+```text
+ConfigureDefault()                       → phase 1 (unchanged)
+ConfigureCentral(sqlConnectionString)    → phase 2 (new)
+ApplyUserLogging(settings)               → moves the local level switch only
+```
+
+### 9.3 Application identity
+
+Standalone reuses **`SiNetApp.Client`**, not a new enum value:
+
+- `Logging.Client.FileLevel` / `Logging.Client.CentralLevel` rows already exist and are managed by
+  the Admin UI. A new `SiNetApp` member would fall through `LoadFromDatabase`'s `_ => string.Empty`
+  branch and become silently non-configurable.
+- `SiNet.App.Wpf` replaces `SiNetProjectManagerV2` as *the* client, so one identity is correct.
+- Both sinks already use `shared: true`, so V2 and App.Wpf may write concurrently during the
+  transition.
+- To keep the two hosts distinguishable, phase 2 adds `Enrich.WithProperty("Host", "SiNet.App.Wpf")`
+  on top of the shared `App` / `Machine` / `User` / `ProcessId` enrichers.
+
+### 9.4 Operational side effects
+
+| Before | After |
+| --- | --- |
+| Local file `SiNet-Standalone-yyyyMMdd.log` | `Client-yyyyMMdd.log` — `AddSiNetCentralLogging` derives the prefix from `SiNetApp` |
+| Local directory `%LOCALAPPDATA%\SiNet\Logs` | Unchanged (passed explicitly as `LocalLogDirectory`) |
+| No central file | `<CentralLogPath>\Client\<machine>\<user>\Client-yyyyMMdd.log` |
+| Plain message lines | Shared output template with `App` / `Machine` / `User` / `ProcessId` / `ThreadId` |
+
+Old `SiNet-Standalone-*.log` files are left in place; they are not migrated or deleted. The central
+file only materialises on the first Warning/Error, because `Logging.Client.CentralLevel` is
+`Warning` by default — an Information-only session legitimately produces no central file.
+
+### 9.5 Effect on the pilot
+
+Once implemented, the default `LoggingEnabled = false` stops being a diagnosability problem: the
+local file stays quiet, while the central share keeps receiving Warning/Error from every pilot user.
+The default itself does **not** need to change.
+
+### 9.6 Out of scope
+
+- Changing `UserAppSettingsDefaults.LoggingEnabled`
+- Changing the central path default or retention
+- Touching V2 / AccService / SyncEngine bootstrap
+- The duplicated `LogDirectory` / `logDirectory` keys written by `JsonAppSettingsService.WriteDto`
+  (tracked separately; harmless to `System.Text.Json`, breaks case-insensitive readers)

@@ -65,6 +65,11 @@ public static class SiNetCompositionExtensions
         if (hostMode == SiNetHostMode.StandaloneNew)
         {
             services.AddSiNetAccInboxBootstrapLocal();
+
+            // The «מצב מערכת» rows the legacy bridge provides in V2 (docs/SYSTEM_HEALTH.md).
+            // AddSiNetAi backs the Ollama row; V2Hybrid registers it in its own graph.
+            services.AddSiNetAi();
+            services.AddSiNetSystemHealthContributors();
         }
 
         if (hostMode == SiNetHostMode.V2Hybrid)

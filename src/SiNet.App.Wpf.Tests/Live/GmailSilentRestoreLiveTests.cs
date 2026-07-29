@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Common;
 using SiNet.Infrastructure.Google;
+using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using Xunit;
 
@@ -16,6 +17,7 @@ public sealed class GmailSilentRestoreLiveTests
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
         services.AddSingleton<IConfiguration>(configuration);
+        services.AddSiNetLogging();
         services.AddSiNetSecrets();
         services.AddSiNetGoogle(static options =>
         {

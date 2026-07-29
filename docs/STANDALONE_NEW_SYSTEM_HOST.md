@@ -87,7 +87,10 @@ Single-machine / offline-friendly Local mode for inbox ensure without AccService
 ## Slice 2 — out of scope
 
 - Inspection Sheets create/export parity
-- `IExternalHealthCheckSource`, `AddSiNetAi`
+- ~~`IExternalHealthCheckSource`, `AddSiNetAi`~~ — **superseded.** The eleven legacy health rows were
+  ported to `ISubsystemStatusContributor` instead of bridging the legacy stack, and the standalone
+  host now registers `AddSiNetAi()` to back the Ollama row. See [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md).
+  `IExternalHealthCheckSource` itself remains unregistered here and stays V2-only.
 - AccService ProjectReference removal from SiNetSQL (track **B**; B1 vault/logging done — see [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md))
 - Delete V2 New System startup / delete `LegacyHostLocalAccInboxBootstrapExecutor`
 - MasterPlan Shared de-vendor / rename `SiNetSQL.*` namespaces

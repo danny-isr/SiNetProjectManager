@@ -3,10 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Common;
 using SiNet.Application.Identity;
 using SiNet.Application.MasterPlan.Reports;
 using SiNet.Application.ProjectWork;
+using SiNet.Application.Runtime;
 using SiNet.Application.Settings;
 using Xunit;
 
@@ -55,7 +59,74 @@ public sealed class StandaloneHostCompositionTests
             Assert.NotNull(sp.GetRequiredService<IMasterPlanR02ReportService>());
             Assert.NotNull(sp.GetRequiredService<IMasterPlanR03ReportService>());
             Assert.NotNull(sp.GetRequiredService<IAccInboxBootstrapLocalExecutor>());
+
+            // Startup path: App.xaml.cs restores the Gmail session before the shell opens,
+            // so a missing logging/secrets registration here is a startup crash, not a lazy failure.
+            Assert.NotNull(sp.GetRequiredService<IAppLogger>());
+            Assert.NotNull(sp.GetRequiredService<IConnectorAuthService>());
+            Assert.NotNull(sp.GetRequiredService<IEmailGateway>());
+            Assert.NotNull(sp.GetRequiredService<IEmailSender>());
         });
+    }
+
+    /// <summary>
+    /// Resolves every non-generic registered service so a broken constructor or a missing
+    /// transitive registration surfaces here instead of as a runtime crash in the pilot.
+    /// </summary>
+    [Fact]
+    public async Task WhenAddSiNetStandaloneHostThenEveryRegisteredServiceResolves()
+    {
+        await RunOnStaThreadAsync(async () =>
+        {
+            var services = BuildStandaloneServices();
+            var serviceTypes = services
+                .Select(d => d.ServiceType)
+                .Where(t => !t.IsGenericTypeDefinition)
+                .Distinct()
+                .OrderBy(t => t.FullName, StringComparer.Ordinal)
+                .ToArray();
+
+            // Guards the sweep itself: if the graph stops being enumerable the test must fail
+            // rather than pass vacuously. 313 registrations at the time of writing.
+            Assert.True(
+                serviceTypes.Length >= 250,
+                $"Expected the standalone graph to expose 250+ service types, found {serviceTypes.Length}.");
+
+            await using var sp = services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateScopes = true,
+            });
+            using var scope = sp.CreateScope();
+
+            var failures = new List<string>();
+            foreach (var serviceType in serviceTypes)
+            {
+                try
+                {
+                    scope.ServiceProvider.GetService(serviceType);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{serviceType.FullName}: {Innermost(ex).Message}");
+                }
+            }
+
+            Assert.True(
+                failures.Count == 0,
+                $"{failures.Count}/{serviceTypes.Length} services failed to resolve:{Environment.NewLine}"
+                    + string.Join(Environment.NewLine, failures));
+        });
+    }
+
+    private static Exception Innermost(Exception exception)
+    {
+        var current = exception;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return current;
     }
 
     [Fact]
@@ -66,6 +137,42 @@ public sealed class StandaloneHostCompositionTests
         Assert.Contains(
             services,
             d => d.ServiceType == typeof(IAccInboxBootstrapLocalExecutor));
+    }
+
+    /// <summary>
+    /// The pilot host lost the eleven legacy health rows because it never registered the legacy
+    /// bridge (docs/SYSTEM_HEALTH.md §1.3). These are the ported replacements, and a silent
+    /// registration gap here shows up in production as a status panel that is quietly short of rows.
+    /// </summary>
+    [Fact]
+    public async Task WhenAddSiNetStandaloneHostThenEverySystemHealthContributorResolvesWithAUniqueKey()
+    {
+        await RunOnStaThreadAsync(async () =>
+        {
+            await using var sp = BuildStandaloneServices().BuildServiceProvider();
+
+            var contributors = sp.GetServices<ISubsystemStatusContributor>().ToList();
+            var keys = contributors
+                .Select(c => c.Key)
+                .OrderBy(k => k, StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(
+                [
+                    "InspectionReportsFolderId",
+                    "InspectionTemplatesFolderId",
+                    "acc-service",
+                    "autodesk-acc",
+                    "database",
+                    "file-server",
+                    "google",
+                    "google_account",
+                    "google_config",
+                    "ollama",
+                    "workflow",
+                ],
+                keys);
+        });
     }
 
     private static ServiceCollection BuildStandaloneServices()

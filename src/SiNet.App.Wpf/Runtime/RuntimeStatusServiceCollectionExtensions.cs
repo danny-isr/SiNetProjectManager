@@ -24,7 +24,8 @@ public static class RuntimeStatusServiceCollectionExtensions
                 sp.GetService<IEmailAccBackgroundWorkTracker>(),
                 sp.GetServices<IConnectorAuthService>(),
                 sp.GetService<IWorkflowAssigneeReadinessQueryService>(),
-                sp.GetService<INotificationDeliveryService>()));
+                sp.GetService<INotificationDeliveryService>(),
+                sp.GetServices<ISubsystemStatusContributor>()));
 
         return services;
     }

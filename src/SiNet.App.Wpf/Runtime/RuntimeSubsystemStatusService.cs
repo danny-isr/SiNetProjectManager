@@ -17,6 +17,12 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
     internal const string WorkflowAssigneeConfigMissingTemplate = "workflow-assignee-config-missing";
     internal const string WorkflowAssigneesKey = "workflow-assignees";
 
+    /// <summary>Default upper bound for a single contributor probe, so one unreachable share cannot stall the panel.</summary>
+    internal static readonly TimeSpan DefaultContributorTimeout = TimeSpan.FromSeconds(10);
+
+    private readonly TimeSpan _contributorTimeout;
+    private readonly IReadOnlyList<ISubsystemStatusContributor> _contributors;
+    private IReadOnlyList<SubsystemRuntimeStatus> _contributorRows = [];
     private readonly IExternalHealthCheckSource? _externalHealth;
     private readonly IAccServiceModeProvider? _accMode;
     private readonly IAccServiceHealthProbe? _accHealth;
@@ -39,9 +45,13 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
         IEmailAccBackgroundWorkTracker? accIngest = null,
         IEnumerable<IConnectorAuthService>? connectors = null,
         IWorkflowAssigneeReadinessQueryService? assigneeReadiness = null,
-        INotificationDeliveryService? notifications = null)
+        INotificationDeliveryService? notifications = null,
+        IEnumerable<ISubsystemStatusContributor>? contributors = null,
+        TimeSpan? contributorTimeout = null)
     {
         _startupTasks = startupTasks ?? throw new ArgumentNullException(nameof(startupTasks));
+        _contributors = contributors?.ToList() ?? [];
+        _contributorTimeout = contributorTimeout ?? DefaultContributorTimeout;
         _externalHealth = externalHealth;
         _accMode = accMode;
         _accHealth = accHealth;
@@ -98,10 +108,61 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
         }
 
         await RefreshAssigneeReadinessAsync(cancellationToken).ConfigureAwait(false);
+        await RefreshContributorsAsync(cancellationToken).ConfigureAwait(false);
 
         Rebuild();
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Runs every contributor concurrently under its own timeout. A contributor that fails yields a
+    /// Degraded row for its own key so one broken probe never removes the rest of the panel.
+    /// </summary>
+    private async Task RefreshContributorsAsync(CancellationToken cancellationToken)
+    {
+        if (_contributors.Count == 0)
+        {
+            _contributorRows = [];
+            return;
+        }
+
+        var rows = await Task.WhenAll(_contributors.Select(c => RunContributorAsync(c, cancellationToken)))
+            .ConfigureAwait(false);
+        _contributorRows = rows;
+    }
+
+    private async Task<SubsystemRuntimeStatus> RunContributorAsync(
+        ISubsystemStatusContributor contributor,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_contributorTimeout);
+
+        try
+        {
+            return await contributor.ContributeAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return FailureRow(contributor, $"הבדיקה חרגה מ-{_contributorTimeout.TotalSeconds:0} שניות");
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError(
+                "[RuntimeStatus] Contributor '{0}' failed (non-fatal): {1}",
+                contributor.Key,
+                ex);
+            return FailureRow(contributor, $"הבדיקה נכשלה: {ex.Message}");
+        }
+    }
+
+    private static SubsystemRuntimeStatus FailureRow(ISubsystemStatusContributor contributor, string summary) =>
+        new(contributor.Key,
+            contributor.DisplayNameHe,
+            SubsystemRuntimeState.Degraded,
+            ActiveWorkCount: null,
+            summary,
+            DateTimeOffset.UtcNow);
 
     public void Dispose()
     {
@@ -213,10 +274,15 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
             }
         }
 
-        rows.Add(BuildAccRow(now));
-        rows.Add(BuildGmailRow(now));
-        rows.Add(BuildAccIngestRow(now));
-        rows.Add(BuildWorkflowAssigneesRow(now));
+        // First-wins by key. The legacy bridge is added above, so where a host registers both the
+        // bridge and the contributors (V2 hybrid) the bridge keeps rendering and V2 is unchanged.
+        foreach (var row in _contributorRows)
+            AddIfAbsent(rows, row);
+
+        AddIfAbsent(rows, BuildAccRow(now));
+        AddIfAbsent(rows, BuildGmailRow(now));
+        AddIfAbsent(rows, BuildAccIngestRow(now));
+        AddIfAbsent(rows, BuildWorkflowAssigneesRow(now));
 
         foreach (var task in _startupTasks.Current)
         {
@@ -243,6 +309,14 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
 
         lock (_gate)
             _current = rows.OrderBy(r => r.DisplayNameHe, StringComparer.Ordinal).ToList();
+    }
+
+    private static void AddIfAbsent(List<SubsystemRuntimeStatus> rows, SubsystemRuntimeStatus row)
+    {
+        if (rows.Any(r => string.Equals(r.Key, row.Key, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        rows.Add(row);
     }
 
     private SubsystemRuntimeStatus BuildWorkflowAssigneesRow(DateTimeOffset now)

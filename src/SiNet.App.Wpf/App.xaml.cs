@@ -37,6 +37,11 @@ public partial class App : System.Windows.Application
         AppGlobalExceptionHandling.Configure(this);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         StandaloneHostLoggingBootstrap.ConfigureDefault();
+
+        // Without this bridge every AppErrorReporter.Report — including the global dispatcher
+        // handler — only reached Debug.WriteLine and was invisible in the log file.
+        AppErrorReporter.ExceptionReported += OnWpfExceptionReported;
+
         base.OnStartup(e);
 
         try
@@ -72,6 +77,10 @@ public partial class App : System.Windows.Application
         var sqlConnectionString = ResolveSqlConnectionStringFromVault()
             ?? throw new InvalidOperationException(
                 "SiNet database connection string is missing from the Credential Vault after setup.");
+
+        // Phase 2 logging: adds the central network sink from DB settings. Must run before the
+        // provider is built — the logging adapter captures the host logger in its constructor.
+        StandaloneHostLoggingBootstrap.ConfigureCentral(sqlConnectionString);
 
         var services = new ServiceCollection();
         services.AddSiNetStandaloneHost(
@@ -184,6 +193,9 @@ public partial class App : System.Windows.Application
 
         return true;
     }
+
+    private static void OnWpfExceptionReported(Exception exception, string context) =>
+        StandaloneHostLoggingBootstrap.Warning(exception, $"[UI] Reported error. Context={context}");
 
     private async Task ApplySavedUserSettingsAsync()
     {

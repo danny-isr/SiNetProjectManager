@@ -919,6 +919,7 @@ public sealed class SettingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            AppErrorReporter.Report(ex, "טעינת הגדרות");
             SummaryMessage = AppErrorReporter.FormatUserMessage(ex, "טעינת הגדרות");
         }
         finally
@@ -930,9 +931,12 @@ public sealed class SettingsViewModel : ObservableObject
     internal async Task RefreshPermissionFlagsAsync(CancellationToken cancellationToken = default)
     {
         var hasUser = _currentUser?.UserId is not null;
+        // Must stay on the UI context: everything below raises PropertyChanged and CanExecuteChanged
+        // on WPF-bound state. ConfigureAwait(false) here threw "a different thread owns it" whenever
+        // the authorization query actually went async instead of returning a cached result.
         var isAdmin = await _authorization
             .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.SystemSettingsWrite, cancellationToken)
-            .ConfigureAwait(false);
+            .ConfigureAwait(true);
 
         var personalScope = Scope == SettingsSurfaceScope.Personal;
         var systemScope = Scope == SettingsSurfaceScope.SystemAdmin;
@@ -997,6 +1001,7 @@ public sealed class SettingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            AppErrorReporter.Report(ex, "שמירת הגדרות");
             SummaryMessage = AppErrorReporter.FormatUserMessage(ex, "שמירת הגדרות");
         }
         finally
