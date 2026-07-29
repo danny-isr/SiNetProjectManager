@@ -201,7 +201,7 @@
                                         <DataTemplate>
                                             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1"
                                                     CornerRadius="3" Padding="6,4" Margin="0,0,0,6" Cursor="Hand"
-                                                    Background="#FAFAFA"
+                                                    Background="{DynamicResource SiSurfaceBrush}"
                                                     MouseLeftButtonDown="PathSummary_MouseLeftButtonDown"
                                                     ToolTip="לחץ לפירוט מלא של המעבר">
                                                 <StackPanel>
@@ -229,7 +229,7 @@
                                         <DataTemplate>
                                             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1"
                                                     CornerRadius="3" Padding="6,4" Margin="0,0,0,6" Cursor="Hand"
-                                                    Background="#FAFAFA"
+                                                    Background="{DynamicResource SiSurfaceBrush}"
                                                     MouseLeftButtonDown="PathSummary_MouseLeftButtonDown"
                                                     ToolTip="לחץ לפירוט מלא של המעבר">
                                                 <StackPanel>

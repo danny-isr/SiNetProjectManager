@@ -1,5 +1,6 @@
 using System.Windows;
 using SiNet.App.Wpf.Surfaces.Email.Detail;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.WorkSurfaces;
 
@@ -17,6 +18,7 @@ public partial class EmailWorkItemWindow : Window
         ArgumentNullException.ThrowIfNull(shellViewModel);
         _shellViewModel = shellViewModel;
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         DataContext = shellViewModel.EmailDetail;
         DetailHost.DataContext = shellViewModel.EmailDetail;
         DetailHost.SetBodyRenderer(bodyRenderer);

@@ -24,7 +24,7 @@
 
         <Border Grid.Row="0"
                 Background="{DynamicResource SiBackgroundBrush}"
-                BorderBrush="#E0E0E0"
+                BorderBrush="{DynamicResource SiBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="4"
                 Padding="8,6"
@@ -83,7 +83,7 @@
 
         <Border Grid.Row="3"
                 Background="{DynamicResource SiBackgroundBrush}"
-                BorderBrush="#E0E0E0"
+                BorderBrush="{DynamicResource SiBorderBrush}"
                 BorderThickness="0,1,0,0"
                 Padding="10,5"
                 Margin="0,8,0,0">

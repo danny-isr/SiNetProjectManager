@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 
@@ -23,6 +24,7 @@ public partial class ExternalDownloadBrowserWindow : Window
         ArgumentNullException.ThrowIfNull(context);
 
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         _initialUrl = url;
         UrlText.Text = url;
         Title = $"הורדה — {context.Subject}";

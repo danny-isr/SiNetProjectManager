@@ -6,7 +6,8 @@
         Width="1100"
         Height="750"
         WindowStartupLocation="CenterScreen"
-        FlowDirection="LeftToRight">
+        FlowDirection="LeftToRight"
+        Background="{DynamicResource SiBackgroundBrush}">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -15,12 +16,13 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#F5F5F5" Padding="8,6"
-                BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+        <Border Grid.Row="0" Background="{DynamicResource SiSurfaceBrush}" Padding="8,6"
+                BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="0,0,0,1">
             <TextBlock x:Name="UrlText"
                        VerticalAlignment="Center"
-                       FontSize="12"
-                       Foreground="#555"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}"
+                       Foreground="{DynamicResource SiMutedForegroundBrush}"
                        TextTrimming="CharacterEllipsis"/>
         </Border>
 
@@ -36,13 +38,15 @@
                 FlowDirection="RightToLeft">
             <StackPanel>
                 <TextBlock x:Name="ProgressStageText"
-                           FontSize="13"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextNormalFontSize}"
                            FontWeight="SemiBold"
                            Foreground="#0D47A1"
                            TextWrapping="Wrap"/>
                 <TextBlock x:Name="ProgressDetailText"
                            Margin="0,4,0,0"
-                           FontSize="12"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"
                            Foreground="#1565C0"
                            TextWrapping="Wrap"/>
                 <ProgressBar x:Name="ProgressBar"

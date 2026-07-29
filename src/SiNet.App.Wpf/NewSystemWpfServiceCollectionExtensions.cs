@@ -12,10 +12,12 @@ using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
+using SiNet.Application.ProjectWork;
 
 namespace SiNet.App.Wpf;
 
@@ -53,6 +55,9 @@ public static class NewSystemWpfServiceCollectionExtensions
 
         // Jumbo/WeTransfer download capture → ACC (N2). Singleton: one active download window.
         services.AddSingleton<IEmailExternalDownloadBrowserHost, WpfEmailExternalDownloadBrowserHost>();
+
+        // Embedded ACC document viewer for ProjectWork (multi-tab WebView2; shared profile).
+        services.AddSingleton<IAccViewerHost, WebView2AccViewerHost>();
 
         return services;
     }

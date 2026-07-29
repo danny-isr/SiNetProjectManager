@@ -228,8 +228,8 @@ namespace SiNetProjectManagerV2
             // Singleton caused reparent of a single WebView2 across hosts → blank body panes.
             // Shared App.Wpf implementation (same Transient registration as standalone AddSiNetNewSystemWpf).
             services.AddTransient<SiNet.Application.Email.Detail.IEmailBodyRenderer, SiNet.App.Wpf.Surfaces.Email.WebView2EmailBodyRenderer>();
-            // Embedded ACC document viewer for the ProjectWork surface (host-seam; WebView2 lives here).
-            services.AddSingleton<SiNet.Application.ProjectWork.IAccViewerHost, SiNetProjectManagerV2.Services.ProjectWork.WebView2AccViewerHost>();
+            // Embedded ACC document viewer — shared App.Wpf implementation (same as StandaloneNew).
+            services.AddSingleton<SiNet.Application.ProjectWork.IAccViewerHost, SiNet.App.Wpf.Surfaces.ProjectWork.WebView2AccViewerHost>();
             // After native task completion, refresh floating/task-panel lists via ActiveProjectContext.
             services.AddSingleton<SiNet.Application.Tasks.ITaskListChangeNotifier,
                 SiNetProjectManagerV2.Services.ActiveProjectTaskListChangeNotifier>();

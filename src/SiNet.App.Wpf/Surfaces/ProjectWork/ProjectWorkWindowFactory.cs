@@ -17,8 +17,8 @@ public sealed class ProjectWorkWindowFactory(IServiceProvider services) : IProje
         var viewModel = _services.GetRequiredService<ProjectWorkWindowViewModel>();
         var view = new ProjectWorkWindowView(viewModel);
 
-        // Optional host-seam: the embedded ACC viewer is only registered by hosts that ship WebView2
-        // (production V2 host). When absent, the surface uses the external-browser fallback.
+        // Host-seam: IAccViewerHost is registered by AddSiNetNewSystemWpf (standalone + V2 New System).
+        // When absent, the surface uses the external-browser fallback.
         var accViewerHost = _services.GetService<IAccViewerHost>();
         view.SetAccViewerHost(accViewerHost);
 

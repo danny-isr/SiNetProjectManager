@@ -189,7 +189,19 @@ Settings UI: color picker + preview swatch + hex (secondary) + reset.
 
 Font: `SiFontFamily`, `SiTextTinyFontSize` … `SiTextHugeFontSize`
 
-Brushes: `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroundBrush`
+Brushes (appearance JSON / runtime-applied): `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroundBrush`
+
+Brushes (static structural / semantic defaults — not yet in appearance JSON):
+
+| Key | Default | Role |
+| --- | --- | --- |
+| `SiBorderBrush` | `#E5E7EB` | Borders / dividers |
+| `SiMutedForegroundBrush` | `#6B7280` | Secondary text |
+| `SiSurfaceBrush` | `#F7F8FA` | Secondary panels |
+| `SiOnPrimaryBrush` | `#FFFFFF` | Text/icons on primary or brand bars |
+| `SiDangerBrush` | `#DC2626` | Error / danger accents |
+| `SiWarningBrush` | `#D97706` | Warning accents |
+| `SiSuccessBrush` | `#059669` | Success accents |
 
 Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`
 
@@ -218,9 +230,17 @@ Logging applier remains separate — appearance preview/save does **not** call `
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow`, `ProjectSelectorView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (content areas), Inspection visual clone (content areas). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
+`NewShellWindow`, `ProjectSelectorView`, `ProjectWorkWindowView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
 
-**Deferred:** legacy windows, `StartupModeSelectionWindow`, Email/Inspection **title-bar chrome** (brand blue/green headers — intentional visual-clone fidelity), semantic row tints in User Management DataGrid, `SiCardStyle`.
+**Intentional exceptions (keep hardcoded):**
+
+- `StartupModeSelectionWindow`
+- Email/Inspection **title-bar brand chrome** (`#1976D2` / `#2E7D32` + on-primary text)
+- Semantic row tints in User Management DataGrid
+- Workflow **node/legend** colors and status chips (email / quote / inspection banners)
+- Tree state colors in ProjectWork (physical / missing / type / empty)
+- `SiCardStyle` (still deferred)
+- Legacy V2 windows outside New System
 
 ---
 

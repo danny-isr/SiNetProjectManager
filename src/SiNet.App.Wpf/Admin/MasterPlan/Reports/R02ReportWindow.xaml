@@ -4,7 +4,8 @@
         Title="R02 — שעות עבודה"
         Width="520" Height="300"
         WindowStartupLocation="CenterOwner"
-        FlowDirection="RightToLeft">
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
   <DockPanel Margin="16">
     <Button DockPanel.Dock="Bottom"
             Content="הפקה ל-Google Sheets"

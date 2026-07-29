@@ -5,7 +5,8 @@
         Width="1280"
         Height="800"
         WindowStartupLocation="CenterScreen"
-        FlowDirection="RightToLeft">
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
     <DockPanel Margin="8">
         <ToolBar DockPanel.Dock="Top">
             <Button Content="רענון" Command="{Binding LoadCommand}" Margin="0,0,6,0"/>

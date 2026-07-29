@@ -16,6 +16,14 @@ public static class ThemeResourceKeys
     public const string BackgroundBrush = "SiBackgroundBrush";
     public const string ForegroundBrush = "SiForegroundBrush";
 
+    public const string BorderBrush = "SiBorderBrush";
+    public const string MutedForegroundBrush = "SiMutedForegroundBrush";
+    public const string SurfaceBrush = "SiSurfaceBrush";
+    public const string OnPrimaryBrush = "SiOnPrimaryBrush";
+    public const string DangerBrush = "SiDangerBrush";
+    public const string WarningBrush = "SiWarningBrush";
+    public const string SuccessBrush = "SiSuccessBrush";
+
     public const string TextTinyStyle = "SiTextTinyStyle";
     public const string TextSmallStyle = "SiTextSmallStyle";
     public const string TextNormalStyle = "SiTextNormalStyle";
@@ -39,11 +47,28 @@ public static class ThemeResourceKeys
         TextHugeFontSize,
     ];
 
+    /// <summary>Brushes driven by per-user appearance JSON.</summary>
+    public static IReadOnlyList<string> AppearanceBrushKeys { get; } =
+    [
+        PrimaryBrush,
+        SecondaryBrush,
+        BackgroundBrush,
+        ForegroundBrush,
+    ];
+
+    /// <summary>All theme brush keys defined in BrushResources.xaml (appearance + structural/semantic).</summary>
     public static IReadOnlyList<string> AllBrushKeys { get; } =
     [
         PrimaryBrush,
         SecondaryBrush,
         BackgroundBrush,
         ForegroundBrush,
+        BorderBrush,
+        MutedForegroundBrush,
+        SurfaceBrush,
+        OnPrimaryBrush,
+        DangerBrush,
+        WarningBrush,
+        SuccessBrush,
     ];
 }

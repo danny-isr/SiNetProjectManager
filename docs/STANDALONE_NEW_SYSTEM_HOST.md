@@ -122,6 +122,21 @@ Pilot menu surfaces from `NEW_SYSTEM_BOUNDARY.md` remain the acceptance bar.
 4. `IProjectWorkSurfaceHost` resolves to native `ProjectWorkSurfaceHost`.
 5. Build/tests green; no SiNetSQL/V2 ProjectReference from App.Wpf.
 
+## ProjectWork — embedded ACC viewer (standalone)
+
+Standalone registers `IAccViewerHost` → `SiNet.App.Wpf.Surfaces.ProjectWork.WebView2AccViewerHost`
+(same type used by the V2 New System path after the port). The ProjectWork right pane hosts a
+multi-tab WebView2 ACC document viewer; pop-out / dock remain on `ProjectWorkWindowView`.
+
+| Item | Value |
+| --- | --- |
+| Shared WebView2 profile | `%LOCALAPPDATA%\SiNet\WebView2UserData\Default` via `WebViewHosting.WebView2SharedEnvironment` |
+| Tab limit | `EmailOffice.AccViewerMaxTabs` from system settings (fallback `10`) |
+| External-browser fallback | Only when the host is unavailable, open fails, or the tab limit is reached (`Process.Start`) |
+| V2 profile path | Historically `%LOCALAPPDATA%\SiNetProjectManagerV2\WebView2UserData\Default` — users moving from V2 to standalone may need to sign in to Autodesk/ACC again in WebView2 |
+
+The V2-only `SiNetProjectManagerV2.Services.ProjectWork.WebView2AccViewerHost` is **deprecated / pending removal**; do not delete until verified unused.
+
 ## Decisions (locked)
 
 1. **Exe strategy:** New System = only `SiNet.App.Wpf.exe`; Legacy = only V2.exe.
@@ -130,3 +145,5 @@ Pilot menu surfaces from `NEW_SYSTEM_BOUNDARY.md` remain the acceptance bar.
 4. **Local AccBootstrap:** prefer AccService Remote by default; StandaloneNew registers
    `IAccInboxBootstrapLocalExecutor` from AccBootstrap so Local works when BaseUrl is cleared.
    App.Wpf does not reference AccBootstrap directly (Composition does).
+5. **ACC viewer:** native WebView2 host lives in App.Wpf and is registered for StandaloneNew
+   (and V2 New System DI points at the same type).

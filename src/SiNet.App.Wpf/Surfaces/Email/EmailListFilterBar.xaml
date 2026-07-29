@@ -15,7 +15,7 @@
             <Setter Property="Margin" Value="0,0,4,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#CCC" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
@@ -49,7 +49,7 @@
             <Setter Property="Margin" Value="0,0,4,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#CCC" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
@@ -100,7 +100,7 @@
                     <TextBlock Text="{Binding AccountStatusDisplay}"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
-                               Foreground="#333" />
+                               Foreground="{DynamicResource SiForegroundBrush}" />
                     <ToggleButton Style="{StaticResource ToggleActionButton}"
                                   IsChecked="{Binding ShowUnreadFilterActive, Mode=OneWay}"
                                   Command="{Binding ToggleUnreadOnlyCommand}"
@@ -112,7 +112,7 @@
                                    FontSize="{DynamicResource SiTextTinyFontSize}" />
                     </ToggleButton>
                     <TextBlock Text="{Binding PageInfo}"
-                               Foreground="#666"
+                               Foreground="{DynamicResource SiMutedForegroundBrush}"
                                FontSize="{DynamicResource SiTextTinyFontSize}"
                                VerticalAlignment="Center"
                                Margin="10,0,0,0"
@@ -168,7 +168,7 @@
 
             <!-- Row 2: filters -->
             <Border Padding="0,4,0,0"
-                    BorderBrush="#EEE"
+                    BorderBrush="{DynamicResource SiBorderBrush}"
                     BorderThickness="0,1,0,0">
                 <StackPanel>
                 <WrapPanel Orientation="Horizontal">

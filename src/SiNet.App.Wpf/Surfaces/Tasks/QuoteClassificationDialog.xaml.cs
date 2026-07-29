@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
@@ -36,6 +37,7 @@ public partial class QuoteClassificationDialog : Window, INotifyPropertyChanged
         _inboxQuery = inboxQuery;
 
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         DataContext = this;
         Loaded += OnLoaded;
     }

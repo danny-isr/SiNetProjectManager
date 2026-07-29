@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Surfaces.Tasks;
 
@@ -10,6 +11,7 @@ public partial class TaskWorkbenchView : Window
     public TaskWorkbenchView(TaskWorkbenchViewModel viewModel)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         DataContext = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         Loaded += OnLoaded;
     }

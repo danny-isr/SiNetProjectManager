@@ -14,7 +14,7 @@
 
     </UserControl.Resources>
 
-    <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Background="White">
+    <Border BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1" CornerRadius="4" Background="{DynamicResource SiBackgroundBrush}">
 
         <Grid>
 
@@ -83,7 +83,7 @@
 
                                                  DataContext="{Binding AttachmentStrip}"
 
-                                                 BorderBrush="#EEE"
+                                                 BorderBrush="{DynamicResource SiBorderBrush}"
 
                                                  BorderThickness="0,1,0,0" />
 
@@ -91,7 +91,7 @@
 
                                            DataContext="{Binding ActionBar}"
 
-                                           BorderBrush="#EEE"
+                                           BorderBrush="{DynamicResource SiBorderBrush}"
 
                                            BorderThickness="0,1,0,0" />
 
@@ -99,7 +99,7 @@
 
                                                      DataContext="{Binding Workflow}"
 
-                                                     BorderBrush="#E0E0E0"
+                                                     BorderBrush="{DynamicResource SiBorderBrush}"
 
                                                      BorderThickness="0,1,0,0" />
 

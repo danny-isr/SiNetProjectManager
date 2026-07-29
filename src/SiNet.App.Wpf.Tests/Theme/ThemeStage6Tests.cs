@@ -355,6 +355,13 @@ public sealed class ThemeStage6Tests
     [InlineData("Surfaces/Tasks/TaskCreateDialogView.xaml")]
     [InlineData("Surfaces/Workflow/WorkflowVisualCanvasWindow.xaml")]
     [InlineData("Surfaces/Workflow/WorkflowClosedViewerWindow.xaml")]
+    [InlineData("Surfaces/ProjectWork/ProjectWorkWindowView.xaml")]
+    [InlineData("Surfaces/Email/ExternalDownloadBrowserWindow.xaml")]
+    [InlineData("Admin/MasterPlan/MasterPlanMappingWindow.xaml")]
+    [InlineData("Admin/MasterPlan/Reports/R01ReportWindow.xaml")]
+    [InlineData("Admin/MasterPlan/Reports/R02ReportWindow.xaml")]
+    [InlineData("Admin/MasterPlan/Reports/R03ReportWindow.xaml")]
+    [InlineData("MainWindow.xaml")]
     public void Migrated_native_xaml_uses_si_background_brush(string relativePath)
     {
         var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));

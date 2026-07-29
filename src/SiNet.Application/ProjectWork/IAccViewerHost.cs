@@ -1,10 +1,10 @@
 namespace SiNet.Application.ProjectWork;
 
 /// <summary>
-/// Host-provided embedded ACC document viewer (WebView2 in the production V2 host). Mirrors the
-/// <c>IEmailBodyRenderer</c> seam: the WPF/WebView2 implementation lives in the host, while the clean
-/// ProjectWork surface depends only on this abstraction. When unavailable, the surface falls back to
-/// opening ACC documents in an external browser.
+/// Host-provided embedded ACC document viewer (WebView2 in App.Wpf for StandaloneNew and V2 New System).
+/// Mirrors the <c>IEmailBodyRenderer</c> seam: the WPF/WebView2 implementation lives in the host, while
+/// the clean ProjectWork surface depends only on this abstraction. When unavailable, the surface falls
+/// back to opening ACC documents in an external browser.
 /// <para>
 /// The viewer manages a strip of tabs (one persistent web view per tab, keyed by
 /// <see cref="AccViewerTabRequest.TabKey"/>) so navigation state is preserved while switching tabs.

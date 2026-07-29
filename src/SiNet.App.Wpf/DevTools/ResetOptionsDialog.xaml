@@ -20,47 +20,69 @@
         <Border Grid.Row="0" Background="#FFF3E0" Padding="12,8" CornerRadius="4" Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock Text="⚠️ אפשרויות איפוס נתונים"
-                           FontSize="15" FontWeight="Bold"
+                           FontSize="{DynamicResource SiTextMediumFontSize}"
+                           FontWeight="Bold"
                            Foreground="#E65100"/>
                 <TextBlock x:Name="DbInfoText"
-                           FontSize="12" Foreground="#555" Margin="0,4,0,0"
+                           FontSize="{DynamicResource SiTextNormalFontSize}"
+                           Foreground="{DynamicResource SiMutedForegroundBrush}"
+                           Margin="0,4,0,0"
                            TextWrapping="Wrap"/>
             </StackPanel>
         </Border>
 
         <TextBlock Grid.Row="1"
                    Text="בחר אילו חלקים לאפס. ברירת המחדל שומרת על הגדרות משתמשים וקבוצות כדי ש־Workflow יוכל ליצור משימות לאחר האיפוס."
-                   FontSize="12" Foreground="#444" Margin="0,0,0,12"
+                   FontSize="{DynamicResource SiTextNormalFontSize}"
+                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                   Margin="0,0,0,12"
                    TextWrapping="Wrap"/>
 
         <StackPanel Grid.Row="2" Margin="0,0,0,8">
             <CheckBox x:Name="OptInitiateResetCheck" IsChecked="True" Margin="0,4">
                 <CheckBox.Content>
                     <StackPanel>
-                        <TextBlock Text="הפעל איפוס נתוני פיתוח" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="הפעל איפוס נתוני פיתוח"
+                                   FontWeight="SemiBold"
+                                   FontSize="{DynamicResource SiTextNormalFontSize}"
+                                   Foreground="{DynamicResource SiForegroundBrush}"/>
                         <TextBlock Text="מוחק נתונים מטבלאות migration (מיילים, ACC, משימות, workflow וכו')."
-                                   FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
                 </CheckBox.Content>
             </CheckBox>
             <CheckBox x:Name="OptConfirmIrreversibleCheck" IsChecked="True" Margin="0,4">
                 <CheckBox.Content>
-                    <TextBlock Text="אני מאשר/ת שזו פעולה בלתי הפיכה" FontWeight="SemiBold" FontSize="13"/>
+                    <TextBlock Text="אני מאשר/ת שזו פעולה בלתי הפיכה"
+                               FontWeight="SemiBold"
+                               FontSize="{DynamicResource SiTextNormalFontSize}"
+                               Foreground="{DynamicResource SiForegroundBrush}"/>
                 </CheckBox.Content>
             </CheckBox>
             <CheckBox x:Name="OptWipeSystemSettingsCheck" IsChecked="False" Margin="0,4">
                 <CheckBox.Content>
-                    <TextBlock Text="מחק גם SystemSettings (ברירת מחדל: נשמר)" FontWeight="SemiBold" FontSize="13"/>
+                    <TextBlock Text="מחק גם SystemSettings (ברירת מחדל: נשמר)"
+                               FontWeight="SemiBold"
+                               FontSize="{DynamicResource SiTextNormalFontSize}"
+                               Foreground="{DynamicResource SiForegroundBrush}"/>
                 </CheckBox.Content>
             </CheckBox>
             <CheckBox x:Name="OptResetUserSettingsCheck" IsChecked="False" Margin="0,4">
                 <CheckBox.Content>
-                    <TextBlock Text="אפס גם UserGroups / UserSettings (ברירת מחדל: נשמר)" FontWeight="SemiBold" FontSize="13"/>
+                    <TextBlock Text="אפס גם UserGroups / UserSettings (ברירת מחדל: נשמר)"
+                               FontWeight="SemiBold"
+                               FontSize="{DynamicResource SiTextNormalFontSize}"
+                               Foreground="{DynamicResource SiForegroundBrush}"/>
                 </CheckBox.Content>
             </CheckBox>
             <CheckBox x:Name="OptIncludeDemoTasksCheck" IsChecked="True" Margin="0,4">
                 <CheckBox.Content>
-                    <TextBlock Text="לאחר seed — טען משימות דמו ל-Task Panel" FontWeight="SemiBold" FontSize="13"/>
+                    <TextBlock Text="לאחר seed — טען משימות דמו ל-Task Panel"
+                               FontWeight="SemiBold"
+                               FontSize="{DynamicResource SiTextNormalFontSize}"
+                               Foreground="{DynamicResource SiForegroundBrush}"/>
                 </CheckBox.Content>
             </CheckBox>
         </StackPanel>
@@ -73,7 +95,8 @@
                     Padding="14,8" MinWidth="130" Margin="0,0,8,0"
                     FontWeight="SemiBold" Background="#FFCDD2" BorderBrush="#E57373"/>
             <Button Content="ביטול" Click="Cancel_Click" IsCancel="True" IsDefault="True"
-                    Padding="14,8" MinWidth="80" Foreground="#777"/>
+                    Padding="14,8" MinWidth="80"
+                    Foreground="{DynamicResource SiMutedForegroundBrush}"/>
         </StackPanel>
     </Grid>
 </Window>

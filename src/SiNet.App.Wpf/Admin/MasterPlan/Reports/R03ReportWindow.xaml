@@ -4,7 +4,8 @@
         Title="R03 — השוואת נוכחות"
         Width="480" Height="280"
         WindowStartupLocation="CenterOwner"
-        FlowDirection="RightToLeft">
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
   <DockPanel Margin="16">
     <Button DockPanel.Dock="Bottom"
             Content="הפקה ל-Google Sheets"

@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Admin.Security;
 
@@ -7,6 +8,7 @@ public partial class ProvisioningPasswordWindow : Window
     public ProvisioningPasswordWindow(bool requireConfirmation, string title)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Title = title;
         ConfirmPanel.Visibility = requireConfirmation ? Visibility.Visible : Visibility.Collapsed;
         Loaded += (_, _) => PasswordBox.Focus();

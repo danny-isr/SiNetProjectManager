@@ -23,7 +23,8 @@
                             BorderBrush="#E57373" Click="NotQuote_Click"/>
                     <Button Content="סגור בלי שינוי"
                             Padding="14,8" Click="Cancel_Click"
-                            Background="#ECEFF1" BorderBrush="#B0BEC5"/>
+                            Background="{DynamicResource SiSurfaceBrush}"
+                            BorderBrush="{DynamicResource SiBorderBrush}"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -47,23 +48,36 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="{Binding Subject}" FontSize="15" FontWeight="SemiBold"
+                    <TextBlock Grid.Row="0" Text="{Binding Subject}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource SiForegroundBrush}"
                                TextWrapping="Wrap" Margin="0,0,0,6"/>
                     <StackPanel Grid.Row="1" Margin="0,0,0,8">
-                        <TextBlock Text="{Binding FromDisplay}" Foreground="#555"/>
-                        <TextBlock Text="{Binding DateDisplay}" Foreground="#555" Margin="0,2,0,0"/>
-                        <TextBlock Text="{Binding PromptHint}" Foreground="#666" TextWrapping="Wrap"
-                                   FontSize="12" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding FromDisplay}"
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"/>
+                        <TextBlock Text="{Binding DateDisplay}"
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                   Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding PromptHint}"
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                   TextWrapping="Wrap"
+                                   FontSize="{DynamicResource SiTextNormalFontSize}"
+                                   Margin="0,6,0,0"/>
                     </StackPanel>
 
                     <DockPanel Grid.Row="2">
                         <TextBlock DockPanel.Dock="Top" Text="קבצים מקושרים"
-                                   FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SiForegroundBrush}"
+                                   Margin="0,0,0,6"/>
                         <TextBlock DockPanel.Dock="Bottom"
                                    Text="{Binding AttachmentsHint}"
-                                   Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                   TextWrapping="Wrap" Margin="0,6,0,0"/>
                         <ListBox ItemsSource="{Binding Attachments}"
-                                 BorderBrush="#E0E0E0" BorderThickness="1"
+                                 BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -73,7 +87,8 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="{Binding FileName}"
-                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                   TextWrapping="Wrap" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource SiForegroundBrush}"/>
                                         <Button Grid.Column="1" Content="פתח ב-ACC"
                                                 Margin="8,0,0,0" Padding="10,4"
                                                 IsEnabled="{Binding CanOpenInAcc}"
@@ -91,7 +106,7 @@
                           Background="#FFD54F" ResizeBehavior="PreviousAndNext"/>
 
             <!-- Right: project create form (approval lives here) -->
-            <Border Grid.Column="2" BorderBrush="#B0BEC5" BorderThickness="1" Padding="4"
+            <Border Grid.Column="2" BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1" Padding="4"
                     FlowDirection="RightToLeft">
                 <projects:ProjectCreateDialogView x:Name="ProjectFormHost"/>
             </Border>

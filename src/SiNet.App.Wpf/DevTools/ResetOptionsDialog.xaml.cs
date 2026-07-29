@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.DevTools;
 
@@ -15,6 +16,7 @@ public partial class ResetOptionsDialog : Window
     public ResetOptionsDialog(string databaseName, string windowsUser)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         DbInfoText.Text = $"מסד נתונים: {databaseName}    משתמש: {windowsUser}";
     }
 

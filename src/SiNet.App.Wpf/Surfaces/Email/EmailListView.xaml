@@ -28,7 +28,7 @@
         <Style TargetType="ListBoxItem" x:Key="EmailCardItemStyle">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="8,6" />
-            <Setter Property="BorderBrush" Value="#EEEEEE" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Background" Value="{Binding RowBackgroundColor, Converter={StaticResource HexToBrush}}" />
             <Setter Property="Tag"
@@ -168,7 +168,7 @@
                     <Setter Property="BorderBrush" Value="#90CAF9" />
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#F5F5F5" />
+                    <Setter Property="Background" Value="{DynamicResource SiSurfaceBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -196,7 +196,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Border BorderBrush="#E0E0E0"
+    <Border BorderBrush="{DynamicResource SiBorderBrush}"
             BorderThickness="1"
             CornerRadius="4"
             ClipToBounds="True"

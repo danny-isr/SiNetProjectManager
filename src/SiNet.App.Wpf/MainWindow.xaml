@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="SiNet — new architecture slice"
-        Height="480" Width="760">
+        Height="480" Width="760"
+        Background="{DynamicResource SiBackgroundBrush}">
     <TabControl Margin="8">
         <TabItem Header="Inbox" DataContext="{Binding Inbox}">
             <Grid Margin="8">
