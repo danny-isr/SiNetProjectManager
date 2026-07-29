@@ -203,7 +203,8 @@ Brushes (static structural / semantic defaults — not yet in appearance JSON):
 | `SiWarningBrush` | `#D97706` | Warning accents |
 | `SiSuccessBrush` | `#059669` | Success accents |
 
-Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`
+Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiRoundedButtonBase` (CornerRadius 6), implicit `Button`,
+`SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`
 
 XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml`.
 

@@ -19,6 +19,56 @@ public sealed class NativeR03ReportService(
         CancellationToken cancellationToken = default)
         => _data.GetEmployeesAsync(activeOnly, cancellationToken);
 
+    public async Task<R03PreviewResult> PreviewAsync(
+        R03ReportRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var errors = request.Validate();
+        if (errors.Count > 0)
+            return R03PreviewResult.Fail(string.Join("\n", errors));
+
+        try
+        {
+            var attendanceTask = _data.GetAttendanceHoursAsync(request, cancellationToken);
+            var reportedTask = _data.GetReportedHoursAsync(request, cancellationToken);
+            await Task.WhenAll(attendanceTask, reportedTask).ConfigureAwait(false);
+
+            var employeeSheets = BuildEmployeeSheets(request, attendanceTask.Result, reportedTask.Result);
+            if (employeeSheets.Count == 0)
+                return R03PreviewResult.Fail("לא נמצאו נתונים עבור החודש שנבחר.");
+
+            var rows = new List<R03DailyPreviewRow>();
+            foreach (var emp in employeeSheets)
+            {
+                foreach (var day in emp.Days)
+                {
+                    rows.Add(new R03DailyPreviewRow(
+                        emp.Id,
+                        emp.Name,
+                        day.Date,
+                        day.DayName,
+                        Math.Round(day.Attendance, 2),
+                        Math.Round(day.Reported, 2)));
+                }
+            }
+
+            var totalAtt = employeeSheets.Sum(e => e.Days.Sum(d => d.Attendance));
+            var totalRep = employeeSheets.Sum(e => e.Days.Sum(d => d.Reported));
+            _logger.Info($"[R03] preview rows={rows.Count} employees={employeeSheets.Count}");
+            return R03PreviewResult.Ok(rows, Math.Round(totalAtt, 2), Math.Round(totalRep, 2));
+        }
+        catch (OperationCanceledException)
+        {
+            return R03PreviewResult.Fail("הפעולה בוטלה.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[R03] preview failed: {ex.Message}", ex);
+            return R03PreviewResult.Fail("שגיאה: " + ex.Message);
+        }
+    }
+
     public async Task<MasterPlanReportGenerationResult> GenerateAsync(
         R03ReportRequest request,
         IProgress<(string Phase, string Message, int Percent)>? progress = null,

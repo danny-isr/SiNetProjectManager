@@ -7,11 +7,8 @@ namespace SiNet.Infrastructure.Sql.Services.MasterPlan.Reports;
 
 /// <summary>
 /// R02 hours: prefer MasterPlan HoursReports up to max date, then Replica MP_ProjectHours
-/// (parity with GoogleConnector R02DataMerger).
-/// <para>
-/// MasterPlan date column is <c>DateTime</c> (not <c>ReportDate</c>). Replica uses
-/// <c>ReportDate</c> + <c>TotalHours</c> (TimeSpan/ticks — converted to decimal hours).
-/// </para>
+/// (parity with GoogleConnector R02DataMerger). One sheet row per hour report — not aggregated —
+/// so Description / SubContract / Step remain available.
 /// </summary>
 public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider connectionProvider)
     : IR02ReportDataSource
@@ -64,6 +61,7 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
             .OrderBy(r => r.ReportDate)
             .ThenBy(r => r.ProjectNum)
             .ThenBy(r => r.EmployeeName)
+            .ThenBy(r => r.HourReportId)
             .ToList();
     }
 
@@ -71,7 +69,6 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
     {
         await using var conn = new SqlConnection(cs);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-        // Legacy MasterPlanR02Repository: MAX(CAST(hr.DateTime AS date))
         await using var cmd = new SqlCommand("SELECT MAX(CAST([DateTime] AS date)) FROM dbo.HoursReports", conn);
         var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return value is DateTime dt ? dt : null;
@@ -87,24 +84,43 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         var sql =
             """
             SELECT
+              hr.ID,
               CAST(hr.[DateTime] AS date),
+              CAST(hr.StartTime AS time),
+              CAST(hr.EndTime AS time),
+              hr.Hours,
+              hr.Description,
+              hr.EmployeeID,
+              LTRIM(RTRIM(ISNULL(e.FirstName,'') + ' ' + ISNULL(e.LastName,''))),
               hr.ProjectID,
               p.ProjectNum,
               p.Name,
-              hr.EmployeeID,
-              LTRIM(RTRIM(ISNULL(e.FirstName,'') + ' ' + ISNULL(e.LastName,''))),
-              SUM(ISNULL(hr.Hours,0))
+              p.CustomerID,
+              ISNULL(co.Name, ''),
+              hr.SubContractID,
+              sc.SubContractNum,
+              sc.Name,
+              hr.SubContractStepID,
+              scs.Name
             FROM dbo.HoursReports hr
-            LEFT JOIN dbo.Projects p ON hr.ProjectID = p.ID
-            LEFT JOIN dbo.Employees e ON hr.EmployeeID = e.ID
+            INNER JOIN dbo.Employees e ON hr.EmployeeID = e.ID
+            INNER JOIN dbo.Projects p ON hr.ProjectID = p.ID
+            LEFT JOIN dbo.Contacts ct ON p.CustomerID = ct.ID
+            LEFT JOIN dbo.Companies co ON ct.CompanyID = co.ID
+            LEFT JOIN dbo.SubContracts sc ON hr.SubContractID = sc.ID
+            LEFT JOIN dbo.SubContractSteps scs ON hr.SubContractStepID = scs.ID
             WHERE hr.[DateTime] >= @Start AND hr.[DateTime] < @EndExclusive
             """;
         sql += AppendMasterPlanFilters(request);
-        sql += """
-             GROUP BY CAST(hr.[DateTime] AS date), hr.ProjectID, p.ProjectNum, p.Name, hr.EmployeeID,
-                      e.FirstName, e.LastName
-            """;
-        return await QueryAsync(cs, sql, start, end.Date.AddDays(1), "MasterPlan", convertHours: false, cancellationToken)
+
+        return await QueryAsync(
+                cs,
+                sql,
+                start,
+                end.Date.AddDays(1),
+                "MasterPlan",
+                convertHours: false,
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -115,39 +131,105 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         R02ReportRequest request,
         CancellationToken cancellationToken)
     {
-        // Replica MP_ProjectHours: ReportDate + TotalHours (SQL time / TimeSpan), not Duration.
-        var sql =
-            """
-            SELECT
-              CAST(ph.ReportDate AS date),
-              ph.ProjectID,
-              p.ProjectNum,
-              p.Name,
-              ph.EmployeeID,
-              LTRIM(RTRIM(ISNULL(e.FirstName,'') + ' ' + ISNULL(e.LastName,''))),
-              ph.TotalHours
-            FROM MP_ProjectHours ph
-            LEFT JOIN MP_Projects p ON ph.ProjectID = p.ID
-            LEFT JOIN MP_Employees e ON ph.EmployeeID = e.ID
-            WHERE ph.ReportDate >= @Start AND ph.ReportDate < @EndExclusive
-            """;
-        sql += AppendReplicaFilters(request);
-        // Aggregate after converting TimeSpan hours in-process (SQL SUM on time is unreliable across schemas).
-        var raw = await QueryAsync(cs, sql, start, end.Date.AddDays(1), "Replica", convertHours: true, cancellationToken)
+        // Prefer Extended (Description + SubContract); fall back to basic MP_ProjectHours.
+        await using var probe = new SqlConnection(cs);
+        await probe.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var useExtended = await TableExistsAsync(probe, "MP_ProjectHoursExtended", cancellationToken)
             .ConfigureAwait(false);
 
-        return raw
-            .GroupBy(r => new { r.ReportDate, r.ProjectId, r.ProjectNum, r.ProjectName, r.EmployeeId, r.EmployeeName })
-            .Select(g => new R02HoursRow(
-                g.Key.ReportDate,
-                g.Key.ProjectId,
-                g.Key.ProjectNum,
-                g.Key.ProjectName,
-                g.Key.EmployeeId,
-                g.Key.EmployeeName,
-                g.Sum(x => x.Hours),
-                "Replica"))
-            .ToList();
+        string sql;
+        bool convertHours;
+        if (useExtended)
+        {
+            convertHours = false; // Duration is already decimal hours
+            sql =
+                """
+                SELECT
+                  ph.ID,
+                  CAST(ph.ReportDate AS date),
+                  ph.StartTime,
+                  ph.EndTime,
+                  ISNULL(ph.Duration, 0),
+                  ph.Description,
+                  ph.EmployeeID,
+                  COALESCE(
+                    NULLIF(LTRIM(RTRIM(ph.EmployeeName)), ''),
+                    LTRIM(RTRIM(ISNULL(e.FirstName,'') + ' ' + ISNULL(e.LastName,'')))),
+                  ph.ProjectID,
+                  COALESCE(NULLIF(LTRIM(RTRIM(ph.ProjectNumber)), ''), p.ProjectNum),
+                  COALESCE(NULLIF(LTRIM(RTRIM(ph.ProjectName)), ''), p.Name),
+                  p.CustomerID,
+                  p.CustomerName,
+                  ph.SubContractID,
+                  CAST(NULL AS nvarchar(50)),
+                  ph.SubContractName,
+                  ph.SubContractStepID,
+                  COALESCE(ph.SubContractStepName, ph.StepName)
+                FROM MP_ProjectHoursExtended ph
+                LEFT JOIN MP_Employees e ON ph.EmployeeID = e.ID
+                LEFT JOIN MP_Projects p ON ph.ProjectID = p.ID
+                WHERE ph.ReportDate >= @Start AND ph.ReportDate < @EndExclusive
+                """;
+            sql += AppendReplicaExtendedFilters(request);
+        }
+        else
+        {
+            convertHours = true;
+            sql =
+                """
+                SELECT
+                  ph.ID,
+                  CAST(ph.ReportDate AS date),
+                  ph.StartTime,
+                  ph.EndTime,
+                  ph.TotalHours,
+                  ph.Description,
+                  ph.EmployeeID,
+                  LTRIM(RTRIM(ISNULL(e.FirstName,'') + ' ' + ISNULL(e.LastName,''))),
+                  ph.ProjectID,
+                  p.ProjectNum,
+                  p.Name,
+                  p.CustomerID,
+                  p.CustomerName,
+                  CAST(NULL AS int),
+                  CAST(NULL AS nvarchar(50)),
+                  CAST(NULL AS nvarchar(200)),
+                  CAST(NULL AS int),
+                  ph.StepName
+                FROM MP_ProjectHours ph
+                INNER JOIN MP_Employees e ON ph.EmployeeID = e.ID
+                INNER JOIN MP_Projects p ON ph.ProjectID = p.ID
+                WHERE ph.ReportDate >= @Start AND ph.ReportDate < @EndExclusive
+                """;
+            sql += AppendReplicaFilters(request);
+        }
+
+        return await QueryAsync(
+                cs,
+                sql,
+                start,
+                end.Date.AddDays(1),
+                "Replica",
+                convertHours,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<bool> TableExistsAsync(
+        SqlConnection connection,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = new SqlCommand(
+            """
+            SELECT CASE WHEN EXISTS (
+              SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @TableName
+            ) THEN 1 ELSE 0 END
+            """,
+            connection);
+        cmd.Parameters.Add("@TableName", SqlDbType.NVarChar, 128).Value = tableName;
+        var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is int i && i == 1;
     }
 
     private static string AppendMasterPlanFilters(R02ReportRequest request)
@@ -158,7 +240,7 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         if (request.EmployeeIds is { Count: > 0 })
             sql += " AND hr.EmployeeID IN (" + string.Join(",", request.EmployeeIds) + ")";
         if (request.CustomerIds is { Count: > 0 })
-            sql += " AND p.CustomerID IN (" + string.Join(",", request.CustomerIds) + ")";
+            sql += " AND ct.CompanyID IN (" + string.Join(",", request.CustomerIds) + ")";
         return sql;
     }
 
@@ -172,6 +254,12 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         if (request.CustomerIds is { Count: > 0 })
             sql += " AND p.CustomerID IN (" + string.Join(",", request.CustomerIds) + ")";
         return sql;
+    }
+
+    private static string AppendReplicaExtendedFilters(R02ReportRequest request)
+    {
+        // Same project/employee filters; customer via joined MP_Projects when present.
+        return AppendReplicaFilters(request);
     }
 
     private static async Task<IReadOnlyList<R02HoursRow>> QueryAsync(
@@ -193,21 +281,45 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var hours = convertHours
-                ? ConvertHoursRaw(reader.IsDBNull(6) ? null : reader.GetValue(6))
-                : reader.IsDBNull(6) ? 0m : Convert.ToDecimal(reader.GetValue(6));
+                ? ConvertHoursRaw(reader.IsDBNull(4) ? null : reader.GetValue(4))
+                : reader.IsDBNull(4) ? 0m : Math.Round(Convert.ToDecimal(reader.GetValue(4)), 2);
 
             list.Add(new R02HoursRow(
-                reader.GetDateTime(0),
-                reader.IsDBNull(1) ? null : reader.GetInt32(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetInt32(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5),
-                hours,
-                source));
+                HourReportId: reader.IsDBNull(0) ? 0 : reader.GetInt32(0),
+                ReportDate: reader.GetDateTime(1),
+                StartTime: ReadTimeSpan(reader, 2),
+                EndTime: ReadTimeSpan(reader, 3),
+                Hours: hours,
+                Description: reader.IsDBNull(5) ? null : reader.GetString(5),
+                EmployeeId: reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                EmployeeName: reader.IsDBNull(7) ? null : reader.GetString(7),
+                ProjectId: reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                ProjectNum: reader.IsDBNull(9) ? null : reader.GetString(9),
+                ProjectName: reader.IsDBNull(10) ? null : reader.GetString(10),
+                CustomerId: reader.IsDBNull(11) ? null : reader.GetInt32(11),
+                CustomerName: reader.IsDBNull(12) ? null : reader.GetString(12),
+                SubContractId: reader.IsDBNull(13) ? null : reader.GetInt32(13),
+                SubContractNum: reader.IsDBNull(14) ? null : reader.GetString(14),
+                SubContractName: reader.IsDBNull(15) ? null : reader.GetString(15),
+                SubContractStepId: reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                SubContractStepName: reader.IsDBNull(17) ? null : reader.GetString(17),
+                Source: source));
         }
 
         return list;
+    }
+
+    private static TimeSpan? ReadTimeSpan(SqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return null;
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            TimeSpan ts => ts,
+            DateTime dt => dt.TimeOfDay,
+            _ => TimeSpan.TryParse(Convert.ToString(value), out var parsed) ? parsed : null,
+        };
     }
 
     /// <summary>Replica TotalHours may be TimeSpan, ticks, or decimal — match GoogleConnector conversion.</summary>

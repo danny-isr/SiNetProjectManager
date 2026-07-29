@@ -28,44 +28,14 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
-        <!-- Small action button (mirrors the legacy CardActionButton chrome). -->
-        <Style TargetType="Button" x:Key="CardActionButton">
-            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+        <!-- Small action button — shared rounded chrome (CornerRadius=6). -->
+        <Style TargetType="Button" x:Key="CardActionButton" BasedOn="{StaticResource SiRoundedButtonBase}">
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
-            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="Margin" Value="4,0,0,0" />
             <Setter Property="MinWidth" Value="0" />
-            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="#CCC" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="3"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF" />
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#90CAF9" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#BBDEFB" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
     </Window.Resources>
 

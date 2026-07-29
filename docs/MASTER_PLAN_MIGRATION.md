@@ -88,12 +88,23 @@ V2 / SiNetSQL / GoogleConnector ProjectReference.
 **Phases:**
 - **S3a:** Sheets/Drive helpers + native R03 (Replica only)
 - **S3b:** Native R01 (Replica/MasterPlan + template)
-- **S3c:** Native R02 (merger + template/pivot as practical)
+- **S3c:** Native R02 — one row per hour report (not aggregated); MasterPlan
+  `HoursReports` + Replica `MP_ProjectHoursExtended` (Description + SubContract /
+  תת-חוזה); fallback `MP_ProjectHours` when Extended missing
+- **S3d:** Native R03 in-app DataGrid preview (**הצג נתונים**) via `PreviewAsync` — same Replica
+  build as Sheets, no Google required for preview. Non-management users see **self only**
+  (`MasterPlanEmployeeId`); management gets checklist multi-select (select all / clear / partial).
+  NewShell exposes R03 to every authenticated user; Sheets generate stays management-only.
 
 **In:** Application ports, Sql repos over vault Replica/MasterPlan CS, NewShell **דוחות** menu
 (`ReportsManagement`), GoogleReports folder/template ids from config.
 
 **Out:** Changing Replica KPI schema; SyncEngine; deleting V2 dialogs until soak; Inspection Sheets.
+
+**SyncEngine vs App.Wpf (locked):** Daily/monthly MasterPlan → Replica → SiData CrossSync remains
+`MasterPlan.SyncEngine.exe` under Task Scheduler. New System already hosts **מיפוי MasterPlan**
+(mapping + Full Sync flags) and R01–R03. Embedding SyncEngine inside the WPF process is **out of
+scope** unless product explicitly re-opens that decision.
 
 **DB/schema:** None.
 

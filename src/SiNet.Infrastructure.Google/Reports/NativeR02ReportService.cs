@@ -87,28 +87,17 @@ public sealed class NativeR02ReportService(
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            var headers = R02HoursRow.GetHeaderRow(request.IsClientExport);
             await sheets.WriteHeadersAsync(
                     spreadsheetId,
                     NativeGoogleSheetsWriter.BuildRange("Data", "A2"),
-                    new List<object>
-                    {
-                        "Date", "ProjectID", "ProjectNum", "ProjectName",
-                        "EmployeeID", "EmployeeName", "Hours", "Source",
-                    },
+                    headers.ToList(),
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var dataRows = rows.Select(r => (IList<object?>)new List<object?>
-            {
-                r.ReportDate.ToString("yyyy-MM-dd"),
-                r.ProjectId,
-                r.ProjectNum,
-                r.ProjectName,
-                r.EmployeeId,
-                r.EmployeeName,
-                Math.Round(r.Hours, 2),
-                r.Source,
-            }).ToList();
+            var dataRows = rows
+                .Select(r => (IList<object?>)r.ToSheetRow(request.IsClientExport))
+                .ToList();
 
             progress?.Report(("write", "כותב נתונים...", 80));
             await sheets.WriteDataBatchedAsync(
@@ -119,7 +108,8 @@ public sealed class NativeR02ReportService(
                 .ConfigureAwait(false);
 
             var url = await drive.GetFileUrlAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
-            _logger.Info($"[R02] completed rows={rows.Count} url={url}");
+            _logger.Info(
+                $"[R02] completed rows={rows.Count} cols={headers.Count} client={request.IsClientExport} url={url}");
             return MasterPlanReportGenerationResult.Ok(spreadsheetId, fileName, url, rows.Count);
         }
         catch (OperationCanceledException)

@@ -44,7 +44,8 @@ public sealed class R01PortfolioRowSheetLayoutTests
     [Fact]
     public void WhenReplicaTotalHoursIsTimeSpanThenConvertHoursRawReturnsDecimalHours()
     {
-        var converted = SqlR02ReportDataSource.ConvertHoursRaw(TimeSpan.FromHours(2.5));
+        var converted = SiNet.Infrastructure.Sql.Services.MasterPlan.Reports.SqlR02ReportDataSource
+            .ConvertHoursRaw(TimeSpan.FromHours(2.5));
         Assert.Equal(2.5m, converted);
     }
 }

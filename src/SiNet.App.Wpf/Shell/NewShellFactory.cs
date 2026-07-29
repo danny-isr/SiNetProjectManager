@@ -205,7 +205,17 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         AddGroupIfAny(top, "משתמשים והרשאות", users);
 
         // ── דוחות MasterPlan (R01–R03) ───────────────────────────────────
+        // R03 in-app preview is available to every authenticated user (self-only when not management).
+        // R01/R02 + Sheets export remain ReportsManagement.
         var reports = new List<NewShellMenuItem>();
+        if (HasAuthenticatedUser())
+        {
+            reports.Add(new NewShellMenuItem(
+                "R03 — השוואת נוכחות",
+                OpenNativeR03Report,
+                "נוכחות מול דיווח — טבלה באפליקציה / Google Sheets להנהלה"));
+        }
+
         if (await CanAccessFeatureAsync(AppFeatureCodes.ReportsManagement, cancellationToken).ConfigureAwait(true))
         {
             reports.Add(new NewShellMenuItem(
@@ -216,10 +226,6 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "R02 — שעות עבודה",
                 OpenNativeR02Report,
                 "שעות עבודה → Google Sheets"));
-            reports.Add(new NewShellMenuItem(
-                "R03 — השוואת נוכחות",
-                OpenNativeR03Report,
-                "נוכחות מול דיווח → Google Sheets"));
         }
 
         AddGroupIfAny(top, "דוחות", reports);

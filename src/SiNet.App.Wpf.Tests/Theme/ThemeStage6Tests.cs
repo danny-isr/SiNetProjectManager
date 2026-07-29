@@ -337,6 +337,18 @@ public sealed class ThemeStage6Tests
 
         Assert.Contains($"x:Key=\"{ThemeResourceKeys.TextNormalStyle}\"", styles, StringComparison.Ordinal);
         Assert.Contains($"x:Key=\"{ThemeResourceKeys.PrimaryButtonStyle}\"", styles, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"6\"", styles, StringComparison.Ordinal);
+        Assert.Contains("SiComboBoxToggleButtonTemplate", styles, StringComparison.Ordinal);
+        Assert.Contains("SiRoundedButtonBase", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskWorkbench_compact_buttons_use_shared_rounded_button_base()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "Tasks", "TaskWorkbenchView.xaml"));
+        Assert.Contains("TaskWorkbenchCompactButton", xaml, StringComparison.Ordinal);
+        Assert.Contains("BasedOn=\"{StaticResource SiRoundedButtonBase}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"6\"", xaml, StringComparison.Ordinal);
     }
 
     [Theory]

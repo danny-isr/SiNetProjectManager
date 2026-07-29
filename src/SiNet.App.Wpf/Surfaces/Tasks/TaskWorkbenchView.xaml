@@ -20,24 +20,24 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
-        <Style x:Key="TaskWorkbenchCompactButton" TargetType="Button">
-            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
+        <!-- Compact toolbar buttons — inherits global rounded CornerRadius=6 chrome. -->
+        <Style x:Key="TaskWorkbenchCompactButton" TargetType="Button"
+               BasedOn="{StaticResource SiRoundedButtonBase}">
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
             <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
             <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="4,2" />
-            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="6,3" />
+            <Setter Property="MinHeight" Value="24" />
             <Setter Property="Margin" Value="0,0,3,3" />
-            <Setter Property="Cursor" Value="Hand" />
         </Style>
 
         <Style x:Key="TaskCardBorder" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="7,5" />
             <Setter Property="Margin" Value="0,0,0,5" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -86,7 +86,7 @@
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0"
                                 Background="{DynamicResource SiSecondaryBrush}"
-                                CornerRadius="3"
+                                CornerRadius="6"
                                 Padding="4,1"
                                 Margin="0,0,6,0"
                                 VerticalAlignment="Center"
@@ -131,7 +131,7 @@
                                    ToolTip="{Binding TaskTypeName}" />
                         <Border Grid.Column="1"
                                 Background="{DynamicResource SiSecondaryBrush}"
-                                CornerRadius="3"
+                                CornerRadius="6"
                                 Padding="4,1"
                                 Margin="6,0,0,0">
                             <TextBlock Text="{Binding StatusName}"
@@ -239,7 +239,7 @@
                 BorderThickness="1"
                 Padding="4"
                 Margin="0,0,0,4"
-                CornerRadius="4"
+                CornerRadius="6"
                 Background="{DynamicResource SiBackgroundBrush}">
             <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="מציג משימות:"

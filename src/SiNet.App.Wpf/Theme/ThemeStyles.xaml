@@ -44,40 +44,237 @@
         <Setter Property="Margin" Value="0,0,0,8"/>
     </Style>
 
-    <Style x:Key="SiPrimaryButtonStyle" TargetType="Button">
+    <!-- Shared rounded chrome; implicit Button + Primary/Secondary derive from this. -->
+    <Style x:Key="SiRoundedButtonBase" TargetType="Button">
         <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
         <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
-        <Setter Property="Foreground" Value="White"/>
-        <Setter Property="Background" Value="{DynamicResource SiPrimaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SiSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12,6"/>
-        <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.92"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <Style x:Key="SiSecondaryButtonStyle" TargetType="Button">
-        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
-        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+    <Style TargetType="Button" BasedOn="{StaticResource SiRoundedButtonBase}"/>
+
+    <Style x:Key="SiPrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SiRoundedButtonBase}">
+        <Setter Property="Foreground" Value="{DynamicResource SiOnPrimaryBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SiPrimaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style x:Key="SiSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SiRoundedButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
         <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="12,6"/>
-        <Setter Property="Cursor" Value="Hand"/>
     </Style>
 
+    <!-- Rounded TextBox (keyed + implicit) -->
     <Style x:Key="SiTextBoxStyle" TargetType="TextBox">
         <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
         <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
         <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
-        <Setter Property="Padding" Value="4,2"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.55"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource SiPrimaryBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
+
+    <Style TargetType="TextBox" BasedOn="{StaticResource SiTextBoxStyle}"/>
+
+    <!-- Rounded ComboBox chrome (same 6px radius) -->
+    <ControlTemplate x:Key="SiComboBoxToggleButtonTemplate" TargetType="ToggleButton">
+        <Border x:Name="Bd"
+                Background="{DynamicResource SiBackgroundBrush}"
+                BorderBrush="{DynamicResource SiBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                SnapsToDevicePixels="True">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="28"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="1" Background="Transparent">
+                    <Path HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Data="M 0 0 L 4 4 L 8 0 Z"
+                          Fill="{DynamicResource SiMutedForegroundBrush}"/>
+                </Border>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource SiPrimaryBrush}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource SiPrimaryBrush}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
 
     <Style x:Key="SiComboBoxStyle" TargetType="ComboBox">
         <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
         <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
         <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="ToggleButton"
+                                      Template="{StaticResource SiComboBoxToggleButtonTemplate}"
+                                      Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      ClickMode="Press"/>
+                        <ContentPresenter x:Name="ContentSite"
+                                          IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="10,5,32,5"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Stretch"/>
+                        <Popup x:Name="Popup"
+                               Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               PopupAnimation="Slide">
+                            <Grid x:Name="DropDown"
+                                  MinWidth="{TemplateBinding ActualWidth}"
+                                  MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                  SnapsToDevicePixels="True">
+                                <Border x:Name="DropDownBorder"
+                                        Background="{DynamicResource SiBackgroundBrush}"
+                                        BorderBrush="{DynamicResource SiBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Margin="0,2,0,0">
+                                    <ScrollViewer Margin="4" SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="HasItems" Value="False">
+                            <Setter TargetName="DropDownBorder" Property="MinHeight" Value="40"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.55"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBox" BasedOn="{StaticResource SiComboBoxStyle}"/>
+
+    <!-- Rounded ToggleButton (employee selector etc.) — separate from Button (TargetType mismatch). -->
+    <Style TargetType="ToggleButton">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SiBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.92"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource SiPrimaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>

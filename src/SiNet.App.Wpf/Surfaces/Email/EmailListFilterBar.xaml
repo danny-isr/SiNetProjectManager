@@ -10,38 +10,11 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-        <Style TargetType="Button" x:Key="ActionButton">
+        <Style TargetType="Button" x:Key="ActionButton" BasedOn="{StaticResource SiRoundedButtonBase}">
             <Setter Property="Padding" Value="8,3" />
             <Setter Property="Margin" Value="0,0,4,0" />
-            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
-            <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="3"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
 
         <Style TargetType="ToggleButton" x:Key="ToggleActionButton">
@@ -61,7 +34,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="3"
+                                CornerRadius="6"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
