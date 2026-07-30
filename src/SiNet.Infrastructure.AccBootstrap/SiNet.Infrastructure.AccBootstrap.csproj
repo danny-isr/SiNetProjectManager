@@ -18,12 +18,15 @@
 	<PackageReference Include="Microsoft.EntityFrameworkCore" />
 	<PackageReference Include="Microsoft.Data.SqlClient" />
 	<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+	<PackageReference Include="Microsoft.Extensions.Http" />
 	<PackageReference Include="Serilog" />
   </ItemGroup>
 
   <ItemGroup>
 	<ProjectReference Include="..\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
+	<ProjectReference Include="..\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />
 	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
+	<ProjectReference Include="..\SiOffice.AccService.Contracts\SiOffice.AccService.Contracts.csproj" />
 	<ProjectReference Include="..\..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
 

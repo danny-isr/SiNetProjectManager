@@ -74,7 +74,14 @@ orchestration.
 
 - `AddSiNetAutodesk()` now registers the control-plane, catalog/discovery/search, folder browse,
   document lookup, inbox bootstrap, and transfer/runtime seams while still **excluding** legacy
-  provisioning/filing services.
+  project-provisioning / filing orchestration from this method.
+- **Standalone New (slice 2c):** project ACC mapping is registered separately via
+  `AddSiNetAccProjectProvisioning()` in `SiNet.Infrastructure.AccBootstrap` (called from
+  `AddSiNet(StandaloneNew)` only). That wires mode-switched
+  `IAccProjectProvisioningService` + `IProjectAccMappingProvisioner` for create-time and
+  on-demand EnsureMapping used by filing/Move. V2Hybrid keeps its own registration in
+  `SiNetProjectManagerV2` `App.xaml.cs`. Control-plane tests that call `AddSiNetAutodesk()`
+  alone must still assert provisioning is **not** pulled in by Autodesk.
 - `SiNetProjectManagerV2/Services/Composition/NewSystemServiceCollectionExtensions.cs` wires:
   - `AddSiNetSecrets()`
   - `AddSiNetAutodesk()`
@@ -265,15 +272,20 @@ breaking wire changes. See [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLIN
 
 ## 4. What Is Still Deferred
 
-This slice does **not** implement:
+The **control-plane / Autodesk module** slice still does **not** own:
 
-- remote project provisioning
-- remote inbox provisioning
-- member reconciliation / project-user bootstrap orchestration
-- `IProjectFileFilingService`
+- remote inbox provisioning (legacy `IAccInboxProvisioner` path; distinct from inbox bootstrap ensure)
+- member reconciliation / project-user bootstrap orchestration UI
 - end-to-end `ProjectFileRefileService` write semantics and broader refile orchestration
-- `MoveToProject` / ACC move metadata flows
 - metadata writes or reconciliation writes
+
+**Hosted outside this control-plane doc (not via `AddSiNetAutodesk`):**
+
+- Standalone New project ACC mapping provisioning — see
+  [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md) slice **2c**
+  (`AddSiNetAccProjectProvisioning`)
+- `IProjectFileFilingService` + MoveToProject consumers — SQL/filing + email modules; they
+  depend on `IProjectAccMappingProvisioner` when the host registered it
 
 Native consumers currently exist for:
 

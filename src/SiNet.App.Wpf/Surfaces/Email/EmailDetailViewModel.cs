@@ -1101,14 +1101,23 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             || _selectedEmail?.InboxMessageId is not int inboxMessageId
             || item.InboxAttachmentId <= 0)
         {
-            SetStatus("בחירת קובץ פרויקט אינה זמינה.");
+            // #region agent log
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"H-TAG0 unavailable tagging={_attachmentTaggingService is not null} picker={_attachmentProjectFilePicker?.IsAvailable == true} inbox={_selectedEmail?.InboxMessageId?.ToString() ?? "null"} att={item.InboxAttachmentId}");
+            // #endregion
+            const string unavailable = "בחירת קובץ פרויקט אינה זמינה ב-host הנוכחי.";
+            SetStatus(unavailable);
+            MessageBox.Show(unavailable, "תיוג צרופה", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail.ProjectId ?? 0;
         if (projectId <= 0)
         {
-            SetStatus("בחר פרויקט לפני תיוג.");
+            const string needProject = "בחר פרויקט לפני תיוג.";
+            SetStatus(needProject);
+            MessageBox.Show(needProject, "תיוג צרופה", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 

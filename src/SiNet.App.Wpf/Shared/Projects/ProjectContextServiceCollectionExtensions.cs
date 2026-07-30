@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.Surfaces.Email.Detail;
 using SiNet.App.Wpf.WorkSurfaces;
+using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shared.Projects;
@@ -96,6 +99,10 @@ public static class ProjectContextServiceCollectionExtensions
 
         services.AddTransient<ProjectCreateDialogViewModel>();
         services.AddTransient<IProjectCreateDialogFactory, ProjectCreateDialogFactory>();
+
+        // Standalone attachment tagging UI hosts. V2 may override with hierarchical pickers.
+        services.TryAddTransient<IEmailAttachmentProjectFilePickerHost, WpfEmailAttachmentProjectFilePickerHost>();
+        services.TryAddTransient<IEmailAlternativeNamePromptHost, WpfEmailAlternativeNamePromptHost>();
 
         services.AddSiNetWorkSurfaces();
     }

@@ -276,8 +276,9 @@ public sealed class EmailDetailBoundaryTests
     {
         var tagging = ReadRepoFile("../SiNetSQL/SiNetSQL/Services/EmailIngestion/AttachmentTaggingService.cs");
         var picker = ReadRepoFile("SiNetProjectManagerV2/Services/EmailIngestion/AttachmentProjectFilePicker.cs");
-        var windowXaml = ReadRepoFile("SiNetProjectManagerV2/Windows/FileTreePickerWindow.xaml");
-        var windowCs = ReadRepoFile("SiNetProjectManagerV2/Windows/FileTreePickerWindow.xaml.cs");
+        var standaloneHost = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/WpfEmailAttachmentProjectFilePickerHost.cs");
+        var windowXaml = ReadRepoFile("src/SiNet.App.Wpf/Shared/Pickers/FileTreePickerWindow.xaml");
+        var windowCs = ReadRepoFile("src/SiNet.App.Wpf/Shared/Pickers/FileTreePickerWindow.xaml.cs");
         var sqlTargets = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Detail/SqlEmailAttachmentTaggingService.cs");
 
         Assert.Contains("typeProjIdFilter", tagging, StringComparison.Ordinal);
@@ -289,11 +290,17 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("כל הסוגים", picker, StringComparison.Ordinal);
         Assert.Contains("includeTypePrefix", picker, StringComparison.Ordinal);
 
+        Assert.Contains("ConfigureTypeFilter", standaloneHost, StringComparison.Ordinal);
+        Assert.Contains("כל הסוגים", standaloneHost, StringComparison.Ordinal);
+        Assert.Contains("LoadTagPickerCatalogAsync", standaloneHost, StringComparison.Ordinal);
+        Assert.Contains("FileTreePickerWindow", standaloneHost, StringComparison.Ordinal);
+
         Assert.Contains("TypeFilterBox", windowXaml, StringComparison.Ordinal);
         Assert.Contains("סוג פרויקט:", windowXaml, StringComparison.Ordinal);
         Assert.Contains("ReplaceRoots", windowCs, StringComparison.Ordinal);
 
         Assert.Contains("pf.OutSidData == true", sqlTargets, StringComparison.Ordinal);
+        Assert.Contains("LoadTagPickerCatalogAsync", sqlTargets, StringComparison.Ordinal);
         Assert.DoesNotContain("TypeOfProjectInProject", sqlTargets, StringComparison.Ordinal);
     }
 

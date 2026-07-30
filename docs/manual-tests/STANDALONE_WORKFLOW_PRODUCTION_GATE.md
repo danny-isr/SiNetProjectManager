@@ -76,7 +76,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Slice | Result | Notes |
 | --- | --- | --- |
-| Happy path 2.0–2.8 → `PRP.Approved` | Not Run (live) | Operator + `[WF-STEP]` required |
+| Happy path 2.0–2.8 → `PRP.Approved` | **In progress** | Start Pass: instance=5 @ `PRP.ProjectSetup`; task provisioned; OpenQuoteProject opened |
 | Branches 3.A–3.D | Not Run (live) | |
 | Integrity 4.1–4.5 | Not Run (live) | Related unit/E2E in Workflow filter |
 | Watchdog 4.6 | Not Run (live) | |
@@ -286,5 +286,14 @@ Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved
 | 2026-07-30 | PLN/REV approved Blocked lists (ProjectWork Deferred, REV.Intake unseeded) | Conditional pilot honesty |
 | 2026-07-30 | Readiness §7.1 + open-decisions item for interactive soak | Sign-off Conditional |
 | 2026-07-30 ~11:46 | Launched `SiNet.App.Wpf` DEBUG (PID 18396); archived prior workflow-manual-debug.log | Soak session open — Tree A |
+| 2026-07-30 ~11:50 | `CreatePriceQuote` inbox=14 → Proposal instance=5 Active @ `PRP.ProjectSetup`; taskId=13; Launcher→OpenQuoteProject (task=12) | A start **Pass** |
+| 2026-07-30 ~11:51 | Completed task=12 `ProjectOpened` (project≈3145); Acc.Provision SKIPPED; AutoAdvance `advanced=False` triggerLinks=0 | Project open OK; **advance gap** — verify task=13 / stage still ProjectSetup |
+| 2026-07-30 ~11:58 | Retry `CreatePriceQuote` inbox=14 (no new Start); then inbox=1 → Proposal instance=1 @ `PRP.ProjectSetup`, taskId=13 | Second start Pass; continue ProjectSetup on this instance |
 
-**Next operator action:** (1) Seed בסיסי (2) מיילים → CreatePriceQuote על מייל unassigned (3) דווח כאן אחרי כל Action.
+| 2026-07-30 ~12:00 | Launcher OpenQuoteProject for **task=13** (email=1, project=136) — correct workflow task | Awaiting dialog complete + advance |
+| 2026-07-30 ~12:00 | task=13 `ProjectOpened` → project=3146; rebind OK; AutoAdvance **Pass** → `PRP.FileMaterial`; task=14; Launcher→EMAIL | Acc.Provision still SKIPPED (known); filing AutoOnCreate ok=True |
+| 2026-07-30 ~12:05 | **Bug:** "בחר קובץ" silent no-op — standalone missing picker host | Fixed host; then restored **same hierarchical FileTreePicker** (not flat list) |
+| 2026-07-30 ~12:22 | FileMaterial: tags OK (att1→238, att2→148); Move 1/2 failed | **Not** "email unlinked" — email filed to project **3146**. Fail = **חסר מיפוי ACC** (Acc.Provision SKIPPED at create) |
+| 2026-07-30 | Fix: `AddSiNetAccProjectProvisioning` on StandaloneNew (Remote/Local + `IProjectAccMappingProvisioner`) | On-demand EnsureMapping on Move; create-time no longer SKIPPED |
+
+**Next operator action:** relaunch standalone (AccService Remote up) → retry Move on project **3146** (on-demand EnsureMapping) or create a new quote project and confirm `Acc.Provision EnsureMapping OK` in the workflow log.

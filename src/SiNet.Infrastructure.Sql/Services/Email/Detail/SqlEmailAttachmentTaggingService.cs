@@ -247,6 +247,92 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
             .ToList();
     }
 
+    public async Task<EmailAttachmentTagPickerCatalog> LoadTagPickerCatalogAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        var fileRows = await db.ProjectFiles
+            .AsNoTracking()
+            .Where(pf => pf.OutSidData == true)
+            .OrderBy(pf => pf.Number)
+            .ThenBy(pf => pf.Title)
+            .Select(pf => new
+            {
+                pf.Id,
+                pf.Title,
+                pf.TypeProjId,
+                TypeTitle = pf.TypeProj != null ? pf.TypeProj.Title : null,
+                FolderId = pf.Folder != null ? (int?)pf.Folder.Id : pf.Folderid,
+                pf.Number,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var files = fileRows
+            .Select(f => new EmailAttachmentTagPickerFile(
+                f.Id,
+                string.IsNullOrWhiteSpace(f.Title) ? "(ללא שם)" : f.Title!,
+                f.TypeProjId,
+                f.TypeTitle,
+                f.FolderId,
+                f.Number))
+            .ToList();
+
+        var seedFolderIds = files
+            .Where(f => f.FolderId is > 0)
+            .Select(f => f.FolderId!.Value)
+            .Distinct()
+            .ToList();
+
+        var folderMap = new Dictionary<int, EmailAttachmentTagPickerFolder>();
+        var pending = seedFolderIds.ToList();
+        while (pending.Count > 0)
+        {
+            var batch = await db.ProjectFolders
+                .AsNoTracking()
+                .Where(f => pending.Contains(f.Id))
+                .Select(f => new { f.Id, f.Title, f.Infolderid })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            pending.Clear();
+            foreach (var f in batch)
+            {
+                if (folderMap.ContainsKey(f.Id))
+                {
+                    continue;
+                }
+
+                folderMap[f.Id] = new EmailAttachmentTagPickerFolder(
+                    f.Id,
+                    string.IsNullOrWhiteSpace(f.Title) ? "(תיקייה ללא שם)" : f.Title!,
+                    f.Infolderid);
+
+                if (f.Infolderid is int parentId && parentId > 0 && !folderMap.ContainsKey(parentId))
+                {
+                    pending.Add(parentId);
+                }
+            }
+        }
+
+        var jobTypes = await db.JobTypes
+            .AsNoTracking()
+            .Where(jt => jt.ProjectFiles.Any(pf => pf.OutSidData == true))
+            .OrderBy(jt => jt.Title)
+            .Select(jt => new { jt.Id, jt.Title })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var jobTypeDtos = jobTypes
+            .Select(jt => new EmailAttachmentTagPickerJobType(
+                jt.Id,
+                string.IsNullOrWhiteSpace(jt.Title) ? $"סוג #{jt.Id}" : jt.Title!))
+            .ToList();
+
+        return new EmailAttachmentTagPickerCatalog(files, folderMap.Values.ToList(), jobTypeDtos);
+    }
+
     public async Task<EmailAttachmentTagValidationResult> ValidateTagAsync(
         EmailAttachmentTagValidationQuery query,
         CancellationToken cancellationToken = default)

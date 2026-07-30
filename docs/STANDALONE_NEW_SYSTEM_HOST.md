@@ -84,6 +84,23 @@ Single-machine / offline-friendly Local mode for inbox ensure without AccService
 
 **Risk / effort:** Low–medium; no DB schema; MultiStart Remote path unchanged.
 
+## Slice 2c — Project ACC mapping provisioning (pilot filing)
+
+Standalone New must provision `ProjectAccMapping` so email Move / ACC filing can resolve
+ACC project + target folder (create-time + on-demand EnsureMapping). This is **not** part of
+`AddSiNetAutodesk()` (control-plane boundary stays read/transfer).
+
+1. `AddSiNetAccProjectProvisioning()` in `SiNet.Infrastructure.AccBootstrap`:
+   - Remote: HTTP `POST /v1/acc/projects/ensure-mapping` (vault API key, mode BaseUrl)
+   - Local: in-process `AccProjectProvisioningService` when BaseUrl is empty
+   - Application port: `IProjectAccMappingProvisioner` → adapter
+2. Registered only from `AddSiNet(SiNetHostMode.StandaloneNew)` (after `AddSiNetAutodesk`).
+   V2Hybrid keeps its own Remote/Local registration in `SiNetProjectManagerV2` `App.xaml.cs`.
+3. `SqlProjectCreateService` + `ProjectFileFilingService` already call the provisioner when
+   present; without this registration they logged `EnsureMapping SKIPPED` and Move failed closed.
+
+**Risk / effort:** Medium (AccService Remote must be healthy for create/Move); no DB schema.
+
 ## Slice 2 — out of scope
 
 - Inspection Sheets create/export parity
@@ -109,6 +126,7 @@ clean Infrastructure modules while keeping SiNetSQL for provisioning/EF.
 | Already have SQL/native impl | Register those |
 | Pilot-needed (token, AD, template list, ProjectWork iface) | Native/vault implementations |
 | Local Acc inbox bootstrap | Slice 2b — registered on StandaloneNew; active when BaseUrl empty |
+| Project ACC mapping provisioning | Slice 2c — `IProjectAccMappingProvisioner` on StandaloneNew (Remote default) |
 | Inspection export | Deferred — stub / menu-gated |
 | Other V2-only | Keep no-op / menu-gated |
 
@@ -147,3 +165,6 @@ The V2-only `SiNetProjectManagerV2.Services.ProjectWork.WebView2AccViewerHost` i
    App.Wpf does not reference AccBootstrap directly (Composition does).
 5. **ACC viewer:** native WebView2 host lives in App.Wpf and is registered for StandaloneNew
    (and V2 New System DI points at the same type).
+6. **Project ACC mapping:** StandaloneNew registers `AddSiNetAccProjectProvisioning()` so
+   create/Move can EnsureMapping (Remote AccService by default). Still outside
+   `AddSiNetAutodesk()` control-plane registration.

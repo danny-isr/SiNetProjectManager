@@ -39,6 +39,14 @@ Self-contained Email Detail component: viewer, attachments, action bar, workflow
 
 See plan: IEmailBodyRenderer, IEmailAccIngestionService, IEmailAttachmentTaggingService, IEmailMoveToProjectService, IEmailExternalDownloadService, IEmailWorkflowContextService, IEmailSuggestedActionService.
 
+### Attachment tag picker (standalone)
+
+- Button **🔗 בחר קובץ** calls `IEmailAttachmentProjectFilePickerHost` (then `IEmailAttachmentTaggingService.SetTagAsync`).
+- **Standalone** registers `WpfEmailAttachmentProjectFilePickerHost` via `AddSiNetProjectContext` (`TryAddTransient`).
+- UI: shared hierarchical `SiNet.App.Wpf.Shared.Pickers.FileTreePickerWindow` (same tree / type-filter / search UX as V2) fed by `IEmailAttachmentTaggingService.LoadTagPickerCatalogAsync` (OutSidData + folders + JobTypes).
+- **V2** may still override with its own host wrapping the legacy window; behavior should match.
+- If the host is missing, the click must surface a visible error (status + MessageBox) — not a silent no-op.
+
 ## Boundary
 
 Detail folder must not reference SiNetSQL, SiNetSQL.MVVM, or LegacyBridge.

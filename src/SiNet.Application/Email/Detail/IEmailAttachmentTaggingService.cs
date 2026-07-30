@@ -19,6 +19,13 @@ public interface IEmailAttachmentTaggingService
         int projectId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Hierarchical catalog for the shared FileTreePicker (OutSidData + folders + job-type filter).
+    /// Mirrors legacy <c>AttachmentTaggingService.LoadStrictExternalAsync</c> scope.
+    /// </summary>
+    Task<EmailAttachmentTagPickerCatalog> LoadTagPickerCatalogAsync(
+        CancellationToken cancellationToken = default);
+
     Task<EmailAttachmentTagValidationResult> ValidateTagAsync(
         EmailAttachmentTagValidationQuery query,
         CancellationToken cancellationToken = default);
@@ -88,6 +95,26 @@ public sealed record EmailAttachmentTagTarget(
     int ProjectFileId,
     string DisplayName,
     bool HasAlternatives);
+
+public sealed record EmailAttachmentTagPickerFile(
+    int ProjectFileId,
+    string Title,
+    int? TypeProjId,
+    string? TypeTitle,
+    int? FolderId,
+    float? Number);
+
+public sealed record EmailAttachmentTagPickerFolder(
+    int FolderId,
+    string Title,
+    int? ParentFolderId);
+
+public sealed record EmailAttachmentTagPickerJobType(int Id, string Title);
+
+public sealed record EmailAttachmentTagPickerCatalog(
+    IReadOnlyList<EmailAttachmentTagPickerFile> Files,
+    IReadOnlyList<EmailAttachmentTagPickerFolder> Folders,
+    IReadOnlyList<EmailAttachmentTagPickerJobType> JobTypes);
 
 public sealed record EmailAttachmentTagValidationQuery(
     int InboxMessageId,

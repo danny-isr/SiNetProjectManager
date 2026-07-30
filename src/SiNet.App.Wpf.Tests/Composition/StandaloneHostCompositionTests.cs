@@ -7,6 +7,7 @@ using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
+using SiNet.Application.Email.Detail;
 using SiNet.Application.Identity;
 using SiNet.Application.MasterPlan.Reports;
 using SiNet.Application.ProjectWork;
@@ -66,6 +67,9 @@ public sealed class StandaloneHostCompositionTests
             Assert.NotNull(sp.GetRequiredService<IConnectorAuthService>());
             Assert.NotNull(sp.GetRequiredService<IEmailGateway>());
             Assert.NotNull(sp.GetRequiredService<IEmailSender>());
+            Assert.NotNull(sp.GetRequiredService<IEmailAttachmentTaggingService>());
+            var tagPicker = sp.GetRequiredService<IEmailAttachmentProjectFilePickerHost>();
+            Assert.True(tagPicker.IsAvailable);
         });
     }
 

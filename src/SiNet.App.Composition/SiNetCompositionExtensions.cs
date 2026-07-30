@@ -60,11 +60,13 @@ public static class SiNetCompositionExtensions
         services.AddSiNetAutodesk();
         services.AddSiNetAutodeskLocalSql();
 
-        // Local inbox ensure only for StandaloneNew. V2Hybrid registers
-        // LegacyHostLocalAccInboxBootstrapExecutor in the V2 composition graph instead.
+        // Local inbox ensure + project ACC mapping provisioning only for StandaloneNew.
+        // V2Hybrid registers LegacyHostLocalAccInboxBootstrapExecutor and its own
+        // AccService Remote/Local provisioning + IProjectAccMappingProvisioner in App.xaml.cs.
         if (hostMode == SiNetHostMode.StandaloneNew)
         {
             services.AddSiNetAccInboxBootstrapLocal();
+            services.AddSiNetAccProjectProvisioning();
 
             // The «מצב מערכת» rows the legacy bridge provides in V2 (docs/SYSTEM_HEALTH.md).
             // AddSiNetAi backs the Ollama row; V2Hybrid registers it in its own graph.
