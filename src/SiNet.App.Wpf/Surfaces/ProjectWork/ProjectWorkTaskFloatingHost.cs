@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.WorkSurfaces;
 
@@ -45,6 +46,7 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
                 return false;
             if (existingWindow.WindowState == WindowState.Minimized)
                 existingWindow.WindowState = WindowState.Normal;
+            TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(existingWindow);
             existingWindow.Activate();
             return true;
         }
@@ -65,17 +67,13 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
             Title = "ביצוע משימה — סביבת עבודה",
             Owner = owner,
             Content = surface,
-            Width = Math.Max(900, (owner?.ActualWidth ?? 1200) * 0.85),
-            Height = Math.Max(650, (owner?.ActualHeight ?? 800) * 0.9),
             MinWidth = 720,
             MinHeight = 480,
             FlowDirection = FlowDirection.RightToLeft,
-            WindowStartupLocation = owner is null
-                ? WindowStartupLocation.CenterScreen
-                : WindowStartupLocation.CenterOwner,
             ShowInTaskbar = true,
             Topmost = true,
         };
+        TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(host);
 
         host.Closed += (_, _) =>
         {

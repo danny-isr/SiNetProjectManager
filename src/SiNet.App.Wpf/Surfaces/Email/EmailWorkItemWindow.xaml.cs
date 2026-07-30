@@ -1,5 +1,6 @@
 using System.Windows;
 using SiNet.App.Wpf.Surfaces.Email.Detail;
+using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.WorkSurfaces;
@@ -26,6 +27,13 @@ public partial class EmailWorkItemWindow : Window
         // Close this popup host when the task-driven filing flow completes (file + move + task close).
         shellViewModel.EmailDetail.WorkItemDismissRequested += OnWorkItemDismissRequested;
         Closed += (_, _) => shellViewModel.EmailDetail.WorkItemDismissRequested -= OnWorkItemDismissRequested;
+        Loaded += OnLoadedApplyComplementaryLayout;
+    }
+
+    private void OnLoadedApplyComplementaryLayout(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedApplyComplementaryLayout;
+        TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(this);
     }
 
     private void OnWorkItemDismissRequested() => Close();

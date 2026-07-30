@@ -3,12 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:detail="clr-namespace:SiNet.App.Wpf.Surfaces.Email.Detail"
         Title="משימת דואר"
-        Width="960"
-        Height="720"
         MinWidth="640"
         MinHeight="480"
         FlowDirection="RightToLeft"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="Manual"
         Background="{DynamicResource SiBackgroundBrush}">
     <Grid Margin="8">
         <Grid.RowDefinitions>

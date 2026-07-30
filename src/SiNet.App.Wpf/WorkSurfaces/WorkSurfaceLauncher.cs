@@ -158,6 +158,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
                 var workItemWindow = workItemFactory.Create();
                 workItemWindow.ApplyContext(context);
+                TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(workItemWindow);
                 workItemWindow.Show();
                 return true;
             }
@@ -210,6 +211,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             // Close ProjectWork task window when switching task family (approved plan D).
             _services.GetService<ITaskFamilyWindowGate>()?.CloseProjectWorkTaskWindows();
 
+            TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(inspectionWindow);
             inspectionWindow.Show();
             return true;
         }
@@ -260,14 +262,12 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             {
                 Title = projectWorkSurface.ViewModel.Title,
                 Content = projectWorkSurface,
-                Width = 1000,
-                Height = 680,
                 MinWidth = 720,
                 MinHeight = 480,
                 FlowDirection = FlowDirection.RightToLeft,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 ShowInTaskbar = true,
             };
+            TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(hostWindow);
             hostWindow.Closed += (_, _) => projectWorkSurface.Dispose();
             hostWindow.Show();
             return true;

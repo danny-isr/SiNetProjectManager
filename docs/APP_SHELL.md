@@ -323,6 +323,31 @@ No legacy menu is scanned or copied. Each item is added deliberately, one migrat
 - Task completion remains the only bridge back into workflow, via a task completion/coordinator
   service that may call `IWorkflowCommandService`.
 
+### 10.1 Task workbench + complementary task-surface geometry
+
+The **Tasks workbench** (`TaskWorkbenchView`) is a tall-narrow floating window docked to the
+**right** of `SystemParameters.WorkArea` (default width `400`, see `DefaultNarrowWidth`).
+
+Every **task-driven work surface** opened from that workbench (or from `IWorkSurfaceLauncher` with a
+task id) must open in the **complementary rectangle** — the remaining WorkArea to the **left** of
+the workbench strip:
+
+| Window role | Geometry |
+| --- | --- |
+| Tasks workbench | Right strip: full WorkArea height, narrow width |
+| Task surface (ProjectWork float, Email work-item, Inspection task window, launcher fallbacks) | Left: `WorkArea.Left` / `Top`; width = `WorkArea.Width − reservedRight`; height = WorkArea height |
+
+Rules:
+
+- Prefer the **live** workbench `ActualWidth` when the workbench window is open; otherwise reserve
+  `TaskWorkbenchView.DefaultNarrowWidth`.
+- Use `WindowStartupLocation=Manual` for these surfaces (not `CenterOwner` / `CenterScreen`).
+- Modal decision dialogs (quote classify, create-task, prompts) stay centered on owner — they are
+  not complementary task surfaces.
+- Browse / shell-hosted inbox content stays in the main shell content area and is unchanged.
+
+Implementation: `TaskSurfaceWindowLayout` in `SiNet.App.Wpf.Surfaces.Tasks`.
+
 ---
 
 ## 11. Settings mechanism (Stage 5 — logging ports)
