@@ -12,7 +12,6 @@ namespace SiNet.Infrastructure.Sql.Services.ProjectWork;
 /// </summary>
 public sealed class ProjectDriveFolderResolver : IProjectDriveFolderResolver
 {
-    private const string ProjectRootFolderTitle = "\u05EA\u05D9\u05E7\u05D9\u05EA \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8";
     private const int MaxDepth = 32;
 
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
@@ -64,7 +63,7 @@ public sealed class ProjectDriveFolderResolver : IProjectDriveFolderResolver
 
             foundLeaf = true;
 
-            if (folder.Title == ProjectRootFolderTitle)
+            if (ProjectFolderTitles.IsProjectRoot(folder.Title))
                 break;
 
             if (!string.IsNullOrWhiteSpace(folder.Title))

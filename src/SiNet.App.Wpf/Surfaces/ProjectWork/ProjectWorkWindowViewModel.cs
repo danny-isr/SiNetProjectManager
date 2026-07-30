@@ -455,7 +455,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
         if (RequiresTachshivPhysicalFile(context) && !HasRequiredTachshivSatisfied())
         {
-            StatusMessage = "יש להעלות את קובץ אומדן הצעת מחיר לפני סיום המשימה.";
+            StatusMessage = "יש להעלות את קובץ אומדן הצעה לפני סיום המשימה.";
             return false;
         }
 

@@ -125,6 +125,7 @@
                 <TextBlock.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="&#x05E4;&#x05EA;&#x05D7; &#x05EA;&#x05D9;&#x05E7;&#x05D9;&#x05D9;&#x05D4;" Command="{Binding OpenFolderCommand}" />
+                        <MenuItem Header="&#x05D9;&#x05E6;&#x05D9;&#x05E8;&#x05EA; &#x05EA;&#x05D9;&#x05E7;&#x05D9;&#x05D9;&#x05D4;" Command="{Binding CreateFolderCommand}" />
                         <Separator />
                         <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05E9;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;" Command="{Binding CopyProjectNameCommand}" />
                         <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05DC;&#x05D6;&#x05D9;&#x05DB;&#x05E8;&#x05D5;&#x05DF;" Command="{Binding CopyPathCommand}" />
@@ -226,9 +227,15 @@
                         <TextBlock DockPanel.Dock="Top"
                                    Margin="8,6,8,2"
                                    FontSize="{DynamicResource SiTextTinyFontSize}"
-                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
-                                   TextWrapping="Wrap"
-                                   Text="ירוק = קבצים פיזיים · כתום = קובץ חובה חסר · כחול = לפי סוג פרויקט · אפור = ריק" />
+                                   TextWrapping="Wrap">
+                            <Run Text="ירוק = קבצים פיזיים" Foreground="#FF047857" />
+                            <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
+                            <Run Text="כתום = קובץ חובה חסר" Foreground="#FFEA580C" />
+                            <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
+                            <Run Text="כחול = לפי סוג פרויקט" Foreground="#FF1565C0" />
+                            <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
+                            <Run Text="אפור = ריק" Foreground="#FF9CA3AF" />
+                        </TextBlock>
                         <TreeView x:Name="FileTree" BorderThickness="0" Background="Transparent"
                                   ItemsSource="{Binding Tree.RootFolders}"
                                   ItemContainerStyle="{StaticResource TreeItemStyle}" />

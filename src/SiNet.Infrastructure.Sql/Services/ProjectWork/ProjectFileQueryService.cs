@@ -17,8 +17,6 @@ namespace SiNet.Infrastructure.Sql.Services.ProjectWork;
 public sealed class ProjectFileQueryService : IProjectFileQueryService
 {
     /// <summary>Synthetic DB root folder whose direct children are the per-project root folders.</summary>
-    private const string ProjectRootFolderTitle = "\u05EA\u05D9\u05E7\u05D9\u05EA \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8";
-
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
 
     public ProjectFileQueryService(IDbContextFactory<SiNetSQLDbContext> dbFactory)
@@ -52,7 +50,7 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
             .ConfigureAwait(false);
 
         var syntheticRootIds = allFolders
-            .Where(f => f.Title == ProjectRootFolderTitle)
+            .Where(f => ProjectFolderTitles.IsProjectRoot(f.Title))
             .Select(f => f.Id)
             .ToHashSet();
 

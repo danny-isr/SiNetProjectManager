@@ -6,6 +6,6 @@ namespace SiNet.Infrastructure.Sql.Constants;
 /// </summary>
 public static class ProjectFileCatalogCodes
 {
-    /// <summary>Required quote-estimate workbook under חומר כללי / ניהול כספי.</summary>
+    /// <summary>Required quote-estimate workbook («אומדן הצעה») under חומר כללי / הצעת מחיר.</summary>
     public const string QuoteEstimate = "QuoteEstimate";
 }

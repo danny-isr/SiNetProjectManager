@@ -9,7 +9,8 @@ namespace SiNet.Infrastructure.Sql.Services.SeedData;
 
 /// <summary>
 /// Bootstrap definitions for curated <see cref="ProjectFile"/> catalog slots.
-/// Reconcile by <see cref="ProjectFileCatalogDefinition.Code"/>; Title/Number may change after insert.
+/// Reconcile by <see cref="ProjectFileCatalogDefinition.Code"/>; never deletes rows.
+/// Title/Number may change after insert only for known catalog aliases.
 /// </summary>
 public static class ProjectFileCatalogSeedData
 {
@@ -17,12 +18,16 @@ public static class ProjectFileCatalogSeedData
     [
         new ProjectFileCatalogDefinition(
             Code: ProjectFileCatalogCodes.QuoteEstimate,
-            DefaultTitle: "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // אומדן הצעת מחיר
+            DefaultTitle: "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05D4", // אומדן הצעה
             JobTypeTitle: SqlProjectCreateService.DefaultJobTypeTitle, // חומר כללי
-            FolderTitle: "\u05E0\u05D9\u05D4\u05D5\u05DC \u05DB\u05E1\u05E4\u05D9", // ניהול כספי
+            FolderTitle: "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעת מחיר
             TypeFile: ".xlsx",
             IsRequired: true,
-            LegacyTitles: ["\u05EA\u05D7\u05E9\u05D9\u05D1"]), // תחשיב
+            LegacyTitles:
+            [
+                "\u05EA\u05D7\u05E9\u05D9\u05D1", // תחשיב
+                "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // אומדן הצעת מחיר
+            ]),
     ];
 
     public sealed record ProjectFileCatalogDefinition(
@@ -36,7 +41,7 @@ public static class ProjectFileCatalogSeedData
 
     /// <summary>
     /// Ensures every catalog definition exists and is linked by <c>Code</c>.
-    /// Does not overwrite a non-empty Title that already differs from <see cref="ProjectFileCatalogDefinition.DefaultTitle"/>.
+    /// Never deletes ProjectFile / ProjectFolder rows. Does not overwrite an arbitrary admin Title rename.
     /// </summary>
     public static async Task<string> EnsureAsync(SiNetSQLDbContext db, CancellationToken ct = default)
     {
@@ -67,22 +72,27 @@ public static class ProjectFileCatalogSeedData
         ProjectFileCatalogDefinition def,
         CancellationToken ct)
     {
+        // Prefer legacy id 9 (same as project-create default), then title match.
         var jobType = await db.JobTypes.AsNoTracking()
-            .FirstOrDefaultAsync(j => j.Title == def.JobTypeTitle, ct)
+            .FirstOrDefaultAsync(j => j.Id == SqlProjectCreateService.LegacyDefaultJobTypeId, ct)
             .ConfigureAwait(false);
-        if (jobType is null)
-            return $"[{def.Code}] skipped (JobType '{def.JobTypeTitle}' not found).";
+        if (jobType is null
+            || !string.Equals(jobType.Title, def.JobTypeTitle, StringComparison.Ordinal))
+        {
+            jobType = await db.JobTypes.AsNoTracking()
+                .FirstOrDefaultAsync(j => j.Title == def.JobTypeTitle, ct)
+                .ConfigureAwait(false);
+        }
 
-        var folderId = await db.ProjectFolders.AsNoTracking()
-            .Where(f => f.Title == def.FolderTitle)
-            .OrderBy(f => f.Id)
-            .Select(f => (int?)f.Id)
-            .FirstOrDefaultAsync(ct)
-            .ConfigureAwait(false);
+        if (jobType is null)
+            return $"[{def.Code}] skipped (JobType '{def.JobTypeTitle}' / id {SqlProjectCreateService.LegacyDefaultJobTypeId} not found).";
+
+        var folderId = await EnsureFolderAsync(db, def.FolderTitle, ct).ConfigureAwait(false);
         if (folderId is null)
-            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' not found).";
+            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' could not be resolved/created).";
 
         var typeId = jobType.Id;
+        var knownTitles = new HashSet<string>(def.LegacyTitles, StringComparer.Ordinal) { def.DefaultTitle };
 
         var byCode = await db.ProjectFiles
             .FirstOrDefaultAsync(f => f.Code == def.Code, ct)
@@ -91,17 +101,17 @@ public static class ProjectFileCatalogSeedData
         if (byCode is null)
         {
             // Attach Code to a legacy row for this job type (exact default title or legacy aliases).
-            var legacyTitles = new HashSet<string>(def.LegacyTitles, StringComparer.Ordinal) { def.DefaultTitle };
             var candidates = await db.ProjectFiles
                 .Where(f => f.TypeProjId == typeId && f.Title != null)
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
-            byCode = candidates.FirstOrDefault(f => legacyTitles.Contains(f.Title!))
+            byCode = candidates.FirstOrDefault(f => knownTitles.Contains(f.Title!))
                 ?? candidates.FirstOrDefault(f => f.IsRequired && f.Code == null);
         }
 
         if (byCode is null)
         {
+            // Prefer next number within the job type; fall back above global max for uniqueness.
             var maxForType = await db.ProjectFiles
                 .Where(f => f.TypeProjId == typeId && f.Number != null)
                 .Select(f => (float?)f.Number)
@@ -120,27 +130,39 @@ public static class ProjectFileCatalogSeedData
                 nextNumber += 1f;
             }
 
-            var titleTaken = await db.ProjectFiles.AsNoTracking()
-                .AnyAsync(f => f.Title == def.DefaultTitle, ct)
+            // Another row may already use the display title under a different job type — attach Code there
+            // only when TypeProjId matches; otherwise pick a free title is not allowed (skip).
+            var titleTakenElsewhere = await db.ProjectFiles.AsNoTracking()
+                .AnyAsync(f => f.Title == def.DefaultTitle && f.TypeProjId != typeId, ct)
                 .ConfigureAwait(false);
-            if (titleTaken)
-                return $"[{def.Code}] skipped (Title '{def.DefaultTitle}' already used).";
+            if (titleTakenElsewhere)
+                return $"[{def.Code}] skipped (Title '{def.DefaultTitle}' already used on another JobType).";
 
-            db.ProjectFiles.Add(new ProjectFile
+            var sameTypeTitle = await db.ProjectFiles
+                .FirstOrDefaultAsync(f => f.Title == def.DefaultTitle && f.TypeProjId == typeId, ct)
+                .ConfigureAwait(false);
+            if (sameTypeTitle is not null)
             {
-                Code = def.Code,
-                Title = def.DefaultTitle,
-                Number = nextNumber,
-                Folderid = folderId,
-                Typefile = def.TypeFile,
-                TypeProjId = typeId,
-                IsRequired = def.IsRequired,
-                StorageDestination = FileStorageDestination.FileServer,
-                Created = DateTime.UtcNow,
-                Modified = DateTime.UtcNow,
-            });
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            return $"[{def.Code}] inserted Number={nextNumber} FolderId={folderId}.";
+                byCode = sameTypeTitle;
+            }
+            else
+            {
+                db.ProjectFiles.Add(new ProjectFile
+                {
+                    Code = def.Code,
+                    Title = def.DefaultTitle,
+                    Number = nextNumber,
+                    Folderid = folderId,
+                    Typefile = def.TypeFile,
+                    TypeProjId = typeId,
+                    IsRequired = def.IsRequired,
+                    StorageDestination = FileStorageDestination.FileServer,
+                    Created = DateTime.UtcNow,
+                    Modified = DateTime.UtcNow,
+                });
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                return $"[{def.Code}] inserted Number={nextNumber} FolderId={folderId} Title='{def.DefaultTitle}'.";
+            }
         }
 
         var changed = false;
@@ -174,8 +196,15 @@ public static class ProjectFileCatalogSeedData
             changed = true;
         }
 
-        // Only fill Title when empty — never overwrite an admin rename.
+        // Fill empty Title, or rename known catalog aliases (תחשיב / אומדן הצעת מחיר) → current default.
+        // Never overwrite an arbitrary admin rename outside the known set.
         if (string.IsNullOrWhiteSpace(byCode.Title))
+        {
+            byCode.Title = def.DefaultTitle;
+            changed = true;
+        }
+        else if (knownTitles.Contains(byCode.Title)
+                 && !string.Equals(byCode.Title, def.DefaultTitle, StringComparison.Ordinal))
         {
             byCode.Title = def.DefaultTitle;
             changed = true;
@@ -185,9 +214,63 @@ public static class ProjectFileCatalogSeedData
         {
             byCode.Modified = DateTime.UtcNow;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            return $"[{def.Code}] updated Id={byCode.Id}.";
+            return $"[{def.Code}] updated Id={byCode.Id} Title='{byCode.Title}' FolderId={folderId}.";
         }
 
-        return $"[{def.Code}] unchanged Id={byCode.Id} Number={byCode.Number}.";
+        return $"[{def.Code}] unchanged Id={byCode.Id} Number={byCode.Number} Title='{byCode.Title}'.";
+    }
+
+    /// <summary>
+    /// Resolves the catalog folder by title; creates it under «תיקיית הפרויקט» when missing.
+    /// If an existing folder has a wrong/missing parent, re-parents it under the project root
+    /// so ProjectWork tree roots (children of the synthetic root) can show it. Never deletes.
+    /// </summary>
+    private static async Task<int?> EnsureFolderAsync(
+        SiNetSQLDbContext db,
+        string folderTitle,
+        CancellationToken ct)
+    {
+        var rootCandidates = await db.ProjectFolders
+            .AsNoTracking()
+            .Where(f => f.Title != null)
+            .OrderBy(f => f.Id)
+            .Select(f => new { f.Id, f.Title })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var rootId = rootCandidates
+            .Where(f => ProjectFolderTitles.IsProjectRoot(f.Title))
+            .Select(f => (int?)f.Id)
+            .FirstOrDefault();
+
+        var existing = await db.ProjectFolders
+            .Where(f => f.Title == folderTitle)
+            .OrderBy(f => f.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (existing is not null)
+        {
+            if (rootId is int rid
+                && existing.Infolderid != rid
+                && existing.Id != rid)
+            {
+                existing.Infolderid = rid;
+                existing.Modified = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+
+            return existing.Id;
+        }
+
+        var folder = new ProjectFolder
+        {
+            Title = folderTitle,
+            Infolderid = rootId,
+            Created = DateTime.UtcNow,
+            Modified = DateTime.UtcNow,
+        };
+        db.ProjectFolders.Add(folder);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return folder.Id;
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.ProjectWork;
 using SiNet.Domain.Files;
+using SiNet.Infrastructure.Sql.Services.ProjectWork;
 using SiNetSQL.Data;
 
 namespace SiNet.Infrastructure.Sql.ProjectWork;
@@ -19,7 +20,6 @@ namespace SiNet.Infrastructure.Sql.ProjectWork;
 /// </summary>
 public sealed class AccFileStore : IFileStore
 {
-    private const string ProjectRootFolderTitle = "\u05EA\u05D9\u05E7\u05D9\u05EA \u05D4\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8";
     private const int MaxDepth = 32;
 
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
@@ -225,7 +225,7 @@ public sealed class AccFileStore : IFileStore
             if (folder is null)
                 break;
 
-            if (folder.Title == ProjectRootFolderTitle)
+            if (ProjectFolderTitles.IsProjectRoot(folder.Title))
                 break;
 
             if (!string.IsNullOrWhiteSpace(folder.Title))

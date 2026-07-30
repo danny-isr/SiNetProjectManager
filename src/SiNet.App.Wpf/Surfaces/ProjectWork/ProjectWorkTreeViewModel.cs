@@ -30,6 +30,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private readonly IFileServerWatcher? _watcher;
     private readonly IProjectFolderPathResolver? _folderPathResolver;
     private readonly IAccWritePolicy? _writePolicy;
+    private readonly IProjectFolderWriteService? _folderWrite;
 
     private readonly Dictionary<int, ProjectFolderNodeVm> _foldersById = new();
     private readonly List<(ProjectFolderNodeVm Node, ProjectFolderDto Dto)> _scanTargets = new();
@@ -50,7 +51,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         IAccViewerHost? accViewerHost = null,
         IFileServerWatcher? watcher = null,
         IProjectFolderPathResolver? folderPathResolver = null,
-        IAccWritePolicy? writePolicy = null)
+        IAccWritePolicy? writePolicy = null,
+        IProjectFolderWriteService? folderWrite = null)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(index);
@@ -64,6 +66,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _watcher = watcher;
         _folderPathResolver = folderPathResolver;
         _writePolicy = writePolicy;
+        _folderWrite = folderWrite;
         _index.InFlightChanged += OnInFlightChanged;
         if (_accViewerHost is not null)
             _accViewerHost.TabClosed += OnAccTabClosed;
@@ -964,8 +967,57 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private void WireFolderCommands(ProjectFolderNodeVm folder)
     {
         folder.OpenFolderCommand = new AsyncRelayCommand(() => OpenFolderInExplorerAsync(folder));
+        folder.CreateFolderCommand = _folderWrite is null
+            ? null
+            : new AsyncRelayCommand(() => CreateChildFolderAsync(folder));
         folder.CopyPathCommand = new RelayCommand(_ => CopyTextToClipboard(folder.FullPath, requireExistingDirectory: true));
         folder.CopyProjectNameCommand = new RelayCommand(_ => CopyProjectNameToClipboard());
+    }
+
+    private async Task CreateChildFolderAsync(ProjectFolderNodeVm parent)
+    {
+        if (_folderWrite is null || _currentProjectId <= 0)
+            return;
+
+        System.Windows.Window? owner = null;
+        if (System.Windows.Application.Current?.Windows is { Count: > 0 } windows)
+        {
+            foreach (System.Windows.Window w in windows)
+            {
+                if (w.IsActive)
+                {
+                    owner = w;
+                    break;
+                }
+            }
+
+            owner ??= System.Windows.Application.Current.MainWindow;
+        }
+
+        var name = StringPromptDialog.Prompt(owner, "יצירת תיקייה", "שם התיקייה החדשה:");
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        try
+        {
+            var result = await _folderWrite
+                .CreateChildFolderAsync(parent.FolderId, name, _currentProjectId, CancellationToken.None)
+                .ConfigureAwait(true);
+            if (!result.Success)
+            {
+                ScanStatus = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? "יצירת תיקייה נכשלה."
+                    : result.ErrorMessage!;
+                return;
+            }
+
+            ScanStatus = $"נוצרה תיקייה: {name}";
+            await LoadProjectAsync(_currentProjectId, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ScanStatus = $"יצירת תיקייה נכשלה: {ex.Message}";
+        }
     }
 
     private void WireVersionCommands(VersionNodeVm version)

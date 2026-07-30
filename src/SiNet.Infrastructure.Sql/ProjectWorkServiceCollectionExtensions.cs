@@ -24,6 +24,7 @@ public static class ProjectWorkServiceCollectionExtensions
         services.TryAddTransient<IProjectFileQueryService, ProjectFileQueryService>();
         services.TryAddTransient<IProjectFolderPathResolver, ProjectFolderPathResolver>();
         services.TryAddTransient<IProjectDriveFolderResolver, ProjectDriveFolderResolver>();
+        services.TryAddTransient<IProjectFolderWriteService, SqlProjectFolderWriteService>();
 
         return services;
     }

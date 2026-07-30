@@ -295,5 +295,9 @@ Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved
 | 2026-07-30 ~12:05 | **Bug:** "בחר קובץ" silent no-op — standalone missing picker host | Fixed host; then restored **same hierarchical FileTreePicker** (not flat list) |
 | 2026-07-30 ~12:22 | FileMaterial: tags OK (att1→238, att2→148); Move 1/2 failed | **Not** "email unlinked" — email filed to project **3146**. Fail = **חסר מיפוי ACC** (Acc.Provision SKIPPED at create) |
 | 2026-07-30 | Fix: `AddSiNetAccProjectProvisioning` on StandaloneNew (Remote/Local + `IProjectAccMappingProvisioner`) | On-demand EnsureMapping on Move; create-time no longer SKIPPED |
+| 2026-07-30 ~12:52 | Relaunch: AccService PID 25296 (health 200) + `SiNet.App.Wpf` DEBUG PID 21272 | Soak resume — Tree A FileMaterial |
+| 2026-07-30 ~12:54 | Move inbox=1 / project=3146 / task=14 | **Pass** — EnsureMapping OK (~12s AccService 200); moved=2/2; task=14 closed |
+| 2026-07-30 ~12:54 | AutoAdvance → `PRP.MaterialCheck` (stage 35); task=15; Launcher→PROJECT-WORK | Continue MaterialCheck |
+| 2026-07-30 ~12:58 | task=15 `MaterialComplete` → AutoAdvance **Pass** → `PRP.Calculation` (stage 36); task=16 | Continue Calculation |
 
-**Next operator action:** relaunch standalone (AccService Remote up) → retry Move on project **3146** (on-demand EnsureMapping) or create a new quote project and confirm `Acc.Provision EnsureMapping OK` in the workflow log.
+**Next operator action:** השלם **task=16** בשלב `PRP.Calculation` (פרויקט 3146). Agent עוקב.

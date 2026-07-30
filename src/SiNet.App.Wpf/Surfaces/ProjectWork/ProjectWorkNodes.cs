@@ -83,6 +83,9 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
     /// <summary>Opens this folder in Windows Explorer. Set by the tree view model.</summary>
     public ICommand? OpenFolderCommand { get; set; }
 
+    /// <summary>Creates a child user folder under this folder. Set by the tree view model.</summary>
+    public ICommand? CreateFolderCommand { get; set; }
+
     /// <summary>Copies the folder full path to the clipboard («שמור לזיכרון»).</summary>
     public ICommand? CopyPathCommand { get; set; }
 
