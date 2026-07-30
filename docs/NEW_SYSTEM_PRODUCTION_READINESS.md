@@ -146,6 +146,26 @@ UI parity vs V2 dialogs may be simplified (filters / R02 pivot); dual path retai
 
 ---
 
+## 7.1 Workflow production gate (standalone)
+
+**Status: Conditional** — gate document and automated engine coverage are in place; **interactive soak**
+(operator + `[WF-STEP]` log) is still required before claiming full workflow production readiness.
+
+| Item | Detail |
+| --- | --- |
+| Master checklist | [`manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md) |
+| Proposal detail runbook | [`manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md`](./manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md) |
+| Trees in scope | PRP (email), OPN (email), PLN (+ hosted MAT), REV (+ MAT), integrity/watchdog, closed viewer |
+| Release UI for progression | מיילים + לוח משימות + השלמת משימות via `ITaskCompletionService` — **not** WorkflowDashboard |
+| DEBUG-only | Seed / Watchdog / `[WF-STEP]` (silence with `SINET_WF_DEBUG=0` after soak) |
+| Known deferred | WorkflowDashboard write; `REV.Intake` seed not wired (see Review seed TODO) |
+
+**Pass criteria (when soak completes):** PRP + OPN happy path + one critical branch each; PLN/REV either
+Pass or an **approved Blocked** list; integrity Pass; closed viewer read-only OK; Release menu still
+hides Dev Seed/Watchdog.
+
+---
+
 ## 8. Verification (automated)
 
 Full strategy: [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) (L1–L4 offline + optional Live).
@@ -257,10 +277,11 @@ Final decision:
 ## 10. Open decisions & next slices
 
 1. **Operator live smoke** (shell + Email ACC + optional Reports) — gate for pilot users.
-2. **G-Policy** — whether native `GmailSend` / Reply / Forward may appear in New System WPF.
-3. After smoke pass: **Email Composite Work Surface Contract** (docs only).
-4. Ops: MasterPlan API key rotation (`OPS-P0-SECRET-ROTATION.md`).
-5. Later: retire V2 R0x dual path; remove deprecated V2 New System startup after soak.
+2. **Workflow interactive soak** — [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md) (PRP→OPN→PLN→REV); flip §7.1 from Conditional to Pass/Fail.
+3. **G-Policy** — whether native `GmailSend` / Reply / Forward may appear in New System WPF.
+4. After smoke pass: **Email Composite Work Surface Contract** (docs only).
+5. Ops: MasterPlan API key rotation (`OPS-P0-SECRET-ROTATION.md`).
+6. Later: retire V2 R0x dual path; remove deprecated V2 New System startup after soak.
 
 ---
 
@@ -276,4 +297,5 @@ Final decision:
 | [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md) | AccService Local/Remote |
 | [`APP_SHELL.md`](./APP_SHELL.md) | Shell / startup modes |
 | [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) | Automated + Live + manual layers |
+| [`manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md) | Workflow trees + production gate |
 | [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md) | DB recovery baseline |

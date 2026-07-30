@@ -4,6 +4,7 @@
 > **Host:** `SiNet.App.Wpf.exe` + AccService Remote (MultiStart)  
 > **Strategy:** [`docs/TEST_STRATEGY.md`](../TEST_STRATEGY.md)  
 > **Envelope:** [`docs/NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md)  
+> **Workflow gate:** [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md)  
 > **Supersedes:** [`NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md),
 > [`EMAIL_ACC_STANDALONE_SMOKE.md`](./EMAIL_ACC_STANDALONE_SMOKE.md)
 

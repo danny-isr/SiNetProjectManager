@@ -61,9 +61,9 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ## 1. Setup
 
-1. **Run the New System** (`SiNetProjectManagerV2` in New System mode). Ensure you are launching a
-   **DEBUG** build (the dev-tools menu and `[WF-STEP]` logs default on in DEBUG; in a RELEASE build set
-   `SINET_WF_DEBUG=1` before launch).
+1. **Run the standalone New System** (`SiNet.App.Wpf.exe`). Prefer a **DEBUG** build (dev-tools menu and
+   `[WF-STEP]` default on in DEBUG; in RELEASE set `SINET_WF_DEBUG=1` before launch).
+   V2 New System mode remains a fallback only — production pilot host is standalone.
 2. **Seed the Proposal workflow:** menu **"כלי פיתוח — טעינת Seed בסיסי"** (Task static + mappings +
    workflow seed). This seeds the PRP.\* definition, stages, transitions and stage-task templates.
    - Make sure every PRP stage's assigned group (`OfficeManagement`, `SeniorManagement`, `Planners`) has
@@ -71,11 +71,12 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
      a user-facing error (look for `WorkflowStartPreflightException` / `WorkflowAdvancePreflightException`).
 3. **Have one unassigned inbox email** available in the New System inbox (an email with the office-default
    project) so the **CreatePriceQuote** suggested action is offered.
-4. **Log file:** all `[WF-STEP]` lines are appended to a dedicated file:
-   - Path: `%LocalAppData%\<Company>\<Product>\Logs\workflow-manual-debug.log`
-     (same Logs folder the app uses, e.g. `…\SiNet\SiNetProjectManagerV2\Logs\`).
-   - The exact resolved path is shown in the **"הרץ Watchdog עכשיו"** result dialog.
-   - Tail it live (PowerShell): `Get-Content -Wait -Tail 50 "$env:LOCALAPPDATA\SiNet\SiNetProjectManagerV2\Logs\workflow-manual-debug.log"`
+4. **Log file:** all `[WF-STEP]` lines are appended to a dedicated file via `WorkflowDebugTrace`:
+   - Path: `%LocalAppData%\<AssemblyCompany>\<EntryAssemblyName>\Logs\workflow-manual-debug.log`
+   - Standalone with company **שיא חדש בע״מ**:  
+     `%LocalAppData%\שיא חדש בע״מ\SiNet.App.Wpf\Logs\workflow-manual-debug.log`
+   - Confirm the live path in the **"הרץ Watchdog עכשיו"** dialog (`WorkflowDebugTrace.FilePath`).
+   - Master gate + all trees: [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md)
    - Each line format: `[WF-STEP] {utcTimestamp} T{threadId} {area} | {details}`.
 5. **Tip:** clear/rename the log between runs so each pass is clean.
 
