@@ -373,6 +373,7 @@ public interface IAuthorizationQueryService
 | `SystemSettingsWrite` | Administrator |
 | `UsersManage` | Administrator |
 | `ActionPermissionsManage` | Administrator |
+| `ShellOpenFileCatalogAdmin` | Administrator |
 
 **Host adapter:** `SiNetProjectManagerV2/Services/LegacyAuthorizationQueryService.cs` → legacy `CurrentUserContext` (hierarchical `Role >= required`).
 

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Composition;
+using SiNet.App.Wpf.Admin.FileCatalog;
 using SiNet.App.Wpf.Admin.MasterPlan;
 using SiNet.App.Wpf.Admin.Permissions;
 using SiNet.App.Wpf.Admin.Security;
@@ -43,6 +44,7 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetUserAdminWpf();
         services.AddSiNetUserGroupsAdminWpf();
         services.AddSiNetPermissionAdminWpf();
+        services.AddSiNetFileCatalogAdminWpf();
         services.AddSiNetSecretAdminWpf();
         services.AddSiNetSettingsAdminWpf();
         services.AddSiNetMasterPlanAdminWpf();

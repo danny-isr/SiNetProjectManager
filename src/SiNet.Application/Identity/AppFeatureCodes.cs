@@ -19,4 +19,6 @@ public static class AppFeatureCodes
     public const string UsersManage = "Users.Manage";
     public const string ActionPermissionsManage = "ActionPermissions.Manage";
     public const string TaskWorkbenchViewOtherUsersTasks = "TaskWorkbench.ViewOtherUsersTasks";
+    /// <summary>Admin global file/folder catalog («ניהול קבצים»).</summary>
+    public const string ShellOpenFileCatalogAdmin = "Shell.OpenFileCatalogAdmin";
 }

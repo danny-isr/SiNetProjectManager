@@ -102,6 +102,7 @@ public static class SiNetCompositionExtensions
 
         services.AddSiNetFileSystem();
         services.AddSiNetProjectWorkSql();
+        services.AddSiNetFileCatalogSql();
 
         // ACC-write gate: closed by default (writes ship dark). A host may override this registration
         // with a configuration-driven policy after the ACC-Write-Policy is approved.

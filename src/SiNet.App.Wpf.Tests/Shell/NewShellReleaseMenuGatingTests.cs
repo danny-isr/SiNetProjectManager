@@ -34,6 +34,7 @@ public sealed class NewShellReleaseMenuGatingTests
     [InlineData("הגדרות מערכת", AppFeatureCodes.SystemSettingsWrite)]
     [InlineData("מיפוי MasterPlan", AppFeatureCodes.SystemSettingsWrite)]
     [InlineData("סטטוס ACC", AppFeatureCodes.SystemSettingsWrite)]
+    [InlineData("ניהול קבצים", AppFeatureCodes.ShellOpenFileCatalogAdmin)]
     public void WhenFeatureGrantedThenMenuItemIsVisible(string title, string featureCode)
     {
         var items = BuildFlattened(granted: [featureCode], authenticated: true);
@@ -49,6 +50,7 @@ public sealed class NewShellReleaseMenuGatingTests
     [InlineData("R01 — סיכום שעות")]
     [InlineData("מפתחות וסודות")]
     [InlineData("מיפוי MasterPlan")]
+    [InlineData("ניהול קבצים")]
     public void WhenNoFeaturesGrantedThenGatedMenuItemsAreHidden(string title)
     {
         var items = BuildFlattened(granted: [], authenticated: true);

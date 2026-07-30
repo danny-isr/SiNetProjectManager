@@ -22,6 +22,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.UsersManage] = AppRole.Administrator,
             [AppFeatureCodes.ActionPermissionsManage] = AppRole.Administrator,
             [AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks] = AppRole.Administrator,
+            [AppFeatureCodes.ShellOpenFileCatalogAdmin] = AppRole.Administrator,
         };
 
     /// <summary>

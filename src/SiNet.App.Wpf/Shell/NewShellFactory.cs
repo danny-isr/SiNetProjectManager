@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Autodesk;
+using SiNet.App.Wpf.Admin.FileCatalog;
 using SiNet.App.Wpf.Admin.MasterPlan;
 using SiNet.App.Wpf.Admin.MasterPlan.Reports;
 using SiNet.App.Wpf.Admin.Permissions;
@@ -264,6 +265,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "מצב ריצה / browse / reconciliation של ACC"));
         }
 
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenFileCatalogAdmin, cancellationToken).ConfigureAwait(true))
+        {
+            admin.Add(new NewShellMenuItem(
+                "ניהול קבצים",
+                OpenNativeFileCatalog,
+                "קטלוג הגדרות קבצים ותיקיות (אדמין)"));
+        }
+
         if (HasAuthenticatedUser())
         {
             admin.Add(new NewShellMenuItem(
@@ -489,6 +498,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת הרשאות פעולה: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeFileCatalog()
+    {
+        try
+        {
+            var window = _services.GetRequiredService<FileCatalogWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת ניהול קבצים: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

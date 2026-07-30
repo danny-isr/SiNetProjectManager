@@ -43,6 +43,7 @@
 | FloatingInspectionView | SiNetProjectManagerV2/WPFUserControl/FloatingInspectionView.xaml | Floating/dockable inspection-report workspace (RTL) | Header chrome (pin/dock/refresh/collapse/close), create-report strip, locked-report action row, metadata + reviewed-plan row, questionnaire tree, drawings section, report cards list, status bar | FloatingInspectionViewModel (~4.5k lines): report CRUD, report generation/export, Gmail/planner response pull, ACC/file actions, drawing stamping |
 | EmailManagementView | SiNetProjectManagerV2/WPFUserControl/EmailManagementView.xaml | Inbox / email triage and move-to-project | Mail list, attachments, project mapping, actions | EmailManagementViewModel (~6k lines): Gmail, ACC inbox, move-to-project |
 | ProjectWorkView | SiNetProjectManagerV2/WPFUserControl/ProjectWorkView.xaml | Project work window (files/alternatives/versions) | File tree, alternatives, versions, actions | ProjectWorkViewModel (~2.2k lines): ACC files, project file instances |
+| FileManagerView | SiNetProjectManagerV2/WPFUserControl/FileManagerView.xaml | Admin global file/folder catalog («ניהול קבצים») | JobType filter, folder tree, ProjectFile grid | FileManagerViewModel (SiNetSQL): DB CRUD only — see [`FILE_CATALOG_ADMIN.md`](./FILE_CATALOG_ADMIN.md) |
 | TaskPanelView | SiNetProjectManagerV2/WPFUserControl/TaskPanelView.xaml | Task panel / queue | Task list, status, actions | TaskPanelViewModel (~1.2k lines): workflow tasks, completion |
 | FloatingProjectTasksView | SiNetProjectManagerV2/WPFUserControl/FloatingProjectTasksView.xaml | Floating per-project task list | Floating chrome, task list | FloatingProjectTasksViewModel (~0.9k lines) |
 | WorkflowManagementWindow | SiNetProjectManagerV2/Dialogs/WorkflowManagementWindow.xaml | Workflow administration dialog | Workflow definitions, stages | Workflow admin services |
@@ -54,6 +55,7 @@
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
 | EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
 | ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/ProjectWorkWindowView | Replaced (V2 menu + task launcher; legacy view no longer opened) |
+| FileManagerView | src/SiNet.App.Wpf/Admin/FileCatalog/ | **Reconnected** — native admin window + menu; see [`FILE_CATALOG_ADMIN.md`](./FILE_CATALOG_ADMIN.md) |
 | TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView | **Started / Pilot** — Task Workbench (queue + CRUD, 2026-07-06) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started |
