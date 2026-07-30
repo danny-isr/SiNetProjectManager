@@ -30,6 +30,10 @@
                         <MenuItem Header="שייך את הקובץ הנבחר לכאן"
                                   Command="{Binding PlacementTarget.Tag.AssignFileToFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}"/>
+                        <Separator/>
+                        <MenuItem Header="מחק תיקייה"
+                                  Command="{Binding PlacementTarget.Tag.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"/>
                     </ContextMenu>
                 </StackPanel.ContextMenu>
                 <TextBlock Text="📁" Margin="0,0,5,0" Foreground="#FFDAA520"/>
@@ -80,6 +84,7 @@
                 <TreeView x:Name="FolderTree" Grid.Row="1"
                           ItemsSource="{Binding FolderTree}"
                           BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1"
+                          PreviewMouseRightButtonDown="FolderTree_OnPreviewMouseRightButtonDown"
                           SelectedItemChanged="FolderTree_OnSelectedItemChanged"/>
             </Grid>
 
@@ -94,6 +99,9 @@
 
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
                     <TextBlock Text="קבצים" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Text=" — תצוגה:" VerticalAlignment="Center" Margin="8,0,0,0"
+                               Foreground="{DynamicResource SiSecondaryBrush}"/>
+                    <TextBlock Text="{Binding FolderFilterCaption}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="4,0,0,0"/>
                     <Button Content="הוסף קובץ" Command="{Binding AddFileCommand}"
                             Margin="10,0,0,0" Padding="8,2"/>
                     <Button Content="מחק נבחר" Command="{Binding DeleteFileCommand}"
@@ -118,6 +126,7 @@
                                 </Style>
                             </DataGridTextColumn.EditingElementStyle>
                         </DataGridTextColumn>
+                        <DataGridTextColumn Header="תיקייה" Binding="{Binding FolderTitle}" IsReadOnly="True" Width="1.2*" MinWidth="100"/>
                         <DataGridTextColumn Header="#" Binding="{Binding Number}" IsReadOnly="True" Width="0.5*" MinWidth="40"/>
                         <DataGridComboBoxColumn Header="סיומת"
                                                 SelectedItemBinding="{Binding Typefile}"

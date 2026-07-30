@@ -8,6 +8,7 @@ public sealed record FileCatalogFolderDto(
     int FolderId,
     string Title,
     int? ParentFolderId,
+    bool IsProjectRoot,
     IReadOnlyList<FileCatalogFolderDto> Children);
 
 public sealed record FileCatalogFileDto(
@@ -21,6 +22,7 @@ public sealed record FileCatalogFileDto(
     string? TemplateLocation,
     string? Description,
     int? FolderId,
+    string? FolderTitle,
     int? JobTypeId,
     bool IsRequired,
     string? Code);

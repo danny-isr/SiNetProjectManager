@@ -14,6 +14,11 @@ public interface IFileCatalogWriteService
         string title,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Deletes an empty catalog folder (no child folders and no file definitions).
+    /// </summary>
+    Task<FileCatalogWriteResult> DeleteFolderAsync(int folderId, CancellationToken cancellationToken = default);
+
     Task<FileCatalogWriteResult> CreateFileAsync(
         int folderId,
         int jobTypeId,

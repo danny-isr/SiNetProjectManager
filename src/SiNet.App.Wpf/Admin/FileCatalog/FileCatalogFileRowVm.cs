@@ -18,6 +18,7 @@ public sealed class FileCatalogFileRowVm : ObservableObject
     private string? _description;
     private bool _isRequired;
     private int? _folderId;
+    private string? _folderTitle;
     private bool _isDirty;
 
     public FileCatalogFileRowVm(FileCatalogFileDto dto)
@@ -36,6 +37,7 @@ public sealed class FileCatalogFileRowVm : ObservableObject
         _description = dto.Description;
         _isRequired = dto.IsRequired;
         _folderId = dto.FolderId;
+        _folderTitle = dto.FolderTitle;
     }
 
     public int FileId { get; }
@@ -130,6 +132,12 @@ public sealed class FileCatalogFileRowVm : ObservableObject
         set => SetField(ref _folderId, value);
     }
 
+    public string? FolderTitle
+    {
+        get => _folderTitle;
+        set => SetField(ref _folderTitle, value);
+    }
+
     public bool IsDirty
     {
         get => _isDirty;
@@ -138,9 +146,10 @@ public sealed class FileCatalogFileRowVm : ObservableObject
 
     public void ClearDirty() => IsDirty = false;
 
-    public void ApplyFolderId(int folderId)
+    public void ApplyFolder(int folderId, string folderTitle)
     {
         FolderId = folderId;
+        FolderTitle = folderTitle;
     }
 
     public FileCatalogFileEditDto ToEditDto() =>

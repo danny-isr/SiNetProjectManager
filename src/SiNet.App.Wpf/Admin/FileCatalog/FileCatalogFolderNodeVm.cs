@@ -14,6 +14,7 @@ public sealed class FileCatalogFolderNodeVm : ObservableObject
         ArgumentNullException.ThrowIfNull(dto);
         FolderId = dto.FolderId;
         Title = dto.Title;
+        IsProjectRoot = dto.IsProjectRoot;
         Parent = parent;
         Children = new ObservableCollection<FileCatalogFolderNodeVm>(
             dto.Children.Select(c => new FileCatalogFolderNodeVm(c, this)));
@@ -21,6 +22,8 @@ public sealed class FileCatalogFolderNodeVm : ObservableObject
 
     public int FolderId { get; }
     public string Title { get; }
+    /// <summary>True for «תיקיית הפרויקט» — filter shows all catalog files.</summary>
+    public bool IsProjectRoot { get; }
     public FileCatalogFolderNodeVm? Parent { get; }
     public ObservableCollection<FileCatalogFolderNodeVm> Children { get; }
 

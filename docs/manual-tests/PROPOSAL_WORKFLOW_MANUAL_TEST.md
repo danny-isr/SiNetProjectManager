@@ -147,7 +147,7 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ### 2.5 — `PRP.Calculation` → `PRP.Preparation`  (`QuoteCalculationCompleted`)
 
-- **Prerequisite:** Seed includes catalog file **אומדן הצעה** (`QuoteEstimate`) under folder **הצעת מחיר**, JobType **חומר כללי**. Project must include that JobType so the orange required slot appears. Upload a physical `.xlsx` before complete (UI blocks otherwise).
+- **Prerequisite:** Seed includes catalog file **אומדן הצעה** (`QuoteEstimate`) under **תכתובת → ניהול כספי**, JobType **חומר כללי**. Project must include that JobType so the orange required slot appears. Upload a physical `.xlsx` before complete (UI blocks otherwise).
 - **Action:** complete `PrepareQuoteCalculation` with result **`QuoteCalculationCompleted`**.
 - **Expected DB state:** `CurrentStage=PRP.Preparation`; new `PrepareQuoteDocument` task open.
 - `[ ]` **Result/Notes:** ________________________________________________

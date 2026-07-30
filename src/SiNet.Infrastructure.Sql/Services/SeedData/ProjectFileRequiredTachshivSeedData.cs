@@ -11,7 +11,8 @@ public static class ProjectFileRequiredOmdanSeedData
     public const string DisplayTitle = "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05D4"; // אומדן הצעה
     public const string DefaultTypeFile = ".xlsx";
     public const string CatalogCode = ProjectFileCatalogCodes.QuoteEstimate;
-    public const string FolderTitle = "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8"; // הצעת מחיר
+    public const string FolderTitle = "\u05E0\u05D9\u05D4\u05D5\u05DC \u05DB\u05E1\u05E4\u05D9"; // ניהול כספי
+    public const string ParentFolderTitle = "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA"; // תכתובת
 
     public static Task<string> EnsureAsync(SiNetSQLDbContext db, CancellationToken ct = default)
         => ProjectFileCatalogSeedData.EnsureAsync(db, ct);

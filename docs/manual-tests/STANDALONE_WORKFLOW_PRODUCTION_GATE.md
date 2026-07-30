@@ -299,5 +299,6 @@ Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved
 | 2026-07-30 ~12:54 | Move inbox=1 / project=3146 / task=14 | **Pass** — EnsureMapping OK (~12s AccService 200); moved=2/2; task=14 closed |
 | 2026-07-30 ~12:54 | AutoAdvance → `PRP.MaterialCheck` (stage 35); task=15; Launcher→PROJECT-WORK | Continue MaterialCheck |
 | 2026-07-30 ~12:58 | task=15 `MaterialComplete` → AutoAdvance **Pass** → `PRP.Calculation` (stage 36); task=16 | Continue Calculation |
+| 2026-07-30 ~16:18 | Relaunch soak: AccService PID **25296** (up); `SiNet.App.Wpf` DEBUG PID **1420**; agent tails branded `workflow-manual-debug.log` | Resume — verify Seed אומדן in «ניהול קבצים», then task=16 |
 
-**Next operator action:** השלם **task=16** בשלב `PRP.Calculation` (פרויקט 3146). Agent עוקב.
+**Next operator action:** (1) מחק ידנית «הצעת מחיר»/אומדן שגוי אם נשארו → (2) Seed בסיסי → (3) **ניהול קבצים**: חומר כללי / תכתובת→ניהול כספי / אומדן הצעה (`QuoteEstimate`) → (4) task=16 Calculation על 3146. Agent עוקב אחרי הלוג.

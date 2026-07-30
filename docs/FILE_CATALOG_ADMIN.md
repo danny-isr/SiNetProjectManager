@@ -42,6 +42,8 @@ This is **not** «בעבודה 2» (project file tree + physical files). Same da
 
 Same layout as V2: top JobType bar, folder tree, files grid, create folder / create file / assign / save. Hebrew labels + shell theme OK.
 
+Folder filter (New System): left-click **תיקיית הפרויקט** → show all files; left-click a specific folder → only that folder’s files. Right-click assign does **not** change the filter. Grid shows a read-only **תיקייה** column. Right-click **מחק תיקייה** only when the folder is empty (no child folders / no file defs); project-root folders cannot be deleted.
+
 Host: floating admin `Window` (like Users / Action Permissions).
 
 ---
@@ -54,7 +56,7 @@ Implement as one feature toward **full V2 parity** (create folders + files + ass
 2. Create folder, create/edit/delete file defs, assign, save  
 3. JobType add/rename if still needed for day-to-day use  
 
-Seeded catalog rows with `Code` (e.g. `QuoteEstimate`): editable title/flags OK; do not delete or clear `Code` without an explicit later decision.
+Seeded catalog rows with `Code` (e.g. `QuoteEstimate` = «אומדן הצעה» under **תכתובת → ניהול כספי**): editable title/flags OK; do not delete or clear `Code` without an explicit later decision. Seed does **not** create «הצעת מחיר».
 
 ---
 

@@ -25,6 +25,7 @@ public sealed class FileCatalogViewModel : ObservableObject
     private FileCatalogJobTypeDto? _selectedJobType;
     private FileCatalogFileRowVm? _selectedFile;
     private FileCatalogFolderNodeVm? _selectedFolder;
+    private FileCatalogFolderNodeVm? _folderFilter;
     private bool _isBusy;
     private string _statusMessage = string.Empty;
     private bool _isDialogOpen;
@@ -54,6 +55,7 @@ public sealed class FileCatalogViewModel : ObservableObject
             _ => !IsBusy && SelectedJobType is { Id: > 0 });
         AddFolderCommand = new RelayCommand(p => OpenFolderAddDialog(p), _ => !IsBusy);
         AssignFileToFolderCommand = new AsyncRelayCommand<object>(AssignFileAsync, _ => !IsBusy);
+        DeleteFolderCommand = new AsyncRelayCommand<object>(DeleteFolderAsync, _ => !IsBusy);
         ConfirmDialogCommand = new AsyncRelayCommand(ConfirmDialogAsync, () => !IsBusy);
         CancelDialogCommand = new RelayCommand(_ => IsDialogOpen = false);
         BrowseTemplateCommand = new RelayCommand(p => BrowseTemplate(p as FileCatalogFileRowVm));
@@ -89,11 +91,13 @@ public sealed class FileCatalogViewModel : ObservableObject
         {
             if (!SetField(ref _selectedFile, value))
                 return;
-            SyncTreeToSelectedFile();
             RaiseCanExecutes();
         }
     }
 
+    /// <summary>
+    /// Target folder for «הוסף קובץ» / create-subfolder fallback. Not changed by right-click assign.
+    /// </summary>
     public FileCatalogFolderNodeVm? SelectedFolder
     {
         get => _selectedFolder;
@@ -108,6 +112,24 @@ public sealed class FileCatalogViewModel : ObservableObject
             RaiseCanExecutes();
         }
     }
+
+    /// <summary>
+    /// Left-click folder filter for the files grid. Project root / null = all files (JobType still applies).
+    /// </summary>
+    public FileCatalogFolderNodeVm? FolderFilter
+    {
+        get => _folderFilter;
+        private set
+        {
+            if (SetField(ref _folderFilter, value))
+                OnPropertyChanged(nameof(FolderFilterCaption));
+        }
+    }
+
+    public string FolderFilterCaption =>
+        FolderFilter is null || FolderFilter.IsProjectRoot
+            ? "כל התיקיות"
+            : FolderFilter.Title;
 
     public bool IsBusy
     {
@@ -151,9 +173,20 @@ public sealed class FileCatalogViewModel : ObservableObject
     public RelayCommand RenameJobTypeCommand { get; }
     public RelayCommand AddFolderCommand { get; }
     public AsyncRelayCommand<object> AssignFileToFolderCommand { get; }
+    public AsyncRelayCommand<object> DeleteFolderCommand { get; }
     public AsyncRelayCommand ConfirmDialogCommand { get; }
     public RelayCommand CancelDialogCommand { get; }
     public RelayCommand BrowseTemplateCommand { get; }
+
+    /// <summary>Left-click on a folder: set grid filter + add-file target. Do not call from right-click.</summary>
+    public void ApplyFolderFilter(FileCatalogFolderNodeVm folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        FolderFilter = folder;
+        SelectedFolder = folder;
+        FilesView?.Refresh();
+        RaiseCanExecutes();
+    }
 
     public async Task LoadAsync()
     {
@@ -163,7 +196,7 @@ public sealed class FileCatalogViewModel : ObservableObject
         {
             var selectedJobId = SelectedJobType?.Id;
             var selectedFileId = SelectedFile?.FileId;
-            var selectedFolderId = SelectedFolder?.FolderId;
+            var filterFolderId = FolderFilter?.FolderId;
 
             var snap = await _query.GetSnapshotAsync().ConfigureAwait(true);
 
@@ -194,12 +227,18 @@ public sealed class FileCatalogViewModel : ObservableObject
             else
                 SelectedFile = null;
 
-            if (selectedFolderId is int folderId)
-                SelectedFolder = FindFolder(folderId);
+            var restore = filterFolderId is int id ? FindFolder(id) : null;
+            restore ??= FolderTree.FirstOrDefault(f => f.IsProjectRoot) ?? FolderTree.FirstOrDefault();
+            if (restore is not null)
+                ApplyFolderFilter(restore);
             else
-                SyncTreeToSelectedFile();
+            {
+                FolderFilter = null;
+                SelectedFolder = null;
+                FilesView?.Refresh();
+            }
 
-            StatusMessage = $"נטענו {AllFiles.Count} קבצים, {CountFolders()} תיקיות.";
+            StatusMessage = $"נטענו {AllFiles.Count} קבצים, {CountFolders()} תיקיות. תצוגה: {FolderFilterCaption}.";
         }
         catch (Exception ex)
         {
@@ -215,9 +254,15 @@ public sealed class FileCatalogViewModel : ObservableObject
     {
         if (obj is not FileCatalogFileRowVm file)
             return false;
-        if (SelectedJobType is null || SelectedJobType.Id == 0)
+
+        if (SelectedJobType is { Id: > 0 } && file.JobTypeId != SelectedJobType.Id)
+            return false;
+
+        // Root / no filter → all folders; specific folder → only that folder's files.
+        if (FolderFilter is null || FolderFilter.IsProjectRoot)
             return true;
-        return file.JobTypeId == SelectedJobType.Id;
+
+        return file.FolderId == FolderFilter.FolderId;
     }
 
     private async Task SaveChangesAsync()
@@ -257,9 +302,13 @@ public sealed class FileCatalogViewModel : ObservableObject
 
     private async Task AddFileAsync()
     {
-        if (SelectedFolder is null)
+        if (SelectedFolder is null || SelectedFolder.IsProjectRoot)
         {
-            MessageBox.Show("יש לבחור תיקייה בעץ.", "ניהול קבצים", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(
+                "יש לבחור תיקייה ספציפית (לא «תיקיית הפרויקט») ליצירת קובץ.",
+                "ניהול קבצים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
@@ -416,11 +465,96 @@ public sealed class FileCatalogViewModel : ObservableObject
         }
     }
 
+    private async Task DeleteFolderAsync(object? param)
+    {
+        if (param is not FileCatalogFolderNodeVm folder)
+            return;
+
+        if (folder.IsProjectRoot)
+        {
+            MessageBox.Show(
+                "לא ניתן למחוק את תיקיית השורש של הפרויקט.",
+                "ניהול קבצים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (folder.Children.Count > 0)
+        {
+            MessageBox.Show(
+                "לא ניתן למחוק תיקייה שמכילה תיקיות משנה. רוקן אותה קודם.",
+                "ניהול קבצים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (AllFiles.Any(f => f.FolderId == folder.FolderId))
+        {
+            MessageBox.Show(
+                "לא ניתן למחוק תיקייה שמכילה הגדרות קבצים. העבר או מחק אותן קודם.",
+                "ניהול קבצים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (MessageBox.Show(
+                $"למחוק את התיקייה הריקה '{folder.Title}'?",
+                "מחיקת תיקייה",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _write.DeleteFolderAsync(folder.FolderId).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                MessageBox.Show(result.ErrorMessage ?? "מחיקה נכשלה.", "ניהול קבצים", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var keepFilterId = FolderFilter?.FolderId == folder.FolderId
+                ? FolderFilter.Parent?.FolderId
+                : FolderFilter?.FolderId;
+            await LoadAsync().ConfigureAwait(true);
+            if (keepFilterId is int id)
+            {
+                var restore = FindFolder(id);
+                if (restore is not null)
+                    ApplyFolderFilter(restore);
+            }
+
+            StatusMessage = $"נמחקה תיקייה: {folder.Title}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private async Task AssignFileAsync(object? param)
     {
-        var folder = param as FileCatalogFolderNodeVm ?? SelectedFolder;
-        if (SelectedFile is null || folder is null)
+        // Prefer CommandParameter (context-menu folder). Do not change FolderFilter — right-click is not a filter click.
+        var folder = param as FileCatalogFolderNodeVm;
+        if (folder is null)
+        {
+            MessageBox.Show(
+                "יש ללחוץ ימני על תיקיית היעד ולבחור «שייך את הקובץ הנבחר לכאן».",
+                "ניהול קבצים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
+        }
+
+        if (SelectedFile is null)
+        {
+            MessageBox.Show("יש לבחור קובץ בטבלה לפני השיוך.", "ניהול קבצים", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         IsBusy = true;
         try
@@ -434,9 +568,9 @@ public sealed class FileCatalogViewModel : ObservableObject
                 return;
             }
 
-            SelectedFile.ApplyFolderId(folder.FolderId);
-            SelectedFolder = folder;
-            StatusMessage = $"הקובץ שויך לתיקייה '{folder.Title}'.";
+            SelectedFile.ApplyFolder(folder.FolderId, folder.Title);
+            FilesView?.Refresh();
+            StatusMessage = $"הקובץ שויך לתיקייה '{folder.Title}'. תצוגה נשארה: {FolderFilterCaption}.";
         }
         finally
         {
@@ -467,15 +601,6 @@ public sealed class FileCatalogViewModel : ObservableObject
         {
             file.TemplateLocation = null;
         }
-    }
-
-    private void SyncTreeToSelectedFile()
-    {
-        if (SelectedFile?.FolderId is not int folderId)
-            return;
-        var node = FindFolder(folderId);
-        if (node is not null)
-            SelectedFolder = node;
     }
 
     private FileCatalogFolderNodeVm? FindFolder(int folderId)

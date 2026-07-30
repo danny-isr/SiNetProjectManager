@@ -25,7 +25,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         {
             new ProjectFolderDto(
                 FolderId: 10,
-                Name: "הצעת מחיר",
+                Name: "ניהול כספי",
                 ParentFolderId: null,
                 Children: Array.Empty<ProjectFolderDto>(),
                 Files: new[]
@@ -161,6 +161,8 @@ public sealed class ProjectWorkRequiredOmdanTests
         await using var db = new SiNetSQLDbContext(options);
         db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול כספי", Infolderid = 2 });
         await db.SaveChangesAsync();
 
         var first = await ProjectFileCatalogSeedData.EnsureAsync(db);
@@ -169,13 +171,14 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Contains("inserted", first, StringComparison.Ordinal);
         Assert.Contains("unchanged", second, StringComparison.Ordinal);
 
-        var quoteFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
-        Assert.Equal(1, quoteFolder.Infolderid);
+        Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+        var financeFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "ניהול כספי").ToListAsync());
+        Assert.Equal(2, financeFolder.Infolderid);
 
         var rows = await db.ProjectFiles.Where(f => f.IsRequired).ToListAsync();
         Assert.Single(rows);
         Assert.Equal(9, rows[0].TypeProjId);
-        Assert.Equal(quoteFolder.Id, rows[0].Folderid);
+        Assert.Equal(financeFolder.Id, rows[0].Folderid);
         Assert.Equal(ProjectFileCatalogCodes.QuoteEstimate, rows[0].Code);
         Assert.Equal(ProjectFileRequiredOmdanSeedData.DisplayTitle, rows[0].Title);
 
@@ -190,7 +193,40 @@ public sealed class ProjectWorkRequiredOmdanTests
     }
 
     [Fact]
-    public async Task Omdan_seed_reparents_quote_folder_under_project_root_when_orphaned()
+    public async Task Omdan_seed_inserts_even_when_same_title_exists_on_another_job_type()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        await using var db = new SiNetSQLDbContext(options);
+        db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
+        db.JobTypes.Add(new JobType { Id = 2, Title = "אחר" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול כספי", Infolderid = 2 });
+        db.ProjectFiles.Add(new ProjectFile
+        {
+            Id = 1,
+            Title = "אומדן הצעה",
+            Number = 1,
+            TypeProjId = 2,
+            Folderid = 1,
+        });
+        await db.SaveChangesAsync();
+
+        var result = await ProjectFileCatalogSeedData.EnsureAsync(db);
+
+        Assert.DoesNotContain("skipped", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("inserted", result, StringComparison.Ordinal);
+        var omdan = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate);
+        Assert.Equal(9, omdan.TypeProjId);
+        Assert.Equal("אומדן הצעה", omdan.Title);
+        Assert.Equal(3, omdan.Folderid);
+    }
+
+    [Fact]
+    public async Task Omdan_seed_skips_when_parent_folder_tachtuvet_missing_and_does_not_create_hatzaat_mechir()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -199,14 +235,34 @@ public sealed class ProjectWorkRequiredOmdanTests
         await using var db = new SiNetSQLDbContext(options);
         db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
-        // Wrong parent (null) — tree roots require Infolderid = project root.
-        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "הצעת מחיר", Infolderid = null });
+        await db.SaveChangesAsync();
+
+        var result = await ProjectFileCatalogSeedData.EnsureAsync(db);
+
+        Assert.Contains("skipped", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("תכתובת", result, StringComparison.Ordinal);
+        Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+        Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Omdan_seed_reparents_finance_folder_under_tachtuvet_when_orphaned()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        await using var db = new SiNetSQLDbContext(options);
+        db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "ניהול כספי", Infolderid = null });
         await db.SaveChangesAsync();
 
         _ = await ProjectFileCatalogSeedData.EnsureAsync(db);
 
-        var quoteFolder = await db.ProjectFolders.SingleAsync(f => f.Title == "הצעת מחיר");
-        Assert.Equal(1, quoteFolder.Infolderid);
+        var finance = await db.ProjectFolders.SingleAsync(f => f.Title == "ניהול כספי");
+        Assert.Equal(2, finance.Infolderid);
     }
 
     [Fact]
@@ -219,7 +275,8 @@ public sealed class ProjectWorkRequiredOmdanTests
         await using var db = new SiNetSQLDbContext(options);
         db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
-        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "הצעת מחיר", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "ניהול כספי", Infolderid = 2 });
         db.ProjectFiles.Add(new ProjectFile
         {
             Id = 50,
@@ -250,6 +307,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         var omdan = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate);
         Assert.Equal("אומדן הצעה", omdan.Title);
         Assert.True(omdan.IsRequired);
+        Assert.Equal(10, omdan.Folderid);
     }
 
     private static WorkSurfaceContext CreateCalcContext() =>

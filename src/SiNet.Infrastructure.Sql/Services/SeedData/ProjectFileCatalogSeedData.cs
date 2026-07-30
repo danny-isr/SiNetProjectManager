@@ -20,13 +20,15 @@ public static class ProjectFileCatalogSeedData
             Code: ProjectFileCatalogCodes.QuoteEstimate,
             DefaultTitle: "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05D4", // אומדן הצעה
             JobTypeTitle: SqlProjectCreateService.DefaultJobTypeTitle, // חומר כללי
-            FolderTitle: "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעת מחיר
+            FolderTitle: "\u05E0\u05D9\u05D4\u05D5\u05DC \u05DB\u05E1\u05E4\u05D9", // ניהול כספי
+            ParentFolderTitle: "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA", // תכתובת
             TypeFile: ".xlsx",
             IsRequired: true,
             LegacyTitles:
             [
                 "\u05EA\u05D7\u05E9\u05D9\u05D1", // תחשיב
                 "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // אומדן הצעת מחיר
+                "\u05D0\u05D5\u05DE\u05D3\u05DF \u05EA\u05DB\u05E0\u05D5\u05DF", // אומדן תכנון (spoken/legacy alias)
             ]),
     ];
 
@@ -35,6 +37,7 @@ public static class ProjectFileCatalogSeedData
         string DefaultTitle,
         string JobTypeTitle,
         string FolderTitle,
+        string ParentFolderTitle,
         string TypeFile,
         bool IsRequired,
         IReadOnlyList<string> LegacyTitles);
@@ -42,6 +45,7 @@ public static class ProjectFileCatalogSeedData
     /// <summary>
     /// Ensures every catalog definition exists and is linked by <c>Code</c>.
     /// Never deletes ProjectFile / ProjectFolder rows. Does not overwrite an arbitrary admin Title rename.
+    /// Does <b>not</b> create «הצעת מחיר». Target folder is «ניהול כספי» under «תכתובת».
     /// </summary>
     public static async Task<string> EnsureAsync(SiNetSQLDbContext db, CancellationToken ct = default)
     {
@@ -87,9 +91,14 @@ public static class ProjectFileCatalogSeedData
         if (jobType is null)
             return $"[{def.Code}] skipped (JobType '{def.JobTypeTitle}' / id {SqlProjectCreateService.LegacyDefaultJobTypeId} not found).";
 
-        var folderId = await EnsureFolderAsync(db, def.FolderTitle, ct).ConfigureAwait(false);
+        var folderId = await EnsureFolderUnderParentAsync(
+                db,
+                def.FolderTitle,
+                def.ParentFolderTitle,
+                ct)
+            .ConfigureAwait(false);
         if (folderId is null)
-            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' could not be resolved/created).";
+            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' under '{def.ParentFolderTitle}' not found; create parent «{def.ParentFolderTitle}» first — seed does not create «הצעת מחיר»).";
 
         var typeId = jobType.Id;
         var knownTitles = new HashSet<string>(def.LegacyTitles, StringComparer.Ordinal) { def.DefaultTitle };
@@ -111,7 +120,6 @@ public static class ProjectFileCatalogSeedData
 
         if (byCode is null)
         {
-            // Prefer next number within the job type; fall back above global max for uniqueness.
             var maxForType = await db.ProjectFiles
                 .Where(f => f.TypeProjId == typeId && f.Number != null)
                 .Select(f => (float?)f.Number)
@@ -129,14 +137,6 @@ public static class ProjectFileCatalogSeedData
             {
                 nextNumber += 1f;
             }
-
-            // Another row may already use the display title under a different job type — attach Code there
-            // only when TypeProjId matches; otherwise pick a free title is not allowed (skip).
-            var titleTakenElsewhere = await db.ProjectFiles.AsNoTracking()
-                .AnyAsync(f => f.Title == def.DefaultTitle && f.TypeProjId != typeId, ct)
-                .ConfigureAwait(false);
-            if (titleTakenElsewhere)
-                return $"[{def.Code}] skipped (Title '{def.DefaultTitle}' already used on another JobType).";
 
             var sameTypeTitle = await db.ProjectFiles
                 .FirstOrDefaultAsync(f => f.Title == def.DefaultTitle && f.TypeProjId == typeId, ct)
@@ -161,7 +161,7 @@ public static class ProjectFileCatalogSeedData
                     Modified = DateTime.UtcNow,
                 });
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
-                return $"[{def.Code}] inserted Number={nextNumber} FolderId={folderId} Title='{def.DefaultTitle}'.";
+                return $"[{def.Code}] inserted Number={nextNumber} FolderId={folderId} Title='{def.DefaultTitle}' JobTypeId={typeId} Folder='{def.FolderTitle}'.";
             }
         }
 
@@ -196,8 +196,6 @@ public static class ProjectFileCatalogSeedData
             changed = true;
         }
 
-        // Fill empty Title, or rename known catalog aliases (תחשיב / אומדן הצעת מחיר) → current default.
-        // Never overwrite an arbitrary admin rename outside the known set.
         if (string.IsNullOrWhiteSpace(byCode.Title))
         {
             byCode.Title = def.DefaultTitle;
@@ -214,33 +212,32 @@ public static class ProjectFileCatalogSeedData
         {
             byCode.Modified = DateTime.UtcNow;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            return $"[{def.Code}] updated Id={byCode.Id} Title='{byCode.Title}' FolderId={folderId}.";
+            return $"[{def.Code}] updated Id={byCode.Id} Title='{byCode.Title}' FolderId={folderId} Folder='{def.FolderTitle}'.";
         }
 
-        return $"[{def.Code}] unchanged Id={byCode.Id} Number={byCode.Number} Title='{byCode.Title}'.";
+        return $"[{def.Code}] unchanged Id={byCode.Id} Number={byCode.Number} Title='{byCode.Title}' Folder='{def.FolderTitle}'.";
     }
 
     /// <summary>
-    /// Resolves the catalog folder by title; creates it under «תיקיית הפרויקט» when missing.
-    /// If an existing folder has a wrong/missing parent, re-parents it under the project root
-    /// so ProjectWork tree roots (children of the synthetic root) can show it. Never deletes.
+    /// Resolves <paramref name="folderTitle"/> under <paramref name="parentFolderTitle"/>.
+    /// Re-parents an existing folder when it is not under the expected parent.
+    /// Creates the child folder only when the parent already exists — never creates «הצעת מחיר»
+    /// and never invents the parent «תכתובת».
     /// </summary>
-    private static async Task<int?> EnsureFolderAsync(
+    private static async Task<int?> EnsureFolderUnderParentAsync(
         SiNetSQLDbContext db,
         string folderTitle,
+        string parentFolderTitle,
         CancellationToken ct)
     {
-        var rootCandidates = await db.ProjectFolders
+        var parent = await db.ProjectFolders
             .AsNoTracking()
-            .Where(f => f.Title != null)
+            .Where(f => f.Title == parentFolderTitle)
             .OrderBy(f => f.Id)
-            .Select(f => new { f.Id, f.Title })
-            .ToListAsync(ct)
+            .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
-        var rootId = rootCandidates
-            .Where(f => ProjectFolderTitles.IsProjectRoot(f.Title))
-            .Select(f => (int?)f.Id)
-            .FirstOrDefault();
+        if (parent is null)
+            return null;
 
         var existing = await db.ProjectFolders
             .Where(f => f.Title == folderTitle)
@@ -250,11 +247,9 @@ public static class ProjectFileCatalogSeedData
 
         if (existing is not null)
         {
-            if (rootId is int rid
-                && existing.Infolderid != rid
-                && existing.Id != rid)
+            if (existing.Infolderid != parent.Id && existing.Id != parent.Id)
             {
-                existing.Infolderid = rid;
+                existing.Infolderid = parent.Id;
                 existing.Modified = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
             }
@@ -265,7 +260,7 @@ public static class ProjectFileCatalogSeedData
         var folder = new ProjectFolder
         {
             Title = folderTitle,
-            Infolderid = rootId,
+            Infolderid = parent.Id,
             Created = DateTime.UtcNow,
             Modified = DateTime.UtcNow,
         };

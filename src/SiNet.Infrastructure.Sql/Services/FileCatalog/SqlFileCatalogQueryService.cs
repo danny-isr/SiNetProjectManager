@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.FileCatalog;
+using SiNet.Infrastructure.Sql.Services.ProjectWork;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using DomainDest = SiNet.Domain.Files.FileStorageDestination;
@@ -35,10 +36,12 @@ internal sealed class SqlFileCatalogQueryService(IDbContextFactory<SiNetSQLDbCon
             .OrderBy(e => e, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var folderTitles = folders.ToDictionary(f => f.Id, f => f.Title ?? string.Empty);
+
         return new FileCatalogSnapshotDto(
             JobTypes: jobTypes,
             FolderRoots: BuildFolderTree(folders),
-            Files: files.Select(ToFileDto).ToList(),
+            Files: files.Select(f => ToFileDto(f, folderTitles)).ToList(),
             FileExtensions: extensions);
     }
 
@@ -70,11 +73,19 @@ internal sealed class SqlFileCatalogQueryService(IDbContextFactory<SiNetSQLDbCon
             FolderId: folder.Id,
             Title: folder.Title ?? string.Empty,
             ParentFolderId: folder.Infolderid,
+            IsProjectRoot: ProjectFolderTitles.IsProjectRoot(folder.Title),
             Children: children);
     }
 
-    private static FileCatalogFileDto ToFileDto(ProjectFile f) =>
-        new(
+    private static FileCatalogFileDto ToFileDto(
+        ProjectFile f,
+        IReadOnlyDictionary<int, string> folderTitles)
+    {
+        string? folderTitle = null;
+        if (f.Folderid is int fid)
+            folderTitles.TryGetValue(fid, out folderTitle);
+
+        return new(
             FileId: f.Id,
             Title: f.Title,
             Number: f.Number,
@@ -85,7 +96,9 @@ internal sealed class SqlFileCatalogQueryService(IDbContextFactory<SiNetSQLDbCon
             TemplateLocation: f.TemplateLocation,
             Description: f.Des,
             FolderId: f.Folderid,
+            FolderTitle: folderTitle,
             JobTypeId: f.TypeProjId,
             IsRequired: f.IsRequired,
             Code: f.Code);
+    }
 }

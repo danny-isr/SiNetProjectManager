@@ -48,6 +48,50 @@ public sealed class SqlFileCatalogWriteServiceTests
     }
 
     [Fact]
+    public async Task DeleteFolder_rejects_non_empty_and_deletes_empty()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        await using (var seed = new SiNetSQLDbContext(options))
+        {
+            seed.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
+            seed.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
+            seed.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+            seed.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ריקה", Infolderid = 2 });
+            seed.ProjectFolders.Add(new ProjectFolder { Id = 4, Title = "עם קובץ", Infolderid = 2 });
+            seed.ProjectFiles.Add(new ProjectFile
+            {
+                Id = 10,
+                Title = "x",
+                TypeProjId = 9,
+                Folderid = 4,
+                Number = 1,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var sut = CreateSut(options);
+
+        var blockedRoot = await sut.DeleteFolderAsync(1);
+        Assert.False(blockedRoot.Success);
+
+        var blockedFiles = await sut.DeleteFolderAsync(4);
+        Assert.False(blockedFiles.Success);
+        Assert.Contains("הגדרות קבצים", blockedFiles.ErrorMessage, StringComparison.Ordinal);
+
+        var blockedChildren = await sut.DeleteFolderAsync(2);
+        Assert.False(blockedChildren.Success);
+        Assert.Contains("תיקיות משנה", blockedChildren.ErrorMessage, StringComparison.Ordinal);
+
+        var ok = await sut.DeleteFolderAsync(3);
+        Assert.True(ok.Success);
+        await using var verify = new SiNetSQLDbContext(options);
+        Assert.Null(await verify.ProjectFolders.FirstOrDefaultAsync(f => f.Id == 3));
+    }
+
+    [Fact]
     public async Task DeleteFile_rejects_known_catalog_code()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()

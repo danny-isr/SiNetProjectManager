@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.FileCatalog;
+using SiNet.Infrastructure.Sql.Services.ProjectWork;
 using SiNet.Infrastructure.Sql.Services.SeedData;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -95,6 +96,40 @@ internal sealed class SqlFileCatalogWriteService(IDbContextFactory<SiNetSQLDbCon
         db.ProjectFolders.Add(folder);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return FileCatalogWriteResult.Ok(folder.Id);
+    }
+
+    public async Task<FileCatalogWriteResult> DeleteFolderAsync(
+        int folderId,
+        CancellationToken cancellationToken = default)
+    {
+        if (folderId <= 0)
+            return FileCatalogWriteResult.Fail("התיקייה אינה תקפה.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var folder = await db.ProjectFolders
+            .FirstOrDefaultAsync(f => f.Id == folderId, cancellationToken)
+            .ConfigureAwait(false);
+        if (folder is null)
+            return FileCatalogWriteResult.Fail("התיקייה לא נמצאה.");
+
+        if (ProjectFolderTitles.IsProjectRoot(folder.Title))
+            return FileCatalogWriteResult.Fail("לא ניתן למחוק את תיקיית השורש של הפרויקט.");
+
+        var hasChildFolders = await db.ProjectFolders.AsNoTracking()
+            .AnyAsync(f => f.Infolderid == folderId, cancellationToken)
+            .ConfigureAwait(false);
+        if (hasChildFolders)
+            return FileCatalogWriteResult.Fail("לא ניתן למחוק תיקייה שמכילה תיקיות משנה. רוקן אותה קודם.");
+
+        var hasFiles = await db.ProjectFiles.AsNoTracking()
+            .AnyAsync(f => f.Folderid == folderId, cancellationToken)
+            .ConfigureAwait(false);
+        if (hasFiles)
+            return FileCatalogWriteResult.Fail("לא ניתן למחוק תיקייה שמכילה הגדרות קבצים. העבר או מחק אותן קודם.");
+
+        db.ProjectFolders.Remove(folder);
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return FileCatalogWriteResult.Ok(folderId);
     }
 
     public async Task<FileCatalogWriteResult> CreateFileAsync(

@@ -100,12 +100,16 @@ public sealed class SqlStaticSeedService : IStaticSeedService
         var catalogResult = await SeedProjectFileCatalogAsync(ct).ConfigureAwait(false);
         if (!catalogResult.Succeeded) errors.AddRange(catalogResult.Errors);
 
+        // Always surface ProjectFile catalog detail (inserted / updated / skipped) — otherwise the
+        // MessageBox only showed bools and operators could not see QuoteEstimate failures.
         return new SeedResult
         {
             Succeeded = errors.Count == 0,
             Summary =
                 $"Core seed: static={staticResult.Succeeded}, mappings={mapResult.Succeeded}, " +
-                $"workflow={wfResult.Succeeded}, projectFileCatalog={catalogResult.Succeeded}",
+                $"workflow={wfResult.Succeeded}, projectFileCatalog={catalogResult.Succeeded}" +
+                Environment.NewLine +
+                $"ProjectFileCatalog: {catalogResult.Summary}",
             Errors = errors,
         };
     }
@@ -117,6 +121,17 @@ public sealed class SqlStaticSeedService : IStaticSeedService
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
             var summary = await ProjectFileCatalogSeedData.EnsureAsync(db, ct).ConfigureAwait(false);
+            // "skipped" means the slot was not ensured — treat as soft failure so the dialog warns.
+            if (summary.Contains("skipped", StringComparison.OrdinalIgnoreCase))
+            {
+                return new SeedResult
+                {
+                    Succeeded = false,
+                    Summary = summary,
+                    Errors = [summary],
+                };
+            }
+
             return Ok(summary);
         }
         catch (Exception ex)
