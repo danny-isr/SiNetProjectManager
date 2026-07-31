@@ -24,4 +24,7 @@ public static class AppFeatureCodes
 
     /// <summary>Admin read-only workflow ops dashboard («בריאות תהליכים»).</summary>
     public const string ShellOpenWorkflowOpsDashboard = "Shell.OpenWorkflowOpsDashboard";
+
+    /// <summary>Admin JobType ↔ WorkflowDefinition mapping («מדיניות סוג↔תהליך»).</summary>
+    public const string ShellOpenProjectTypeWorkflowPolicy = "Shell.OpenProjectTypeWorkflowPolicy";
 }

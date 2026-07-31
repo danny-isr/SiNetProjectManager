@@ -191,12 +191,16 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 - **Prerequisite:** physical PDF in catalog **`QuoteClientApproval`** («אישור_לקוח_להצעה») under
   תכתובת → ניהול_כספי — from reply attachment (email tag + file) or ProjectWork upload.
+  Every project type on the project must have an enabled `ProjectTypeWorkflowDefinition` mapping
+  (see [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./PROJECT_TYPE_WORKFLOW_POLICY.md)).
 - **Action:** open `FollowQuoteApproval` → Email filtered by sent thread/counterpart → pick reply /
   tag or file PDF as `QuoteClientApproval` (or ProjectWork fallback) → complete
   **`QuoteApprovedByClient`**.
-- **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Approved' isFinal=True status=Completed`.
+- **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Approved' isFinal=True status=Completed`;
+  then continuation start(s) for unique mapped workflow definitions (e.g. Planning).
 - **Expected DB state:** `CurrentStage=PRP.Approved`; instance `status=Completed`, `CompletedAtUtc` set;
-  project status = `WaitingForWorkOrder`; **no new task** created for the terminal stage.
+  project status = `WaitingForWorkOrder`; **no new Proposal task**; **≥1 project-bound** continuation
+  `WorkflowInstance` Active for each unique mapped definition (deduped).
 - `[ ]` **Result/Notes:** ________________________________________________
 
 ---

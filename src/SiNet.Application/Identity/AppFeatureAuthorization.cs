@@ -24,6 +24,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks] = AppRole.Administrator,
             [AppFeatureCodes.ShellOpenFileCatalogAdmin] = AppRole.Administrator,
             [AppFeatureCodes.ShellOpenWorkflowOpsDashboard] = AppRole.Administrator,
+            [AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy] = AppRole.Administrator,
         };
 
     /// <summary>

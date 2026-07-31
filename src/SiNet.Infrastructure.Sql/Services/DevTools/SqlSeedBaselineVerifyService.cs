@@ -53,11 +53,34 @@ public sealed class SqlSeedBaselineVerifyService(IDbContextFactory<SiNetSQLDbCon
                 cancellationToken)
             .ConfigureAwait(false);
 
+        var jobTypesWithEnabledActiveMapping = await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
+            .Where(m => m.IsEnabled && m.WorkflowDefinition.IsActive)
+            .Select(m => m.ProjectTypeId)
+            .Distinct()
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var mappedSet = jobTypesWithEnabledActiveMapping.ToHashSet();
+
+        var jobTypesMissingMapping = await db.JobTypes.AsNoTracking()
+            .Where(j => j.Title != null && j.Title != "")
+            .Select(j => new { j.Id, j.Title })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var missingTitles = jobTypesMissingMapping
+            .Where(j => !mappedSet.Contains(j.Id))
+            .Select(j => j.Title!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+
         return SeedBaselineVerifyResult.Evaluate(
             workflowCodes,
             groupCodes,
             catalogCodes,
             jobTypePresent,
-            correspondencePresent);
+            correspondencePresent,
+            missingTitles);
     }
 }

@@ -93,6 +93,23 @@ public sealed class SeedBaselineVerifyResultTests
     }
 
     [Fact]
+    public void Evaluate_when_job_type_missing_workflow_mapping_then_required_gap()
+    {
+        var result = SeedBaselineVerifyResult.Evaluate(
+            SeedBaselineCatalog.RequiredWorkflowDefinitionCodes.ToList(),
+            SeedBaselineCatalog.RequiredUserGroupCodes.ToList(),
+            SeedBaselineCatalog.RequiredProjectFileCatalogCodes.ToList(),
+            jobTypePresent: true,
+            correspondenceFolderPresent: true,
+            jobTypesMissingWorkflowMapping: ["תכנון עירוני"]);
+
+        Assert.False(result.IsComplete);
+        Assert.True(result.HasRequiredGaps);
+        Assert.Contains("תכנון עירוני", result.JobTypesMissingWorkflowMapping);
+        Assert.Contains("מיפוי", result.FormatSummaryHe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GuidanceCatalog_seed_baseline_returns_seed_guidance()
     {
         var guidance = SystemStatusGuidanceCatalog.Resolve(
@@ -102,6 +119,7 @@ public sealed class SeedBaselineVerifyResultTests
 
         Assert.NotNull(guidance);
         Assert.Contains("Seed בסיסי", guidance, StringComparison.Ordinal);
+        Assert.Contains("מדיניות סוג↔תהליך", guidance, StringComparison.Ordinal);
     }
 
     private sealed class StubVerify(SeedBaselineVerifyResult result) : ISeedBaselineVerifyService

@@ -6,12 +6,14 @@ public sealed record SeedBaselineVerifyResult(
     IReadOnlyList<string> MissingUserGroupCodes,
     IReadOnlyList<string> MissingProjectFileCatalogCodes,
     bool JobTypePresent,
-    bool CorrespondenceFolderPresent)
+    bool CorrespondenceFolderPresent,
+    IReadOnlyList<string> JobTypesMissingWorkflowMapping)
 {
     public bool HasRequiredGaps =>
         MissingWorkflowDefinitionCodes.Count > 0
         || MissingUserGroupCodes.Count > 0
-        || MissingProjectFileCatalogCodes.Count > 0;
+        || MissingProjectFileCatalogCodes.Count > 0
+        || JobTypesMissingWorkflowMapping.Count > 0;
 
     public bool HasPrerequisiteWarnings => !JobTypePresent || !CorrespondenceFolderPresent;
 
@@ -23,18 +25,28 @@ public sealed record SeedBaselineVerifyResult(
         IReadOnlyCollection<string> presentUserGroupCodes,
         IReadOnlyCollection<string> presentCatalogCodes,
         bool jobTypePresent,
-        bool correspondenceFolderPresent)
+        bool correspondenceFolderPresent,
+        IReadOnlyCollection<string>? jobTypesMissingWorkflowMapping = null)
     {
         ArgumentNullException.ThrowIfNull(presentWorkflowCodes);
         ArgumentNullException.ThrowIfNull(presentUserGroupCodes);
         ArgumentNullException.ThrowIfNull(presentCatalogCodes);
+
+        IReadOnlyList<string> missingMappings = jobTypesMissingWorkflowMapping is null
+            ? []
+            : jobTypesMissingWorkflowMapping
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(t => t, StringComparer.Ordinal)
+                .ToList();
 
         return new SeedBaselineVerifyResult(
             Missing(SeedBaselineCatalog.RequiredWorkflowDefinitionCodes, presentWorkflowCodes),
             Missing(SeedBaselineCatalog.RequiredUserGroupCodes, presentUserGroupCodes),
             Missing(SeedBaselineCatalog.RequiredProjectFileCatalogCodes, presentCatalogCodes),
             jobTypePresent,
-            correspondenceFolderPresent);
+            correspondenceFolderPresent,
+            missingMappings);
     }
 
     public string FormatSummaryHe()
@@ -49,6 +61,15 @@ public sealed record SeedBaselineVerifyResult(
             parts.Add("קבוצות: " + string.Join(", ", MissingUserGroupCodes));
         if (MissingProjectFileCatalogCodes.Count > 0)
             parts.Add("Catalog: " + string.Join(", ", MissingProjectFileCatalogCodes));
+        if (JobTypesMissingWorkflowMapping.Count > 0)
+        {
+            var preview = JobTypesMissingWorkflowMapping.Count <= 5
+                ? string.Join(", ", JobTypesMissingWorkflowMapping)
+                : string.Join(", ", JobTypesMissingWorkflowMapping.Take(5))
+                  + $" (+{JobTypesMissingWorkflowMapping.Count - 5})";
+            parts.Add("סוגי פרויקט בלי מיפוי תהליך: " + preview);
+        }
+
         if (!JobTypePresent)
             parts.Add($"חסר JobType «{SeedBaselineCatalog.RequiredJobTypeTitle}»");
         if (!CorrespondenceFolderPresent)

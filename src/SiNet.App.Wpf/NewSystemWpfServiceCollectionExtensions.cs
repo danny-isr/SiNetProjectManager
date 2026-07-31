@@ -3,6 +3,7 @@ using SiNet.App.Composition;
 using SiNet.App.Wpf.Admin.FileCatalog;
 using SiNet.App.Wpf.Admin.MasterPlan;
 using SiNet.App.Wpf.Admin.Permissions;
+using SiNet.App.Wpf.Admin.ProjectTypeWorkflowPolicy;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.SystemStatus;
@@ -48,6 +49,7 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetUserGroupsAdminWpf();
         services.AddSiNetPermissionAdminWpf();
         services.AddSiNetFileCatalogAdminWpf();
+        services.AddSiNetProjectTypeWorkflowPolicyAdminWpf();
         services.AddSiNetSecretAdminWpf();
         services.AddSiNetSettingsAdminWpf();
         services.AddSiNetMasterPlanAdminWpf();

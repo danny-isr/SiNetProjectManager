@@ -27,6 +27,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.TaskWorkbenchViewOtherUsersTasks,
             AppFeatureCodes.ShellOpenFileCatalogAdmin,
             AppFeatureCodes.ShellOpenWorkflowOpsDashboard,
+            AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy,
         }.Select(c => new object[] { c });
 
     [Theory]
@@ -51,6 +52,8 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenFileCatalogAdmin, false)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.ShellOpenWorkflowOpsDashboard, true)]
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenWorkflowOpsDashboard, false)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy, true)]
+    [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy, false)]
     public void Feature_role_matrix(AppRole role, string featureCode, bool expected)
     {
         Assert.Equal(expected, AppFeatureAuthorization.CanAccessFeature(role, featureCode));

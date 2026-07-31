@@ -5,6 +5,7 @@ using SiNet.App.Wpf.Admin.FileCatalog;
 using SiNet.App.Wpf.Admin.MasterPlan;
 using SiNet.App.Wpf.Admin.MasterPlan.Reports;
 using SiNet.App.Wpf.Admin.Permissions;
+using SiNet.App.Wpf.Admin.ProjectTypeWorkflowPolicy;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.SystemStatus;
@@ -282,6 +283,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "דשבורד תפעולי למופעי workflow (קריאה בלבד)"));
         }
 
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy, cancellationToken).ConfigureAwait(true))
+        {
+            admin.Add(new NewShellMenuItem(
+                "מדיניות סוג↔תהליך",
+                OpenNativeProjectTypeWorkflowPolicy,
+                "מיפוי סוג פרויקט (JobType) להגדרת תהליך ברירת מחדל"));
+        }
+
         if (HasAuthenticatedUser())
         {
             admin.Add(new NewShellMenuItem(
@@ -526,6 +535,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת ניהול קבצים: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeProjectTypeWorkflowPolicy()
+    {
+        try
+        {
+            var window = _services.GetRequiredService<ProjectTypeWorkflowPolicyWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת מדיניות סוג↔תהליך: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

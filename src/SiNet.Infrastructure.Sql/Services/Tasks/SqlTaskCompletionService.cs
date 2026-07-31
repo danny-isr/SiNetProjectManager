@@ -32,15 +32,18 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly IWorkflowCommandService _workflowCommands;
     private readonly ITaskListChangeNotifier? _taskListNotifier;
+    private readonly IProjectTypeContinuationStarter? _continuationStarter;
 
     public SqlTaskCompletionService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         IWorkflowCommandService workflowCommands,
-        ITaskListChangeNotifier? taskListNotifier = null)
+        ITaskListChangeNotifier? taskListNotifier = null,
+        IProjectTypeContinuationStarter? continuationStarter = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workflowCommands = workflowCommands ?? throw new ArgumentNullException(nameof(workflowCommands));
         _taskListNotifier = taskListNotifier;
+        _continuationStarter = continuationStarter;
     }
 
     public async ValueTask<TaskCompletionResultDto> CompleteAsync(CompleteTaskCommand command, CancellationToken ct)
@@ -134,6 +137,22 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
         if (string.Equals(command.CompletionEventCode, ReviewCompletionEvents.ReviewProjectCreated, StringComparison.Ordinal))
         {
             await RebindCreatedProjectAsync(db, task, ct).ConfigureAwait(false);
+        }
+
+        // Post-approval continuation requires every project type to have an enabled workflow mapping.
+        // Fail before mutating so Approve does not leave a half-closed FollowQuote task.
+        if (string.Equals(taskResultCode, TaskResultCodes.QuoteApprovedByClient, StringComparison.Ordinal)
+            && task.ProjectId is int approveProjectId
+            && _continuationStarter is not null)
+        {
+            var mappingCheck = await _continuationStarter
+                .ValidateMappingsAsync(approveProjectId, ct)
+                .ConfigureAwait(false);
+            if (!mappingCheck.Success)
+            {
+                return TaskCompletionResultDto.Failure(
+                    mappingCheck.Error ?? "חסר מיפוי תהליך לסוגי הפרויקט.");
+            }
         }
 
         var nowUtc = DateTime.UtcNow;
@@ -301,6 +320,10 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                 if (sharedTx is not null)
                     await sharedTx.CommitAsync(ct).ConfigureAwait(false);
 
+                await TryStartPostApprovalContinuationsAsync(
+                        taskResultCode, task.ProjectId, command.UserId, ct)
+                    .ConfigureAwait(false);
+
                 NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: stageAdvanceResult is not null);
                 return success with
                 {
@@ -334,6 +357,10 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                     command.TaskId,
                     advanceError);
 
+                await TryStartPostApprovalContinuationsAsync(
+                        taskResultCode, task.ProjectId, command.UserId, ct)
+                    .ConfigureAwait(false);
+
                 NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: false);
                 return success with
                 {
@@ -349,6 +376,10 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             fallbackAdvanceResult = result;
         }
 
+        await TryStartPostApprovalContinuationsAsync(
+                taskResultCode, task.ProjectId, command.UserId, ct)
+            .ConfigureAwait(false);
+
         NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance);
         return success with
         {
@@ -358,6 +389,49 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             NewProjectStatusCode = newProjectStatusCode,
             StageAdvanceResult = fallbackAdvanceResult,
         };
+    }
+
+    private async Task TryStartPostApprovalContinuationsAsync(
+        string? taskResultCode,
+        int? projectId,
+        int userId,
+        CancellationToken ct)
+    {
+        if (!string.Equals(taskResultCode, TaskResultCodes.QuoteApprovedByClient, StringComparison.Ordinal))
+            return;
+        if (projectId is not int pid || pid <= 0 || _continuationStarter is null)
+            return;
+
+        try
+        {
+            var result = await _continuationStarter
+                .StartContinuationsAsync(pid, userId, ct)
+                .ConfigureAwait(false);
+
+            if (!result.Success)
+            {
+                Trace.TraceError(
+                    "[SqlTaskCompletionService] Post-approval continuation failed for project {0}: {1}",
+                    pid,
+                    result.Error);
+            }
+            else
+            {
+                Trace.TraceInformation(
+                    "[SqlTaskCompletionService] Post-approval continuations project={0} started=[{1}] skipped=[{2}]",
+                    pid,
+                    string.Join(",", result.StartedInstanceIds),
+                    string.Join(",", result.SkippedAlreadyActiveCodes));
+            }
+        }
+        catch (Exception ex)
+        {
+            // Approval + PRP.Approved already committed; do not fail the completion after the fact.
+            Trace.TraceError(
+                "[SqlTaskCompletionService] Post-approval continuation threw for project {0}: {1}",
+                projectId,
+                ex);
+        }
     }
 
     /// <summary>

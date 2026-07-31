@@ -58,7 +58,7 @@
 | FileManagerView | src/SiNet.App.Wpf/Admin/FileCatalog/ | **Reconnected** — native admin window + menu; see [`FILE_CATALOG_ADMIN.md`](./FILE_CATALOG_ADMIN.md) |
 | TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView | **Started / Pilot** — Task Workbench (queue + CRUD, 2026-07-06) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
-| WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started |
+| WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started (full hub). **Partial:** Policy tab → `Admin/ProjectTypeWorkflowPolicy/` mapping window |
 
 ## First target - FloatingInspectionView
 

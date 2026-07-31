@@ -44,6 +44,8 @@ public static class WorkflowServiceCollectionExtensions
         services.TryAddTransient<IWorkflowCanvasLayoutService>(
             sp => sp.GetRequiredService<SqlWorkflowCanvasLayoutService>());
 
+        services.TryAddTransient<IProjectTypeWorkflowPolicyAdminService, SqlProjectTypeWorkflowPolicyAdminService>();
+
         return services;
     }
 

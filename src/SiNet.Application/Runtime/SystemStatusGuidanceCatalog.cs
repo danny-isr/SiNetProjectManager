@@ -142,7 +142,8 @@ public static class SystemStatusGuidanceCatalog
         + "ודא ש־client secrets ו־token store מוגדרים, ואז רענן מצב מערכת.";
 
     internal const string SeedBaselineGuidance =
-        "חסרים פריטי Seed בסיסיים (workflow / קבוצות / catalog). "
+        "חסרים פריטי Seed בסיסיים (workflow / קבוצות / catalog / מיפוי סוג↔תהליך). "
         + "ב־DEBUG: כלי פיתוח → «טעינת Seed בסיסי». "
-        + "אחרי הטעינה רענן «מצב מערכת». הקצאות חברי קבוצה הן נפרדות (שורת workflow-assignees).";
+        + "לסוגי פרויקט בלי מיפוי: מנהלה → «מדיניות סוג↔תהליך». "
+        + "אחרי התיקון רענן «מצב מערכת». הקצאות חברי קבוצה הן נפרדות (שורת workflow-assignees).";
 }
