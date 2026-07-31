@@ -59,6 +59,7 @@ public static class ProposalWorkflowHarness
             new TaskType { Code = TaskTypeCodes.PrepareQuoteCalculation, Name = "תחשיב", IsActive = true },
             new TaskType { Code = TaskTypeCodes.PrepareQuoteDocument, Name = "מסמך הצעה", IsActive = true },
             new TaskType { Code = TaskTypeCodes.ApproveQuoteInternal, Name = "אישור פנימי", IsActive = true },
+            new TaskType { Code = TaskTypeCodes.SendQuoteToClient, Name = "שליחת הצעה", IsActive = true },
             new TaskType { Code = TaskTypeCodes.FollowQuoteApproval, Name = "מעקב אישור", IsActive = true });
 
         db.TaskResultDefinitions.AddRange(
@@ -66,7 +67,15 @@ public static class ProposalWorkflowHarness
             new TaskResultDefinition { Code = TaskResultCodes.NotQuoteRequest, Name = "לא בקשה", Category = "Proposal", IsActive = true, SortOrder = 20 },
             new TaskResultDefinition { Code = TaskResultCodes.ProjectOpened, Name = "פרויקט נפתח", Category = "Project", IsActive = true, SortOrder = 30 },
             new TaskResultDefinition { Code = TaskResultCodes.MaterialComplete, Name = "חומר מלא", Category = "Proposal", IsActive = true, SortOrder = 40 },
-            new TaskResultDefinition { Code = TaskResultCodes.MaterialMissing, Name = "חומר חסר", Category = "Proposal", IsActive = true, SortOrder = 50 });
+            new TaskResultDefinition { Code = TaskResultCodes.MaterialMissing, Name = "חומר חסר", Category = "Proposal", IsActive = true, SortOrder = 50 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteCalculationCompleted, Name = "תחשיב הושלם", Category = "Quote", IsActive = true, SortOrder = 200 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuotePrepared, Name = "הצעה מוכנה", Category = "Quote", IsActive = true, SortOrder = 210 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteApprovedInternally, Name = "אושרה פנימית", Category = "Quote", IsActive = true, SortOrder = 220 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteRequiresRevision, Name = "דורשת תיקון", Category = "Quote", IsActive = true, SortOrder = 230 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteSent, Name = "נשלחה", Category = "Quote", IsActive = true, SortOrder = 240 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteApprovedByClient, Name = "אושרה לקוח", Category = "Quote", IsActive = true, SortOrder = 250 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteRejectedByClient, Name = "נדחתה לקוח", Category = "Quote", IsActive = true, SortOrder = 260 },
+            new TaskResultDefinition { Code = TaskResultCodes.QuoteCancelledNoResponse, Name = "בוטל אין תגובה", Category = "Quote", IsActive = true, SortOrder = 270 });
 
         var user = new Siuser { Id = UserId, Name = "Test User", IsActive = true };
         db.Siusers.Add(user);

@@ -27,6 +27,7 @@ public static class TaskResultDefinitionSeedData
         new TaskResultDefinitionRecord(TaskResultCodes.QuoteSent,                   "הצעת מחיר נשלחה ללקוח",            "Quote",    240),
         new TaskResultDefinitionRecord(TaskResultCodes.QuoteApprovedByClient,       "הצעה אושרה ע״י הלקוח",             "Quote",    250),
         new TaskResultDefinitionRecord(TaskResultCodes.QuoteRejectedByClient,       "הצעה נדחתה ע״י הלקוח",             "Quote",    260),
+        new TaskResultDefinitionRecord(TaskResultCodes.QuoteCancelledNoResponse,    "בוטל — אין תגובת לקוח",             "Quote",    270),
 
         // Work order
         new TaskResultDefinitionRecord(TaskResultCodes.WorkOrderReceived,           "התקבלה הזמנת עבודה",               "WorkOrder",300),

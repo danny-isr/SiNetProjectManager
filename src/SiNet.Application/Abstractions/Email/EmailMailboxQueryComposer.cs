@@ -51,6 +51,7 @@ public static class EmailMailboxQueryComposer
             EmailMailboxScope.Unread => InboxPrimaryUnreadQuery,
             EmailMailboxScope.Label when !string.IsNullOrWhiteSpace(query.LabelName)
                 => $"label:{QuoteGmailTerm(query.LabelName.Trim())}",
+            EmailMailboxScope.Sent => "in:sent",
             EmailMailboxScope.Inbox => string.IsNullOrWhiteSpace(inboxQueryOverride)
                 ? InboxPrimaryQuery
                 : inboxQueryOverride.Trim(),
@@ -88,6 +89,7 @@ public static class EmailMailboxQueryComposer
             EmailMailboxScope.Label => string.IsNullOrWhiteSpace(query.LabelName)
                 ? "Label"
                 : $"Label:{query.LabelName}",
+            EmailMailboxScope.Sent => "Sent",
             _ => query.MailboxScope.ToString(),
         };
 

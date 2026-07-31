@@ -48,7 +48,8 @@ public static class ProposalWorkflowSeedData
         new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.Calculation,      "הכנת תחשיב להצעת מחיר",                SortOrder: 40),
         new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.Preparation,      "הכנת הצעת מחיר",                       SortOrder: 50),
         new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.InternalApproval, "אישור פנימי להצעת מחיר",                SortOrder: 60),
-        new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.SentFollowUp,     "שליחה ומעקב אחר הצעת מחיר",            SortOrder: 70),
+        new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.SendQuote,        "שליחת הצעת מחיר ללקוח",                 SortOrder: 65),
+        new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.SentFollowUp,     "מעקב אישור לקוח",                       SortOrder: 70),
         new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.Approved,         "הצעה אושרה",                            SortOrder: 80, IsInitial: false, IsFinal: true),
         new PlanningWorkflowSeedData.StageDefinition(ProposalStageCodes.Rejected,         "הצעה נדחתה",                            SortOrder: 90, IsInitial: false, IsFinal: true),
     };
@@ -113,13 +114,17 @@ public static class ProposalWorkflowSeedData
             taskResult: TaskResultCodes.QuotePrepared),
 
         // ── Internal approval ───────────────────────────────────────────────
-        Conditional(ProposalStageCodes.InternalApproval, ProposalStageCodes.SentFollowUp,
+        Conditional(ProposalStageCodes.InternalApproval, ProposalStageCodes.SendQuote,
             taskResult: TaskResultCodes.QuoteApprovedInternally,
             actions: SetStatus(ProjectStatusCodes.WaitingForQuoteApproval)),
 
         // Internal reviewer asks for revisions → back to Preparation.
         Conditional(ProposalStageCodes.InternalApproval, ProposalStageCodes.Preparation,
             taskResult: TaskResultCodes.QuoteRequiresRevision),
+
+        // ── Send to client (Gmail compose + Sent proof / manager override) ───
+        Conditional(ProposalStageCodes.SendQuote, ProposalStageCodes.SentFollowUp,
+            taskResult: TaskResultCodes.QuoteSent),
 
         // ── Terminal outcomes ───────────────────────────────────────────────
         // Client approved → final Approved stage. The continuation workflow
@@ -132,6 +137,11 @@ public static class ProposalWorkflowSeedData
         // Client rejected → final Rejected stage.
         Conditional(ProposalStageCodes.SentFollowUp, ProposalStageCodes.Rejected,
             taskResult: TaskResultCodes.QuoteRejectedByClient,
+            actions: SetStatus(ProjectStatusCodes.ClosedLost)),
+
+        // No client response / operator cancels follow-up → Rejected.
+        Conditional(ProposalStageCodes.SentFollowUp, ProposalStageCodes.Rejected,
+            taskResult: TaskResultCodes.QuoteCancelledNoResponse,
             actions: SetStatus(ProjectStatusCodes.ClosedLost)),
     };
 
@@ -179,6 +189,10 @@ public static class ProposalWorkflowSeedData
             TaskTypeCode: TaskTypeCodes.ApproveQuoteInternal,
             AssignedGroupCode: UserGroupCodes.SeniorManagement),
         new PlanningWorkflowSeedData.StageTaskDefinition(
+            StageCode: ProposalStageCodes.SendQuote,
+            TaskTypeCode: TaskTypeCodes.SendQuoteToClient,
+            AssignedGroupCode: UserGroupCodes.OfficeManagement),
+        new PlanningWorkflowSeedData.StageTaskDefinition(
             StageCode: ProposalStageCodes.SentFollowUp,
             TaskTypeCode: TaskTypeCodes.FollowQuoteApproval,
             AssignedGroupCode: UserGroupCodes.OfficeManagement),
@@ -200,6 +214,7 @@ public static class ProposalWorkflowSeedData
             [ProposalStageCodes.Calculation]      = UserGroupCodes.Planners,
             [ProposalStageCodes.Preparation]      = UserGroupCodes.Planners,
             [ProposalStageCodes.InternalApproval] = UserGroupCodes.SeniorManagement,
+            [ProposalStageCodes.SendQuote]        = UserGroupCodes.OfficeManagement,
             [ProposalStageCodes.SentFollowUp]     = UserGroupCodes.OfficeManagement,
         };
 

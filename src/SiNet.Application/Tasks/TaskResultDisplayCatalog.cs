@@ -57,6 +57,7 @@ public static class TaskResultDisplayCatalog
         Add("QuoteSent", "הצעת מחיר נשלחה ללקוח", TaskResultColorKind.Neutral);
         Add("QuoteApprovedByClient", "הצעה אושרה ע״י הלקוח", TaskResultColorKind.Positive);
         Add("QuoteRejectedByClient", "הצעה נדחתה ע״י הלקוח", TaskResultColorKind.Negative);
+        Add("QuoteCancelledNoResponse", "בוטל — אין תגובת לקוח", TaskResultColorKind.Negative);
 
         // Work order
         Add("WorkOrderReceived", "התקבלה הזמנת עבודה", TaskResultColorKind.Positive);

@@ -52,6 +52,9 @@ public sealed class TaskSurfaceWindowLayoutTests
         Assert.Contains("TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench", emailWindow, StringComparison.Ordinal);
         Assert.Contains("TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench", inspection, StringComparison.Ordinal);
         Assert.DoesNotContain("WindowStartupLocation.CenterOwner", floatingHost, StringComparison.Ordinal);
+        Assert.Contains("Topmost = false", floatingHost, StringComparison.Ordinal);
+        Assert.Contains("Owner = owner", floatingHost, StringComparison.Ordinal);
+        Assert.Contains("SendQuoteToClient", launcher, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath) =>

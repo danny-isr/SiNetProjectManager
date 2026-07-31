@@ -5,6 +5,7 @@
 > **Related:** [`PROPOSAL_WORKFLOW_MANUAL_TEST.md`](./PROPOSAL_WORKFLOW_MANUAL_TEST.md),
 > [`NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md),
 > [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](../WORK_SURFACE_WORKFLOW_INTEGRATION.md),
+> [`WORKFLOW_SOAK_OPEN_FOLLOWUPS.md`](./WORKFLOW_SOAK_OPEN_FOLLOWUPS.md) (soak UX/eng backlog — do not fix mid-session),
 > seed inventory in `SiNetProjectManagerV2/Docs/Domains/Workflow/WorkflowManagementWindow-Inventory-2026-07-12.md`
 
 ## 0. Protocol (operator + agent)
@@ -59,7 +60,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Id | Workflow | Start | UI | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **In progress** (live soak) | Awaiting Seed + CreatePriceQuote |
+| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **In progress** (live soak) | Project **3146**; through Calculation → at `PRP.Preparation` task=17 |
 | B | Opinion `OPN.*` | `CreateOpinionProject` | Email + Task workbench | **Not Run** (live) | Checklist §3 ready; no dedicated engine test yet |
 | C | Planning `PLN.*` | ProjectType mapping / post-quote work order | Project create + tasks | **Blocked (pilot)** | Approved Blocked §4.C.Blocked — ProjectWork Deferred |
 | D | Review `REV.*` + MAT | Review start / hosted MAT | Tasks (+ ProjectWork) | **Blocked (pilot)** | Approved Blocked §5 — REV.Intake unseeded + ProjectWork Deferred |
@@ -76,7 +77,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Slice | Result | Notes |
 | --- | --- | --- |
-| Happy path 2.0–2.8 → `PRP.Approved` | **In progress** | Start Pass: instance=5 @ `PRP.ProjectSetup`; task provisioned; OpenQuoteProject opened |
+| Happy path 2.0–2.8 → `PRP.Approved` | **In progress** | Through 2.6 **Pass** (→ `PRP.InternalApproval` task=18); **next = 2.7** approve/revise |
 | Branches 3.A–3.D | Not Run (live) | |
 | Integrity 4.1–4.5 | Not Run (live) | Related unit/E2E in Workflow filter |
 | Watchdog 4.6 | Not Run (live) | |
@@ -242,15 +243,15 @@ Use an **Active** PRP or OPN instance. Mirror Proposal runbook §4:
 | Log path contract | `WorkflowDebugTracePathTests` | File under LocalAppData/`Logs`/… |
 | Composition | `StandaloneHostCompositionTests` | Ports registered |
 
-**Last agent run (2026-07-30):**
+**Last agent run (2026-07-31):**
 
 ```text
-dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj → 0 errors
-dotnet test src\SiNet.App.Wpf.Tests --filter FullyQualifiedName~Workflow
-  → Passed: 268, Failed: 0
+dotnet test src\SiNet.App.Wpf.Tests --no-build --filter FullyQualifiedName~Workflow
+  → Passed: 286, Failed: 0
+(SiNet.App.Wpf DEBUG left running — rebuild skipped to avoid DLL locks)
 ```
 
-Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved Blocked lists (§4 / §5).
+Prior run 2026-07-30: 268 Pass. Live Tree A soak in progress (see §9 / §10). C/D Blocked lists approved.
 
 ---
 
@@ -268,10 +269,10 @@ Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved
 
 | Field | Value |
 | --- | --- |
-| **Gate status** | **Conditional** — docs + automated Workflow Pass (268); C/D Blocked approved; A/B/E/F live soak pending |
-| **Tester** | Agent prep 2026-07-30; operator soak TBD |
-| **Build / commit** | Prep @ `d5b3606` (+ uncommitted gate docs/tests); re-check HEAD at soak |
-| **Date** | 2026-07-30 |
+| **Gate status** | **Conditional** — automated Workflow **286 Pass**; Tree A live through Preparation; C/D Blocked approved |
+| **Tester** | Operator + agent soak (project 3146) |
+| **Build / commit** | Soak host DEBUG @ HEAD `d91abd8` (Workflow Ops dashboard) — re-check if relaunching |
+| **Date** | 2026-07-31 |
 
 ---
 
@@ -303,4 +304,35 @@ Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved
 | 2026-07-30 ~17:42 | Relaunch soak after layout/catalog commits: AccService PID **25296**; `SiNet.App.Wpf` DEBUG PID **17004**; agent tails branded log | App up |
 | 2026-07-30 ~17:43 | task=16 `QuoteCalculationCompleted` → AutoAdvance **Pass** → `PRP.Preparation` (stage 37); task=17; Launcher→PROJECT-WORK | Calculation **Pass** |
 
-**Next operator action:** השלם **task=17** בשלב `PRP.Preparation` (פרויקט 3146) עם `QuotePrepared`. Agent עוקב אחרי הלוג.
+| 2026-07-31 ~07:20 | Resume soak: AccService PID **25296** (up since 30/07); launched `SiNet.App.Wpf` DEBUG PID **49244**; opened gate doc | Session open |
+| 2026-07-31 ~07:22 | `FullyQualifiedName~Workflow` → **286 Pass / 0 Fail** (`--no-build`, app locked bin) | Automated evidence refreshed |
+| 2026-07-31 ~07:21 | Operator opened **task=17** → ProjectWork float (project=3146); result combo shows `QuotePrepared` | UI ready |
+| 2026-07-31 ~07:23 | Created **QuoteDocument** from template («אלטרנטיבה מתבנית»); completed task=17 `QuotePrepared` | Gate + complete **Pass** |
+| 2026-07-31 ~07:23 | AutoAdvance → `PRP.InternalApproval` (stage 38); **task=18** provisioned; Launcher opened float | Preparation **Pass** |
+| 2026-07-31 ~07:27 | UX note: Topmost task/surface hides external apps → logged as **SOF-001** | Open follow-up |
+| 2026-07-31 ~07:29 | InternalApproval **Pass** → stage `PRP.SentFollowUp`; **task=19** provisioned (`FollowQuoteApproval` → EmailFiling) | Engine OK |
+| 2026-07-31 ~07:35 | Operator: missing critical **send quote** step with Gmail Sent proof → **SOF-003** | Design gap |
+| 2026-07-31 ~07:41 | Double-click task=19 → **no window** (`primaryTarget` empty → launcher blocks). Desired client-approval PDF / reject variants → **SOF-004** | Open blocked |
+| 2026-07-31 | Implemented SOF-001/002/003/004 (docs + code): `PRP.SendQuote`, Sent proof dialog, FollowQuoteApproval→ProjectWork, `QuoteClientApproval`, `QuoteCancelledNoResponse`, Topmost=false, `~$` ignore | Code ready — Seed + re-run tail |
+| 2026-07-31 | Instance 3146 / task=19 **not mid-patched**; new graph applies after Seed + new Proposal start (or from InternalApproval on fresh instance) | Operator: Seed בסיסי then soak 2.7→2.8 |
+
+**Next:** DEBUG Seed בסיסי → short soak from InternalApproval (or full Proposal on new email) → verify SendQuote compose/Sent + FollowQuoteApproval ProjectWork/PDF.
+
+---
+
+## 10. Tree A progress snapshot (project 3146) — what we already passed
+
+| Step | Stage / action | Result | Evidence |
+| --- | --- | --- | --- |
+| Start | `CreatePriceQuote` → Intake → ProjectSetup | **Pass** | instances + tasks provisioned |
+| 2.2 | `OpenQuoteProject` → project **3146** | **Pass** | AutoAdvance → FileMaterial |
+| 2.3 | FileMaterial Move ACC (after EnsureMapping fix) | **Pass** | moved 2/2; task=14 closed |
+| 2.4 | MaterialCheck `MaterialComplete` | **Pass** | → Calculation task=16 |
+| 2.5 | Calculation `QuoteCalculationCompleted` | **Pass** | → Preparation task=17 (2026-07-30 ~17:43) |
+| 2.6 | Preparation: create QuoteDocument from template + `QuotePrepared` | **Pass** | event=`Review.QuoteDocumentPrepared`; → stage 38; task=18 |
+| 2.7 | InternalApproval `QuoteApprovedInternally` | **Pass** *(old graph)* | Was → `PRP.SentFollowUp` task=19; **new graph** → `PRP.SendQuote` after Seed |
+| 2.7b | SendQuote `QuoteSent` (compose + Sent / admin override) | **Ready to soak** | SOF-003 implemented |
+| 2.8 | SentFollowUp client decision (ProjectWork + PDF / reject / cancel) | **Ready to soak** | SOF-004 implemented |
+| Branches / Integrity / Watchdog | §3–§4 | **Not Run** (live) | engine covered in Workflow suite |
+
+**Also shipped during soak (not Tree A steps):** complementary task windows; File Catalog UX; QuoteDocument gates; Workflow Ops Dashboard (`בריאות תהליכים`); SOF-001 Topmost policy; SOF-002 `~$` ignore.

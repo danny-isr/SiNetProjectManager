@@ -14,4 +14,7 @@ public enum EmailMailboxScope
 
     /// <summary>Explicit Gmail label selected via <see cref="EmailMailboxQuery.LabelName"/>.</summary>
     Label,
+
+    /// <summary>Sent mail — <c>in:sent</c>.</summary>
+    Sent,
 }

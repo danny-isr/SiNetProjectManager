@@ -465,6 +465,20 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        if (RequiresQuoteClientApprovalPhysicalFile(context, resolvedResultCode)
+            && !HasRequiredCatalogPhysical(QuoteClientApprovalCatalogCode))
+        {
+            StatusMessage = "יש להעלות קובץ PDF של אישור לקוח להצעה לפני אישור.";
+            return false;
+        }
+
+        if (RequiresExplicitCancelNoResponseConfirm(context, resolvedResultCode)
+            && !ConfirmQuoteCancelledNoResponse())
+        {
+            StatusMessage = "בוטל — לא נרשמה תוצאת «אין תגובה».";
+            return false;
+        }
+
         IsBusy = true;
         try
         {
@@ -550,14 +564,36 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
     private const string PrepareQuoteCalculationTaskType = "PrepareQuoteCalculation";
     private const string PrepareQuoteDocumentTaskType = "PrepareQuoteDocument";
+    private const string FollowQuoteApprovalTaskType = "FollowQuoteApproval";
     private const string QuoteEstimateCatalogCode = "QuoteEstimate";
     private const string QuoteDocumentCatalogCode = "QuoteDocument";
+    private const string QuoteClientApprovalCatalogCode = "QuoteClientApproval";
+    private const string QuoteApprovedByClientResult = "QuoteApprovedByClient";
+    private const string QuoteCancelledNoResponseResult = "QuoteCancelledNoResponse";
 
     private static bool RequiresQuoteEstimatePhysicalFile(WorkSurfaceContext context) =>
         string.Equals(context.TaskTypeCode, PrepareQuoteCalculationTaskType, StringComparison.Ordinal);
 
     private static bool RequiresQuoteDocumentPhysicalFile(WorkSurfaceContext context) =>
         string.Equals(context.TaskTypeCode, PrepareQuoteDocumentTaskType, StringComparison.Ordinal);
+
+    private static bool RequiresQuoteClientApprovalPhysicalFile(WorkSurfaceContext context, string? resultCode) =>
+        string.Equals(context.TaskTypeCode, FollowQuoteApprovalTaskType, StringComparison.Ordinal)
+        && string.Equals(resultCode, QuoteApprovedByClientResult, StringComparison.Ordinal);
+
+    private static bool RequiresExplicitCancelNoResponseConfirm(WorkSurfaceContext context, string? resultCode) =>
+        string.Equals(context.TaskTypeCode, FollowQuoteApprovalTaskType, StringComparison.Ordinal)
+        && string.Equals(resultCode, QuoteCancelledNoResponseResult, StringComparison.Ordinal);
+
+    private static bool ConfirmQuoteCancelledNoResponse()
+    {
+        var result = System.Windows.MessageBox.Show(
+            "לאשר ביטול מעקב בלי תגובת לקוח? (ללא PDF)",
+            "מעקב אישור לקוח",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+        return result == System.Windows.MessageBoxResult.Yes;
+    }
 
     private bool HasRequiredCatalogPhysical(string catalogCode) =>
         _tree is not null && _tree.HasRequiredPhysicalFile(catalogCode);

@@ -72,7 +72,10 @@ public static class ReviewCompletionEvents
     /// <summary>Generic: a quote was internally approved or sent back for revision (Proposal PRP.InternalApproval).</summary>
     public const string QuoteInternallyApproved               = "Review.QuoteInternallyApproved";
 
-    /// <summary>Generic: a sent quote's client decision was tracked — approved/rejected (Proposal PRP.SentFollowUp).</summary>
+    /// <summary>Generic: a quote was sent to the client (Proposal PRP.SendQuote).</summary>
+    public const string QuoteSentToClient                     = "Review.QuoteSentToClient";
+
+    /// <summary>Generic: a sent quote's client decision was tracked — approved/rejected/cancelled (Proposal PRP.SentFollowUp).</summary>
     public const string QuoteApprovalTracked                  = "Review.QuoteApprovalTracked";
 
     /// <summary>Generic: an administrative project-close decision was made — approved/rejected/needs-more-info (REV.Close / PLN.Close CloseProject task).</summary>

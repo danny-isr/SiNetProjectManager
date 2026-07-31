@@ -1,0 +1,70 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Tasks.SendQuoteToClientDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="שליחת הצעת מחיר ללקוח"
+        Width="680" Height="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        MinWidth="520" MinHeight="360"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
+    <DockPanel Margin="12">
+        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="פתח Compose ב-Gmail"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Background="#BBDEFB" Foreground="#0D47A1" FontWeight="SemiBold"
+                        BorderBrush="#64B5F6" Click="OpenCompose_Click"/>
+                <Button Content="בדוק שנשלח"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Background="#C8E6C9" Foreground="#1B5E20" FontWeight="SemiBold"
+                        BorderBrush="#81C784" Click="VerifySent_Click"/>
+                <Button Content="סיום אחרי הוכחה"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Background="#A5D6A7" Foreground="#1B5E20" FontWeight="SemiBold"
+                        BorderBrush="#66BB6A" Click="CompleteVerified_Click"
+                        IsEnabled="{Binding CanCompleteVerified}"/>
+                <Button Content="אישור מנהל (override)"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Background="#FFE0B2" Foreground="#E65100" FontWeight="SemiBold"
+                        BorderBrush="#FFB74D" Click="Override_Click"
+                        IsEnabled="{Binding CanOverride}"/>
+                <Button Content="סגור"
+                        Padding="14,8" Click="Close_Click"
+                        Background="{DynamicResource SiSurfaceBrush}"
+                        BorderBrush="{DynamicResource SiBorderBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="שליחת הצעת מחיר — Compose + הוכחת Sent"
+                   FontWeight="SemiBold"
+                   FontSize="{DynamicResource SiTextMediumFontSize}"
+                   Foreground="{DynamicResource SiForegroundBrush}"
+                   Margin="0,0,0,8"/>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="פתחו Compose ב-Gmail, שלחו את המייל, ואז בדקו את תיקיית Sent לפי סימן המעקב. בלי הוכחה לא ניתן לסיים — אלא אם מנהל מאשר override."
+                   Foreground="{DynamicResource SiSecondaryBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,10"/>
+
+        <Border Padding="12" CornerRadius="6"
+                Background="#E3F2FD" BorderBrush="#64B5F6" BorderThickness="1"
+                VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Text="{Binding ProjectLine}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource SiForegroundBrush}"
+                           Margin="0,0,0,6"/>
+                <TextBlock Text="{Binding MarkerLine}"
+                           Foreground="{DynamicResource SiMutedForegroundBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,6"/>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{DynamicResource SiForegroundBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+    </DockPanel>
+</Window>

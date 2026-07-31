@@ -27,6 +27,11 @@ public static class ProposalStageCodes
     public const string Calculation        = "PRP.Calculation";
     public const string Preparation        = "PRP.Preparation";
     public const string InternalApproval   = "PRP.InternalApproval";
+
+    /// <summary>Send the approved quote to the client (Gmail compose + Sent proof).</summary>
+    public const string SendQuote          = "PRP.SendQuote";
+
+    /// <summary>Track client approval / rejection after the quote was sent.</summary>
     public const string SentFollowUp       = "PRP.SentFollowUp";
 
     /// <summary>Final stage when the client approves the quote.</summary>

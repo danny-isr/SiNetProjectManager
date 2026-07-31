@@ -430,15 +430,32 @@ public static class ReviewTaskInteractionRegistry
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: true),
 
-            // FollowQuoteApproval — wait for client approval/rejection on the sent quote.
+            // SendQuoteToClient — Gmail compose + Sent proof (or admin override).
+            new(
+                TaskTypeCodes.SendQuoteToClient,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
+                TaskCompletionPolicy.WorkflowResultRecorded,
+                new[] { TaskResultCodes.QuoteSent },
+                AutoCloseOnCompletion: true,
+                RequiresUserConfirmation: false),
+
+            // FollowQuoteApproval — client decision on ProjectWork (PDF approve / reject / cancel).
             new(
                 TaskTypeCodes.FollowQuoteApproval,
-                TaskOpenMode.EmailFiling,
-                TaskComponentKeys.EmailFiling,
-                TaskWorkTargetEntityType.EmailThread,
-                TaskLinkRole.FollowUp,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
                 TaskCompletionPolicy.WorkflowResultRecorded,
-                new[] { TaskResultCodes.QuoteApprovedByClient, TaskResultCodes.QuoteRejectedByClient },
+                new[]
+                {
+                    TaskResultCodes.QuoteApprovedByClient,
+                    TaskResultCodes.QuoteRejectedByClient,
+                    TaskResultCodes.QuoteCancelledNoResponse,
+                },
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: false),
 

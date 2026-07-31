@@ -40,6 +40,7 @@ decision for any behavior change.
 | Capability | Active implementation | Stack | Current status |
 | --- | --- | --- | --- |
 | Gmail inbox read (project label scoped) | `InboxViewModel` -> `IEmailGateway` -> `GmailEmailGateway` -> `GmailClientProvider` | Native | Active |
+| Gmail Sent search (Proposal send proof) | `SendQuoteToClientDialog` → `IEmailGateway.GetMailboxPageAsync` (`EmailMailboxScope.Sent` / `in:sent` + marker) | Native | Active (readonly; no silent API send). Compose opens Gmail web URL. |
 | First real email window (Gmail + ACC-filing) | `EmailWindowViewModel` -> `IEmailGateway` + ACC ports / executors | Native | Active ACC-filing pilot (N1–N3); Send/Reply/Forward still G-Policy |
 | Gmail auth/health bridge | `IConnectorAuthService` -> `GmailConnectorAuthService` | Native | Active |
 | Gmail send capability | `IEmailSender` -> `GmailEmailSender` | Native module | Implemented in code; host adoption is still separate |

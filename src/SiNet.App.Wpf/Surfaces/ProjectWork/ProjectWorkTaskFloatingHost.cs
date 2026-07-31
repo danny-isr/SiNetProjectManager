@@ -71,7 +71,7 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
             MinHeight = 480,
             FlowDirection = FlowDirection.RightToLeft,
             ShowInTaskbar = true,
-            Topmost = true,
+            Topmost = false,
         };
         TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(host);
 
@@ -98,7 +98,7 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
 
         // #region agent log
         WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
-            $"create-float task={context.TaskId} project={context.ProjectId} topmost=True");
+            $"create-float task={context.TaskId} project={context.ProjectId} topmost=False owner=MainWindow");
         // #endregion
         host.Show();
         host.Activate();

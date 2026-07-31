@@ -20,6 +20,9 @@ public static class TaskResultCodes
     public const string QuoteApprovedByClient = "QuoteApprovedByClient";
     public const string QuoteRejectedByClient = "QuoteRejectedByClient";
 
+    /// <summary>Client follow-up closed without a response (cancel / no reply).</summary>
+    public const string QuoteCancelledNoResponse = "QuoteCancelledNoResponse";
+
     // Work order
     public const string WorkOrderReceived = "WorkOrderReceived";
     public const string WorkOrderFiled = "WorkOrderFiled";

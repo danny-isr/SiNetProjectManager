@@ -256,13 +256,17 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Equal(2, financeFolder.Infolderid);
 
         var rows = await db.ProjectFiles.Where(f => f.IsRequired).OrderBy(f => f.Code).ToListAsync();
-        Assert.Equal(2, rows.Count);
+        Assert.Equal(3, rows.Count);
         Assert.Contains(rows, r => r.Code == ProjectFileCatalogCodes.QuoteEstimate && r.Title == ProjectFileRequiredOmdanSeedData.DisplayTitle);
         var quote = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteDocument);
         Assert.Equal("הצעת מחיר", quote.Title);
         Assert.Equal(".docx", quote.Typefile);
         Assert.False(quote.OutSidData);
         Assert.Equal(financeFolder.Id, quote.Folderid);
+        var clientApproval = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteClientApproval);
+        Assert.Equal("אישור לקוח להצעה", clientApproval.Title);
+        Assert.Equal(".pdf", clientApproval.Typefile);
+        Assert.Equal(financeFolder.Id, clientApproval.Folderid);
 
         // Title rename must not break Code identity on second ensure.
         var omdan = rows.Single(r => r.Code == ProjectFileCatalogCodes.QuoteEstimate);
@@ -307,6 +311,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Equal("אומדן הצעה", omdan.Title);
         Assert.Equal(3, omdan.Folderid);
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument));
+        Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteClientApproval));
     }
 
     [Fact]
@@ -328,6 +333,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
         Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate).ToListAsync());
         Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteDocument).ToListAsync());
+        Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteClientApproval).ToListAsync());
     }
 
     [Fact]
@@ -387,13 +393,14 @@ public sealed class ProjectWorkRequiredOmdanTests
         var result = await ProjectFileCatalogSeedData.EnsureAsync(db);
 
         Assert.Contains("updated", result, StringComparison.Ordinal);
-        Assert.Equal(3, await db.ProjectFiles.CountAsync());
+        Assert.Equal(4, await db.ProjectFiles.CountAsync());
         Assert.NotNull(await db.ProjectFiles.SingleAsync(f => f.Id == 50 && f.Title == "קובץ אחר"));
         var omdan = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate);
         Assert.Equal("אומדן הצעה", omdan.Title);
         Assert.True(omdan.IsRequired);
         Assert.Equal(10, omdan.Folderid);
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument));
+        Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteClientApproval));
     }
 
     [Fact]

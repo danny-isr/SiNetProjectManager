@@ -30,10 +30,12 @@ flowchart TD
   matcheck -->|MaterialMissing| matcheck
   calc -->|QuoteCalculationCompleted| prep[PRP.Preparation]
   prep -->|QuotePrepared| approval[PRP.InternalApproval]
-  approval -->|QuoteApprovedInternally| followup[PRP.SentFollowUp]
+  approval -->|QuoteApprovedInternally| send[PRP.SendQuote]
   approval -->|QuoteRequiresRevision| prep
+  send -->|QuoteSent| followup[PRP.SentFollowUp]
   followup -->|QuoteApprovedByClient| approved[PRP.Approved]
   followup -->|QuoteRejectedByClient| rejected
+  followup -->|QuoteCancelledNoResponse| rejected
 ```
 
 Node reference (stage code → task type → result code that advances it → project status set):
@@ -50,8 +52,10 @@ Node reference (stage code → task type → result code that advances it → pr
 | 6 | `PRP.Preparation` | `PrepareQuoteDocument` | `QuotePrepared` | — |
 | 7 | `PRP.InternalApproval` | `ApproveQuoteInternal` | `QuoteApprovedInternally` | `WaitingForQuoteApproval` |
 | — | `PRP.InternalApproval` (revise) | `ApproveQuoteInternal` | `QuoteRequiresRevision` | back to `PRP.Preparation` |
-| 8 | `PRP.SentFollowUp` | `FollowQuoteApproval` | `QuoteApprovedByClient` | `WaitingForWorkOrder` → **PRP.Approved** |
+| 8 | `PRP.SendQuote` | `SendQuoteToClient` | `QuoteSent` | — (status already WaitingForQuoteApproval) |
+| 9 | `PRP.SentFollowUp` | `FollowQuoteApproval` | `QuoteApprovedByClient` | `WaitingForWorkOrder` → **PRP.Approved** |
 | — | `PRP.SentFollowUp` (branch) | `FollowQuoteApproval` | `QuoteRejectedByClient` | `ClosedLost` → **PRP.Rejected** |
+| — | `PRP.SentFollowUp` (branch) | `FollowQuoteApproval` | `QuoteCancelledNoResponse` | `ClosedLost` → **PRP.Rejected** |
 
 All PRP transitions run in **`Auto`** mode, so closing a stage's task auto-advances the workflow in the
 same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are **terminal**
@@ -86,7 +90,7 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ---
 
-## 2. Happy path — Start → all 8 stages → PRP.Approved
+## 2. Happy path — Start → all stages → PRP.Approved
 
 ### 2.0 — Start + intake (email `CreatePriceQuote`) — **skips second classification UI**
 
@@ -159,15 +163,25 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 - **Expected DB state:** `CurrentStage=PRP.InternalApproval`; new `ApproveQuoteInternal` task open.
 - `[ ]` **Result/Notes:** ________________________________________________
 
-### 2.7 — `PRP.InternalApproval` → `PRP.SentFollowUp`  (`QuoteApprovedInternally`)
+### 2.7 — `PRP.InternalApproval` → `PRP.SendQuote`  (`QuoteApprovedInternally`)
 
 - **Action:** complete `ApproveQuoteInternal` with result **`QuoteApprovedInternally`**.
-- **Expected DB state:** `CurrentStage=PRP.SentFollowUp`; new `FollowQuoteApproval` task open; project
+- **Expected DB state:** `CurrentStage=PRP.SendQuote`; new `SendQuoteToClient` task open; project
   status = `WaitingForQuoteApproval`.
+- `[ ]` **Result/Notes:** ________________________________________________
+
+### 2.7b — `PRP.SendQuote` → `PRP.SentFollowUp`  (`QuoteSent`)
+
+- **Action:** open `SendQuoteToClient` → «פתח Compose ב-Gmail» (marker in subject/body) → send in Gmail →
+  «בדוק שנשלח» (Sent proof). Or Administrator **override** if Sent proof is unavailable.
+- **Expected DB state:** `CurrentStage=PRP.SentFollowUp`; new `FollowQuoteApproval` task open
+  (display: מעקב אישור לקוח). ProjectWork surface (not EmailFiling-blocked).
 - `[ ]` **Result/Notes:** ________________________________________________
 
 ### 2.8 — `PRP.SentFollowUp` → `PRP.Approved`  (`QuoteApprovedByClient`)  **[terminal]**
 
+- **Prerequisite:** upload client-approval PDF catalog file **`QuoteClientApproval`**
+  («אישור לקוח להצעה») under תכתובת → ניהול כספי before completing with approve.
 - **Action:** complete `FollowQuoteApproval` with result **`QuoteApprovedByClient`**.
 - **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Approved' isFinal=True status=Completed`.
 - **Expected DB state:** `CurrentStage=PRP.Approved`; instance `status=Completed`, `CompletedAtUtc` set;
@@ -207,9 +221,16 @@ Run each from a **fresh** Proposal instance (start again via `CreatePriceQuote` 
 
 ### 3.D — SentFollowUp `QuoteRejectedByClient` → `PRP.Rejected`  **[terminal]**
 
-- **Precondition:** advance a fresh instance to `PRP.SentFollowUp`.
+- **Precondition:** advance a fresh instance to `PRP.SentFollowUp` (via SendQuote / `QuoteSent`).
 - **Action:** complete `FollowQuoteApproval` with result **`QuoteRejectedByClient`**.
 - **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Rejected' isFinal=True status=Completed`.
+- **Expected DB state:** instance `Completed` at `PRP.Rejected`; project status = `ClosedLost`.
+- `[ ]` **Result/Notes:** ________________________________________________
+
+### 3.E — SentFollowUp `QuoteCancelledNoResponse` → `PRP.Rejected`  **[terminal]**
+
+- **Precondition:** advance a fresh instance to `PRP.SentFollowUp`.
+- **Action:** complete `FollowQuoteApproval` with result **`QuoteCancelledNoResponse`** (explicit confirm; no PDF).
 - **Expected DB state:** instance `Completed` at `PRP.Rejected`; project status = `ClosedLost`.
 - `[ ]` **Result/Notes:** ________________________________________________
 

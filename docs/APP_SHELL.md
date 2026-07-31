@@ -354,7 +354,20 @@ Rules:
   not complementary task surfaces.
 - Browse / shell-hosted inbox content stays in the main shell content area and is unchanged.
 
-Implementation: `TaskSurfaceWindowLayout` in `SiNet.App.Wpf.Surfaces.Tasks`.
+**Topmost / ownership (SOF-001):**
+
+| Window role | `Topmost` | `Owner` |
+| --- | --- | --- |
+| Tasks workbench strip | may stay topmost (narrow chrome) | optional |
+| Task **work surface** (ProjectWork float, Acc pop-out, Email work-item, Inspection task window) | **`false`** | **`MainWindow`** (shell-owned child) |
+| Modal decision dialogs | N/A | owner window |
+
+Work surfaces must not float above other desktop apps when the operator switches away from SiNet.
+Complementary geometry is unchanged. Full dock into `IShellContentHost` for every task surface is
+**out of scope** for this policy slice.
+
+Implementation: `TaskSurfaceWindowLayout` in `SiNet.App.Wpf.Surfaces.Tasks`;
+`ProjectWorkTaskFloatingHost` / Acc pop-out respect the table above.
 
 ---
 

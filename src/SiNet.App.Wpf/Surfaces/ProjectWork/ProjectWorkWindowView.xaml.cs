@@ -155,7 +155,7 @@ public partial class ProjectWorkWindowView : UserControl, IDisposable
             Width = Math.Max(900, (owner?.ActualWidth ?? 1200) * 0.85),
             Height = Math.Max(650, (owner?.ActualHeight ?? 800) * 0.9),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Topmost = true,
+            Topmost = false,
             Content = _accFloatHost,
         };
         AccDockToggleButton.Content = "החזר לפאנל";
@@ -167,7 +167,7 @@ public partial class ProjectWorkWindowView : UserControl, IDisposable
         // #region agent log
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
             "ProjectWork.AccPopOut",
-            "pop-out opened Topmost=true");
+            "pop-out opened Topmost=false");
         // #endregion
         _accFloatWindow.Show();
     }

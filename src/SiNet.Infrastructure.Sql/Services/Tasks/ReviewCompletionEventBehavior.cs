@@ -417,9 +417,21 @@ public static class ReviewCompletionEventBehavior
                 RequestWorkflowAdvance: true,
                 ClosesAssociatedTask: true),
 
+            new(ReviewCompletionEvents.QuoteSentToClient,
+                new[] { TaskTypeCodes.SendQuoteToClient },
+                new[] { TaskResultCodes.QuoteSent },
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
+
             new(ReviewCompletionEvents.QuoteApprovalTracked,
                 new[] { TaskTypeCodes.FollowQuoteApproval },
-                new[] { TaskResultCodes.QuoteApprovedByClient, TaskResultCodes.QuoteRejectedByClient },
+                new[]
+                {
+                    TaskResultCodes.QuoteApprovedByClient,
+                    TaskResultCodes.QuoteRejectedByClient,
+                    TaskResultCodes.QuoteCancelledNoResponse,
+                },
                 NewProjectStatusCode: null,
                 RequestWorkflowAdvance: true,
                 ClosesAssociatedTask: true),

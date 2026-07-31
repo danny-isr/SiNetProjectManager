@@ -11,11 +11,14 @@ using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
+using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
+using Microsoft.Extensions.Logging;
 
 namespace SiNet.App.Wpf.WorkSurfaces;
 
@@ -126,11 +129,35 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 _services.GetService<IEmailInboxQueryService>(),
                 _services.GetService<IAccResolvedDocsUrlLauncher>(),
                 _services.GetService<SiNet.Application.Email.IEmailFilingService>(),
-                _services.GetService<SiNet.Application.Abstractions.Email.IEmailGateway>())
+                _services.GetService<IEmailGateway>())
             {
                 Owner = System.Windows.Application.Current?.MainWindow,
             };
             openQuoteDialog.ShowDialog();
+            return true;
+        }
+
+        if (string.Equals(context.TaskTypeCode, "SendQuoteToClient", StringComparison.OrdinalIgnoreCase))
+        {
+            WorkflowDebugTrace.Step("Launcher.Open",
+                $"task={context.TaskId} → routing to SendQuoteToClient dialog");
+
+            if (_services.GetService<ITaskCompletionService>() is not { } sendQuoteCompletion)
+            {
+                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                return false;
+            }
+
+            var sendDialog = new SendQuoteToClientDialog(
+                context,
+                sendQuoteCompletion,
+                _services.GetService<IEmailGateway>(),
+                _services.GetService<IAuthorizationQueryService>(),
+                _services.GetService<ILoggerFactory>()?.CreateLogger("SendQuoteToClient"))
+            {
+                Owner = System.Windows.Application.Current?.MainWindow,
+            };
+            sendDialog.ShowDialog();
             return true;
         }
 
