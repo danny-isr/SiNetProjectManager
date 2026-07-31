@@ -1,6 +1,7 @@
 # Workflow Principles
 
-- **Decision date / Updated date:** 26.05.2026
+- **Decision date:** 26.05.2026
+- **Updated:** 01.08.2026
 - **Status:** Active â€” source of truth for tasks, actions, and runtime workflow.
 - **Scope:** Tasks, Actions, RuntimeActions, action handlers, task completion, ReviewTask, FileQuoteMaterial, workflow advance, FloatingTasks, `PRP.MaterialCheck`.
 
@@ -137,6 +138,51 @@ An older task management model (`ProjectTypeTaskType`, `ProjectTypeStatus`, `Tas
 
 For the full analysis of the coexistence between the old and new models, including known risks and alignment plan, see [`TaskingWorkflowCoexistence-2026-06-19.md`](TaskingWorkflowCoexistence-2026-06-19.md).
 
+
+## Project-type track instances (B2 approved 01.08.2026)
+
+The approved unit of project-type parallelism is a **project JobType track**: one independent
+`WorkflowInstance` for each `Project + WorkflowDefinition + JobType` combination. It is not a
+workflow instance per task.
+
+The detailed binding policy and implementation gates are maintained in
+[`PROJECT_TYPE_WORKFLOW_POLICY.md`](../../../../docs/manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md).
+That document is the source of truth for continuation dedupe, JobType identity, runtime stage
+profiles, task links/reuse, navigation, dashboards, project-level status, and legacy null/backfill
+policy.
+
+### Existing mechanism and approved change
+
+- Current runtime deduplicates post-Proposal continuation by `WorkflowDefinitionId`; JobTypes that
+  share `PlanningWorkflow` therefore share one instance.
+- The B2 target replaces that rule with one active/paused instance per
+  `ProjectId + WorkflowDefinitionId + JobTypeId`.
+- A task remains a unit of work inside its Trigger-linked instance; a task does not become its own
+  workflow.
+- B1 (separate definitions per JobType) is not the architecture target and may be used only as an
+  explicitly documented temporary bridge.
+
+### Binding runtime principles
+
+1. New JobType-driven instances carry explicit JobType track identity.
+2. `ProjectTypeWorkflowStage` selects and constrains the runtime stages for the instance’s JobType;
+   missing or invalid required policy fails visibly.
+3. Task ownership and navigation resolve the exact instance through `TaskLink` role `Trigger`;
+   project-level “newest/best instance” guessing is forbidden when that link exists.
+4. Task reuse is scoped to the same instance/track and must not merge work across parallel JobTypes.
+5. Dashboards and project views expose all tracks rather than collapsing them to one representative
+   instance.
+6. Completing one track does not advance, complete, or cancel a sibling track and does not close the
+   project. The project remains non-terminal while any required track is active/paused and becomes
+   eligible for closure only after all required tracks and separate project-level gates are terminal.
+
+### B2 documentation checkpoint — Out of Scope
+
+This documentation-first checkpoint does not change entity/configuration code, runtime behavior,
+seed data, UI, tests, database state, or files under `**/Migrations/**`. Model work begins only
+after explicit approval of the updated policy documents; migration generation and application
+remain user-owned.
+
 ## What we do not do now
 - Do not bypass the action handler dispatcher for new actions.
 - Do not change workflow designer or migrations as part of documentation work.
@@ -147,6 +193,10 @@ For the full analysis of the coexistence between the old and new models, includi
 - Do not use `RuntimeAction` as a parallel workflow engine.
 - Do not add a fallback that reports success while the handler failed.
 - Do not create a new handler before checking whether an existing handler can be extended.
+- Do not model a workflow instance per task.
+- Do not implement B2 schema/runtime before the documentation approval checkpoint.
+- Do not resolve task workflow context from the newest/best project instance when a Trigger link exists.
+- Do not create, edit, or run EF migration files; migration commands remain user-owned.
 
 ## Dropped / cancelled / postponed
 - `Completed` as a `ProjectStatus` value â€” dropped.
@@ -162,6 +212,10 @@ For the full analysis of the coexistence between the old and new models, includi
 - `AI` as an autonomous decision maker inside workflow â€” **not approved**.
 - `AI` auto-approve / auto-reject / auto-complete / auto-advance â€” **not approved**.
 - Deep per-handler documentation â€” postponed.
+- Workflow instance per individual task â€” **dropped**.
+- B1 / separate definitions per JobType as the architecture target â€” **dropped**; temporary bridge only if explicitly approved and documented.
+- B2 entity/runtime implementation â€” **postponed until the docs approval checkpoint is passed**.
+- EF migration generation/application for B2 â€” **postponed and user-owned**.
 
 ## Relevant terms / search terms
 Task, Action, RuntimeAction, IProcessActionHandler, MoveToProject, AddMaterialToProject, ReviewTask, FileQuoteMaterial, FloatingTask, PRP.MaterialCheck, WorkflowStageDefinition, PLN.Approval.AuthorityApproved, ProjectStatus, UserGroup, default assignee, Workflow vs Task, Action Handler boundary, Completion boundary, RuntimeAction boundary, ViewModel boundary, dispatcher, handler extension.
