@@ -31,6 +31,18 @@ public sealed class FileServerSidecarMetadataTests : IDisposable
         => Assert.False(FileServerSidecarMetadata.IsMetadataCompanion(Path.Combine(_dir, "report.pdf")));
 
     [Fact]
+    public void IsOfficeOwnerLockFile_true_for_word_tilde_dollar_prefix()
+        => Assert.True(FileServerSidecarMetadata.IsOfficeOwnerLockFile("~$הצעת מחיר.docx"));
+
+    [Fact]
+    public void ShouldSkipFromScan_true_for_office_owner_lock_and_sidecar()
+    {
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "~$quote.docx")));
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "quote.docx.si.json")));
+        Assert.False(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "quote.docx")));
+    }
+
+    [Fact]
     public void TryReadSourceFileName_reads_source_from_sidecar()
     {
         var data = Path.Combine(_dir, "x.pdf");

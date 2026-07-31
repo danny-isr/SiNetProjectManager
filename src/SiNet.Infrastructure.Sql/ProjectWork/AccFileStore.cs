@@ -122,6 +122,11 @@ public sealed class AccFileStore : IFileStore
             if (entry.Kind != AccFolderEntryKind.Item)
                 continue;
 
+            // Office owner/lock files (~$*.docx) are not deliverables if ever present in ACC.
+            if (!string.IsNullOrWhiteSpace(entry.DisplayName)
+                && entry.DisplayName.StartsWith("~$", StringComparison.Ordinal))
+                continue;
+
             var viewerUrl = BuildItemViewerUrl(accProjectId, accFolderId, entry.Id);
             if (!sampleLogged)
             {

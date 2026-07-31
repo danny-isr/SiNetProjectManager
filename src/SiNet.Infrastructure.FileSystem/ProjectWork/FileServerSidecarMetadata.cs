@@ -15,7 +15,14 @@ public static class FileServerSidecarMetadata
     public const string SidecarSuffix = ".si.json";
 
     /// <summary>
-    /// Returns <see langword="true"/> when <paramref name="fileName"/> is a metadata companion that
+    /// Returns <see langword="true"/> when the path/name must not appear in a ProjectWork file scan
+    /// (sidecar companions + ephemeral Office owner/lock files).
+    /// </summary>
+    public static bool ShouldSkipFromScan(string fullPathOrName) =>
+        IsMetadataCompanion(fullPathOrName) || IsOfficeOwnerLockFile(fullPathOrName);
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="fullPathOrName"/> is a metadata companion that
     /// should be skipped during scanning: either a SiNet sidecar (<c>*.si.json</c>) or a
     /// <c>{data}.json</c> companion sitting next to its data sibling.
     /// </summary>
@@ -38,6 +45,20 @@ public static class FileServerSidecarMetadata
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Word / Excel / PowerPoint create a short-lived owner file <c>~$Document.docx</c> next to the
+    /// real document while it is open. It is not a project deliverable and must not appear in the tree
+    /// (looks like a duplicate of the open file).
+    /// </summary>
+    public static bool IsOfficeOwnerLockFile(string fullPathOrName)
+    {
+        if (string.IsNullOrWhiteSpace(fullPathOrName))
+            return false;
+
+        var name = Path.GetFileName(fullPathOrName);
+        return name.StartsWith("~$", StringComparison.Ordinal);
     }
 
     /// <summary>

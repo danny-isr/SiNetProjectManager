@@ -42,6 +42,7 @@ public sealed class FileServerFileStoreTests : IDisposable
         File.WriteAllText(Path.Combine(_dir, "data.txt"), "d");
         File.WriteAllText(Path.Combine(_dir, "data.txt.json"), "{}");        // companion → skipped
         File.WriteAllText(Path.Combine(_dir, "notes.si.json"), "{}");         // sidecar → skipped
+        File.WriteAllText(Path.Combine(_dir, "~$data.txt"), "lock");          // Office owner → skipped
 
         var store = new FileServerFileStore(Mock.Of<IProjectFolderPathResolver>());
 

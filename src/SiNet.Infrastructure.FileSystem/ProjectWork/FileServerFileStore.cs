@@ -51,8 +51,8 @@ public sealed class FileServerFileStore : IFileStore
                 continue;
             }
 
-            // Sidecar / metadata-companion JSON files are metadata for their sibling data file — skip.
-            if (FileServerSidecarMetadata.IsMetadataCompanion(fi.FullName))
+            // Sidecars + Office ~$ owner/lock files (Word open) — skip from the project tree.
+            if (FileServerSidecarMetadata.ShouldSkipFromScan(fi.FullName))
                 continue;
 
             var parsed = ProjectFileNameParser.TryParse(fi.Name);
