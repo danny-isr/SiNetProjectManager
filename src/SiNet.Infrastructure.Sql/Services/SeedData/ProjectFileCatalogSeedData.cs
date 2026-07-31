@@ -55,7 +55,8 @@ public static class ProjectFileCatalogSeedData
             ParentFolderTitle: "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA", // תכתובת
             TypeFile: ".pdf",
             IsRequired: true,
-            OutSidData: false,
+            // true: FollowQuote Email-first tagging can target this slot (physical file still required to approve).
+            OutSidData: true,
             LegacyTitles:
             [
                 "\u05D0\u05D9\u05E9\u05D5\u05E8 \u05DC\u05E7\u05D5\u05D7 \u05DC\u05D4\u05E6\u05E2\u05D4", // אישור לקוח להצעה

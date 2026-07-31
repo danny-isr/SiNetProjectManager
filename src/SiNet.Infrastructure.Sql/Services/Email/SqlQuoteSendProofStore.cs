@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Email.QuoteSend;
+using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -23,6 +24,7 @@ public sealed class SqlQuoteSendProofStore(IDbContextFactory<SiNetSQLDbContext> 
         string gmailMessageId,
         string? gmailThreadId,
         string marker,
+        string? primaryTo = null,
         CancellationToken cancellationToken = default)
     {
         if (taskId <= 0)
@@ -40,11 +42,15 @@ public sealed class SqlQuoteSendProofStore(IDbContextFactory<SiNetSQLDbContext> 
         if (!exists)
             throw new InvalidOperationException($"Task {taskId} was not found.");
 
+        var note = $"GmailMessageId={gmailMessageId.Trim()}; Marker={marker}";
+        if (!string.IsNullOrWhiteSpace(primaryTo))
+            note += $"; PrimaryTo={primaryTo.Trim()}";
+
         db.ProjectAssignmentEvents.Add(new ProjectAssignmentEvent
         {
             ProjectAssignmentId = taskId,
             EventType = EventType,
-            Note = $"GmailMessageId={gmailMessageId.Trim()}; Marker={marker}",
+            Note = note,
             EmailThreadId = string.IsNullOrWhiteSpace(gmailThreadId) ? null : gmailThreadId.Trim(),
             CreatedByUserId = actingUserId,
             CreatedDate = DateTime.UtcNow,
@@ -64,26 +70,68 @@ public sealed class SqlQuoteSendProofStore(IDbContextFactory<SiNetSQLDbContext> 
             .AsNoTracking()
             .Where(e => e.ProjectAssignmentId == taskId && e.EventType == EventType)
             .OrderByDescending(e => e.CreatedDate)
-            .Select(e => new { e.Note, e.EmailThreadId, e.CreatedDate })
+            .Select(e => new { e.ProjectAssignmentId, e.Note, e.EmailThreadId, e.CreatedDate })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (row is null)
+        return row is null ? null : ToProof(row.ProjectAssignmentId, row.Note, row.EmailThreadId, row.CreatedDate);
+    }
+
+    public async Task<QuoteSendProof?> GetLatestForProjectAsync(
+        int projectId,
+        CancellationToken cancellationToken = default)
+    {
+        if (projectId <= 0)
             return null;
 
-        var messageId = ExtractGmailMessageId(row.Note);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        var sendQuoteTaskIds = await (
+                from t in db.ProjectAssignments.AsNoTracking()
+                join tt in db.TaskTypes.AsNoTracking() on t.TaskTypeId equals tt.Id
+                where t.ProjectId == projectId && tt.Code == TaskTypeCodes.SendQuoteToClient
+                select t.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (sendQuoteTaskIds.Count == 0)
+            return null;
+
+        var row = await db.ProjectAssignmentEvents
+            .AsNoTracking()
+            .Where(e => sendQuoteTaskIds.Contains(e.ProjectAssignmentId) && e.EventType == EventType)
+            .OrderByDescending(e => e.CreatedDate)
+            .Select(e => new { e.ProjectAssignmentId, e.Note, e.EmailThreadId, e.CreatedDate })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return row is null
+            ? null
+            : ToProof(row.ProjectAssignmentId, row.Note, row.EmailThreadId, row.CreatedDate);
+    }
+
+    private static QuoteSendProof? ToProof(int taskId, string? note, string? threadId, DateTime created)
+    {
+        var messageId = ExtractGmailMessageId(note);
         if (string.IsNullOrWhiteSpace(messageId))
             return null;
 
-        return new QuoteSendProof(taskId, messageId, row.EmailThreadId, row.CreatedDate);
+        return new QuoteSendProof(
+            taskId,
+            messageId,
+            threadId,
+            created,
+            ExtractField(note, "PrimaryTo="));
     }
 
     internal static string? ExtractGmailMessageId(string? note)
+        => ExtractField(note, "GmailMessageId=");
+
+    internal static string? ExtractField(string? note, string prefix)
     {
         if (string.IsNullOrWhiteSpace(note))
             return null;
 
-        const string prefix = "GmailMessageId=";
         var start = note.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
         if (start < 0)
             return null;

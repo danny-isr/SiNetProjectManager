@@ -14,6 +14,7 @@ using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using AccBrowserHost = SiNet.Application.Email.Acc.IEmailExternalDownloadBrowserHost;
 using SiNet.Application.Identity;
+using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
@@ -32,6 +33,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     private readonly IEmailInboxQueryService? _emailInboxQuery;
     private readonly IEmailAccClosePrompt? _accClosePrompt;
     private readonly IEmailAccBackgroundWorkTracker? _backgroundWorkTracker;
+    private readonly IProjectWorkSurfaceHost? _projectWorkHost;
     private readonly EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private WorkSurfaceContext? _workSurfaceContext;
@@ -43,6 +45,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     private int _lastBackgroundWorkCount;
     private int _autoRefreshGate;
     private int _applyTaskContextGate;
+    private bool _isFollowQuoteMode;
+    private bool _isFollowQuoteEmptyState;
+    private string _followQuoteBannerText = string.Empty;
+    private bool _offerFollowQuoteProjectWorkFallback;
 
     public EmailWindowViewModel()
         : this(
@@ -142,7 +148,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailFilingProjectPickerHost? filingProjectPicker = null,
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
         IShellContentHost? shellContentHost = null,
-        IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null)
+        IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null,
+        IProjectWorkSurfaceHost? projectWorkHost = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -152,6 +159,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         _emailInboxQuery = emailInboxQuery;
         _accClosePrompt = accClosePrompt;
         _backgroundWorkTracker = backgroundWorkTracker;
+        _projectWorkHost = projectWorkHost;
 
         Folders = new ObservableCollection<EmailFolderRow>(EmailWindowDesignData.SampleFolders);
         StatusOptions = new ObservableCollection<string>(EmailWindowDesignData.SampleStatuses);
@@ -244,6 +252,16 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         OpenEmailCommand = new AsyncRelayCommand(
             () => EmailDetail.OpenSelectedEmailAsync(),
             () => !EmailList.IsBusy && EmailList.SelectedEmail is not null);
+        ClearFollowQuoteFilterCommand = new AsyncRelayCommand(
+            ClearFollowQuoteFilterAsync,
+            () => _isFollowQuoteMode && !EmailList.IsBusy);
+        OpenFollowQuoteProjectWorkCommand = new AsyncRelayCommand(
+            OpenFollowQuoteProjectWorkAsync,
+            () => _isFollowQuoteMode
+                 && _offerFollowQuoteProjectWorkFallback
+                 && _projectWorkHost is not null
+                 && _workSurfaceContext?.TaskId is > 0
+                 && !EmailList.IsBusy);
     }
 
     public string Title => "ניהול דואר — Gmail + ACC Inbox";
@@ -327,6 +345,53 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     public ICommand SearchCommand { get; }
     public ICommand ClearSearchCommand { get; }
     public ICommand OpenEmailCommand { get; }
+    public ICommand ClearFollowQuoteFilterCommand { get; }
+    public ICommand OpenFollowQuoteProjectWorkCommand { get; }
+
+    public bool IsFollowQuoteMode
+    {
+        get => _isFollowQuoteMode;
+        private set
+        {
+            if (SetField(ref _isFollowQuoteMode, value))
+            {
+                OnPropertyChanged(nameof(ShowFollowQuoteBanner));
+                (ClearFollowQuoteFilterCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (OpenFollowQuoteProjectWorkCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsFollowQuoteEmptyState
+    {
+        get => _isFollowQuoteEmptyState;
+        private set => SetField(ref _isFollowQuoteEmptyState, value);
+    }
+
+    public string FollowQuoteBannerText
+    {
+        get => _followQuoteBannerText;
+        private set => SetField(ref _followQuoteBannerText, value);
+    }
+
+    public bool OfferFollowQuoteProjectWorkFallback
+    {
+        get => _offerFollowQuoteProjectWorkFallback;
+        private set
+        {
+            if (SetField(ref _offerFollowQuoteProjectWorkFallback, value))
+            {
+                OnPropertyChanged(nameof(ShowFollowQuoteBanner));
+                (OpenFollowQuoteProjectWorkCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool ShowFollowQuoteBanner =>
+        IsFollowQuoteMode
+        && (IsFollowQuoteEmptyState
+            || OfferFollowQuoteProjectWorkFallback
+            || !string.IsNullOrWhiteSpace(FollowQuoteBannerText));
 
     public void ApplyContext(WorkSurfaceContext? context)
     {
@@ -335,6 +400,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             _workSurfaceContext = null;
             EmailList.ClearPendingTaskSelection();
             EmailDetail.ApplyWorkSurfaceContext(null);
+            ClearFollowQuoteUiState();
             return;
         }
 
@@ -480,6 +546,15 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private async Task ApplyTaskContextCoreAsync(WorkSurfaceContext context)
     {
+        // FollowQuoteApproval Email-first: filter by SendQuote anchor (no inbox TaskLink required).
+        if (context.EmailHints is { } hints)
+        {
+            await ApplyFollowQuoteHintsAsync(context, hints).ConfigureAwait(true);
+            return;
+        }
+
+        ClearFollowQuoteUiState();
+
         // Register the task's target email BEFORE the project change below: that change fires
         // reloads (some fire-and-forget) that auto-select the first row, racing the explicit
         // selection at the end of this method. With the pending target registered, every reload
@@ -584,6 +659,135 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         }
 
         StatusMessage = $"מייל \"{inboxMessage.Subject}\" לא נמצא בעמוד Gmail הנוכחי.";
+    }
+
+    private async Task ApplyFollowQuoteHintsAsync(WorkSurfaceContext context, EmailOpenHints hints)
+    {
+        IsFollowQuoteMode = true;
+        OfferFollowQuoteProjectWorkFallback = hints.OfferProjectWorkFallback && _projectWorkHost is not null;
+        IsFollowQuoteEmptyState = false;
+
+        if (context.ProjectId > 0)
+        {
+            var project = await _projectQuery
+                .GetProjectAsync(context.ProjectId)
+                .ConfigureAwait(true);
+
+            if (project is not null)
+            {
+                await _currentProject.SetCurrentProjectAsync(project).ConfigureAwait(true);
+            }
+            else
+            {
+                StatusMessage = $"פרויקט #{context.ProjectId} לא נמצא.";
+                FollowQuoteBannerText = StatusMessage;
+                OnPropertyChanged(nameof(ShowFollowQuoteBanner));
+                return;
+            }
+        }
+
+        if (!IsConnected)
+        {
+            StatusMessage = context.TaskId is int taskId
+                ? $"מעקב אישור הצעה (משימה #{taskId}). התחבר ל-Google כדי לטעון תשובות."
+                : "מעקב אישור הצעה. התחבר ל-Google כדי לטעון תשובות.";
+            FollowQuoteBannerText = StatusMessage;
+            OnPropertyChanged(nameof(ShowFollowQuoteBanner));
+            return;
+        }
+
+        EmailList.SelectedMailboxScope = EmailMailboxScope.AllMail;
+        EmailList.AddressFilter = hints.CounterpartAddress?.Trim() ?? string.Empty;
+        EmailList.FollowQuoteThreadFilter = hints.GmailThreadId;
+
+        if (context.ProjectId > 0)
+        {
+            await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+        }
+
+        await RefreshAsync().ConfigureAwait(true);
+
+        var hasThread = !string.IsNullOrWhiteSpace(hints.GmailThreadId);
+        var hasAddress = !string.IsNullOrWhiteSpace(hints.CounterpartAddress);
+        var count = EmailList.DisplayedCount;
+        IsFollowQuoteEmptyState = count == 0;
+
+        if (IsFollowQuoteEmptyState)
+        {
+            FollowQuoteBannerText = hasThread
+                ? "אין תשובות בשרשור עדיין. ניתן להמתין, לבחור מייל אחר, או לתיוק קובץ בלי מייל."
+                : hasAddress
+                    ? "לא נמצאו מיילים מהנמען אחרי השליחה. ניתן להמתין, להרחיב חיפוש, או לתיוק קובץ בלי מייל."
+                    : "אין עוגן שליחה (שרשור/נמען). בחר מייל ידנית או תיוק קובץ בלי מייל.";
+            StatusMessage = FollowQuoteBannerText;
+        }
+        else
+        {
+            FollowQuoteBannerText = hasThread
+                ? $"מעקב אישור הצעה — מציג תשובות בשרשור ({count}). תייג PDF כ־אישור_לקוח_להצעה, או תיוק קובץ."
+                : $"מעקב אישור הצעה — מציג מיילים מסוננים ({count}). בחר תשובה ותייג PDF כ־אישור_לקוח_להצעה.";
+            StatusMessage = context.TaskId is int openedTaskId
+                ? $"נפתח מתוך משימה #{openedTaskId}. {FollowQuoteBannerText}"
+                : FollowQuoteBannerText;
+        }
+
+        WorkflowDebugTrace.Step(
+            "FollowQuote.Filter",
+            $"task={context.TaskId} empty={IsFollowQuoteEmptyState} count={count} thread={(hints.GmailThreadId ?? "-")} to={(hints.CounterpartAddress ?? "-")}");
+
+        OnPropertyChanged(nameof(ShowFollowQuoteBanner));
+        (ClearFollowQuoteFilterCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (OpenFollowQuoteProjectWorkCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    private async Task ClearFollowQuoteFilterAsync()
+    {
+        EmailList.FollowQuoteThreadFilter = null;
+        EmailList.AddressFilter = string.Empty;
+        EmailList.SelectedMailboxScope = EmailMailboxScope.AllMail;
+        IsFollowQuoteEmptyState = false;
+        FollowQuoteBannerText =
+            "סינון מעקב אישור הוסר — בחר מייל אחר בפרויקט, או תיוק קובץ בלי מייל.";
+        StatusMessage = FollowQuoteBannerText;
+        OnPropertyChanged(nameof(ShowFollowQuoteBanner));
+        await EmailList.ApplyFiltersAsync().ConfigureAwait(true);
+    }
+
+    private async Task OpenFollowQuoteProjectWorkAsync()
+    {
+        if (_projectWorkHost is null || _workSurfaceContext is null)
+        {
+            StatusMessage = "פתיחת ProjectWork אינה זמינה.";
+            return;
+        }
+
+        var pwContext = _workSurfaceContext with
+        {
+            ComponentKey = WorkSurfaceComponentKeys.ProjectWork,
+            EmailHints = null,
+        };
+
+        WorkflowDebugTrace.Step(
+            "FollowQuote.FileFallback",
+            $"task={pwContext.TaskId} → ProjectWork QuoteClientApproval");
+
+        var opened = await _projectWorkHost
+            .TryOpenFromTaskAsync(pwContext, CancellationToken.None)
+            .ConfigureAwait(true);
+
+        StatusMessage = opened
+            ? "נפתח תיוק קבצים — העלה PDF ל־אישור_לקוח_להצעה והשלם את המשימה."
+            : "פתיחת תיוק קבצים נכשלה.";
+    }
+
+    private void ClearFollowQuoteUiState()
+    {
+        IsFollowQuoteMode = false;
+        IsFollowQuoteEmptyState = false;
+        FollowQuoteBannerText = string.Empty;
+        OfferFollowQuoteProjectWorkFallback = false;
+        EmailList.FollowQuoteThreadFilter = null;
+        OnPropertyChanged(nameof(ShowFollowQuoteBanner));
     }
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)

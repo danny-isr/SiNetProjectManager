@@ -442,7 +442,9 @@ public static class ReviewTaskInteractionRegistry
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: false),
 
-            // FollowQuoteApproval — client decision on ProjectWork (PDF approve / reject / cancel).
+            // FollowQuoteApproval — Email-first (launcher special-case) with ProjectWork file fallback.
+            // Registry stays Project-scoped so navigation resolves without an inbox TaskLink;
+            // WorkSurfaceLauncher opens Email with SendQuote anchor hints.
             new(
                 TaskTypeCodes.FollowQuoteApproval,
                 TaskOpenMode.ProjectWork,

@@ -332,6 +332,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         var clientApproval = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteClientApproval);
         Assert.Equal("אישור_לקוח_להצעה", clientApproval.Title);
         Assert.Equal(".pdf", clientApproval.Typefile);
+        Assert.True(clientApproval.OutSidData);
         Assert.Equal(financeFolder.Id, clientApproval.Folderid);
         var clientRequest = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteClientRequest);
         Assert.Equal("דרישת_המזמין_להצעת_מחיר", clientRequest.Title);

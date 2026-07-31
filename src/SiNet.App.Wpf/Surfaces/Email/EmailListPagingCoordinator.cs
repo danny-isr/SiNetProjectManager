@@ -293,6 +293,7 @@ internal sealed class EmailListPagingCoordinator
         _owner.SelectedLabel = null;
         _owner.SelectedMailboxScope = EmailMailboxScope.Inbox;
         _owner.SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+        _owner.FollowQuoteThreadFilter = null;
         _owner.SetAttachmentsOnly(false);
         _owner.SetUnreadOnly(false);
         _grouping.ClearDisplayGroups();
@@ -374,6 +375,7 @@ internal sealed class EmailListPagingCoordinator
         _owner.SelectedLabel = null;
         _owner.SelectedMailboxScope = EmailMailboxScope.Inbox;
         _owner.SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+        _owner.FollowQuoteThreadFilter = null;
         _owner.SetGroupByLabel(true);
         _grouping.ClearProjectGroup();
         _grouping.ClearDisplayGroups();

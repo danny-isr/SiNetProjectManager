@@ -343,12 +343,15 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
             }
 
             CanCompleteVerified = true;
-            StatusMessage = $"נשלח בהצלחה. MessageId={result.MessageId}. אפשר לסיים את המשימה.";
+            StatusMessage = $"נשלח בהצלחה. MessageId={result.MessageId}. מסיים משימה…";
             _logger?.LogInformation(
                 "SendQuote sent: task={TaskId} marker={Marker} messageId={MessageId}",
                 taskId, draft.Marker, result.MessageId);
             WorkflowDebugTrace.Step("SendQuote.Verify",
                 $"task={taskId} marker={draft.Marker} found=True messageId={result.MessageId}");
+
+            // Proof is the persisted send MessageId — complete + close on the same successful path.
+            await CompleteAsync(overrideNote: null).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -724,6 +727,7 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
 
             if (!result.Success)
             {
+                StatusMessage = result.ErrorMessage ?? "השלמת המשימה נכשלה. אפשר לנסות «סיום אחרי הוכחה».";
                 MessageBox.Show(
                     result.ErrorMessage ?? "השלמת המשימה נכשלה.",
                     "שליחת הצעה",
@@ -732,12 +736,15 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
                 return;
             }
 
+            WorkflowDebugTrace.Step("SendQuote.Complete",
+                $"task={taskId} result={QuoteSentResult} advanced=True");
             DialogResult = true;
             Close();
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "SendQuote complete failed for task {TaskId}", taskId);
+            StatusMessage = $"השלמת המשימה נכשלה: {ex.Message}";
             MessageBox.Show(ex.Message, "שליחת הצעה", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

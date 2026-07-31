@@ -18,6 +18,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -52,11 +53,46 @@
             </WrapPanel>
         </Border>
 
-        <local:EmailListFilterBar Grid.Row="1"
+        <Border Grid.Row="1"
+                Background="#FFF8E1"
+                BorderBrush="#FFB300"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="10,8"
+                Margin="0,0,0,6"
+                Visibility="{Binding ShowFollowQuoteBanner, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Left"
+                            Orientation="Horizontal"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center">
+                    <Button Content="בחר מייל אחר"
+                            Command="{Binding ClearFollowQuoteFilterCommand}"
+                            Padding="10,4"
+                            Margin="0,0,8,0"
+                            FontFamily="{DynamicResource SiFontFamily}"
+                            FontSize="{DynamicResource SiTextSmallFontSize}" />
+                    <Button Content="תיוק קובץ בלי מייל"
+                            Command="{Binding OpenFollowQuoteProjectWorkCommand}"
+                            Padding="10,4"
+                            FontFamily="{DynamicResource SiFontFamily}"
+                            FontSize="{DynamicResource SiTextSmallFontSize}"
+                            Visibility="{Binding OfferFollowQuoteProjectWorkFallback, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <TextBlock Text="{Binding FollowQuoteBannerText}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                           Foreground="#5D4037" />
+            </DockPanel>
+        </Border>
+
+        <local:EmailListFilterBar Grid.Row="2"
                                   DataContext="{Binding EmailList}"
                                   Margin="0,0,0,6" />
 
-        <Grid Grid.Row="2" FlowDirection="RightToLeft">
+        <Grid Grid.Row="3" FlowDirection="RightToLeft">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="420" MinWidth="250" />
                 <ColumnDefinition Width="Auto" />
@@ -81,7 +117,7 @@
                                     MinHeight="0" />
         </Grid>
 
-        <Border Grid.Row="3"
+        <Border Grid.Row="4"
                 Background="{DynamicResource SiBackgroundBrush}"
                 BorderBrush="{DynamicResource SiBorderBrush}"
                 BorderThickness="0,1,0,0"

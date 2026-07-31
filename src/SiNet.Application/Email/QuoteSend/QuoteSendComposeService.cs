@@ -148,12 +148,14 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
         if (!result.Success || string.IsNullOrWhiteSpace(result.MessageId))
             return result;
 
+        var primaryTo = draft.To.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a));
         await _proofStore.SaveAsync(
                 taskId,
                 actingUserId,
                 result.MessageId!,
                 draft.ThreadId,
                 draft.Marker,
+                primaryTo,
                 cancellationToken)
             .ConfigureAwait(false);
 

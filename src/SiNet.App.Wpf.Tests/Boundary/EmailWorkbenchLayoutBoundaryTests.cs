@@ -12,7 +12,8 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
         var listXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListView.xaml");
 
         var projectBarIdx = surfaceXaml.IndexOf("ProjectSelectorView", StringComparison.Ordinal);
-        var mainGridIdx = surfaceXaml.IndexOf("Grid Grid.Row=\"2\"", StringComparison.Ordinal);
+        // Row 0 = project bar, 1 = FollowQuote banner, 2 = filter bar, 3 = list+detail.
+        var mainGridIdx = surfaceXaml.IndexOf("Grid Grid.Row=\"3\"", StringComparison.Ordinal);
         Assert.True(projectBarIdx >= 0);
         Assert.True(mainGridIdx > projectBarIdx);
         Assert.DoesNotContain("ProjectSelectorView", listXaml, StringComparison.Ordinal);
@@ -25,9 +26,19 @@ public sealed class EmailWorkbenchLayoutBoundaryTests
         var filterBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilterBar.xaml");
 
         Assert.Contains("EmailListFilterBar", surfaceXaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"1\"", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("local:EmailListFilterBar Grid.Row=\"2\"", surfaceXaml, StringComparison.Ordinal);
         Assert.Contains("ApplyFiltersCommand", filterBarXaml, StringComparison.Ordinal);
         Assert.Contains("LoadNextPageCommand", filterBarXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Email_workbench_has_follow_quote_banner_actions()
+    {
+        var surfaceXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");
+        Assert.Contains("ShowFollowQuoteBanner", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("ClearFollowQuoteFilterCommand", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("OpenFollowQuoteProjectWorkCommand", surfaceXaml, StringComparison.Ordinal);
+        Assert.Contains("תיוק קובץ בלי מייל", surfaceXaml, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -67,6 +67,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private string? _lastLoadedGmailQuery;
     private string? _lastUnreadQuerySignature;
     private EmailProjectLinkFilter _projectLinkFilter = EmailProjectLinkFilter.All;
+    private string? _followQuoteThreadFilter;
     private EmailListProjectContext? _projectContext;
     private EmailLabelGroupViewModel? _projectGroup;
     private bool _hasLabelGroups;
@@ -506,6 +507,16 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
                 OnPropertyChanged(nameof(ShowSparsePageWarning));
             }
         }
+    }
+
+    /// <summary>
+    /// Optional client-side thread filter for FollowQuoteApproval (SendQuote anchor).
+    /// Applied in <see cref="EmailListRowDisplayCoordinator.ApplyClientRowFilters"/>.
+    /// </summary>
+    public string? FollowQuoteThreadFilter
+    {
+        get => _followQuoteThreadFilter;
+        set => SetField(ref _followQuoteThreadFilter, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
     }
 
     public bool ShowConnectButton => !IsConnected;

@@ -33,4 +33,14 @@ public sealed record QuoteSendProof(
     int TaskId,
     string GmailMessageId,
     string? GmailThreadId,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string? PrimaryTo = null);
+
+/// <summary>Open hints for FollowQuoteApproval Email-first filtering.</summary>
+public sealed record FollowQuoteOpenAnchor(
+    int FollowQuoteTaskId,
+    int ProjectId,
+    int? WorkflowInstanceId,
+    string? GmailThreadId,
+    string? SentGmailMessageId,
+    string? CounterpartAddress);

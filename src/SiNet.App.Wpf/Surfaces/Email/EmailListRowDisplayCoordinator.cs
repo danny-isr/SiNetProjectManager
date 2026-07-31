@@ -149,16 +149,24 @@ internal sealed class EmailListRowDisplayCoordinator
 
     public IReadOnlyList<EmailListRow> ApplyClientRowFilters(IReadOnlyList<EmailListRow> rows)
     {
-        var filtered = _owner.SelectedProjectLinkFilter switch
+        IEnumerable<EmailListRow> filtered = _owner.SelectedProjectLinkFilter switch
         {
-            EmailProjectLinkFilter.Linked => rows.Where(static row => row.IsLinked).ToList(),
-            EmailProjectLinkFilter.Unlinked => rows.Where(static row => !row.IsLinked).ToList(),
+            EmailProjectLinkFilter.Linked => rows.Where(static row => row.IsLinked),
+            EmailProjectLinkFilter.Unlinked => rows.Where(static row => !row.IsLinked),
             _ => rows,
         };
 
+        // FollowQuoteApproval: prefer the SendQuote Gmail thread when an anchor is present.
+        if (!string.IsNullOrWhiteSpace(_owner.FollowQuoteThreadFilter))
+        {
+            var threadId = _owner.FollowQuoteThreadFilter.Trim();
+            filtered = filtered.Where(row =>
+                string.Equals(row.ThreadId, threadId, StringComparison.OrdinalIgnoreCase));
+        }
+
         // AttachmentsOnly is enforced server-side via has:attachment.
 
-        return filtered;
+        return filtered.ToList();
     }
 
     public void ReplaceRows(

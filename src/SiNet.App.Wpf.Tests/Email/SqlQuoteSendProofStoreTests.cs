@@ -19,4 +19,13 @@ public sealed class SqlQuoteSendProofStoreTests
         Assert.Null(SqlQuoteSendProofStore.ExtractGmailMessageId("no proof here"));
         Assert.Null(SqlQuoteSendProofStore.ExtractGmailMessageId(null));
     }
+
+    [Fact]
+    public void ExtractField_reads_PrimaryTo()
+    {
+        var to = SqlQuoteSendProofStore.ExtractField(
+            "GmailMessageId=abc; Marker=m; PrimaryTo=client@example.com",
+            "PrimaryTo=");
+        Assert.Equal("client@example.com", to);
+    }
 }

@@ -17,6 +17,7 @@ public static class EmailReadServiceCollectionExtensions
         services.AddSingleton<IEmailThreadMappingSyncService, SqlEmailThreadMappingSyncService>();
         services.AddSingleton<IProposalSourceEmailQuery, SqlProposalSourceEmailQuery>();
         services.AddSingleton<IQuoteSendProofStore, SqlQuoteSendProofStore>();
+        services.AddSingleton<IFollowQuoteAnchorResolver, SqlFollowQuoteAnchorResolver>();
         services.AddSingleton<IQuoteSendComposeService, QuoteSendComposeService>();
         services.AddSingleton<IQuoteSendAttachmentService, QuoteSendAttachmentService>();
 

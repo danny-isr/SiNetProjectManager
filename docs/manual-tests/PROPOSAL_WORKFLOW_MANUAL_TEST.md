@@ -176,19 +176,24 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 ### 2.7b — `PRP.SendQuote` → `PRP.SentFollowUp`  (`QuoteSent`)
 
 - **Action:** open `SendQuoteToClient` → internal SiNet compose (default Reply-All to Proposal source
-  email) → attach **PDF** (dialog opens under ניהול_כספי) → if catalog slot `QuoteSendDocument`
-  («הצעה_לשליחה») is empty, file the PDF there; if already filed as that slot, skip re-file →
-  explicit «שלח» via `IEmailSender` → «סיום אחרי הוכחה» (proof = persisted sent MessageId).
-  Marker `SINET-QS-*` must **not** appear in the Subject. Or Administrator **override** if send is unavailable.
+  email) → attach **PDF** (dialog opens under ניהול_כספי) → file as `QuoteSendDocument`
+  («הצעה_לשליחה») per catalog rules → explicit «שלח» via `IEmailSender`.
+  On successful send (proof = persisted MessageId) the dialog **auto-completes** with `QuoteSent`,
+  closes, and advances to `PRP.SentFollowUp`. Marker `SINET-QS-*` must **not** appear in the Subject.
+  «סיום אחרי הוכחה» remains as a retry if auto-complete fails after send; Administrator **override**
+  if send is unavailable.
 - **Expected DB state:** `CurrentStage=PRP.SentFollowUp`; new `FollowQuoteApproval` task open
-  (display: מעקב אישור לקוח). ProjectWork surface (not EmailFiling-blocked).
+  (display: מעקב אישור לקוח). Opens **Email-first** (filtered by SendQuote anchor). See
+  [`FOLLOW_QUOTE_APPROVAL.md`](./FOLLOW_QUOTE_APPROVAL.md).
 - `[ ]` **Result/Notes:** ________________________________________________
 
 ### 2.8 — `PRP.SentFollowUp` → `PRP.Approved`  (`QuoteApprovedByClient`)  **[terminal]**
 
-- **Prerequisite:** upload client-approval PDF catalog file **`QuoteClientApproval`**
-  («אישור_לקוח_להצעה») under תכתובת → ניהול_כספי before completing with approve.
-- **Action:** complete `FollowQuoteApproval` with result **`QuoteApprovedByClient`**.
+- **Prerequisite:** physical PDF in catalog **`QuoteClientApproval`** («אישור_לקוח_להצעה») under
+  תכתובת → ניהול_כספי — from reply attachment (email tag + file) or ProjectWork upload.
+- **Action:** open `FollowQuoteApproval` → Email filtered by sent thread/counterpart → pick reply /
+  tag or file PDF as `QuoteClientApproval` (or ProjectWork fallback) → complete
+  **`QuoteApprovedByClient`**.
 - **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Approved' isFinal=True status=Completed`.
 - **Expected DB state:** `CurrentStage=PRP.Approved`; instance `status=Completed`, `CompletedAtUtc` set;
   project status = `WaitingForWorkOrder`; **no new task** created for the terminal stage.

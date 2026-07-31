@@ -36,6 +36,9 @@ namespace SiNet.Application.WorkSurfaces;
 /// completion-metadata port at completion time, without owning a mapping table or guessing;
 /// <see langword="null"/> when the host did not supply it. <b>Runtime-only</b> — never persisted.
 /// </param>
+/// <param name="EmailHints">
+/// Optional Email-first open hints (FollowQuoteApproval thread/counterpart filter). Runtime-only.
+/// </param>
 public sealed record WorkSurfaceContext(
     int? TaskId,
     int ProjectId,
@@ -45,4 +48,12 @@ public sealed record WorkSurfaceContext(
     IReadOnlyList<string> AllowedResultCodes,
     string? CompletionEventCode = null,
     int? ActingUserId = null,
-    string? TaskTypeCode = null);
+    string? TaskTypeCode = null,
+    EmailOpenHints? EmailHints = null);
+
+/// <summary>Runtime-only Email open filter hints (e.g. FollowQuoteApproval).</summary>
+public sealed record EmailOpenHints(
+    string? GmailThreadId,
+    string? AfterGmailMessageId,
+    string? CounterpartAddress,
+    bool OfferProjectWorkFallback);

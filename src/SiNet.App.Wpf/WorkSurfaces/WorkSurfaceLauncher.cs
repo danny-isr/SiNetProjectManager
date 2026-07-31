@@ -13,6 +13,7 @@ using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
+using SiNet.Application.Email.QuoteSend;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Application.ProjectWork;
@@ -150,11 +151,16 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 () => new SendQuoteToClientDialog(
                     context,
                     sendQuoteCompletion,
-                    _services.GetService<SiNet.Application.Email.QuoteSend.IQuoteSendComposeService>(),
-                    _services.GetService<SiNet.Application.Email.QuoteSend.IQuoteSendAttachmentService>(),
+                    _services.GetService<IQuoteSendComposeService>(),
+                    _services.GetService<IQuoteSendAttachmentService>(),
                     _services.GetService<IEmailGateway>(),
                     _services.GetService<IAuthorizationQueryService>(),
                     _services.GetService<ILoggerFactory>()?.CreateLogger("SendQuoteToClient")));
+        }
+
+        if (string.Equals(context.TaskTypeCode, "FollowQuoteApproval", StringComparison.OrdinalIgnoreCase))
+        {
+            return await OpenFollowQuoteEmailAsync(context, cancellationToken).ConfigureAwait(true);
         }
 
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
@@ -163,9 +169,10 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to EMAIL surface");
 
             // Task-driven email opens require an exact primary work target — never browse fallback.
+            // Exception: EmailHints (FollowQuote) allow open without an inbox TaskLink.
             if (context.TaskId is > 0)
             {
-                if (context.PrimaryWorkTargetEntityId is not > 0)
+                if (context.PrimaryWorkTargetEntityId is not > 0 && context.EmailHints is null)
                 {
                     Trace.TraceWarning(
                         "[WorkSurfaceLauncher] Email task {0} has no primary work target; opening blocked.",
@@ -260,6 +267,55 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             context.ComponentKey,
             context.TaskId);
         return false;
+    }
+
+    private async Task<bool> OpenFollowQuoteEmailAsync(
+        WorkSurfaceContext context,
+        CancellationToken cancellationToken)
+    {
+        WorkflowDebugTrace.Step(
+            "Launcher.Open",
+            $"task={context.TaskId} → routing to FollowQuoteApproval Email-first");
+
+        FollowQuoteOpenAnchor? anchor = null;
+        if (context.TaskId is int followTaskId && followTaskId > 0
+            && _services.GetService<IFollowQuoteAnchorResolver>() is { } resolver)
+        {
+            anchor = await resolver.ResolveAsync(followTaskId, cancellationToken).ConfigureAwait(true);
+        }
+
+        var hints = new EmailOpenHints(
+            GmailThreadId: anchor?.GmailThreadId,
+            AfterGmailMessageId: anchor?.SentGmailMessageId,
+            CounterpartAddress: anchor?.CounterpartAddress,
+            OfferProjectWorkFallback: true);
+
+        var emailContext = context with
+        {
+            ComponentKey = WorkSurfaceComponentKeys.EmailFiling,
+            EmailHints = hints,
+        };
+
+        // Close any other task surface; FollowQuote uses the shell Email list (filter + empty state).
+        _services.GetService<ITaskSurfaceWindowCoordinator>()
+            ?.PrepareOpen(TaskSurfaceWindowKind.EmailWorkItem, context.TaskId);
+
+        if (_services.GetService<IEmailSurfaceHost>() is { } shellEmail)
+        {
+            shellEmail.Show(emailContext);
+            WorkflowDebugTrace.Step(
+                "FollowQuote.Open",
+                $"task={context.TaskId} host=shellEmail thread={(hints.GmailThreadId ?? "-")} to={(hints.CounterpartAddress ?? "-")}");
+            return true;
+        }
+
+        if (_services.GetService<EmailWorkItemTaskFloatingHost>() is not { } emailHost)
+        {
+            Trace.TraceWarning("[WorkSurfaceLauncher] No Email host for FollowQuoteApproval.");
+            return false;
+        }
+
+        return emailHost.OpenOrRebind(emailContext);
     }
 
     private bool ShowTaskDialog(

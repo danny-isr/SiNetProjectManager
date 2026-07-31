@@ -1206,7 +1206,19 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             "Email.TagUI",
             $"H-TAG2 after-ApplyTag att={item.InboxAttachmentId} pf={item.ProjectFileId} selectedAlt={item.SelectedAlternativeId?.ToString() ?? "null"} showAlt={item.ShowAlternativeSelector}");
         // #endregion
-        SetStatus("הצרופה תויגה לקובץ הפרויקט.");
+        if (string.Equals(_workSurfaceContext?.TaskTypeCode, "FollowQuoteApproval", StringComparison.Ordinal)
+            && IsQuoteClientApprovalTitle(targetTitle))
+        {
+            SetStatus(
+                "הצרופה תויגה כ־אישור_לקוח_להצעה. להשלמת QuoteApprovedByClient נדרש גם PDF פיזי — השתמש ב«תיוק קובץ בלי מייל» או העלה ב-ProjectWork.");
+            WorkflowDebugTrace.Step(
+                "FollowQuote.Tag",
+                $"task={_workSurfaceContext?.TaskId} tagged QuoteClientApproval att={item.InboxAttachmentId}");
+        }
+        else
+        {
+            SetStatus("הצרופה תויגה לקובץ הפרויקט.");
+        }
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         RefreshActionBarState();
     }
@@ -1420,6 +1432,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         StatusMessage = message;
         StatusMessageChanged?.Invoke(this, message);
     }
+
+    private static bool IsQuoteClientApprovalTitle(string? title) =>
+        !string.IsNullOrWhiteSpace(title)
+        && (title.Contains("אישור_לקוח", StringComparison.Ordinal)
+            || title.Contains("QuoteClientApproval", StringComparison.OrdinalIgnoreCase));
 
     private bool IsBusy
     {

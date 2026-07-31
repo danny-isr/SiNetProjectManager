@@ -52,7 +52,17 @@ public interface IQuoteSendProofStore
         string gmailMessageId,
         string? gmailThreadId,
         string marker,
+        string? primaryTo = null,
         CancellationToken cancellationToken = default);
 
     Task<QuoteSendProof?> GetLatestAsync(int taskId, CancellationToken cancellationToken = default);
+
+    /// <summary>Latest proof for any SendQuoteToClient task on the project (for FollowQuote open).</summary>
+    Task<QuoteSendProof?> GetLatestForProjectAsync(int projectId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Resolves SendQuote anchor metadata for opening FollowQuoteApproval Email-first.</summary>
+public interface IFollowQuoteAnchorResolver
+{
+    Task<FollowQuoteOpenAnchor?> ResolveAsync(int followQuoteTaskId, CancellationToken cancellationToken = default);
 }
