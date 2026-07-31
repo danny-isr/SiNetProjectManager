@@ -38,12 +38,41 @@ Clear/rename the log between full tree runs. Gate: DEBUG builds default `[WF-STE
 
 ### 0.2 Setup (before any tree)
 
-- [x] DEBUG build of `SiNet.App.Wpf` running; NewShell open — **soak started 2026-07-30 ~11:46**, PID noted in §9
-- [ ] **כלי פיתוח → טעינת Seed בסיסי** succeeded
+- [ ] DEBUG build of `SiNet.App.Wpf` running; NewShell open — **clean-DB soak restart 2026-07-31**
+- [ ] **כלי פיתוח → טעינת Seed בסיסי** succeeded (check summary: no `[…] skipped` for catalog / JobType)
 - [ ] Groups have active members + default assignees: `OfficeManagement`, `SeniorManagement`, `Planners`, Review groups (`ReviewIntake`, `ProjectOpeners`, `Reviewers`, `ReviewManagers`, `PoliceLiaison` as seeded)
 - [ ] Unassigned inbox email available (Proposal + Opinion)
-- [x] Log path confirmed; previous log archived (pre-soak rename)
+- [ ] Log path confirmed; previous log archived if starting a fresh tree
 - [ ] AccService / Gmail as required for email-driven starts
+
+### 0.2b Clean database — what startup checks vs what you must still do
+
+Standalone **does not** auto-seed on launch (unlike V2). On an empty/clean DB, use this matrix.
+
+| Layer | Blocks launch today? | What is checked / seeded | Operator action on clean DB |
+| --- | --- | --- | --- |
+| Vault DB connection | **Yes** | `SiNetDatabase` secret present | Secret Setup if missing |
+| Schema gate | **Yes** | Tables exist: `TaskType`, `ProjectAssignmentStatus`, `ProjectAssignmentEvent`, `UserSetting` only | Run **efbundle** / full migrations first — gate does **not** prove workflows/users tables have data |
+| Windows user (`SIUser`) | **Yes** | `LoginName` matches current Windows identity (e.g. `AzureAD\dannyisrael` or `…\dannyisrael`), `IsActive`, `Role` ≠ Unauthorized | Insert/activate your user **before** launch (or app shows «אין הרשאה» and exits) |
+| Seed בסיסי (DEBUG menu) | No (manual) | TaskTypes, statuses, results; UserGroup **shells**; MAT/PLN/REV/PRP/OPN graphs; catalog `Quote*` under underscore folders | Run after login; **must** succeed |
+| JobType `חומר כללי` | No | Catalog seed skips without it | Ensure JobType exists (legacy id 9 preferred) |
+| Folder `תכתובת` | No | Catalog creates children only; never invents parent | Create parent folder if missing |
+| Group members + `DefaultAssigneeId` | No (health strip only) | Seed creates empty groups; readiness UI can show red | **הקצאות משתמשים / קבוצות** — add yourself to OfficeManagement / SeniorManagement / Planners (+ Review groups if testing REV); set default when >1 member |
+| `TemplateLocation` on quote files | No | Seed never writes it | **ניהול קבצים** — set templates for `אומדן_הצעה` / `הצעת_מחיר` |
+| AccService / Gmail | No | Background restore / health only | AccService up + Gmail session for email starts |
+
+**Not checked at startup today (candidates to add later — needs design approval):** warn/fail if no `WorkflowDefinition` Code=`Proposal`; warn if PRP groups have zero members; warn if JobType/`תכתובת` missing; expand schema gate beyond 4 tables; soft-warn AccService/Gmail offline.
+
+### 0.2c Clean-DB operator order (Tree A)
+
+1. Migrations/efbundle applied; Vault DB secret OK.  
+2. `SIUser` for current Windows login (active, Role ≥ Employee; Management recommended for DevTools).  
+3. Launch DEBUG → confirm shell opens (auth Pass in log: `User authorized`).  
+4. **טעינת Seed בסיסי** → read dialog/log for skips.  
+5. JobType `חומר כללי` + folder `תכתובת` present; catalog rows under `ניהול_כספי`.  
+6. Assign current user to workflow groups + defaults.  
+7. Set `TemplateLocation` where needed.  
+8. AccService + Gmail ready → unassigned email → **פתיחת הצעת מחיר**.
 
 ### 0.3 Shell limits (production honesty)
 
@@ -60,7 +89,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Id | Workflow | Start | UI | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Resume** (project **3147** @ FileMaterial) | Backlog triage done (`380481f` SOF-007/008/009). Seed בסיסי then continue 2.3→Approved. Ignore stalled 3146/task=19 |
+| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Restart — clean DB** (2026-07-31) | Fresh DB: follow §0.2b–0.2c then Tree A from 2.0. Prior 3146/3147 ignored |
 | B | Opinion `OPN.*` | `CreateOpinionProject` | Email + Task workbench | **Not Run** (live) | Checklist §3 ready; no dedicated engine test yet |
 | C | Planning `PLN.*` | ProjectType mapping / post-quote work order | Project create + tasks | **Blocked (pilot)** | Approved Blocked §4.C.Blocked — ProjectWork Deferred |
 | D | Review `REV.*` + MAT | Review start / hosted MAT | Tasks (+ ProjectWork) | **Blocked (pilot)** | Approved Blocked §5 — REV.Intake unseeded + ProjectWork Deferred |
@@ -77,7 +106,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Slice | Result | Notes |
 | --- | --- | --- |
-| Happy path 2.0–2.8 → `PRP.Approved` | **In progress** | Restart instance=2 / project **3147**: through OpenQuote **Pass** → FileMaterial task=21. **Next:** Seed + 2.3 (tag `QuoteClientRequest`) → … → SendQuote → SentFollowUp → Approved |
+| Happy path 2.0–2.8 → `PRP.Approved` | **Not Run** (clean DB restart) | Complete §0.2c then start at 2.0 `CreatePriceQuote` |
 | Branches 3.A–3.D | Not Run (live) | |
 | Integrity 4.1–4.5 | Not Run (live) | Related unit/E2E in Workflow filter |
 | Watchdog 4.6 | Not Run (live) | |
@@ -322,11 +351,12 @@ Prior run 2026-07-30: 268 Pass. Live Tree A soak in progress (see §9 / §10). C
 | 2026-07-31 ~08:30 | SOF-007: OpenQuote/FileMaterial not in complementary strip — fixed `PrepareTaskSurfaceWindow`; app restarted | Verify on next task open |
 | 2026-07-31 ~09:06 | Backlog triage: Open follow-ups cleared; SOF-005/006 Parked; SOF-007/008/009 Done in `380481f`; build+tests Pass | Resume Tree A |
 | 2026-07-31 | **After Tree A Approved queue:** Tree B Opinion → SOF-005/006 product → E/F integrity/viewer (SOF-009 already shipped) | Phase 4 |
+| 2026-07-31 ~13:03 | **Relaunch:** AccService restarted (PID **36732**, health 200); PFX recreated — thumbprint **`5334600A28CEBE905388141D3AEC3FBD170E617B`**; `SiNet.App.Wpf` DEBUG PID **41172**; prior WF log archived; agent tails branded log + 3m heartbeat | Session open — pin thumbprint in Settings→ACC if SSL offline |
 
 **Next (operator):**
-1. Launch New System → **טעינת Seed בסיסי** (required for `QuoteClientRequest` + SendQuote graph).
-2. Open FileMaterial (task on project **3147**) — verify complementary strip + SOF-009 single window.
-3. Tag PDF «דרישת המזמין להצעת מחיר» → close FileMaterial → MaterialCheck → Calculation → Preparation → InternalApproval → **SendQuote** → SentFollowUp → `PRP.Approved`.
+1. **הגדרות → ACC:** BaseUrl `https://localhost:8443` + pin thumbprint למעלה → שמירה → **הפעלה מחדש של האפליקציה** (pins נטענים ב־startup).
+2. **טעינת Seed בסיסי** + הקצאות קבוצות (OfficeManagement / SeniorManagement / Planners…).
+3. מייל לא משויך → **פתיחת הצעת מחיר** → Tree A מ־ProjectSetup דרך SendQuote → SentFollowUp.
 
 ---
 

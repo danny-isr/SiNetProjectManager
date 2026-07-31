@@ -310,8 +310,9 @@ public static class ProjectFileCatalogSeedData
     }
 
     /// <summary>
-    /// When Code sits on a wrongly seeded space-named row, move Code to the office
-    /// underscore / templated peer and drop the spurious coded duplicate.
+    /// When Code sits on a wrongly seeded row, move Code to the office
+    /// underscore / templated peer. Always merge <see cref="ProjectFile.TemplateLocation"/>
+    /// onto the survivor before deleting the other row.
     /// </summary>
     private static async Task<ProjectFile?> PreferExistingCatalogRowAsync(
         SiNetSQLDbContext db,
@@ -321,12 +322,16 @@ public static class ProjectFileCatalogSeedData
         ProjectFile? byCode,
         CancellationToken ct)
     {
+        // Prefer same JobType; also consider other JobTypes so a templated office row is not missed.
         var peers = await db.ProjectFiles
-            .Where(f => f.TypeProjId == typeId && f.Title != null)
+            .Where(f => f.Title != null)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        var titledPeers = peers.Where(f => knownTitles.Contains(f.Title!)).ToList();
+        var titledPeers = peers
+            .Where(f => knownTitles.Contains(f.Title!))
+            .OrderByDescending(f => f.TypeProjId == typeId)
+            .ToList();
         if (titledPeers.Count == 0)
             return byCode;
 
@@ -341,12 +346,24 @@ public static class ProjectFileCatalogSeedData
         if (byCode is null || byCode.Id == preferred.Id)
             return preferred;
 
-        // Move Code onto preferred; remove the wrongly seeded duplicate.
+        // Survivor keeps any template from either row — never drop TemplateLocation on reclaim.
+        MergeTemplateLocation(from: byCode, to: preferred);
         preferred.Code = def.Code;
+        preferred.TypeProjId = typeId;
         preferred.Modified = DateTime.UtcNow;
+        byCode.Code = null;
         db.ProjectFiles.Remove(byCode);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return preferred;
+    }
+
+    private static void MergeTemplateLocation(ProjectFile from, ProjectFile to)
+    {
+        if (string.IsNullOrWhiteSpace(to.TemplateLocation)
+            && !string.IsNullOrWhiteSpace(from.TemplateLocation))
+        {
+            to.TemplateLocation = from.TemplateLocation;
+        }
     }
 
     private static ProjectFile? PreferCandidate(IReadOnlyList<ProjectFile> candidates)
@@ -502,8 +519,16 @@ public static class ProjectFileCatalogSeedData
             if (dupe.Code is not null && !IsKnownCatalogCode(dupe.Code))
                 continue;
 
-            if (dupe.Code is not null && keeperIds.Contains(dupe.Id))
-                continue;
+            // Never destroy a template: merge onto the matching Code keeper first, or skip.
+            if (!string.IsNullOrWhiteSpace(dupe.TemplateLocation))
+            {
+                var keeper = await FindKeeperForSpaceDupeAsync(db, dupe, ct).ConfigureAwait(false);
+                if (keeper is null)
+                    continue;
+
+                MergeTemplateLocation(from: dupe, to: keeper);
+                keeper.Modified = DateTime.UtcNow;
+            }
 
             db.ProjectFiles.Remove(dupe);
             deletedFiles++;
@@ -581,5 +606,24 @@ public static class ProjectFileCatalogSeedData
             return string.Empty;
 
         return $"[cleanup] removed space-named duplicates: files={deletedFiles} folders={deletedFolders}.";
+    }
+
+    private static async Task<ProjectFile?> FindKeeperForSpaceDupeAsync(
+        SiNetSQLDbContext db,
+        ProjectFile dupe,
+        CancellationToken ct)
+    {
+        foreach (var def in Definitions)
+        {
+            var titles = KnownFileTitles(def);
+            if (dupe.Title is null || !titles.Contains(dupe.Title))
+                continue;
+
+            return await db.ProjectFiles
+                .FirstOrDefaultAsync(f => f.Code == def.Code, ct)
+                .ConfigureAwait(false);
+        }
+
+        return null;
     }
 }

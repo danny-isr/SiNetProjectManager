@@ -73,9 +73,9 @@ Seeded catalog rows with `Code` (JobType חומר כללי) — **canonical titl
 
 1. **Prefer existing** underscore catalog folders/files. Treat space-separated titles as aliases (`ניהול_כספי` ↔ `ניהול כספי`). Prefer the row that already has `TemplateLocation` when reclaiming a `Code`.
 2. **Never invent a missing parent** (e.g. do not create `תכתובת`). Create a **child** folder only when the parent exists and no alias of the child is found — always with the **underscore** canonical name.
-3. **Never overwrite `TemplateLocation`** (or clear it). Admin owns templates.
+3. **Never overwrite/clear `TemplateLocation`.** Admin owns templates. When reclaiming `Code` onto a preferred row, **copy** `TemplateLocation` from the discarded duplicate if the keeper lacks one. Cleanup must **not** delete any row that still has a non-empty `TemplateLocation` (merge onto keeper first, or skip).
 4. Attach/update by `Code` when possible; rename only known legacy/alias titles to the canonical underscore form; do not overwrite arbitrary admin renames.
-5. **Cleanup:** after ensure, delete spurious **space-named** duplicate file defs and empty duplicate folders that match known catalog alias titles (wrong tree from an older seed). Does not delete the keeper row for each `Code`.
+5. **Cleanup:** after ensure, delete spurious **space-named** duplicate file defs (never templated leftovers) and empty duplicate folders that match known catalog alias titles. Does not delete the keeper row for each `Code`.
 6. Admin **may delete** catalog file defs (including those with `Code`) from «ניהול קבצים» after an extra confirmation. To restore seeded slots, run **טעינת Seed בסיסי** again.
 
 Editable title/flags OK; do not clear `Code` without an explicit decision (delete of the whole def is allowed with confirm).

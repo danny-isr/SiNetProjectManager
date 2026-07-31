@@ -190,17 +190,59 @@ string), so the next support investigation has a log trail even when the user ne
 
 ---
 
-## 3. Explicitly out of scope
+## 3. AccService TLS after a clean database
+
+After replacing / wiping the SiNet DB, `SystemSettings` no longer hold `AccService.BaseUrl` or
+`AccService.PinnedCertificateThumbprints`. Startup applies host ACC config from DB
+(`ApplyAccHostConfigFromSystemSettingsAsync`); without pins, HTTPS to AccService fails with
+**SSL connection cannot be established** (self-signed cert).
+
+Operator recovery:
+
+1. Ensure **SiOffice.AccService** is running (typical URL `https://localhost:8443`).
+2. **הגדרות → ACC**: set `AccServiceBaseUrl` (e.g. `https://localhost:8443`).
+3. Copy the server certificate **thumbprint** into `PinnedCertificateThumbprints`
+   (semicolon-separated if multiple). Sources: error text `presented thumbprint=…`, AccService
+   diag, or a prior settings backup.
+4. **Save**, then **restart** the app (pins bind into `AccServiceControlPlaneOptions` at startup).
+5. Open **מצב מערכת** → Refresh; row `acc-service` (SiOffice.AccService) should become ready.
+
+Related rows (do not confuse them):
+
+| Key | Display | Meaning |
+| --- | --- | --- |
+| `acc` | Autodesk ACC (built-in) | Local vs Remote mode |
+| `acc-service` | SiOffice.AccService (פנימי) | AccService health / TLS |
+| `autodesk-acc` | Autodesk ACC | Token probe; Degraded («מוגבל») if 2-legged only |
+
+---
+
+## 4. Remediation guidance in «מצב מערכת» (`GuidanceHe`)
+
+When a status is a **known** operator-fixable problem, the detail column shows a second Hebrew
+line under the summary: what to do next.
+
+- Catalog: `SystemStatusGuidanceCatalog.Resolve(key, state, summaryHe)` in Application.
+- Applied in `SystemStatusRowViewModel.From` (does not require every contributor to set text).
+- Initial coverage: `acc`, `acc-service`, `autodesk-acc`, `workflow-assignees`, `gmail`.
+- Empty / healthy rows show no guidance line.
+
+Workflow assignee gaps remain **manual** (User Groups + default assignee) — not Seed.
+
+---
+
+## 5. Explicitly out of scope
 
 - Deleting the dead `SiNet.Application.RuntimeStatus` namespace or any legacy check.
 - Changing the legacy `SystemHealthIndicator` / `SystemHealthWindow` surfaces.
 - Gmail throttle inspection (the legacy `google` check reads it best-effort; the port reports auth
   and reachability only).
 - Removing `IExternalHealthCheckSource` from the V2 hybrid host.
+- Auto-fixing SSL pins or seeding group memberships.
 
 ---
 
-## 4. Risk and complexity
+## 6. Risk and complexity
 
 | Area | Assessment |
 | --- | --- |

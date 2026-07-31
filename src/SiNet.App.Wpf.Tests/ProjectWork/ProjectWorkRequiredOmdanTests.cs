@@ -536,6 +536,53 @@ public sealed class ProjectWorkRequiredOmdanTests
     }
 
     [Fact]
+    public async Task Catalog_seed_preserves_template_when_coded_row_lacks_it_and_space_alias_has_it()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        await using var db = new SiNetSQLDbContext(options);
+        db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול_כספי", Infolderid = 2 });
+        // Coded keeper from a bad prior seed — no template.
+        db.ProjectFiles.Add(new ProjectFile
+        {
+            Id = 20,
+            Code = ProjectFileCatalogCodes.QuoteDocument,
+            Title = "הצעת_מחיר",
+            Number = 1,
+            TypeProjId = 9,
+            Folderid = 3,
+            Typefile = ".docx",
+            IsRequired = true,
+            OutSidData = false,
+            TemplateLocation = null,
+        });
+        // Office row that still holds the template under the space alias.
+        db.ProjectFiles.Add(new ProjectFile
+        {
+            Id = 21,
+            Title = "הצעת מחיר",
+            Number = 2,
+            TypeProjId = 9,
+            Folderid = 3,
+            Typefile = ".docx",
+            TemplateLocation = @"D:\office\templates\hatzaat_mechir.docx",
+        });
+        await db.SaveChangesAsync();
+
+        _ = await ProjectFileCatalogSeedData.EnsureAsync(db);
+
+        var keeper = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument);
+        Assert.Equal(@"D:\office\templates\hatzaat_mechir.docx", keeper.TemplateLocation);
+        Assert.Equal("הצעת_מחיר", keeper.Title);
+        Assert.Empty(await db.ProjectFiles.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+    }
+
+    [Fact]
     public void Alternative_name_prompt_uses_dialog_not_silent_auto_assign()
     {
         var cs = File.ReadAllText(Path.Combine(

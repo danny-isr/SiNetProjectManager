@@ -132,18 +132,27 @@ public sealed class SystemStatusRowViewModel
     public required string DisplayName { get; init; }
     public required string StateLabel { get; init; }
     public required string Summary { get; init; }
+    public required string Guidance { get; init; }
+    public bool HasGuidance => !string.IsNullOrWhiteSpace(Guidance);
     public required string ActiveWorkDisplay { get; init; }
     public required Brush StateBrush { get; init; }
 
-    public static SystemStatusRowViewModel From(SubsystemRuntimeStatus s) => new()
+    public static SystemStatusRowViewModel From(SubsystemRuntimeStatus s)
     {
-        Key = s.Key,
-        DisplayName = s.DisplayNameHe,
-        StateLabel = StateToHe(s.State),
-        Summary = s.SummaryHe,
-        ActiveWorkDisplay = s.ActiveWorkCount is > 0 ? s.ActiveWorkCount.Value.ToString() : "—",
-        StateBrush = StateToBrush(s.State),
-    };
+        var enriched = SystemStatusGuidanceCatalog.WithGuidance(s);
+        return new SystemStatusRowViewModel
+        {
+            Key = enriched.Key,
+            DisplayName = enriched.DisplayNameHe,
+            StateLabel = StateToHe(enriched.State),
+            Summary = enriched.SummaryHe,
+            Guidance = enriched.GuidanceHe ?? string.Empty,
+            ActiveWorkDisplay = enriched.ActiveWorkCount is > 0
+                ? enriched.ActiveWorkCount.Value.ToString()
+                : "—",
+            StateBrush = StateToBrush(enriched.State),
+        };
+    }
 
     private static string StateToHe(SubsystemRuntimeState state) => state switch
     {
