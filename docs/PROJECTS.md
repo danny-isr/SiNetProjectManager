@@ -40,6 +40,8 @@ The project is the main business context for:
 - **Workflow** (workflow instances run per project).
 - **Files / ACC** (storage destinations and ACC mappings are per project).
 - **Reporting** (reports are produced for a project or set of projects).
+- **Projects Overview Dashboard** (cross-project business overview — see
+  [`PROJECTS_DASHBOARD.md`](./PROJECTS_DASHBOARD.md)).
 
 ---
 
@@ -51,9 +53,11 @@ The project is the main business context for:
 | **Current Project** | The runtime, user-selected "active project" for manual navigation and shared shell context. Runtime-only, may be `null`. See §4. |
 | **Project Selector** | The shared, reusable UI component for searching and choosing a project. See §5. |
 | **Project filters** | Job Type / Status / User filters that narrow the selectable project list. See §6. |
+| **Projects Overview Dashboard** | Cross-project table + KPI overview (status, types, open workflows/tasks, dates). See [`PROJECTS_DASHBOARD.md`](./PROJECTS_DASHBOARD.md). |
 | **`WorkSurfaceContext`** | The explicit context a Work Surface receives when opened from a task/workflow; carries the authoritative `ProjectId` for that surface. See §7. |
 | **`ICurrentProjectContext`** | The Application port that holds and broadcasts the Current Project. See §4/§12. |
 | **`IProjectQueryService`** | The Application port that searches/loads project DTOs. See §12. |
+| **`IProjectDashboardQueryService`** | Read-only port for the Projects Overview Dashboard rows. See [`PROJECTS_DASHBOARD.md`](./PROJECTS_DASHBOARD.md). |
 
 ---
 
@@ -453,6 +457,9 @@ entities, no schema, no migrations):
 ProjectSummaryDto
 ProjectSearchQuery
 IProjectQueryService
+IProjectDashboardQueryService
+ProjectDashboardRowDto
+ProjectDashboardQuery
 ICurrentProjectContext
 ProjectChangedEventArgs
 ```
@@ -461,7 +468,9 @@ Intended shapes (defined in detail in the migration plan; summarized here as the
 
 - **`ProjectSummaryDto`** — `(int ProjectId, string ProjectNumber, string ProjectName, string? PlaceName,
   string? CompanyName, string? JobType, string? Status, string? AssignedUserName, bool IsActive,
-  int? StatusId, IReadOnlyList<int>? JobTypeIds)`. The only project shape the UI binds to.
+  int? StatusId, IReadOnlyList<int>? JobTypeIds)`. The project shape the selector and shell bind to.
+  The overview dashboard uses a **separate** `ProjectDashboardRowDto` (see
+  [`PROJECTS_DASHBOARD.md`](./PROJECTS_DASHBOARD.md)) so selector contracts stay stable.
 - **`ProjectSearchQuery`** — `(string? SearchText, string? JobType, string? Status, int? JobTypeId,
   int? StatusId, int? AssignedUserId, bool IncludeClosed, int? MaxResults)`.
 - **`IProjectQueryService`** — `SearchProjectsAsync(ProjectSearchQuery, CancellationToken)` and

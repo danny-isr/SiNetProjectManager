@@ -27,4 +27,7 @@ public static class AppFeatureCodes
 
     /// <summary>Admin JobType ↔ WorkflowDefinition mapping («מדיניות סוג↔תהליך»).</summary>
     public const string ShellOpenProjectTypeWorkflowPolicy = "Shell.OpenProjectTypeWorkflowPolicy";
+
+    /// <summary>Business projects overview dashboard («ריכוז פרויקטים»).</summary>
+    public const string ShellOpenProjectsDashboard = "Shell.OpenProjectsDashboard";
 }

@@ -40,6 +40,7 @@ public sealed class NewShellDesignData : NewShellViewModel
         NewShellMenuItem.Group("פרויקטים ותבניות",
         [
             new NewShellMenuItem("פתיחת פרויקט חדש", static () => { }),
+            new NewShellMenuItem("ריכוז פרויקטים", static () => { }),
             new NewShellMenuItem("מיילים", static () => { }),
             new NewShellMenuItem("בעבודה 2", static () => { }),
         ]),

@@ -17,6 +17,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.DevToolsReset] = AppRole.Management,
             [AppFeatureCodes.DevToolsSeed] = AppRole.Management,
             [AppFeatureCodes.ProjectCreate] = AppRole.Management,
+            [AppFeatureCodes.ShellOpenProjectsDashboard] = AppRole.Management,
             [AppFeatureCodes.ReportsManagement] = AppRole.Management,
             [AppFeatureCodes.SystemSettingsWrite] = AppRole.Administrator,
             [AppFeatureCodes.UsersManage] = AppRole.Administrator,

@@ -11,6 +11,7 @@ using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.Autodesk;
+using SiNet.App.Wpf.Projects.Dashboard;
 using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
@@ -21,6 +22,7 @@ using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.ProjectWork;
+using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf;
 
@@ -43,6 +45,14 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddTransient<SystemStatusWindow>();
         services.AddTransient<WorkflowOpsDashboardViewModel>();
         services.AddTransient<WorkflowOpsDashboardWindow>();
+        services.AddTransient<ProjectsDashboardViewModel>(sp =>
+            new ProjectsDashboardViewModel(
+                sp.GetRequiredService<IProjectDashboardQueryService>(),
+                sp.GetRequiredService<IProjectFilterOptionsService>(),
+                sp.GetRequiredService<ICurrentProjectContext>(),
+                sp.GetService<IProjectWorkSurfaceHost>(),
+                sp.GetService<IPlaceCatalogService>()));
+        services.AddTransient<ProjectsDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();
         services.AddSiNetUserAdminWpf();

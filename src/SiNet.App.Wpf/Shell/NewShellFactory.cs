@@ -14,6 +14,7 @@ using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Projects.Dashboard;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
@@ -119,6 +120,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "פתיחת פרויקט חדש",
                 () => _ = OpenNewProjectAsync(projectCreateFactory, cancellationToken),
                 "יצירת פרויקט חדש עם מקום, חברה, איש קשר וסוגי פרויקט"));
+        }
+
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenProjectsDashboard, cancellationToken).ConfigureAwait(true))
+        {
+            projects.Add(new NewShellMenuItem(
+                "ריכוז פרויקטים",
+                OpenNativeProjectsDashboard,
+                "טבלת סקירה: סטטוס, סוגי פרויקט, תהליכים ומשימות פתוחים"));
         }
 
         if (_services.GetService<IEmailSurfaceHost>() is { } emailSurfaceHost
@@ -632,6 +641,26 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת בריאות תהליכים: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeProjectsDashboard()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<ProjectsDashboardWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת ריכוז פרויקטים: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

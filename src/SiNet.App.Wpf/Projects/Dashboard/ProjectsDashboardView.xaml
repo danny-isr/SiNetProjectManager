@@ -1,0 +1,188 @@
+<UserControl x:Class="SiNet.App.Wpf.Projects.Dashboard.ProjectsDashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <DockPanel Margin="16" LastChildFill="True">
+        <!-- Toolbar -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10" LastChildFill="True">
+            <Button DockPanel.Dock="Left"
+                    Content="רענון"
+                    Command="{Binding RefreshCommand}"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,12,0" />
+            <Button DockPanel.Dock="Left"
+                    Content="פתח פרויקט"
+                    Command="{Binding OpenSelectedCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,12,0"
+                    ToolTip="מגדיר Current Project ופותח בעבודה 2" />
+            <TextBlock Text="{Binding StatusMessage}"
+                       Style="{DynamicResource SiTextSmallStyle}"
+                       Foreground="{DynamicResource SiSecondaryBrush}"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+        </DockPanel>
+
+        <!-- KPI cards -->
+        <UniformGrid DockPanel.Dock="Top" Columns="7" Margin="0,0,0,10">
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="סה״כ מוצגים" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding TotalCountText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" FontSize="20" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="פעילים" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding ActiveCountText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" FontSize="20" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="סגורים" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding ClosedCountText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" FontSize="20" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="עם תהליך פתוח" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding WithOpenWorkflowText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" FontSize="20" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="ללא תהליך" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding WithoutOpenWorkflowText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" FontSize="20" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="משימות פתוחות" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding OpenTasksSumText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" FontSize="20" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8">
+                <StackPanel>
+                    <TextBlock Text="רענון אחרון" Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="{Binding LastRefreshText}" Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <!-- Filters row 1 -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="חיפוש:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <TextBox Width="200" Margin="0,0,12,4"
+                     Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                     VerticalContentAlignment="Center" />
+
+            <TextBlock Text="סטטוס:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <ComboBox Width="160" Margin="0,0,12,4"
+                      ItemsSource="{Binding StatusFilterOptions}"
+                      SelectedItem="{Binding StatusFilter}"
+                      DisplayMemberPath="DisplayName" />
+
+            <TextBlock Text="סוג:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <ComboBox Width="160" Margin="0,0,12,4"
+                      ItemsSource="{Binding JobTypeFilterOptions}"
+                      SelectedItem="{Binding JobTypeFilter}"
+                      DisplayMemberPath="DisplayName" />
+
+            <TextBlock Text="מקום:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <ComboBox Width="140" Margin="0,0,12,4"
+                      ItemsSource="{Binding PlaceFilterOptions}"
+                      SelectedItem="{Binding PlaceFilter}" />
+        </WrapPanel>
+
+        <!-- Filters row 2 -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Text="התחלה מ:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <DatePicker Width="130" Margin="0,0,12,4"
+                        SelectedDate="{Binding StartFrom}" />
+            <TextBlock Text="עד:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <DatePicker Width="130" Margin="0,0,16,4"
+                        SelectedDate="{Binding StartTo}" />
+
+            <TextBlock Text="נוצר מ:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <DatePicker Width="130" Margin="0,0,12,4"
+                        SelectedDate="{Binding CreatedFrom}" />
+            <TextBlock Text="עד:" VerticalAlignment="Center" Margin="0,0,6,4"
+                       Style="{DynamicResource SiTextSmallStyle}" />
+            <DatePicker Width="130" Margin="0,0,16,4"
+                        SelectedDate="{Binding CreatedTo}" />
+
+            <CheckBox Content="כולל סגורים"
+                      IsChecked="{Binding IncludeClosed}"
+                      VerticalAlignment="Center"
+                      Margin="0,0,12,4" />
+            <CheckBox Content="רק עם תהליך פתוח"
+                      IsChecked="{Binding OnlyWithOpenWorkflow}"
+                      VerticalAlignment="Center"
+                      Margin="0,0,12,4" />
+            <CheckBox Content="רק עם משימות פתוחות"
+                      IsChecked="{Binding OnlyWithOpenTasks}"
+                      VerticalAlignment="Center"
+                      Margin="0,0,12,4" />
+        </WrapPanel>
+
+        <!-- Grid -->
+        <DataGrid ItemsSource="{Binding Rows}"
+                  SelectedItem="{Binding Selected}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserSortColumns="True"
+                  EnableRowVirtualization="True"
+                  SelectionMode="Single"
+                  SelectionUnit="FullRow"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  Background="{DynamicResource SiBackgroundBrush}"
+                  BorderBrush="{DynamicResource SiSecondaryBrush}"
+                  BorderThickness="1"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  MouseDoubleClick="OnProjectsGridMouseDoubleClick">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="מספר" Binding="{Binding ProjectNumber}" Width="70" />
+                <DataGridTextColumn Header="שם" Binding="{Binding ProjectName}" Width="160" />
+                <DataGridTextColumn Header="מקום" Binding="{Binding PlaceName}" Width="100" />
+                <DataGridTextColumn Header="לקוח" Binding="{Binding CompanyName}" Width="120" />
+                <DataGridTextColumn Header="סוגי פרויקט" Binding="{Binding JobTypesDisplay}" Width="140" />
+                <DataGridTextColumn Header="סטטוס" Binding="{Binding Status}" Width="120" />
+                <DataGridTextColumn Header="אחראי" Binding="{Binding AssignedUserName}" Width="100" />
+                <DataGridTextColumn Header="תהליכים פתוחים" Binding="{Binding OpenWorkflowsDisplay}" Width="220" />
+                <DataGridTextColumn Header="משימות" Binding="{Binding OpenTaskCount}" Width="70" />
+                <DataGridTextColumn Header="התחלה" Binding="{Binding Start, StringFormat={}{0:dd/MM/yyyy}}" Width="90" />
+                <DataGridTextColumn Header="סיום" Binding="{Binding End, StringFormat={}{0:dd/MM/yyyy}}" Width="90" />
+                <DataGridTextColumn Header="נוצר" Binding="{Binding Created, StringFormat={}{0:dd/MM/yyyy}}" Width="90" />
+                <DataGridTextColumn Header="פעיל" Binding="{Binding ActiveLabel}" Width="55" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>
