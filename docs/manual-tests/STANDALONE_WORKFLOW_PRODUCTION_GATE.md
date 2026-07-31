@@ -60,7 +60,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Id | Workflow | Start | UI | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Restart** (live soak 2026-07-31 ~08:19) | Fresh run after SOF-001–004; ignore stalled 3146/task=19 |
+| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Resume** (project **3147** @ FileMaterial) | Backlog triage done (`380481f` SOF-007/008/009). Seed בסיסי then continue 2.3→Approved. Ignore stalled 3146/task=19 |
 | B | Opinion `OPN.*` | `CreateOpinionProject` | Email + Task workbench | **Not Run** (live) | Checklist §3 ready; no dedicated engine test yet |
 | C | Planning `PLN.*` | ProjectType mapping / post-quote work order | Project create + tasks | **Blocked (pilot)** | Approved Blocked §4.C.Blocked — ProjectWork Deferred |
 | D | Review `REV.*` + MAT | Review start / hosted MAT | Tasks (+ ProjectWork) | **Blocked (pilot)** | Approved Blocked §5 — REV.Intake unseeded + ProjectWork Deferred |
@@ -77,7 +77,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Slice | Result | Notes |
 | --- | --- | --- |
-| Happy path 2.0–2.8 → `PRP.Approved` | **In progress** | Through 2.6 **Pass** (→ `PRP.InternalApproval` task=18); **next = 2.7** approve/revise |
+| Happy path 2.0–2.8 → `PRP.Approved` | **In progress** | Restart instance=2 / project **3147**: through OpenQuote **Pass** → FileMaterial task=21. **Next:** Seed + 2.3 (tag `QuoteClientRequest`) → … → SendQuote → SentFollowUp → Approved |
 | Branches 3.A–3.D | Not Run (live) | |
 | Integrity 4.1–4.5 | Not Run (live) | Related unit/E2E in Workflow filter |
 | Watchdog 4.6 | Not Run (live) | |
@@ -320,8 +320,13 @@ Prior run 2026-07-30: 268 Pass. Live Tree A soak in progress (see §9 / §10). C
 | 2026-07-31 ~08:24 | OpenQuoteProject → project **3147**; Acc.Provision EnsureMapping **OK** (~6s); advance toward FileMaterial | ProjectSetup **Pass** |
 | 2026-07-31 ~08:25 | Health: «תם הזמן בהמתנה לשרת AI» = **Ollama** timeout (SOF-005). «פתח ב-ACC» opens **browser** by design in OpenQuote dialog (SOF-006) | Logged; soak continues |
 | 2026-07-31 ~08:30 | SOF-007: OpenQuote/FileMaterial not in complementary strip — fixed `PrepareTaskSurfaceWindow`; app restarted | Verify on next task open |
+| 2026-07-31 ~09:06 | Backlog triage: Open follow-ups cleared; SOF-005/006 Parked; SOF-007/008/009 Done in `380481f`; build+tests Pass | Resume Tree A |
+| 2026-07-31 | **After Tree A Approved queue:** Tree B Opinion → SOF-005/006 product → E/F integrity/viewer (SOF-009 already shipped) | Phase 4 |
 
-**Next (operator):** reopen FileMaterial (or continue) → verify complementary fill → … → SendQuote → SentFollowUp → `PRP.Approved`.
+**Next (operator):**
+1. Launch New System → **טעינת Seed בסיסי** (required for `QuoteClientRequest` + SendQuote graph).
+2. Open FileMaterial (task on project **3147**) — verify complementary strip + SOF-009 single window.
+3. Tag PDF «דרישת המזמין להצעת מחיר» → close FileMaterial → MaterialCheck → Calculation → Preparation → InternalApproval → **SendQuote** → SentFollowUp → `PRP.Approved`.
 
 ---
 
@@ -340,4 +345,4 @@ Prior run 2026-07-30: 268 Pass. Live Tree A soak in progress (see §9 / §10). C
 | 2.8 | SentFollowUp client decision (ProjectWork + PDF / reject / cancel) | **Ready to soak** | SOF-004 implemented |
 | Branches / Integrity / Watchdog | §3–§4 | **Not Run** (live) | engine covered in Workflow suite |
 
-**Also shipped during soak (not Tree A steps):** complementary task windows; File Catalog UX; QuoteDocument gates; Workflow Ops Dashboard (`בריאות תהליכים`); SOF-001 Topmost policy; SOF-002 `~$` ignore.
+**Also shipped during soak (not Tree A steps):** complementary task windows; File Catalog UX; QuoteDocument gates; Workflow Ops Dashboard (`בריאות תהליכים`); SOF-001 Topmost; SOF-002 `~$` ignore; SOF-007 complementary hosts; SOF-008 `QuoteClientRequest`; SOF-009 single task surface.

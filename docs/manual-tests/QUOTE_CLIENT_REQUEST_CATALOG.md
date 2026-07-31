@@ -1,25 +1,29 @@
-# Catalog — דרישת המזמין להצעת מחיר
+# Catalog — דרישת_המזמין_להצעת_מחיר
 
-> **Status:** Target approved (soak 2026-07-31)  
+> **Status:** Target (naming fix 2026-07-31)  
 > **Related:** [`FILE_CATALOG_ADMIN.md`](../FILE_CATALOG_ADMIN.md), Proposal `PRP.FileMaterial`
 
 ## Target
 
 | Piece | Value |
 | --- | --- |
-| Folder path | תכתובת → **ניהול כספי** → **הצעת מחיר** (new subfolder) |
+| Folder path | תכתובת → **ניהול_כספי** → **הצעת_מחיר** |
 | File code | `QuoteClientRequest` |
-| Title | דרישת המזמין להצעת מחיר |
+| Title | דרישת_המזמין_להצעת_מחיר |
 | Type | `.pdf` |
 | Required | yes (`IsRequired`) |
 | OutSidData | **true** (required so the email ACC tagging picker lists this slot) |
 | JobType | חומר כללי |
 | Filing | Tag email ACC attachment (PDF) onto this slot during `FileQuoteMaterial` |
 
-Rationale: client/orderer request material for the quote must be filed as a durable required catalog file; ניהול כספי was getting crowded, so quote-request artifacts live under a dedicated «הצעת מחיר» subfolder.
+Rationale: client/orderer request material for the quote must be filed as a durable required catalog file; finance folder was getting crowded, so quote-request artifacts live under a dedicated «הצעת_מחיר» subfolder.
+
+## Naming
+
+Catalog folder/file titles use **underscore instead of space** (office convention). Seed must resolve existing underscore folders first and treat space-separated names as aliases only — never create a parallel `ניהול כספי` / `הצעת מחיר` tree.
 
 ## Notes
 
-- Existing `QuoteEstimate` / `QuoteDocument` / `QuoteClientApproval` remain under **ניהול כספי** (not moved in this slice).
-- Seed **creates** folder «הצעת מחיר» under «ניהול כספי» when missing (parent must already exist).
-- No EF migration — catalog seed only. Run **טעינת Seed בסיסי** / catalog Ensure after deploy.
+- Existing `QuoteEstimate` / `QuoteDocument` / `QuoteClientApproval` remain under **ניהול_כספי** (not moved into the nested quote folder).
+- Seed **creates** folder «הצעת_מחיר» under «ניהול_כספי» only when missing (parent must already exist).
+- Seed never deletes rows and never overwrites `TemplateLocation`.

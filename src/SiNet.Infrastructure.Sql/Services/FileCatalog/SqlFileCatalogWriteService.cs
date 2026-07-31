@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.FileCatalog;
 using SiNet.Infrastructure.Sql.Services.ProjectWork;
-using SiNet.Infrastructure.Sql.Services.SeedData;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using SqlDest = SiNetSQL.Models.FileStorageDestination;
@@ -191,10 +190,7 @@ internal sealed class SqlFileCatalogWriteService(IDbContextFactory<SiNetSQLDbCon
         if (file is null)
             return FileCatalogWriteResult.Fail("הקובץ לא נמצא.");
 
-        if (ProjectFileCatalogSeedData.IsKnownCatalogCode(file.Code))
-            return FileCatalogWriteResult.Fail(
-                $"לא ניתן למחוק הגדרת קטלוג עם Code '{file.Code}'. ניתן לערוך כותרת/דגלים.");
-
+        // Catalog Code rows may be deleted (UI confirms). Restore via Seed בסיסי.
         try
         {
             db.ProjectFiles.Remove(file);

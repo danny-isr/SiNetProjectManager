@@ -115,6 +115,12 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
     /// <summary>True when the catalog marks this slot as required (e.g. אומדן הצעת מחיר).</summary>
     public bool IsRequired { get; init; }
 
+    /// <summary>
+    /// True when this file's <see cref="Code"/> is an active completion-gate for the open task.
+    /// Drives orange highlight (SOF-010); independent of catalog <see cref="IsRequired"/>.
+    /// </summary>
+    public bool IsActiveCompletionGate { get; set; }
+
     /// <summary>Stable catalog code (e.g. QuoteEstimate); null for uncoded rows.</summary>
     public string? Code { get; init; }
 
@@ -148,7 +154,9 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
         }
     }
 
-    /// <summary>True when <see cref="IsRequired"/> and no physical version has been scanned yet.</summary>
+    /// <summary>
+    /// True when this slot is an active task completion gate and no physical version exists yet.
+    /// </summary>
     public bool IsRequiredMissing
     {
         get => _isRequiredMissing;
@@ -173,7 +181,7 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
     };
 
     internal void RefreshRequiredMissing() =>
-        IsRequiredMissing = IsRequired && !IsUnfiled && !HasPhysicalVersions;
+        IsRequiredMissing = IsActiveCompletionGate && !IsUnfiled && !HasPhysicalVersions;
 }
 
 /// <summary>An alternative (variant) under a file. Children are its versions.</summary>

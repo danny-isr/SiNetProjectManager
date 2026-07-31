@@ -133,8 +133,8 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 - **Note:** this stage closes via the file-filing pipeline (`ReviewMaterialFiled`), **not** a picked result
   code. The transition fires on `AllRequiredTasksClosed`.
-- **Prerequisite:** Seed includes catalog PDF **דרישת המזמין להצעת מחיר** (`QuoteClientRequest`) under
-  **תכתובת → ניהול כספי → הצעת מחיר**. Tag a PDF from the email ACC attachments onto that required slot
+- **Prerequisite:** Seed includes catalog PDF **דרישת_המזמין_להצעת_מחיר** (`QuoteClientRequest`) under
+  **תכתובת → ניהול_כספי → הצעת_מחיר**. Tag a PDF from the email ACC attachments onto that required slot
   (typical client request material).
 - **Action:** file material against the `FileQuoteMaterial` task until it closes (email filing /
   MoveToProject, or complete via the ProjectWork surface if that is how the task is exposed).
@@ -154,14 +154,14 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ### 2.5 — `PRP.Calculation` → `PRP.Preparation`  (`QuoteCalculationCompleted`)
 
-- **Prerequisite:** Seed includes catalog file **אומדן הצעה** (`QuoteEstimate`) under **תכתובת → ניהול כספי**, JobType **חומר כללי**. Project must include that JobType so the orange required slot appears. Upload a physical `.xlsx` before complete (UI blocks otherwise).
+- **Prerequisite:** Seed includes catalog file **אומדן_הצעה** (`QuoteEstimate`) under **תכתובת → ניהול_כספי**, JobType **חומר כללי**. Project must include that JobType so the orange required slot appears. Upload a physical `.xlsx` before complete (UI blocks otherwise).
 - **Action:** complete `PrepareQuoteCalculation` with result **`QuoteCalculationCompleted`**.
 - **Expected DB state:** `CurrentStage=PRP.Preparation`; new `PrepareQuoteDocument` task open.
 - `[ ]` **Result/Notes:** ________________________________________________
 
 ### 2.6 — `PRP.Preparation` → `PRP.InternalApproval`  (`QuotePrepared`)
 
-- **Prerequisite:** Seed includes catalog file **הצעת מחיר** (`QuoteDocument`) under **תכתובת → ניהול כספי**, JobType **חומר כללי**, `OutSidData=false`. Project must include that JobType so the orange required slot appears. Upload / create a physical `.docx` (or use «אלטרנטיבה נוספת מתבנית» after setting `TemplateLocation` in ניהול קבצים) before complete (UI blocks otherwise). New alternative always prompts for name (default `1`).
+- **Prerequisite:** Seed includes catalog file **הצעת_מחיר** (`QuoteDocument`) under **תכתובת → ניהול_כספי**, JobType **חומר כללי**, `OutSidData=false`. Project must include that JobType so the orange required slot appears. Upload / create a physical `.docx` (or use «אלטרנטיבה נוספת מתבנית» after setting `TemplateLocation` in ניהול קבצים) before complete (UI blocks otherwise). New alternative always prompts for name (default `1`).
 - **Action:** complete `PrepareQuoteDocument` with result **`QuotePrepared`**.
 - **Expected DB state:** `CurrentStage=PRP.InternalApproval`; new `ApproveQuoteInternal` task open.
 - `[ ]` **Result/Notes:** ________________________________________________
@@ -184,7 +184,7 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 ### 2.8 — `PRP.SentFollowUp` → `PRP.Approved`  (`QuoteApprovedByClient`)  **[terminal]**
 
 - **Prerequisite:** upload client-approval PDF catalog file **`QuoteClientApproval`**
-  («אישור לקוח להצעה») under תכתובת → ניהול כספי before completing with approve.
+  («אישור_לקוח_להצעה») under תכתובת → ניהול_כספי before completing with approve.
 - **Action:** complete `FollowQuoteApproval` with result **`QuoteApprovedByClient`**.
 - **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Approved' isFinal=True status=Completed`.
 - **Expected DB state:** `CurrentStage=PRP.Approved`; instance `status=Completed`, `CompletedAtUtc` set;

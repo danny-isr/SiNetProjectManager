@@ -104,10 +104,13 @@ public sealed class ProjectWorkRequiredOmdanTests
         var sut = CreateTree(BuildRequiredTree());
 
         await sut.LoadProjectAsync(5);
+        sut.SetActiveRequiredCatalogCodes(
+            new HashSet<string>(StringComparer.Ordinal) { ProjectFileCatalogCodes.QuoteEstimate });
 
         var folder = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(sut.RootFolders));
         var file = Assert.Single(folder.Children.OfType<ProjectFileNodeVm>());
         Assert.True(file.IsRequired);
+        Assert.True(file.IsActiveCompletionGate);
         Assert.True(file.IsRequiredMissing);
         Assert.False(file.HasPhysicalVersions);
         Assert.True(folder.HasRequiredMissing);
@@ -118,6 +121,47 @@ public sealed class ProjectWorkRequiredOmdanTests
     }
 
     [Fact]
+    public async Task Catalog_required_without_active_gate_is_not_orange()
+    {
+        var sut = CreateTree(BuildRequiredTree());
+
+        await sut.LoadProjectAsync(5);
+        // MaterialCheck / browse: no active gate codes.
+        sut.SetActiveRequiredCatalogCodes(null);
+
+        var folder = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(sut.RootFolders));
+        var file = Assert.Single(folder.Children.OfType<ProjectFileNodeVm>());
+        Assert.True(file.IsRequired);
+        Assert.False(file.IsActiveCompletionGate);
+        Assert.False(file.IsRequiredMissing);
+        Assert.False(folder.HasRequiredMissing);
+    }
+
+    [Fact]
+    public async Task Active_gate_missing_keeps_folder_orange_when_sibling_has_physical()
+    {
+        var (tree, scanned) = BuildTreeWithCodes(
+            estimateRequired: true,
+            estimatePhysical: false,
+            documentRequired: true,
+            documentPhysical: true);
+        var sut = CreateTree(tree, scanned);
+
+        await sut.LoadProjectAsync(5);
+        sut.SetActiveRequiredCatalogCodes(
+            new HashSet<string>(StringComparer.Ordinal) { ProjectFileCatalogCodes.QuoteEstimate });
+
+        var folder = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(sut.RootFolders));
+        var estimate = folder.Children.OfType<ProjectFileNodeVm>().Single(n => n.FileId == 100);
+        var document = folder.Children.OfType<ProjectFileNodeVm>().Single(n => n.FileId == 101);
+        Assert.True(estimate.IsRequiredMissing);
+        Assert.False(document.IsRequiredMissing);
+        Assert.True(document.HasPhysicalVersions);
+        Assert.True(folder.HasPhysicalFiles);
+        Assert.True(folder.HasRequiredMissing);
+    }
+
+    [Fact]
     public async Task Required_file_with_matching_scan_clears_required_missing()
     {
         var sut = CreateTree(
@@ -125,6 +169,8 @@ public sealed class ProjectWorkRequiredOmdanTests
             FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
 
         await sut.LoadProjectAsync(5);
+        sut.SetActiveRequiredCatalogCodes(
+            new HashSet<string>(StringComparer.Ordinal) { ProjectFileCatalogCodes.QuoteEstimate });
 
         var folder = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(sut.RootFolders));
         var file = folder.Children.OfType<ProjectFileNodeVm>().Single(n => n.FileId == 100);
@@ -134,6 +180,25 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.True(folder.HasPhysicalFiles);
         Assert.True(sut.HasAllRequiredPhysicalFiles());
         Assert.True(sut.HasRequiredPhysicalFile(ProjectFileCatalogCodes.QuoteEstimate));
+    }
+
+    [Theory]
+    [InlineData("PrepareQuoteCalculation", ProjectWorkActiveRequiredCatalog.QuoteEstimate)]
+    [InlineData("PrepareQuoteDocument", ProjectWorkActiveRequiredCatalog.QuoteDocument)]
+    [InlineData("FollowQuoteApproval", ProjectWorkActiveRequiredCatalog.QuoteClientApproval)]
+    [InlineData("CheckQuoteMaterialCompleteness", null)]
+    [InlineData(null, null)]
+    public void Resolve_active_codes_matches_completion_gates(string? taskType, string? expectedCode)
+    {
+        WorkSurfaceContext? context = taskType is null
+            ? null
+            : CreateCalcContext() with { TaskTypeCode = taskType, AllowedResultCodes = Array.Empty<string>() };
+
+        var codes = ProjectWorkActiveRequiredCatalog.Resolve(context);
+        if (expectedCode is null)
+            Assert.Empty(codes);
+        else
+            Assert.Equal(new[] { expectedCode }, codes);
     }
 
     [Fact]
@@ -242,7 +307,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
-        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול כספי", Infolderid = 2 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול_כספי", Infolderid = 2 });
         await db.SaveChangesAsync();
 
         var first = await ProjectFileCatalogSeedData.EnsureAsync(db);
@@ -251,25 +316,25 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Contains("inserted", first, StringComparison.Ordinal);
         Assert.Contains("unchanged", second, StringComparison.Ordinal);
 
-        var financeFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "ניהול כספי").ToListAsync());
+        var financeFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "ניהול_כספי").ToListAsync());
         Assert.Equal(2, financeFolder.Infolderid);
-        var quoteFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+        var quoteFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "הצעת_מחיר").ToListAsync());
         Assert.Equal(financeFolder.Id, quoteFolder.Infolderid);
 
         var rows = await db.ProjectFiles.Where(f => f.IsRequired).OrderBy(f => f.Code).ToListAsync();
         Assert.Equal(4, rows.Count);
         Assert.Contains(rows, r => r.Code == ProjectFileCatalogCodes.QuoteEstimate && r.Title == ProjectFileRequiredOmdanSeedData.DisplayTitle);
         var quote = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteDocument);
-        Assert.Equal("הצעת מחיר", quote.Title);
+        Assert.Equal("הצעת_מחיר", quote.Title);
         Assert.Equal(".docx", quote.Typefile);
         Assert.False(quote.OutSidData);
         Assert.Equal(financeFolder.Id, quote.Folderid);
         var clientApproval = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteClientApproval);
-        Assert.Equal("אישור לקוח להצעה", clientApproval.Title);
+        Assert.Equal("אישור_לקוח_להצעה", clientApproval.Title);
         Assert.Equal(".pdf", clientApproval.Typefile);
         Assert.Equal(financeFolder.Id, clientApproval.Folderid);
         var clientRequest = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteClientRequest);
-        Assert.Equal("דרישת המזמין להצעת מחיר", clientRequest.Title);
+        Assert.Equal("דרישת_המזמין_להצעת_מחיר", clientRequest.Title);
         Assert.Equal(".pdf", clientRequest.Typefile);
         Assert.True(clientRequest.OutSidData);
         Assert.Equal(quoteFolder.Id, clientRequest.Folderid);
@@ -297,11 +362,11 @@ public sealed class ProjectWorkRequiredOmdanTests
         db.JobTypes.Add(new JobType { Id = 2, Title = "אחר" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
-        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול כספי", Infolderid = 2 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול_כספי", Infolderid = 2 });
         db.ProjectFiles.Add(new ProjectFile
         {
             Id = 1,
-            Title = "אומדן הצעה",
+            Title = "אומדן_הצעה",
             Number = 1,
             TypeProjId = 2,
             Folderid = 1,
@@ -314,12 +379,12 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Contains("inserted", result, StringComparison.Ordinal);
         var omdan = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate);
         Assert.Equal(9, omdan.TypeProjId);
-        Assert.Equal("אומדן הצעה", omdan.Title);
+        Assert.Equal("אומדן_הצעה", omdan.Title);
         Assert.Equal(3, omdan.Folderid);
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument));
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteClientApproval));
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteClientRequest));
-        var quoteFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+        var quoteFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "הצעת_מחיר").ToListAsync());
         Assert.Equal(3, quoteFolder.Infolderid);
     }
 
@@ -339,7 +404,7 @@ public sealed class ProjectWorkRequiredOmdanTests
 
         Assert.Contains("skipped", result, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("תכתובת", result, StringComparison.Ordinal);
-        Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+        Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "הצעת_מחיר").ToListAsync());
         Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate).ToListAsync());
         Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteDocument).ToListAsync());
         Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteClientApproval).ToListAsync());
@@ -363,8 +428,10 @@ public sealed class ProjectWorkRequiredOmdanTests
 
         _ = await ProjectFileCatalogSeedData.EnsureAsync(db);
 
-        var finance = await db.ProjectFolders.SingleAsync(f => f.Title == "ניהול כספי");
+        // Space-named orphan is renamed to underscore canonical and reparented.
+        var finance = await db.ProjectFolders.SingleAsync(f => f.Title == "ניהול_כספי");
         Assert.Equal(2, finance.Infolderid);
+        Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "ניהול כספי").ToListAsync());
     }
 
     [Fact]
@@ -378,7 +445,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
         db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
-        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "ניהול כספי", Infolderid = 2 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 10, Title = "ניהול_כספי", Infolderid = 2 });
         db.ProjectFiles.Add(new ProjectFile
         {
             Id = 50,
@@ -407,16 +474,65 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Equal(5, await db.ProjectFiles.CountAsync());
         Assert.NotNull(await db.ProjectFiles.SingleAsync(f => f.Id == 50 && f.Title == "קובץ אחר"));
         var omdan = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate);
-        Assert.Equal("אומדן הצעה", omdan.Title);
+        Assert.Equal("אומדן_הצעה", omdan.Title);
         Assert.True(omdan.IsRequired);
         Assert.Equal(10, omdan.Folderid);
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument));
         Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteClientApproval));
         var clientRequest = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteClientRequest);
-        Assert.Equal("דרישת המזמין להצעת מחיר", clientRequest.Title);
-        var quoteFolder = await db.ProjectFolders.SingleAsync(f => f.Title == "הצעת מחיר");
+        Assert.Equal("דרישת_המזמין_להצעת_מחיר", clientRequest.Title);
+        var quoteFolder = await db.ProjectFolders.SingleAsync(f => f.Title == "הצעת_מחיר");
         Assert.Equal(10, quoteFolder.Infolderid);
         Assert.Equal(quoteFolder.Id, clientRequest.Folderid);
+    }
+
+    [Fact]
+    public async Task Catalog_seed_prefers_underscore_template_row_and_removes_space_duplicate()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        await using var db = new SiNetSQLDbContext(options);
+        db.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "תכתובת", Infolderid = 1 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 3, Title = "ניהול_כספי", Infolderid = 2 });
+        db.ProjectFolders.Add(new ProjectFolder { Id = 4, Title = "ניהול כספי", Infolderid = 2 });
+        db.ProjectFiles.Add(new ProjectFile
+        {
+            Id = 10,
+            Title = "הצעת_מחיר",
+            Number = 1,
+            TypeProjId = 9,
+            Folderid = 3,
+            Typefile = ".docx",
+            TemplateLocation = @"C:\templates\quote.docx",
+        });
+        db.ProjectFiles.Add(new ProjectFile
+        {
+            Id = 11,
+            Code = ProjectFileCatalogCodes.QuoteDocument,
+            Title = "הצעת מחיר",
+            Number = 2,
+            TypeProjId = 9,
+            Folderid = 4,
+            Typefile = ".docx",
+            IsRequired = true,
+            OutSidData = false,
+        });
+        await db.SaveChangesAsync();
+
+        var result = await ProjectFileCatalogSeedData.EnsureAsync(db);
+
+        Assert.Contains("cleanup", result, StringComparison.OrdinalIgnoreCase);
+        var keeper = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument);
+        Assert.Equal(10, keeper.Id);
+        Assert.Equal("הצעת_מחיר", keeper.Title);
+        Assert.Equal(@"C:\templates\quote.docx", keeper.TemplateLocation);
+        Assert.Equal(3, keeper.Folderid);
+        Assert.Null(await db.ProjectFiles.FirstOrDefaultAsync(f => f.Id == 11));
+        Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "ניהול כספי").ToListAsync());
     }
 
     [Fact]

@@ -346,21 +346,17 @@ public sealed class FileCatalogViewModel : ObservableObject
         if (SelectedFile is null)
             return;
 
-        if (SelectedFile.HasCatalogCode)
-        {
-            MessageBox.Show(
-                $"לא ניתן למחוק הגדרה עם Code '{SelectedFile.Code}'.",
-                "ניהול קבצים",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
+        var hadCatalogCode = SelectedFile.HasCatalogCode;
+        var codeNote = hadCatalogCode
+            ? $"{Environment.NewLine}{Environment.NewLine}זהו קובץ קטלוג (Code: {SelectedFile.Code}).{Environment.NewLine}"
+              + "כדי לשחזר אותו אחרי המחיקה יש להריץ שוב «טעינת Seed בסיסי»."
+            : string.Empty;
 
         if (MessageBox.Show(
-                $"למחוק את '{SelectedFile.Title}'?",
+                $"למחוק את '{SelectedFile.Title}'?{codeNote}",
                 "אישור מחיקה",
                 MessageBoxButton.YesNo,
-                MessageBoxImage.Question) != MessageBoxResult.Yes)
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
         IsBusy = true;
@@ -374,7 +370,9 @@ public sealed class FileCatalogViewModel : ObservableObject
             }
 
             await LoadAsync().ConfigureAwait(true);
-            StatusMessage = "הקובץ נמחק.";
+            StatusMessage = hadCatalogCode
+                ? "הקובץ נמחק. לשחזור: טעינת Seed בסיסי."
+                : "הקובץ נמחק.";
         }
         finally
         {

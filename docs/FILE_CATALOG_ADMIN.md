@@ -56,16 +56,29 @@ Implement as one feature toward **full V2 parity** (create folders + files + ass
 2. Create folder, create/edit/delete file defs, assign, save  
 3. JobType add/rename if still needed for day-to-day use  
 
-Seeded catalog rows with `Code` (JobType חומר כללי):
+### Catalog naming convention (folders + file defs)
+
+Office catalog titles use **underscore instead of space** between words (FileServer / ACC path parity). Examples: `ניהול_כספי`, `הצעת_מחיר`, `אומדן_הצעה`. Single-word titles stay as-is (`תכתובת`).
+
+Seeded catalog rows with `Code` (JobType חומר כללי) — **canonical titles**:
 
 | Code | Title | Folder | Type | Required | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `QuoteEstimate` | אומדן הצעה | תכתובת → ניהול כספי | `.xlsx` | yes | Gates `PrepareQuoteCalculation` |
-| `QuoteDocument` | הצעת מחיר | תכתובת → ניהול כספי | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false`. Set `TemplateLocation` for «אלטרנטיבה מתבנית» |
-| `QuoteClientApproval` | אישור לקוח להצעה | תכתובת → ניהול כספי | `.pdf` | yes | Gates `FollowQuoteApproval` approve |
-| `QuoteClientRequest` | דרישת המזמין להצעת מחיר | תכתובת → ניהול כספי → **הצעת מחיר** | `.pdf` | yes | `OutSidData=true` so email ACC tagging can target it during `FileQuoteMaterial`. See [`QUOTE_CLIENT_REQUEST_CATALOG.md`](./manual-tests/QUOTE_CLIENT_REQUEST_CATALOG.md) |
+| `QuoteEstimate` | אומדן_הצעה | תכתובת → ניהול_כספי | `.xlsx` | yes | Gates `PrepareQuoteCalculation` |
+| `QuoteDocument` | הצעת_מחיר | תכתובת → ניהול_כספי | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false`. Set `TemplateLocation` for «אלטרנטיבה מתבנית» |
+| `QuoteClientApproval` | אישור_לקוח_להצעה | תכתובת → ניהול_כספי | `.pdf` | yes | Gates `FollowQuoteApproval` approve |
+| `QuoteClientRequest` | דרישת_המזמין_להצעת_מחיר | תכתובת → ניהול_כספי → **הצעת_מחיר** | `.pdf` | yes | `OutSidData=true` so email ACC tagging can target it during `FileQuoteMaterial`. See [`QUOTE_CLIENT_REQUEST_CATALOG.md`](./manual-tests/QUOTE_CLIENT_REQUEST_CATALOG.md) |
 
-Editable title/flags OK; do not delete or clear `Code` without an explicit later decision. Seed **creates** nested folder «הצעת מחיר» under «ניהול כספי» when missing (for `QuoteClientRequest`).
+### Seed rules (`ProjectFileCatalogSeedData`)
+
+1. **Prefer existing** underscore catalog folders/files. Treat space-separated titles as aliases (`ניהול_כספי` ↔ `ניהול כספי`). Prefer the row that already has `TemplateLocation` when reclaiming a `Code`.
+2. **Never invent a missing parent** (e.g. do not create `תכתובת`). Create a **child** folder only when the parent exists and no alias of the child is found — always with the **underscore** canonical name.
+3. **Never overwrite `TemplateLocation`** (or clear it). Admin owns templates.
+4. Attach/update by `Code` when possible; rename only known legacy/alias titles to the canonical underscore form; do not overwrite arbitrary admin renames.
+5. **Cleanup:** after ensure, delete spurious **space-named** duplicate file defs and empty duplicate folders that match known catalog alias titles (wrong tree from an older seed). Does not delete the keeper row for each `Code`.
+6. Admin **may delete** catalog file defs (including those with `Code`) from «ניהול קבצים» after an extra confirmation. To restore seeded slots, run **טעינת Seed בסיסי** again.
+
+Editable title/flags OK; do not clear `Code` without an explicit decision (delete of the whole def is allowed with confirm).
 
 ---
 

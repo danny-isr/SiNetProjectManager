@@ -43,6 +43,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private int _currentProjectId;
     private int? _currentProjectNumber;
     private string? _currentProjectNameAndNumber;
+    private IReadOnlySet<string> _activeRequiredCatalogCodes =
+        new HashSet<string>(StringComparer.Ordinal);
 
     public ProjectWorkTreeViewModel(
         IProjectFileQueryService query,
@@ -75,6 +77,19 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     /// <summary>True when ACC write operations are enabled by the ACC-write gate.</summary>
     public bool IsAccWriteEnabled => _writePolicy?.IsWriteEnabled == true;
+
+    /// <summary>
+    /// Catalog codes that paint orange when missing physical files (current-task completion gates).
+    /// </summary>
+    public void SetActiveRequiredCatalogCodes(IReadOnlySet<string>? codes)
+    {
+        _activeRequiredCatalogCodes = codes is { Count: > 0 }
+            ? new HashSet<string>(codes, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+            RefreshHasFiles(root);
+    }
 
     /// <summary>Top-level project folders shown in the tree.</summary>
     public ObservableCollection<ProjectWorkNodeVm> RootFolders { get; } = new();
@@ -318,6 +333,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 TemplateLocation = fileDto.TemplateLocation,
                 OutSidData = fileDto.OutSidData,
             };
+            fileNode.IsActiveCompletionGate = IsActiveGateCode(fileNode.Code);
             fileNode.RefreshRequiredMissing();
             WireFileCommands(fileNode);
             node.Children.Add(fileNode);
@@ -453,6 +469,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             TemplateLocation = def.TemplateLocation,
             OutSidData = def.OutSidData,
         };
+        created.IsActiveCompletionGate = IsActiveGateCode(created.Code);
         created.RefreshRequiredMissing();
         WireFileCommands(created);
         folder.Children.Add(created);
@@ -470,7 +487,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         return bucket;
     }
 
-    private static bool RefreshHasFiles(ProjectFolderNodeVm folder)
+    private bool RefreshHasFiles(ProjectFolderNodeVm folder)
     {
         var hasPhysical = false;
         var hasDefined = false;
@@ -479,6 +496,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         foreach (var file in folder.Children.OfType<ProjectFileNodeVm>())
         {
             var physical = file.Children.OfType<AlternativeNodeVm>().Any(a => a.Children.Count > 0);
+            file.IsActiveCompletionGate = IsActiveGateCode(file.Code);
             file.HasPhysicalVersions = physical;
             file.RefreshRequiredMissing();
 
@@ -502,6 +520,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         folder.HasRequiredMissing = hasRequiredMissing;
         return hasPhysical;
     }
+
+    private bool IsActiveGateCode(string? code) =>
+        !string.IsNullOrWhiteSpace(code) && _activeRequiredCatalogCodes.Contains(code);
 
     /// <summary>
     /// True when every catalog slot with <paramref name="catalogCode"/> has at least one physical

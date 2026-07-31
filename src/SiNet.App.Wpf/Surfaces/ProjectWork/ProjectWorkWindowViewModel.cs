@@ -219,6 +219,8 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanCompleteTask));
         (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 
+        _tree?.SetActiveRequiredCatalogCodes(ProjectWorkActiveRequiredCatalog.Resolve(null));
+
         var projectId = _currentProject?.CurrentProject?.ProjectId ?? 0;
         if (projectId > 0)
         {
@@ -226,6 +228,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
                 ? FormatProjectDisplay(p)
                 : $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {projectId}";
             await LoadTreeAsync(projectId, cancellationToken).ConfigureAwait(true);
+            _tree?.SetActiveRequiredCatalogCodes(ProjectWorkActiveRequiredCatalog.Resolve(null));
         }
         else
         {
@@ -281,6 +284,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
         await BindProjectAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
         await LoadTreeAsync(context.ProjectId, cancellationToken, forceReload: true).ConfigureAwait(true);
+        _tree?.SetActiveRequiredCatalogCodes(ProjectWorkActiveRequiredCatalog.Resolve(context));
 
         _loaded = true;
         StatusMessage = $"\u05E0\u05E4\u05EA\u05D7\u05D4 \u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u05E2\u05D1\u05D5\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId}.";
@@ -346,6 +350,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         try
         {
             await _tree.LoadProjectAsync(projectId, cancellationToken).ConfigureAwait(true);
+            _tree.SetActiveRequiredCatalogCodes(ProjectWorkActiveRequiredCatalog.Resolve(_taskContext));
             if (_tree.RootFolders.Count == 0)
             {
                 StatusMessage = string.IsNullOrWhiteSpace(_tree.ScanStatus)

@@ -92,7 +92,7 @@ public sealed class SqlFileCatalogWriteServiceTests
     }
 
     [Fact]
-    public async Task DeleteFile_rejects_known_catalog_code()
+    public async Task DeleteFile_allows_known_catalog_code()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -102,11 +102,11 @@ public sealed class SqlFileCatalogWriteServiceTests
         {
             seed.JobTypes.Add(new JobType { Id = 9, Title = "חומר כללי" });
             seed.ProjectFolders.Add(new ProjectFolder { Id = 1, Title = "תיקיית הפרויקט" });
-            seed.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "הצעת מחיר", Infolderid = 1 });
+            seed.ProjectFolders.Add(new ProjectFolder { Id = 2, Title = "ניהול_כספי", Infolderid = 1 });
             seed.ProjectFiles.Add(new ProjectFile
             {
                 Id = 50,
-                Title = "אומדן הצעה",
+                Title = "אומדן_הצעה",
                 Code = ProjectFileCatalogCodes.QuoteEstimate,
                 TypeProjId = 9,
                 Folderid = 2,
@@ -117,8 +117,9 @@ public sealed class SqlFileCatalogWriteServiceTests
 
         var sut = CreateSut(options);
         var result = await sut.DeleteFileAsync(50);
-        Assert.False(result.Success);
-        Assert.Contains("QuoteEstimate", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.True(result.Success);
+        await using var verify = new SiNetSQLDbContext(options);
+        Assert.Null(await verify.ProjectFiles.FirstOrDefaultAsync(f => f.Id == 50));
         Assert.True(ProjectFileCatalogSeedData.IsKnownCatalogCode(ProjectFileCatalogCodes.QuoteEstimate));
     }
 

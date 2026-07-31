@@ -148,13 +148,14 @@
                             </MultiDataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
-                                    <Condition Binding="{Binding HasRequiredMissing}" Value="True" />
-                                    <Condition Binding="{Binding HasPhysicalFiles}" Value="False" />
+                                    <Condition Binding="{Binding HasPhysicalFiles}" Value="True" />
+                                    <Condition Binding="{Binding HasRequiredMissing}" Value="False" />
                                 </MultiDataTrigger.Conditions>
-                                <Setter Property="Foreground" Value="#FFEA580C" />
-                            </MultiDataTrigger>
-                            <DataTrigger Binding="{Binding HasPhysicalFiles}" Value="True">
                                 <Setter Property="Foreground" Value="#FF047857" />
+                            </MultiDataTrigger>
+                            <!-- Orange wins over green when a task-gated file is missing under this folder. -->
+                            <DataTrigger Binding="{Binding HasRequiredMissing}" Value="True">
+                                <Setter Property="Foreground" Value="#FFEA580C" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
