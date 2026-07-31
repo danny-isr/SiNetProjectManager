@@ -138,6 +138,7 @@ public sealed class ProjectFileQueryService : IProjectFileQueryService
             ProjectType: file.TypeProjId,
             Number: file.Number.HasValue ? (int)file.Number.Value : null,
             TemplateLocation: string.IsNullOrWhiteSpace(file.TemplateLocation) ? null : file.TemplateLocation,
+            OutSidData: file.OutSidData,
             IsRequired: file.IsRequired,
             Code: file.Code);
     }

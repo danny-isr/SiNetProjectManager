@@ -300,5 +300,7 @@ Live UI rows (A/B/E/F) remain **Not Run** until operator soak. C/D have approved
 | 2026-07-30 ~12:54 | AutoAdvance → `PRP.MaterialCheck` (stage 35); task=15; Launcher→PROJECT-WORK | Continue MaterialCheck |
 | 2026-07-30 ~12:58 | task=15 `MaterialComplete` → AutoAdvance **Pass** → `PRP.Calculation` (stage 36); task=16 | Continue Calculation |
 | 2026-07-30 ~16:18 | Relaunch soak: AccService PID **25296** (up); `SiNet.App.Wpf` DEBUG PID **1420**; agent tails branded `workflow-manual-debug.log` | Resume — verify Seed אומדן in «ניהול קבצים», then task=16 |
+| 2026-07-30 ~17:42 | Relaunch soak after layout/catalog commits: AccService PID **25296**; `SiNet.App.Wpf` DEBUG PID **17004**; agent tails branded log | App up |
+| 2026-07-30 ~17:43 | task=16 `QuoteCalculationCompleted` → AutoAdvance **Pass** → `PRP.Preparation` (stage 37); task=17; Launcher→PROJECT-WORK | Calculation **Pass** |
 
-**Next operator action:** (1) מחק ידנית «הצעת מחיר»/אומדן שגוי אם נשארו → (2) Seed בסיסי → (3) **ניהול קבצים**: חומר כללי / תכתובת→ניהול כספי / אומדן הצעה (`QuoteEstimate`) → (4) task=16 Calculation על 3146. Agent עוקב אחרי הלוג.
+**Next operator action:** השלם **task=17** בשלב `PRP.Preparation` (פרויקט 3146) עם `QuotePrepared`. Agent עוקב אחרי הלוג.

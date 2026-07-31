@@ -56,7 +56,14 @@ Implement as one feature toward **full V2 parity** (create folders + files + ass
 2. Create folder, create/edit/delete file defs, assign, save  
 3. JobType add/rename if still needed for day-to-day use  
 
-Seeded catalog rows with `Code` (e.g. `QuoteEstimate` = «אומדן הצעה» under **תכתובת → ניהול כספי**): editable title/flags OK; do not delete or clear `Code` without an explicit later decision. Seed does **not** create «הצעת מחיר».
+Seeded catalog rows with `Code` under **תכתובת → ניהול כספי** (JobType חומר כללי):
+
+| Code | Title | Type | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `QuoteEstimate` | אומדן הצעה | `.xlsx` | yes | Gates `PrepareQuoteCalculation` |
+| `QuoteDocument` | הצעת מחיר | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false` (office-created). Set `TemplateLocation` in this admin UI for «אלטרנטיבה מתבנית» in ProjectWork |
+
+Editable title/flags OK; do not delete or clear `Code` without an explicit later decision. Seed does **not** create a folder named «הצעת מחיר» — only the file def under **ניהול כספי**.
 
 ---
 

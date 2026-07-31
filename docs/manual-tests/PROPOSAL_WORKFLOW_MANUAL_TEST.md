@@ -154,6 +154,7 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ### 2.6 — `PRP.Preparation` → `PRP.InternalApproval`  (`QuotePrepared`)
 
+- **Prerequisite:** Seed includes catalog file **הצעת מחיר** (`QuoteDocument`) under **תכתובת → ניהול כספי**, JobType **חומר כללי**, `OutSidData=false`. Project must include that JobType so the orange required slot appears. Upload / create a physical `.docx` (or use «אלטרנטיבה נוספת מתבנית» after setting `TemplateLocation` in ניהול קבצים) before complete (UI blocks otherwise). New alternative always prompts for name (default `1`).
 - **Action:** complete `PrepareQuoteDocument` with result **`QuotePrepared`**.
 - **Expected DB state:** `CurrentStage=PRP.InternalApproval`; new `ApproveQuoteInternal` task open.
 - `[ ]` **Result/Notes:** ________________________________________________

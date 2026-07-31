@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using Microsoft.Win32;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
@@ -314,6 +315,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 ParentFolderId = node.FolderId,
                 IsRequired = fileDto.IsRequired,
                 Code = fileDto.Code,
+                TemplateLocation = fileDto.TemplateLocation,
+                OutSidData = fileDto.OutSidData,
             };
             fileNode.RefreshRequiredMissing();
             WireFileCommands(fileNode);
@@ -447,6 +450,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             ParentFolderId = folder.FolderId,
             IsRequired = def.IsRequired,
             Code = def.Code,
+            TemplateLocation = def.TemplateLocation,
+            OutSidData = def.OutSidData,
         };
         created.RefreshRequiredMissing();
         WireFileCommands(created);
@@ -499,8 +504,22 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     }
 
     /// <summary>
-    /// Returns <see langword="false"/> when any required catalog file under the loaded tree
-    /// is missing a physical version (or when no required slot is present at all for the gate caller).
+    /// True when every catalog slot with <paramref name="catalogCode"/> has at least one physical
+    /// version, or when no such slot is present on this project tree (not applicable).
+    /// </summary>
+    public bool HasRequiredPhysicalFile(string catalogCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(catalogCode);
+        var matches = EnumerateFileNodes(RootFolders)
+            .Where(f => !f.IsUnfiled && string.Equals(f.Code, catalogCode, StringComparison.Ordinal))
+            .ToList();
+        if (matches.Count == 0)
+            return true;
+        return matches.All(f => f.HasPhysicalVersions);
+    }
+
+    /// <summary>
+    /// True when at least one required catalog file exists and every required file has a physical version.
     /// </summary>
     public bool HasAllRequiredPhysicalFiles()
     {
@@ -962,6 +981,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         if (file.IsUnfiled || file.FileId is null)
             return;
         file.AddVersionCommand = new AsyncRelayCommand(() => PickAndAddVersionAsync(file, alternativeName: null));
+        file.AddVersionFromTemplateCommand = new AsyncRelayCommand(
+            () => AddVersionFromTemplateAsync(file),
+            () => file.CanAddFromTemplate);
     }
 
     private void WireFolderCommands(ProjectFolderNodeVm folder)
@@ -1204,15 +1226,68 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private static string? PromptAlternativeName(ProjectFileNodeVm file)
     {
-        // Default to the next free numeric alternative label; the drop/menu flow keeps it simple.
-        var used = file.Children.OfType<AlternativeNodeVm>().Select(a => a.AlternativeName).ToHashSet(StringComparer.Ordinal);
-        for (var i = 1; i <= 99; i++)
+        var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+            ?? System.Windows.Application.Current?.MainWindow;
+        var name = StringPromptDialog.Prompt(
+            owner,
+            "\u05E9\u05DD \u05D0\u05DC\u05D8\u05E8\u05E0\u05D8\u05D9\u05D1\u05D4", // שם אלטרנטיבה
+            "\u05D4\u05DB\u05E0\u05E1 \u05E9\u05DD \u05DC\u05D0\u05DC\u05D8\u05E8\u05E0\u05D8\u05D9\u05D1\u05D4 \u05D4\u05D7\u05D3\u05E9\u05D4:", // הכנס שם לאלטרנטיבה החדשה:
+            initial: "1");
+        if (name is null)
+            return null;
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        var trimmed = name.Trim();
+        var used = file.Children.OfType<AlternativeNodeVm>()
+            .Select(a => a.AlternativeName)
+            .ToHashSet(StringComparer.Ordinal);
+        if (used.Contains(trimmed))
         {
-            var candidate = i.ToString();
-            if (!used.Contains(candidate))
-                return candidate;
+            System.Windows.MessageBox.Show(
+                $"\u05D4\u05E9\u05DD '{trimmed}' \u05DB\u05D1\u05E8 \u05E7\u05D9\u05D9\u05DD.", // השם '{trimmed}' כבר קיים.
+                "\u05E1\u05D1\u05D9\u05D1\u05EA \u05E2\u05D1\u05D5\u05D3\u05D4",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return null;
         }
-        return null;
+
+        return trimmed;
+    }
+
+    private async Task AddVersionFromTemplateAsync(ProjectFileNodeVm file)
+    {
+        if (!file.CanAddFromTemplate || string.IsNullOrWhiteSpace(file.TemplateLocation))
+            return;
+
+        var altName = PromptAlternativeName(file);
+        if (string.IsNullOrWhiteSpace(altName))
+            return;
+
+        var outcome = await AddVersionAsync(file, altName, file.TemplateLocation).ConfigureAwait(true);
+        ReportOutcome(outcome, file.Title);
+        if (outcome.Status != FileWriteStatus.Success)
+            return;
+
+        var alt = file.Children.OfType<AlternativeNodeVm>()
+            .FirstOrDefault(a => string.Equals(a.AlternativeName, altName, StringComparison.Ordinal));
+        var version = alt?.Children.OfType<VersionNodeVm>()
+            .OrderByDescending(v => v.VersionNumber)
+            .FirstOrDefault();
+        if (version is null)
+            return;
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(version.FullPath) && File.Exists(version.FullPath))
+                Process.Start(new ProcessStartInfo(version.FullPath) { UseShellExecute = true });
+            else if (version.OpenCommand?.CanExecute(null) == true)
+                version.OpenCommand.Execute(null);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning($"[ProjectWork] Open after template place failed: {ex.Message}");
+        }
     }
 
     private static void ReportOutcome(FileWriteOutcome outcome, string title)

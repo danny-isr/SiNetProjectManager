@@ -24,12 +24,23 @@ public static class ProjectFileCatalogSeedData
             ParentFolderTitle: "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA", // תכתובת
             TypeFile: ".xlsx",
             IsRequired: true,
+            OutSidData: null,
             LegacyTitles:
             [
                 "\u05EA\u05D7\u05E9\u05D9\u05D1", // תחשיב
                 "\u05D0\u05D5\u05DE\u05D3\u05DF \u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // אומדן הצעת מחיר
                 "\u05D0\u05D5\u05DE\u05D3\u05DF \u05EA\u05DB\u05E0\u05D5\u05DF", // אומדן תכנון (spoken/legacy alias)
             ]),
+        new ProjectFileCatalogDefinition(
+            Code: ProjectFileCatalogCodes.QuoteDocument,
+            DefaultTitle: "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעת מחיר
+            JobTypeTitle: SqlProjectCreateService.DefaultJobTypeTitle,
+            FolderTitle: "\u05E0\u05D9\u05D4\u05D5\u05DC \u05DB\u05E1\u05E4\u05D9", // ניהול כספי
+            ParentFolderTitle: "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA", // תכתובת
+            TypeFile: ".docx",
+            IsRequired: true,
+            OutSidData: false,
+            LegacyTitles: []),
     ];
 
     public sealed record ProjectFileCatalogDefinition(
@@ -40,12 +51,13 @@ public static class ProjectFileCatalogSeedData
         string ParentFolderTitle,
         string TypeFile,
         bool IsRequired,
+        bool? OutSidData,
         IReadOnlyList<string> LegacyTitles);
 
     /// <summary>
     /// Ensures every catalog definition exists and is linked by <c>Code</c>.
     /// Never deletes ProjectFile / ProjectFolder rows. Does not overwrite an arbitrary admin Title rename.
-    /// Does <b>not</b> create «הצעת מחיר». Target folder is «ניהול כספי» under «תכתובת».
+    /// Target folder is «ניהול כספי» under «תכתובת». Does <b>not</b> create a folder named «הצעת מחיר».
     /// </summary>
     public static async Task<string> EnsureAsync(SiNetSQLDbContext db, CancellationToken ct = default)
     {
@@ -98,7 +110,7 @@ public static class ProjectFileCatalogSeedData
                 ct)
             .ConfigureAwait(false);
         if (folderId is null)
-            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' under '{def.ParentFolderTitle}' not found; create parent «{def.ParentFolderTitle}» first — seed does not create «הצעת מחיר»).";
+            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' under '{def.ParentFolderTitle}' not found; create parent «{def.ParentFolderTitle}» first — seed does not create a folder named «הצעת מחיר»).";
 
         var typeId = jobType.Id;
         var knownTitles = new HashSet<string>(def.LegacyTitles, StringComparer.Ordinal) { def.DefaultTitle };
@@ -156,6 +168,7 @@ public static class ProjectFileCatalogSeedData
                     Typefile = def.TypeFile,
                     TypeProjId = typeId,
                     IsRequired = def.IsRequired,
+                    OutSidData = def.OutSidData,
                     StorageDestination = FileStorageDestination.FileServer,
                     Created = DateTime.UtcNow,
                     Modified = DateTime.UtcNow,
@@ -196,6 +209,12 @@ public static class ProjectFileCatalogSeedData
             changed = true;
         }
 
+        if (def.OutSidData is { } outSid && byCode.OutSidData != outSid)
+        {
+            byCode.OutSidData = outSid;
+            changed = true;
+        }
+
         if (string.IsNullOrWhiteSpace(byCode.Title))
         {
             byCode.Title = def.DefaultTitle;
@@ -221,8 +240,8 @@ public static class ProjectFileCatalogSeedData
     /// <summary>
     /// Resolves <paramref name="folderTitle"/> under <paramref name="parentFolderTitle"/>.
     /// Re-parents an existing folder when it is not under the expected parent.
-    /// Creates the child folder only when the parent already exists — never creates «הצעת מחיר»
-    /// and never invents the parent «תכתובת».
+    /// Creates the child folder only when the parent already exists — never creates a folder
+    /// named «הצעת מחיר» and never invents the parent «תכתובת».
     /// </summary>
     private static async Task<int?> EnsureFolderUnderParentAsync(
         SiNetSQLDbContext db,

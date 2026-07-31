@@ -453,9 +453,15 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             return false;
         }
 
-        if (RequiresTachshivPhysicalFile(context) && !HasRequiredTachshivSatisfied())
+        if (RequiresQuoteEstimatePhysicalFile(context) && !HasRequiredCatalogPhysical(QuoteEstimateCatalogCode))
         {
             StatusMessage = "יש להעלות את קובץ אומדן הצעה לפני סיום המשימה.";
+            return false;
+        }
+
+        if (RequiresQuoteDocumentPhysicalFile(context) && !HasRequiredCatalogPhysical(QuoteDocumentCatalogCode))
+        {
+            StatusMessage = "יש להעלות את קובץ הצעת מחיר לפני סיום המשימה.";
             return false;
         }
 
@@ -543,12 +549,18 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
     }
 
     private const string PrepareQuoteCalculationTaskType = "PrepareQuoteCalculation";
+    private const string PrepareQuoteDocumentTaskType = "PrepareQuoteDocument";
+    private const string QuoteEstimateCatalogCode = "QuoteEstimate";
+    private const string QuoteDocumentCatalogCode = "QuoteDocument";
 
-    private static bool RequiresTachshivPhysicalFile(WorkSurfaceContext context) =>
+    private static bool RequiresQuoteEstimatePhysicalFile(WorkSurfaceContext context) =>
         string.Equals(context.TaskTypeCode, PrepareQuoteCalculationTaskType, StringComparison.Ordinal);
 
-    private bool HasRequiredTachshivSatisfied() =>
-        _tree is not null && _tree.HasAllRequiredPhysicalFiles();
+    private static bool RequiresQuoteDocumentPhysicalFile(WorkSurfaceContext context) =>
+        string.Equals(context.TaskTypeCode, PrepareQuoteDocumentTaskType, StringComparison.Ordinal);
+
+    private bool HasRequiredCatalogPhysical(string catalogCode) =>
+        _tree is not null && _tree.HasRequiredPhysicalFile(catalogCode);
 
     private static bool TryResolveResultCode(
         WorkSurfaceContext context,

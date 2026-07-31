@@ -1,3 +1,4 @@
+using System.IO;
 using Moq;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.Application.ProjectWork;
@@ -16,34 +17,70 @@ namespace SiNet.App.Wpf.Tests.ProjectWork;
 
 public sealed class ProjectWorkRequiredOmdanTests
 {
-    private const string RequiredMessage = "יש להעלות את קובץ אומדן הצעה לפני סיום המשימה.";
+    private const string RequiredOmdanMessage = "יש להעלות את קובץ אומדן הצעה לפני סיום המשימה.";
+    private const string RequiredQuoteMessage = "יש להעלות את קובץ הצעת מחיר לפני סיום המשימה.";
 
-    private static ProjectFileTreeDto BuildRequiredTree(bool isRequired = true) => new(
-        ProjectId: 5,
-        ProjectNumber: 5,
-        RootFolders: new[]
+    private static (ProjectFileTreeDto Tree, ScannedFile[] Scanned) BuildTreeWithCodes(
+        bool estimateRequired = true,
+        bool estimatePhysical = false,
+        bool documentRequired = false,
+        bool documentPhysical = false)
+    {
+        var files = new List<ProjectFileDefinitionDto>
         {
-            new ProjectFolderDto(
+            new(
+                FileId: 100,
+                BaseName: "אומדן הצעה",
+                Extension: ".xlsx",
+                StorageDestination: FileStorageDestination.FileServer,
                 FolderId: 10,
-                Name: "ניהול כספי",
-                ParentFolderId: null,
-                Children: Array.Empty<ProjectFolderDto>(),
-                Files: new[]
-                {
-                    new ProjectFileDefinitionDto(
-                        FileId: 100,
-                        BaseName: "אומדן הצעה",
-                        Extension: ".xlsx",
-                        StorageDestination: FileStorageDestination.FileServer,
-                        FolderId: 10,
-                        ProjectType: 9,
-                        Number: 7,
-                        TemplateLocation: null,
-                        IsRequired: isRequired,
-                        Code: "QuoteEstimate"),
-                }),
-        },
-        ProjectNameAndNumber: "(5)בדיקה");
+                ProjectType: 9,
+                Number: 7,
+                TemplateLocation: null,
+                OutSidData: null,
+                IsRequired: estimateRequired,
+                Code: ProjectFileCatalogCodes.QuoteEstimate),
+        };
+        if (documentRequired || documentPhysical)
+        {
+            files.Add(new ProjectFileDefinitionDto(
+                FileId: 101,
+                BaseName: "הצעת מחיר",
+                Extension: ".docx",
+                StorageDestination: FileStorageDestination.FileServer,
+                FolderId: 10,
+                ProjectType: 9,
+                Number: 8,
+                TemplateLocation: null,
+                OutSidData: false,
+                IsRequired: documentRequired,
+                Code: ProjectFileCatalogCodes.QuoteDocument));
+        }
+
+        var scanned = new List<ScannedFile>();
+        if (estimatePhysical)
+            scanned.Add(FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
+        if (documentPhysical)
+            scanned.Add(FakeFileStore.FileServerFile("(5)-9-8-1-1-Quote.docx"));
+
+        var tree = new ProjectFileTreeDto(
+            ProjectId: 5,
+            ProjectNumber: 5,
+            RootFolders: new[]
+            {
+                new ProjectFolderDto(
+                    FolderId: 10,
+                    Name: "ניהול כספי",
+                    ParentFolderId: null,
+                    Children: Array.Empty<ProjectFolderDto>(),
+                    Files: files),
+            },
+            ProjectNameAndNumber: "(5)בדיקה");
+        return (tree, scanned.ToArray());
+    }
+
+    private static ProjectFileTreeDto BuildRequiredTree(bool isRequired = true) =>
+        BuildTreeWithCodes(estimateRequired: isRequired).Tree;
 
     private static ProjectWorkTreeViewModel CreateTree(ProjectFileTreeDto tree, params ScannedFile[] scanned)
     {
@@ -77,6 +114,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.False(folder.HasPhysicalFiles);
         Assert.True(folder.HasDefinedFiles);
         Assert.False(sut.HasAllRequiredPhysicalFiles());
+        Assert.False(sut.HasRequiredPhysicalFile(ProjectFileCatalogCodes.QuoteEstimate));
     }
 
     [Fact]
@@ -95,6 +133,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.False(folder.HasRequiredMissing);
         Assert.True(folder.HasPhysicalFiles);
         Assert.True(sut.HasAllRequiredPhysicalFiles());
+        Assert.True(sut.HasRequiredPhysicalFile(ProjectFileCatalogCodes.QuoteEstimate));
     }
 
     [Fact]
@@ -110,20 +149,61 @@ public sealed class ProjectWorkRequiredOmdanTests
 
         Assert.False(ok);
         Assert.Equal(0, completion.CallCount);
-        Assert.Equal(RequiredMessage, sut.StatusMessage);
+        Assert.Equal(RequiredOmdanMessage, sut.StatusMessage);
     }
 
     [Fact]
-    public async Task CompleteFromTaskAsync_allows_PrepareQuoteCalculation_when_omdan_physical_exists()
+    public async Task CompleteFromTaskAsync_allows_PrepareQuoteCalculation_when_omdan_physical_exists_even_if_quote_doc_missing()
     {
+        var (treeDto, _) = BuildTreeWithCodes(
+            estimateRequired: true,
+            estimatePhysical: true,
+            documentRequired: true,
+            documentPhysical: false);
         var completion = new RecordingCompletion();
-        var tree = CreateTree(
-            BuildRequiredTree(),
-            FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
+        var tree = CreateTree(treeDto, FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
         var sut = new ProjectWorkWindowViewModel(completion, tree: tree);
-        var context = CreateCalcContext();
 
-        Assert.True(await sut.ApplyContextAsync(context));
+        Assert.True(await sut.ApplyContextAsync(CreateCalcContext()));
+        var ok = await sut.CompleteFromTaskAsync();
+
+        Assert.True(ok);
+        Assert.Equal(1, completion.CallCount);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_blocks_PrepareQuoteDocument_when_quote_doc_missing()
+    {
+        var (treeDto, _) = BuildTreeWithCodes(
+            estimateRequired: true,
+            estimatePhysical: true,
+            documentRequired: true,
+            documentPhysical: false);
+        var completion = new RecordingCompletion();
+        var tree = CreateTree(treeDto, FakeFileStore.FileServerFile("(5)-9-7-1-1-Omdan.xlsx"));
+        var sut = new ProjectWorkWindowViewModel(completion, tree: tree);
+
+        Assert.True(await sut.ApplyContextAsync(CreatePrepContext()));
+        var ok = await sut.CompleteFromTaskAsync();
+
+        Assert.False(ok);
+        Assert.Equal(0, completion.CallCount);
+        Assert.Equal(RequiredQuoteMessage, sut.StatusMessage);
+    }
+
+    [Fact]
+    public async Task CompleteFromTaskAsync_allows_PrepareQuoteDocument_when_quote_doc_physical_exists()
+    {
+        var (treeDto, scanned) = BuildTreeWithCodes(
+            estimateRequired: true,
+            estimatePhysical: true,
+            documentRequired: true,
+            documentPhysical: true);
+        var completion = new RecordingCompletion();
+        var tree = CreateTree(treeDto, scanned);
+        var sut = new ProjectWorkWindowViewModel(completion, tree: tree);
+
+        Assert.True(await sut.ApplyContextAsync(CreatePrepContext()));
         var ok = await sut.CompleteFromTaskAsync();
 
         Assert.True(ok);
@@ -152,7 +232,7 @@ public sealed class ProjectWorkRequiredOmdanTests
     }
 
     [Fact]
-    public async Task Omdan_seed_is_idempotent_for_general_material_job_type()
+    public async Task Catalog_seed_inserts_estimate_and_quote_document_under_finance_folder()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -175,15 +255,18 @@ public sealed class ProjectWorkRequiredOmdanTests
         var financeFolder = Assert.Single(await db.ProjectFolders.Where(f => f.Title == "ניהול כספי").ToListAsync());
         Assert.Equal(2, financeFolder.Infolderid);
 
-        var rows = await db.ProjectFiles.Where(f => f.IsRequired).ToListAsync();
-        Assert.Single(rows);
-        Assert.Equal(9, rows[0].TypeProjId);
-        Assert.Equal(financeFolder.Id, rows[0].Folderid);
-        Assert.Equal(ProjectFileCatalogCodes.QuoteEstimate, rows[0].Code);
-        Assert.Equal(ProjectFileRequiredOmdanSeedData.DisplayTitle, rows[0].Title);
+        var rows = await db.ProjectFiles.Where(f => f.IsRequired).OrderBy(f => f.Code).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.Contains(rows, r => r.Code == ProjectFileCatalogCodes.QuoteEstimate && r.Title == ProjectFileRequiredOmdanSeedData.DisplayTitle);
+        var quote = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteDocument);
+        Assert.Equal("הצעת מחיר", quote.Title);
+        Assert.Equal(".docx", quote.Typefile);
+        Assert.False(quote.OutSidData);
+        Assert.Equal(financeFolder.Id, quote.Folderid);
 
         // Title rename must not break Code identity on second ensure.
-        rows[0].Title = "שם מותאם";
+        var omdan = rows.Single(r => r.Code == ProjectFileCatalogCodes.QuoteEstimate);
+        omdan.Title = "שם מותאם";
         await db.SaveChangesAsync();
         var afterRename = await ProjectFileCatalogSeedData.EnsureAsync(db);
         Assert.Contains("unchanged", afterRename, StringComparison.Ordinal);
@@ -223,10 +306,11 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Equal(9, omdan.TypeProjId);
         Assert.Equal("אומדן הצעה", omdan.Title);
         Assert.Equal(3, omdan.Folderid);
+        Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument));
     }
 
     [Fact]
-    public async Task Omdan_seed_skips_when_parent_folder_tachtuvet_missing_and_does_not_create_hatzaat_mechir()
+    public async Task Omdan_seed_skips_when_parent_folder_tachtuvet_missing_and_does_not_create_hatzaat_mechir_folder()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -243,6 +327,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Contains("תכתובת", result, StringComparison.Ordinal);
         Assert.Empty(await db.ProjectFolders.Where(f => f.Title == "הצעת מחיר").ToListAsync());
         Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate).ToListAsync());
+        Assert.Empty(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteDocument).ToListAsync());
     }
 
     [Fact]
@@ -302,12 +387,28 @@ public sealed class ProjectWorkRequiredOmdanTests
         var result = await ProjectFileCatalogSeedData.EnsureAsync(db);
 
         Assert.Contains("updated", result, StringComparison.Ordinal);
-        Assert.Equal(2, await db.ProjectFiles.CountAsync());
+        Assert.Equal(3, await db.ProjectFiles.CountAsync());
         Assert.NotNull(await db.ProjectFiles.SingleAsync(f => f.Id == 50 && f.Title == "קובץ אחר"));
         var omdan = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteEstimate);
         Assert.Equal("אומדן הצעה", omdan.Title);
         Assert.True(omdan.IsRequired);
         Assert.Equal(10, omdan.Folderid);
+        Assert.NotNull(await db.ProjectFiles.SingleOrDefaultAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument));
+    }
+
+    [Fact]
+    public void Alternative_name_prompt_uses_dialog_not_silent_auto_assign()
+    {
+        var cs = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "SiNet.App.Wpf",
+            "Surfaces",
+            "ProjectWork",
+            "ProjectWorkTreeViewModel.cs"));
+        Assert.Contains("StringPromptDialog.Prompt", cs, StringComparison.Ordinal);
+        Assert.Contains("AddVersionFromTemplateAsync", cs, StringComparison.Ordinal);
+        Assert.DoesNotContain("Default to the next free numeric alternative label", cs, StringComparison.Ordinal);
     }
 
     private static WorkSurfaceContext CreateCalcContext() =>
@@ -321,6 +422,21 @@ public sealed class ProjectWorkRequiredOmdanTests
             CompletionEventCode: "Review.QuoteCalculationCompleted",
             ActingUserId: 7,
             TaskTypeCode: "PrepareQuoteCalculation");
+
+    private static WorkSurfaceContext CreatePrepContext() =>
+        new(
+            TaskId: 20,
+            ProjectId: 5,
+            WorkflowInstanceId: 1,
+            ComponentKey: WorkSurfaceComponentKeys.ProjectWork,
+            PrimaryWorkTargetEntityId: null,
+            AllowedResultCodes: ["QuotePrepared"],
+            CompletionEventCode: "Review.QuotePrepared",
+            ActingUserId: 7,
+            TaskTypeCode: "PrepareQuoteDocument");
+
+    private static string RepoRoot =>
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     private sealed class RecordingCompletion : ITaskCompletionService
     {

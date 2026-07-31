@@ -50,6 +50,7 @@ public sealed record ProjectFolderDto(
 /// <param name="ProjectType">Project type id (legacy <c>TypeProjId</c>) used to match scanned files.</param>
 /// <param name="Number">File number used to match scanned files; <see langword="null"/> when unset.</param>
 /// <param name="TemplateLocation">Template source path, when a template exists; <see langword="null"/> otherwise.</param>
+/// <param name="OutSidData">True when the slot is external/outside SiData material; office templates use false.</param>
 /// <param name="IsRequired">True when a physical version is required before gated task completion.</param>
 /// <param name="Code">Stable catalog code (e.g. QuoteEstimate); <see langword="null"/> for uncoded legacy rows.</param>
 public sealed record ProjectFileDefinitionDto(
@@ -61,5 +62,6 @@ public sealed record ProjectFileDefinitionDto(
     int? ProjectType,
     int? Number,
     string? TemplateLocation,
+    bool? OutSidData = null,
     bool IsRequired = false,
     string? Code = null);

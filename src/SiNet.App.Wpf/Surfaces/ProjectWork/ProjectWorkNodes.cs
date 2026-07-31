@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inspection;
 using SiNet.Domain.Files;
@@ -117,6 +118,21 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
     /// <summary>Stable catalog code (e.g. QuoteEstimate); null for uncoded rows.</summary>
     public string? Code { get; init; }
 
+    /// <summary>Template source path from catalog; null when unset.</summary>
+    public string? TemplateLocation { get; init; }
+
+    /// <summary>True when marked as external (outside office) material.</summary>
+    public bool? OutSidData { get; init; }
+
+    /// <summary>
+    /// True when «אלטרנטיבה נוספת מתבנית» should appear: office slot with an existing template file.
+    /// </summary>
+    public bool CanAddFromTemplate =>
+        !IsUnfiled
+        && OutSidData != true
+        && !string.IsNullOrWhiteSpace(TemplateLocation)
+        && File.Exists(TemplateLocation);
+
     private bool _hasPhysicalVersions;
     private bool _isRequiredMissing;
 
@@ -141,6 +157,9 @@ public sealed class ProjectFileNodeVm : ProjectWorkNodeVm
 
     /// <summary>Adds a new alternative/version to this file from a picked source file. Set by the tree view model.</summary>
     public ICommand? AddVersionCommand { get; set; }
+
+    /// <summary>Adds a new alternative from the catalog template path. Set by the tree view model.</summary>
+    public ICommand? AddVersionFromTemplateCommand { get; set; }
 
     /// <summary>True for the synthetic "unfiled" bucket holding files that match no DB definition.</summary>
     public bool IsUnfiled { get; init; }

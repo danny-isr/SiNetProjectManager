@@ -8,4 +8,7 @@ public static class ProjectFileCatalogCodes
 {
     /// <summary>Required quote-estimate workbook («אומדן הצעה») under חומר כללי / תכתובת → ניהול כספי.</summary>
     public const string QuoteEstimate = "QuoteEstimate";
+
+    /// <summary>Required quote document («הצעת מחיר») under חומר כללי / תכתובת → ניהול כספי.</summary>
+    public const string QuoteDocument = "QuoteDocument";
 }
