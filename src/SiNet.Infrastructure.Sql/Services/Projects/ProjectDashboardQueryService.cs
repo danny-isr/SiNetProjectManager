@@ -126,6 +126,7 @@ public sealed class ProjectDashboardQueryService : IProjectDashboardQueryService
                 return new ProjectDashboardRowDto(
                     ProjectId: p.Id,
                     ProjectNumber: FormatNumber(p.Number),
+                    ProjectNumberValue: p.Number,
                     ProjectName: p.Title ?? string.Empty,
                     PlaceName: NullIfBlank(p.PlaceName),
                     CompanyName: NullIfBlank(p.CompanyName),

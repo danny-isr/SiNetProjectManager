@@ -129,6 +129,7 @@ public sealed class ProjectsDashboardViewModelTests
         new(
             ProjectId: id,
             ProjectNumber: id.ToString(),
+            ProjectNumberValue: id,
             ProjectName: name,
             PlaceName: place,
             CompanyName: "Co",

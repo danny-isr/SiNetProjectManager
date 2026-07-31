@@ -7,6 +7,7 @@ namespace SiNet.Application.Projects;
 /// </summary>
 /// <param name="ProjectId">Project identifier.</param>
 /// <param name="ProjectNumber">Formatted project number for display/search.</param>
+/// <param name="ProjectNumberValue">Numeric project number for grid sorting; <see langword="null"/> when unset.</param>
 /// <param name="ProjectName">Project title.</param>
 /// <param name="PlaceName">Place / city; <see langword="null"/> when unknown.</param>
 /// <param name="CompanyName">Company / client; <see langword="null"/> when unknown.</param>
@@ -27,6 +28,7 @@ namespace SiNet.Application.Projects;
 public sealed record ProjectDashboardRowDto(
     int ProjectId,
     string ProjectNumber,
+    float? ProjectNumberValue,
     string ProjectName,
     string? PlaceName,
     string? CompanyName,

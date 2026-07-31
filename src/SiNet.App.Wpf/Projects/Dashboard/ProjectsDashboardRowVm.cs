@@ -17,6 +17,8 @@ public sealed class ProjectsDashboardRowVm
 
     public int ProjectId => Dto.ProjectId;
     public string ProjectNumber => Dto.ProjectNumber;
+    /// <summary>Numeric value used by the DataGrid for number-column sorting.</summary>
+    public float ProjectNumberValue => Dto.ProjectNumberValue ?? float.MinValue;
     public string ProjectName => Dto.ProjectName;
     public string? PlaceName => Dto.PlaceName;
     public string? CompanyName => Dto.CompanyName;

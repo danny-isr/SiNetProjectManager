@@ -162,21 +162,40 @@
                   SelectionUnit="FullRow"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
+                  RowBackground="White"
+                  AlternatingRowBackground="#F3F4F6"
                   Background="{DynamicResource SiBackgroundBrush}"
                   BorderBrush="{DynamicResource SiSecondaryBrush}"
                   BorderThickness="1"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   MouseDoubleClick="OnProjectsGridMouseDoubleClick">
+            <DataGrid.Resources>
+                <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
+                    <Setter Property="TextWrapping" Value="Wrap" />
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                    <Setter Property="Padding" Value="2,4" />
+                </Style>
+            </DataGrid.Resources>
             <DataGrid.Columns>
-                <DataGridTextColumn Header="מספר" Binding="{Binding ProjectNumber}" Width="70" />
-                <DataGridTextColumn Header="שם" Binding="{Binding ProjectName}" Width="160" />
-                <DataGridTextColumn Header="מקום" Binding="{Binding PlaceName}" Width="100" />
-                <DataGridTextColumn Header="לקוח" Binding="{Binding CompanyName}" Width="120" />
-                <DataGridTextColumn Header="סוגי פרויקט" Binding="{Binding JobTypesDisplay}" Width="140" />
-                <DataGridTextColumn Header="סטטוס" Binding="{Binding Status}" Width="120" />
-                <DataGridTextColumn Header="אחראי" Binding="{Binding AssignedUserName}" Width="100" />
-                <DataGridTextColumn Header="תהליכים פתוחים" Binding="{Binding OpenWorkflowsDisplay}" Width="220" />
+                <DataGridTextColumn Header="מספר"
+                                    Binding="{Binding ProjectNumber}"
+                                    SortMemberPath="ProjectNumberValue"
+                                    Width="70" />
+                <DataGridTextColumn Header="שם" Binding="{Binding ProjectName}" Width="160"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                <DataGridTextColumn Header="מקום" Binding="{Binding PlaceName}" Width="100"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                <DataGridTextColumn Header="לקוח" Binding="{Binding CompanyName}" Width="120"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                <DataGridTextColumn Header="סוגי פרויקט" Binding="{Binding JobTypesDisplay}" Width="140"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                <DataGridTextColumn Header="סטטוס" Binding="{Binding Status}" Width="120"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                <DataGridTextColumn Header="אחראי" Binding="{Binding AssignedUserName}" Width="100"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                <DataGridTextColumn Header="תהליכים פתוחים" Binding="{Binding OpenWorkflowsDisplay}" Width="220"
+                                    ElementStyle="{StaticResource WrapTextBlockStyle}" />
                 <DataGridTextColumn Header="משימות" Binding="{Binding OpenTaskCount}" Width="70" />
                 <DataGridTextColumn Header="התחלה" Binding="{Binding Start, StringFormat={}{0:dd/MM/yyyy}}" Width="90" />
                 <DataGridTextColumn Header="סיום" Binding="{Binding End, StringFormat={}{0:dd/MM/yyyy}}" Width="90" />
