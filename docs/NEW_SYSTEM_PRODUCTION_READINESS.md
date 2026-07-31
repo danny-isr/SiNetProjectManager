@@ -66,7 +66,7 @@ Implemented in `NewShellFactory.BuildMigratedOnlyMenuAsync`
 | משימות | **צפייה בתהליכים (סגור)** | Read-only workflow canvas | `Shell.OpenWorkflowClosedViewer` |
 | דוחות | **R01 / R02 / R03** | MasterPlan → Google Sheets | `ReportsManagement` |
 | משתמשים והרשאות | **ניהול / הוספת משתמש / הרשאות פעולה** | Native admin | `UsersManage` / `ActionPermissionsManage` |
-| מנהלה | **הגדרות / מפתחות / מיפוי MasterPlan / סטטוס ACC / מצב מערכת** | Native admin / operator | Authenticated / `SystemSettingsWrite` |
+| מנהלה | **הגדרות / מפתחות / מיפוי MasterPlan / סטטוס ACC / מצב מערכת / בריאות תהליכים** | Native admin / operator | Authenticated / `SystemSettingsWrite` / `Shell.OpenWorkflowOpsDashboard` |
 | (host) | **NewShellWindow** | Project selector + menu | — |
 
 ### Dev-only / harness (not production menu)
@@ -140,7 +140,8 @@ UI parity vs V2 dialogs may be simplified (filters / R02 pivot); dual path retai
 | Inspection Sheets create/export / screenshot Drive upload | Google / Inspection slice | **Deferred** |
 | ACC write beyond approved Email filing / inbox ensure | ACC-Write-Policy | **Blocked** |
 | Production switch of all legacy `GoogleService` consumers | Host cutover | **Blocked** |
-| FloatingProjectTasks / WorkflowDashboard write in New Shell | Not migrated | **Deferred** |
+| FloatingProjectTasks / WorkflowDashboard **write** in New Shell | Not migrated | **Deferred** |
+| Workflow ops dashboard (read-only instances + stalled) | Native `WorkflowOpsDashboardWindow` | **Pilot** — see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md); Retry/Cancel deferred |
 | Broad task-aware window mutation | Integration contract | **Deferred** |
 | V2 New System as pilot host | Standalone decision | **Out of envelope** |
 

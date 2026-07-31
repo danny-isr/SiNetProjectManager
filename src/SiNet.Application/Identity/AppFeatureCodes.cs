@@ -21,4 +21,7 @@ public static class AppFeatureCodes
     public const string TaskWorkbenchViewOtherUsersTasks = "TaskWorkbench.ViewOtherUsersTasks";
     /// <summary>Admin global file/folder catalog («ניהול קבצים»).</summary>
     public const string ShellOpenFileCatalogAdmin = "Shell.OpenFileCatalogAdmin";
+
+    /// <summary>Admin read-only workflow ops dashboard («בריאות תהליכים»).</summary>
+    public const string ShellOpenWorkflowOpsDashboard = "Shell.OpenWorkflowOpsDashboard";
 }

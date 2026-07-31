@@ -10,6 +10,7 @@ using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Admin.Users;
+using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -271,6 +272,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "ניהול קבצים",
                 OpenNativeFileCatalog,
                 "קטלוג הגדרות קבצים ותיקיות (אדמין)"));
+        }
+
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenWorkflowOpsDashboard, cancellationToken).ConfigureAwait(true))
+        {
+            admin.Add(new NewShellMenuItem(
+                "בריאות תהליכים",
+                OpenNativeWorkflowOpsDashboard,
+                "דשבורד תפעולי למופעי workflow (קריאה בלבד)"));
         }
 
         if (HasAuthenticatedUser())
@@ -575,6 +584,26 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת מצב מערכת: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeWorkflowOpsDashboard()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<WorkflowOpsDashboardWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת בריאות תהליכים: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

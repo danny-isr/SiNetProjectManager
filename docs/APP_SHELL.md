@@ -212,6 +212,7 @@ Initial menu (P3 + P6 + native admin):
 | Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
 | ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native ACC control/status + inbox reconciliation window |
 | System health | Authenticated user | Any signed-in user | `SystemStatusWindow` → native subsystem status + background work |
+| Workflow ops health | `Shell.OpenWorkflowOpsDashboard` | Administrator | `WorkflowOpsDashboardWindow` → read-only instance grid + stalled badge (complements System health; see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md)) |
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 
@@ -247,6 +248,13 @@ native `SystemStatusWindow` in `SiNet.App.Wpf.Admin.SystemStatus`, backed by
 Gmail connector auth, `IEmailAccBackgroundWorkTracker`, and the startup task registry). Display
 states: `Running` | `Idle` | `Degraded` | `Stopped` | `NotConfigured`. Does **not** open legacy
 `SystemHealthWindow`.
+
+**Workflow ops health (native MVP, read-only):** Administrators see **בריאות תהליכים** when
+`Shell.OpenWorkflowOpsDashboard` is authorized. Opens `WorkflowOpsDashboardWindow` in
+`SiNet.App.Wpf.Admin.WorkflowOps`, backed by `IWorkflowQueryService` +
+`IWorkflowRecoveryService.DetectStalledAsync` (+ infra strip from `IRuntimeSubsystemStatusService`).
+Complements מצב מערכת; does **not** migrate WorkflowDashboard write, Retry, or Cancel. Full target:
+[`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md).
 
 Implemented capabilities in this surface:
 

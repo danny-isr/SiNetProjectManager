@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Admin.UserGroups;
+using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
@@ -39,6 +40,8 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetRuntimeStatus();
         services.AddTransient<SystemStatusViewModel>();
         services.AddTransient<SystemStatusWindow>();
+        services.AddTransient<WorkflowOpsDashboardViewModel>();
+        services.AddTransient<WorkflowOpsDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();
         services.AddSiNetUserAdminWpf();
