@@ -190,7 +190,24 @@ string), so the next support investigation has a log trail even when the user ne
 
 ---
 
-## 3. AccService TLS after a clean database
+## 3. Startup schema / migration head gate
+
+Standalone host (`SiNet.App.Wpf`) runs `IDatabaseSchemaGate` before the shell opens:
+
+1. SQL `CanConnect`
+2. Presence of a small set of required tables (legacy Task Management gate)
+3. **No pending EF migrations** — `GetPendingMigrationsAsync` vs migrations in the deployed
+   `SiNetSQLDbContext` assembly (cheap `__EFMigrationsHistory` check; not a full column scan)
+
+If pending migrations exist, startup fails closed with the ids and the operator `Update-Database`
+command (startup project must be `SiNetProjectManagerV2` — see
+[`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md) §4).
+
+The app never auto-applies migrations.
+
+---
+
+## 4. AccService TLS after a clean database
 
 After replacing / wiping the SiNet DB, `SystemSettings` no longer hold `AccService.BaseUrl` or
 `AccService.PinnedCertificateThumbprints`. Startup applies host ACC config from DB
@@ -217,7 +234,7 @@ Related rows (do not confuse them):
 
 ---
 
-## 4. Remediation guidance in «מצב מערכת» (`GuidanceHe`)
+## 5. Remediation guidance in «מצב מערכת» (`GuidanceHe`)
 
 When a status is a **known** operator-fixable problem, the detail column shows a second Hebrew
 line under the summary: what to do next.
@@ -231,7 +248,7 @@ Workflow assignee gaps remain **manual** (User Groups + default assignee) — no
 
 ---
 
-## 5. Explicitly out of scope
+## 6. Explicitly out of scope
 
 - Deleting the dead `SiNet.Application.RuntimeStatus` namespace or any legacy check.
 - Changing the legacy `SystemHealthIndicator` / `SystemHealthWindow` surfaces.
@@ -242,7 +259,7 @@ Workflow assignee gaps remain **manual** (User Groups + default assignee) — no
 
 ---
 
-## 6. Risk and complexity
+## 7. Risk and complexity
 
 | Area | Assessment |
 | --- | --- |

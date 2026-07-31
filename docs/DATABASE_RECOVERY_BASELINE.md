@@ -113,6 +113,26 @@ Per project rules (`.cursor/rules/ef-migrations-immutable.mdc`):
 
 Recovery uses **backups** or **live schema export**, not migration rewrites.
 
+### Apply pending migrations (operator)
+
+Standalone New System startup fails closed when
+`Database.GetPendingMigrationsAsync` reports any migration id still missing from
+`__EFMigrationsHistory` (in addition to the small required-table check). The app does **not**
+call `Database.Migrate()` — the operator applies schema.
+
+`SiNet.App.Wpf` is **not** a valid EF Tools startup project (no `Microsoft.EntityFrameworkCore.Design`
+reference). Use `SiNetProjectManagerV2`:
+
+```powershell
+Update-Database -Context SiNetSQLDbContext -Project SiNet.Infrastructure.Sql -StartupProject SiNetProjectManagerV2
+```
+
+```powershell
+dotnet ef database update --context SiNetSQLDbContext --project src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj --startup-project SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
+```
+
+Only run `Add-Migration` after a real model/configuration change (avoid empty migrations).
+
 ---
 
 ## 5. Operator checklist (recovery validation)

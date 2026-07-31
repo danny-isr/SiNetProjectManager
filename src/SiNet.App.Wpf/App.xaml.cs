@@ -208,9 +208,30 @@ public partial class App : System.Windows.Application
             MessageBox.Show(
                 "מבנה מסד הנתונים אינו עדכני.\n\n" +
                 $"טבלאות חסרות: {tableList}\n\n" +
-                "יש להריץ את efbundle.exe לעדכון המבנה.\n" +
-                "פרטים נוספים: scripts\\README.md",
+                "יש להריץ Update-Database / efbundle לעדכון המבנה.\n" +
+                "פרטים: docs\\DATABASE_RECOVERY_BASELINE.md",
                 "נדרש עדכון מסד נתונים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        if (result.HasPendingMigrations)
+        {
+            var pendingList = string.Join(", ", result.PendingMigrations);
+            StandaloneHostLoggingBootstrap.Fatal(
+                $"Database migrations pending: {pendingList}");
+            MessageBox.Show(
+                "חסרות מיגרציות במסד הנתונים (הבילד מצפה למיגרציה אחרונה שעדיין לא הוחלה).\n\n" +
+                $"מיגרציות ממתינות:\n{pendingList}\n\n" +
+                "הפעל ב-Package Manager Console / CLI:\n" +
+                "Update-Database -Context SiNetSQLDbContext " +
+                "-Project SiNet.Infrastructure.Sql -StartupProject SiNetProjectManagerV2\n\n" +
+                "או:\n" +
+                "dotnet ef database update --context SiNetSQLDbContext " +
+                "--project src\\SiNet.Infrastructure.Sql\\SiNet.Infrastructure.Sql.csproj " +
+                "--startup-project SiNetProjectManagerV2\\SiNetProjectManagerV2.csproj",
+                "נדרש Update-Database",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return false;

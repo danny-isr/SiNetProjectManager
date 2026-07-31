@@ -30,6 +30,10 @@ public sealed class SqlConnectivityLiveTests
         Assert.True(
             result.IsSchemaPresent,
             "Schema incomplete. Missing: " + string.Join(", ", result.MissingTables));
+        Assert.False(
+            result.HasPendingMigrations,
+            "Pending migrations (run Update-Database): " + string.Join(", ", result.PendingMigrations));
+        Assert.True(result.IsReady, "Schema gate not ready after connect + tables + migrations checks.");
     }
 
     // Avoid pulling SecretCatalog into assert message via type if Secrets not imported — keep string.
