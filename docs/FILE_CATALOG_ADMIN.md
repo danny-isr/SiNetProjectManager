@@ -65,7 +65,7 @@ Seeded catalog rows with `Code` (JobType חומר כללי) — **canonical titl
 | Code | Title | Folder | Type | Required | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `QuoteEstimate` | אומדן_הצעה | תכתובת → ניהול_כספי | `.xlsx` | yes | Gates `PrepareQuoteCalculation` |
-| `QuoteDocument` | הצעת_מחיר | תכתובת → ניהול_כספי | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false`. Set `TemplateLocation` for «אלטרנטיבה מתבנית» |
+| `QuoteDocument` | הצעות_מחיר | תכתובת → ניהול_כספי | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false`. Office name is plural (not «הצעת_מחיר»). Set `TemplateLocation` for «אלטרנטיבה מתבנית» |
 | `QuoteClientApproval` | אישור_לקוח_להצעה | תכתובת → ניהול_כספי | `.pdf` | yes | Gates `FollowQuoteApproval` approve; `OutSidData=true` so email tagging can target it (FollowQuote Email-first). Physical FileServer/ACC file still required before `QuoteApprovedByClient` |
 | `QuoteClientRequest` | דרישת_המזמין_להצעת_מחיר | תכתובת → ניהול_כספי → **הצעת_מחיר** | `.pdf` | yes | `OutSidData=true` so email ACC tagging can target it during `FileQuoteMaterial`. See [`QUOTE_CLIENT_REQUEST_CATALOG.md`](./manual-tests/QUOTE_CLIENT_REQUEST_CATALOG.md) |
 | `QuoteSendDocument` | הצעה_לשליחה | תכתובת → ניהול_כספי | `.pdf` | **no** | SendQuote attach: always file/attach as this slot. Physical base-name cap = max DB title length + 2 (currently 35). See [`QUOTE_SEND_DOCUMENT_CATALOG.md`](./manual-tests/QUOTE_SEND_DOCUMENT_CATALOG.md) |

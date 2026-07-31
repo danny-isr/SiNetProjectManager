@@ -18,7 +18,7 @@ namespace SiNet.App.Wpf.Tests.ProjectWork;
 public sealed class ProjectWorkRequiredOmdanTests
 {
     private const string RequiredOmdanMessage = "יש להעלות את קובץ אומדן הצעה לפני סיום המשימה.";
-    private const string RequiredQuoteMessage = "יש להעלות את קובץ הצעת מחיר לפני סיום המשימה.";
+    private const string RequiredQuoteMessage = "יש להעלות את קובץ הצעות מחיר לפני סיום המשימה.";
 
     private static (ProjectFileTreeDto Tree, ScannedFile[] Scanned) BuildTreeWithCodes(
         bool estimateRequired = true,
@@ -45,7 +45,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         {
             files.Add(new ProjectFileDefinitionDto(
                 FileId: 101,
-                BaseName: "הצעת מחיר",
+                BaseName: "הצעות מחיר",
                 Extension: ".docx",
                 StorageDestination: FileStorageDestination.FileServer,
                 FolderId: 10,
@@ -325,7 +325,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Equal(4, rows.Count);
         Assert.Contains(rows, r => r.Code == ProjectFileCatalogCodes.QuoteEstimate && r.Title == ProjectFileRequiredOmdanSeedData.DisplayTitle);
         var quote = Assert.Single(rows, r => r.Code == ProjectFileCatalogCodes.QuoteDocument);
-        Assert.Equal("הצעת_מחיר", quote.Title);
+        Assert.Equal("הצעות_מחיר", quote.Title);
         Assert.Equal(".docx", quote.Typefile);
         Assert.False(quote.OutSidData);
         Assert.Equal(financeFolder.Id, quote.Folderid);
@@ -513,7 +513,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         db.ProjectFiles.Add(new ProjectFile
         {
             Id = 10,
-            Title = "הצעת_מחיר",
+            Title = "הצעות_מחיר",
             Number = 1,
             TypeProjId = 9,
             Folderid = 3,
@@ -539,7 +539,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Contains("cleanup", result, StringComparison.OrdinalIgnoreCase);
         var keeper = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument);
         Assert.Equal(10, keeper.Id);
-        Assert.Equal("הצעת_מחיר", keeper.Title);
+        Assert.Equal("הצעות_מחיר", keeper.Title);
         Assert.Equal(@"C:\templates\quote.docx", keeper.TemplateLocation);
         Assert.Equal(3, keeper.Folderid);
         Assert.Null(await db.ProjectFiles.FirstOrDefaultAsync(f => f.Id == 11));
@@ -572,25 +572,25 @@ public sealed class ProjectWorkRequiredOmdanTests
             OutSidData = false,
             TemplateLocation = null,
         });
-        // Office row that still holds the template under the space alias.
+        // Office row that still holds the template under the plural space alias.
         db.ProjectFiles.Add(new ProjectFile
         {
             Id = 21,
-            Title = "הצעת מחיר",
+            Title = "הצעות מחיר",
             Number = 2,
             TypeProjId = 9,
             Folderid = 3,
             Typefile = ".docx",
-            TemplateLocation = @"D:\office\templates\hatzaat_mechir.docx",
+            TemplateLocation = @"D:\office\templates\hatzaot_mechir.docx",
         });
         await db.SaveChangesAsync();
 
         _ = await ProjectFileCatalogSeedData.EnsureAsync(db);
 
         var keeper = await db.ProjectFiles.SingleAsync(f => f.Code == ProjectFileCatalogCodes.QuoteDocument);
-        Assert.Equal(@"D:\office\templates\hatzaat_mechir.docx", keeper.TemplateLocation);
-        Assert.Equal("הצעת_מחיר", keeper.Title);
-        Assert.Empty(await db.ProjectFiles.Where(f => f.Title == "הצעת מחיר").ToListAsync());
+        Assert.Equal(@"D:\office\templates\hatzaot_mechir.docx", keeper.TemplateLocation);
+        Assert.Equal("הצעות_מחיר", keeper.Title);
+        Assert.Empty(await db.ProjectFiles.Where(f => f.Title == "הצעות מחיר").ToListAsync());
     }
 
     [Fact]

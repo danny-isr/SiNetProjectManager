@@ -36,7 +36,8 @@ public static class ProjectFileCatalogSeedData
             ]),
         new ProjectFileCatalogDefinition(
             Code: ProjectFileCatalogCodes.QuoteDocument,
-            DefaultTitle: "\u05D4\u05E6\u05E2\u05EA_\u05DE\u05D7\u05D9\u05E8", // הצעת_מחיר
+            // Office / FileServer slot is historically plural «הצעות_מחיר» — keep that name.
+            DefaultTitle: "\u05D4\u05E6\u05E2\u05D5\u05EA_\u05DE\u05D7\u05D9\u05E8", // הצעות_מחיר
             JobTypeTitle: SqlProjectCreateService.DefaultJobTypeTitle,
             FolderTitle: "\u05E0\u05D9\u05D4\u05D5\u05DC_\u05DB\u05E1\u05E4\u05D9", // ניהול_כספי
             ParentFolderTitle: "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA", // תכתובת
@@ -45,7 +46,9 @@ public static class ProjectFileCatalogSeedData
             OutSidData: false,
             LegacyTitles:
             [
-                "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעת מחיר (space alias)
+                "\u05D4\u05E6\u05E2\u05D5\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעות מחיר (space alias)
+                "\u05D4\u05E6\u05E2\u05EA_\u05DE\u05D7\u05D9\u05E8", // הצעת_מחיר (singular — older seed)
+                "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעת מחיר (singular space)
             ]),
         new ProjectFileCatalogDefinition(
             Code: ProjectFileCatalogCodes.QuoteClientApproval,

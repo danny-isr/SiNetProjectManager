@@ -466,7 +466,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
         if (RequiresQuoteDocumentPhysicalFile(context) && !HasRequiredCatalogPhysical(QuoteDocumentCatalogCode))
         {
-            StatusMessage = "יש להעלות את קובץ הצעת מחיר לפני סיום המשימה.";
+            StatusMessage = "יש להעלות את קובץ הצעות מחיר לפני סיום המשימה.";
             return false;
         }
 
