@@ -73,6 +73,32 @@ public sealed class EmailAccSelectionHandlerStatusTests
         Assert.False(handler.CanUpload(RowWithAttachments(), isConnected: false));
     }
 
+    [Fact]
+    public void WhenNoAttachmentsAndNotFiledThenCannotUpload()
+    {
+        var handler = CreateHandlerWithCoordinator();
+        var row = RowWithAttachments() with { AttachmentCount = 0, IsFiledToProject = false };
+
+        Assert.False(handler.CanUpload(row, isConnected: true));
+        Assert.Equal(
+            "אין צרופות ולא משויך לפרויקט — לא מועלה ל-ACC.",
+            handler.DescribeUploadDisabledReason(row, isConnected: true));
+    }
+
+    [Fact]
+    public void WhenNoAttachmentsButFiledToProjectThenCanUpload()
+    {
+        var handler = CreateHandlerWithCoordinator();
+        var row = RowWithAttachments() with
+        {
+            AttachmentCount = 0,
+            IsFiledToProject = true,
+            AccProcessingStatus = EmailAccProcessingStatus.MissingInAcc,
+        };
+
+        Assert.True(handler.CanUpload(row, isConnected: true));
+    }
+
     private static EmailAccSelectionHandler CreateHandlerWithCoordinator()
     {
         var coordinator = new Mock<IEmailAccUploadCoordinator>();

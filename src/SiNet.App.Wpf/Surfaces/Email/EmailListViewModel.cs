@@ -733,6 +733,44 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         return await _accHandler.TryPassiveIngestAsync(row, isStillSelected, cancellationToken).ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// N4.3: after mailbox File-to-project, ingest zero-attachment (or not-yet-uploaded) messages.
+    /// Best-effort — filing already succeeded.
+    /// </summary>
+    internal async Task TryIngestAfterProjectFileAsync(EmailListRow row)
+    {
+        if (_accHandler is null || !IsConnected)
+        {
+            return;
+        }
+
+        if (!EmailAccIngestGates.IsEligibleForAccIngest(row.HasAttachments, row.IsFiledToProject))
+        {
+            return;
+        }
+
+        if (row.AccProcessingStatus is EmailAccProcessingStatus.UploadedToAcc
+            or EmailAccProcessingStatus.MovedToProject
+            or EmailAccProcessingStatus.LockedByOtherUser
+            or EmailAccProcessingStatus.UploadInProgress)
+        {
+            return;
+        }
+
+        try
+        {
+            await _accHandler
+                .TryPassiveIngestAsync(
+                    row,
+                    () => string.Equals(SelectedEmail?.Id, row.Id, StringComparison.Ordinal))
+                .ConfigureAwait(true);
+        }
+        catch
+        {
+            // Filing already succeeded; ACC ingest failure is surfaced via row status.
+        }
+    }
+
     internal async Task SyncThreadMappingsFromPageAsync(IReadOnlyList<EmailSummary> summaries)
     {
         if (_threadMappingSync is null || summaries.Count == 0)

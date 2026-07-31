@@ -232,7 +232,8 @@ public sealed class EmailAccPipelineTests
             0);
 
         var text = EmailAccUploadOutcomeDisplay.ResolveFailureMessage(result);
-        Assert.Contains("לא רלוונטי", text, StringComparison.Ordinal);
+        Assert.Contains("לא מועלה ל-ACC", text, StringComparison.Ordinal);
+        Assert.Contains("צרופות", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -290,6 +291,35 @@ public sealed class EmailAccPipelineTests
         var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");
         Assert.Contains("IEmailAccIngestionExecutor", extensions, StringComparison.Ordinal);
         Assert.Contains("NativeEmailAccIngestionExecutor", extensions, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Native_ingest_n43_eligibility_and_body_pdf_port()
+    {
+        var executor = ReadRepoFile(
+            "src/SiNet.Infrastructure.Sql/Services/Email/Acc/NativeEmailAccIngestionExecutor.cs");
+        var wpfDi = ReadRepoFile("src/SiNet.App.Wpf/NewSystemWpfServiceCollectionExtensions.cs");
+        var handler = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailAccSelectionHandler.cs");
+        var listVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        var gates = ReadRepoFile("src/SiNet.Application/Email/Acc/EmailAccIngestGates.cs");
+        var n4Doc = ReadRepoFile("docs/NATIVE_EMAIL_ACC_INGEST.md");
+
+        Assert.Contains("IEmailBodyPdfRenderer", executor, StringComparison.Ordinal);
+        Assert.Contains("TryUploadBodyPdfAsync", executor, StringComparison.Ordinal);
+        Assert.Contains("EmailBodyAttachmentIndex", executor, StringComparison.Ordinal);
+        Assert.Contains("Missing 00_Email.pdf", executor, StringComparison.Ordinal);
+        Assert.Contains("re-ingesting (not AlreadyProcessed)", executor, StringComparison.Ordinal);
+        Assert.Contains("AllowZeroAttachmentIngest", executor, StringComparison.Ordinal);
+        Assert.Contains("SkippedNotRelevant", executor, StringComparison.Ordinal);
+        Assert.Contains("skip already has AccItemId", executor, StringComparison.Ordinal);
+        Assert.DoesNotContain("BodyPdfImageRefreshDone", executor, StringComparison.Ordinal);
+        Assert.Contains("IEmailBodyPdfRenderer", wpfDi, StringComparison.Ordinal);
+        Assert.Contains("WpfEmailBodyPdfRenderer", wpfDi, StringComparison.Ordinal);
+        Assert.Contains("IsEligibleForAccIngest", handler, StringComparison.Ordinal);
+        Assert.Contains("IsEligibleForAccIngest", gates, StringComparison.Ordinal);
+        Assert.Contains("TryIngestAfterProjectFileAsync", listVm, StringComparison.Ordinal);
+        Assert.Contains("N4.3", n4Doc, StringComparison.Ordinal);
+        Assert.Contains("Slice N5", n4Doc, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shell;
+using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
@@ -144,12 +145,46 @@ public partial class App : System.Windows.Application
             ShutdownMode = ShutdownMode.OnMainWindowClose;
             shell.Show();
 
+            ScheduleEmailBodyPdfRendererInit();
+
             StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System ready.");
         }
         finally
         {
             splash.Close();
         }
+    }
+
+    /// <summary>
+    /// Non-fatal warmup for ACC Inbox <c>00_Email.pdf</c> (N4). Lazy init still happens on first render.
+    /// </summary>
+    private void ScheduleEmailBodyPdfRendererInit()
+    {
+        var renderer = _services?.GetService<WpfEmailBodyPdfRenderer>();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                await renderer.InitializeAsync(_shutdownCts.Token).ConfigureAwait(true);
+                StandaloneHostLoggingBootstrap.Info(
+                    $"[STARTUP] Email body PDF renderer ready={renderer.IsAvailable}");
+            }
+            catch (OperationCanceledException)
+            {
+                // shutdown
+            }
+            catch (Exception ex)
+            {
+                StandaloneHostLoggingBootstrap.Warning(
+                    ex,
+                    "[STARTUP] Email body PDF renderer init failed (non-fatal).");
+            }
+        });
     }
 
     private async Task<bool> EnsureVaultDatabaseReadyAsync()

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Settings;
@@ -17,26 +18,41 @@ namespace SiNet.Infrastructure.Sql.Services.Email.Acc;
 /// Standalone ACC inbox ingest orchestrator. Uses native Gmail + AccService ports
 /// (no SiNetSQL <c>EmailIngestionService</c> / V2 bridge). See <c>docs/NATIVE_EMAIL_ACC_INGEST.md</c>.
 /// </summary>
-public sealed class NativeEmailAccIngestionExecutor(
-    IDbContextFactory<SiNetSQLDbContext> dbFactory,
-    IEmailGateway emailGateway,
-    IAccInboxBootstrapService inboxBootstrap,
-    IAccFolderPathService folderPathService,
-    IAccFileUploadService fileUploadService,
-    IAppLogger logger) : IEmailAccIngestionExecutor
+public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
 {
-    private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
-        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
-    private readonly IEmailGateway _emailGateway =
-        emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
-    private readonly IAccInboxBootstrapService _inboxBootstrap =
-        inboxBootstrap ?? throw new ArgumentNullException(nameof(inboxBootstrap));
-    private readonly IAccFolderPathService _folderPathService =
-        folderPathService ?? throw new ArgumentNullException(nameof(folderPathService));
-    private readonly IAccFileUploadService _fileUploadService =
-        fileUploadService ?? throw new ArgumentNullException(nameof(fileUploadService));
-    private readonly IAppLogger _logger =
-        logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
+    private readonly IEmailGateway _emailGateway;
+    private readonly IAccInboxBootstrapService _inboxBootstrap;
+    private readonly IAccFolderPathService _folderPathService;
+    private readonly IAccFileUploadService _fileUploadService;
+    private readonly IAppLogger _logger;
+    private readonly IEmailBodyPdfRenderer? _bodyPdfRenderer;
+
+    public NativeEmailAccIngestionExecutor(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        IEmailGateway emailGateway,
+        IAccInboxBootstrapService inboxBootstrap,
+        IAccFolderPathService folderPathService,
+        IAccFileUploadService fileUploadService,
+        IAppLogger logger,
+        IEmailBodyPdfRenderer? bodyPdfRenderer = null)
+    {
+        _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+        _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
+        _inboxBootstrap = inboxBootstrap ?? throw new ArgumentNullException(nameof(inboxBootstrap));
+        _folderPathService = folderPathService ?? throw new ArgumentNullException(nameof(folderPathService));
+        _fileUploadService = fileUploadService ?? throw new ArgumentNullException(nameof(fileUploadService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _bodyPdfRenderer = bodyPdfRenderer;
+
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H1",
+            "NativeEmailAccIngestionExecutor.ctor",
+            "executor constructed",
+            new { rendererRegistered = bodyPdfRenderer is not null });
+        // #endregion
+    }
 
     public async Task<EmailAccUploadResult> IngestToInboxAsync(
         EmailAccUploadCommand command,
@@ -49,6 +65,19 @@ public sealed class NativeEmailAccIngestionExecutor(
         var actingLogin = string.IsNullOrWhiteSpace(command.ActingUserLogin)
             ? Environment.UserName
             : command.ActingUserLogin.Trim();
+
+        // #region agent log
+        AgentDebugNdjson.Write(
+            "H1",
+            "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+            "ingest enter",
+            new
+            {
+                gmailMessageId = command.GmailMessageId,
+                rendererRegistered = _bodyPdfRenderer is not null,
+                rendererAvailable = _bodyPdfRenderer?.IsAvailable,
+            });
+        // #endregion
 
         EmailMessageDetails? details;
         try
@@ -86,10 +115,22 @@ public sealed class NativeEmailAccIngestionExecutor(
 
         var messageUniqueId = EmailMessageIdentity.GetMessageUniqueId(internetMessageId, details.MessageId);
         var attachments = details.Attachments ?? [];
-        if (attachments.Count == 0)
+
+        // N4.3: zero-attachment ingest only when mailbox-filed / recovery / post-File (AllowZeroAttachmentIngest).
+        if (attachments.Count == 0 && !command.AllowZeroAttachmentIngest)
         {
+            _logger.Info(
+                $"[NativeAccIngest] Skip — no attachments and AllowZeroAttachmentIngest=false MessageUniqueId={messageUniqueId}");
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H10",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "skip not eligible N4.3",
+                new { messageUniqueId, gmailMessageId = command.GmailMessageId },
+                runId: "post-fix");
+            // #endregion
             return new EmailAccUploadResult(
-                EmailAccUploadOutcome.SkippedNoAttachments,
+                EmailAccUploadOutcome.SkippedNotRelevant,
                 messageUniqueId,
                 null,
                 0,
@@ -111,6 +152,20 @@ public sealed class NativeEmailAccIngestionExecutor(
                 .ConfigureAwait(false);
             if (shortCircuit is not null)
             {
+                // #region agent log
+                AgentDebugNdjson.Write(
+                    "H2",
+                    "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                    "short-circuit return",
+                    new
+                    {
+                        messageUniqueId,
+                        inboxId = existing.Id,
+                        status = existing.Status.ToString(),
+                        outcome = shortCircuit.Outcome.ToString(),
+                        folderId = existing.InboxAccFolderId,
+                    });
+                // #endregion
                 return shortCircuit;
             }
 
@@ -245,6 +300,30 @@ public sealed class NativeEmailAccIngestionExecutor(
             existing.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H5",
+                "NativeEmailAccIngestionExecutor.IngestToInboxAsync",
+                "before TryUploadBodyPdfAsync",
+                new
+                {
+                    inboxId = existing.Id,
+                    msgFolderId,
+                    attachmentCount = attachments.Count,
+                    htmlLen = details.HtmlBody?.Length ?? 0,
+                    textLen = details.BodyText?.Length ?? 0,
+                });
+            // #endregion
+
+            await TryUploadBodyPdfAsync(
+                    db,
+                    existing,
+                    details,
+                    inboxProjectId,
+                    msgFolderId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             var uploadedCount = 0;
             var attachmentIndex = 0;
             foreach (var attachment in attachments)
@@ -349,7 +428,22 @@ public sealed class NativeEmailAccIngestionExecutor(
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            if (uploadedCount == 0)
+            // Succeed when the message folder exists on ACC. Attachments are optional (N4);
+            // if Gmail reported attachments but none uploaded, fail.
+            if (string.IsNullOrWhiteSpace(existing.InboxAccFolderId))
+            {
+                return await FailAndReleaseAsync(
+                        db,
+                        existing,
+                        messageUniqueId,
+                        attachments.Count,
+                        "לא נוצרה תיקיית הודעה ב-ACC Inbox.",
+                        stopwatch.ElapsedMilliseconds,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (attachments.Count > 0 && uploadedCount == 0)
             {
                 return await FailAndReleaseAsync(
                         db,
@@ -409,8 +503,64 @@ public sealed class NativeEmailAccIngestionExecutor(
             return null;
         }
 
+        var bodyPdfReady = await db.EmailInboxAttachments
+            .AsNoTracking()
+            .AnyAsync(
+                a => a.MessageId == existing.Id
+                     && a.AttachmentIndex == AccInboxLayout.EmailBodyAttachmentIndex
+                     && a.AccItemId != null,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        // N4.1: never treat Uploaded+folder as final when 00_Email.pdf is still missing and a
+        // renderer exists — first ingest often raced WebView2 init and skipped the body PDF.
+        // Do not demote Moved (project filing already completed).
+        if (!bodyPdfReady
+            && _bodyPdfRenderer is not null
+            && existing.Status == EmailInboxStatus.Uploaded)
+        {
+            _logger.Info(
+                $"[NativeAccIngest] Body PDF missing for MessageUniqueId={messageUniqueId} — re-ingesting (not AlreadyProcessed).");
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H2",
+                "TryShortCircuitAlreadyProcessedAsync",
+                "force re-ingest missing body PDF",
+                new { messageUniqueId, inboxId = existing.Id, status = existing.Status.ToString() });
+            // #endregion
+            existing.Status = EmailInboxStatus.Error;
+            existing.Error = "Missing 00_Email.pdf — retrying body PDF upload.";
+            existing.UpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return null;
+        }
+
+        if (!bodyPdfReady && existing.Status == EmailInboxStatus.Moved)
+        {
+            _logger.Warn(
+                $"[NativeAccIngest] Body PDF missing on Moved message MessageUniqueId={messageUniqueId} — not demoting; open ACC MSG folder to verify.");
+        }
+
+        // Zero-attachment messages: folder + (body PDF or no renderer) = done.
+        if (expectedAttachmentCount == 0
+            && !string.IsNullOrWhiteSpace(existing.InboxAccFolderId))
+        {
+            return new EmailAccUploadResult(
+                EmailAccUploadOutcome.AlreadyProcessed,
+                messageUniqueId,
+                existing.Id,
+                0,
+                0,
+                null,
+                stopwatch.ElapsedMilliseconds);
+        }
+
         var uploadedAttachmentCount = await db.EmailInboxAttachments
-            .CountAsync(a => a.MessageId == existing.Id && a.AccItemId != null, cancellationToken)
+            .CountAsync(
+                a => a.MessageId == existing.Id
+                     && a.AccItemId != null
+                     && a.AttachmentIndex != AccInboxLayout.EmailBodyAttachmentIndex,
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (uploadedAttachmentCount > 0 && uploadedAttachmentCount >= expectedAttachmentCount)
@@ -431,6 +581,232 @@ public sealed class NativeEmailAccIngestionExecutor(
         existing.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return null;
+    }
+
+    private async Task TryUploadBodyPdfAsync(
+        SiNetSQLDbContext db,
+        EmailInboxMessage message,
+        EmailMessageDetails details,
+        string inboxProjectId,
+        string msgFolderId,
+        CancellationToken cancellationToken)
+    {
+        if (_bodyPdfRenderer is null)
+        {
+            _logger.Warn("[NativeAccIngest] Body PDF renderer not registered — skipping 00_Email.pdf.");
+            // #region agent log
+            AgentDebugNdjson.Write("H1", "TryUploadBodyPdfAsync", "skip renderer null", new { inboxId = message.Id });
+            // #endregion
+            return;
+        }
+
+        var htmlBody = details.HtmlBody;
+        var textBody = details.BodyText;
+        var hasHtml = !string.IsNullOrWhiteSpace(htmlBody);
+        var hasText = !string.IsNullOrWhiteSpace(textBody);
+        if (!hasHtml && !hasText)
+        {
+            _logger.Info("[NativeAccIngest] Email has no body content — skipping 00_Email.pdf.");
+            // #region agent log
+            AgentDebugNdjson.Write("H3", "TryUploadBodyPdfAsync", "skip empty body", new { inboxId = message.Id });
+            // #endregion
+            return;
+        }
+
+        string? pdfPath = null;
+        try
+        {
+            var existingRow = await db.EmailInboxAttachments
+                .FirstOrDefaultAsync(
+                    a => a.MessageId == message.Id
+                         && a.AttachmentIndex == AccInboxLayout.EmailBodyAttachmentIndex,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            // N4.3: do not re-render/re-upload when ACC already has 00_Email.pdf.
+            if (existingRow is not null && !string.IsNullOrEmpty(existingRow.AccItemId))
+            {
+                // #region agent log
+                AgentDebugNdjson.Write(
+                    "H2",
+                    "TryUploadBodyPdfAsync",
+                    "skip already has AccItemId",
+                    new { inboxId = message.Id, accItemId = existingRow.AccItemId },
+                    runId: "post-fix");
+                // #endregion
+                return;
+            }
+
+            pdfPath = Path.Combine(Path.GetTempPath(), $"email_body_{Guid.NewGuid():N}.pdf");
+            var inlineCount = details.InlineImages?.Count ?? 0;
+            var htmlDocument = EmailBodyHtmlDocumentBuilder.Build(
+                details.Subject,
+                details.From.ToString(),
+                details.ReceivedAt,
+                details.InternetMessageId ?? message.InternetMessageId,
+                hasHtml ? htmlBody! : textBody!,
+                isPlainTextFallback: !hasHtml);
+
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H6",
+                "TryUploadBodyPdfAsync",
+                "render with inline images",
+                new
+                {
+                    inboxId = message.Id,
+                    inlineCount,
+                    htmlLen = htmlDocument.Length,
+                    hasCidLeft = htmlDocument.Contains("cid:", StringComparison.OrdinalIgnoreCase),
+                    existingAccItemId = existingRow?.AccItemId,
+                },
+                runId: "post-fix");
+            // #endregion
+
+            _logger.Info(
+                $"[NativeAccIngest] Rendering body PDF HtmlLen={htmlDocument.Length} inline={inlineCount} rendererAvailable={_bodyPdfRenderer.IsAvailable}");
+            var generated = await _bodyPdfRenderer
+                .RenderHtmlToPdfAsync(htmlDocument, pdfPath, details.InlineImages, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!generated || !File.Exists(pdfPath))
+            {
+                _logger.Warn(
+                    $"[NativeAccIngest] Body PDF render failed (non-fatal). available={_bodyPdfRenderer.IsAvailable} pathExists={File.Exists(pdfPath)}");
+                // #region agent log
+                AgentDebugNdjson.Write(
+                    "H4",
+                    "TryUploadBodyPdfAsync",
+                    "render failed",
+                    new
+                    {
+                        inboxId = message.Id,
+                        available = _bodyPdfRenderer.IsAvailable,
+                        pathExists = File.Exists(pdfPath),
+                        htmlLen = htmlDocument.Length,
+                        plainText = !hasHtml,
+                    });
+                // #endregion
+                return;
+            }
+
+            var pdfBytes = await File.ReadAllBytesAsync(pdfPath, cancellationToken).ConfigureAwait(false);
+            var sha256 = EmailMessageIdentity.ComputeSha256Hex(pdfBytes);
+            var fileName = AccInboxLayout.EmailBodyFileName;
+
+            EmailInboxAttachment dbAttachment;
+            if (existingRow is not null)
+            {
+                dbAttachment = existingRow;
+                dbAttachment.ContentSha256 = sha256;
+                dbAttachment.SavedFileName = fileName;
+            }
+            else
+            {
+                dbAttachment = new EmailInboxAttachment
+                {
+                    MessageId = message.Id,
+                    AttachmentIndex = AccInboxLayout.EmailBodyAttachmentIndex,
+                    OriginalFileName = fileName,
+                    SavedFileName = fileName,
+                    ContentSha256 = sha256,
+                };
+                db.EmailInboxAttachments.Add(dbAttachment);
+            }
+
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            // H9 (runtime): AccService returns HTTP 500 when versioning body PDF via ExistingItemId
+            // for many messages; first upload (null ExistingItemId) succeeds. Retry as a new file.
+            var existingItemId = dbAttachment.AccItemId;
+            AccFileUploadResult upload;
+            try
+            {
+                upload = await _fileUploadService
+                    .UploadAsync(
+                        new AccFileUploadRequest(inboxProjectId, pdfPath, fileName)
+                        {
+                            TargetFolderId = msgFolderId,
+                            ExistingItemId = existingItemId,
+                        },
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex) when (!string.IsNullOrWhiteSpace(existingItemId))
+            {
+                // #region agent log
+                AgentDebugNdjson.Write(
+                    "H9",
+                    "TryUploadBodyPdfAsync",
+                    "version upload failed — retry without ExistingItemId",
+                    new
+                    {
+                        inboxId = message.Id,
+                        existingItemId,
+                        errorType = ex.GetType().Name,
+                        error = ex.Message,
+                    },
+                    runId: "post-fix");
+                // #endregion
+                _logger.Warn(
+                    $"[NativeAccIngest] Body PDF version upload failed ({ex.Message}) — retrying as new file.");
+                upload = await _fileUploadService
+                    .UploadAsync(
+                        new AccFileUploadRequest(inboxProjectId, pdfPath, fileName)
+                        {
+                            TargetFolderId = msgFolderId,
+                            ExistingItemId = null,
+                        },
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            dbAttachment.AccItemId = upload.ItemId;
+            dbAttachment.AccVersionId = upload.VersionId;
+            message.UpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _logger.Info($"[NativeAccIngest] Body PDF uploaded AccItemId={upload.ItemId}");
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H5",
+                "TryUploadBodyPdfAsync",
+                "upload succeeded",
+                new
+                {
+                    inboxId = message.Id,
+                    accItemId = upload.ItemId,
+                    msgFolderId,
+                    bytes = pdfBytes.Length,
+                    retriedWithoutExistingItemId = !string.IsNullOrWhiteSpace(existingItemId)
+                        && !string.Equals(existingItemId, upload.ItemId, StringComparison.Ordinal),
+                },
+                runId: "post-fix");
+            // #endregion
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[NativeAccIngest] Body PDF skipped (non-fatal): {ex.Message}");
+            // #region agent log
+            AgentDebugNdjson.Write(
+                "H5",
+                "TryUploadBodyPdfAsync",
+                "upload/exception",
+                new { inboxId = message.Id, errorType = ex.GetType().Name, error = ex.Message },
+                runId: "post-fix");
+            // #endregion
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(pdfPath))
+            {
+                try { File.Delete(pdfPath); }
+                catch { /* best-effort */ }
+            }
+        }
     }
 
     private static async Task<bool> TryAcquireLeaseAsync(
@@ -619,4 +995,5 @@ public sealed class NativeEmailAccIngestionExecutor(
 
         return value.Length <= maxLength ? value : value[..maxLength];
     }
+
 }

@@ -193,6 +193,21 @@ https://mail.google.com/mail/u/0/#search/rfc822msgid:{EncodedMessageId}
   display list (`AllDisplayableAttachments`) but not part of the native MIME
   attachment set.
 
+### 5.5 Archive attachments (ZIP / RAR) — target policy (added 2026-07-31)
+
+> Implementation status: Legacy + Jumbo extract ZIP today; Native Gmail ingest
+> does not yet (N5 proposed — `docs/NATIVE_EMAIL_ACC_INGEST.md`).
+
+- Archive attachments (`.zip`, and `.rar` when supported) are **extracted** into
+  an ACC Inbox subfolder under `Attachments/{archiveName}/` so contents can be
+  viewed.
+- **Tagging and Move treat the archive as one work unit** (one taggable inbox
+  attachment row for the archive), not one tag per extracted file.
+- Extracted children uploaded for viewing/filing are limited to business types:
+  **DWG, PDF, and common image formats**. Fonts and other non-business types are
+  not uploaded as filing candidates.
+- RAR support is optional until an approved extraction library is selected.
+
 ### 5.4 Gmail DOM is not a source of truth for attachments
 
 - The Gmail DOM **must not** be used to identify attachments or to validate
@@ -227,6 +242,19 @@ https://mail.google.com/mail/u/0/#search/rfc822msgid:{EncodedMessageId}
   - `00_Email.pdf` — the rendered email body.
   - `manifest.json` — the sidecar manifest for the message folder.
   - `Attachments\` — child folder for the message's attachments.
+- **When a message belongs in ACC Inbox** (eligibility — Native N4.3, 2026-07-31):
+  - **Has business Gmail attachments** → ingest to ACC Inbox (passive select /
+    explicit upload).
+  - **No attachments** → ingest **only after mailbox project association**
+    (Gmail label filed — §6.6). Browsing an unfiled, attachment-less email
+    must **not** create ACC folders or upload `00_Email.pdf`.
+  - Layout when ingested: `00_Email.pdf` (best-effort) + `manifest.json` +
+    `Attachments\` (may be empty). See `docs/NATIVE_EMAIL_ACC_INGEST.md` N4.3.
+- **No re-upload when ACC already has the file:** if DB cache has a valid
+  `AccItemId` for that attachment / body PDF (and short-circuit / status says
+  present), do **not** print or upload again. Re-upload only when ACC presence
+  is missing / stale (`MissingInAcc` / no `AccItemId`). Do not force “refresh”
+  uploads on every select.
 - Sidecar JSON files (e.g. `<file>.<ext>.json`) are **metadata sidecars**, not
   competing versions. They must not be reported as extension conflicts against
   the main file. (Implementation of this rule is out of scope for this

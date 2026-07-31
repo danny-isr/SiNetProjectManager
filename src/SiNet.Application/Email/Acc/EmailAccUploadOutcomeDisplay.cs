@@ -19,7 +19,7 @@ public static class EmailAccUploadOutcomeDisplay
             {
                 EmailAccUploadOutcome.InProgress => "בטיפול על ידי משתמש אחר",
                 EmailAccUploadOutcome.SkippedNoAttachments => "אין צרופות להעלאה",
-                EmailAccUploadOutcome.SkippedNotRelevant => "מייל לא רלוונטי ל-ACC",
+                EmailAccUploadOutcome.SkippedNotRelevant => "אין צרופות ולא משויך לפרויקט — לא מועלה ל-ACC",
                 EmailAccUploadOutcome.BackendNotAvailable => "העלאה ל-ACC אינה זמינה (Backend לא מוגדר)",
                 EmailAccUploadOutcome.Failed => upload.ErrorMessage ?? "העלאה ל-ACC נכשלה",
                 _ => upload.ErrorMessage,
@@ -29,7 +29,7 @@ public static class EmailAccUploadOutcomeDisplay
         upload.Outcome switch
         {
             EmailAccUploadOutcome.SkippedNoAttachments => "אין צרופות Gmail להעלאה ל-ACC",
-            EmailAccUploadOutcome.SkippedNotRelevant => "מייל לא רלוונטי ל-ACC — לא הועלה",
+            EmailAccUploadOutcome.SkippedNotRelevant => "אין צרופות ולא משויך לפרויקט — לא מועלה ל-ACC",
             EmailAccUploadOutcome.BackendNotAvailable =>
                 "העלאה ל-ACC אינה זמינה — ודא שה-host מחובר ל-ACC Inbox",
             EmailAccUploadOutcome.InProgress => "המייל בטיפול על ידי משתמש אחר — ממתין לסיום…",

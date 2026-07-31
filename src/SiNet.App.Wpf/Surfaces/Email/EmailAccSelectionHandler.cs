@@ -38,8 +38,8 @@ internal sealed class EmailAccSelectionHandler
         row is not null
         && isConnected
         && (_uploadCoordinator is not null || _ingestQueue is not null)
-        && row.HasAttachments
         && !_busyRowIds.Contains(row.Id)
+        && EmailAccIngestGates.IsEligibleForAccIngest(row.HasAttachments, row.IsFiledToProject)
         && row.AccProcessingStatus is not (
             EmailAccProcessingStatus.UploadedToAcc
             or EmailAccProcessingStatus.MovedToProject
@@ -64,9 +64,9 @@ internal sealed class EmailAccSelectionHandler
             return "העלאה ל-ACC אינה זמינה.";
         }
 
-        if (!row.HasAttachments)
+        if (!EmailAccIngestGates.IsEligibleForAccIngest(row.HasAttachments, row.IsFiledToProject))
         {
-            return "אין קבצים מצורפים.";
+            return "אין צרופות ולא משויך לפרויקט — לא מועלה ל-ACC.";
         }
 
         if (row.AccProcessingStatus == EmailAccProcessingStatus.LockedByOtherUser)
@@ -131,7 +131,8 @@ internal sealed class EmailAccSelectionHandler
     }
 
     /// <summary>
-    /// Legacy parity: on email selection, sync ACC status and passively ingest when attachments exist.
+    /// On email selection, sync ACC status and passively ingest when N4.3-eligible
+    /// (has attachments, or mailbox-filed to a project).
     /// </summary>
     public async Task<(EmailListRow Row, EmailAccInboxStatus? Status)> TryPassiveIngestAsync(
         EmailListRow row,
@@ -151,7 +152,8 @@ internal sealed class EmailAccSelectionHandler
 
         row = syncedRow;
 
-        if (!row.HasAttachments)
+        // N4.3: unfiled + no attachments → status sync only, no AccService / PDF work.
+        if (!EmailAccIngestGates.IsEligibleForAccIngest(row.HasAttachments, row.IsFiledToProject))
         {
             return (row, status);
         }
@@ -385,7 +387,8 @@ internal sealed class EmailAccSelectionHandler
             row.Id,
             row.ThreadId ?? string.Empty,
             row.InternetMessageId,
-            ResolveActingUserLogin());
+            ResolveActingUserLogin(),
+            AllowZeroAttachmentIngest: row.IsFiledToProject);
 
     private static bool IsTerminalAccStatus(EmailAccProcessingStatus status) =>
         status is EmailAccProcessingStatus.UploadedToAcc

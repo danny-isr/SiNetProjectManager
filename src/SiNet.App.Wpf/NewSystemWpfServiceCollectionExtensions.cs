@@ -60,6 +60,10 @@ public static class NewSystemWpfServiceCollectionExtensions
         // Transient per email surface — WebView2 must not be reparented across hosts.
         services.AddTransient<IEmailBodyRenderer, WebView2EmailBodyRenderer>();
 
+        // Hidden WebView2 → 00_Email.pdf for ACC Inbox ingest (N4). Singleton + lazy/UI init.
+        services.AddSingleton<WpfEmailBodyPdfRenderer>();
+        services.AddSingleton<IEmailBodyPdfRenderer>(sp => sp.GetRequiredService<WpfEmailBodyPdfRenderer>());
+
         // Jumbo/WeTransfer download capture → ACC (N2). Singleton: one active download window.
         services.AddSingleton<IEmailExternalDownloadBrowserHost, WpfEmailExternalDownloadBrowserHost>();
 

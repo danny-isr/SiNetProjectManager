@@ -1,8 +1,15 @@
 namespace SiNet.Application.Email.Acc;
 
-/// <summary>Passive ingest gate helpers (legacy parity).</summary>
+/// <summary>Passive ingest gate helpers (legacy parity + N4.3 eligibility).</summary>
 public static class EmailAccIngestGates
 {
+    /// <summary>
+    /// N4.3: ACC Inbox ingest only when the message has business attachments
+    /// or is mailbox-filed to a project (Gmail label — §6.6).
+    /// </summary>
+    public static bool IsEligibleForAccIngest(bool hasAttachments, bool isFiledToProject) =>
+        hasAttachments || isFiledToProject;
+
     public static bool IsIngestFullyComplete(EmailAccInboxStatus? status) =>
         status?.InboxMessageId is > 0
         && status.TotalAttachments > 0

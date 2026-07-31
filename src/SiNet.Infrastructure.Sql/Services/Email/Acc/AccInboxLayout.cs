@@ -29,6 +29,11 @@ public static class AccInboxLayout
     public const string EmailBodyFileName = "00_Email.pdf";
     public const string ManifestFileName = "manifest.json";
 
+    /// <summary>
+    /// Sentinel <c>EmailInboxAttachment.AttachmentIndex</c> for the body PDF row (Legacy parity).
+    /// </summary>
+    public const int EmailBodyAttachmentIndex = -11;
+
     /// <summary>Returns the MSG folder name (e.g. <c>MSG_ab12cd34</c>).</summary>
     public static string GetMessageFolderName(string messageKey) => MessageFolderPrefix + messageKey;
 
@@ -68,7 +73,7 @@ public static class AccInboxLayout
         bool isExternalDownload,
         string? subfolderName = null)
     {
-        if (attachmentIndex == -11 || IsEmailBodyFile(fileName))
+        if (attachmentIndex == EmailBodyAttachmentIndex || IsEmailBodyFile(fileName))
             return AccInboxFileRole.EmailBodyPdf;
         if (IsManifestFile(fileName))
             return AccInboxFileRole.Manifest;

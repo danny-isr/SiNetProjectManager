@@ -1,8 +1,8 @@
 # Native Email → ACC Inbox ingest (standalone)
 
-> Status: **N1 implemented** · **N2 implemented (awaiting operator smoke)** · **N3 recovery — implemented**  
-> Date: 2026-07-28 (N1/N2/N3)  
-> Approved by: operator (N1 + N2 + N3 chat 2026-07-28)
+> Status: **N1–N3 implemented** · **N4 body PDF — implemented** · **N4.3 eligibility + no-redundant-upload — implemented** · **N5 ZIP/RAR — proposed (docs only)**
+> Date: 2026-07-28 (N1/N2/N3) · 2026-07-31 (N4 / N4.1 / N4.3 / N5)
+> Approved by: operator (N1–N3); N4 code go-ahead 2026-07-31; N4.3 code go-ahead 2026-07-31; N5 code awaits approval
 
 
 > Related: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
@@ -321,4 +321,196 @@ EmailAccSelectionHandler
 - Approved by: operator
 - Date: 2026-07-28
 - Scope tweaks: none
+
+---
+
+## Slice N4 — Zero-attachment ingest + `00_Email.pdf` (standalone)
+
+### Problem (verified 2026-07-31 soak)
+
+Project-associated / selected emails with **no Gmail attachments** do not create ACC Inbox state.
+
+| Gap | Today (Native) | Principles / target |
+| --- | --- | --- |
+| Zero attachments | `NativeEmailAccIngestionExecutor` returns `SkippedNoAttachments` before folder ensure | Per-message folder must exist (`THREAD_…/MSG_…/`) |
+| Body PDF | Not implemented on Native path | `00_Email.pdf` in message folder (`AccInboxLayout.EmailBodyFileName`) |
+| UI gates | `EmailAccSelectionHandler` skips passive ingest / Upload when `!HasAttachments` | Allow ingest when message should land in ACC Inbox |
+| Legacy parity | SiNetSQL also skips no-attachment emails | **Intentional New-System correction** — do not reopen Legacy in this slice |
+
+Operator decision (2026-07-31): **option 2 — full layout** (folder + body PDF best-effort), not folder-only.
+
+### Principles (locked for N4)
+
+1. Same SoT as N1: ACC physical; Gmail label = mailbox filed; DB helper.
+2. Layout per `EmailSystemPrinciples` §6.2 / `AccInboxLayout`: message folder contains `00_Email.pdf`, `manifest.json`, and `Attachments\` (may be empty).
+3. Body PDF is **best-effort**: missing renderer / render failure must **not** fail ingest if the message folder (+ optional attachments) was ensured. Log and continue.
+4. No SiNetSQL / V2 `ProjectReference` for PDF. New Application port + App.Wpf WebView2 impl.
+5. Do **not** change SiNetSQL `EmailIngestionService` STEP A in this slice (Legacy may keep skipping).
+
+### Target state
+
+```text
+EmailAccSelectionHandler / explicit Upload
+  → NativeEmailAccIngestionExecutor
+       → load Gmail details (attachments may be empty)
+       → lease + ensure THREAD_/MSG_ (+ Attachments/ when needed)
+       → IEmailBodyPdfRenderer? → upload 00_Email.pdf (best-effort)
+       → upload Gmail attachments (0..n)
+       → manifest.json (best-effort)
+       → Succeeded when message folder is on ACC (body PDF optional; attachments optional)
+```
+
+### In scope — N4
+
+1. Application port `IEmailBodyPdfRenderer` (`IsAvailable`, `RenderHtmlToPdfAsync`) — thin; not `IEmailBodyRenderer`.
+2. App.Wpf implementation (hidden WebView2 print-to-PDF; adapt from V2 `WebView2PdfRenderer.RenderToPdfAsync` without SiNetSQL types). Singleton DI in `AddSiNetNewSystemWpf`.
+3. `NativeEmailAccIngestionExecutor`:
+   - Remove `SkippedNoAttachments` early exit.
+   - Ensure message folder even when `attachments.Count == 0`.
+   - Best-effort body PDF upload to **message folder** (`AttachmentIndex` sentinel matching Legacy `-11` if DB requires a row).
+   - Change “`uploadedCount == 0` ⇒ Failed” so zero-attachment success is allowed when folder (+ optional PDF/manifest) succeeded.
+   - Short-circuit `AlreadyProcessed`: treat Uploaded/Moved with `InboxAccFolderId` as done even if attachment count is 0.
+4. UI: allow `CanUpload` / passive ingest when connected and not terminal — **do not** require `HasAttachments`.
+5. Docs + boundary/unit tests (source guards + DI). Smoke: file/select a no-attachment project email → ACC MSG folder + `00_Email.pdf` when renderer available.
+
+### Explicitly out of scope for N4
+
+- Changing Legacy / SiNetSQL skip-no-attachment behavior
+- Perfect WYSIWYG parity with live Gmail DOM print
+- Forcing Move of empty emails into project file slots (Move empty shortcut already exists)
+- EF migrations / schema changes
+- Requiring body PDF for `Succeeded` (best-effort only)
+
+### Options
+
+| Option | Decision |
+| --- | --- |
+| **A. Folder + best-effort `00_Email.pdf`** | **Selected** (operator option 2) |
+| B. Folder/SQL only, no PDF | Rejected for this slice |
+| C. Keep `SkippedNoAttachments` | Rejected — contradicts soak requirement |
+
+### Risk & complexity (pre-code)
+
+| Item | Assessment |
+| --- | --- |
+| Complexity | **Medium–High** — new WebView2 PDF port + ingest success criteria change |
+| Effort | Focused PR; PDF init may need STA/dispatcher care like V2 |
+| Behavior drift | Native diverges from Legacy skip — intentional; document in smoke |
+| UI | Passive ingest may run more often (every selected email) — watch AccService load |
+| AccService | Same Remote requirement as N1 |
+| DB/schema | **None** expected |
+| Breaking V2 | Low if Native-only; V2 still uses Legacy skip unless later ported |
+
+### Acceptance criteria (N4)
+
+1. Standalone: select/upload a **no-attachment** email → ACC has `THREAD_…/MSG_…/` (and `00_Email.pdf` when renderer available).
+2. With attachments: still uploads attachments; body PDF best-effort; does not regress N1.
+3. UI no longer blocks Upload solely because `HasAttachments == false`.
+4. Build gate green; no EF migrations.
+
+### Approval notes (N4)
+
+- Direction: operator chose option 2 (2026-07-31)
+- Code go-ahead: operator (2026-07-31)
+
+### N4.3 — ACC ingest eligibility + no redundant re-upload (2026-07-31)
+
+**Operator direction:** reduce AccService / WebView2 load. Supersedes the N4 UI rule “passive-ingest every selected email including unfiled zero-attachment”.
+
+#### Eligibility (when to ingest)
+
+| Condition | Passive select / Upload button | After mailbox File-to-project (§6.6) |
+| --- | --- | --- |
+| Has business Gmail attachments | **Ingest** | (already ingested or ingest if needed) |
+| No attachments + **not** Gmail-filed to a project | **Skip** — no ACC folder, no `00_Email.pdf` | — |
+| No attachments + **is** Gmail-filed to a project | **Ingest** (folder + best-effort body PDF) | **Ingest** if not yet on ACC |
+
+Outcomes for skip: reuse `SkippedNoAttachments` / add clear status text, or `SkippedNotRelevant` — prefer a dedicated display string: “אין צרופות ולא משויך לפרויקט — לא מועלה ל-ACC”.
+
+#### No redundant re-upload
+
+1. If attachment / `00_Email.pdf` row already has `AccItemId` → **do not** re-render PDF and **do not** call AccService upload for that file.
+2. Remove TEMP debug “force body PDF image refresh” (`BodyPdfImageRefreshDoneV2`) — one-shot re-upload on every process must not ship.
+3. Keep **N4.1**: re-enter ingest only when body PDF is **missing** (`AccItemId` null) while message is `Uploaded` and renderer exists.
+4. Keep H9 fallback (retry without `ExistingItemId` on HTTP 500) **only** on the first upload path for a missing file — never as a deliberate “refresh all” loop.
+5. `AlreadyProcessed` short-circuit when folder + required files already have `AccItemId` remains the happy path.
+
+#### In-scope code (after approval)
+
+1. `EmailAccSelectionHandler.TryPassiveIngestAsync` / `CanUpload`: require `HasAttachments || IsFiledToProject` (mailbox filed).
+2. `EmailListFilingCoordinator` (or post-File hook): after successful File-to-project, trigger ACC ingest when the message is not already terminal on ACC (covers zero-attachment filed emails).
+3. `NativeEmailAccIngestionExecutor`: early skip when `attachments.Count == 0` and caller/command indicates not project-filed (defense in depth); restore body-PDF skip when `AccItemId` present; delete TEMP refresh dictionary.
+4. Docs + gate tests; smoke: browse unfiled no-attachment → no ACC work; file to project → ACC appears; attachment email → ingest once, reselect → `AlreadyProcessed` / no second upload.
+
+#### Risk & complexity
+
+| Item | Assessment |
+| --- | --- |
+| Complexity | **Low–Medium** — gate + File hook + remove TEMP re-upload |
+| AccService load | **Down** — main goal |
+| Behavior drift from N4 soak | Intentional — unfiled empty emails no longer land in ACC on browse |
+| DB/schema | **None** |
+
+#### Approval
+
+- Direction: operator 2026-07-31
+- Code go-ahead: operator «כן לקוד N4.3» (2026-07-31)
+
+### N4.2 — Embedded images in `00_Email.pdf` (2026-07-31)
+
+**Problem:** PDF uploaded but inline/`cid:` images were blank — fixed ~400ms delay after navigation is not enough, and `cid:` sources are not loadable without a virtual-host handler (same as the UI body viewer).
+
+**Fix:** `WpfEmailBodyPdfRenderer` rewrites `cid:` → `https://sinet-mail-images.local/…`, serves bytes via `WebResourceRequested`, then waits for `document.readyState === 'complete'` + all `img.complete && naturalWidth > 0` (≤15s) + 500ms settle before `PrintToPdfAsync` (parity with legacy `WebView2PdfRenderer`).
+
+### N4.1 — Body PDF retry (2026-07-31)
+
+**Problem:** First ingest often created `MSG_…` while WebView2 was cold → body PDF skipped non-fatally → later selects returned `AlreadyProcessed` from folder id alone → `00_Email.pdf` never retried.
+
+**Fix:** `TryShortCircuitAlreadyProcessedAsync` must **not** short-circuit `Uploaded` when body attachment (`AttachmentIndex = -11`) has no `AccItemId` and `IEmailBodyPdfRenderer` is registered. Re-enter ingest to call `TryUploadBodyPdfAsync` again. Do not demote `Moved`.
+
+**UI note:** `00_Email.pdf` lives in the **message folder** (not `Attachments/`) and is not taggable in the strip.
+
+---
+
+## Slice N5 — ZIP/RAR archive extract + ZIP-level tagging (proposed)
+
+### Problem (verified 2026-07-31 soak)
+
+Gmail → ACC Native ingest uploads `.zip` as a single opaque file (no extract). Legacy + Jumbo extract ZIPs. RAR unsupported everywhere.
+
+### Operator policy (target — 2026-07-31)
+
+1. **Extract** `.zip` (and `.rar` when a supported library is approved) into `Attachments/{archiveName}/` for viewing.
+2. **Tagging / Move unit = the archive** (one inbox attachment row for the ZIP/RAR), not each extracted child.
+3. **Upload filter for extracted children:** business files only — **DWG, PDF, images** (e.g. png/jpg/jpeg/tif/tiff/bmp/webp). Skip fonts and other non-business types.
+4. Optional: also keep the original archive file in ACC (TBD at code approval) — default proposal: **extract children + archive row pointing at folder** (Legacy parity via `AccVersionId` = zip folder id), without requiring a second tagged object.
+
+### In scope — N5 (after code go-ahead)
+
+1. Docs approval (this section + principles note).
+2. Port Legacy ZIP extract behavior into `NativeEmailAccIngestionExecutor` (reuse/adapt Jumbo extract helpers where possible).
+3. Tagging UI: one taggable chip for the archive; extracted files viewable/openable in ACC under the zip subfolder.
+4. RAR: add only if an approved NuGet/library is chosen (else document ZIP-only and defer RAR).
+5. Tests + soak with multi-file ZIP (DWG/PDF/image + noise files).
+
+### Explicitly out of scope until approved
+
+- Changing Legacy SiNetSQL behavior
+- Perfect nested-archive / password-protected archives
+- Tagging each extracted file separately
+
+### Risk & complexity (pre-code)
+
+| Item | Assessment |
+| --- | --- |
+| Complexity | **Medium–High** (extract + folder layout + tagging semantics + optional RAR) |
+| Effort | Focused PR after library choice for RAR |
+| Behavior drift | Aligns Native Gmail with Legacy ZIP; filters are **stricter** than Legacy (Legacy uploads all extracted files) |
+| DB/schema | **None** expected |
+| AccService load | Large ZIPs → many uploads; filter reduces volume |
+
+### Approval notes (N5)
+
+- Policy direction from operator (2026-07-31, option 3 with PDF-now)
+- **Code starts only after explicit go-ahead on this N5 section** (and RAR library choice if RAR is in-scope)
 

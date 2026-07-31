@@ -100,7 +100,8 @@ public sealed class NativeEmailAccRecoveryExecutor(
             GmailMessageId: gmailMessageId.Trim(),
             GmailThreadId: gmailThreadId,
             InternetMessageId: internetMessageId,
-            ActingUserLogin: login);
+            ActingUserLogin: login,
+            AllowZeroAttachmentIngest: true);
 
         EmailAccUploadResult ingestResult;
         try

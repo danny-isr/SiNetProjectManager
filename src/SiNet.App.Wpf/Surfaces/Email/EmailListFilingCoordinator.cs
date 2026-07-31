@@ -147,11 +147,18 @@ internal sealed class EmailListFilingCoordinator
             },
             failureMessagePrefix: "שיוך לפרויקט נכשל").ConfigureAwait(true);
 
-        return filedRow is { IsFiledToProject: true }
+        var result = filedRow is { IsFiledToProject: true }
             ? filedRow
             : _display.FindRowById(row.Id) is { IsFiledToProject: true } visible
                 ? visible
                 : null;
+
+        if (result is { IsFiledToProject: true })
+        {
+            await _owner.TryIngestAfterProjectFileAsync(result).ConfigureAwait(true);
+        }
+
+        return result;
     }
 
     public async Task FileEmailToThreadProjectAsync(EmailListRow? row)
@@ -207,6 +214,11 @@ internal sealed class EmailListFilingCoordinator
             },
             onSuccessLocalUpdate: currentRow => RefreshRowAfterThreadFileAsync(currentRow, threadProject),
             failureMessagePrefix: "שיוך לפרויקט השרשור נכשל").ConfigureAwait(true);
+
+        if (_display.FindRowById(row.Id) is { IsFiledToProject: true } filed)
+        {
+            await _owner.TryIngestAfterProjectFileAsync(filed).ConfigureAwait(true);
+        }
     }
 
     public async Task UnfileEmailAsync(EmailListRow? row)

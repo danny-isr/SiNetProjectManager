@@ -47,6 +47,13 @@ See plan: IEmailBodyRenderer, IEmailAccIngestionService, IEmailAttachmentTagging
 - **V2** may still override with its own host wrapping the legacy window; behavior should match.
 - If the host is missing, the click must surface a visible error (status + MessageBox) — not a silent no-op.
 
+### ACC ingest without attachments (N4 / N4.3)
+
+- Zero-attachment emails create ACC Inbox (`00_Email.pdf` + layout) only when
+  mailbox-filed to a project (or after File-to-project). Unfiled browse without
+  attachments does not ingest. See `docs/NATIVE_EMAIL_ACC_INGEST.md` §N4.3.
+- “העלה ל-ACC” requires attachments **or** `IsFiledToProject`.
+
 ### InboxMessageId resolution for tagging (thread-safe)
 
 When refreshing SQL attachment tag state for the selected Gmail row:
