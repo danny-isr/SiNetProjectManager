@@ -190,7 +190,23 @@ string), so the next support investigation has a log trail even when the user ne
 
 ---
 
-## 3. Startup schema / migration head gate
+## 3. Seed baseline verify (`seed-baseline`)
+
+Standalone does **not** auto-seed. After a clean DB or manual deletes, required Seed Codes may be
+missing. A cheap **read-only** check (`ISeedBaselineVerifyService`) lists missing Codes from
+`SeedBaselineCatalog` (workflows, user-group shells, Quote* catalog) and soft-warns on catalog
+prerequisites (`חומר כללי` / `תכתובת`).
+
+- System Status row key: `seed-baseline` (Idle when complete; Degraded when required Codes missing).
+- DevTools DEBUG: **בדיקת Seed** (same result, MessageBox) next to **טעינת Seed בסיסי**.
+- Does **not** fail startup (empty DB before manual seed is legitimate).
+- Does **not** replace `workflow-assignees` (membership / default assignee).
+
+Remediation: כלי פיתוח → טעינת Seed בסיסי (`GuidanceHe` on the status row).
+
+---
+
+## 3b. Startup schema / migration head gate
 
 Standalone host (`SiNet.App.Wpf`) runs `IDatabaseSchemaGate` before the shell opens:
 
@@ -241,7 +257,7 @@ line under the summary: what to do next.
 
 - Catalog: `SystemStatusGuidanceCatalog.Resolve(key, state, summaryHe)` in Application.
 - Applied in `SystemStatusRowViewModel.From` (does not require every contributor to set text).
-- Initial coverage: `acc`, `acc-service`, `autodesk-acc`, `workflow-assignees`, `gmail`.
+- Initial coverage: `acc`, `acc-service`, `autodesk-acc`, `workflow-assignees`, `seed-baseline`, `gmail`.
 - Empty / healthy rows show no guidance line.
 
 Workflow assignee gaps remain **manual** (User Groups + default assignee) — not Seed.

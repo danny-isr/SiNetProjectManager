@@ -26,6 +26,7 @@ public static class SystemHealthContributorsExtensions
 
         services.AddSingleton<ISubsystemStatusContributor, DatabaseStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, WorkflowEngineStatusContributor>();
+        services.AddSingleton<ISubsystemStatusContributor, SeedBaselineStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, FileServerStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, OllamaStatusContributor>();
 

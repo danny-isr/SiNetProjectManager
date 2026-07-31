@@ -174,6 +174,7 @@ public sealed class StandaloneHostCompositionTests
                     "google_config",
                     "masterplan-reports-drive",
                     "ollama",
+                    "seed-baseline",
                     "workflow",
                 ],
                 keys);

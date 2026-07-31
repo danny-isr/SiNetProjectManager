@@ -18,10 +18,21 @@ Dev reset and workflow/task seed were migrated from legacy `SiNetSQL.Services` t
 Menu items (Management role + Windows user allow-list):
 
 1. **כלי פיתוח — איפוס נתוני פיתוח** — wipe migration tables + re-seed
-2. **כלי פיתוח — טעינת Seed בסיסי** — static lookups + mappings + workflow
-3. **כלי פיתוח — טעינת משימות דemo** — demo tasks for Task Panel read-only
+2. **כלי פיתוח — טעינת Seed בסיסי** — static lookups + mappings + workflow + catalog
+3. **כלי פיתוח — בדיקת Seed** — **read-only** verify that required Seed Codes still exist (no write)
+4. **כלי פיתוח — טעינת משימות דמו** — demo tasks for Task Panel read-only
 
 Wired via `DevToolsCoordinator` → Application ports only. **Does not** call `SiNetSQL.Services.DevDataResetService` or open legacy `MainWindow`.
+
+### Seed baseline verify (read-only)
+
+`ISeedBaselineVerifyService` / `SeedBaselineCatalog` checks that essential Codes from basic seed
+still exist in SQL (`WorkflowDefinition`, `UserGroup`, `ProjectFile` catalog slots). Soft-warns when
+JobType `חומר כללי` or folder `תכתובת` are missing (catalog seed prerequisites).
+
+- Same signal appears as System Status row `seed-baseline` (see [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md)).
+- Does **not** re-run seed, does not check group memberships (that is `workflow-assignees`), and does
+  not validate the full workflow graph.
 
 ## What reset deletes
 

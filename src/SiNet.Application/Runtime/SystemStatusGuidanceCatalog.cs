@@ -71,6 +71,12 @@ public static class SystemStatusGuidanceCatalog
             }
         }
 
+        if (string.Equals(keyNorm, "seed-baseline", StringComparison.OrdinalIgnoreCase))
+        {
+            if (state is SubsystemRuntimeState.Degraded or SubsystemRuntimeState.NotConfigured)
+                return SeedBaselineGuidance;
+        }
+
         if (string.Equals(keyNorm, "gmail", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyNorm, "google", StringComparison.OrdinalIgnoreCase))
         {
@@ -134,4 +140,9 @@ public static class SystemStatusGuidanceCatalog
     internal const string GmailGuidance =
         "Gmail לא מחובר. התחבר דרך מסכי המייל/הגדרות Google (שחזור שקט או התחברות אינטראקטיבית), "
         + "ודא ש־client secrets ו־token store מוגדרים, ואז רענן מצב מערכת.";
+
+    internal const string SeedBaselineGuidance =
+        "חסרים פריטי Seed בסיסיים (workflow / קבוצות / catalog). "
+        + "ב־DEBUG: כלי פיתוח → «טעינת Seed בסיסי». "
+        + "אחרי הטעינה רענן «מצב מערכת». הקצאות חברי קבוצה הן נפרדות (שורת workflow-assignees).";
 }

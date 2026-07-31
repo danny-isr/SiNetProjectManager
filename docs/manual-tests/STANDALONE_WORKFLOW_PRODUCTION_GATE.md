@@ -40,6 +40,7 @@ Clear/rename the log between full tree runs. Gate: DEBUG builds default `[WF-STE
 
 - [ ] DEBUG build of `SiNet.App.Wpf` running; NewShell open — **clean-DB soak restart 2026-07-31**
 - [ ] **כלי פיתוח → טעינת Seed בסיסי** succeeded (check summary: no `[…] skipped` for catalog / JobType)
+- [ ] **כלי פיתוח → בדיקת Seed** (or «מצב מערכת» row `seed-baseline`) reports complete — Codes present without re-running seed
 - [ ] Groups have active members + default assignees: `OfficeManagement`, `SeniorManagement`, `Planners`, Review groups (`ReviewIntake`, `ProjectOpeners`, `Reviewers`, `ReviewManagers`, `PoliceLiaison` as seeded)
 - [ ] Unassigned inbox email available (Proposal + Opinion)
 - [ ] Log path confirmed; previous log archived if starting a fresh tree
@@ -352,11 +353,12 @@ Prior run 2026-07-30: 268 Pass. Live Tree A soak in progress (see §9 / §10). C
 | 2026-07-31 ~09:06 | Backlog triage: Open follow-ups cleared; SOF-005/006 Parked; SOF-007/008/009 Done in `380481f`; build+tests Pass | Resume Tree A |
 | 2026-07-31 | **After Tree A Approved queue:** Tree B Opinion → SOF-005/006 product → E/F integrity/viewer (SOF-009 already shipped) | Phase 4 |
 | 2026-07-31 ~13:03 | **Relaunch:** AccService restarted (PID **36732**, health 200); PFX recreated — thumbprint **`5334600A28CEBE905388141D3AEC3FBD170E617B`**; `SiNet.App.Wpf` DEBUG PID **41172**; prior WF log archived; agent tails branded log + 3m heartbeat | Session open — pin thumbprint in Settings→ACC if SSL offline |
+| 2026-07-31 ~13:53 | **Full soak restart:** AccService PID **36880** (thumbprint unchanged `5334…617B`); `SiNet.App.Wpf` DEBUG PID **44824**; startup BaseUrl **`https://localhost:8443`** (fixed from SI-WIN-2K19 name-mismatch); WF log archived; agent tails branded log | Session open — comprehensive Tree A |
 
 **Next (operator):**
-1. **הגדרות → ACC:** BaseUrl `https://localhost:8443` + pin thumbprint למעלה → שמירה → **הפעלה מחדש של האפליקציה** (pins נטענים ב־startup).
+1. **מצב מערכת** → רענון: אשר ש־`acc-service` מוכן (לא SSL).
 2. **טעינת Seed בסיסי** + הקצאות קבוצות (OfficeManagement / SeniorManagement / Planners…).
-3. מייל לא משויך → **פתיחת הצעת מחיר** → Tree A מ־ProjectSetup דרך SendQuote → SentFollowUp.
+3. מייל לא משויך → **פתיחת הצעת מחיר** → Tree A: ProjectSetup → FileMaterial → MaterialCheck → Calculation → Preparation → InternalApproval → **SendQuote** → SentFollowUp → Approved.
 
 ---
 

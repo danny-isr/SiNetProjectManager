@@ -15,6 +15,8 @@ public static class DevToolsServiceCollectionExtensions
         services.AddSingleton<DevToolsGate>();
         services.AddTransient<SqlWorkflowSeedService>();
         services.AddTransient<SqlTaskDemoSeedService>();
+        // Read-only; available in Release too (System Status + optional DevTools UI in DEBUG).
+        services.AddTransient<ISeedBaselineVerifyService, SqlSeedBaselineVerifyService>();
 
 #if DEBUG
         services.AddTransient<IStaticSeedService, SqlStaticSeedService>();

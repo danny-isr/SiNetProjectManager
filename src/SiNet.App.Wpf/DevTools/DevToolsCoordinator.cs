@@ -85,6 +85,40 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
         }
     }
 
+    /// <summary>Read-only: required Seed Codes still present (no write).</summary>
+    public async Task RunSeedBaselineVerifyAsync(Window? owner)
+    {
+        var verify = _services.GetService<ISeedBaselineVerifyService>();
+        if (verify is null)
+        {
+            ShowError(owner, "ISeedBaselineVerifyService לא רשום.");
+            return;
+        }
+
+        try
+        {
+            var result = await verify.VerifyAsync().ConfigureAwait(true);
+            var image = result.IsComplete
+                ? MessageBoxImage.Information
+                : result.HasRequiredGaps
+                    ? MessageBoxImage.Warning
+                    : MessageBoxImage.Warning;
+            MessageBox.Show(
+                owner,
+                result.FormatSummaryHe()
+                + (result.HasRequiredGaps
+                    ? Environment.NewLine + Environment.NewLine + "תיקון: כלי פיתוח → טעינת Seed בסיסי"
+                    : string.Empty),
+                "בדיקת Seed",
+                MessageBoxButton.OK,
+                image);
+        }
+        catch (Exception ex)
+        {
+            ShowError(owner, ex.Message);
+        }
+    }
+
     public async Task RunDemoTaskSeedAsync(Window? owner)
     {
         var seed = _services.GetRequiredService<IStaticSeedService>();

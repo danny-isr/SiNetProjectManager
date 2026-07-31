@@ -729,6 +729,11 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             "Task static + mappings + workflow seed"));
 
         items.Add(new NewShellMenuItem(
+            "בדיקת Seed",
+            () => _ = coordinator.RunSeedBaselineVerifyAsync(Owner()),
+            "בדיקה לקריאה בלבד: האם Codes הנדרשים של Seed בסיסי עדיין קיימים"));
+
+        items.Add(new NewShellMenuItem(
             "טעינת משימות דמו",
             () => _ = coordinator.RunDemoTaskSeedAsync(Owner()),
             "משימות DEBUG בשלושה buckets ל-Task Panel read-only"));

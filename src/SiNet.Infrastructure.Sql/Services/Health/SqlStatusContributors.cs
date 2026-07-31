@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.DevTools;
 using SiNet.Application.Runtime;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Sql.Services.Files;
@@ -248,4 +249,82 @@ public sealed class OllamaStatusContributor(ISystemSettingsQueryService settings
 
     private SubsystemRuntimeStatus Row(SubsystemRuntimeState state, string summary) =>
         new(Key, DisplayNameHe, state, null, summary, DateTimeOffset.UtcNow);
+}
+
+/// <summary>
+/// Read-only seed baseline: required Codes from basic seed still present (see <c>docs/DEV_TOOLS.md</c>).
+/// </summary>
+public sealed class SeedBaselineStatusContributor(ISeedBaselineVerifyService verify)
+    : ISubsystemStatusContributor
+{
+    public const string StatusKey = "seed-baseline";
+
+    private readonly ISeedBaselineVerifyService _verify =
+        verify ?? throw new ArgumentNullException(nameof(verify));
+
+    public string Key => StatusKey;
+
+    public string DisplayNameHe => "Seed בסיסי (Codes)";
+
+    public async Task<SubsystemRuntimeStatus> ContributeAsync(CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(8));
+
+        SeedBaselineVerifyResult result;
+        try
+        {
+            result = await _verify.VerifyAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new SubsystemRuntimeStatus(
+                Key,
+                DisplayNameHe,
+                SubsystemRuntimeState.Degraded,
+                null,
+                "בדיקת Seed — תם הזמן",
+                DateTimeOffset.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            return new SubsystemRuntimeStatus(
+                Key,
+                DisplayNameHe,
+                SubsystemRuntimeState.Degraded,
+                null,
+                "בדיקת Seed נכשלה: " + ex.Message,
+                DateTimeOffset.UtcNow);
+        }
+
+        if (result.HasRequiredGaps)
+        {
+            return new SubsystemRuntimeStatus(
+                Key,
+                DisplayNameHe,
+                SubsystemRuntimeState.Degraded,
+                null,
+                "חסרים Codes: " + result.FormatSummaryHe(),
+                DateTimeOffset.UtcNow);
+        }
+
+        if (result.HasPrerequisiteWarnings)
+        {
+            return new SubsystemRuntimeStatus(
+                Key,
+                DisplayNameHe,
+                SubsystemRuntimeState.Degraded,
+                null,
+                "אזהרה (תנאי catalog): " + result.FormatSummaryHe(),
+                DateTimeOffset.UtcNow);
+        }
+
+        return new SubsystemRuntimeStatus(
+            Key,
+            DisplayNameHe,
+            SubsystemRuntimeState.Idle,
+            null,
+            "Seed בסיסי שלם",
+            DateTimeOffset.UtcNow);
+    }
 }
