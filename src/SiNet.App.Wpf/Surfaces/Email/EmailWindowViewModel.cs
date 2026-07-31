@@ -415,6 +415,27 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         _ = ApplyTaskContextAsync(context);
     }
 
+    /// <summary>
+    /// Shell menu browse open: clear task/FollowQuote context and restore default Inbox filters.
+    /// </summary>
+    public async Task ResetToDefaultBrowseAsync()
+    {
+        ApplyContext(null);
+        StatusMessage = "מצב דואר רגיל — מסנני משימה אופסו.";
+        try
+        {
+            await EmailList.ClearFiltersAndReloadAsync().ConfigureAwait(true);
+            if (IsConnected)
+            {
+                StatusMessage = "מצב דואר רגיל — אינבוקס.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"איפוס מסך הדואר נכשל: {ex.Message}";
+        }
+    }
+
     public async Task RefreshAsync()
     {
         await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);

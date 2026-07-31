@@ -193,7 +193,10 @@ Rules:
   requires a real, DI-resolvable surface — no placeholders that throw.
 - Menu items open surfaces through DI/factory paths. **Email** is hosted **inside** the shell content
   area via `IEmailSurfaceHost` (singleton, create-once — legacy `_cachedEmailManagementView` pattern).
-  Other surfaces may still open as separate windows until they are migrated to in-shell hosting.
+  Re-opening **מיילים** via the menu calls `Show()` with no task context and **resets** the inbox to
+  browse default (clears FollowQuote/task filters, banner, and list filters → Inbox). Task-driven
+  opens pass an explicit `WorkSurfaceContext` and do not reset. Other surfaces may still open as
+  separate windows until they are migrated to in-shell hosting.
 - **Menu availability (P3):** `NewShellFactory` resolves whether an item is included/enabled via
   `IAuthorizationQueryService.CanCurrentUserAccessFeatureAsync` and `AppFeatureCodes` — not via legacy
   `CurrentUserContext` or `IsAdmin` checks inside `NewShellViewModel`.

@@ -12,7 +12,8 @@ public interface IEmailSurfaceHost
 {
     /// <summary>
     /// Shows the cached email surface inside the main shell. Creates it on first use.
-    /// Optionally applies a work-surface context (browse / project-centric open).
+    /// When <paramref name="context"/> is provided, applies that task/work-surface context.
+    /// When omitted (<see langword="null"/>), resets the inbox to browse default (menu «מיילים»).
     /// </summary>
     void Show(WorkSurfaceContext? context = null);
 

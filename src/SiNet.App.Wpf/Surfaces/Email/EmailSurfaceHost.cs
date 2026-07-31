@@ -26,6 +26,11 @@ public sealed class EmailSurfaceHost(
         {
             _view!.ApplyContext(context);
         }
+        else
+        {
+            // Menu «מיילים»: leave task/FollowQuote mode and restore browse defaults.
+            _ = _viewModel!.ResetToDefaultBrowseAsync();
+        }
 
         _contentHost.NavigateTo(_view);
 

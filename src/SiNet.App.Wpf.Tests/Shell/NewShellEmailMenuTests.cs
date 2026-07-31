@@ -39,6 +39,16 @@ public sealed class NewShellEmailMenuTests
     }
 
     [Fact]
+    public void EmailSurfaceHost_menu_show_without_context_resets_to_browse_default()
+    {
+        var hostSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceHost.cs");
+        var vmSource = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        Assert.Contains("ResetToDefaultBrowseAsync", hostSource, StringComparison.Ordinal);
+        Assert.Contains("ResetToDefaultBrowseAsync", vmSource, StringComparison.Ordinal);
+        Assert.Contains("ClearFiltersAndReloadAsync", vmSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NewShellWindow_blocks_close_via_email_surface_host()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellWindow.xaml.cs");
