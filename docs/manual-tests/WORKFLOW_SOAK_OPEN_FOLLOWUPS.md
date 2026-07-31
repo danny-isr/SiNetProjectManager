@@ -37,7 +37,7 @@ round (docs → risk → code), not during Tree A happy-path clicks.
 | --- | --- | --- |
 | SOF-002 | 2026-07-31 | Office owner/lock files `~$…` skipped in FileServer/ACC/Drive scan (`FileServerSidecarMetadata.ShouldSkipFromScan`). Unit tests Pass. |
 | SOF-001 | 2026-07-31 | ProjectWork float + Acc pop-out: `Topmost=false`, Owner=MainWindow; APP_SHELL §10.1. |
-| SOF-003 | 2026-07-31 | `PRP.SendQuote` + `SendQuoteToClientDialog` (compose/Sent/admin override); engine test Pass. |
+| SOF-003 | 2026-07-31 | `PRP.SendQuote` + internal Compose/`IEmailSender` + MessageId proof (G-Policy exception); admin override kept. |
 | SOF-004 | 2026-07-31 | `FollowQuoteApproval`→ProjectWork; `QuoteClientApproval` PDF gate; `QuoteCancelledNoResponse`. |
 | SOF-007 | 2026-07-31 | Complementary geometry via `PrepareTaskSurfaceWindow` on task hosts (`380481f`). Verify on next FileMaterial/OpenQuote open. |
 | SOF-008 | 2026-07-31 | Catalog `QuoteClientRequest` («דרישת_המזמין_להצעת_מחיר») under תכתובת→ניהול_כספי→הצעת_מחיר; `.pdf`, `OutSidData=true`. Seed uses underscore titles, cleans space-named duplicates, never overwrites `TemplateLocation`. **Seed בסיסי** after deploy. |

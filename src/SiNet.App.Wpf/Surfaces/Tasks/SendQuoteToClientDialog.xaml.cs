@@ -1,11 +1,12 @@
 using System.ComponentModel;
-using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Abstractions.Email;
-using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Diagnostics;
 using SiNet.Application.Email.QuoteSend;
 using SiNet.Application.Identity;
 using SiNet.Application.Tasks;
@@ -14,7 +15,8 @@ using SiNet.Application.WorkSurfaces;
 namespace SiNet.App.Wpf.Surfaces.Tasks;
 
 /// <summary>
-/// Proposal <c>SendQuoteToClient</c>: open Gmail compose with tracking marker, verify Sent, or admin override.
+/// Proposal <c>SendQuoteToClient</c>: internal SiNet compose + explicit Send via
+/// <see cref="IQuoteSendComposeService"/> (narrow G-Policy exception).
 /// </summary>
 public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
 {
@@ -23,32 +25,36 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
 
     private readonly WorkSurfaceContext _context;
     private readonly ITaskCompletionService _completion;
+    private readonly IQuoteSendComposeService? _compose;
     private readonly IEmailGateway? _emailGateway;
     private readonly IAuthorizationQueryService? _authorization;
     private readonly ILogger? _logger;
 
-    private readonly string _marker;
-    private string _statusMessage = "פתחו Compose, שלחו, ואז בדקו שנשלח.";
+    private QuoteSendComposeDraft? _draft;
+    private readonly List<EmailAttachment> _attachments = [];
+    private string _statusMessage = "טוען טיוטה…";
+    private string _toText = string.Empty;
+    private string _ccText = string.Empty;
+    private string _subjectText = string.Empty;
+    private string _bodyText = string.Empty;
     private bool _sentVerified;
     private bool _canOverride;
+    private bool _isBusy;
 
     public SendQuoteToClientDialog(
         WorkSurfaceContext context,
         ITaskCompletionService completion,
+        IQuoteSendComposeService? compose = null,
         IEmailGateway? emailGateway = null,
         IAuthorizationQueryService? authorization = null,
         ILogger? logger = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _completion = completion ?? throw new ArgumentNullException(nameof(completion));
+        _compose = compose;
         _emailGateway = emailGateway;
         _authorization = authorization;
         _logger = logger;
-
-        var instanceId = context.WorkflowInstanceId is > 0
-            ? context.WorkflowInstanceId.Value
-            : context.TaskId is > 0 ? context.TaskId.Value : context.ProjectId;
-        _marker = QuoteSendTrackingMarker.Create(Math.Max(instanceId, 1));
 
         InitializeComponent();
         ThemeWindowChrome.ApplyThemedWindowBackground(this);
@@ -59,7 +65,17 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     public string ProjectLine =>
         $"פרויקט #{_context.ProjectId} · משימה #{_context.TaskId} · מופע #{_context.WorkflowInstanceId}";
 
-    public string MarkerLine => $"סימן מעקב: {_marker}";
+    public string ModeLine =>
+        _draft is null
+            ? string.Empty
+            : _draft.Mode == QuoteSendComposeMode.ReplyAll
+                ? $"מצב: Reply-All לשרשור (מקור inbox #{_draft.SourceInboxMessageId?.ToString() ?? "?"})"
+                : "מצב: Compose חדש (לא Reply)";
+
+    public string AttachmentLine =>
+        _attachments.Count == 0
+            ? "ללא קבצים מצורפים"
+            : $"מצורפים: {string.Join(", ", _attachments.Select(a => a.FileName))}";
 
     public string StatusMessage
     {
@@ -72,6 +88,32 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
         }
     }
 
+    public string ToText
+    {
+        get => _toText;
+        set { if (_toText == value) return; _toText = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanSend)); }
+    }
+
+    public string CcText
+    {
+        get => _ccText;
+        set { if (_ccText == value) return; _ccText = value; OnPropertyChanged(); }
+    }
+
+    public string SubjectText
+    {
+        get => _subjectText;
+        set { if (_subjectText == value) return; _subjectText = value; OnPropertyChanged(); }
+    }
+
+    public string BodyText
+    {
+        get => _bodyText;
+        set { if (_bodyText == value) return; _bodyText = value; OnPropertyChanged(); }
+    }
+
+    public bool CanSend => !_isBusy && _compose is not null && !string.IsNullOrWhiteSpace(ToText);
+
     public bool CanCompleteVerified
     {
         get => _sentVerified;
@@ -80,7 +122,6 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
             if (_sentVerified == value) return;
             _sentVerified = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(CanCompleteVerified));
         }
     }
 
@@ -100,95 +141,318 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
-        if (_authorization is null)
+
+        if (_authorization is not null)
         {
-            CanOverride = false;
+            try
+            {
+                CanOverride = await _authorization
+                    .IsCurrentUserInRoleAsync(AppRole.Administrator, CancellationToken.None)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "SendQuote: failed to resolve Administrator override eligibility.");
+                CanOverride = false;
+            }
+        }
+
+        if (_compose is null)
+        {
+            StatusMessage = "שירות Compose אינו זמין.";
             return;
         }
 
-        try
+        if (_context.TaskId is int taskId && taskId > 0)
         {
-            CanOverride = await _authorization
-                .IsCurrentUserInRoleAsync(AppRole.Administrator, CancellationToken.None)
-                .ConfigureAwait(true);
+            var existing = await _compose.GetProofAsync(taskId, CancellationToken.None).ConfigureAwait(true);
+            if (existing is not null)
+            {
+                CanCompleteVerified = true;
+                StatusMessage = $"נמצאה הוכחת שליחה קיימת (MessageId={existing.GmailMessageId}). אפשר לסיים.";
+            }
         }
-        catch (Exception ex)
+
+        var source = await _compose
+            .GetProposalSourceEmailAsync(_context.WorkflowInstanceId, CancellationToken.None)
+            .ConfigureAwait(true);
+
+        if (source is null && !CanCompleteVerified)
         {
-            _logger?.LogWarning(ex, "SendQuote: failed to resolve Administrator override eligibility.");
-            CanOverride = false;
-        }
-    }
+            var choice = MessageBox.Show(
+                "לא נמצא מייל מקור מקושר לתהליך ההצעה.\n\nכן = בחירת מייל מקור (Reply-All)\nלא = המשך כ־Compose חדש",
+                "מייל מקור",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+            if (choice == MessageBoxResult.Cancel)
+            {
+                DialogResult = false;
+                Close();
+                return;
+            }
 
-    private void OpenCompose_Click(object sender, RoutedEventArgs e)
-    {
-        var (subject, body) = GmailComposeUrlBuilder.BuildQuoteSendContent(_marker, _context.ProjectId);
-        var url = GmailComposeUrlBuilder.Build(subject, body);
-        WorkflowDebugTrace.Step("SendQuote.Compose",
-            $"task={_context.TaskId} marker={_marker}");
+            if (choice == MessageBoxResult.Yes)
+            {
+                await PickAndApplySourceAsync().ConfigureAwait(true);
+                if (_draft is null)
+                    await LoadDraftAsync(QuoteSendComposeMode.NewCompose, preferredInbox: null).ConfigureAwait(true);
+                return;
+            }
 
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        StatusMessage = "Compose נפתח ב-Gmail. שלחו את המייל ואז לחצו «בדוק שנשלח».";
-    }
-
-    private async void VerifySent_Click(object sender, RoutedEventArgs e)
-    {
-        if (_emailGateway is null)
-        {
-            StatusMessage = "שירות הדואר אינו זמין — לא ניתן לאמת Sent.";
+            await LoadDraftAsync(QuoteSendComposeMode.NewCompose, preferredInbox: null).ConfigureAwait(true);
             return;
         }
 
-        StatusMessage = "בודק תיקיית Sent…";
+        await LoadDraftAsync(QuoteSendComposeMode.ReplyAll, preferredInbox: source?.InboxMessageId)
+            .ConfigureAwait(true);
+    }
+
+    private async Task LoadDraftAsync(QuoteSendComposeMode mode, int? preferredInbox)
+    {
+        if (_compose is null)
+            return;
+
+        SetBusy(true);
         try
         {
-            var page = await _emailGateway
-                .GetMailboxPageAsync(
-                    QuoteSendTrackingMarker.BuildSentSearchQuery(_marker),
-                    pageToken: null,
+            _draft = await _compose.CreateDraftAsync(
+                    _context.ProjectId,
+                    _context.WorkflowInstanceId,
+                    preferredInbox,
+                    mode,
                     CancellationToken.None)
                 .ConfigureAwait(true);
 
-            var hit = page.Items.FirstOrDefault(i =>
-                QuoteSendTrackingMarker.LooksLikeMarker(i.Subject)
-                || i.Snippet.Contains(_marker, StringComparison.OrdinalIgnoreCase));
+            ApplyDraftToUi(_draft);
+            StatusMessage = mode == QuoteSendComposeMode.ReplyAll && preferredInbox is > 0
+                ? "טיוטת Reply-All מוכנה. ערוך במידת הצורך ולחץ «שלח»."
+                : "טיוטת Compose חדש מוכנה. מלא נמענים ולחץ «שלח».";
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SendQuote draft load failed.");
+            StatusMessage = $"טעינת טיוטה נכשלה: {ex.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
 
-            if (hit is null && page.Items.Count > 0)
-            {
-                // FreeText already scoped to marker; any Sent hit counts as proof.
-                hit = page.Items[0];
-            }
+    private void ApplyDraftToUi(QuoteSendComposeDraft draft)
+    {
+        ToText = string.Join("; ", draft.To);
+        CcText = string.Join("; ", draft.Cc);
+        SubjectText = draft.Subject;
+        BodyText = draft.Body;
+        OnPropertyChanged(nameof(ModeLine));
+    }
 
-            if (hit is null)
+    private QuoteSendComposeDraft? CaptureDraftFromUi()
+    {
+        if (_draft is null)
+            return null;
+
+        return _draft with
+        {
+            To = SplitAddresses(ToText),
+            Cc = SplitAddresses(CcText),
+            Subject = SubjectText?.Trim() ?? string.Empty,
+            Body = BodyText ?? string.Empty,
+        };
+    }
+
+    private static IReadOnlyList<string> SplitAddresses(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return Array.Empty<string>();
+
+        return text
+            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(s => s.Contains('@', StringComparison.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async void Send_Click(object sender, RoutedEventArgs e)
+    {
+        if (_compose is null || _context.TaskId is not int taskId || taskId <= 0)
+        {
+            MessageBox.Show("חסר שירות שליחה או מזהה משימה.", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var userId = _context.ActingUserId ?? 0;
+        if (userId <= 0)
+        {
+            MessageBox.Show("חסר משתמש מחובר לשליחה.", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var draft = CaptureDraftFromUi();
+        if (draft is null || draft.To.Count == 0)
+        {
+            MessageBox.Show("יש למלא לפחות נמען אחד ב־אל.", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (SubjectText.Contains(QuoteSendTrackingMarker.Prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("אין לכלול את סימן המעקב בכותרת.", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SetBusy(true);
+        StatusMessage = "שולח…";
+        try
+        {
+            WorkflowDebugTrace.Step("SendQuote.Compose",
+                $"task={taskId} marker={draft.Marker} mode={draft.Mode} to={draft.To.Count} cc={draft.Cc.Count}");
+
+            var result = await _compose
+                .SendAsync(taskId, userId, draft, _attachments, CancellationToken.None)
+                .ConfigureAwait(true);
+
+            if (!result.Success)
             {
                 CanCompleteVerified = false;
-                StatusMessage = "לא נמצאה הוכחה ב-Sent. שלחו את המייל או בקשו override ממנהל.";
+                StatusMessage = result.RequiresConsent
+                    ? $"נדרש אישור Google לשליחה: {result.Error}"
+                    : $"השליחה נכשלה: {result.Error}";
                 WorkflowDebugTrace.Step("SendQuote.Verify",
-                    $"task={_context.TaskId} marker={_marker} found=False");
+                    $"task={taskId} marker={draft.Marker} found=False error={result.Error}");
                 return;
             }
 
             CanCompleteVerified = true;
-            var recipients = hit.To is { Value.Length: > 0 } to ? to.Value : "(לא זמין)";
-            StatusMessage = $"נמצאה הוכחה ב-Sent. נמענים: {recipients}. אפשר לסיים את המשימה.";
+            StatusMessage = $"נשלח בהצלחה. MessageId={result.MessageId}. אפשר לסיים את המשימה.";
             _logger?.LogInformation(
-                "SendQuote Sent proof: task={TaskId} marker={Marker} messageId={MessageId} to={To}",
-                _context.TaskId, _marker, hit.MessageId, recipients);
+                "SendQuote sent: task={TaskId} marker={Marker} messageId={MessageId}",
+                taskId, draft.Marker, result.MessageId);
             WorkflowDebugTrace.Step("SendQuote.Verify",
-                $"task={_context.TaskId} marker={_marker} found=True messageId={hit.MessageId}");
+                $"task={taskId} marker={draft.Marker} found=True messageId={result.MessageId}");
         }
         catch (Exception ex)
         {
             CanCompleteVerified = false;
-            StatusMessage = $"שגיאה בבדיקת Sent: {ex.Message}";
-            _logger?.LogWarning(ex, "SendQuote Sent verify failed for task {TaskId}", _context.TaskId);
+            StatusMessage = $"שגיאה בשליחה: {ex.Message}";
+            _logger?.LogWarning(ex, "SendQuote send failed for task {TaskId}", taskId);
         }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async void PickSource_Click(object sender, RoutedEventArgs e)
+        => await PickAndApplySourceAsync().ConfigureAwait(true);
+
+    private async Task PickAndApplySourceAsync()
+    {
+        if (_emailGateway is null || _compose is null)
+        {
+            MessageBox.Show("שירות הדואר אינו זמין לבחירת מייל מקור.", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SetBusy(true);
+        StatusMessage = "טוען מיילים לבחירה…";
+        try
+        {
+            var page = await _emailGateway.GetMailboxPageAsync(
+                new EmailMailboxQuery
+                {
+                    MailboxScope = EmailMailboxScope.AllMail,
+                    PageSize = 40,
+                },
+                pageToken: null,
+                CancellationToken.None).ConfigureAwait(true);
+
+            if (page.Items.Count == 0)
+            {
+                StatusMessage = "לא נמצאו מיילים לבחירה.";
+                return;
+            }
+
+            var picker = new QuoteSourceEmailPickerDialog(page.Items) { Owner = this };
+            if (picker.ShowDialog() != true || picker.Selected is null)
+            {
+                StatusMessage = "בחירת מייל מקור בוטלה.";
+                return;
+            }
+
+            // Resolve via rfc822 when possible; otherwise build Reply-All from summary+details.
+            var details = await _emailGateway
+                .GetDetailsAsync(picker.Selected.MessageId, CancellationToken.None)
+                .ConfigureAwait(true);
+            if (details is null)
+            {
+                StatusMessage = "לא ניתן לטעון את פרטי המייל שנבחר.";
+                return;
+            }
+
+            var instanceId = _context.WorkflowInstanceId is > 0
+                ? _context.WorkflowInstanceId.Value
+                : Math.Max(_context.ProjectId, 1);
+            var marker = QuoteSendTrackingMarker.Create(instanceId);
+            _draft = QuoteReplyAllComposer.BuildReplyAll(
+                details,
+                currentUserEmail: null,
+                _context.ProjectId,
+                marker);
+            ApplyDraftToUi(_draft);
+            StatusMessage = "טיוטת Reply-All לפי המייל שנבחר. לחץ «שלח».";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"בחירת מייל נכשלה: {ex.Message}";
+            _logger?.LogWarning(ex, "SendQuote pick source failed.");
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async void NewCompose_Click(object sender, RoutedEventArgs e)
+        => await LoadDraftAsync(QuoteSendComposeMode.NewCompose, preferredInbox: null).ConfigureAwait(true);
+
+    private void Attach_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Multiselect = true, CheckFileExists = true };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        foreach (var path in dialog.FileNames)
+        {
+            try
+            {
+                var bytes = File.ReadAllBytes(path);
+                _attachments.Add(new EmailAttachment(
+                    Path.GetFileName(path),
+                    "application/octet-stream",
+                    bytes));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"לא ניתן לצרף '{path}': {ex.Message}", "שליחת הצעה",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        OnPropertyChanged(nameof(AttachmentLine));
     }
 
     private async void CompleteVerified_Click(object sender, RoutedEventArgs e)
     {
         if (!CanCompleteVerified)
         {
-            MessageBox.Show("יש לאמת שליחה ב-Sent לפני סיום.", "שליחת הצעה",
+            MessageBox.Show("יש לשלוח בהצלחה לפני סיום (או לבקש override).", "שליחת הצעה",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -200,20 +464,20 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     {
         if (!CanOverride)
         {
-            MessageBox.Show("רק מנהל מערכת יכול לאשר בלי הוכחת Sent.", "שליחת הצעה",
+            MessageBox.Show("רק מנהל מערכת יכול לאשר בלי הוכחת שליחה.", "שליחת הצעה",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var confirm = MessageBox.Show(
-            "לאשר שליחה ללא הוכחת Sent? (override מנהל)",
+            "לאשר שליחה ללא הוכחת MessageId? (override מנהל)",
             "אישור מנהל",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
             return;
 
-        await CompleteAsync(overrideNote: $"AdminOverride marker={_marker}").ConfigureAwait(true);
+        await CompleteAsync(overrideNote: $"AdminOverride marker={_draft?.Marker}").ConfigureAwait(true);
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
@@ -280,6 +544,13 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
             _logger?.LogError(ex, "SendQuote complete failed for task {TaskId}", taskId);
             MessageBox.Show(ex.Message, "שליחת הצעה", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void SetBusy(bool busy)
+    {
+        _isBusy = busy;
+        OnPropertyChanged(nameof(CanSend));
+        IsEnabled = !busy;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>

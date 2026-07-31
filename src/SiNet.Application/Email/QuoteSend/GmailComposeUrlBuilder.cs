@@ -17,15 +17,15 @@ public static class GmailComposeUrlBuilder
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Legacy URL helper retained for tests. Subject must not include the tracking marker;
+    /// marker lives only in a small body footer (SendQuote internal compose policy).
+    /// </summary>
     public static (string Subject, string Body) BuildQuoteSendContent(string marker, int projectId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(marker);
-
-        var subject = $"הצעת מחיר — פרויקט {projectId} [{marker}]";
-        var body =
-            "שלום," + Environment.NewLine + Environment.NewLine +
-            "מצורפת הצעת מחיר." + Environment.NewLine + Environment.NewLine +
-            $"סימן מעקב (נא להשאיר): {marker}" + Environment.NewLine;
+        var subject = $"הצעת מחיר — פרויקט {projectId}";
+        var body = QuoteReplyAllComposer.BuildBody(marker, isReply: false);
         return (subject, body);
     }
 }

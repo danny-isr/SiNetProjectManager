@@ -40,8 +40,8 @@ decision for any behavior change.
 | Capability | Active implementation | Stack | Current status |
 | --- | --- | --- | --- |
 | Gmail inbox read (project label scoped) | `InboxViewModel` -> `IEmailGateway` -> `GmailEmailGateway` -> `GmailClientProvider` | Native | Active |
-| Gmail Sent search (Proposal send proof) | `SendQuoteToClientDialog` → `IEmailGateway.GetMailboxPageAsync` (`EmailMailboxScope.Sent` / `in:sent` + marker) | Native | Active (readonly; no silent API send). Compose opens Gmail web URL. |
-| First real email window (Gmail + ACC-filing) | `EmailWindowViewModel` -> `IEmailGateway` + ACC ports / executors | Native | Active ACC-filing pilot (N1–N3); Send/Reply/Forward still G-Policy |
+| Proposal SendQuote (narrow G-Policy exception) | `SendQuoteToClientDialog` → Application `IQuoteSendComposeService` → `IEmailSender` / `IEmailGateway` | Native | **Approved exception (2026-07-31):** internal SiNet compose + explicit user «שלח»; default Reply-All to Proposal source email; proof = send result MessageId persisted on task event (not Sent marker search). External Gmail URL compose retired for this task. |
+| First real email window (Gmail + ACC-filing) | `EmailWindowViewModel` -> `IEmailGateway` + ACC ports / executors | Native | Active ACC-filing pilot (N1–N3); Send/Reply/Forward still G-Policy **except** the SendQuote exception above |
 | Gmail auth/health bridge | `IConnectorAuthService` -> `GmailConnectorAuthService` | Native | Active |
 | Gmail send capability | `IEmailSender` -> `GmailEmailSender` | Native module | Implemented in code; host adoption is still separate |
 | Gmail outbound send used by legacy flows | `GmailOutboundMailService` / `GoogleService` | Legacy host | Active |
@@ -58,7 +58,7 @@ decision for any behavior change.
 | Host | Google runtime path | `AddSiNetGoogle()` | `AddSiNetSecrets()` | Result |
 | --- | --- | --- | --- | --- |
 | `SiNetProjectManagerV2` production host | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` for active legacy flows; native Gmail module is registered only for future New System consumers | Yes, via `AddSiNetNewSystemGraph()` | Yes, via `AddSiNetNewSystemGraph()` | Vault and native Gmail auth/session services are available to the New System graph, but production Google behavior remains legacy until a window/runtime slice explicitly adopts them |
-| `SiNet.App.Wpf` standalone New System | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` (+ Drive/Sheets for ProjectWork / Reports) | Yes | Yes | Production New System host for the limited pilot; vault-first client-secrets; GmailSend adoption still gated by G-Policy |
+| `SiNet.App.Wpf` standalone New System | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` (+ Drive/Sheets for ProjectWork / Reports) | Yes | Yes | Production New System host for the limited pilot; vault-first client-secrets; GmailSend adoption still gated by G-Policy **except** Proposal `SendQuoteToClient` (see §4.1) |
 
 Implication: native Gmail/Drive/Sheets on standalone are the **New System pilot** path. Legacy
 `GoogleService` remains the V2 Legacy production path until cutover. G-Policy still blocks broad
@@ -156,7 +156,10 @@ Rules for this slice:
 - Token store policy is **unchanged** — V2 continues to map native Gmail to
   `AppConfiguration.GoogleTokenStorePath` via `ConfigureNewSystemGmail`.
 - Legacy `GoogleService` production flows are **not replaced** by this change.
-- **GmailSend** still requires a separate **G-Policy** decision before any window adoption.
+- **GmailSend** still requires a separate **G-Policy** decision before broad window adoption.
+  **Exception (2026-07-31):** Proposal `SendQuoteToClient` may call `IEmailSender` only through
+  `IQuoteSendComposeService` after an explicit user «שלח» click. No other Email / Reply / Forward
+  surfaces are covered by this exception.
 - **MasterPlan Reports Sheets (R01–R03)** are approved native (S3); Inspection/other Sheets remain deferred.
 - **Broad legacy window migration** remains blocked until G-Policy, ACC-Host contract, and other
   foundation gaps are closed.
@@ -191,7 +194,7 @@ Rule of thumb:
 | --- | --- | --- | --- |
 | Gmail inbox read | User OAuth | Approved (`GmailReadonly`) | Native and allowed |
 | Gmail silent restore / explicit connect | User OAuth | Approved | Native and allowed |
-| Gmail send | User OAuth | Code present (`GmailSend`) | **Policy gap**: not broadly approved for window migration by default |
+| Gmail send | User OAuth | Code present (`GmailSend`) | **Narrow approval:** Proposal `SendQuoteToClient` only (internal compose + explicit Send). Broad window migration still blocked |
 | Gmail modify / labels / mark-read | User OAuth | Code present (`GmailModify`) | Native for list filing/triage; re-consent may be required |
 | Gmail full body / attachment metadata | User OAuth | Approved under `GmailReadonly` | Native and allowed for the first real email window |
 | Drive ProjectWork read/list/open | User OAuth | Approved (`Drive`) | Native via `GoogleDriveFileStore` |
@@ -218,7 +221,7 @@ Until a separately approved design says otherwise:
 
 Still deferred after the ProjectWork Drive slice:
 
-- Explicit product/policy decision on whether native `GmailSend` is approved for broad window adoption
+- Explicit product/policy decision on whether native `GmailSend` is approved for **broad** window adoption (Reply/Forward in Email window, etc.)
 - Attachment open/download behavior from the first real email window
 - Gmail throttling / rate-limit parity
 - ~~Google Sheets ports for MasterPlan R01–R03~~ — native S3
@@ -230,6 +233,11 @@ Still deferred after the ProjectWork Drive slice:
 `src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs` may consume `IConnectorAuthService` and
 `IEmailGateway` for the read-only email window, but must not consume `GmailClientProvider` or
 `IEmailSender` directly and must not grow send/modify behavior ad hoc.
+
+**SendQuote exception:** `SendQuoteToClientDialog` must not resolve `IEmailSender` / `GmailClientProvider`
+directly — only Application `IQuoteSendComposeService`. Tracking marker `SINET-QS-*` must not appear in
+the Subject; optional small footer in the body is allowed. Send proof is the `IEmailSender` MessageId
+persisted on a `ProjectAssignmentEvent` (not Sent-folder marker search).
 
 ## 6.1 Drive / Sheets / Reports status
 

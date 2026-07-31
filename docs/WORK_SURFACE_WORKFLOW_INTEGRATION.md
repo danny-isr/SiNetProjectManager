@@ -183,10 +183,14 @@ The standalone `EmailListView` / `EmailListViewModel` is hosted by `EmailWindowV
 | Linked mail → ProjectWork | **Not wired** |
 | File / unlink mail | **Deferred** — `IEmailFilingService` design only |
 | Cross-page task mail selection | **Not supported** — current Gmail page only |
-| Gmail send / modify / delete | **Deferred** — G-Policy |
+| Gmail send / modify / delete | **Deferred** — G-Policy (Email list window) |
 
 See [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) for component scope and deferred items.
-| Gmail send/modify | **Deferred** — requires G-Policy. No `IEmailSender` in WPF until approved. |
+
+| Capability | Status |
+| --- | --- |
+| Gmail send/modify (general WPF) | **Deferred** — G-Policy. No `IEmailSender` in Email/ProjectWork windows. |
+| Proposal `SendQuoteToClient` | **Approved exception (2026-07-31)** — `IQuoteSendComposeService` → `IEmailSender`; explicit «שלח»; Reply-All to Proposal source; proof = persisted MessageId. See [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md). |
 | Drive / Sheets | **Legacy/deferred** — not part of Work Surface integration yet. |
 | ACC read | Native ports (`IAccDocumentService`, browse, reconciliation). |
 | ACC write/upload/provisioning | **Deferred** — server-only / ACC-Write-Policy. No upload/provisioning ports from New System WPF. |
@@ -209,7 +213,8 @@ See [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) for component scope a
 | New task-window router | **Rejected** — use `TaskNavigationResolver` / `ITaskNavigationService` |
 | Direct completion from ViewModel | **Rejected** — use `ITaskCompletionCoordinator` |
 | Direct WorkflowStage / ProjectStatus mutation from UI | **Rejected** |
-| GmailSend / Reply / Forward | **Suspended** — G-Policy |
+| GmailSend / Reply / Forward (Email window) | **Suspended** — G-Policy |
+| Proposal SendQuote (`IQuoteSendComposeService`) | **Approved exception** — see [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) |
 | Drive / Sheets / Reports | **Suspended** — legacy/deferred |
 | ACC write / provisioning / upload | **Suspended** — ACC-Write-Policy |
 | Deleting old tasking model (`ProjectTypeTaskType`, etc.) | **Not approved** — still active; document only |

@@ -27,10 +27,10 @@ public sealed class QuoteSendTrackingMarkerTests
     }
 
     [Fact]
-    public void GmailComposeUrlBuilder_embeds_subject_and_body()
+    public void GmailComposeUrlBuilder_keeps_marker_out_of_subject()
     {
         var (subject, body) = GmailComposeUrlBuilder.BuildQuoteSendContent("SINET-QS-9-x", 3146);
-        Assert.Contains("SINET-QS-9-x", subject, StringComparison.Ordinal);
+        Assert.DoesNotContain("SINET-QS", subject, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("3146", subject, StringComparison.Ordinal);
         Assert.Contains("SINET-QS-9-x", body, StringComparison.Ordinal);
 
@@ -40,3 +40,4 @@ public sealed class QuoteSendTrackingMarkerTests
         Assert.Contains("body=", url, StringComparison.Ordinal);
     }
 }
+

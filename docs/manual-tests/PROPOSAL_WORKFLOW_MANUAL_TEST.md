@@ -175,8 +175,9 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ### 2.7b — `PRP.SendQuote` → `PRP.SentFollowUp`  (`QuoteSent`)
 
-- **Action:** open `SendQuoteToClient` → «פתח Compose ב-Gmail» (marker in subject/body) → send in Gmail →
-  «בדוק שנשלח» (Sent proof). Or Administrator **override** if Sent proof is unavailable.
+- **Action:** open `SendQuoteToClient` → internal SiNet compose (default Reply-All to Proposal source
+  email) → explicit «שלח» via `IEmailSender` → «סיום אחרי הוכחה» (proof = persisted sent MessageId).
+  Marker `SINET-QS-*` must **not** appear in the Subject. Or Administrator **override** if send is unavailable.
 - **Expected DB state:** `CurrentStage=PRP.SentFollowUp`; new `FollowQuoteApproval` task open
   (display: מעקב אישור לקוח). ProjectWork surface (not EmailFiling-blocked).
 - `[ ]` **Result/Notes:** ________________________________________________

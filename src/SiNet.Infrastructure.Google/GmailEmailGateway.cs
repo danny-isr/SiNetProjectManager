@@ -787,7 +787,9 @@ public sealed class GmailEmailGateway : IEmailGateway
             htmlBody,
             InternetMessageId: summary.InternetMessageId ?? GetHeader(headers, "Message-ID"),
             InReplyTo: GetHeader(headers, "In-Reply-To"),
-            References: GetHeader(headers, "References"));
+            References: GetHeader(headers, "References"),
+            ToAddresses: SiNet.Application.Email.QuoteSend.EmailHeaderAddressParser.Parse(GetHeader(headers, "To")),
+            CcAddresses: SiNet.Application.Email.QuoteSend.EmailHeaderAddressParser.Parse(GetHeader(headers, "Cc")));
     }
 
     private static string? GetHeader(IList<MessagePartHeader>? headers, string name)

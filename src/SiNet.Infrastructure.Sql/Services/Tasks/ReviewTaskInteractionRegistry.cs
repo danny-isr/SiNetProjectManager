@@ -430,7 +430,7 @@ public static class ReviewTaskInteractionRegistry
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: true),
 
-            // SendQuoteToClient — Gmail compose + Sent proof (or admin override).
+            // SendQuoteToClient — internal compose + IEmailSender MessageId proof (or admin override).
             new(
                 TaskTypeCodes.SendQuoteToClient,
                 TaskOpenMode.ProjectWork,

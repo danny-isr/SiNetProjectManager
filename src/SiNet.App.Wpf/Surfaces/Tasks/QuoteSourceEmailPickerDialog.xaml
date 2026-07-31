@@ -1,0 +1,17 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Tasks.QuoteSourceEmailPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="בחירת מייל מקור"
+        Width="720" Height="480"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+            <Button Content="אישור" Padding="14,8" Margin="0,0,8,0" IsDefault="True" Click="Ok_Click"/>
+            <Button Content="ביטול" Padding="14,8" IsCancel="True" Click="Cancel_Click"/>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Top" Text="בחר מייל להמשך Reply-All:" Margin="0,0,0,8"/>
+        <ListBox x:Name="EmailList" DisplayMemberPath="Display" />
+    </DockPanel>
+</Window>

@@ -2,24 +2,21 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="שליחת הצעת מחיר ללקוח"
-        Width="680" Height="480"
+        Width="820" Height="640"
         WindowStartupLocation="Manual"
         ResizeMode="CanResizeWithGrip"
-        MinWidth="520" MinHeight="360"
+        MinWidth="640" MinHeight="480"
         ShowInTaskbar="True"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}">
     <DockPanel Margin="12">
         <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <StackPanel Orientation="Horizontal">
-                <Button Content="פתח Compose ב-Gmail"
+                <Button Content="שלח"
                         Padding="14,8" Margin="0,0,8,0"
                         Background="#BBDEFB" Foreground="#0D47A1" FontWeight="SemiBold"
-                        BorderBrush="#64B5F6" Click="OpenCompose_Click"/>
-                <Button Content="בדוק שנשלח"
-                        Padding="14,8" Margin="0,0,8,0"
-                        Background="#C8E6C9" Foreground="#1B5E20" FontWeight="SemiBold"
-                        BorderBrush="#81C784" Click="VerifySent_Click"/>
+                        BorderBrush="#64B5F6" Click="Send_Click"
+                        IsEnabled="{Binding CanSend}"/>
                 <Button Content="סיום אחרי הוכחה"
                         Padding="14,8" Margin="0,0,8,0"
                         Background="#A5D6A7" Foreground="#1B5E20" FontWeight="SemiBold"
@@ -30,6 +27,21 @@
                         Background="#FFE0B2" Foreground="#E65100" FontWeight="SemiBold"
                         BorderBrush="#FFB74D" Click="Override_Click"
                         IsEnabled="{Binding CanOverride}"/>
+                <Button Content="צרף קובץ…"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Click="Attach_Click"
+                        Background="{DynamicResource SiSurfaceBrush}"
+                        BorderBrush="{DynamicResource SiBorderBrush}"/>
+                <Button Content="בחר מייל מקור…"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Click="PickSource_Click"
+                        Background="{DynamicResource SiSurfaceBrush}"
+                        BorderBrush="{DynamicResource SiBorderBrush}"/>
+                <Button Content="Compose חדש"
+                        Padding="14,8" Margin="0,0,8,0"
+                        Click="NewCompose_Click"
+                        Background="{DynamicResource SiSurfaceBrush}"
+                        BorderBrush="{DynamicResource SiBorderBrush}"/>
                 <Button Content="סגור"
                         Padding="14,8" Click="Close_Click"
                         Background="{DynamicResource SiSurfaceBrush}"
@@ -38,34 +50,63 @@
         </Border>
 
         <TextBlock DockPanel.Dock="Top"
-                   Text="שליחת הצעת מחיר — Compose + הוכחת Sent"
+                   Text="שליחת הצעת מחיר — Compose פנימי"
                    FontWeight="SemiBold"
                    FontSize="{DynamicResource SiTextMediumFontSize}"
                    Foreground="{DynamicResource SiForegroundBrush}"
+                   Margin="0,0,0,6"/>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding ProjectLine}"
+                   Foreground="{DynamicResource SiSecondaryBrush}"
+                   Margin="0,0,0,4"/>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding ModeLine}"
+                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                   Margin="0,0,0,4"/>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding StatusMessage}"
+                   Foreground="{DynamicResource SiForegroundBrush}"
+                   TextWrapping="Wrap"
                    Margin="0,0,0,8"/>
 
         <TextBlock DockPanel.Dock="Top"
-                   Text="פתחו Compose ב-Gmail, שלחו את המייל, ואז בדקו את תיקיית Sent לפי סימן המעקב. בלי הוכחה לא ניתן לסיים — אלא אם מנהל מאשר override."
-                   Foreground="{DynamicResource SiSecondaryBrush}"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,10"/>
+                   Text="{Binding AttachmentLine}"
+                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                   Margin="0,0,0,8"/>
 
-        <Border Padding="12" CornerRadius="6"
-                Background="#E3F2FD" BorderBrush="#64B5F6" BorderThickness="1"
-                VerticalAlignment="Top">
-            <StackPanel>
-                <TextBlock Text="{Binding ProjectLine}"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource SiForegroundBrush}"
-                           Margin="0,0,0,6"/>
-                <TextBlock Text="{Binding MarkerLine}"
-                           Foreground="{DynamicResource SiMutedForegroundBrush}"
-                           TextWrapping="Wrap"
-                           Margin="0,0,0,6"/>
-                <TextBlock Text="{Binding StatusMessage}"
-                           Foreground="{DynamicResource SiForegroundBrush}"
-                           TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="80"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="אל:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ToText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,6" MinHeight="28"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="עותק:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CcText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,6" MinHeight="28"/>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="נושא:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SubjectText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,6" MinHeight="28"/>
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="גוף:" VerticalAlignment="Top" Margin="0,4,8,0"/>
+            <TextBox Grid.Row="3" Grid.Column="1"
+                     Text="{Binding BodyText, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     MinHeight="220"/>
+        </Grid>
     </DockPanel>
 </Window>
