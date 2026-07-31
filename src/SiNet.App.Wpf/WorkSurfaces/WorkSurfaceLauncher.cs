@@ -151,6 +151,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                     context,
                     sendQuoteCompletion,
                     _services.GetService<SiNet.Application.Email.QuoteSend.IQuoteSendComposeService>(),
+                    _services.GetService<SiNet.Application.Email.QuoteSend.IQuoteSendAttachmentService>(),
                     _services.GetService<IEmailGateway>(),
                     _services.GetService<IAuthorizationQueryService>(),
                     _services.GetService<ILoggerFactory>()?.CreateLogger("SendQuoteToClient")));

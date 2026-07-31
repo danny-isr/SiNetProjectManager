@@ -20,4 +20,10 @@ public static class ProjectFileCatalogCodes
     /// under תכתובת → ניהול כספי → הצעת מחיר.
     /// </summary>
     public const string QuoteClientRequest = "QuoteClientRequest";
+
+    /// <summary>
+    /// Optional send-ready quote PDF («הצעת מחיר לשליחה») under תכתובת → ניהול כספי.
+    /// Filled from SendQuote attach when the slot has no physical file yet.
+    /// </summary>
+    public const string QuoteSendDocument = "QuoteSendDocument";
 }

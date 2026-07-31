@@ -33,6 +33,7 @@ public static class SeedBaselineCatalog
         "QuoteDocument",
         "QuoteClientApproval",
         "QuoteClientRequest",
+        "QuoteSendDocument",
     ];
 
     /// <summary>JobType title required before catalog seed can attach Quote* rows.</summary>

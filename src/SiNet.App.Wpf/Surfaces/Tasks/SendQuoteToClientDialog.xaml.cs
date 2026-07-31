@@ -26,6 +26,7 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     private readonly WorkSurfaceContext _context;
     private readonly ITaskCompletionService _completion;
     private readonly IQuoteSendComposeService? _compose;
+    private readonly IQuoteSendAttachmentService? _attachmentService;
     private readonly IEmailGateway? _emailGateway;
     private readonly IAuthorizationQueryService? _authorization;
     private readonly ILogger? _logger;
@@ -45,6 +46,7 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
         WorkSurfaceContext context,
         ITaskCompletionService completion,
         IQuoteSendComposeService? compose = null,
+        IQuoteSendAttachmentService? attachmentService = null,
         IEmailGateway? emailGateway = null,
         IAuthorizationQueryService? authorization = null,
         ILogger? logger = null)
@@ -52,6 +54,7 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _completion = completion ?? throw new ArgumentNullException(nameof(completion));
         _compose = compose;
+        _attachmentService = attachmentService;
         _emailGateway = emailGateway;
         _authorization = authorization;
         _logger = logger;
@@ -422,27 +425,76 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     private async void NewCompose_Click(object sender, RoutedEventArgs e)
         => await LoadDraftAsync(QuoteSendComposeMode.NewCompose, preferredInbox: null).ConfigureAwait(true);
 
-    private void Attach_Click(object sender, RoutedEventArgs e)
+    private async void Attach_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Multiselect = true, CheckFileExists = true };
-        if (dialog.ShowDialog(this) != true)
-            return;
+        var dialog = new OpenFileDialog
+        {
+            Multiselect = false,
+            CheckFileExists = true,
+            Filter = "PDF (*.pdf)|*.pdf",
+            Title = "בחר הצעת מחיר לשליחה (PDF)",
+        };
 
-        foreach (var path in dialog.FileNames)
+        if (_attachmentService is not null)
         {
             try
             {
-                var bytes = File.ReadAllBytes(path);
-                _attachments.Add(new EmailAttachment(
-                    Path.GetFileName(path),
-                    "application/octet-stream",
-                    bytes));
+                var initial = await _attachmentService
+                    .ResolveAttachInitialDirectoryAsync(_context.ProjectId, CancellationToken.None)
+                    .ConfigureAwait(true);
+                if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
+                    dialog.InitialDirectory = initial;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"לא ניתן לצרף '{path}': {ex.Message}", "שליחת הצעה",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                _logger?.LogWarning(ex, "SendQuote: failed to resolve ניהול_כספי initial directory.");
             }
+        }
+
+        if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FileName))
+            return;
+
+        var path = dialog.FileName;
+        try
+        {
+            if (_attachmentService is not null)
+            {
+                var filed = await _attachmentService
+                    .EnsureFiledIfNeededAsync(_context.ProjectId, path, CancellationToken.None)
+                    .ConfigureAwait(true);
+                if (!filed.Success)
+                {
+                    MessageBox.Show(
+                        $"הצירוף בוצע, אך התיוק לקטלוג נכשל: {filed.Error}",
+                        "שליחת הצעה",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                else if (filed.FiledNow)
+                {
+                    StatusMessage = "הקובץ תויק כ«הצעת_מחיר_לשליחה».";
+                    WorkflowDebugTrace.Step("SendQuote.File",
+                        $"project={_context.ProjectId} filed=True path={filed.FiledCanonicalPath}");
+                }
+                else if (filed.AlreadyFiled)
+                {
+                    StatusMessage = "הקובץ כבר מתויק כ«הצעת_מחיר_לשליחה» — לא תויק מחדש.";
+                    WorkflowDebugTrace.Step("SendQuote.File",
+                        $"project={_context.ProjectId} alreadyFiled=True path={filed.FiledCanonicalPath}");
+                }
+            }
+
+            var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
+            _attachments.Clear();
+            _attachments.Add(new EmailAttachment(
+                Path.GetFileName(path),
+                "application/pdf",
+                bytes));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"לא ניתן לצרף '{path}': {ex.Message}", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         OnPropertyChanged(nameof(AttachmentLine));

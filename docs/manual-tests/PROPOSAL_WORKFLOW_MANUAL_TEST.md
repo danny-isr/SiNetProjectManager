@@ -176,7 +176,9 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 ### 2.7b — `PRP.SendQuote` → `PRP.SentFollowUp`  (`QuoteSent`)
 
 - **Action:** open `SendQuoteToClient` → internal SiNet compose (default Reply-All to Proposal source
-  email) → explicit «שלח» via `IEmailSender` → «סיום אחרי הוכחה» (proof = persisted sent MessageId).
+  email) → attach **PDF** (dialog opens under ניהול_כספי) → if catalog slot `QuoteSendDocument`
+  («הצעת_מחיר_לשליחה») is empty, file the PDF there; if already filed as that slot, skip re-file →
+  explicit «שלח» via `IEmailSender` → «סיום אחרי הוכחה» (proof = persisted sent MessageId).
   Marker `SINET-QS-*` must **not** appear in the Subject. Or Administrator **override** if send is unavailable.
 - **Expected DB state:** `CurrentStage=PRP.SentFollowUp`; new `FollowQuoteApproval` task open
   (display: מעקב אישור לקוח). ProjectWork surface (not EmailFiling-blocked).

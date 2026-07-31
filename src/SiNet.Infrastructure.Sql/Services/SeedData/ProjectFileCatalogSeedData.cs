@@ -75,6 +75,20 @@ public static class ProjectFileCatalogSeedData
             [
                 "\u05D3\u05E8\u05D9\u05E9\u05EA \u05D4\u05DE\u05D6\u05DE\u05D9\u05DF \u05DC\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // דרישת המזמין להצעת מחיר
             ]),
+        // Optional send-ready PDF under ניהול_כספי (filled from SendQuote attach when slot empty).
+        new ProjectFileCatalogDefinition(
+            Code: ProjectFileCatalogCodes.QuoteSendDocument,
+            DefaultTitle: "\u05D4\u05E6\u05E2\u05EA_\u05DE\u05D7\u05D9\u05E8_\u05DC\u05E9\u05DC\u05D9\u05D7\u05D4", // הצעת_מחיר_לשליחה
+            JobTypeTitle: SqlProjectCreateService.DefaultJobTypeTitle,
+            FolderTitle: "\u05E0\u05D9\u05D4\u05D5\u05DC_\u05DB\u05E1\u05E4\u05D9", // ניהול_כספי
+            ParentFolderTitle: "\u05EA\u05DB\u05EA\u05D5\u05D1\u05EA", // תכתובת
+            TypeFile: ".pdf",
+            IsRequired: false,
+            OutSidData: false,
+            LegacyTitles:
+            [
+                "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8 \u05DC\u05E9\u05DC\u05D9\u05D7\u05D4", // הצעת מחיר לשליחה
+            ]),
     ];
 
     public sealed record ProjectFileCatalogDefinition(

@@ -18,6 +18,7 @@ public static class EmailReadServiceCollectionExtensions
         services.AddSingleton<IProposalSourceEmailQuery, SqlProposalSourceEmailQuery>();
         services.AddSingleton<IQuoteSendProofStore, SqlQuoteSendProofStore>();
         services.AddSingleton<IQuoteSendComposeService, QuoteSendComposeService>();
+        services.AddSingleton<IQuoteSendAttachmentService, QuoteSendAttachmentService>();
 
         return services;
     }
