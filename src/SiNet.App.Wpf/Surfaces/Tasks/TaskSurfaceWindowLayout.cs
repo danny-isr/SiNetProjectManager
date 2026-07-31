@@ -60,4 +60,18 @@ public static class TaskSurfaceWindowLayout
         window.Width = bounds.Width;
         window.Height = bounds.Height;
     }
+
+    /// <summary>
+    /// Complementary geometry + shell ownership for a task-driven surface (non-Topmost).
+    /// Call before <c>Show</c> / <c>ShowDialog</c>; optionally call again on <c>Loaded</c>.
+    /// </summary>
+    public static void PrepareTaskSurfaceWindow(Window window, Window? owner = null)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        window.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
+        window.Topmost = false;
+        window.ShowInTaskbar = true;
+        ApplyComplementaryToWorkbench(window);
+    }
 }

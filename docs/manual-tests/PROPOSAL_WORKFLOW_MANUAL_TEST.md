@@ -133,6 +133,9 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 - **Note:** this stage closes via the file-filing pipeline (`ReviewMaterialFiled`), **not** a picked result
   code. The transition fires on `AllRequiredTasksClosed`.
+- **Prerequisite:** Seed includes catalog PDF **דרישת המזמין להצעת מחיר** (`QuoteClientRequest`) under
+  **תכתובת → ניהול כספי → הצעת מחיר**. Tag a PDF from the email ACC attachments onto that required slot
+  (typical client request material).
 - **Action:** file material against the `FileQuoteMaterial` task until it closes (email filing /
   MoveToProject, or complete via the ProjectWork surface if that is how the task is exposed).
 - **Expected `[WF-STEP]` logs:**

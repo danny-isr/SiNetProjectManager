@@ -14,4 +14,10 @@ public static class ProjectFileCatalogCodes
 
     /// <summary>Client approval PDF («אישור לקוח להצעה») under חומר כללי / תכתובת → ניהול כספי.</summary>
     public const string QuoteClientApproval = "QuoteClientApproval";
+
+    /// <summary>
+    /// Required client/orderer quote-request PDF («דרישת המזמין להצעת מחיר»)
+    /// under תכתובת → ניהול כספי → הצעת מחיר.
+    /// </summary>
+    public const string QuoteClientRequest = "QuoteClientRequest";
 }

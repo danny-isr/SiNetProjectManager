@@ -60,7 +60,7 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Id | Workflow | Start | UI | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **In progress** (live soak) | Project **3146**; through Calculation → at `PRP.Preparation` task=17 |
+| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Restart** (live soak 2026-07-31 ~08:19) | Fresh run after SOF-001–004; ignore stalled 3146/task=19 |
 | B | Opinion `OPN.*` | `CreateOpinionProject` | Email + Task workbench | **Not Run** (live) | Checklist §3 ready; no dedicated engine test yet |
 | C | Planning `PLN.*` | ProjectType mapping / post-quote work order | Project create + tasks | **Blocked (pilot)** | Approved Blocked §4.C.Blocked — ProjectWork Deferred |
 | D | Review `REV.*` + MAT | Review start / hosted MAT | Tasks (+ ProjectWork) | **Blocked (pilot)** | Approved Blocked §5 — REV.Intake unseeded + ProjectWork Deferred |
@@ -315,8 +315,13 @@ Prior run 2026-07-30: 268 Pass. Live Tree A soak in progress (see §9 / §10). C
 | 2026-07-31 ~07:41 | Double-click task=19 → **no window** (`primaryTarget` empty → launcher blocks). Desired client-approval PDF / reject variants → **SOF-004** | Open blocked |
 | 2026-07-31 | Implemented SOF-001/002/003/004 (docs + code): `PRP.SendQuote`, Sent proof dialog, FollowQuoteApproval→ProjectWork, `QuoteClientApproval`, `QuoteCancelledNoResponse`, Topmost=false, `~$` ignore | Code ready — Seed + re-run tail |
 | 2026-07-31 | Instance 3146 / task=19 **not mid-patched**; new graph applies after Seed + new Proposal start (or from InternalApproval on fresh instance) | Operator: Seed בסיסי then soak 2.7→2.8 |
+| 2026-07-31 ~08:19 | **Tree A restart:** archived prior log; launched `SiNet.App.Wpf` DEBUG PID **45312**; AccService PID **25296** still up; agent tails branded `workflow-manual-debug.log` | Session open |
+| 2026-07-31 ~08:21 | `CreatePriceQuote` inbox=2 → Proposal **instance=2** Active @ `PRP.ProjectSetup` (stage 33); **task=20** OpenQuoteProject; Launcher→combined dialog | A start **Pass** |
+| 2026-07-31 ~08:24 | OpenQuoteProject → project **3147**; Acc.Provision EnsureMapping **OK** (~6s); advance toward FileMaterial | ProjectSetup **Pass** |
+| 2026-07-31 ~08:25 | Health: «תם הזמן בהמתנה לשרת AI» = **Ollama** timeout (SOF-005). «פתח ב-ACC» opens **browser** by design in OpenQuote dialog (SOF-006) | Logged; soak continues |
+| 2026-07-31 ~08:30 | SOF-007: OpenQuote/FileMaterial not in complementary strip — fixed `PrepareTaskSurfaceWindow`; app restarted | Verify on next task open |
 
-**Next:** DEBUG Seed בסיסי → short soak from InternalApproval (or full Proposal on new email) → verify SendQuote compose/Sent + FollowQuoteApproval ProjectWork/PDF.
+**Next (operator):** reopen FileMaterial (or continue) → verify complementary fill → … → SendQuote → SentFollowUp → `PRP.Approved`.
 
 ---
 

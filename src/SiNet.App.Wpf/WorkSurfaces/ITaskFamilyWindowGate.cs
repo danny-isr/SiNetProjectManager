@@ -1,8 +1,8 @@
 namespace SiNet.App.Wpf.WorkSurfaces;
 
 /// <summary>
-/// Host seam: close floating task-family windows when switching to another family
-/// (e.g. ProjectWork ↔ Inspection) so only one execution window stays open.
+/// Legacy seam: close ProjectWork floating task windows.
+/// Prefer <see cref="ITaskSurfaceWindowCoordinator"/> (SOF-009) for all task surfaces.
 /// </summary>
 public interface ITaskFamilyWindowGate
 {

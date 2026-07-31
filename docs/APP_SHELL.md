@@ -350,8 +350,10 @@ Rules:
 - Prefer the **live** workbench `ActualWidth` when the workbench window is open; otherwise reserve
   `TaskWorkbenchView.DefaultNarrowWidth`.
 - Use `WindowStartupLocation=Manual` for these surfaces (not `CenterOwner` / `CenterScreen`).
-- Modal decision dialogs (quote classify, create-task, prompts) stay centered on owner — they are
-  not complementary task surfaces.
+- **Task hosts from the workbench** — including `OpenQuoteProjectDecisionDialog`,
+  `SendQuoteToClientDialog`, Email work-item (`FileQuoteMaterial`), ProjectWork float, Inspection —
+  use complementary geometry + `Owner=MainWindow` + `Activate()`, even when shown with `ShowDialog`.
+- Small **prompts** only (place/company picker, MessageBox, create-task prompt) stay `CenterOwner`.
 - Browse / shell-hosted inbox content stays in the main shell content area and is unchanged.
 
 **Topmost / ownership (SOF-001):**
@@ -366,8 +368,18 @@ Work surfaces must not float above other desktop apps when the operator switches
 Complementary geometry is unchanged. Full dock into `IShellContentHost` for every task surface is
 **out of scope** for this policy slice.
 
+**Singleton / uniqueness (SOF-009):**
+
+| Rule | Detail |
+| --- | --- |
+| At most one | Process-wide: only **one** task work surface open (Email work-item, ProjectWork float, Inspection, OpenQuote, SendQuote, QuoteClassification) |
+| No duplicates | Same surface must not open twice with divergent state |
+| Re-open | Same task → `Activate`; other task (any family) → close previous or rebind, then show |
+| Workbench | `TaskWorkbenchView` is **not** a work surface — stays open for switching tasks |
+| Focus | `Topmost=false` (SOF-001); `Owner=MainWindow` + `Activate`. Shell/workbench stay interactive (no global MainWindow disable) |
+
 Implementation: `TaskSurfaceWindowLayout` in `SiNet.App.Wpf.Surfaces.Tasks`;
-`ProjectWorkTaskFloatingHost` / Acc pop-out respect the table above.
+`ITaskSurfaceWindowCoordinator` + `ProjectWorkTaskFloatingHost` / Email / Inspection hosts / Acc pop-out.
 
 ---
 

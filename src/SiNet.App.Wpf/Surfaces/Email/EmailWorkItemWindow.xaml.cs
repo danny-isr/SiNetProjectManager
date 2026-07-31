@@ -33,7 +33,8 @@ public partial class EmailWorkItemWindow : Window
     private void OnLoadedApplyComplementaryLayout(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoadedApplyComplementaryLayout;
-        TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(this);
+        TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow(this, Owner);
+        Activate();
     }
 
     private void OnWorkItemDismissRequested() => Close();

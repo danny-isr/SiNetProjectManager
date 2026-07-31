@@ -51,6 +51,18 @@ public static class ProjectFileCatalogSeedData
             IsRequired: true,
             OutSidData: false,
             LegacyTitles: []),
+        // Nested under ניהול כספי (parent must exist — created by the rows above).
+        new ProjectFileCatalogDefinition(
+            Code: ProjectFileCatalogCodes.QuoteClientRequest,
+            DefaultTitle: "\u05D3\u05E8\u05D9\u05E9\u05EA \u05D4\u05DE\u05D6\u05DE\u05D9\u05DF \u05DC\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // דרישת המזמין להצעת מחיר
+            JobTypeTitle: SqlProjectCreateService.DefaultJobTypeTitle,
+            FolderTitle: "\u05D4\u05E6\u05E2\u05EA \u05DE\u05D7\u05D9\u05E8", // הצעת מחיר
+            ParentFolderTitle: "\u05E0\u05D9\u05D4\u05D5\u05DC \u05DB\u05E1\u05E4\u05D9", // ניהול כספי
+            TypeFile: ".pdf",
+            IsRequired: true,
+            // Must be true: email ACC tagging picker only lists OutSidData catalog slots.
+            OutSidData: true,
+            LegacyTitles: []),
     ];
 
     public sealed record ProjectFileCatalogDefinition(
@@ -67,7 +79,9 @@ public static class ProjectFileCatalogSeedData
     /// <summary>
     /// Ensures every catalog definition exists and is linked by <c>Code</c>.
     /// Never deletes ProjectFile / ProjectFolder rows. Does not overwrite an arbitrary admin Title rename.
-    /// Target folder is «ניהול כספי» under «תכתובת». Does <b>not</b> create a folder named «הצעת מחיר».
+    /// Most quote finance slots target «ניהול כספי» under «תכתובת».
+    /// <see cref="ProjectFileCatalogCodes.QuoteClientRequest"/> targets nested
+    /// «הצעת מחיר» under «ניהול כספי» (folder is created when missing).
     /// </summary>
     public static async Task<string> EnsureAsync(SiNetSQLDbContext db, CancellationToken ct = default)
     {
@@ -120,7 +134,7 @@ public static class ProjectFileCatalogSeedData
                 ct)
             .ConfigureAwait(false);
         if (folderId is null)
-            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' under '{def.ParentFolderTitle}' not found; create parent «{def.ParentFolderTitle}» first — seed does not create a folder named «הצעת מחיר»).";
+            return $"[{def.Code}] skipped (folder '{def.FolderTitle}' under '{def.ParentFolderTitle}' not found; create parent «{def.ParentFolderTitle}» first).";
 
         var typeId = jobType.Id;
         var knownTitles = new HashSet<string>(def.LegacyTitles, StringComparer.Ordinal) { def.DefaultTitle };
@@ -250,8 +264,8 @@ public static class ProjectFileCatalogSeedData
     /// <summary>
     /// Resolves <paramref name="folderTitle"/> under <paramref name="parentFolderTitle"/>.
     /// Re-parents an existing folder when it is not under the expected parent.
-    /// Creates the child folder only when the parent already exists — never creates a folder
-    /// named «הצעת מחיר» and never invents the parent «תכתובת».
+    /// Creates the child folder when the parent already exists; never invents a missing parent
+    /// (e.g. will not create «תכתובת» or «ניהול כספי» if absent).
     /// </summary>
     private static async Task<int?> EnsureFolderUnderParentAsync(
         SiNetSQLDbContext db,

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.Application.Abstractions.Inspection;
@@ -19,7 +20,11 @@ public static class WorkSurfaceServiceCollectionExtensions
         services.AddTransient<SiNet.App.Wpf.Shared.Projects.ProjectSelectorViewModel>();
         services.AddTransient<ProjectWorkWindowViewModel>();
         services.AddSingleton<IProjectWorkWindowFactory, ProjectWorkWindowFactory>();
+        services.AddSingleton<ITaskSurfaceWindowCoordinator, TaskSurfaceWindowCoordinator>();
+        services.AddSingleton<ITaskFamilyWindowGate>(sp => sp.GetRequiredService<ITaskSurfaceWindowCoordinator>());
         services.AddSingleton<ProjectWorkTaskFloatingHost>();
+        services.AddSingleton<EmailWorkItemTaskFloatingHost>();
+        services.AddSingleton<InspectionTaskFloatingHost>();
         services.AddSingleton<ProjectWorkSurfaceHost>();
         services.AddSingleton<IProjectWorkSurfaceHost>(sp => sp.GetRequiredService<ProjectWorkSurfaceHost>());
         services.AddSingleton<IWorkSurfaceLauncher, WorkSurfaceLauncher>();

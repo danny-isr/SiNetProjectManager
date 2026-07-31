@@ -136,7 +136,7 @@ public sealed class EmailListMigrationBoundaryTests
         Assert.Contains("PrimaryWorkTargetEntityId", vmSource, StringComparison.Ordinal);
         Assert.Contains("IEmailInboxQueryService", vmSource, StringComparison.Ordinal);
         Assert.Contains("WorkSurfaceComponentKeys.IsEmailSurface", launcherSource, StringComparison.Ordinal);
-        Assert.Contains("IEmailWorkItemWindowFactory", launcherSource, StringComparison.Ordinal);
+        Assert.Contains("EmailWorkItemTaskFloatingHost", launcherSource, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
+using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.WorkSurfaces;
@@ -56,6 +57,7 @@ public sealed class NewShellProjectWorkMenuTests
             var services = new ServiceCollection();
             services.AddSingleton<IShellContentHost, ShellContentHost>();
             services.AddSingleton<IProjectWorkWindowFactory>(new StubFactory());
+            services.AddSingleton<ITaskSurfaceWindowCoordinator, TaskSurfaceWindowCoordinator>();
             services.AddSingleton<ProjectWorkTaskFloatingHost>();
             var sp = services.BuildServiceProvider();
             var host = new ProjectWorkSurfaceHost(
@@ -80,6 +82,7 @@ public sealed class NewShellProjectWorkMenuTests
             var services = new ServiceCollection();
             services.AddSingleton<IShellContentHost>(contentHost);
             services.AddSingleton<IProjectWorkWindowFactory>(factory);
+            services.AddSingleton<ITaskSurfaceWindowCoordinator, TaskSurfaceWindowCoordinator>();
             services.AddSingleton<ProjectWorkTaskFloatingHost>();
             var sp = services.BuildServiceProvider();
             var host = new ProjectWorkSurfaceHost(
@@ -140,6 +143,7 @@ public sealed class NewShellProjectWorkMenuTests
             new StubAuthorization(projectWorkAuthorized, emailAuthorized));
         services.AddSingleton<IShellContentHost, ShellContentHost>();
         services.AddSingleton<IProjectWorkWindowFactory>(new StubFactory());
+        services.AddSingleton<ITaskSurfaceWindowCoordinator, TaskSurfaceWindowCoordinator>();
         services.AddSingleton<ProjectWorkTaskFloatingHost>();
         services.AddSingleton<ProjectWorkSurfaceHost>();
         // Email menu only needs the host type present; Show is never invoked in these tests.

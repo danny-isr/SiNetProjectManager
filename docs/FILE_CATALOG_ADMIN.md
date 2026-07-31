@@ -56,14 +56,16 @@ Implement as one feature toward **full V2 parity** (create folders + files + ass
 2. Create folder, create/edit/delete file defs, assign, save  
 3. JobType add/rename if still needed for day-to-day use  
 
-Seeded catalog rows with `Code` under **תכתובת → ניהול כספי** (JobType חומר כללי):
+Seeded catalog rows with `Code` (JobType חומר כללי):
 
-| Code | Title | Type | Required | Notes |
-| --- | --- | --- | --- | --- |
-| `QuoteEstimate` | אומדן הצעה | `.xlsx` | yes | Gates `PrepareQuoteCalculation` |
-| `QuoteDocument` | הצעת מחיר | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false` (office-created). Set `TemplateLocation` in this admin UI for «אלטרנטיבה מתבנית» in ProjectWork |
+| Code | Title | Folder | Type | Required | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `QuoteEstimate` | אומדן הצעה | תכתובת → ניהול כספי | `.xlsx` | yes | Gates `PrepareQuoteCalculation` |
+| `QuoteDocument` | הצעת מחיר | תכתובת → ניהול כספי | `.docx` | yes | Gates `PrepareQuoteDocument`; `OutSidData=false`. Set `TemplateLocation` for «אלטרנטיבה מתבנית» |
+| `QuoteClientApproval` | אישור לקוח להצעה | תכתובת → ניהול כספי | `.pdf` | yes | Gates `FollowQuoteApproval` approve |
+| `QuoteClientRequest` | דרישת המזמין להצעת מחיר | תכתובת → ניהול כספי → **הצעת מחיר** | `.pdf` | yes | `OutSidData=true` so email ACC tagging can target it during `FileQuoteMaterial`. See [`QUOTE_CLIENT_REQUEST_CATALOG.md`](./manual-tests/QUOTE_CLIENT_REQUEST_CATALOG.md) |
 
-Editable title/flags OK; do not delete or clear `Code` without an explicit later decision. Seed does **not** create a folder named «הצעת מחיר» — only the file def under **ניהול כספי**.
+Editable title/flags OK; do not delete or clear `Code` without an explicit later decision. Seed **creates** nested folder «הצעת מחיר» under «ניהול כספי» when missing (for `QuoteClientRequest`).
 
 ---
 

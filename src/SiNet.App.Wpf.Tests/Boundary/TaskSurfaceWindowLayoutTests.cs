@@ -47,14 +47,20 @@ public sealed class TaskSurfaceWindowLayoutTests
         var emailWindow = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWorkItemWindow.xaml.cs");
         var inspection = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView.xaml.cs");
 
-        Assert.Contains("TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench", floatingHost, StringComparison.Ordinal);
-        Assert.Contains("TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench", launcher, StringComparison.Ordinal);
-        Assert.Contains("TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench", emailWindow, StringComparison.Ordinal);
+        Assert.Contains("TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow", floatingHost, StringComparison.Ordinal);
+        Assert.Contains("TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow", launcher, StringComparison.Ordinal);
+        Assert.Contains("TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow", emailWindow, StringComparison.Ordinal);
         Assert.Contains("TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench", inspection, StringComparison.Ordinal);
         Assert.DoesNotContain("WindowStartupLocation.CenterOwner", floatingHost, StringComparison.Ordinal);
-        Assert.Contains("Topmost = false", floatingHost, StringComparison.Ordinal);
-        Assert.Contains("Owner = owner", floatingHost, StringComparison.Ordinal);
+        Assert.Contains("OpenQuoteProject", launcher, StringComparison.Ordinal);
+        Assert.Contains("ShowTaskDialog", launcher, StringComparison.Ordinal);
+        Assert.Contains("ITaskSurfaceWindowCoordinator", launcher, StringComparison.Ordinal);
+        Assert.Contains("EmailWorkItemTaskFloatingHost", launcher, StringComparison.Ordinal);
+        Assert.Contains("InspectionTaskFloatingHost", launcher, StringComparison.Ordinal);
         Assert.Contains("SendQuoteToClient", launcher, StringComparison.Ordinal);
+        Assert.Contains("WindowStartupLocation=\"Manual\"",
+            ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/OpenQuoteProjectDecisionDialog.xaml"),
+            StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath) =>

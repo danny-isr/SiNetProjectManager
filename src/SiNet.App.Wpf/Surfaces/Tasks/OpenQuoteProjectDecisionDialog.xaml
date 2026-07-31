@@ -4,9 +4,10 @@
         xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
         Title="פתיחת פרויקט הצעת מחיר"
         Width="1100" Height="780"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="Manual"
         ResizeMode="CanResizeWithGrip"
         MinWidth="860" MinHeight="600"
+        ShowInTaskbar="True"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}">
     <DockPanel Margin="10">

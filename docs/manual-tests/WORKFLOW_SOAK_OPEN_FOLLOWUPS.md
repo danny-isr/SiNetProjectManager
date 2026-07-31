@@ -15,7 +15,7 @@ round (docs → risk → code), not during Tree A happy-path clicks.
 
 | Id | Area | Summary | Observed | Proposed direction | Priority |
 | --- | --- | --- | --- | --- | --- |
-| *(none)* | | | | | |
+| SOF-007 | Complementary layout for OpenQuote + FileMaterial | Task hosts not filling left complementary strip / appear behind shell | OpenQuote used `CenterOwner`; Email work-item lacked Owner+Activate. Fixed: `PrepareTaskSurfaceWindow` on launcher paths | Restart app to pick up; verify next FileMaterial / OpenQuote open | High (soak UX) |
 
 ---
 
@@ -23,7 +23,8 @@ round (docs → risk → code), not during Tree A happy-path clicks.
 
 | Id | Area | Summary | Status |
 | --- | --- | --- | --- |
-| *(none yet)* | | | |
+| SOF-005 | System health — Ollama | Timeout strip noise | Parked — not blocking Tree A |
+| SOF-006 | OpenQuote «פתח ב-ACC» | Opens external browser by design | Parked — product choice after Tree A |
 
 ---
 
@@ -35,6 +36,8 @@ round (docs → risk → code), not during Tree A happy-path clicks.
 | SOF-001 | 2026-07-31 | ProjectWork float + Acc pop-out: `Topmost=false`, Owner=MainWindow; APP_SHELL §10.1. |
 | SOF-003 | 2026-07-31 | `PRP.SendQuote` + `SendQuoteToClientDialog` (compose/Sent/admin override); engine test Pass. |
 | SOF-004 | 2026-07-31 | `FollowQuoteApproval`→ProjectWork; `QuoteClientApproval` PDF gate; `QuoteCancelledNoResponse`. |
+| SOF-008 | 2026-07-31 | Catalog `QuoteClientRequest` («דרישת המזמין להצעת מחיר») under תכתובת→ניהול כספי→הצעת מחיר; `.pdf`, `OutSidData=true` for email ACC tag. Seed בסיסי after deploy. |
+| SOF-009 | 2026-07-31 | Process-wide single task work surface (`ITaskSurfaceWindowCoordinator`); Email/Inspection OpenOrRebind; dialogs close floats before ShowDialog. APP_SHELL §10.1. |
 
 ---
 

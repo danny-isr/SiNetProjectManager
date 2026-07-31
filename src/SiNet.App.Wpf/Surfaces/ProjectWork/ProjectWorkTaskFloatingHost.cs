@@ -1,5 +1,6 @@
 using System.Windows;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.WorkSurfaces;
 
@@ -10,14 +11,18 @@ namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 /// PoliceSubmission). Browse mode stays in the shell content area; task mode must never NavigateTo
 /// the main shell — NewShell and Legacy both use this host.
 /// </summary>
-public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factory)
+public sealed class ProjectWorkTaskFloatingHost(
+    IProjectWorkWindowFactory factory,
+    ITaskSurfaceWindowCoordinator coordinator)
 {
     private readonly IProjectWorkWindowFactory _factory =
         factory ?? throw new ArgumentNullException(nameof(factory));
+    private readonly ITaskSurfaceWindowCoordinator _coordinator =
+        coordinator ?? throw new ArgumentNullException(nameof(coordinator));
 
-    private static readonly object Gate = new();
-    private static Window? _window;
-    private static ProjectWorkWindowView? _view;
+    private readonly object _gate = new();
+    private Window? _window;
+    private ProjectWorkWindowView? _view;
 
     public async Task<bool> OpenOrRebindAsync(
         WorkSurfaceContext context,
@@ -25,30 +30,38 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        Window? existingWindow;
-        ProjectWorkWindowView? existingView;
-        lock (Gate)
+        var prepared = _coordinator.PrepareOpen(TaskSurfaceWindowKind.ProjectWork, context.TaskId);
+        if (prepared is { IsLoaded: true } existingWindow)
         {
-            existingWindow = _window;
-            existingView = _view;
-        }
+            ProjectWorkWindowView? existingView = existingWindow.Content as ProjectWorkWindowView;
+            lock (_gate)
+            {
+                if (existingView is null && ReferenceEquals(_window, existingWindow))
+                    existingView = _view;
+                if (existingView is not null)
+                {
+                    _window = existingWindow;
+                    _view = existingView;
+                }
+            }
 
-        if (existingWindow is { IsLoaded: true } && existingView is not null)
-        {
-            // #region agent log
-            WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
-                $"rebind task={context.TaskId} project={context.ProjectId}");
-            // #endregion
-            existingView.ViewModel.CloseRequested -= CloseIfOpen;
-            existingView.ViewModel.CloseRequested += CloseIfOpen;
-            var rebound = await existingView.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
-            if (!rebound)
-                return false;
-            if (existingWindow.WindowState == WindowState.Minimized)
-                existingWindow.WindowState = WindowState.Normal;
-            TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(existingWindow);
-            existingWindow.Activate();
-            return true;
+            if (existingView is not null)
+            {
+                // #region agent log
+                WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
+                    $"rebind task={context.TaskId} project={context.ProjectId}");
+                // #endregion
+                existingView.ViewModel.CloseRequested -= CloseIfOpen;
+                existingView.ViewModel.CloseRequested += CloseIfOpen;
+                var rebound = await existingView.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
+                if (!rebound)
+                    return false;
+                if (existingWindow.WindowState == WindowState.Minimized)
+                    existingWindow.WindowState = WindowState.Normal;
+                TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow(existingWindow);
+                existingWindow.Activate();
+                return true;
+            }
         }
 
         var surface = _factory.Create();
@@ -61,24 +74,20 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
 
         surface.ViewModel.CloseRequested += CloseIfOpen;
 
-        var owner = System.Windows.Application.Current?.MainWindow;
         var host = new Window
         {
             Title = "ביצוע משימה — סביבת עבודה",
-            Owner = owner,
             Content = surface,
             MinWidth = 720,
             MinHeight = 480,
             FlowDirection = FlowDirection.RightToLeft,
-            ShowInTaskbar = true,
-            Topmost = false,
         };
-        TaskSurfaceWindowLayout.ApplyComplementaryToWorkbench(host);
+        TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow(host);
 
         host.Closed += (_, _) =>
         {
             surface.ViewModel.CloseRequested -= CloseIfOpen;
-            lock (Gate)
+            lock (_gate)
             {
                 if (ReferenceEquals(_window, host))
                 {
@@ -90,11 +99,13 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
             surface.Dispose();
         };
 
-        lock (Gate)
+        lock (_gate)
         {
             _window = host;
             _view = surface;
         }
+
+        _coordinator.RegisterActive(host, TaskSurfaceWindowKind.ProjectWork, context.TaskId);
 
         // #region agent log
         WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
@@ -108,7 +119,7 @@ public sealed class ProjectWorkTaskFloatingHost(IProjectWorkWindowFactory factor
     public void CloseIfOpen()
     {
         Window? win;
-        lock (Gate)
+        lock (_gate)
             win = _window;
 
         if (win is not { IsLoaded: true })

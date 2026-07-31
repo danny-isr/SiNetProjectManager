@@ -3,9 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="סיווג בקשת הצעת מחיר"
         Width="620" Height="420"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="Manual"
         ResizeMode="CanResizeWithGrip"
         MinWidth="480" MinHeight="320"
+        ShowInTaskbar="True"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}">
     <DockPanel Margin="12">

@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
+using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.WorkSurfaces;
@@ -110,6 +111,7 @@ public sealed class NewShellReleaseMenuGatingTests
         services.AddSingleton<IEmailSurfaceHost, StubEmailHost>();
         services.AddSingleton<IShellContentHost, ShellContentHost>();
         services.AddSingleton<IProjectWorkWindowFactory, StubProjectWorkWindowFactory>();
+        services.AddSingleton<ITaskSurfaceWindowCoordinator, TaskSurfaceWindowCoordinator>();
         services.AddSingleton<ProjectWorkTaskFloatingHost>();
         services.AddSingleton<ProjectWorkSurfaceHost>();
         services.AddSingleton<ITaskPanelReadOnlyWindowFactory, StubTaskPanelFactory>();
