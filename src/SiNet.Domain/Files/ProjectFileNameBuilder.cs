@@ -9,14 +9,19 @@ namespace SiNet.Domain.Files;
 /// The filename is the authoritative identity of a file across every storage destination, so the
 /// write pipeline (add alternative / add version / replace) uses this builder to produce the name a
 /// staged file must carry before it is uploaded. Mirrors the naming rules of the legacy
-/// <c>SiNetSQL.Services.Files.ProjectFileNameBuilder</c> / <c>BaseFileVersion</c> — including the
-/// 10-character base-name cap — while remaining free of any DB or IO dependency.
+/// <c>SiNetSQL.Services.ProjectFileNameBuilder</c> / <c>BaseFileVersion</c>, except the base-name
+/// cap is <see cref="MaxBaseNameLength"/> (derived from live <c>ProjectFile.Title</c> lengths,
+/// not the legacy hard-coded 10).
 /// </para>
 /// </summary>
 public static class ProjectFileNameBuilder
 {
-    /// <summary>Maximum length of the human-readable base-name segment (legacy parity).</summary>
-    public const int MaxBaseNameLength = 10;
+    /// <summary>
+    /// Maximum length of the human-readable base-name segment.
+    /// Set to (max <c>LEN(ProjectFile.Title)</c> in SIData) + 2 — measured 2026-07-31 as 33 → 35.
+    /// Legacy SiNetSQL still truncates at 10.
+    /// </summary>
+    public const int MaxBaseNameLength = 35;
 
     /// <summary>
     /// Builds a canonical file name. When <paramref name="projectNumber"/> or

@@ -1,8 +1,8 @@
 namespace SiNet.Application.Email.QuoteSend;
 
 /// <summary>
-/// SendQuote PDF attach: resolve ניהול_כספי initial directory and file into catalog slot
-/// <c>QuoteSendDocument</c> («הצעת_מחיר_לשליחה») only when that slot has no physical file yet.
+/// SendQuote PDF attach: resolve ניהול_כספי initial directory and ensure the email attachment
+/// is a filed <c>QuoteSendDocument</c> («הצעה_לשליחה») copy.
 /// </summary>
 public interface IQuoteSendAttachmentService
 {
@@ -18,25 +18,37 @@ public interface IQuoteSendAttachmentService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Places <paramref name="sourcePdfPath"/> into the <see cref="CatalogCode"/> slot when empty.
-    /// When a physical match already exists for that slot, skips placement.
+    /// Ensures <paramref name="sourcePdfPath"/> becomes (or already is) a physical
+    /// <see cref="CatalogCode"/> file. When a send document already exists and the selected file
+    /// is not it, returns <see cref="QuoteSendEnsureFiledResult.RequiresNewAlternative"/> unless
+    /// <paramref name="alternativeName"/> is supplied for a new unused alternative.
+    /// Never renames the original source file.
     /// </summary>
     Task<QuoteSendEnsureFiledResult> EnsureFiledIfNeededAsync(
         int projectId,
         string sourcePdfPath,
+        string? alternativeName = null,
         CancellationToken cancellationToken = default);
 }
 
 /// <param name="Success">Overall operation succeeded (skip or place).</param>
-/// <param name="AlreadyFiled">Slot already had a physical FileServer match.</param>
-/// <param name="FiledNow">A new canonical file was placed in this call.</param>
-/// <param name="SourcePath">The PDF the user selected.</param>
-/// <param name="FiledCanonicalPath">Canonical path when placed or when source already was the filed file.</param>
+/// <param name="AlreadyFiled">Selected file was already a QuoteSendDocument physical match.</param>
+/// <param name="FiledNow">A new canonical copy was placed in this call.</param>
+/// <param name="RequiresNewAlternative">
+/// Existing send document(s) found and selected file is different — caller must prompt for a new alternative.
+/// </param>
+/// <param name="ExistingAlternatives">Alternative labels already used for this catalog slot.</param>
+/// <param name="SuggestedAlternative">Suggested unused alternative label (e.g. <c>"2"</c>).</param>
+/// <param name="SourcePath">The PDF the user selected (unchanged on disk).</param>
+/// <param name="FiledCanonicalPath">Path of the filed QuoteSendDocument to attach/open.</param>
 /// <param name="Error">Failure detail when <see cref="Success"/> is false.</param>
 public sealed record QuoteSendEnsureFiledResult(
     bool Success,
     bool AlreadyFiled,
     bool FiledNow,
+    bool RequiresNewAlternative,
+    IReadOnlyList<string> ExistingAlternatives,
+    string? SuggestedAlternative,
     string SourcePath,
     string? FiledCanonicalPath,
     string? Error);

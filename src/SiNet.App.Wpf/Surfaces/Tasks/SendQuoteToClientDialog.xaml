@@ -9,6 +9,9 @@
         ShowInTaskbar="True"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Window.Resources>
     <DockPanel Margin="12">
         <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <StackPanel Orientation="Horizontal">
@@ -72,10 +75,56 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,8"/>
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{Binding AttachmentLine}"
-                   Foreground="{DynamicResource SiMutedForegroundBrush}"
-                   Margin="0,0,0,8"/>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="קבצים מצורפים"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource SiSecondaryBrush}"
+                       Margin="0,0,0,4"/>
+            <ItemsControl ItemsSource="{Binding AttachmentChips}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" FlowDirection="RightToLeft"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="8,4"
+                                Margin="0,0,6,4"
+                                Background="{DynamicResource SiSurfaceBrush}"
+                                BorderBrush="{DynamicResource SiBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Cursor="Hand"
+                                Tag="{Binding}"
+                                MouseLeftButtonUp="AttachmentChip_MouseLeftButtonUp"
+                                ToolTip="לחץ לצפייה ב-PDF המתויק">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding FileName}"
+                                           VerticalAlignment="Center"
+                                           MaxWidth="220"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding FullPath}"
+                                           Foreground="{DynamicResource SiForegroundBrush}"
+                                           Margin="0,0,8,0"/>
+                                <Button Content="✕"
+                                        Width="22" Height="22"
+                                        Padding="0"
+                                        FontSize="11"
+                                        ToolTip="הסר קובץ מצורף"
+                                        Tag="{Binding}"
+                                        Click="RemoveAttachment_Click"
+                                        Background="Transparent"
+                                        BorderBrush="{DynamicResource SiBorderBrush}"
+                                        Foreground="{DynamicResource SiMutedForegroundBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="אין קבצים מצורפים"
+                       Foreground="{DynamicResource SiMutedForegroundBrush}"
+                       Visibility="{Binding HasNoAttachments, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+        </StackPanel>
 
         <Grid>
             <Grid.RowDefinitions>

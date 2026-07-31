@@ -1,9 +1,14 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
+using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Diagnostics;
@@ -32,7 +37,8 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     private readonly ILogger? _logger;
 
     private QuoteSendComposeDraft? _draft;
-    private readonly List<EmailAttachment> _attachments = [];
+    private readonly Dictionary<int, EmailAttachment> _attachmentsById = new();
+    private readonly ObservableCollection<SendQuoteAttachmentChip> _attachmentChips = [];
     private string _statusMessage = "טוען טיוטה…";
     private string _toText = string.Empty;
     private string _ccText = string.Empty;
@@ -41,6 +47,7 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     private bool _sentVerified;
     private bool _canOverride;
     private bool _isBusy;
+    private int _nextAttachmentId = 1;
 
     public SendQuoteToClientDialog(
         WorkSurfaceContext context,
@@ -75,10 +82,9 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
                 ? $"מצב: Reply-All לשרשור (מקור inbox #{_draft.SourceInboxMessageId?.ToString() ?? "?"})"
                 : "מצב: Compose חדש (לא Reply)";
 
-    public string AttachmentLine =>
-        _attachments.Count == 0
-            ? "ללא קבצים מצורפים"
-            : $"מצורפים: {string.Join(", ", _attachments.Select(a => a.FileName))}";
+    public ObservableCollection<SendQuoteAttachmentChip> AttachmentChips => _attachmentChips;
+
+    public bool HasNoAttachments => _attachmentChips.Count == 0;
 
     public string StatusMessage
     {
@@ -317,7 +323,12 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
                 $"task={taskId} marker={draft.Marker} mode={draft.Mode} to={draft.To.Count} cc={draft.Cc.Count}");
 
             var result = await _compose
-                .SendAsync(taskId, userId, draft, _attachments, CancellationToken.None)
+                .SendAsync(
+                    taskId,
+                    userId,
+                    draft,
+                    _attachmentsById.Values.ToList(),
+                    CancellationToken.None)
                 .ConfigureAwait(true);
 
             if (!result.Success)
@@ -429,10 +440,11 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     {
         var dialog = new OpenFileDialog
         {
-            Multiselect = false,
+            Multiselect = true,
             CheckFileExists = true,
             Filter = "PDF (*.pdf)|*.pdf",
             Title = "בחר הצעת מחיר לשליחה (PDF)",
+            RestoreDirectory = true,
         };
 
         if (_attachmentService is not null)
@@ -442,8 +454,18 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
                 var initial = await _attachmentService
                     .ResolveAttachInitialDirectoryAsync(_context.ProjectId, CancellationToken.None)
                     .ConfigureAwait(true);
-                if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
+                if (!string.IsNullOrWhiteSpace(initial))
+                {
                     dialog.InitialDirectory = initial;
+                    StatusMessage = $"בחירת קובץ מתוך: {initial}";
+                }
+                else
+                {
+                    StatusMessage = "לא נמצאה תיקיית ניהול_כספי לפרויקט — נפתח דיאלוג רגיל.";
+                    _logger?.LogWarning(
+                        "SendQuote: ניהול_כספי initial directory unresolved for project {ProjectId}",
+                        _context.ProjectId);
+                }
             }
             catch (Exception ex)
             {
@@ -451,53 +473,175 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
             }
         }
 
-        if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FileName))
+        if (dialog.ShowDialog(this) != true || dialog.FileNames.Length == 0)
             return;
 
-        var path = dialog.FileName;
-        try
+        foreach (var path in dialog.FileNames)
         {
-            if (_attachmentService is not null)
+            try
             {
-                var filed = await _attachmentService
-                    .EnsureFiledIfNeededAsync(_context.ProjectId, path, CancellationToken.None)
-                    .ConfigureAwait(true);
-                if (!filed.Success)
+                if (_attachmentService is null)
                 {
                     MessageBox.Show(
-                        $"הצירוף בוצע, אך התיוק לקטלוג נכשל: {filed.Error}",
+                        "שירות תיוק הקבצים אינו זמין — לא ניתן לצרף בלי תיוק כ«הצעה_לשליחה».",
                         "שליחת הצעה",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
+                    continue;
                 }
-                else if (filed.FiledNow)
-                {
-                    StatusMessage = "הקובץ תויק כ«הצעת_מחיר_לשליחה».";
-                    WorkflowDebugTrace.Step("SendQuote.File",
-                        $"project={_context.ProjectId} filed=True path={filed.FiledCanonicalPath}");
-                }
-                else if (filed.AlreadyFiled)
-                {
-                    StatusMessage = "הקובץ כבר מתויק כ«הצעת_מחיר_לשליחה» — לא תויק מחדש.";
-                    WorkflowDebugTrace.Step("SendQuote.File",
-                        $"project={_context.ProjectId} alreadyFiled=True path={filed.FiledCanonicalPath}");
-                }
+
+                var filed = await EnsureFiledForAttachAsync(path).ConfigureAwait(true);
+                if (filed is null)
+                    continue;
+
+                var attachPath = filed.FiledCanonicalPath!;
+                StatusMessage = filed.FiledNow
+                    ? "הועתק ותויק כ«הצעה_לשליחה» — מצורף למייל הקובץ המתויק."
+                    : "הקובץ כבר מתויק כ«הצעה_לשליחה» — מצורף הקובץ המתויק.";
+
+                var bytes = await File.ReadAllBytesAsync(attachPath).ConfigureAwait(true);
+                var fileName = Path.GetFileName(attachPath);
+                var id = _nextAttachmentId++;
+                _attachmentsById[id] = new EmailAttachment(fileName, "application/pdf", bytes);
+                _attachmentChips.Add(new SendQuoteAttachmentChip(id, fileName, attachPath));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"לא ניתן לצרף '{path}': {ex.Message}", "שליחת הצעה",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        OnPropertyChanged(nameof(HasNoAttachments));
+    }
+
+    /// <summary>
+    /// Files the selected PDF as QuoteSendDocument. When a send document already exists and the
+    /// pick is different, prompts for a new alternative name before copying.
+    /// </summary>
+    private async Task<QuoteSendEnsureFiledResult?> EnsureFiledForAttachAsync(string path)
+    {
+        if (_attachmentService is null)
+            return null;
+
+        var filed = await _attachmentService
+            .EnsureFiledIfNeededAsync(_context.ProjectId, path, alternativeName: null, CancellationToken.None)
+            .ConfigureAwait(true);
+
+        if (filed.RequiresNewAlternative)
+        {
+            var existing = filed.ExistingAlternatives.Count == 0
+                ? "(אין)"
+                : string.Join(", ", filed.ExistingAlternatives);
+            var prompt =
+                "כבר קיימת הצעת מחיר לשליחה.\n" +
+                "כדי לתייק PDF אחר יש לבחור אלטרנטיבה חדשה (או לבחור את הקובץ המתויק הקיים).\n\n" +
+                $"אלטרנטיבות קיימות: {existing}\n" +
+                "הזן שם אלטרנטיבה חדשה:";
+
+            var alt = StringPromptDialog.Prompt(
+                this,
+                "אלטרנטיבה חדשה — הצעת מחיר לשליחה",
+                prompt,
+                filed.SuggestedAlternative ?? "2");
+
+            if (string.IsNullOrWhiteSpace(alt))
+            {
+                StatusMessage = "הצירוף בוטל — לא נבחרה אלטרנטיבה חדשה.";
+                return null;
             }
 
-            var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
-            _attachments.Clear();
-            _attachments.Add(new EmailAttachment(
-                Path.GetFileName(path),
-                "application/pdf",
-                bytes));
+            filed = await _attachmentService
+                .EnsureFiledIfNeededAsync(_context.ProjectId, path, alt.Trim(), CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+
+        if (!filed.Success || string.IsNullOrWhiteSpace(filed.FiledCanonicalPath))
+        {
+            MessageBox.Show(
+                $"התיוק נכשל — הקובץ לא צורף למייל: {filed.Error}",
+                "שליחת הצעה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return null;
+        }
+
+        if (!File.Exists(filed.FiledCanonicalPath))
+        {
+            MessageBox.Show(
+                $"הקובץ המתויק לא נמצא בדיסק: {filed.FiledCanonicalPath}",
+                "שליחת הצעה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return null;
+        }
+
+        return filed;
+    }
+
+    private void AttachmentChip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject d
+            && FindAncestorButton(d) is not null)
+            return;
+
+        if (sender is not FrameworkElement { Tag: SendQuoteAttachmentChip chip })
+            return;
+
+        OpenFiledPdf(chip);
+        e.Handled = true;
+    }
+
+    private void OpenFiledPdf(SendQuoteAttachmentChip chip)
+    {
+        if (string.IsNullOrWhiteSpace(chip.FullPath) || !File.Exists(chip.FullPath))
+        {
+            MessageBox.Show("לא נמצא קובץ PDF לפתיחה.", "שליחת הצעה",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(chip.FullPath) { UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"לא ניתן לצרף '{path}': {ex.Message}", "שליחת הצעה",
+            _logger?.LogWarning(ex, "SendQuote: failed to open filed PDF {Path}", chip.FullPath);
+            MessageBox.Show($"לא ניתן לפתוח את הקובץ: {ex.Message}", "שליחת הצעה",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
 
-        OnPropertyChanged(nameof(AttachmentLine));
+    private static Button? FindAncestorButton(DependencyObject? current)
+    {
+        while (current is not null)
+        {
+            if (current is Button button)
+                return button;
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private void RemoveAttachment_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: SendQuoteAttachmentChip chip })
+            return;
+
+        e.Handled = true;
+        var chipVm = _attachmentChips.FirstOrDefault(c => c.Id == chip.Id);
+        if (chipVm is null)
+            return;
+
+        _attachmentChips.Remove(chipVm);
+        _attachmentsById.Remove(chip.Id);
+
+        OnPropertyChanged(nameof(HasNoAttachments));
+        StatusMessage = _attachmentsById.Count == 0
+            ? "הוסרו כל הקבצים המצורפים."
+            : $"הוסר «{chip.FileName}».";
     }
 
     private async void CompleteVerified_Click(object sender, RoutedEventArgs e)
@@ -608,3 +752,6 @@ public partial class SendQuoteToClientDialog : Window, INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
+
+/// <summary>Removable attachment chip shown above the SendQuote compose fields.</summary>
+public sealed record SendQuoteAttachmentChip(int Id, string FileName, string FullPath);

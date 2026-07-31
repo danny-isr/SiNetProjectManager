@@ -340,7 +340,7 @@ public sealed class ProjectWorkRequiredOmdanTests
         Assert.Equal(quoteFolder.Id, clientRequest.Folderid);
 
         var sendDoc = Assert.Single(await db.ProjectFiles.Where(f => f.Code == ProjectFileCatalogCodes.QuoteSendDocument).ToListAsync());
-        Assert.Equal("הצעת_מחיר_לשליחה", sendDoc.Title);
+        Assert.Equal("הצעה_לשליחה", sendDoc.Title);
         Assert.Equal(".pdf", sendDoc.Typefile);
         Assert.False(sendDoc.IsRequired);
         Assert.False(sendDoc.OutSidData);

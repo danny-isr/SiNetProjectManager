@@ -23,11 +23,22 @@ public sealed class ProjectFileNameBuilderTests
     }
 
     [Fact]
-    public void Build_caps_base_name_to_ten_characters()
+    public void Build_caps_base_name_to_max_length()
     {
-        var name = ProjectFileNameBuilder.Build(1, 1, 1, "1", 1, "SuperLongTitleThatExceeds", "x.pdf");
+        var tooLong = new string('A', ProjectFileNameBuilder.MaxBaseNameLength + 5);
+        var name = ProjectFileNameBuilder.Build(1, 1, 1, "1", 1, tooLong, "x.pdf");
         var parsed = ProjectFileNameParser.TryParse(name);
-        Assert.Equal("SuperLongT", parsed!.BaseName);
+        Assert.Equal(new string('A', ProjectFileNameBuilder.MaxBaseNameLength), parsed!.BaseName);
+        Assert.Equal(ProjectFileNameBuilder.MaxBaseNameLength, parsed.BaseName.Length);
+    }
+
+    [Fact]
+    public void Build_keeps_quote_send_title_intact_under_raised_cap()
+    {
+        var name = ProjectFileNameBuilder.Build(3142, 9, 76, "1", 1, "הצעה_לשליחה", "q.pdf");
+        var parsed = ProjectFileNameParser.TryParse(name);
+        Assert.Equal("הצעה_לשליחה", parsed!.BaseName);
+        Assert.Equal("(3142)-9-76-1-1-הצעה_לשליחה.pdf", name);
     }
 
     [Fact]
