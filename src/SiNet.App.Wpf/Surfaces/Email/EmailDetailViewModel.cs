@@ -874,6 +874,73 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             : RefreshInboxAttachmentsAsync(_selectedEmailLoadVersion, _selectedEmail.Id);
 
     /// <summary>
+    /// Resolves the SQL <c>EmailInboxMessage</c> id that belongs to the selected Gmail row.
+    /// Order: row patch → identity lookup → task primary only when this row is the pending task target.
+    /// </summary>
+    private async Task<int?> ResolveInboxMessageIdForSelectedAsync(EmailListRow selected)
+    {
+        if (selected.InboxMessageId is int rowInboxId && rowInboxId > 0)
+        {
+            return rowInboxId;
+        }
+
+        if (_inboxQuery is not null
+            && (!string.IsNullOrWhiteSpace(selected.InternetMessageId)
+                || !string.IsNullOrWhiteSpace(selected.Id)))
+        {
+            var byIdentity = await _inboxQuery
+                .FindByMessageIdentityAsync(selected.InternetMessageId, selected.Id)
+                .ConfigureAwait(true);
+            if (byIdentity is not null && byIdentity.Id > 0)
+            {
+                return byIdentity.Id;
+            }
+        }
+
+        // Late-reload safety for the task anchor only — never for a sibling reply.
+        if (_workSurfaceContext?.PrimaryWorkTargetEntityId is int primary
+            && primary > 0
+            && IsPendingTaskTargetRow(selected))
+        {
+            return primary;
+        }
+
+        return null;
+    }
+
+    private bool IsPendingTaskTargetRow(EmailListRow selected)
+    {
+        var pending = _emailList.PendingTaskSelection;
+        if (pending is null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(pending.MessageUniqueId)
+            || !string.IsNullOrWhiteSpace(pending.InternetMessageId))
+        {
+            if (EmailMessageIdMatcher.Matches(selected.InternetMessageId, pending.InternetMessageId)
+                || EmailMessageIdMatcher.Matches(selected.InternetMessageId, pending.MessageUniqueId))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(pending.MessageUniqueId))
+            {
+                var selectedUnique = EmailMessageIdentity.GetMessageUniqueId(
+                    selected.InternetMessageId,
+                    selected.Id);
+                if (string.Equals(selectedUnique, pending.MessageUniqueId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// After ACC upload patches the list row (same Gmail id), sync detail state and reload
     /// AccItemId so double-click open-in-ACC works without re-selecting the email.
     /// </summary>
@@ -899,18 +966,23 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         var projectFromRow = _selectedEmail?.ProjectId;
         // #endregion
 
-        // Prefer the SQL inbox id on the list row; when a late reload stripped it, fall back to
-        // the task's PrimaryWorkTargetEntityId so Gmail-downloaded ACC attachments still tag.
-        var inboxMessageId = _selectedEmail?.InboxMessageId
-            ?? (_workSurfaceContext?.PrimaryWorkTargetEntityId is int primary && primary > 0
-                ? primary
-                : null);
+        // Resolve inbox id for THIS selected Gmail message only. Never borrow the task
+        // PrimaryWorkTargetEntityId for a different reply in the same thread (same filename
+        // would then tag the anchor's SQL attachment).
+        var inboxMessageId = _selectedEmail is null
+            ? null
+            : await ResolveInboxMessageIdForSelectedAsync(_selectedEmail).ConfigureAwait(true);
 
         // #region agent log
         WorkflowDebugTrace.Step(
             "Email.TagUI",
             $"refresh enter service={taggingServicePresent} inboxId={(inboxMessageId?.ToString() ?? "null")} rowInbox={(_selectedEmail?.InboxMessageId?.ToString() ?? "null")} projectCtx={projectFromContext?.ToString() ?? "null"} projectRow={projectFromRow?.ToString() ?? "null"} stripCount={AttachmentStrip.Attachments.Count} taskPrimary={_workSurfaceContext?.PrimaryWorkTargetEntityId?.ToString() ?? "null"}");
         // #endregion
+
+        if (!IsCurrentSelection(messageId, loadVersion))
+        {
+            return;
+        }
 
         if (_attachmentTaggingService is null || inboxMessageId is not int resolvedInboxId)
         {

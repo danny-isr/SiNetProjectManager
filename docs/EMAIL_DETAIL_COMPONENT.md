@@ -47,6 +47,16 @@ See plan: IEmailBodyRenderer, IEmailAccIngestionService, IEmailAttachmentTagging
 - **V2** may still override with its own host wrapping the legacy window; behavior should match.
 - If the host is missing, the click must surface a visible error (status + MessageBox) — not a silent no-op.
 
+### InboxMessageId resolution for tagging (thread-safe)
+
+When refreshing SQL attachment tag state for the selected Gmail row:
+
+1. Prefer `EmailListRow.InboxMessageId` on that row.
+2. Else resolve via `IEmailInboxQueryService.FindByMessageIdentityAsync` (RFC Message-ID / message unique id of **that** message).
+3. Else fall back to task `PrimaryWorkTargetEntityId` **only** when the selected row is the pending task target (SendQuote / filing anchor).
+
+Do **not** patch a sibling reply in the same thread with the anchor's `InboxMessageId`. Doing so makes identical attachment filenames tag/mutate the wrong SQL row.
+
 ## Boundary
 
 Detail folder must not reference SiNetSQL, SiNetSQL.MVVM, or LegacyBridge.

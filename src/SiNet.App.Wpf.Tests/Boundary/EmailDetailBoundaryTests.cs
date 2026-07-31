@@ -167,6 +167,31 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("### 6.6 Mailbox project association", principles, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Guard: tagging must resolve InboxMessageId for the selected Gmail message only.
+    /// Blind PrimaryWorkTargetEntityId fallback patches sibling replies onto the SendQuote anchor.
+    /// </summary>
+    [Fact]
+    public void Attachment_tagging_resolves_inbox_id_by_selected_message_identity()
+    {
+        var detailVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
+        var inboxQuery = ReadRepoFile("src/SiNet.Application/Email/IEmailInboxQueryService.cs");
+        var sqlInbox = ReadRepoFile(
+            "src/SiNet.Infrastructure.Sql/Services/Email/SqlEmailInboxQueryService.cs");
+        var detailDoc = ReadRepoFile("docs/EMAIL_DETAIL_COMPONENT.md");
+
+        Assert.Contains("FindByMessageIdentityAsync", inboxQuery, StringComparison.Ordinal);
+        Assert.Contains("FindByMessageIdentityAsync", sqlInbox, StringComparison.Ordinal);
+        Assert.Contains("ResolveInboxMessageIdForSelectedAsync", detailVm, StringComparison.Ordinal);
+        Assert.Contains("IsPendingTaskTargetRow", detailVm, StringComparison.Ordinal);
+        Assert.Contains("FindByMessageIdentityAsync", detailVm, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "? (_workSurfaceContext?.PrimaryWorkTargetEntityId is int primary && primary > 0",
+            detailVm,
+            StringComparison.Ordinal);
+        Assert.Contains("InboxMessageId resolution for tagging", detailDoc, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Source_tree_has_no_IsEffectivelyFiled_helper()
     {

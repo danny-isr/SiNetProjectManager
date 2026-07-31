@@ -36,6 +36,47 @@ public sealed class SqlEmailInboxQueryService(IDbContextFactory<SiNetSQLDbContex
         return row;
     }
 
+    public async Task<EmailInboxMessageDto?> FindByMessageIdentityAsync(
+        string? internetMessageId,
+        string? gmailMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(internetMessageId) && string.IsNullOrWhiteSpace(gmailMessageId))
+        {
+            return null;
+        }
+
+        var messageUniqueId = EmailMessageIdentity.GetMessageUniqueId(
+            internetMessageId,
+            gmailMessageId ?? string.Empty);
+        var cleanedInternetId = string.IsNullOrWhiteSpace(internetMessageId)
+            ? null
+            : internetMessageId.Trim().Trim('<', '>').Trim();
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        return await db.EmailInboxMessages
+            .AsNoTracking()
+            .Where(message =>
+                message.MessageUniqueId == messageUniqueId
+                || (cleanedInternetId != null
+                    && (message.InternetMessageId == cleanedInternetId
+                        || message.InternetMessageId == internetMessageId
+                        || message.MessageUniqueId == cleanedInternetId)))
+            .Select(message => new EmailInboxMessageDto(
+                message.Id,
+                message.ProjectId,
+                message.Subject,
+                message.FromAddress,
+                message.ReceivedUtc,
+                message.MessageUniqueId,
+                message.InternetMessageId,
+                message.InboxAccProjectId,
+                message.InboxAccFolderId))
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<EmailInboxAttachmentViewDto>> GetAttachmentsAsync(
         int inboxMessageId,
         CancellationToken cancellationToken = default)
