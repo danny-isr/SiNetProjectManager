@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Actions;
 using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Sql.Services.Actions;
@@ -14,6 +15,10 @@ public static class TasksServiceCollectionExtensions
 {
     public static IServiceCollection AddSiNetTaskServices(this IServiceCollection services)
     {
+        // Standalone hosts need an in-process notifier so Workbench reloads immediately after
+        // completion. V2 may register ActiveProjectTaskListChangeNotifier later (last wins).
+        services.TryAddSingleton<ITaskListChangeNotifier, InProcessTaskListChangeNotifier>();
+
         services.AddTransient<SqlTaskNavigationService>();
         services.AddTransient<ITaskNavigationService>(sp => sp.GetRequiredService<SqlTaskNavigationService>());
 

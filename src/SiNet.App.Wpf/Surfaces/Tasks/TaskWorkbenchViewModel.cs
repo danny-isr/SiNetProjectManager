@@ -37,6 +37,9 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
     private readonly InMemoryCurrentProjectContext _localProjectFilterContext = new();
     private readonly DispatcherTimer? _crossClientRefreshTimer;
 
+    /// <summary>Set when a notify arrives while <see cref="IsBusy"/>; drained after LoadAsync.</summary>
+    private bool _reloadPending;
+
     private TaskSummaryDto? _selectedTask;
     private string _statusMessage = "טוען משימות...";
     private string _diagnosticsText = string.Empty;
@@ -143,8 +146,15 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         // #endregion
         void Reload()
         {
-            if (_disposed || IsBusy || !_scopeOptionsInitialized)
+            if (_disposed || !_scopeOptionsInitialized)
                 return;
+            if (IsBusy)
+            {
+                _reloadPending = true;
+                WorkflowDebugTrace.Step("Tasks.Workbench", "notify while busy → reloadPending");
+                return;
+            }
+
             _ = LoadAsync();
         }
 
@@ -429,6 +439,13 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         if (!_scopeOptionsInitialized)
             await InitializeScopeOptionsAsync(ct).ConfigureAwait(true);
 
+        // Serialize reloads: a notify (or second caller) while busy coalesces into one follow-up load.
+        if (IsBusy)
+        {
+            _reloadPending = true;
+            return;
+        }
+
         IsBusy = true;
         BucketCounts counts = default;
         try
@@ -518,6 +535,12 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         finally
         {
             IsBusy = false;
+            if (_reloadPending && !_disposed)
+            {
+                _reloadPending = false;
+                WorkflowDebugTrace.Step("Tasks.Workbench", "draining reloadPending → LoadAsync");
+                _ = LoadAsync();
+            }
         }
     }
 

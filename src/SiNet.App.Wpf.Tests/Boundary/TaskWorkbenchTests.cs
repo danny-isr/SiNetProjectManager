@@ -8,6 +8,7 @@ using SiNet.Application.Identity;
 using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Constants;
+using SiNet.Infrastructure.Sql.DependencyInjection;
 using SiNet.Infrastructure.Sql.Services.DevTools;
 using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
@@ -118,6 +119,22 @@ public sealed class TaskWorkbenchTests
 
         var vm = provider.GetRequiredService<TaskWorkbenchViewModel>();
         Assert.Equal("SqlTaskQueryService", vm.QueryServiceName);
+    }
+
+    [Fact]
+    public void AddSiNetTaskServices_registers_in_process_task_list_change_notifier()
+    {
+        var services = new ServiceCollection();
+        services.AddSiNetTaskServices();
+        using var provider = services.BuildServiceProvider();
+
+        var notifier = provider.GetRequiredService<ITaskListChangeNotifier>();
+        Assert.IsType<InProcessTaskListChangeNotifier>(notifier);
+
+        var raised = false;
+        notifier.TaskListChanged += () => raised = true;
+        notifier.NotifyTaskListChanged();
+        Assert.True(raised);
     }
 
     [Fact]

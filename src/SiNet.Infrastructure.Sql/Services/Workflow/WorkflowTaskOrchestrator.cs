@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
@@ -21,13 +22,31 @@ internal sealed class WorkflowTaskOrchestrator(
     WorkflowEngine engine,
     WorkflowTransitionEvaluator evaluator,
     WorkflowActionExecutor actionExecutor,
-    WorkflowStageTaskProvisioningService provisioning)
+    WorkflowStageTaskProvisioningService provisioning,
+    ITaskListChangeNotifier? taskListNotifier = null)
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
     private readonly WorkflowEngine _engine = engine;
     private readonly WorkflowTransitionEvaluator _evaluator = evaluator;
     private readonly WorkflowActionExecutor _actionExecutor = actionExecutor;
     private readonly WorkflowStageTaskProvisioningService _provisioning = provisioning;
+    private readonly ITaskListChangeNotifier? _taskListNotifier = taskListNotifier;
+
+    private void NotifyUiTaskListChanged(string reason)
+    {
+        try
+        {
+            WorkflowDebugTrace.Step("Orchestrator.Notify", $"{reason} notifier={_taskListNotifier is not null}");
+            _taskListNotifier?.NotifyTaskListChanged();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                "[WorkflowTaskOrchestrator] NotifyTaskListChanged failed ({0}): {1}",
+                reason,
+                ex.Message);
+        }
+    }
 
     // ── High-level operations ──────────────────────────────────────────────
 
@@ -59,6 +78,9 @@ internal sealed class WorkflowTaskOrchestrator(
         WorkflowDebugTrace.Step("Orchestrator.Start",
             $"instance={instance.Id} def={definitionId} project={projectId} → stageId={instance.CurrentStageId} status={instance.Status} tasksCreated={tasks.Count}");
 
+        if (tasks.Count > 0)
+            NotifyUiTaskListChanged($"start instance={instance.Id} tasks={tasks.Count}");
+
         return new WorkflowStartResultDto(instance.ToDto(), tasks.ToSummaryDtoList());
     }
 
@@ -84,6 +106,9 @@ internal sealed class WorkflowTaskOrchestrator(
         {
             await NotifyParentOfSubWorkflowCompletionAsync(instance, succeeded: true, userId, ct).ConfigureAwait(false);
         }
+
+        if (tasks.Count > 0)
+            NotifyUiTaskListChanged($"advance instance={instanceId} tasks={tasks.Count}");
 
         return new WorkflowAdvanceResultDto(instance.ToDto(), tasks.ToSummaryDtoList());
     }
@@ -148,6 +173,8 @@ internal sealed class WorkflowTaskOrchestrator(
         }
 
         var created = await _provisioning.CreateStageTasksAsync(instanceId, stageId, userId, ct).ConfigureAwait(false);
+        if (created.Count > 0)
+            NotifyUiTaskListChanged($"reprovision instance={instanceId} tasks={created.Count}");
         return created.Count;
     }
 

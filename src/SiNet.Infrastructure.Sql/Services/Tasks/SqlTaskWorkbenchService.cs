@@ -16,13 +16,32 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory;
     private readonly IWorkflowCommandService _workflowCommands;
+    private readonly ITaskListChangeNotifier? _taskListNotifier;
 
     public SqlTaskWorkbenchService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        IWorkflowCommandService workflowCommands)
+        IWorkflowCommandService workflowCommands,
+        ITaskListChangeNotifier? taskListNotifier = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workflowCommands = workflowCommands ?? throw new ArgumentNullException(nameof(workflowCommands));
+        _taskListNotifier = taskListNotifier;
+    }
+
+    private void NotifyUiTaskListChanged(string reason)
+    {
+        try
+        {
+            WorkflowDebugTrace.Step("Workbench.Notify", $"{reason} notifier={_taskListNotifier is not null}");
+            _taskListNotifier?.NotifyTaskListChanged();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                "[SqlTaskWorkbenchService] NotifyTaskListChanged failed ({0}): {1}",
+                reason,
+                ex.Message);
+        }
     }
 
     public async ValueTask<TaskCreationOptionsDto> GetTaskCreationOptionsAsync(CancellationToken ct = default)
@@ -132,6 +151,7 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
             }
 
+            NotifyUiTaskListChanged($"created task={task.Id}");
             return new TaskCommandResult(true, $"Created task {task.Id}.", task.Id);
         }
         catch (DbUpdateException ex) when (IsUniqueOpenTaskViolation(ex))
@@ -196,6 +216,7 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
                 .ConfigureAwait(false);
         }
 
+        NotifyUiTaskListChanged($"deleted task={taskId}");
         return new TaskCommandResult(true, $"Deleted task {taskId}.");
     }
 
@@ -292,6 +313,7 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
             WorkflowDebugTrace.Step("Workbench.Deactivate",
                 $"task={taskId} → status=Cancelled; pausedInstances=[{string.Join(",", pausedInstanceIds)}]");
 
+            NotifyUiTaskListChanged($"deactivated task={taskId}");
             return new TaskCommandResult(true, $"Deactivated task {taskId}.", taskId);
         }
         catch
@@ -388,6 +410,7 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
                 .ConfigureAwait(false);
         }
 
+        NotifyUiTaskListChanged($"reactivated task={taskId}");
         return new TaskCommandResult(true, $"Reactivated task {taskId}.", taskId);
     }
 
