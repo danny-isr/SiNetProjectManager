@@ -269,6 +269,9 @@ public class WorkflowInstanceConfiguration : IEntityTypeConfiguration<WorkflowIn
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(e => e.JobTypeId)
+            .HasColumnName("JobTypeID");
+
         // ═══ Indexes ═══
 
         // Fast lookup: all workflows for a project
@@ -283,6 +286,14 @@ public class WorkflowInstanceConfiguration : IEntityTypeConfiguration<WorkflowIn
         // Fast lookup: child sub-workflows of a parent instance
         builder.HasIndex(e => e.ParentWorkflowInstanceId, "IX_WorkflowInstance_Parent");
 
+        // B2: at most one Active/Paused track instance per Project + Definition + JobType.
+        // Null JobTypeId excluded (legacy / project-level unbound). Status: Active=1, Paused=2.
+        builder.HasIndex(
+                e => new { e.ProjectId, e.WorkflowDefinitionId, e.JobTypeId },
+                "UX_WorkflowInstance_ActiveTrack")
+            .IsUnique()
+            .HasFilter("[JobTypeID] IS NOT NULL AND [Status] IN (1, 2)");
+
         // ═══ Relationships ═══
 
         builder.HasOne(e => e.WorkflowDefinition)
@@ -296,6 +307,12 @@ public class WorkflowInstanceConfiguration : IEntityTypeConfiguration<WorkflowIn
             .HasForeignKey(e => e.ProjectId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("FK_WorkflowInstance_Project");
+
+        builder.HasOne(e => e.JobType)
+            .WithMany(j => j.WorkflowInstances)
+            .HasForeignKey(e => e.JobTypeId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_WorkflowInstance_JobType");
 
         builder.HasOne(e => e.CurrentStage)
             .WithMany()

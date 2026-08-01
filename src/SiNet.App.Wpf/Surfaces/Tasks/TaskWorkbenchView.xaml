@@ -124,16 +124,23 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0"
-                                   Text="{Binding TaskTypeName}"
-                                   Style="{DynamicResource SiTextTinyStyle}"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding TaskTypeName}" />
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding TaskTypeName}"
+                                       Style="{DynamicResource SiTextTinyStyle}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding TaskTypeName}" />
+                            <TextBlock Text="{Binding TrackDisplayLine}"
+                                       Style="{DynamicResource SiTextTinyStyle}"
+                                       Opacity="0.8"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding TrackDisplayLine}" />
+                        </StackPanel>
                         <Border Grid.Column="1"
                                 Background="{DynamicResource SiSecondaryBrush}"
                                 CornerRadius="6"
                                 Padding="4,1"
-                                Margin="6,0,0,0">
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Top">
                             <TextBlock Text="{Binding StatusName}"
                                        Style="{DynamicResource SiTextTinyStyle}" />
                         </Border>

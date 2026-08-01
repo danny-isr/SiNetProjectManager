@@ -2,7 +2,8 @@ namespace SiNet.Application.Workflow;
 
 /// <summary>
 /// After client quote approval: validate every project type has a workflow mapping,
-/// then start one project-bound instance per unique mapped WorkflowDefinition.
+/// then start one project-bound instance per JobType track
+/// (<c>ProjectId + WorkflowDefinitionId + JobTypeId</c>).
 /// </summary>
 public interface IProjectTypeContinuationStarter
 {
@@ -15,7 +16,8 @@ public interface IProjectTypeContinuationStarter
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Validates mappings then starts missing active instances (deduped by definition).
+    /// Validates mappings then starts missing Active/Paused track instances
+    /// (one per JobType; same definition may start multiple times).
     /// </summary>
     Task<ProjectTypeContinuationResult> StartContinuationsAsync(
         int projectId,

@@ -89,7 +89,7 @@ TaskPanel / FloatingProjectTasksView / Workflow UI
 - `ComponentKey` (from `TaskInteractionDefinition`)
 - `ProjectId`
 - `TaskId`
-- `WorkflowInstanceId`
+- `WorkflowInstanceId` — **must** come from the task’s `TaskLink` role `Trigger` when present; must **not** be the newest/best open instance on the project (B2 multi-track). See [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md) §6.
 - `PrimaryWorkTargetEntityId`
 - `AllowedResultCodes` / `AllowedTaskResultCodes`
 - `CompletionEventCode`, `ActingUserId`, `TaskTypeCode` (when host supplies them)

@@ -70,7 +70,9 @@ public static class WorkflowDtoMappings
                     .OrderBy(t => t.TransitionedAtUtc)
                     .Select(t => t.ToDto())
                     .ToList()
-                : []);
+                : [],
+            instance.JobTypeId,
+            instance.JobType?.Title);
 
     public static List<WorkflowDefinitionDto> ToDtoList(this IEnumerable<WorkflowDefinition> definitions) =>
         definitions.Select(d => d.ToDto()).ToList();

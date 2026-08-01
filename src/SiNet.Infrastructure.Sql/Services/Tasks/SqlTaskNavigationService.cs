@@ -104,23 +104,65 @@ public sealed class SqlTaskNavigationService : ITaskNavigationService
 
         int? stageGroupId = null;
 
+        string? processDisplayName = null;
+
+        string? jobTypeDisplayName = null;
+
+        string? currentStageDisplayName = null;
 
 
-        if (task.ProjectId is int projectId)
+
+        // B2: prefer exact Trigger link; never guess newest-on-project when a link exists.
+
+        var triggerLinkId = task.TaskLinks
+
+            .Where(l => l.Role == TaskLinkRole.Trigger
+
+                        && l.LinkedEntityType == TaskLinkEntityType.WorkflowInstance)
+
+            .OrderByDescending(l => l.CreatedAtUtc)
+
+            .Select(l => (long?)l.LinkedEntityId)
+
+            .FirstOrDefault();
+
+
+
+        if (triggerLinkId is long linkedLong && linkedLong > 0 && linkedLong <= int.MaxValue)
+        {
+            var linkedInstanceId = (int)linkedLong;
+            var instance = await db.WorkflowInstances
+                .AsNoTracking()
+                .Include(i => i.CurrentStage)
+                .Include(i => i.WorkflowDefinition)
+                .Include(i => i.JobType)
+                .FirstOrDefaultAsync(i => i.Id == linkedInstanceId, ct)
+                .ConfigureAwait(false);
+
+            if (instance is not null)
+            {
+                workflowInstanceId = instance.Id;
+                stageGroupId = instance.CurrentStage?.AssignedGroupId;
+                processDisplayName = instance.WorkflowDefinition?.Name ?? instance.WorkflowDefinition?.Code;
+                jobTypeDisplayName = instance.JobType?.Title;
+                currentStageDisplayName = instance.CurrentStage?.Name ?? instance.CurrentStage?.Code;
+            }
+        }
+        else if (task.ProjectId is int projectId)
 
         {
 
-            // TEMPORARY / DEFERRED — newest active workflow instance wins when multiple are open.
-
-            // WHY: legacy resolver used the same tie-break; ambiguous multi-instance projects are rare.
-
-            // REMOVAL WHEN: workflow instance is bound explicitly on the task or a single-active policy is enforced.
+            // Fallback only when the task has no Trigger link (ad-hoc / legacy rows).
 
             var instance = await db.WorkflowInstances
 
                 .AsNoTracking()
 
                 .Include(i => i.CurrentStage)
+
+                .Include(i => i.WorkflowDefinition)
+
+                .Include(i => i.JobType)
 
                 .Where(i => i.ProjectId == projectId
 
@@ -143,6 +185,12 @@ public sealed class SqlTaskNavigationService : ITaskNavigationService
                 workflowInstanceId = instance.Id;
 
                 stageGroupId = instance.CurrentStage?.AssignedGroupId;
+
+                processDisplayName = instance.WorkflowDefinition?.Name ?? instance.WorkflowDefinition?.Code;
+
+                jobTypeDisplayName = instance.JobType?.Title;
+
+                currentStageDisplayName = instance.CurrentStage?.Name ?? instance.CurrentStage?.Code;
 
             }
 
@@ -204,7 +252,13 @@ public sealed class SqlTaskNavigationService : ITaskNavigationService
 
             ActingUserId: _currentUser?.UserId,
 
-            TaskTypeCode: taskTypeCode);
+            TaskTypeCode: taskTypeCode,
+
+            ProcessDisplayName: processDisplayName,
+
+            JobTypeDisplayName: jobTypeDisplayName,
+
+            CurrentStageDisplayName: currentStageDisplayName);
 
     }
 

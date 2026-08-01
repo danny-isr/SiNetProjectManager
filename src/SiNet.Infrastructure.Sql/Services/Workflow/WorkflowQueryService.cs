@@ -186,31 +186,37 @@ public class WorkflowQueryService : IWorkflowQueryService
             .OrderBy(p => p.Title)
             .ToListAsync(ct);
 
-        // 2. Latest instance per project (Active > Paused > Draft > rest, then newest)
+        // 2. All instances for those projects (include JobType for B2 track display)
         var latestInstances = await db.WorkflowInstances
             .AsNoTracking()
             .Include(i => i.WorkflowDefinition)
                 .ThenInclude(d => d.Stages.OrderBy(s => s.SortOrder))
             .Include(i => i.CurrentStage)
+            .Include(i => i.JobType)
             .Include(i => i.StageTransitions)
             .Where(i => projects.Select(p => p.Id).Contains(i.ProjectId))
             .ToListAsync(ct);
 
-        // Group by project and pick the "most relevant" instance
-        var bestByProject = latestInstances
-            .GroupBy(i => i.ProjectId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.OrderByDescending(i => StatusPriority(i.Status))
-                      .ThenByDescending(i => i.CreatedAtUtc)
-                      .First());
+        var byProject = latestInstances.GroupBy(i => i.ProjectId).ToDictionary(g => g.Key, g => g.ToList());
 
         var results = new List<ProjectWorkflowSnapshotDto>(projects.Count);
 
         foreach (var project in projects)
         {
-            if (bestByProject.TryGetValue(project.Id, out var inst))
+            if (byProject.TryGetValue(project.Id, out var projectInstances) && projectInstances.Count > 0)
             {
+                var tracks = projectInstances
+                    .Where(i => i.Status is WorkflowStatus.Active or WorkflowStatus.Paused)
+                    .OrderBy(i => i.JobTypeId ?? int.MaxValue)
+                    .ThenByDescending(i => i.CreatedAtUtc)
+                    .Select(i => i.ToDto())
+                    .ToList();
+
+                var inst = projectInstances
+                    .OrderByDescending(i => StatusPriority(i.Status))
+                    .ThenByDescending(i => i.CreatedAtUtc)
+                    .First();
+
                 var stages = inst.WorkflowDefinition.Stages.OrderBy(s => s.SortOrder).ToDtoList();
                 var visitedStageIds = inst.StageTransitions
                     .Select(t => t.ToStageId)
@@ -220,7 +226,8 @@ public class WorkflowQueryService : IWorkflowQueryService
                     project.ToDto(),
                     inst.ToDto(),
                     stages,
-                    visitedStageIds));
+                    visitedStageIds,
+                    tracks));
             }
             else
             {
@@ -228,7 +235,8 @@ public class WorkflowQueryService : IWorkflowQueryService
                     project.ToDto(),
                     Instance: null,
                     AllStages: [],
-                    VisitedStageIds: new HashSet<int>()));
+                    VisitedStageIds: new HashSet<int>(),
+                    TrackInstances: []));
             }
         }
 
@@ -249,6 +257,7 @@ public class WorkflowQueryService : IWorkflowQueryService
             .Include(i => i.WorkflowDefinition)
                 .ThenInclude(d => d.Stages.OrderBy(s => s.SortOrder))
             .Include(i => i.CurrentStage)
+            .Include(i => i.JobType)
             .Include(i => i.Project)
             .Include(i => i.StageTransitions)
             .OrderByDescending(i => i.CreatedAtUtc)

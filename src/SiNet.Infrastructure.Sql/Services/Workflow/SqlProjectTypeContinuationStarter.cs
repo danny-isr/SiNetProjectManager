@@ -8,7 +8,7 @@ namespace SiNet.Infrastructure.Sql.Services.Workflow;
 
 /// <summary>
 /// After QuoteApprovedByClient: require a default enabled mapping per project type,
-/// then start one project-bound instance per unique WorkflowDefinition.
+/// then start one project-bound instance per JobType track (B2).
 /// </summary>
 public sealed class SqlProjectTypeContinuationStarter(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
@@ -23,15 +23,15 @@ public sealed class SqlProjectTypeContinuationStarter(
     public Task<ProjectTypeContinuationResult> ValidateMappingsAsync(
         int projectId,
         CancellationToken cancellationToken = default) =>
-        ResolveDefinitionIdsAsync(projectId, start: false, actingUserId: 0, cancellationToken);
+        ResolveAndMaybeStartAsync(projectId, start: false, actingUserId: 0, cancellationToken);
 
     public Task<ProjectTypeContinuationResult> StartContinuationsAsync(
         int projectId,
         int actingUserId,
         CancellationToken cancellationToken = default) =>
-        ResolveDefinitionIdsAsync(projectId, start: true, actingUserId, cancellationToken);
+        ResolveAndMaybeStartAsync(projectId, start: true, actingUserId, cancellationToken);
 
-    private async Task<ProjectTypeContinuationResult> ResolveDefinitionIdsAsync(
+    private async Task<ProjectTypeContinuationResult> ResolveAndMaybeStartAsync(
         int projectId,
         bool start,
         int actingUserId,
@@ -78,7 +78,7 @@ public sealed class SqlProjectTypeContinuationStarter(
             .ConfigureAwait(false);
 
         var missingTitles = new List<string>();
-        var definitionIds = new List<(int DefinitionId, string? Code)>();
+        var tracks = new List<(int JobTypeId, int DefinitionId, string? Code)>();
 
         foreach (var typeId in typeIds)
         {
@@ -95,7 +95,7 @@ public sealed class SqlProjectTypeContinuationStarter(
                 continue;
             }
 
-            definitionIds.Add((best.WorkflowDefinitionId, best.Code));
+            tracks.Add((typeId, best.WorkflowDefinitionId, best.Code));
         }
 
         if (missingTitles.Count > 0)
@@ -106,10 +106,9 @@ public sealed class SqlProjectTypeContinuationStarter(
                 + ". הגדר במנהלה → «מדיניות סוג↔תהליך».");
         }
 
-        var uniqueByDefinition = definitionIds
-            .GroupBy(d => d.DefinitionId)
-            .Select(g => g.First())
-            .OrderBy(d => d.DefinitionId)
+        tracks = tracks
+            .OrderBy(t => t.JobTypeId)
+            .ThenBy(t => t.DefinitionId)
             .ToList();
 
         if (!start)
@@ -118,20 +117,23 @@ public sealed class SqlProjectTypeContinuationStarter(
         var started = new List<int>();
         var skipped = new List<string>();
 
-        foreach (var (definitionId, code) in uniqueByDefinition)
+        foreach (var (jobTypeId, definitionId, code) in tracks)
         {
+            var trackLabel = $"{code ?? definitionId.ToString()}/{titleById.GetValueOrDefault(jobTypeId, $"#{jobTypeId}")}";
+
             var alreadyActive = await db.WorkflowInstances.AsNoTracking()
                 .AnyAsync(
                     i => i.ProjectId == projectId
                          && i.IsProjectBound
                          && i.WorkflowDefinitionId == definitionId
+                         && i.JobTypeId == jobTypeId
                          && (i.Status == WorkflowStatus.Active || i.Status == WorkflowStatus.Paused),
                     cancellationToken)
                 .ConfigureAwait(false);
 
             if (alreadyActive)
             {
-                skipped.Add(code ?? definitionId.ToString());
+                skipped.Add(trackLabel);
                 continue;
             }
 
@@ -145,27 +147,31 @@ public sealed class SqlProjectTypeContinuationStarter(
                             TriggerEntityId: null,
                             UserId: actingUserId,
                             Notes: "post QuoteApprovedByClient",
-                            IsProjectBound: true),
+                            IsProjectBound: true,
+                            InitialStageCode: null,
+                            JobTypeId: jobTypeId),
                         cancellationToken)
                     .ConfigureAwait(false);
 
                 started.Add(result.Instance.Id);
                 Trace.TraceInformation(
-                    "[ProjectTypeContinuation] Started definition={0} ({1}) instance={2} project={3}",
+                    "[ProjectTypeContinuation] Started definition={0} ({1}) jobType={2} instance={3} project={4}",
                     definitionId,
                     code ?? "?",
+                    jobTypeId,
                     result.Instance.Id,
                     projectId);
             }
             catch (Exception ex)
             {
                 Trace.TraceError(
-                    "[ProjectTypeContinuation] Start failed definition={0} project={1}: {2}",
+                    "[ProjectTypeContinuation] Start failed definition={0} jobType={1} project={2}: {3}",
                     definitionId,
+                    jobTypeId,
                     projectId,
                     ex);
                 return ProjectTypeContinuationResult.Fail(
-                    $"הפעלת תהליך המשך «{code ?? definitionId.ToString()}» נכשלה: {ex.Message}");
+                    $"הפעלת תהליך המשך «{trackLabel}» נכשלה: {ex.Message}");
             }
         }
 

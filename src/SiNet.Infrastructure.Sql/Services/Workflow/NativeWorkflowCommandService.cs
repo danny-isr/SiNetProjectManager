@@ -26,7 +26,7 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
     {
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Engine.Command.Start",
-            $"def={command.DefinitionId} project={command.ProjectId} trigger={command.TriggerType} entity={command.TriggerEntityId} user={command.UserId} bound={command.IsProjectBound} initialStage={command.InitialStageCode ?? "(default)"}");
+            $"def={command.DefinitionId} project={command.ProjectId} trigger={command.TriggerType} entity={command.TriggerEntityId} user={command.UserId} bound={command.IsProjectBound} initialStage={command.InitialStageCode ?? "(default)"} jobType={command.JobTypeId?.ToString() ?? "(none)"}");
         return _orchestrator.StartWorkflowAsync(
             command.DefinitionId,
             command.ProjectId,
@@ -36,7 +36,8 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
             command.Notes,
             ct,
             command.IsProjectBound,
-            command.InitialStageCode);
+            command.InitialStageCode,
+            command.JobTypeId);
     }
 
     public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct) =>

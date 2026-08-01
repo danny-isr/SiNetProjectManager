@@ -68,12 +68,12 @@ The workflow-first model is a fully wired engine with 14 registered DI services,
 |---|---|
 | `WorkflowDefinition` | Named workflow template (PLN, MAT, REV, PRP, OPN) |
 | `WorkflowStageDefinition` | Stage within a workflow (with visual designer properties, sub-workflow support) |
-| `WorkflowInstance` | Running instance of a workflow bound to a project |
+| `WorkflowInstance` | Running instance of a workflow bound to a project. **B2 target:** project-bound tracks carry explicit JobType identity; active uniqueness is `Project + WorkflowDefinition + JobType` (not one instance per definition). See [`PROJECT_TYPE_WORKFLOW_POLICY.md`](../../../../docs/manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md). |
 | `WorkflowTransitionRule` | Rule governing stage-to-stage transitions (trigger, condition, evaluation mode) |
 | `WorkflowStageTask` | Template linking a stage to a `TaskType` with default assignee |
 | `WorkflowStartTrigger` | Defines what starts a workflow. Infrastructure exists; runtime auto-evaluation is postponed. |
 | `ProjectTypeWorkflowDefinition` | Maps project types to allowed workflow definitions |
-| `ProjectTypeWorkflowStage` | Per-project-type stage activation and requirement |
+| `ProjectTypeWorkflowStage` | Per-project-type stage activation and requirement. **B2 target:** runtime source of truth for which stages a JobType track provisions/advances (not seed-only). |
 | `ProjectTypeDiscipline` | Per-project-type discipline activation |
 | `TaskResultDefinition` | Standardized result codes for task completion |
 
@@ -249,6 +249,17 @@ Unmapped types return `(null, null)`, so `TryCompleteReportTaskAsync` no-ops and
 - Do **not** let the reused singleton window keep a previous task's context; the normal open path (`ApplyActiveProject`) must clear task mode.
 - Do **not** auto-complete multi-outcome tasks (`RecheckPlan`) or approval tasks from a plain export; only single-outcome review tasks are mapped.
 - The normal project-centric way of opening `FloatingInspectionView` (not task-driven) remains unchanged; task-completion services are optional and only used when a task context is supplied.
+
+## 8a. Project-type track instances (B2 — cross-reference)
+
+Approved product target (2026-08-01): one independent `WorkflowInstance` per
+`Project + WorkflowDefinition + JobType` track — not one instance per task, and not
+dedupe-by-definition as the product rule. Tasks, navigation, and reuse must follow the
+Trigger-linked instance. Full policy and gates:
+[`docs/manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md`](../../../../docs/manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md)
+and [`WorkflowPrinciples-2026-05-26.md`](WorkflowPrinciples-2026-05-26.md) § Project-type track instances.
+
+Runtime/schema for B2 remain postponed until the documentation approval checkpoint passes.
 
 ## 9. Dropped / cancelled / postponed
 - Deleting `ProjectTypeTaskType` / `ProjectTypeStatus` — **not approved**; still actively used.

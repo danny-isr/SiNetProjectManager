@@ -32,6 +32,10 @@ public enum WorkflowTriggerTypeDto
 /// <param name="Notes">Optional free-text notes.</param>
 /// <param name="IsProjectBound">Whether the workflow is truly attached to a project.</param>
 /// <param name="InitialStageCode">Optional explicit initial stage code; null lets the engine choose.</param>
+/// <param name="JobTypeId">
+/// B2 track identity (JobType / project type). Required for JobType-driven project-bound
+/// continuations; null for Proposal/unbound and legacy project-level starts.
+/// </param>
 public sealed record StartWorkflowCommand(
     int DefinitionId,
     int ProjectId,
@@ -40,7 +44,8 @@ public sealed record StartWorkflowCommand(
     int UserId,
     string? Notes,
     bool IsProjectBound = true,
-    string? InitialStageCode = null);
+    string? InitialStageCode = null,
+    int? JobTypeId = null);
 
 /// <summary>Advances an existing workflow to a target stage and provisions the new stage's tasks.</summary>
 /// <param name="InstanceId">Workflow instance to advance.</param>

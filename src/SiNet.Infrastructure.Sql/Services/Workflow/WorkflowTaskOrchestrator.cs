@@ -40,13 +40,15 @@ internal sealed class WorkflowTaskOrchestrator(
         string? notes,
         CancellationToken ct,
         bool isProjectBound = true,
-        string? initialStageCode = null)
+        string? initialStageCode = null,
+        int? jobTypeId = null)
     {
         await PreflightStartAsync(definitionId, ct, initialStageCode).ConfigureAwait(false);
 
         var instance = await _engine.StartAsync(
             definitionId, projectId, triggerType, triggerEntityId, userId, notes, ct, isProjectBound,
-            initialStageCode: initialStageCode).ConfigureAwait(false);
+            initialStageCode: initialStageCode,
+            jobTypeId: jobTypeId).ConfigureAwait(false);
 
         var (advancedInstance, tasks) = await _provisioning.EnsureInitialStageTasksAsync(instance, userId, ct)
             .ConfigureAwait(false);

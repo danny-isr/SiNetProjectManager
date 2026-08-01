@@ -40,7 +40,7 @@ public sealed class SqlTaskQueueService : ITaskQueueService
                         && t.WorkPriority != null);
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortByPriorityWithinBucket(tasks).Select(SqlTaskQueryService.MapTask).ToList();
+        return TaskQueryOrdering.SortByPriorityWithinBucket(tasks).Select(t => SqlTaskQueryService.MapTask(t)).ToList();
     }
 
     public async ValueTask MoveWithinBucketAsync(

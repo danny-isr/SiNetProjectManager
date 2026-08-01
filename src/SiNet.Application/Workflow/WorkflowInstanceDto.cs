@@ -21,6 +21,11 @@ namespace SiNet.Application.Workflow;
 /// <param name="Project">Bound project reference, when loaded.</param>
 /// <param name="CreatedByUser">User who created the instance, when loaded.</param>
 /// <param name="StageTransitions">Ordered transition history, when loaded.</param>
+/// <param name="JobTypeId">
+/// B2 track identity (JobType / project type) when the instance is JobType-bound; null for
+/// unbound / legacy / project-level instances.
+/// </param>
+/// <param name="JobTypeTitle">Display title of the track JobType when loaded.</param>
 public sealed record WorkflowInstanceDto(
     int Id,
     int WorkflowDefinitionId,
@@ -34,4 +39,6 @@ public sealed record WorkflowInstanceDto(
     WorkflowStageDefinitionDto? CurrentStage,
     WorkflowProjectRefDto? Project,
     WorkflowUserRefDto? CreatedByUser,
-    IReadOnlyList<WorkflowStageTransitionDto> StageTransitions);
+    IReadOnlyList<WorkflowStageTransitionDto> StageTransitions,
+    int? JobTypeId = null,
+    string? JobTypeTitle = null);

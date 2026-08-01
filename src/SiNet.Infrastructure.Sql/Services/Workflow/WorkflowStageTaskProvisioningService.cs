@@ -192,6 +192,17 @@ internal sealed class WorkflowStageTaskProvisioningService
             return [];
         }
 
+        if (instance.JobTypeId is int provisionJobTypeId
+            && !await ProjectTypeWorkflowStagePolicy.IsStageAllowedAsync(
+                    db, provisionJobTypeId, instance.WorkflowDefinitionId, stageId, ct)
+                .ConfigureAwait(false))
+        {
+            Trace.TraceWarning(
+                $"[Provisioning] Skipping stage {stageId} for instance {instanceId}: " +
+                $"inactive for JobType {provisionJobTypeId}.");
+            return [];
+        }
+
         var stageTasks = await db.WorkflowStageTasks
             .Include(st => st.TaskType)
             .Where(st => st.StageDefinitionId == stageId && st.IsActive)
@@ -244,6 +255,8 @@ internal sealed class WorkflowStageTaskProvisioningService
                 // IX_ProjectAssignment_UniqueOpenTask: one open queued row per
                 // (project, assignee, taskType, parent=null). On the office project many Proposal
                 // emails share that key.
+                // B2: reuse only when the open task is already Trigger-linked to THIS instance.
+                // Do not share an open task across parallel JobType tracks.
                 var existingOpenTask = await db.ProjectAssignments
                     .Include(t => t.AssignmentStatus)
                     .FirstOrDefaultAsync(t =>
@@ -253,16 +266,18 @@ internal sealed class WorkflowStageTaskProvisioningService
                         && t.ParentAssignmentId == null
                         && t.WorkPriority != null
                         && t.AssignmentStatus != null
-                        && t.AssignmentStatus.IsOpen, ct)
+                        && t.AssignmentStatus.IsOpen
+                        && t.TaskLinks.Any(l =>
+                            l.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
+                            && l.Role == TaskLinkRole.Trigger
+                            && l.LinkedEntityId == instanceId), ct)
                     .ConfigureAwait(false);
 
                 if (existingOpenTask is not null && instance.IsProjectBound)
                 {
-                    // Bound workflows: legacy Tier-2 reuse (one parent + extra WorkTarget/instance links).
                     Trace.TraceWarning(
-                        $"[Provisioning] Open task #{existingOpenTask.Id} already exists for " +
-                        $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}). " +
-                        "Reusing parent and linking this email/instance.");
+                        $"[Provisioning] Open task #{existingOpenTask.Id} already linked to instance {instanceId} for " +
+                        $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}). Reusing.");
 
                     var alreadyLinked = await db.TaskLinks.AnyAsync(l =>
                         l.TaskId == existingOpenTask.Id
@@ -298,15 +313,28 @@ internal sealed class WorkflowStageTaskProvisioningService
                     createdTasks.Add(existingOpenTask);
                     // TEMP WF-DEBUG
                     WorkflowDebugTrace.Step("Provisioning.TaskCreated",
-                        $"instance={instanceId} stage={stageId} taskId={existingOpenTask.Id} taskTypeId={template.TaskTypeId} assignedTo={assigneeId} REUSED parent+link email={(emailSource?.Id.ToString() ?? "none")} title='{existingOpenTask.Title}'");
+                        $"instance={instanceId} stage={stageId} taskId={existingOpenTask.Id} taskTypeId={template.TaskTypeId} assignedTo={assigneeId} REUSED same-instance email={(emailSource?.Id.ToString() ?? "none")} title='{existingOpenTask.Title}'");
                     continue;
                 }
 
-                // Unbound (Proposal): each instance needs its own driving task. When the unique-open
-                // slot is taken, create a non-queued shell parent + queued child (ParentAssignmentId
-                // differs → index allows another open row of the same type).
+                // Unbound Proposal OR parallel B2 track: when the unique-open (parent=null) slot is
+                // taken by another instance, create a non-queued shell parent + queued child.
                 int? parentAssignmentId = null;
-                if (existingOpenTask is not null && !instance.IsProjectBound)
+                var collidingOpen = existingOpenTask is null
+                    ? await db.ProjectAssignments
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(t =>
+                            t.ProjectId == instance.ProjectId
+                            && t.AssignedToId == assigneeId
+                            && t.TaskTypeId == template.TaskTypeId
+                            && t.ParentAssignmentId == null
+                            && t.WorkPriority != null
+                            && t.AssignmentStatus != null
+                            && t.AssignmentStatus.IsOpen, ct)
+                        .ConfigureAwait(false)
+                    : null;
+
+                if (collidingOpen is not null)
                 {
                     var shell = new ProjectAssignment
                     {
@@ -323,8 +351,8 @@ internal sealed class WorkflowStageTaskProvisioningService
                     parentAssignmentId = shell.Id;
 
                     Trace.TraceWarning(
-                        $"[Provisioning] Unbound collision on open task #{existingOpenTask.Id}; " +
-                        $"creating child under shell #{shell.Id} for instance {instanceId}.");
+                        $"[Provisioning] Open-slot collision on task #{collidingOpen.Id}; " +
+                        $"creating child under shell #{shell.Id} for instance {instanceId} (bound={instance.IsProjectBound}).");
                 }
 
                 var task = new ProjectAssignment

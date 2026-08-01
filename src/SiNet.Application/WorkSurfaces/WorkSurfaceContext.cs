@@ -39,6 +39,9 @@ namespace SiNet.Application.WorkSurfaces;
 /// <param name="EmailHints">
 /// Optional Email-first open hints (FollowQuoteApproval thread/counterpart filter). Runtime-only.
 /// </param>
+/// <param name="ProcessDisplayName">Workflow definition name of the Trigger-linked instance (B2 UI).</param>
+/// <param name="JobTypeDisplayName">JobType track title of the Trigger-linked instance (B2 UI).</param>
+/// <param name="CurrentStageDisplayName">Current stage name of the Trigger-linked instance (B2 UI).</param>
 public sealed record WorkSurfaceContext(
     int? TaskId,
     int ProjectId,
@@ -49,7 +52,10 @@ public sealed record WorkSurfaceContext(
     string? CompletionEventCode = null,
     int? ActingUserId = null,
     string? TaskTypeCode = null,
-    EmailOpenHints? EmailHints = null);
+    EmailOpenHints? EmailHints = null,
+    string? ProcessDisplayName = null,
+    string? JobTypeDisplayName = null,
+    string? CurrentStageDisplayName = null);
 
 /// <summary>Runtime-only Email open filter hints (e.g. FollowQuoteApproval).</summary>
 public sealed record EmailOpenHints(

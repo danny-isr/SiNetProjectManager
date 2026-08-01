@@ -57,6 +57,7 @@ Button **פתח מצב מערכת** opens the existing `SystemStatusWindow`.
 | --- | --- |
 | Id | `WorkflowInstanceDto.Id` |
 | Workflow | `WorkflowDefinition.Name` |
+| Track / JobType | B2: JobType track identity on the instance (display name); empty for genuinely project-level / unbound instances |
 | Project | `Project` display |
 | User | `CreatedByUser` |
 | Started | `CreatedAtUtc` (local) |
@@ -67,6 +68,8 @@ Button **פתח מצב מערכת** opens the existing `SystemStatusWindow`.
 | Tasks | Optional `GetStageTaskProgressAsync` text when detail selected |
 
 No fake progress %. Filters: status, workflow name, project/user text. Auto-refresh 20s + manual refresh.
+
+**B2:** A project may have several active instances of the same definition (one per JobType track). The grid must list **each** instance; do not collapse to one “best” row per project. Policy: [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md) §7.
 
 ### 3.4 Detail panel
 

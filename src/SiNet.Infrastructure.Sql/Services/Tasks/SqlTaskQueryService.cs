@@ -29,10 +29,15 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.AssignmentStatus)
             .Include(t => t.AssignedTo)
             .Include(t => t.LastTaskResult)
+            .Include(t => t.TaskLinks)
             .FirstOrDefaultAsync(t => t.Id == taskId, ct)
             .ConfigureAwait(false);
 
-        return task is null ? null : MapTask(task);
+        if (task is null)
+            return null;
+
+        var trackByTask = await LoadTrackDisplayAsync(db, [task], ct).ConfigureAwait(false);
+        return MapTask(task, trackByTask.GetValueOrDefault(task.Id));
     }
 
     public async ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(
@@ -49,6 +54,7 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.AssignmentStatus)
             .Include(t => t.AssignedTo)
             .Include(t => t.LastTaskResult)
+            .Include(t => t.TaskLinks)
             .Where(t => t.ProjectId == projectId);
 
         if (!includeClosed)
@@ -58,7 +64,10 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortByQueueOrder(tasks).Select(MapTask).ToList();
+        var trackByTask = await LoadTrackDisplayAsync(db, tasks, ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortByQueueOrder(tasks)
+            .Select(t => MapTask(t, trackByTask.GetValueOrDefault(t.Id)))
+            .ToList();
     }
 
     public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(
@@ -93,11 +102,15 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.AssignmentStatus)
             .Include(t => t.AssignedTo)
             .Include(t => t.LastTaskResult)
+            .Include(t => t.TaskLinks)
             .Where(t => t.WorkQueueBucket == workQueueBucket
                         && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortAllUsersInBucket(tasks).Select(MapTask).ToList();
+        var trackByTask = await LoadTrackDisplayAsync(db, tasks, ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortAllUsersInBucket(tasks)
+            .Select(t => MapTask(t, trackByTask.GetValueOrDefault(t.Id)))
+            .ToList();
     }
 
     private async ValueTask<IReadOnlyList<TaskSummaryDto>> QueryOpenTasksForUserAsync(
@@ -113,24 +126,76 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.AssignmentStatus)
             .Include(t => t.AssignedTo)
             .Include(t => t.LastTaskResult)
+            .Include(t => t.TaskLinks)
             .Where(t => t.AssignedToId == userId
                         && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
 
         if (workQueueBucket.HasValue)
             query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
-        // Sort in memory — legacy DB rows may have varchar/datetime values that break SQL ORDER BY.
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortByQueueOrder(tasks).Select(MapTask).ToList();
+        var trackByTask = await LoadTrackDisplayAsync(db, tasks, ct).ConfigureAwait(false);
+        return TaskQueryOrdering.SortByQueueOrder(tasks)
+            .Select(t => MapTask(t, trackByTask.GetValueOrDefault(t.Id)))
+            .ToList();
     }
 
-    internal static TaskSummaryDto MapTask(ProjectAssignment task)
+    private static async Task<Dictionary<int, TrackDisplay>> LoadTrackDisplayAsync(
+        SiNetSQLDbContext db,
+        IReadOnlyList<ProjectAssignment> tasks,
+        CancellationToken ct)
+    {
+        var taskToInstance = new Dictionary<int, int>();
+        foreach (var task in tasks)
+        {
+            var link = task.TaskLinks
+                .Where(l => l.Role == TaskLinkRole.Trigger
+                            && l.LinkedEntityType == TaskLinkEntityType.WorkflowInstance)
+                .OrderByDescending(l => l.CreatedAtUtc)
+                .FirstOrDefault();
+            if (link is null || link.LinkedEntityId <= 0 || link.LinkedEntityId > int.MaxValue)
+                continue;
+            taskToInstance[task.Id] = (int)link.LinkedEntityId;
+        }
+
+        if (taskToInstance.Count == 0)
+            return new Dictionary<int, TrackDisplay>();
+
+        var instanceIds = taskToInstance.Values.Distinct().ToList();
+        var instances = await db.WorkflowInstances.AsNoTracking()
+            .Include(i => i.WorkflowDefinition)
+            .Include(i => i.JobType)
+            .Include(i => i.CurrentStage)
+            .Where(i => instanceIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, ct)
+            .ConfigureAwait(false);
+
+        var result = new Dictionary<int, TrackDisplay>();
+        foreach (var (taskId, instanceId) in taskToInstance)
+        {
+            if (!instances.TryGetValue(instanceId, out var inst))
+                continue;
+            result[taskId] = new TrackDisplay(
+                inst.WorkflowDefinition?.Name ?? inst.WorkflowDefinition?.Code,
+                inst.JobType?.Title,
+                inst.CurrentStage?.Name ?? inst.CurrentStage?.Code);
+        }
+
+        return result;
+    }
+
+    internal static TaskSummaryDto MapTask(ProjectAssignment task, TrackDisplay? track = null)
     {
         var bucket = WorkQueueBucketResolver.Resolve(task);
         var taskTypeCode = task.TaskType?.Code;
         var interaction = taskTypeCode is not null
             ? ReviewTaskInteractionRegistry.TryGet(taskTypeCode)
             : null;
+
+        var trackParts = new[] { track?.ProcessName, track?.JobTypeTitle, track?.StageName }
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+        var trackLine = trackParts.Length == 0 ? null : string.Join(" · ", trackParts);
 
         return new TaskSummaryDto(
             TaskId: task.Id,
@@ -150,6 +215,12 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             CreatedAt: task.Created ?? task.StartDate,
             LastTaskResultCode: task.LastTaskResult?.Code,
             Title: task.Title,
-            ComponentKey: interaction?.ComponentKey);
+            ComponentKey: interaction?.ComponentKey,
+            WorkflowDefinitionName: track?.ProcessName,
+            JobTypeTitle: track?.JobTypeTitle,
+            CurrentStageName: track?.StageName,
+            TrackDisplayLine: trackLine);
     }
+
+    internal sealed record TrackDisplay(string? ProcessName, string? JobTypeTitle, string? StageName);
 }

@@ -216,7 +216,7 @@ Initial menu (P3 + P6 + native admin):
 | ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native ACC control/status + inbox reconciliation window |
 | System health | Authenticated user | Any signed-in user | `SystemStatusWindow` → native subsystem status + background work |
 | Workflow ops health | `Shell.OpenWorkflowOpsDashboard` | Administrator | `WorkflowOpsDashboardWindow` → read-only instance grid + stalled badge (complements System health; see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md)) |
-| ProjectType↔Workflow policy | `Shell.OpenProjectTypeWorkflowPolicy` | Administrator | Focused mapping admin (JobType → WorkflowDefinition); not full `WorkflowManagementWindow` — see [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md) |
+| ProjectType↔Workflow policy | `Shell.OpenProjectTypeWorkflowPolicy` | Administrator | Focused mapping admin (JobType → WorkflowDefinition). B2 target: continuation tracks are per JobType (`Project + Definition + JobType`) — see [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md) |
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 

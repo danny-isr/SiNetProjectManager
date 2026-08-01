@@ -34,6 +34,14 @@ public class WorkflowInstance
     /// </summary>
     public bool IsProjectBound { get; set; } = true;
 
+    /// <summary>
+    /// B2 track identity: FK to the project <see cref="JobType"/> (discipline / project type)
+    /// this instance advances for. Required for new JobType-driven project-bound tracks;
+    /// null for historical rows, ambiguous legacy rows, and genuinely project-level workflows
+    /// (see docs/manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md).
+    /// </summary>
+    public int? JobTypeId { get; set; }
+
     /// <summary>Lifecycle status of this instance.</summary>
     public WorkflowStatus Status { get; set; }
 
@@ -78,6 +86,9 @@ public class WorkflowInstance
     public virtual WorkflowDefinition WorkflowDefinition { get; set; } = null!;
 
     public virtual Project Project { get; set; } = null!;
+
+    /// <summary>Track JobType when <see cref="JobTypeId"/> is set.</summary>
+    public virtual JobType? JobType { get; set; }
 
     public virtual WorkflowStageDefinition? CurrentStage { get; set; }
 

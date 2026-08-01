@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SiNetSQL.Data;
 
@@ -11,9 +12,11 @@ using SiNetSQL.Data;
 namespace SiNetSQL.Migrations
 {
     [DbContext(typeof(SiNetSQLDbContext))]
-    partial class SiNetSQLDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731224421_WorkflowInstance_JobTypeTrack")]
+    partial class WorkflowInstance_JobTypeTrack
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

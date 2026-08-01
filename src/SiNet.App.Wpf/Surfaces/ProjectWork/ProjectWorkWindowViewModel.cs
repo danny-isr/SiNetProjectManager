@@ -278,9 +278,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             "ProjectWork AccDock/PopOut control available on surface");
         // #endregion
 
-        TaskHeader = string.IsNullOrWhiteSpace(context.TaskTypeCode)
-            ? $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId}"
-            : $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u2014 {context.TaskTypeCode}";
+        TaskHeader = BuildTaskHeader(context);
 
         await BindProjectAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
         await LoadTreeAsync(context.ProjectId, cancellationToken, forceReload: true).ConfigureAwait(true);
@@ -675,5 +673,26 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         Add("\u05D0\u05D7\u05E8\u05D0\u05D9", project.AssignedUserName);
 
         return string.Join(" \u00B7 ", parts);
+    }
+
+    private static string BuildTaskHeader(WorkSurfaceContext context)
+    {
+        var parts = new List<string>
+        {
+            context.TaskId is int id
+                ? $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{id}"
+                : "\u05DE\u05E9\u05D9\u05DE\u05D4",
+        };
+
+        if (!string.IsNullOrWhiteSpace(context.TaskTypeCode))
+            parts.Add(context.TaskTypeCode!);
+        if (!string.IsNullOrWhiteSpace(context.ProcessDisplayName))
+            parts.Add(context.ProcessDisplayName!);
+        if (!string.IsNullOrWhiteSpace(context.JobTypeDisplayName))
+            parts.Add(context.JobTypeDisplayName!);
+        if (!string.IsNullOrWhiteSpace(context.CurrentStageDisplayName))
+            parts.Add(context.CurrentStageDisplayName!);
+
+        return string.Join(" \u2014 ", parts);
     }
 }

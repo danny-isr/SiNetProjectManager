@@ -22,4 +22,9 @@ public sealed record TaskSummaryDto(
     DateTime? CreatedAt,
     string? LastTaskResultCode,
     string? Title,
-    string? ComponentKey);
+    string? ComponentKey,
+    string? WorkflowDefinitionName = null,
+    string? JobTypeTitle = null,
+    string? CurrentStageName = null,
+    /// <summary>Preformatted process · track · stage line for list cards (null when unknown).</summary>
+    string? TrackDisplayLine = null);

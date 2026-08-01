@@ -1,7 +1,7 @@
 # ProjectType ↔ Workflow — track-instance policy and post-approval continuation
 
 - **Date:** 2026-08-01
-- **Status:** Planning — B2 product decision approved; runtime and schema are not implemented
+- **Status:** Runtime slice in progress — migration applied; continuation/nav/reuse/stage-policy/UI wired to B2 tracks
 - **Scope:** Project-bound continuation workflows started after Proposal approval, their JobType track identity, stage policy, task ownership, navigation, dashboard projection, and project-level status aggregation
 - **Related:** [Workflow Principles](../../SiNetProjectManagerV2/Docs/Domains/Workflow/WorkflowPrinciples-2026-05-26.md), [Proposal workflow manual test](./PROPOSAL_WORKFLOW_MANUAL_TEST.md) §2.8, table `ProjectTypeWorkflowDefinition`
 
@@ -128,12 +128,13 @@ Backfill policy:
 
 ## 10. Required implementation order and approval gates
 
-1. **Docs-first:** this document and Workflow Principles become the approved source of truth.
-2. **Approval checkpoint:** stop for explicit user approval of the updated documentation.
-3. **Model only:** update entity and EF configuration; do not create/edit/run files under `**/Migrations/**`.
-4. **User-owned migration:** provide the exact `dotnet ef migrations add ... --context ...` command and stop for the user to run it.
-5. **Runtime:** continuation, stage enforcement, task reuse, navigation, dashboard, and tests.
-6. **UI:** process + JobType track identity and same-instance sibling tasks.
+1. **Docs-first:** this document and Workflow Principles become the approved source of truth. ✅
+2. **Approval checkpoint:** stop for explicit user approval of the updated documentation. ✅ (2026-08-01)
+3. **Model only:** update entity and EF configuration; do not create/edit/run files under `**/Migrations/**`. ✅
+4. **User-owned migration:** `WorkflowInstance_JobTypeTrack` applied. ✅
+5. **Runtime:** continuation, stage enforcement, task reuse, navigation, dashboard, and tests. ✅ (initial B2 wiring)
+6. **UI:** process + JobType track identity on task cards / TaskHeader. ✅ (sibling-task list optional follow-up)
+
 
 ## 11. Future manual checks
 

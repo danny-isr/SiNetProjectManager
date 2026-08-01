@@ -23,7 +23,7 @@ public sealed class ProjectTypeContinuationStarterTests
     }
 
     [Fact]
-    public async Task Start_when_two_types_share_definition_then_starts_once()
+    public async Task Start_when_two_types_share_definition_then_starts_twice_with_job_types()
     {
         var (factory, projectId) = await BuildAsync(mapTypes: true, twoTypesSameDefinition: true);
         var spy = new SpyWorkflowCommands();
@@ -32,29 +32,35 @@ public sealed class ProjectTypeContinuationStarterTests
         var result = await starter.StartContinuationsAsync(projectId, actingUserId: 1);
 
         Assert.True(result.Success, result.Error);
-        Assert.Single(spy.StartedDefinitionIds);
-        Assert.Equal(10, spy.StartedDefinitionIds[0]);
-        Assert.Single(result.StartedInstanceIds);
+        Assert.Equal(2, spy.StartedCommands.Count);
+        Assert.All(spy.StartedCommands, c => Assert.Equal(10, c.DefinitionId));
+        Assert.Equal(new[] { 1, 2 }, spy.StartedCommands.Select(c => c.JobTypeId!.Value).OrderBy(x => x));
+        Assert.Equal(2, result.StartedInstanceIds.Count);
     }
 
     [Fact]
-    public async Task Start_when_active_instance_exists_then_skips()
+    public async Task Start_when_active_track_exists_then_skips_that_track_only()
     {
-        var (factory, projectId) = await BuildAsync(mapTypes: true, seedActiveInstance: true);
+        var (factory, projectId) = await BuildAsync(
+            mapTypes: true,
+            twoTypesSameDefinition: true,
+            seedActiveInstanceForJobTypeId: 1);
         var spy = new SpyWorkflowCommands();
         var starter = new SqlProjectTypeContinuationStarter(factory, spy);
 
         var result = await starter.StartContinuationsAsync(projectId, actingUserId: 1);
 
         Assert.True(result.Success, result.Error);
-        Assert.Empty(spy.StartedDefinitionIds);
-        Assert.Contains("PlanningWorkflow", result.SkippedAlreadyActiveCodes);
+        Assert.Single(spy.StartedCommands);
+        Assert.Equal(2, spy.StartedCommands[0].JobTypeId);
+        Assert.Single(result.StartedInstanceIds);
+        Assert.Contains("PlanningWorkflow", result.SkippedAlreadyActiveCodes[0], StringComparison.Ordinal);
     }
 
     private static async Task<(IDbContextFactory<SiNetSQLDbContext> Factory, int ProjectId)> BuildAsync(
         bool mapTypes,
         bool twoTypesSameDefinition = false,
-        bool seedActiveInstance = false)
+        int? seedActiveInstanceForJobTypeId = null)
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -113,13 +119,14 @@ public sealed class ProjectTypeContinuationStarterTests
             }
         }
 
-        if (seedActiveInstance)
+        if (seedActiveInstanceForJobTypeId is int jobTypeId)
         {
             db.WorkflowInstances.Add(new WorkflowInstance
             {
                 Id = 55,
                 ProjectId = 100,
                 WorkflowDefinitionId = 10,
+                JobTypeId = jobTypeId,
                 IsProjectBound = true,
                 Status = WorkflowStatus.Active,
                 CreatedByUserId = 1,
@@ -142,12 +149,12 @@ public sealed class ProjectTypeContinuationStarterTests
 
     private sealed class SpyWorkflowCommands : IWorkflowCommandService
     {
-        public List<int> StartedDefinitionIds { get; } = [];
+        public List<StartWorkflowCommand> StartedCommands { get; } = [];
         private int _nextInstanceId = 1000;
 
         public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
         {
-            StartedDefinitionIds.Add(command.DefinitionId);
+            StartedCommands.Add(command);
             var id = ++_nextInstanceId;
             var instance = new WorkflowInstanceDto(
                 id,
@@ -162,7 +169,8 @@ public sealed class ProjectTypeContinuationStarterTests
                 CurrentStage: null,
                 Project: null,
                 CreatedByUser: null,
-                StageTransitions: []);
+                StageTransitions: [],
+                JobTypeId: command.JobTypeId);
             return ValueTask.FromResult(new WorkflowStartResultDto(instance, []));
         }
 

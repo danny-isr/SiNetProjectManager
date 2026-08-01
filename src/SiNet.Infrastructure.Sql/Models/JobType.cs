@@ -36,6 +36,9 @@ public partial  class JobType
     // Workflow mappings - which WorkflowDefinitions are allowed for this ProjectType
     public virtual ICollection<ProjectTypeWorkflowDefinition> AllowedWorkflows { get; set; } = new List<ProjectTypeWorkflowDefinition>();
 
+    /// <summary>B2: workflow instances that run as an independent track for this JobType.</summary>
+    public virtual ICollection<WorkflowInstance> WorkflowInstances { get; set; } = new List<WorkflowInstance>();
+
     // Per-ProjectType WorkflowStage configuration (which PLN.* stages are active/required/repeatable)
     public virtual ICollection<ProjectTypeWorkflowStage> WorkflowStages { get; set; } = new List<ProjectTypeWorkflowStage>();
 

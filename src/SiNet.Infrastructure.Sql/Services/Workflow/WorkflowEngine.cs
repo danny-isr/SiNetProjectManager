@@ -38,7 +38,8 @@ internal sealed class WorkflowEngine
         CancellationToken ct,
         bool isProjectBound = true,
         int? parentWorkflowInstanceId = null,
-        string? initialStageCode = null)
+        string? initialStageCode = null,
+        int? jobTypeId = null)
     {
         if (isProjectBound &&
             !await _policyService.IsWorkflowAllowedAsync(projectId, definitionId, ct).ConfigureAwait(false))
@@ -48,6 +49,29 @@ internal sealed class WorkflowEngine
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+
+        if (jobTypeId is int jtId)
+        {
+            var jobTypeExists = await db.JobTypes.AsNoTracking()
+                .AnyAsync(j => j.Id == jtId, ct)
+                .ConfigureAwait(false);
+            if (!jobTypeExists)
+                throw new InvalidOperationException($"JobType {jtId} not found.");
+
+            var trackBusy = await db.WorkflowInstances.AsNoTracking()
+                .AnyAsync(
+                    i => i.ProjectId == projectId
+                         && i.WorkflowDefinitionId == definitionId
+                         && i.JobTypeId == jtId
+                         && (i.Status == WorkflowStatus.Active || i.Status == WorkflowStatus.Paused),
+                    ct)
+                .ConfigureAwait(false);
+            if (trackBusy)
+            {
+                throw new InvalidOperationException(
+                    $"An Active/Paused workflow already exists for project {projectId}, definition {definitionId}, JobType {jtId}.");
+            }
+        }
 
         var definition = await db.WorkflowDefinitions
             .Include(d => d.Stages)
@@ -61,6 +85,13 @@ internal sealed class WorkflowEngine
             ?? throw new InvalidOperationException(
                 $"Workflow definition '{definition.Code}' has no stage matching initial stage criteria.");
 
+        if (jobTypeId is int trackJobTypeId)
+        {
+            await ProjectTypeWorkflowStagePolicy.EnsureStageAllowedOrThrowAsync(
+                    db, trackJobTypeId, definitionId, initialStage.Id, ct)
+                .ConfigureAwait(false);
+        }
+
         if (parentWorkflowInstanceId is int parentId &&
             !await db.WorkflowInstances.AnyAsync(p => p.Id == parentId, ct).ConfigureAwait(false))
         {
@@ -72,6 +103,7 @@ internal sealed class WorkflowEngine
             WorkflowDefinitionId = definitionId,
             ProjectId = projectId,
             IsProjectBound = isProjectBound,
+            JobTypeId = jobTypeId,
             Status = WorkflowStatus.Active,
             CurrentStageId = initialStage.Id,
             TriggerType = triggerType,
@@ -157,6 +189,13 @@ internal sealed class WorkflowEngine
             .FirstOrDefaultAsync(s => s.Id == targetStageId, ct)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Target stage {targetStageId} not found.");
+
+        if (instance.JobTypeId is int advanceJobTypeId)
+        {
+            await ProjectTypeWorkflowStagePolicy.EnsureStageAllowedOrThrowAsync(
+                    db, advanceJobTypeId, instance.WorkflowDefinitionId, targetStageId, ct)
+                .ConfigureAwait(false);
+        }
 
         var previousStageId = instance.CurrentStageId;
 

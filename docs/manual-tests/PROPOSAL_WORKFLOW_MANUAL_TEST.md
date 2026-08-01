@@ -192,15 +192,22 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 - **Prerequisite:** physical PDF in catalog **`QuoteClientApproval`** («אישור_לקוח_להצעה») under
   תכתובת → ניהול_כספי — from reply attachment (email tag + file) or ProjectWork upload.
   Every project type on the project must have an enabled `ProjectTypeWorkflowDefinition` mapping
-  (see [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./PROJECT_TYPE_WORKFLOW_POLICY.md)).
+  (see [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./PROJECT_TYPE_WORKFLOW_POLICY.md) — **B2 track policy**).
 - **Action:** open `FollowQuoteApproval` → Email filtered by sent thread/counterpart → pick reply /
   tag or file PDF as `QuoteClientApproval` (or ProjectWork fallback) → complete
   **`QuoteApprovedByClient`**.
 - **Expected `[WF-STEP]` logs:** `Engine.Advance | … → 'PRP.Approved' isFinal=True status=Completed`;
-  then continuation start(s) for unique mapped workflow definitions (e.g. Planning).
-- **Expected DB state:** `CurrentStage=PRP.Approved`; instance `status=Completed`, `CompletedAtUtc` set;
-  project status = `WaitingForWorkOrder`; **no new Proposal task**; **≥1 project-bound** continuation
-  `WorkflowInstance` Active for each unique mapped definition (deduped).
+  then continuation start(s) for **each project JobType track** (same `WorkflowDefinition` may start
+  more than once when JobTypes differ).
+- **Expected DB state (B2 target):** `CurrentStage=PRP.Approved`; Proposal instance `status=Completed`,
+  `CompletedAtUtc` set; project status = `WaitingForWorkOrder`; **no new Proposal task**;
+  **one Active project-bound continuation `WorkflowInstance` per**
+  `ProjectId + WorkflowDefinitionId + JobTypeId` (e.g. Roads + Traffic both mapped to
+  `PlanningWorkflow` → **two** Planning instances with distinct JobType identity). Completing /
+  advancing one track must not affect the other.
+- **Current runtime gap (until B2 model/runtime ships):** continuation still deduplicates by
+  `WorkflowDefinitionId` only (shared Planning instance). Treat that as a known gap against the
+  approved policy — do **not** document it as the product target. See policy §2 vs §3–§4.
 - `[ ]` **Result/Notes:** ________________________________________________
 
 ---
