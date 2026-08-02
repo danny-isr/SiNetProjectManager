@@ -2,6 +2,7 @@
 
 > **Title:** docs/ README — New System & ops documentation index  
 > **Date:** 02.08.2026  
+> **Updated:** 02.08.2026  
 > **Status:** Active  
 > **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
 
@@ -40,6 +41,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DEV_TOOLS.md`](./DEV_TOOLS.md) | DEBUG-only Reset & Seed — not for production DB |
 | [`BUILD_SIBLING_PINS.md`](./BUILD_SIBLING_PINS.md) | Sibling repo pins for build/CI |
 | [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md) | SQL recovery baseline / freeze notes |
+| [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md) | SyncEngine watermarks, hours lookback window, weekly reconciliation |
 
 ---
 

@@ -34,6 +34,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | [`docs/ENVIRONMENTS.md`](../../docs/ENVIRONMENTS.md) | PROD vs DEV machine roles; config placement; Google/ACC isolation target |
 | [`docs/RELEASE_PROCESS.md`](../../docs/RELEASE_PROCESS.md) | Who publishes, gates before `publish-all.ps1`, versioning, rollback |
 | [`docs/PRODUCTION_MONITORING.md`](../../docs/PRODUCTION_MONITORING.md) | Live UNC logs, System Status, Workflow Ops during pilot |
+| [`docs/MASTERPLAN_SYNC_WATERMARKS.md`](../../docs/MASTERPLAN_SYNC_WATERMARKS.md) | SyncEngine watermarks, hours lookback window, weekly reconciliation |
 | [`docs/README.md`](../../docs/README.md) | Full index of repository `docs/*.md` |
 
 Cross-domain deployment principles remain: [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md).

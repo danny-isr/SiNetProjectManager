@@ -32,6 +32,12 @@ public class EntitySyncResult
     public DateTime? PreviousWatermark { get; set; }
     public DateTime? NewWatermark { get; set; }
     public string? ErrorMessage { get; set; }
+
+    /// <summary>True when this entity was fetched unfiltered as part of a reconciliation pass.</summary>
+    public bool ReconciliationRun { get; set; }
+
+    /// <summary>Replica rows the API did not return during reconciliation. Reported, never deleted.</summary>
+    public int OrphanCandidates { get; set; }
 }
 
 /// <summary>
@@ -45,6 +51,7 @@ public class ApiDailySyncService
     private readonly string? _siDataConnectionString;
     private readonly ILogger<ApiDailySyncService> _logger;
     private readonly RawCaptureService? _captureService;
+    private readonly HoursSyncOptions _hoursOptions;
     private SqlConnection? _lockConnection;
 
     // Entity configuration: table name, watermark column, whether it supports lastUpdated filter
@@ -74,21 +81,29 @@ public class ApiDailySyncService
         ["ProjectHours"] = ("MP_ProjectHours", "ReportDate", false), // Uses fromDate filter, watermark on ReportDate
         // Hours endpoints
         ["TimeHourReports"] = ("MP_TimeHourReports", "ReportDateTime", false), // NO LastUpdated in API — watermark on ReportDateTime (API field "DateTime")
-        ["ProjectHoursExtended"] = ("MP_ProjectHoursExtended", "LastUpdated", true) // HAS LastUpdated — UPSERT with LastUpdated comparison
+        ["ProjectHoursExtended"] = ("MP_ProjectHoursExtended", "ReportDate", true) // Watermark on ReportDate (the field FromDate filters); LastUpdated still drives the upsert comparison
     };
+
+    /// <summary>
+    /// Entities whose rows are back-datable, so they use a lookback window plus periodic
+    /// reconciliation instead of a bare watermark. See docs/MASTERPLAN_SYNC_WATERMARKS.md.
+    /// </summary>
+    private const string ReconcileStateSuffix = ":Reconcile";
 
     public ApiDailySyncService(
         MasterPlanApiClient apiClient, 
         string replicaConnectionString, 
         ILogger<ApiDailySyncService> logger,
         RawCaptureService? captureService = null,
-        string? siDataConnectionString = null)
+        string? siDataConnectionString = null,
+        HoursSyncOptions? hoursOptions = null)
     {
         _apiClient = apiClient;
         _replicaConnectionString = replicaConnectionString;
         _logger = logger;
         _captureService = captureService;
         _siDataConnectionString = siDataConnectionString;
+        _hoursOptions = hoursOptions ?? new HoursSyncOptions();
     }
 
     /// <summary>
@@ -716,8 +731,10 @@ public class ApiDailySyncService
         {
             // Get watermark based on ReportDate (actual API field)
             result.PreviousWatermark = await GetWatermarkAsync("ProjectHours");
-            LogWatermarkDiagnostics("ProjectHours", "ReportDate", result.PreviousWatermark, "?fromDate=");
-            var hours = await _apiClient.GetProjectHoursAsync(result.PreviousWatermark, ct);
+            var (fromDate, isReconciliation) = await ResolveHoursFromDateAsync("ProjectHours", result.PreviousWatermark);
+            result.ReconciliationRun = isReconciliation;
+            LogWatermarkDiagnostics("ProjectHours", "ReportDate", fromDate, "?fromDate=");
+            var hours = await _apiClient.GetProjectHoursAsync(fromDate, ct);
             result.RecordsFetched = hours.Count;
 
             var groups = hours.GroupBy(h => h.ID).ToList();
@@ -731,10 +748,16 @@ public class ApiDailySyncService
                 var (inserted, updated) = await UpsertProjectHoursAsync(hours);
                 result.RecordsInserted = inserted;
                 result.RecordsUpdated = updated;
-                var batchMax = hours.Max(h => h.ReportDate);
+                var batchMax = ClampToToday(hours.Max(h => h.ReportDate));
                 result.NewWatermark = (batchMax.HasValue && batchMax > result.PreviousWatermark)
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("ProjectHours", result.NewWatermark);
+            }
+
+            if (isReconciliation)
+            {
+                result.OrphanCandidates = await CountOrphanCandidatesAsync("ProjectHours", hours.Select(h => h.ID));
+                await MarkReconciliationCompleteAsync("ProjectHours");
             }
             LogSyncComplete(result, "ReportDate");
         }
@@ -757,7 +780,8 @@ public class ApiDailySyncService
         try
         {
             result.PreviousWatermark = await GetWatermarkAsync("TimeHourReports");
-            var fromDate = result.PreviousWatermark ?? AnalysisModeDefaultWatermark;
+            var (fromDate, isReconciliation) = await ResolveHoursFromDateAsync("TimeHourReports", result.PreviousWatermark);
+            result.ReconciliationRun = isReconciliation;
             LogWatermarkDiagnostics("TimeHourReports", "ReportDateTime", fromDate, "?FromDate=");
             var reports = await _apiClient.GetTimeHourReportsAsync(fromDate, ct);
             result.RecordsFetched = reports.Count;
@@ -773,10 +797,16 @@ public class ApiDailySyncService
                 var (inserted, updated) = await UpsertTimeHourReportsAsync(reports);
                 result.RecordsInserted = inserted;
                 result.RecordsUpdated = updated;
-                var batchMax = reports.Max(r => r.ReportDateTime);
+                var batchMax = ClampToToday(reports.Max(r => r.ReportDateTime));
                 result.NewWatermark = (batchMax.HasValue && batchMax > result.PreviousWatermark)
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("TimeHourReports", result.NewWatermark);
+            }
+
+            if (isReconciliation)
+            {
+                result.OrphanCandidates = await CountOrphanCandidatesAsync("TimeHourReports", reports.Select(r => r.ID));
+                await MarkReconciliationCompleteAsync("TimeHourReports");
             }
             LogSyncComplete(result, "ReportDateTime");
         }
@@ -799,8 +829,9 @@ public class ApiDailySyncService
         try
         {
             result.PreviousWatermark = await GetWatermarkAsync("ProjectHoursExtended");
-            var fromDate = result.PreviousWatermark ?? AnalysisModeDefaultWatermark;
-            LogWatermarkDiagnostics("ProjectHoursExtended", "LastUpdated", fromDate, "?FromDate=");
+            var (fromDate, isReconciliation) = await ResolveHoursFromDateAsync("ProjectHoursExtended", result.PreviousWatermark);
+            result.ReconciliationRun = isReconciliation;
+            LogWatermarkDiagnostics("ProjectHoursExtended", "ReportDate", fromDate, "?FromDate=");
             var hours = await _apiClient.GetProjectHoursExtendedAsync(fromDate, ct);
             result.RecordsFetched = hours.Count;
             var apiNullCount = hours.Count(h => !h.LastUpdated.HasValue);
@@ -821,12 +852,20 @@ public class ApiDailySyncService
                 result.RecordsInserted = inserted;
                 result.RecordsUpdated = updated;
                 result.RecordsSkipped = skipped;
-                var batchMax = hours.Max(h => h.LastUpdated);
+                // The API filters FromDate on ReportDate, so the watermark must be a ReportDate too.
+                // Storing MAX(LastUpdated) here pushed the watermark past every report of the same day.
+                var batchMax = ClampToToday(hours.Max(h => h.ReportDate));
                 result.NewWatermark = (batchMax.HasValue && batchMax > result.PreviousWatermark)
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("ProjectHoursExtended", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+
+            if (isReconciliation)
+            {
+                result.OrphanCandidates = await CountOrphanCandidatesAsync("ProjectHoursExtended", hours.Select(h => h.ID));
+                await MarkReconciliationCompleteAsync("ProjectHoursExtended");
+            }
+            LogSyncComplete(result, "ReportDate");
         }
         catch (Exception ex)
         {
@@ -1671,6 +1710,105 @@ public class ApiDailySyncService
             result.PreviousWatermark?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "(none)",
             result.NewWatermark?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "(unchanged)",
             watermarkColumn);
+    }
+
+    /// <summary>
+    /// Build the date filter for a back-datable hours entity.
+    /// Every request reaches <see cref="HoursSyncOptions.LookbackDays"/> further back than the stored
+    /// watermark so that late and retroactive reports are picked up, and once every
+    /// <see cref="HoursSyncOptions.ReconcileIntervalDays"/> days the filter is dropped entirely.
+    /// See docs/MASTERPLAN_SYNC_WATERMARKS.md.
+    /// </summary>
+    private async Task<(DateTime? FromDate, bool IsReconciliation)> ResolveHoursFromDateAsync(string entityName, DateTime? watermark)
+    {
+        if (await IsReconciliationDueAsync(entityName).ConfigureAwait(false))
+        {
+            _logger.LogWarning(
+                "[RECONCILE] {Entity}: full unfiltered pass (interval {IntervalDays}d, forced={Forced})",
+                entityName, _hoursOptions.ReconcileIntervalDays, _hoursOptions.ForceReconcile);
+            return (null, true);
+        }
+
+        var fromDate = (watermark ?? AnalysisModeDefaultWatermark).AddDays(-_hoursOptions.LookbackDays);
+        return (fromDate, false);
+    }
+
+    private async Task<bool> IsReconciliationDueAsync(string entityName)
+    {
+        if (_hoursOptions.SkipReconcile)
+            return false;
+        if (_hoursOptions.ForceReconcile)
+            return true;
+
+        await using var connection = new SqlConnection(_replicaConnectionString);
+        var lastRun = await connection.ExecuteScalarAsync<DateTime?>(
+            "SELECT LastSyncTime FROM Sync_State WHERE EntityName = @EntityName",
+            new { EntityName = entityName + ReconcileStateSuffix }).ConfigureAwait(false);
+
+        return !lastRun.HasValue
+            || lastRun.Value <= DateTime.UtcNow.AddDays(-_hoursOptions.ReconcileIntervalDays);
+    }
+
+    /// <summary>
+    /// Records the reconciliation timestamp in its own <c>Sync_State</c> row. LastWatermark stays
+    /// NULL so the row cannot be mistaken for an entity watermark by <see cref="IsInitialLoadAsync"/>.
+    /// </summary>
+    private async Task MarkReconciliationCompleteAsync(string entityName)
+    {
+        await using var connection = new SqlConnection(_replicaConnectionString);
+        await connection.ExecuteAsync(@"
+            MERGE Sync_State AS target
+            USING (SELECT @EntityName AS EntityName) AS source
+            ON target.EntityName = source.EntityName
+            WHEN MATCHED THEN
+                UPDATE SET LastSyncTime = GETUTCDATE(), UpdatedAt = GETUTCDATE()
+            WHEN NOT MATCHED THEN
+                INSERT (EntityName, LastWatermark, LastSyncTime, UpdatedAt)
+                VALUES (@EntityName, NULL, GETUTCDATE(), GETUTCDATE());",
+            new { EntityName = entityName + ReconcileStateSuffix }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// After an unfiltered pass, report replica rows the API no longer returns. The engine never
+    /// bulk-deletes, so these are surfaced for manual review only.
+    /// </summary>
+    private async Task<int> CountOrphanCandidatesAsync(string entityName, IEnumerable<int> apiIds)
+    {
+        if (!EntityConfig.TryGetValue(entityName, out var config))
+            throw new ArgumentException($"No entity configuration for '{entityName}'.", nameof(entityName));
+
+        var apiIdSet = apiIds.ToHashSet();
+
+        await using var connection = new SqlConnection(_replicaConnectionString);
+        var dbIds = await connection.QueryAsync<int>($"SELECT ID FROM {config.TableName}").ConfigureAwait(false);
+        var orphans = dbIds.Where(id => !apiIdSet.Contains(id)).ToList();
+
+        if (orphans.Count > 0)
+        {
+            _logger.LogWarning(
+                "[RECONCILE] {Entity}: {OrphanCount} row(s) in {Table} were not returned by the API. " +
+                "Not deleted — review manually. Sample IDs: {SampleIds}",
+                entityName, orphans.Count, config.TableName, string.Join(", ", orphans.Take(20)));
+        }
+        else
+        {
+            _logger.LogInformation("[RECONCILE] {Entity}: replica matches the API, no orphan rows.", entityName);
+        }
+
+        return orphans.Count;
+    }
+
+    /// <summary>
+    /// A single future-dated report must not push the watermark past today — everything between
+    /// would then be skipped permanently (observed 2026-07-07, see docs/MASTERPLAN_SYNC_WATERMARKS.md).
+    /// </summary>
+    private static DateTime? ClampToToday(DateTime? candidate)
+    {
+        if (!candidate.HasValue)
+            return null;
+
+        var endOfToday = DateTime.Today.AddDays(1).AddTicks(-1);
+        return candidate.Value > endOfToday ? endOfToday : candidate.Value;
     }
 
     private async Task<DateTime?> GetWatermarkAsync(string entityName)

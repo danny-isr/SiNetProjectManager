@@ -267,7 +267,19 @@ else if (args.Contains("--daily") || args.Contains("-d") || args.Contains("--dai
     // Create API client using configuration from appsettings.json
     // Configuration section: MasterPlanApi { BaseUrl, ApiKey, TimeoutSeconds }
     using var apiClient = new MasterPlanApiClient(configuration, apiClientLogger, captureService);
-    var apiSyncService = new ApiDailySyncService(apiClient, replicaConnectionString, apiSyncLogger, captureService, siDataConnectionString);
+
+    // Hour reports are back-datable: lookback window + periodic full reconciliation.
+    // See docs/MASTERPLAN_SYNC_WATERMARKS.md.
+    var hoursOptions = HoursSyncOptions.FromConfiguration(
+        configuration,
+        forceReconcile: args.Contains("--reconcile"),
+        skipReconcile: args.Contains("--no-reconcile"));
+    Console.WriteLine(
+        $"[CONFIG] Hours sync: lookback {hoursOptions.LookbackDays}d, reconcile every {hoursOptions.ReconcileIntervalDays}d" +
+        (hoursOptions.ForceReconcile ? " (forced this run)" : string.Empty) +
+        (hoursOptions.SkipReconcile ? " (suppressed this run)" : string.Empty));
+
+    var apiSyncService = new ApiDailySyncService(apiClient, replicaConnectionString, apiSyncLogger, captureService, siDataConnectionString, hoursOptions);
 
     try
     {
@@ -667,6 +679,8 @@ else
     Console.WriteLine("  --validate-only, -v    Only validate endpoints, don't run sync");
     Console.WriteLine("  --force                Continue sync even if endpoint validation fails");
     Console.WriteLine("  --no-capture           Disable raw capture mode (skips saving API responses)");
+    Console.WriteLine("  --reconcile            Force a full unfiltered pass over the hour entities");
+    Console.WriteLine("  --no-reconcile         Suppress the weekly hour-entity reconciliation pass");
     Console.WriteLine();
     Console.WriteLine("  OFFLINE SIMULATION MODE (no API calls)");
     Console.WriteLine("  ─────────────────────────────────────────────────────────────────");
