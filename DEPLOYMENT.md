@@ -1,6 +1,17 @@
 # מדריך פריסה — SiNetProjectManager Solution
 
-מדריך מסודר לפריסה של שלושת הרכיבים מסביבת העבודה אל שרת הקבצים `\\SI-WIN-2K19`.
+מדריך מסודר לפריסה של הרכיבים מסביבת העבודה אל שרת הקבצים `\\SI-WIN-2K19`.
+
+> **סביבות ותהליך שחרור (2026-08-02):** תפקידי מכונות PROD/DEV, שערי שחרור ו-rollback —
+> [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md), [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
+> ניטור אחרי פאבליש: [`docs/PRODUCTION_MONITORING.md`](docs/PRODUCTION_MONITORING.md).
+> ערוץ הדסקטופ הנוכחי הוא **`SiNet.App.Wpf`** (לא V2) — ראה גם [`docs/DESKTOP_CUTOVER.md`](docs/DESKTOP_CUTOVER.md).
+> חלק מהנתיבים ההיסטוריים ל-V2 בהמשך המסמך נשארים להפניה; מקור האמת לערוץ 3 הוא `publish-all.ps1`.
+>
+> **ערכת שרת (בלי D:\repos):** אחרי `publish-all.ps1` נוצרת תיקייה עצמאית
+> `\\SI-WIN-2K19\AppFolder\AppNet\Server\` עם MSI + SecretImport + `Install-OnServer.ps1`.
+> על השרת (כ-Administrator): `Upgrade-AccService.cmd` בתיקיית Server,
+> או `powershell -File ...\Install-OnServer.ps1 Upgrade` (בלי `-SkipImport`).
 
 ---
 

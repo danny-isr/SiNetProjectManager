@@ -1,82 +1,82 @@
-# ════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 #  Install-OnServer.ps1 - The ONE script for installing SiOffice on the server.
-# ════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 #
 #  WHAT IT DOES (in this order, single password prompt):
 #    1. Asks ONCE for the Windows password of SI-ENG\sieng.
 #    2. Imports the secrets file into sieng's Windows Credential Manager
-#       (per-user DPAPI vault) - using SiNet.SecretImport.exe.
+#       (per-user DPAPI vault) - using SiNet.SecretImport.exe. (Full / SecretsOnly)
 #    3. (Re)installs the SiOfficeAccService Windows Service so it runs as
-#       SI-ENG\sieng (so it can read the same vault).
+#       SI-ENG\sieng. (Full / Upgrade)
 #    4. Verifies everything (vault status + service StartName + service state).
 #
-#  WHY IT EXISTS:
-#    Windows Credential Manager is per-user. The service MUST run as the same
-#    Windows account that owns the secrets, otherwise it cannot read them.
-#    Doing the two steps separately is what caused confusion before. This
-#    script does both, with one password prompt, and is the ONLY supported
-#    install path on the server.
-#
 #  RUN AS:
-#    - Local Administrator on SI-WIN-2K19 (UAC-elevated PowerShell).
-#    - The interactive Windows session itself does NOT need to be sieng.
-#      The script will run the secret-import EXE *as sieng* via
-#      Start-Process -Credential, so the secrets land in sieng's vault.
+#    - Local Administrator on SI-WIN-2K19 (UAC-elevated).
+#    - Prefer the CMD wrappers in the Server kit (no switch-parameter bugs):
+#        Upgrade-AccService.cmd
+#        Install-Full.cmd
 #
-#  PARAMETERS:
-#    -SecretsFile   Path to the encrypted .secrets file produced by the WPF.
-#    -SecretsPwd    Password used during Export (.secrets package password).
-#                   Optional: if omitted, you'll be prompted (hidden input).
-#    -ServiceUser   Windows account the service should run as.
-#                   Default: SI-ENG\sieng
-#    -SkipImport    Only (re)install the service, don't import secrets.
-#    -SkipService   Only import secrets, don't touch the service.
+#  MODE (first positional argument - do NOT use -SkipImport switches):
+#    Upgrade      - service MSI only (default) - vault already configured
+#    Full         - import secrets + install/upgrade service
+#    SecretsOnly  - import secrets only
 #
 #  EXAMPLES:
-#    # Full install on the server (typical):
-#    .\Install-OnServer.ps1 `
-#        -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets"
+#    powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-OnServer.ps1 Upgrade
+#    powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-OnServer.ps1 Full
 #
-#    # If service already correct, just re-import secrets:
-#    .\Install-OnServer.ps1 -SecretsFile <...> -SkipService
-#
-#  TROUBLESHOOTING:
-#    If you get "The term '-SkipService' is not recognized", this usually means
-#    PowerShell split your command line incorrectly. Make sure to run as a single
-#    line, or use backticks (`) for line continuation. Avoid copy-pasting commands
-#    with invisible characters from web pages or rich-text editors.
-# ════════════════════════════════════════════════════════════════════════════
+#  Kit-relative defaults: MSI / SecretImport / SiNet.secrets next to this script.
+# =============================================================================
 
-[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$SecretsFile,
+    [Parameter(Position = 0)]
+    [ValidateSet('Upgrade', 'Full', 'SecretsOnly')]
+    [string]$Mode = 'Upgrade',
 
-    [string]$SecretsPwd,
+    [string]$SecretsFile = "",
+
+    [string]$SecretsPwd = "",
 
     [string]$ServiceUser = "SI-ENG\sieng",
 
-    [string]$MsiPath = "\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi",
+    [string]$MsiPath = "",
 
-    [string]$SecretImportExe = "\\SI-WIN-2K19\AppFolder\AppNet\SiNet.SecretImport\SiNet.SecretImport.exe",
-
-    [switch]$SkipImport,
-    [switch]$SkipService
+    [string]$SecretImportExe = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-# ─── Header ────────────────────────────────────────────────────────────────
+$SkipImport = ($Mode -eq 'Upgrade')
+$SkipService = ($Mode -eq 'SecretsOnly')
+
+# Resolve kit-relative defaults (works from share / D:\SharedFolder without repos).
+$kitRoot = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+if (-not $MsiPath) {
+    $MsiPath = Join-Path $kitRoot "SiOfficeAccService.msi"
+}
+if (-not $SecretImportExe) {
+    $SecretImportExe = Join-Path $kitRoot "SiNet.SecretImport.exe"
+}
+if (-not $SecretsFile) {
+    $localSecrets = Join-Path $kitRoot "SiNet.secrets"
+    if (Test-Path $localSecrets) {
+        $SecretsFile = $localSecrets
+    }
+    else {
+        $SecretsFile = "\\SI-WIN-2K19\AppFolder\AppNet\SiNet.secrets"
+    }
+}
+
 Write-Host ""
-Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "  SiOffice server install - unified script" -ForegroundColor Cyan
-Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "  Mode         : $Mode"
 Write-Host "  Service user : $ServiceUser"
 Write-Host "  Secrets file : $SecretsFile"
 Write-Host "  MSI path     : $MsiPath"
 Write-Host ""
 
-# ─── Pre-flight checks ─────────────────────────────────────────────────────
 $isAdmin = ([Security.Principal.WindowsPrincipal] `
     [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -84,6 +84,9 @@ if (-not $isAdmin) {
     throw "This script must run from an elevated (Administrator) PowerShell. Right-click PowerShell -> Run as administrator."
 }
 
+if (-not $SkipImport -and [string]::IsNullOrWhiteSpace($SecretsFile)) {
+    throw "SecretsFile is required for Mode Full/SecretsOnly. Place SiNet.secrets next to this script or pass -SecretsFile."
+}
 if (-not $SkipImport -and -not (Test-Path $SecretsFile)) {
     throw "Secrets file not found: $SecretsFile"
 }
@@ -94,22 +97,14 @@ if (-not $SkipService -and -not (Test-Path $MsiPath)) {
     throw "MSI not found at: $MsiPath"
 }
 
-# ─── Single password prompt for SI-ENG\sieng (GUI dialog) ──────────────────
-# Same Windows password is used for BOTH:
-#   - Start-Process -Credential (so secret import runs as sieng)
-#   - msiexec SERVICEPASSWORD=... (so the Windows service starts as sieng)
-# Using Get-Credential -> native Windows credential dialog (works reliably
-# even when the script is launched from a UNC path / non-interactive host).
 Write-Host "A Windows credential dialog will pop up for: $ServiceUser" -ForegroundColor Yellow
 $cred = Get-Credential -UserName $ServiceUser -Message "Windows password for $ServiceUser (NOT the .secrets package password)"
 if (-not $cred) { throw "Cancelled at Windows credential prompt." }
-# Keep service user exactly as requested (Get-Credential may strip the domain
-# from UserName if the same account is the current user).
+
 $winPwdSecure = $cred.Password
 $winPwdPlain  = [System.Net.NetworkCredential]::new("", $winPwdSecure).Password
 $cred = New-Object System.Management.Automation.PSCredential($ServiceUser, $winPwdSecure)
 
-# ─── Prompt for secrets package password (GUI dialog) ──────────────────────
 if (-not $SkipImport) {
     if (-not $SecretsPwd) {
         Write-Host "A second dialog will pop up for the .secrets package password." -ForegroundColor Yellow
@@ -119,16 +114,11 @@ if (-not $SkipImport) {
     }
 }
 
-# ════════════════════════════════════════════════════════════════════════════
-#  STEP 1 - Import secrets into sieng's Credential Manager
-# ════════════════════════════════════════════════════════════════════════════
+# --- Step 1: Import secrets -------------------------------------------------
 if (-not $SkipImport) {
     Write-Host ""
-    Write-Host "─── Step 1/3: Importing secrets as $ServiceUser ───" -ForegroundColor Cyan
+    Write-Host "--- Step 1/3: Importing secrets as $ServiceUser ---" -ForegroundColor Cyan
 
-    # Run the importer AS sieng so the secrets land in sieng's per-user vault.
-    # We capture stdout/stderr to temp files because Start-Process doesn't
-    # stream them to the parent console when -Credential is used.
     $stdout = [IO.Path]::GetTempFileName()
     $stderr = [IO.Path]::GetTempFileName()
     try {
@@ -156,18 +146,14 @@ if (-not $SkipImport) {
 }
 else {
     Write-Host ""
-    Write-Host "─── Step 1/3: SKIPPED (-SkipImport) ───" -ForegroundColor DarkYellow
+    Write-Host "--- Step 1/3: SKIPPED (Mode=Upgrade) ---" -ForegroundColor DarkYellow
 }
 
-# ════════════════════════════════════════════════════════════════════════════
-#  STEP 2 - (Re)install the Windows service to run as sieng
-# ════════════════════════════════════════════════════════════════════════════
+# --- Step 2: Install / upgrade Windows service ------------------------------
 if (-not $SkipService) {
     Write-Host ""
-    Write-Host "─── Step 2/3: Installing SiOfficeAccService as $ServiceUser ───" -ForegroundColor Cyan
+    Write-Host "--- Step 2/3: Installing SiOfficeAccService as $ServiceUser ---" -ForegroundColor Cyan
 
-    # If the service already exists with a DIFFERENT account, do an explicit
-    # uninstall first. MSI MajorUpgrade does not always change ServiceAccount.
     $existing = Get-CimInstance Win32_Service -Filter "Name='SiOfficeAccService'" -ErrorAction SilentlyContinue
     if ($existing) {
         $currentAcct = $existing.StartName
@@ -202,16 +188,13 @@ if (-not $SkipService) {
 }
 else {
     Write-Host ""
-    Write-Host "─── Step 2/3: SKIPPED (-SkipService) ───" -ForegroundColor DarkYellow
+    Write-Host "--- Step 2/3: SKIPPED (Mode=SecretsOnly) ---" -ForegroundColor DarkYellow
 }
 
-# ════════════════════════════════════════════════════════════════════════════
-#  STEP 3 - Verify
-# ════════════════════════════════════════════════════════════════════════════
+# --- Step 3: Verify ---------------------------------------------------------
 Write-Host ""
-Write-Host "─── Step 3/3: Verifying ───" -ForegroundColor Cyan
+Write-Host "--- Step 3/3: Verifying ---" -ForegroundColor Cyan
 
-# Service state
 $svc = Get-CimInstance Win32_Service -Filter "Name='SiOfficeAccService'" -ErrorAction SilentlyContinue
 if ($svc) {
     Write-Host ""
@@ -228,7 +211,6 @@ else {
     Write-Host "Service SiOfficeAccService is NOT installed." -ForegroundColor Red
 }
 
-# Vault status (also has to run AS sieng to be meaningful)
 if (Test-Path $SecretImportExe) {
     Write-Host ""
     Write-Host "Vault status for $ServiceUser :" -ForegroundColor White
@@ -244,12 +226,11 @@ if (Test-Path $SecretImportExe) {
     }
 }
 
-# Clear plaintext password from memory
 $winPwdPlain = $null
 $SecretsPwd  = $null
 [GC]::Collect()
 
 Write-Host ""
-Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  Done." -ForegroundColor Green
-Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "  Done. Mode=$Mode" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green

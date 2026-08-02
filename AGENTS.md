@@ -2,6 +2,22 @@
 
 This file is the **entry point for Cursor / AI agents** working in this repository.
 
+## Environment & machine roles
+
+Two workstations use this repo. They are **not** interchangeable. Read [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) before DevTools, publish, or ACC/Drive writes.
+
+| Role | Machine | Agents may | Agents must not |
+| --- | --- | --- | --- |
+| **PROD** | Release + ops workstation | Small fixes; help with release gates; ops/log guidance | Run DevTools Reset/Seed against production SQL; treat Google/ACC as a sandbox |
+| **DEV** | Development workstation | Feature work, Debug, DevTools against **dev DB only** | Run `publish-all.ps1` to the production UNC share |
+
+- **Release protocol:** [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — only PROD publishes to `\\SI-WIN-2K19\AppFolder\AppNet\`. Target branches: `release` (ship) and `development` (must absorb `release` after every ship).
+- **Pilot monitoring:** [`docs/PRODUCTION_MONITORING.md`](docs/PRODUCTION_MONITORING.md).
+- **ACC on DEV:** only projects with place name **`SI`** — see [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) §5.1.
+- **Docs index:** [`docs/README.md`](docs/README.md).
+
+If it is unclear which machine/DB the session is on, **ask the operator** before destructive or publish actions.
+
 ## Where instructions live (priority order)
 
 | Layer | Path | Use for |
@@ -48,6 +64,10 @@ Report in the final message: build result, test result, and whether DB/schema ch
 
 ## Key docs
 
+- `docs/README.md` — Index of all `docs/*.md`
+- `docs/ENVIRONMENTS.md` — PROD vs DEV machine roles and config placement
+- `docs/RELEASE_PROCESS.md` — Publish gates, versioning, rollback
+- `docs/PRODUCTION_MONITORING.md` — Live logs and health during pilot
 - `docs/APP_SHELL.md` — Production shell is `SiNet.App.Wpf` (V2 not shipped)
 - `docs/STANDALONE_NEW_SYSTEM_HOST.md` — Standalone host composition and cutover
 - `docs/WORKFLOW_OPS_DASHBOARD.md` — Workflow runtime ops (closed-world definitions)

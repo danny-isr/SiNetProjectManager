@@ -143,6 +143,8 @@ No schema / migration changes in Stage 4.
 
 ## 8. Related docs
 
+- [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) — pilot live-tail commands, central vs local levels, what to grep for
+- [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) — PROD/DEV log share and target `Environment` enricher
 - [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) — no legacy logger in App.Wpf
 - [`APP_SHELL.md`](./APP_SHELL.md) §11 — settings mechanisms (logging toggle today in legacy `SettingsWindow`)
 - [`MIGRATION_MAP.md`](./MIGRATION_MAP.md) — Logging domain / D2 composition gate

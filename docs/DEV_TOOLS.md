@@ -1,6 +1,9 @@
 # Dev Tools — Reset & Seed (New System)
 
 > **DEBUG-only.** Development database operations for local testing. Not for production.
+>
+> Machine roles: use only on the **DEV** workstation against the **development** DB.
+> See [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) §4. Forbidden on the PROD release/ops machine.
 
 ## Overview
 
@@ -87,5 +90,6 @@ This tooling assumes a **development DB**. Do not run against production.
 
 ## Related docs
 
+- [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) — PROD vs DEV; DevTools allowed only on DEV
 - [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md)
 - [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md)

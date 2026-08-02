@@ -1,8 +1,8 @@
 # SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 20.07.2026
-> **Status:** Active documentation index — Email/ACC source-of-truth summary linked (20.07.2026).
+> **Updated:** 02.08.2026
+> **Status:** Active documentation index — Environments / Release / Production Monitoring linked (02.08.2026).
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 
 ---
@@ -25,6 +25,18 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | Decisions / ADR | `Docs\Decisions\` | Dated decision records. |
 | Archive | `Docs\Archive\` | Historical material — not a source of truth. |
 | Feature notes (existing) | top of `Docs\` | A small number of per-feature notes still in place (e.g. `LOGGING.md`, `UI-Consistency-System.md`, `Inspection-Template-Guide.md`). |
+| New System / ops (`docs/` at repo root) | [`docs/README.md`](../../docs/README.md) | Environments, release, monitoring, migration, architecture for `SiNet.App.Wpf`. |
+
+### 2a. Environments, release & production ops (repo `docs/`)
+
+| Document | Purpose |
+| --- | --- |
+| [`docs/ENVIRONMENTS.md`](../../docs/ENVIRONMENTS.md) | PROD vs DEV machine roles; config placement; Google/ACC isolation target |
+| [`docs/RELEASE_PROCESS.md`](../../docs/RELEASE_PROCESS.md) | Who publishes, gates before `publish-all.ps1`, versioning, rollback |
+| [`docs/PRODUCTION_MONITORING.md`](../../docs/PRODUCTION_MONITORING.md) | Live UNC logs, System Status, Workflow Ops during pilot |
+| [`docs/README.md`](../../docs/README.md) | Full index of repository `docs/*.md` |
+
+Cross-domain deployment principles remain: [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md).
 
 ## 3. Active domains
 

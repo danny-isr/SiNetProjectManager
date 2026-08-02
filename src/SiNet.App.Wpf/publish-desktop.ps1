@@ -114,22 +114,60 @@ finally { Pop-Location }
 # Stage manifest + image assets into the payload folder.
 # ---------------------------------------------------------------
 Write-Host "`n=== Staging manifest + images ===" -ForegroundColor Cyan
-$manifestText = (Get-Content $manifestSrc -Raw).Replace('{VERSION}', $msixVersion)
-Set-Content -Path (Join-Path $payloadDir "AppxManifest.xml") -Value $manifestText -Encoding UTF8
+# UTF-8 round-trip is required: Windows PowerShell Get-Content without -Encoding
+# corrupts Hebrew DisplayName in Package.appxmanifest (taskbar shows mojibake).
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+$manifestText = [System.IO.File]::ReadAllText($manifestSrc, $utf8NoBom).Replace('{VERSION}', $msixVersion)
+$manifestOut = Join-Path $payloadDir "AppxManifest.xml"
+# MakeAppx accepts UTF-8 with BOM for non-ASCII DisplayName.
+$utf8Bom = New-Object System.Text.UTF8Encoding $true
+[System.IO.File]::WriteAllText($manifestOut, $manifestText, $utf8Bom)
 
-if (-not (Test-Path $imagesSrc)) {
-    Write-Host "  Images\ folder not found -- generating placeholder PNGs." -ForegroundColor Yellow
-    New-Item -ItemType Directory -Path $imagesSrc -Force | Out-Null
-    Add-Type -AssemblyName System.Drawing
-    foreach ($name in @("StoreLogo.png", "Square150x150Logo.png", "Square44x44Logo.png")) {
-        $bmp = New-Object System.Drawing.Bitmap 64,64
+$requiredLogos = @("StoreLogo.png", "Square150x150Logo.png", "Square44x44Logo.png")
+$logoSource = Join-Path $PSScriptRoot "Assets\sinet.ico"
+if (-not (Test-Path $logoSource)) {
+    $logoSource = Join-Path $PSScriptRoot "Assets\shia-chadash-mark.png"
+}
+$needGenerateLogos = -not (Test-Path $imagesSrc)
+if (-not $needGenerateLogos) {
+    foreach ($name in $requiredLogos) {
+        if (-not (Test-Path (Join-Path $imagesSrc $name))) { $needGenerateLogos = $true; break }
+    }
+}
+if ($needGenerateLogos -or -not (Test-Path $logoSource)) {
+    if (-not (Test-Path $logoSource)) {
+        throw "Logo source not found (Assets\sinet.ico / Assets\shia-chadash-mark.png). Cannot build MSIX icons."
+    }
+}
+# Always regenerate MSIX logos from the branded ICO/PNG so placeholders cannot ship.
+Write-Host "  Generating MSIX logos from $logoSource" -ForegroundColor Cyan
+New-Item -ItemType Directory -Path $imagesSrc -Force | Out-Null
+Add-Type -AssemblyName System.Drawing
+$srcImg = [System.Drawing.Image]::FromFile((Resolve-Path $logoSource))
+try {
+    $sizes = @{
+        "StoreLogo.png"           = 50
+        "Square150x150Logo.png"   = 150
+        "Square44x44Logo.png"     = 44
+    }
+    foreach ($entry in $sizes.GetEnumerator()) {
+        $size = [int]$entry.Value
+        $bmp = New-Object System.Drawing.Bitmap $size, $size
         $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.Clear([System.Drawing.Color]::FromArgb(0,120,215))
+        $g.Clear([System.Drawing.Color]::Transparent)
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+        $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $g.DrawImage($srcImg, 0, 0, $size, $size)
         $g.Dispose()
-        $bmp.Save((Join-Path $imagesSrc $name), [System.Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Save((Join-Path $imagesSrc $entry.Key), [System.Drawing.Imaging.ImageFormat]::Png)
         $bmp.Dispose()
     }
 }
+finally {
+    $srcImg.Dispose()
+}
+
 $payloadImagesDir = Join-Path $payloadDir "Images"
 New-Item -ItemType Directory -Path $payloadImagesDir -Force | Out-Null
 Copy-Item (Join-Path $imagesSrc "*") $payloadImagesDir -Force

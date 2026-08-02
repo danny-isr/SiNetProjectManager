@@ -1,6 +1,9 @@
 # Rollout — SiNet.App.Wpf (replaces V2 distribution)
 
 > Related: [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md),  
+> [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) (publish gates),  
+> [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (post-publish watch),  
+> [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) (PROD vs DEV),  
 > [`manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md`](./manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md)
 
 ## Decision

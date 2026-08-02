@@ -63,6 +63,17 @@ if (-not $SkipTool) {
 }
 else { Write-Host "`n[SKIPPED] SiNet.SecretImport" -ForegroundColor DarkGray }
 
+# Assemble self-contained Server kit (MSI + SecretImport + Install-OnServer)
+# so admins can upgrade AccService from the UNC share without D:\repos.
+if (-not $SkipDeploy) {
+    Write-Host "`n############################################################" -ForegroundColor Magenta
+    Write-Host "  Server kit -> \\SI-WIN-2K19\AppFolder\AppNet\Server\"       -ForegroundColor Magenta
+    Write-Host "############################################################`n" -ForegroundColor Magenta
+    & (Join-Path $PSScriptRoot "build\publish-server-kit.ps1")
+}
+
 Write-Host "`n============================================================" -ForegroundColor Green
 Write-Host "  All requested channels published successfully."             -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+Write-Host "  Server upgrade (on SI-WIN-2K19, elevated):"                  -ForegroundColor Green
+Write-Host "    \\SI-WIN-2K19\AppFolder\AppNet\Server\Upgrade-AccService.cmd" -ForegroundColor Green

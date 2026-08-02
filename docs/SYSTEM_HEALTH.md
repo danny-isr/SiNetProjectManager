@@ -3,7 +3,9 @@
 Status: **implemented.** Eleven legacy checks ported; Drive write probes and MasterPlan Shared Drive
 row added after a false-green findings (report generation failed while the panel stayed Idle).
 
-Related: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
+Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (pilot ops routines),
+[`ENVIRONMENTS.md`](./ENVIRONMENTS.md),
+[`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
 [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
 [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md),
 [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).

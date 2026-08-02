@@ -1,59 +1,53 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-	<OutputType>WinExe</OutputType>
-	<TargetFramework>net10.0-windows</TargetFramework>
-	<ImplicitUsings>enable</ImplicitUsings>
-	<Nullable>enable</Nullable>
-	<UseWPF>true</UseWPF>
-	<RootNamespace>SiNet.App.Wpf</RootNamespace>
-	<ApplicationIcon>Assets\sinet.ico</ApplicationIcon>
-	<AssemblyTitle>שיא חדש — מנהל פרויקטים</AssemblyTitle>
-	<Product>שיא חדש — מנהל פרויקטים</Product>
-	<Company>שיא חדש בע״מ</Company>
-	<!-- MSIX publish-desktop.ps1 bumps the patch component. -->
-	<Version>1.0.0</Version>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>SiNet.App.Wpf</RootNamespace>
+    <ApplicationIcon>Assets\sinet.ico</ApplicationIcon>
+    <AssemblyTitle>׳³ֲ©׳³ג„¢׳³ֲ ׳³ג€”׳³ג€׳³ֲ© ׳’ג‚¬ג€ ׳³ֲ׳³ֲ ׳³ג€׳³ֲ ׳³ג‚×׳³ֲ¨׳³ג€¢׳³ג„¢׳³ֲ§׳³ֻ׳³ג„¢׳³ֲ</AssemblyTitle>
+    <Product>׳³ֲ©׳³ג„¢׳³ֲ ׳³ג€”׳³ג€׳³ֲ© ׳’ג‚¬ג€ ׳³ֲ׳³ֲ ׳³ג€׳³ֲ ׳³ג‚×׳³ֲ¨׳³ג€¢׳³ג„¢׳³ֲ§׳³ֻ׳³ג„¢׳³ֲ</Product>
+    <Company>׳³ֲ©׳³ג„¢׳³ֲ ׳³ג€”׳³ג€׳³ֲ© ׳³ג€˜׳³ֲ¢׳³ֲ´׳³ֲ</Company>
+    <!-- MSIX publish-desktop.ps1 bumps the patch component. -->
+    <Version>1.0.3</Version>
   </PropertyGroup>
-
   <ItemGroup>
-	<Resource Include="Assets\sinet.ico" />
-	<Resource Include="Assets\shia-chadash-mark.png" />
-	<Resource Include="Assets\logo_si.jpg" />
+    <Resource Include="Assets\sinet.ico" />
+    <Resource Include="Assets\shia-chadash-mark.png" />
+    <Resource Include="Assets\logo_si.jpg" />
   </ItemGroup>
-
   <ItemGroup>
-	<InternalsVisibleTo Include="SiNet.App.Wpf.Tests" />
+    <InternalsVisibleTo Include="SiNet.App.Wpf.Tests" />
   </ItemGroup>
-
   <ItemGroup>
-	<PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-	<PackageReference Include="Microsoft.Extensions.Configuration" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.Json" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
-	<PackageReference Include="Microsoft.Web.WebView2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
   </ItemGroup>
-
   <ItemGroup>
-	<Content Include="appsettings.json">
-	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	</Content>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
-
   <ItemGroup>
-	<ProjectReference Include="..\SiNet.App.Composition\SiNet.App.Composition.csproj" />
-	<ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
-	<ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
-	<!--
+    <ProjectReference Include="..\SiNet.App.Composition\SiNet.App.Composition.csproj" />
+    <ProjectReference Include="..\SiNet.Application\SiNet.Application.csproj" />
+    <ProjectReference Include="..\SiNet.Domain\SiNet.Domain.csproj" />
+    <!--
 	  SiNet.Infrastructure.Secrets is referenced only by this project's own composition root
 	  (App.xaml.cs, the standalone WinExe entry point) for AddSiNetSecrets() and the vault bootstrap
 	  that reads the SQL connection string. It cannot move to SiNet.App.Composition: the Secrets module
 	  targets net10.0-windows (Windows Credential Manager) while Composition is platform-neutral
 	  net10.0. All UI code consumes the vault through SiNet.Application.Configuration abstractions
-	  (ISecretVaultStore / ISecretSetupService) — see the boundary test in
+	  (ISecretVaultStore / ISecretSetupService) ׳³ג€™׳’ג€ֲ¬׳’ג‚¬ֲ see the boundary test in
 	  src/SiNet.App.Wpf.Tests/Boundary/WpfSecretsBoundaryTests.cs.
 	-->
-	<ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
+    <ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
   </ItemGroup>
-
 </Project>
