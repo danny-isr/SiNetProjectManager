@@ -1,0 +1,75 @@
+<UserControl x:Class="SiNet.App.Wpf.Admin.WorkflowOps.WorkflowStartDialogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <DockPanel Margin="16" LastChildFill="True">
+        <TextBlock DockPanel.Dock="Top"
+                   Text="הפעלת תהליך ידנית"
+                   Style="{DynamicResource SiTextNormalStyle}"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,12" />
+
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10" LastChildFill="True">
+            <Button DockPanel.Dock="Left"
+                    Content="חפש"
+                    Command="{Binding SearchProjectsCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,8,0" />
+            <TextBox Text="{Binding ProjectSearchText, UpdateSourceTrigger=PropertyChanged}"
+                     MinHeight="28"
+                     VerticalContentAlignment="Center" />
+        </DockPanel>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="פרויקט"
+                   Style="{DynamicResource SiTextSmallStyle}"
+                   Margin="0,0,0,4" />
+        <ListBox DockPanel.Dock="Top"
+                 Height="160"
+                 Margin="0,0,0,12"
+                 ItemsSource="{Binding Projects}"
+                 SelectedItem="{Binding SelectedProject}"
+                 BorderBrush="{DynamicResource SiSecondaryBrush}"
+                 BorderThickness="1">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock>
+                        <Run Text="{Binding ProjectNumber, Mode=OneWay}" />
+                        <Run Text=" · " />
+                        <Run Text="{Binding ProjectName, Mode=OneWay}" />
+                    </TextBlock>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="תבנית תהליך מותרת"
+                   Style="{DynamicResource SiTextSmallStyle}"
+                   Margin="0,0,0,4" />
+        <ComboBox DockPanel.Dock="Top"
+                  Margin="0,0,0,12"
+                  ItemsSource="{Binding Definitions}"
+                  SelectedItem="{Binding SelectedDefinition}"
+                  DisplayMemberPath="Name" />
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding StatusMessage}"
+                   Style="{DynamicResource SiTextSmallStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12" />
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="הפעל"
+                    Command="{Binding StartCommand}"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"
+                    Padding="16,6"
+                    Margin="0,0,8,0" />
+            <Button Content="ביטול"
+                    Command="{Binding CancelDialogCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="16,6" />
+        </StackPanel>
+    </DockPanel>
+</UserControl>

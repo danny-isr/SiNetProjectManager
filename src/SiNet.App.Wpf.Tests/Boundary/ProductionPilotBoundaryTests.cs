@@ -4,7 +4,7 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Boundary;
 
 /// <summary>
-/// Guards for <see cref="docs/NEW_SYSTEM_PRODUCTION_READINESS.md"/> — limited production pilot envelope.
+/// Guards for <c>docs/NEW_SYSTEM_PRODUCTION_READINESS.md</c> — production cutover envelope.
 /// </summary>
 public sealed class ProductionPilotBoundaryTests
 {
@@ -13,13 +13,14 @@ public sealed class ProductionPilotBoundaryTests
     {
         var doc = ReadRepoFile("docs/NEW_SYSTEM_PRODUCTION_READINESS.md");
 
-        Assert.Contains("Limited Production Pilot", doc, StringComparison.Ordinal);
+        Assert.Contains("Production cutover", doc, StringComparison.Ordinal);
         Assert.Contains("SiNet.App.Wpf.exe", doc, StringComparison.Ordinal);
         Assert.Contains("ACC-filing", doc, StringComparison.Ordinal);
         Assert.Contains("InspectionShell", doc, StringComparison.Ordinal);
         Assert.Contains("GmailSend", doc, StringComparison.Ordinal);
         Assert.Contains("ReportsManagement", doc, StringComparison.Ordinal);
         Assert.Contains("StandaloneNew", doc, StringComparison.Ordinal);
+        Assert.Contains("DESKTOP_CUTOVER", doc, StringComparison.Ordinal);
     }
 
     [Fact]

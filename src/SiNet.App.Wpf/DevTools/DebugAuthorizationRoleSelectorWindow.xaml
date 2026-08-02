@@ -1,0 +1,57 @@
+<Window x:Class="SiNet.App.Wpf.DevTools.DebugAuthorizationRoleSelectorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="[DEBUG] Authorization Role Selector" Height="400" Width="420"
+        WindowStartupLocation="CenterScreen" Topmost="True" Background="#FFF5F5F5"
+        FlowDirection="RightToLeft">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="#FFFFE0" BorderBrush="#FFCC00" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,15">
+            <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FlowDirection="RightToLeft">
+                <Run Text="מצב בדיקת הרשאות — משנה את הרשאות המשתמש הנוכחי ב־DB." FontWeight="Bold"/>
+                <LineBreak/>
+                <Run Text="חלון זה מיועד לבדיקות (Debug) בלבד ולא קיים ב־Release / Production."/>
+            </TextBlock>
+        </Border>
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,15">
+            <TextBlock Text="משתמש נוכחי:" FontWeight="Bold" Margin="0,0,0,5"/>
+            <TextBlock x:Name="LoginNameText" Text="LoginName: " Margin="0,0,0,2"/>
+            <TextBlock x:Name="DisplayNameText" Text="DisplayName: " Margin="0,0,0,2"/>
+            <TextBlock x:Name="CurrentRoleText" Text="Current Role: " Margin="0,0,0,2"/>
+            <TextBlock x:Name="IsActiveText" Text="Is Active: " Margin="0,0,0,2"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="בחר Role לטעינה (ישנה ב־DB):" FontWeight="Bold" Margin="0,0,0,10"/>
+
+            <RadioButton x:Name="RbNoChange" Content="No Change (Continue with current)" IsChecked="True" Margin="0,0,0,5"/>
+            <RadioButton x:Name="RbAdmin" Content="Administrator / Active" Margin="0,0,0,5"/>
+            <RadioButton x:Name="RbManagement" Content="Management / Active" Margin="0,0,0,5"/>
+            <RadioButton x:Name="RbEmployee" Content="Employee / Active" Margin="0,0,0,5"/>
+            <RadioButton x:Name="RbUnauthorized" Content="Unauthorized / Active" Margin="0,0,0,5"/>
+            <RadioButton x:Name="RbInactive" Content="Employee / Inactive" Margin="0,0,0,5"/>
+
+            <TextBlock x:Name="WarningTextUnauthorized" Foreground="Red" TextWrapping="Wrap" Margin="0,10,0,0" FontWeight="Bold"
+                       Text="בחירה זו תחסום את הכניסה לאפליקציה לאחר המשך ההפעלה. ודא שיש Restore." Visibility="Collapsed"/>
+            <TextBlock x:Name="WarningTextInactive" Foreground="Red" TextWrapping="Wrap" Margin="0,10,0,0" FontWeight="Bold"
+                       Text="בחירה זו תהפוך את המשתמש ללא פעיל ותחסום את הכניסה. ודא שיש Restore." Visibility="Collapsed"/>
+        </StackPanel>
+
+        <Grid Grid.Row="3" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Content="Restore Original" Width="120" Height="30" Click="Restore_Click" HorizontalAlignment="Left"/>
+            <Button Grid.Column="1" Content="Apply and Continue" Width="140" Height="30" Click="Apply_Click" FontWeight="Bold"/>
+        </Grid>
+    </Grid>
+</Window>

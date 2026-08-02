@@ -18,24 +18,36 @@
                     Command="{Binding CopyInstanceIdCommand}"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
                     Padding="14,6"
-                    Margin="0,0,12,0"
+                    Margin="0,0,8,0"
                     ToolTip="העתקת Instance Id ללוח" />
             <Button DockPanel.Dock="Left"
-                    Content="Retry"
-                    Command="{Binding RetryCommand}"
-                    IsEnabled="False"
+                    Content="פתח מופע"
+                    Command="{Binding OpenInstanceCommand}"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
                     Padding="14,6"
                     Margin="0,0,8,0"
-                    ToolTip="בקרוב — לא ב-MVP" />
+                    ToolTip="פירוט מופע + קידום / השהיה / ביטול" />
+            <Button DockPanel.Dock="Left"
+                    Content="הפעל תהליך"
+                    Command="{Binding StartWorkflowCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,8,0"
+                    ToolTip="הפעלה ידנית לפרויקט + תבנית מותרת" />
+            <Button DockPanel.Dock="Left"
+                    Content="Retry"
+                    Command="{Binding RetryCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,8,0"
+                    ToolTip="שחזור מופע חשוד כתקוע" />
             <Button DockPanel.Dock="Left"
                     Content="ביטול"
                     Command="{Binding CancelWorkflowCommand}"
-                    IsEnabled="False"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
                     Padding="14,6"
                     Margin="0,0,12,0"
-                    ToolTip="בקרוב — לא ב-MVP" />
+                    ToolTip="ביטול מופע נבחר" />
             <TextBlock Text="{Binding DangerousActionsHint}"
                        Style="{DynamicResource SiTextSmallStyle}"
                        Foreground="{DynamicResource SiSecondaryBrush}"
@@ -153,7 +165,8 @@
                   BorderThickness="1"
                   BorderBrush="{DynamicResource SiSecondaryBrush}"
                   Background="{DynamicResource SiBackgroundBrush}"
-                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  MouseDoubleClick="OnRowsMouseDoubleClick">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Id" Width="55"

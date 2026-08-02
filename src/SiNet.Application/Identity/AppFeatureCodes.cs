@@ -22,7 +22,7 @@ public static class AppFeatureCodes
     /// <summary>Admin global file/folder catalog («ניהול קבצים»).</summary>
     public const string ShellOpenFileCatalogAdmin = "Shell.OpenFileCatalogAdmin";
 
-    /// <summary>Admin read-only workflow ops dashboard («בריאות תהליכים»).</summary>
+    /// <summary>Admin workflow ops dashboard («בריאות תהליכים»).</summary>
     public const string ShellOpenWorkflowOpsDashboard = "Shell.OpenWorkflowOpsDashboard";
 
     /// <summary>Admin JobType ↔ WorkflowDefinition mapping («מדיניות סוג↔תהליך»).</summary>
@@ -30,4 +30,16 @@ public static class AppFeatureCodes
 
     /// <summary>Business projects overview dashboard («ריכוז פרויקטים»).</summary>
     public const string ShellOpenProjectsDashboard = "Shell.OpenProjectsDashboard";
+
+    /// <summary>Advance / pause / resume / complete a workflow instance from ops UI.</summary>
+    public const string WorkflowOpsAdvance = "WorkflowOps.Advance";
+
+    /// <summary>Cancel a workflow instance from ops UI.</summary>
+    public const string WorkflowOpsCancel = "WorkflowOps.Cancel";
+
+    /// <summary>Retry stalled workflow recovery from ops UI.</summary>
+    public const string WorkflowOpsRetry = "WorkflowOps.Retry";
+
+    /// <summary>Manually start a workflow instance from ops UI.</summary>
+    public const string WorkflowOpsStart = "WorkflowOps.Start";
 }

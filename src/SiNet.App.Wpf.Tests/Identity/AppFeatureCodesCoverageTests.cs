@@ -29,6 +29,10 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.ShellOpenWorkflowOpsDashboard,
             AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy,
             AppFeatureCodes.ShellOpenProjectsDashboard,
+            AppFeatureCodes.WorkflowOpsAdvance,
+            AppFeatureCodes.WorkflowOpsCancel,
+            AppFeatureCodes.WorkflowOpsRetry,
+            AppFeatureCodes.WorkflowOpsStart,
         }.Select(c => new object[] { c });
 
     [Theory]
@@ -57,6 +61,12 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy, false)]
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenProjectsDashboard, true)]
     [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenProjectsDashboard, false)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsAdvance, true)]
+    [InlineData(AppRole.Management, AppFeatureCodes.WorkflowOpsAdvance, false)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsCancel, true)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsRetry, true)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsStart, true)]
+    [InlineData(AppRole.Management, AppFeatureCodes.WorkflowOpsStart, false)]
     public void Feature_role_matrix(AppRole role, string featureCode, bool expected)
     {
         Assert.Equal(expected, AppFeatureAuthorization.CanAccessFeature(role, featureCode));

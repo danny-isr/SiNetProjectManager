@@ -21,8 +21,11 @@ using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
+using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
+using SiNet.Application.Runtime;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf;
 
@@ -43,8 +46,17 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetRuntimeStatus();
         services.AddTransient<SystemStatusViewModel>();
         services.AddTransient<SystemStatusWindow>();
-        services.AddTransient<WorkflowOpsDashboardViewModel>();
+        services.AddTransient<WorkflowOpsDashboardViewModel>(sp =>
+            new WorkflowOpsDashboardViewModel(
+                sp.GetRequiredService<IWorkflowQueryService>(),
+                sp,
+                sp.GetService<IWorkflowRecoveryService>(),
+                sp.GetService<IRuntimeSubsystemStatusService>(),
+                sp.GetService<IWorkflowCommandService>(),
+                sp.GetService<ICurrentUserContext>(),
+                sp.GetService<IAuthorizationQueryService>()));
         services.AddTransient<WorkflowOpsDashboardWindow>();
+        services.AddTransient<WorkflowStartDialogViewModel>();
         services.AddTransient<ProjectsDashboardViewModel>(sp =>
             new ProjectsDashboardViewModel(
                 sp.GetRequiredService<IProjectDashboardQueryService>(),

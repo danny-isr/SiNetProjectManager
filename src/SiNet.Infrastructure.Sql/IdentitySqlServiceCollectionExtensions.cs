@@ -23,6 +23,7 @@ public static class IdentitySqlServiceCollectionExtensions
         services.TryAddSingleton<ICurrentUserProfileService>(sp => sp.GetRequiredService<AuthenticatedUserSession>());
         services.TryAddTransient<SqlWindowsCurrentUserAuthenticator>();
         services.TryAddTransient<IDatabaseSchemaGate, SqlDatabaseSchemaGate>();
+        services.TryAddTransient<IDebugAuthorizationRoleOverrideService, SqlDebugAuthorizationRoleOverrideService>();
 
         return services;
     }

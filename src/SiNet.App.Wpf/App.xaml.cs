@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Admin.Security;
+using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email;
@@ -9,6 +10,7 @@ using SiNet.App.Wpf.Theme;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
 using SiNet.Application.Data;
+using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
@@ -117,6 +119,12 @@ public partial class App : System.Windows.Application
                 Shutdown();
                 return;
             }
+
+#if DEBUG
+            splash.Hide();
+            await RunDebugAuthorizationRoleSelectorAsync().ConfigureAwait(true);
+            splash.Show();
+#endif
 
             splash.SetStatus("מאמת משתמש...");
             StandaloneHostLoggingBootstrap.Info("[STARTUP] Authorizing Windows user...");
@@ -388,6 +396,44 @@ public partial class App : System.Windows.Application
             options.TokenStorePath = tokenStore;
         }
     }
+
+#if DEBUG
+    /// <summary>
+    /// DEBUG-only: always shows the role selector on standalone Debug startups.
+    /// Mutates <c>SIUser</c> only when the tester picks a role — not compiled in Release.
+    /// (Opt-out: set env <c>SINET_SKIP_DEBUG_ROLE_SELECTOR=1</c>.)
+    /// </summary>
+    private Task RunDebugAuthorizationRoleSelectorAsync()
+    {
+        if (_services is null)
+            return Task.CompletedTask;
+
+        try
+        {
+            var skip = Environment.GetEnvironmentVariable("SINET_SKIP_DEBUG_ROLE_SELECTOR");
+            if (string.Equals(skip, "1", StringComparison.Ordinal)
+                || string.Equals(skip, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                StandaloneHostLoggingBootstrap.Info(
+                    "[STARTUP] Debug Authorization Role Selector skipped (SINET_SKIP_DEBUG_ROLE_SELECTOR).");
+                return Task.CompletedTask;
+            }
+
+            StandaloneHostLoggingBootstrap.Info("[STARTUP] Debug Authorization Role Selector...");
+            var overrideService = _services.GetRequiredService<IDebugAuthorizationRoleOverrideService>();
+            var window = new DebugAuthorizationRoleSelectorWindow(overrideService);
+            _ = window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            StandaloneHostLoggingBootstrap.Warning(
+                ex,
+                "[STARTUP] Failed to run Debug Authorization Role Selector.");
+        }
+
+        return Task.CompletedTask;
+    }
+#endif
 
     private static string? ResolveSqlConnectionStringFromVault()
     {

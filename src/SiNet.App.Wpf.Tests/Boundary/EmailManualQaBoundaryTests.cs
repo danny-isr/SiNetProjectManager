@@ -51,7 +51,8 @@ public sealed class EmailManualQaBoundaryTests
         var trace = ReadRepoFile("src/SiNet.Application/Diagnostics/WorkflowDebugTrace.cs");
         Assert.Contains("[WF-STEP]", trace, StringComparison.Ordinal);
         Assert.Contains("workflow-manual-debug.log", trace, StringComparison.Ordinal);
-        Assert.Contains("TEMP WF-DEBUG", trace, StringComparison.Ordinal);
+        Assert.Contains("SINET_WF_DEBUG", trace, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"D:\repos", trace, StringComparison.OrdinalIgnoreCase);
 
         var runbook = ReadRepoFile("docs/manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md");
         Assert.Contains("CreatePriceQuote", runbook, StringComparison.Ordinal);

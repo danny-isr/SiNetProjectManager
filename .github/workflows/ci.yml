@@ -1,7 +1,9 @@
 name: CI
 
-# Automatic CI is temporarily paused. Keep manual execution available for future use.
 on:
+  push:
+    branches: [main, master, SiWorkNet10]
+  pull_request:
   workflow_dispatch:
 
 jobs:

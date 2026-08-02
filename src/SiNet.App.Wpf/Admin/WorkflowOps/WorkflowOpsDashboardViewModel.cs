@@ -8,6 +8,8 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Theme;
+using SiNet.Application.Identity;
+using SiNet.Application.Projects;
 using SiNet.Application.Runtime;
 using SiNet.Application.Workflow;
 using SiNet.Domain.Workflow;
@@ -15,21 +17,27 @@ using SiNet.Domain.Workflow;
 namespace SiNet.App.Wpf.Admin.WorkflowOps;
 
 /// <summary>
-/// Read-only Workflow Ops Dashboard VM — see docs/WORKFLOW_OPS_DASHBOARD.md.
+/// Workflow Ops Dashboard VM — see docs/WORKFLOW_OPS_DASHBOARD.md.
 /// </summary>
 public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposable
 {
     private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(20);
 
     private readonly IWorkflowQueryService _query;
+    private readonly IWorkflowCommandService? _commands;
     private readonly IWorkflowRecoveryService? _recovery;
     private readonly IRuntimeSubsystemStatusService? _runtime;
+    private readonly ICurrentUserContext? _currentUser;
+    private readonly IAuthorizationQueryService? _authorization;
     private readonly IServiceProvider _services;
     private readonly EventHandler _timerTick;
     private DispatcherTimer? _timer;
 
     private bool _isBusy;
     private bool _disposed;
+    private bool _canRetryFeature;
+    private bool _canCancelFeature;
+    private bool _canStartFeature;
     private string _overallStatusText = "טוען…";
     private string _overallStatusTone = "Unknown";
     private string _activeCountText = "—";
@@ -44,20 +52,27 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
     private string? _workflowNameFilter;
     private string _detailSummary = "בחר מופע מהטבלה לפירוט שלבים.";
     private string _detailTransitions = string.Empty;
-    private string _dangerousActionsHint = "Retry / ביטול — בקרוב (לא ב-MVP).";
+    private string _dangerousActionsHint = "בחר מופע — Retry לתקועים, ביטול למופעים פעילים.";
     private WorkflowOpsInstanceRowVm? _selected;
     private IReadOnlyList<WorkflowOpsInstanceRowVm> _allRows = [];
+    private IReadOnlyList<WorkflowRecoveryCandidate> _stalledCandidates = [];
 
     public WorkflowOpsDashboardViewModel(
         IWorkflowQueryService query,
         IServiceProvider services,
         IWorkflowRecoveryService? recovery = null,
-        IRuntimeSubsystemStatusService? runtime = null)
+        IRuntimeSubsystemStatusService? runtime = null,
+        IWorkflowCommandService? commands = null,
+        ICurrentUserContext? currentUser = null,
+        IAuthorizationQueryService? authorization = null)
     {
         _query = query ?? throw new ArgumentNullException(nameof(query));
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _recovery = recovery;
         _runtime = runtime;
+        _commands = commands;
+        _currentUser = currentUser;
+        _authorization = authorization;
 
         Rows = new ObservableCollection<WorkflowOpsInstanceRowVm>();
         StatusFilterOptions = new ObservableCollection<string>
@@ -79,8 +94,10 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
         CopyInstanceIdCommand = new RelayCommand(
             _ => CopySelectedInstanceId(),
             _ => Selected is not null);
-        RetryCommand = new RelayCommand(_ => { }, _ => false);
-        CancelWorkflowCommand = new RelayCommand(_ => { }, _ => false);
+        OpenInstanceCommand = new RelayCommand(_ => OpenSelectedInstance(), _ => Selected is not null);
+        RetryCommand = new AsyncRelayCommand(RetrySelectedAsync, () => !IsBusy && CanRetry);
+        CancelWorkflowCommand = new AsyncRelayCommand(CancelSelectedAsync, () => !IsBusy && CanCancelSelected);
+        StartWorkflowCommand = new AsyncRelayCommand(StartWorkflowAsync, () => !IsBusy && CanStart);
 
         // Created in LoadAsync so unit tests can call RefreshAsync without a WPF Dispatcher.
         _timerTick = async (_, _) =>
@@ -189,9 +206,29 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
             if (!SetField(ref _selected, value))
                 return;
             (CopyInstanceIdCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (OpenInstanceCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            RaiseDangerousCanExecutes();
             _ = LoadDetailAsync(value);
         }
     }
+
+    public bool CanRetry =>
+        _canRetryFeature
+        && _recovery is not null
+        && Selected is { IsStalled: true }
+        && ResolveUserId() is not null;
+
+    public bool CanCancelSelected =>
+        _canCancelFeature
+        && _commands is not null
+        && Selected is not null
+        && Selected.Status is WorkflowStatus.Active or WorkflowStatus.Paused or WorkflowStatus.Draft
+        && ResolveUserId() is not null;
+
+    public bool CanStart =>
+        _canStartFeature
+        && _commands is not null
+        && ResolveUserId() is not null;
 
     public string DetailSummary
     {
@@ -219,17 +256,21 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
             if (!SetField(ref _isBusy, value))
                 return;
             (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            RaiseDangerousCanExecutes();
         }
     }
 
     public ICommand RefreshCommand { get; }
     public ICommand OpenSystemStatusCommand { get; }
     public ICommand CopyInstanceIdCommand { get; }
+    public ICommand OpenInstanceCommand { get; }
     public ICommand RetryCommand { get; }
     public ICommand CancelWorkflowCommand { get; }
+    public ICommand StartWorkflowCommand { get; }
 
     public async Task LoadAsync()
     {
+        await RefreshPermissionsAsync().ConfigureAwait(true);
         await RefreshAsync().ConfigureAwait(true);
         if (_disposed)
             return;
@@ -238,6 +279,30 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
         _timer.Tick -= _timerTick;
         _timer.Tick += _timerTick;
         _timer.Start();
+    }
+
+    private async Task RefreshPermissionsAsync()
+    {
+        if (_authorization is null)
+        {
+            _canRetryFeature = _recovery is not null;
+            _canCancelFeature = _commands is not null;
+            _canStartFeature = _commands is not null;
+            UpdateDangerousHint();
+            return;
+        }
+
+        _canRetryFeature = await _authorization
+            .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.WorkflowOpsRetry, CancellationToken.None)
+            .ConfigureAwait(true);
+        _canCancelFeature = await _authorization
+            .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.WorkflowOpsCancel, CancellationToken.None)
+            .ConfigureAwait(true);
+        _canStartFeature = await _authorization
+            .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.WorkflowOpsStart, CancellationToken.None)
+            .ConfigureAwait(true);
+        UpdateDangerousHint();
+        RaiseDangerousCanExecutes();
     }
 
     public void Dispose()
@@ -272,6 +337,7 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
                 }
             }
 
+            _stalledCandidates = stalled;
             var stalledIds = stalled.Select(s => s.InstanceId).ToHashSet();
             var utcNow = DateTime.UtcNow;
             var rows = snapshots
@@ -474,6 +540,165 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
         }
     }
 
+    internal void OpenSelectedInstance()
+    {
+        if (Selected is null || _commands is null)
+            return;
+
+        try
+        {
+            ThemeResourceLoader.EnsureApplicationResourcesMerged();
+            var detailVm = new WorkflowInstanceDetailViewModel(
+                Selected.InstanceId,
+                _query,
+                _commands,
+                _currentUser,
+                _authorization,
+                onChanged: () => _ = RefreshAsync());
+            var window = new WorkflowInstanceDetailWindow(detailVm);
+            if (System.Windows.Application.Current?.MainWindow is { } owner
+                && !ReferenceEquals(owner, window))
+            {
+                window.Owner = owner;
+            }
+
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"שגיאה בפתיחת מופע: {ex.Message}",
+                "בריאות תהליכים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async Task RetrySelectedAsync()
+    {
+        if (!CanRetry || Selected is null || _recovery is null || ResolveUserId() is not { } userId)
+            return;
+
+        var candidate = _stalledCandidates.FirstOrDefault(c => c.InstanceId == Selected.InstanceId);
+        if (candidate is null)
+        {
+            MessageBox.Show(
+                "המופע שנבחר אינו ברשימת התקועים כרגע. רענן ונסה שוב.",
+                "בריאות תהליכים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"לנסות שחזור למופע #{Selected.InstanceId} (שלב {candidate.StageName})?",
+            "Retry תהליך",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var recovered = await _recovery.AttemptRecoveryAsync([candidate], userId, CancellationToken.None)
+                .ConfigureAwait(true);
+            DangerousActionsHint = recovered > 0
+                ? $"Retry הצליח עבור {recovered} מופע(ים)."
+                : "Retry הסתיים ללא שינוי.";
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Retry נכשל: {ex.Message}",
+                "בריאות תהליכים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task CancelSelectedAsync()
+    {
+        if (!CanCancelSelected || Selected is null || _commands is null || ResolveUserId() is not { } userId)
+            return;
+
+        var confirm = MessageBox.Show(
+            $"לבטל את מופע #{Selected.InstanceId}? פעולה זו אינה ניתנת לביטול.",
+            "ביטול תהליך",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            await _commands.CancelAsync(
+                    new CancelWorkflowCommand(Selected.InstanceId, userId, null),
+                    CancellationToken.None)
+                .ConfigureAwait(true);
+            DangerousActionsHint = $"מופע #{Selected.InstanceId} בוטל.";
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"ביטול נכשל: {ex.Message}",
+                "בריאות תהליכים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task StartWorkflowAsync()
+    {
+        if (!CanStart || _commands is null)
+            return;
+
+        try
+        {
+            ThemeResourceLoader.EnsureApplicationResourcesMerged();
+            var startVm = new WorkflowStartDialogViewModel(
+                _services.GetRequiredService<IProjectQueryService>(),
+                _services.GetRequiredService<IProjectWorkflowPolicyService>(),
+                _commands,
+                _currentUser,
+                _authorization);
+            var dialog = new WorkflowStartDialogWindow(startVm);
+            if (System.Windows.Application.Current?.MainWindow is { } owner
+                && !ReferenceEquals(owner, dialog))
+            {
+                dialog.Owner = owner;
+            }
+
+            var ok = dialog.ShowDialog() == true;
+            if (ok)
+            {
+                DangerousActionsHint = startVm.StartedInstanceId is { } id
+                    ? $"הופעל מופע #{id}."
+                    : "תהליך הופעל.";
+                await RefreshAsync().ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"שגיאה בהפעלת תהליך: {ex.Message}",
+                "בריאות תהליכים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private void OpenSystemStatus()
     {
         try
@@ -496,6 +721,29 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+
+    private int? ResolveUserId() => _currentUser?.UserId is { } id && id > 0 ? id : null;
+
+    private void RaiseDangerousCanExecutes()
+    {
+        (RetryCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (CancelWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (StartWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(CanRetry));
+        OnPropertyChanged(nameof(CanCancelSelected));
+        OnPropertyChanged(nameof(CanStart));
+    }
+
+    private void UpdateDangerousHint()
+    {
+        if (!_canRetryFeature && !_canCancelFeature && !_canStartFeature)
+        {
+            DangerousActionsHint = "אין הרשאה לפעולות מסוכנות.";
+            return;
+        }
+
+        DangerousActionsHint = "בחר מופע — Retry לתקועים, ביטול למופעים פעילים; או הפעל תהליך חדש.";
     }
 
     private static DateTime ToLocalDate(DateTime utc) =>

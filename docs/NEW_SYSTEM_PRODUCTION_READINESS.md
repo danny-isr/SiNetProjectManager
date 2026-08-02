@@ -1,22 +1,26 @@
-# New System — Limited Production Pilot Envelope
+# New System — Production cutover envelope (`SiNet.App.Wpf`)
 
-> **Status:** Active (2026-07-28) — rewritten for **standalone** host  
-> **Scope:** Defines what **`SiNet.App.Wpf.exe`** may expose in a **limited production pilot**.
-> This is **not** full legacy replacement, **not** broad window migration, and **not** approval
-> of GmailSend / Reply / Forward (G-Policy still open).
+> **Status:** Active (2026-08-02) — **cutover host** (replaces V2 distribution)  
+> **Scope:** Defines what **`SiNet.App.Wpf.exe`** may expose as the **only shipped desktop app**.
+> V2 remains in-repo for reference/build; it is **not** published. Office safety net until
+> cutover sign-off is the external legacy system (outside this repo).
+> This is still **not** approval of GmailSend / Reply / Forward (G-Policy still open).
 >
-> Locked host decision: New System = `SiNet.App.Wpf.exe` only; Legacy = `SiNetProjectManagerV2.exe`
-> only. See [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md).
+> Locked host decision: Production desktop = `SiNet.App.Wpf.exe` only.
+> See [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
+> [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md).
 >
 > Related:
 > [`TEST_STRATEGY.md`](./TEST_STRATEGY.md),
 > [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
 > [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
+> [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md),
 > [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md),
-> [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md),
+> [`manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md`](./manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md),
 > [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md) (G-Policy = Send/Reply/Forward only),
 > [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md),
 > [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md),
+> [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md),
 > [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md),
 > [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
 
@@ -42,9 +46,9 @@ System host** for a controlled internal pilot when:
 
 | Process | Role |
 | --- | --- |
-| **`SiNet.App.Wpf.exe`** | **Production New System** — this pilot envelope |
-| **`SiNetProjectManagerV2.exe`** | **Legacy** mode only |
-| V2 “New System” startup | **Deprecated + logged** — not part of this pilot envelope, checklist, or smoke gate |
+| **`SiNet.App.Wpf.exe`** | **Production desktop app** (MSIX channel 3/4) |
+| **`SiNetProjectManagerV2.exe`** | In-repo reference / hybrid build only — **not published** |
+| External legacy system | Safety net until cutover sign-off (outside this repo) |
 
 Composition: `AddSiNetStandaloneHost` → `AddSiNet(StandaloneNew)` + vault SQL + native WPF surfaces.
 Launch: `dotnet run --project src/SiNet.App.Wpf`, or VS MultiStart **New System + AccService**.
@@ -196,16 +200,15 @@ Useful classes (non-exhaustive): `StandaloneHostCompositionTests`,
 `EmailAccSelectionHandlerStatusTests`, `ProductionPilotBoundaryTests`,
 `StandaloneLocalAccInboxBootstrapTests`.
 
-### 8.1 Automated run snapshot (2026-07-29)
+### 8.1 Automated run snapshot (2026-08-02)
 
-Measured on branch `SiWorkNet10` after the test-strategy slice (offline + Live skipped):
+Measured on branch `SiWorkNet10` after the cutover / Workflow Ops runtime slice (offline + Live skipped):
 
 | Project | Passed | Failed | Skipped |
 | --- | --- | --- | --- |
-| `SiNet.App.Wpf.Tests` | 2635 | 0 | 6 (LiveSmoke, no `SINET_LIVE_SMOKE`) |
-| `SiNet.Infrastructure.Google.Tests` | 89 | 0 | 0 |
-| `SiNet.LegacyBridge.Tests` | 20 | 0 | 0 |
-| **Build** `SiNetProjectManagerV2` | ✅ | | |
+| `SiNet.App.Wpf.Tests` | **3028** | 0 | 6 (LiveSmoke, no `SINET_LIVE_SMOKE`) |
+| **Build** `src/SiNet.App.Wpf` | ✅ | | |
+| Sibling pins (`build/sibling-pins.json`) | Match local HEAD (no drift) | | |
 
 Live layer (`Category=LiveSmoke`) was **Not Run** here (no AccService/DB session in the agent). Operators should run it locally before manual UI smoke.
 
@@ -217,8 +220,9 @@ Live layer (`Category=LiveSmoke`) was **Not Run** here (no AccService/DB session
 | --- | --- |
 | **Interactive smoke** | **Not Run** |
 | **Primary host** | `SiNet.App.Wpf.exe` + AccService MultiStart |
-| **Operator checklist** | [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md) |
-| **Pilot after Pass** | 1–2 internal **ACC-filing** pilot users (not send/reply) |
+| **Operator checklist** | [`manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md`](./manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md) |
+| **Rollout** | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) |
+| **Pilot after Pass** | 1–2 internal users while external legacy system stays available |
 
 ### 9.1 Operator focus (standalone)
 

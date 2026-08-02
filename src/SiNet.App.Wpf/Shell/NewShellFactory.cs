@@ -289,7 +289,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             admin.Add(new NewShellMenuItem(
                 "בריאות תהליכים",
                 OpenNativeWorkflowOpsDashboard,
-                "דשבורד תפעולי למופעי workflow (קריאה בלבד)"));
+                "דשבורד תפעולי למופעי workflow (צפייה + קידום/ביטול/הפעלה)"));
         }
 
         if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy, cancellationToken).ConfigureAwait(true))

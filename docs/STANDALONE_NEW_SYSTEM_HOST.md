@@ -1,14 +1,16 @@
 # Standalone New System host — target state
 
-> Status: **Approved — slice 2 implemented (pilot parity)**  
-> Date: 2026-07-28  
-> Decision context: operator chose **standalone New System host** as the first step toward
-> removing runtime dependence on `SiNetSQL` / `SiNetProjectManagerV2`.
+> Status: **Approved — production cutover host**  
+> Date: 2026-08-02 (supersedes 2026-07-28 pilot framing)  
+> Decision context: operator chose **standalone New System host** as the production desktop app.
+> `SiNetProjectManagerV2` stays in-repo for code reference and hybrid builds; it is **not** shipped.
 >
-> Locked decisions (2026-07-28):
-> 1. New System = `SiNet.App.Wpf.exe` only; Legacy = `SiNetProjectManagerV2.exe` only.
-> 2. V2 New System path: **deprecated + logged** (not deleted in slice 1).
+> Locked decisions:
+> 1. Production desktop = `SiNet.App.Wpf.exe` only (MSIX channel under `publish-all.ps1`).
+> 2. V2 remains buildable as a strangler/reference; distribution channel points at App.Wpf.
 > 3. Surfaces without a native adapter: **hidden from the shell menu** until reimplemented.
+> 4. Workflow definitions stay closed-world (seed); ops UI is runtime-only
+>    ([`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md)).
 >
 > Slice 1 delivery (done):
 > - Entry: `src/SiNet.App.Wpf/App.xaml.cs` → vault gate → schema gate → Windows user auth →
@@ -35,8 +37,9 @@ The process that operators call "New System" must be a **self-contained WPF host
 - **No** LegacyBridge registration
 - **No** startup path that opens `WPF_Window.SecretSetupWindow` / other V2 dialogs
 
-`SiNetProjectManagerV2` remains available temporarily as **Legacy mode only** (frozen strangler),
-not as the New System process host.
+`SiNetProjectManagerV2` remains in the repository as a **frozen strangler / code reference**
+(still buildable via `SiNetProjectManager.sln`). It is **not** the production process host and
+is **not** published by the desktop channel in `publish-all.ps1`.
 
 ## Target process shape
 
@@ -46,6 +49,8 @@ SiNet.App.Wpf.exe
   → AddSiNet(StandaloneNew) + AddSiNetSecrets + vault SQL factory
   → Native vault/DB gate (native Secret Setup / provisioning only)
   → Schema gate
+  → DEBUG only: DebugAuthorizationRoleSelectorWindow (always on Debug startups;
+    opt-out via SINET_SKIP_DEBUG_ROLE_SELECTOR=1; not compiled in Release)
   → Authorize current user
   → Apply AccService BaseUrl/pins from system settings
   → INewShellFactory.CreateShellAsync() → NewShellWindow

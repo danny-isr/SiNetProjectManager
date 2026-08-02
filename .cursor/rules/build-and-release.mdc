@@ -8,7 +8,7 @@ alwaysApply: true
 Before marking any **code** task complete:
 
 1. Run:
-   - `dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj`
+   - `dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj`
    - `dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj`
 2. Fix all compile errors — do not leave the repo in a broken build state.
 3. In the final report, state: build pass/fail, test pass/fail, DB/schema changes (must be none unless explicitly requested).

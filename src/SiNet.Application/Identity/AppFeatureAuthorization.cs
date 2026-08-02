@@ -26,6 +26,10 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.ShellOpenFileCatalogAdmin] = AppRole.Administrator,
             [AppFeatureCodes.ShellOpenWorkflowOpsDashboard] = AppRole.Administrator,
             [AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy] = AppRole.Administrator,
+            [AppFeatureCodes.WorkflowOpsAdvance] = AppRole.Administrator,
+            [AppFeatureCodes.WorkflowOpsCancel] = AppRole.Administrator,
+            [AppFeatureCodes.WorkflowOpsRetry] = AppRole.Administrator,
+            [AppFeatureCodes.WorkflowOpsStart] = AppRole.Administrator,
         };
 
     /// <summary>

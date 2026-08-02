@@ -11,6 +11,8 @@
 	<AssemblyTitle>שיא חדש — מנהל פרויקטים</AssemblyTitle>
 	<Product>שיא חדש — מנהל פרויקטים</Product>
 	<Company>שיא חדש בע״מ</Company>
+	<!-- MSIX publish-desktop.ps1 bumps the patch component. -->
+	<Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

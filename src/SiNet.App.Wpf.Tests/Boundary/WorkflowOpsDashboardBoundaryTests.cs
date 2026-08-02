@@ -4,7 +4,7 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Boundary;
 
 /// <summary>
-/// Guards for Workflow Ops Dashboard MVP — Application ports only, no schema/write paths.
+/// Guards for Workflow Ops Dashboard — Application ports only, no direct SQL.
 /// </summary>
 public sealed class WorkflowOpsDashboardBoundaryTests
 {
@@ -14,21 +14,48 @@ public sealed class WorkflowOpsDashboardBoundaryTests
         "IDbContextFactory",
         "SaveChanges",
         "Add-Migration",
-        "AttemptRecoveryAsync",
-        "IWorkflowCommandService",
     ];
 
     [Fact]
-    public void ViewModel_uses_query_and_detect_stalled_only()
+    public void ViewModel_uses_query_command_and_recovery_ports()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Admin/WorkflowOps/WorkflowOpsDashboardViewModel.cs");
 
         Assert.Contains("IWorkflowQueryService", source, StringComparison.Ordinal);
         Assert.Contains("GetAllWorkflowInstanceSnapshotsAsync", source, StringComparison.Ordinal);
         Assert.Contains("DetectStalledAsync", source, StringComparison.Ordinal);
+        Assert.Contains("IWorkflowCommandService", source, StringComparison.Ordinal);
+        Assert.Contains("AttemptRecoveryAsync", source, StringComparison.Ordinal);
         Assert.Contains("IRuntimeSubsystemStatusService", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("AttemptRecoveryAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("IWorkflowCommandService", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.WorkflowOpsRetry", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.WorkflowOpsCancel", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.WorkflowOpsStart", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Detail_viewmodel_uses_command_port_and_feature_gates()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Admin/WorkflowOps/WorkflowInstanceDetailViewModel.cs");
+
+        Assert.Contains("IWorkflowCommandService", source, StringComparison.Ordinal);
+        Assert.Contains("AdvanceAsync", source, StringComparison.Ordinal);
+        Assert.Contains("PauseAsync", source, StringComparison.Ordinal);
+        Assert.Contains("CancelAsync", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.WorkflowOpsAdvance", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.WorkflowOpsCancel", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiNetSQL", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDbContextFactory", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Start_dialog_uses_policy_and_start_command()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Admin/WorkflowOps/WorkflowStartDialogViewModel.cs");
+
+        Assert.Contains("IProjectWorkflowPolicyService", source, StringComparison.Ordinal);
+        Assert.Contains("GetAllowedWorkflowsAsync", source, StringComparison.Ordinal);
+        Assert.Contains("StartAsync", source, StringComparison.Ordinal);
+        Assert.Contains("AppFeatureCodes.WorkflowOpsStart", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -48,6 +75,7 @@ public sealed class WorkflowOpsDashboardBoundaryTests
         var source = ReadRepoFile("src/SiNet.App.Wpf/NewSystemWpfServiceCollectionExtensions.cs");
         Assert.Contains("WorkflowOpsDashboardViewModel", source, StringComparison.Ordinal);
         Assert.Contains("WorkflowOpsDashboardWindow", source, StringComparison.Ordinal);
+        Assert.Contains("WorkflowStartDialogViewModel", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -58,7 +86,7 @@ public sealed class WorkflowOpsDashboardBoundaryTests
     }
 
     [Fact]
-    public void Workflow_ops_sources_forbid_write_and_sql_identifiers()
+    public void Workflow_ops_sources_forbid_direct_sql_identifiers()
     {
         foreach (var relativePath in EnumerateWorkflowOpsFiles())
         {

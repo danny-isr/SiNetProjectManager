@@ -34,30 +34,12 @@ public partial class EmailAttachmentStripView : UserControl
             return;
         }
 
-        // #region agent log
-        try
+        if (comboBox.SelectedValue is int selectedPreviewId)
         {
-            var sv = comboBox.SelectedValue;
-            var detail =
-                $"att={item.InboxAttachmentId} svType={sv?.GetType().FullName ?? "null"} sv={sv?.ToString() ?? "null"} bound={item.SelectedAlternativeId?.ToString() ?? "null"} pf={item.ProjectFileId?.ToString() ?? "null"}";
-            WorkflowDebugTrace.Step("Email.TagUI", $"H-ALT3 selection-changed {detail}");
-            var payload = JsonSerializer.Serialize(new
-            {
-                sessionId = "cbfc8f",
-                runId = "quote-file-tag-pre",
-                hypothesisId = "H-ALT3",
-                location = "EmailAttachmentStripView.AlternativeSelectionChanged",
-                message = detail,
-                data = new { detail },
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            });
-            File.AppendAllText(@"D:\repos2026\debug-cbfc8f.log", payload + Environment.NewLine);
+            WorkflowDebugTrace.Step(
+                "Email.TagUI",
+                $"H-ALT3 selection-changed att={item.InboxAttachmentId} sv={selectedPreviewId} bound={item.SelectedAlternativeId?.ToString() ?? "null"}");
         }
-        catch
-        {
-            // diagnostics only
-        }
-        // #endregion
 
         if (comboBox.SelectedValue is not int selectedId)
         {

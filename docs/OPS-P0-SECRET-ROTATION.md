@@ -2,7 +2,10 @@
 
 Operational checklist for rotating the MasterPlan Web API key. **Do not record actual key values in this document or in Git.**
 
-## Status — `Manual Pending` (as of 2026-07-28)
+## Status — `Manual Pending` (as of 2026-08-02)
+
+> Cutover blocker: rotation must be performed by a MasterPlan admin / server operator.
+> Engineering prepared this checklist; the agent cannot rotate the live key.
 
 | Item | Status | Notes |
 | --- | --- | --- |

@@ -375,6 +375,10 @@ public interface IAuthorizationQueryService
 | `ActionPermissionsManage` | Administrator |
 | `ShellOpenFileCatalogAdmin` | Administrator |
 | `ShellOpenWorkflowOpsDashboard` | Administrator |
+| `WorkflowOps.Advance` | Administrator |
+| `WorkflowOps.Cancel` | Administrator |
+| `WorkflowOps.Retry` | Administrator |
+| `WorkflowOps.Start` | Administrator |
 | `ShellOpenProjectsDashboard` | Management |
 
 **Host adapter:** `SiNetProjectManagerV2/Services/LegacyAuthorizationQueryService.cs` → legacy `CurrentUserContext` (hierarchical `Role >= required`).
@@ -453,7 +457,7 @@ Phased, documentation-driven slices:
 | --- | --- | --- |
 | **P0 — this slice** | `docs/IDENTITY_AND_PERMISSIONS.md` (this file) | None |
 | **P1 — auth parity decision** | New System calls `AuthorizeCurrentUser` before shell | ✅ Implemented |
-| **P1.5 — DEBUG role selector** | Shared `DebugAuthorizationRoleSelectorWindow` on New + Legacy paths | ✅ Implemented |
+| **P1.5 — DEBUG role selector** | Shared debug role override: V2 window still gated by `EnableAuthorizationTestMode`; standalone `SiNet.App.Wpf` shows native selector on every Debug startup (`#if DEBUG`, opt-out `SINET_SKIP_DEBUG_ROLE_SELECTOR`) via `IDebugAuthorizationRoleOverrideService` | ✅ Implemented |
 | **P2 — profile display** | `ICurrentUserProfileService` + shell display | ✅ Implemented |
 | **P3 — authorization queries** | `IAuthorizationQueryService` + NewShell menu gating | ✅ Implemented |
 | **P4 — action permission port** | `IActionPermissionQueryService`; migrated surfaces that execute actions use it | ✅ Implemented (read-only port + adapter; admin UI still legacy) |

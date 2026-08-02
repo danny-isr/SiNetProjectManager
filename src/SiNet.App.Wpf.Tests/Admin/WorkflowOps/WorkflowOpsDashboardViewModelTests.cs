@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Admin.WorkflowOps;
+using SiNet.Application.Identity;
 using SiNet.Application.Runtime;
 using SiNet.Application.Workflow;
 using SiNet.Domain.Workflow;
@@ -97,17 +98,48 @@ public sealed class WorkflowOpsDashboardViewModelTests
     }
 
     [Fact]
-    public async Task Retry_and_cancel_commands_are_disabled()
+    public async Task Retry_and_cancel_commands_are_disabled_without_ports_or_selection()
     {
         var query = new FakeQuery([], StageTaskProgressDto.Empty);
         using var vm = new WorkflowOpsDashboardViewModel(
             query,
             new ServiceCollection().BuildServiceProvider());
 
-        await vm.RefreshAsync().ConfigureAwait(true);
+        await vm.LoadAsync().ConfigureAwait(true);
 
         Assert.False(vm.RetryCommand.CanExecute(null));
         Assert.False(vm.CancelWorkflowCommand.CanExecute(null));
+        Assert.False(vm.CanRetry);
+        Assert.False(vm.CanCancelSelected);
+    }
+
+    [Fact]
+    public async Task Retry_enabled_for_stalled_selection_when_recovery_and_user_present()
+    {
+        var snap = MakeSnapshot(
+            id: 7,
+            name: "WF",
+            status: WorkflowStatus.Active,
+            createdUtc: DateTime.UtcNow.AddHours(-3),
+            completedUtc: null,
+            projectTitle: "P",
+            userName: "U");
+        var query = new FakeQuery([snap], StageTaskProgressDto.Empty);
+        var recovery = new FakeRecovery(
+        [
+            new WorkflowRecoveryCandidate(7, 1, 1, "S", 1, null, 0, 0),
+        ]);
+        using var vm = new WorkflowOpsDashboardViewModel(
+            query,
+            new ServiceCollection().BuildServiceProvider(),
+            recovery,
+            currentUser: new FakeUser(42));
+
+        await vm.LoadAsync().ConfigureAwait(true);
+        vm.Selected = vm.Rows.Single();
+
+        Assert.True(vm.CanRetry);
+        Assert.True(vm.RetryCommand.CanExecute(null));
     }
 
     private static WorkflowInstanceSnapshotDto MakeSnapshot(
@@ -196,5 +228,43 @@ public sealed class WorkflowOpsDashboardViewModelTests
         public event EventHandler? Changed;
         public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void StartPeriodicRefresh() { }
+    }
+
+    private sealed class FakeUser(int userId) : ICurrentUserContext
+    {
+        public int? UserId { get; } = userId;
+    }
+
+    private sealed class FakeCommands : IWorkflowCommandService
+    {
+        public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<StageCompletionResultDto?> CheckAndAdvanceOnActionCompletedAsync(ActionCompletedCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask<int> ReprovisionStalledStageTasksAsync(StalledWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask PauseAsync(PauseWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask ResumeAsync(ResumeWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask CompleteInstanceAsync(CompleteWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public ValueTask CancelAsync(CancelWorkflowCommand command, CancellationToken ct)
+            => throw new NotSupportedException();
     }
 }

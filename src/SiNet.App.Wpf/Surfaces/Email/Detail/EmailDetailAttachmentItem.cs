@@ -227,30 +227,8 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
         (AlternativeChangedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
-    // #region agent log
     private static void AgentDebugLog(string hypothesisId, string location, string detail)
-    {
-        try
-        {
-            WorkflowDebugTrace.Step("Email.TagUI", $"{hypothesisId} {detail}");
-            var payload = JsonSerializer.Serialize(new
-            {
-                sessionId = "cbfc8f",
-                runId = "quote-file-tag-pre",
-                hypothesisId,
-                location,
-                message = detail,
-                data = new { detail },
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            });
-            File.AppendAllText(@"D:\repos2026\debug-cbfc8f.log", payload + Environment.NewLine);
-        }
-        catch
-        {
-            // diagnostics only
-        }
-    }
-    // #endregion
+        => WorkflowDebugTrace.Step("Email.TagUI", $"{hypothesisId} {location} {detail}");
 
     public void RestorePreviousAlternativeSelection()
     {

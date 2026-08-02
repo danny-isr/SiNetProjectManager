@@ -3,8 +3,11 @@
 # Runs the four independent deployment channels in order:
 #   1. SiOffice.AccService    -> WiX MSI    -> \\SI-WIN-2K19\...\SiProjecNet2026-Full\
 #   2. MasterPlan.SyncEngine  -> robocopy   -> \\SI-WIN-2K19\...\MasterPlanSync\
-#   3. SiNetProjectManagerV2  -> MSIX       -> \\SI-WIN-2K19\...\SiNetProjectManagerV2\
+#   3. SiNet.App.Wpf          -> MSIX       -> \\SI-WIN-2K19\...\SiNet.App.Wpf\
 #   4. SiNet.SecretImport     -> robocopy   -> \\SI-WIN-2K19\...\SiNet.SecretImport\
+#
+# Channel 3 previously published SiNetProjectManagerV2. That host remains in the
+# repo for reference/build only and is no longer distributed (see docs/DESKTOP_CUTOVER.md).
 #
 # Each component bumps its own <Version> independently. Pass -SkipXxx to omit
 # a channel (useful when only one component changed).
@@ -49,10 +52,10 @@ if (-not $SkipConsole) {
 else { Write-Host "`n[SKIPPED] MasterPlan.SyncEngine" -ForegroundColor DarkGray }
 
 if (-not $SkipDesktop) {
-    Invoke-Channel "3/4  SiNetProjectManagerV2 (WPF -> MSIX + .appinstaller)" `
-        (Join-Path $PSScriptRoot "SiNetProjectManagerV2\publish-desktop.ps1")
+    Invoke-Channel "3/4  SiNet.App.Wpf (WPF -> MSIX + .appinstaller)" `
+        (Join-Path $PSScriptRoot "src\SiNet.App.Wpf\publish-desktop.ps1")
 }
-else { Write-Host "`n[SKIPPED] SiNetProjectManagerV2" -ForegroundColor DarkGray }
+else { Write-Host "`n[SKIPPED] SiNet.App.Wpf" -ForegroundColor DarkGray }
 
 if (-not $SkipTool) {
     Invoke-Channel "4/4  SiNet.SecretImport (portable provisioner -> network share)" `

@@ -1,15 +1,12 @@
-using System.Text;
-using System.Text.Json;
-
 namespace SiNet.Application.Diagnostics;
 
-/// <summary>TEMP debug-mode NDJSON writer for session 65884a (body PDF soak). Remove after fix verified.</summary>
+/// <summary>
+/// Retired temporary NDJSON debug sink. Kept as a no-op so existing call sites compile
+/// without writing to disk. Call sites may be removed in a later cleanup pass.
+/// Status: inactive / pending removal — do not reintroduce a hard-coded log path.
+/// </summary>
 public static class AgentDebugNdjson
 {
-    private const string SessionId = "65884a";
-    private const string LogPath = @"D:\repos2026\SiNetProjectManager_GitHub\debug-65884a.log";
-    private static readonly object Gate = new();
-
     public static void Write(
         string hypothesisId,
         string location,
@@ -17,27 +14,6 @@ public static class AgentDebugNdjson
         object? data = null,
         string runId = "pre-fix")
     {
-        try
-        {
-            var payload = JsonSerializer.Serialize(new
-            {
-                sessionId = SessionId,
-                runId,
-                hypothesisId,
-                location,
-                message,
-                data,
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            });
-
-            lock (Gate)
-            {
-                File.AppendAllText(LogPath, payload + Environment.NewLine, Encoding.UTF8);
-            }
-        }
-        catch
-        {
-            // Diagnostics must never destabilize ingest.
-        }
+        // Intentionally no-op — production builds must not write session debug files.
     }
 }

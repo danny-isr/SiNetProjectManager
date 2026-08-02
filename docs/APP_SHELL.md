@@ -1,6 +1,6 @@
 # SiNet Application Shell (Legacy mode vs New system mode)
 
-> **Status:** Draft — Shell/Startup Round (2026-06-27)
+> **Status:** Cutover target — `SiNet.App.Wpf` replaces V2 as the only shipped desktop app (2026-08-02)
 > **Working branch:** `SiWorkNet10`
 > **New solution:** `SiNet.sln` · **Legacy/functional reference:** `SiNetProjectManager.sln`
 
@@ -14,6 +14,16 @@ then the code (see [`README`](./README.md) documentation-driven workflow).
 > implemented by [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md).
 > Limited production pilot envelope (standalone host): [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
 > Standalone host target: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md).
+
+### Cutover decision (2026-08-02)
+
+| Topic | Decision |
+| --- | --- |
+| Production desktop app | **`SiNet.App.Wpf.exe` only** |
+| `SiNetProjectManagerV2` | Remains in the repo and in hybrid builds as a **code reference**; **not** distributed via `publish-all.ps1` |
+| Coexistence on user machines | **Not required** — V2 was never production; the office still runs an older external system until cutover |
+| Feature readiness bar | Daily work must be possible; not full parity with every V2 screen |
+| Workflow definitions | Closed-world seed (no visual editor in New System) — see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md) |
 
 ---
 
@@ -29,8 +39,8 @@ without dragging in the legacy host. It exists to:
 - Give migrated Work Surfaces (Email, Inspection, Project Context, later Settings) a home as they are
   ported, following the *Work Surfaces* model in `ARCHITECTURE_TARGET.md` §4.
 
-The shell is **additive**. It never replaces the legacy host in Legacy mode and never changes legacy
-behavior.
+**Production path:** `SiNet.App.Wpf` is the shipped shell. `SiNetProjectManagerV2` is kept for
+reference/build only and is not the distribution channel.
 
 ---
 

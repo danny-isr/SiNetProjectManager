@@ -27,11 +27,11 @@ This file is the **entry point for Cursor / AI agents** working in this reposito
 [build/sibling-pins.json](build/sibling-pins.json). On a clean machine run
 `pwsh .\build\fetch-siblings.ps1` before building. See `docs/BUILD_SIBLING_PINS.md`.
 
-Local agent gate (host app + primary test project):
+Local agent gate (production host + primary test project):
 
 ```powershell
 cd SiNetProjectManager_GitHub
-dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
+dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
 ```
 
@@ -48,7 +48,9 @@ Report in the final message: build result, test result, and whether DB/schema ch
 
 ## Key docs
 
-- `docs/APP_SHELL.md` — Legacy vs New system shell; `StartupModeSelectionWindow` is first UI
+- `docs/APP_SHELL.md` — Production shell is `SiNet.App.Wpf` (V2 not shipped)
+- `docs/STANDALONE_NEW_SYSTEM_HOST.md` — Standalone host composition and cutover
+- `docs/WORKFLOW_OPS_DASHBOARD.md` — Workflow runtime ops (closed-world definitions)
 - `docs/PROJECTS.md` — Shared ProjectSelector, project context
 - `docs/PROJECTS_DASHBOARD.md` — Projects overview dashboard («ריכוז פרויקטים»)
 - `docs/PROJECT_CONTEXT_MIGRATION.md` — Migration slice notes
@@ -59,8 +61,8 @@ Report in the final message: build result, test result, and whether DB/schema ch
 
 ## New stack layout
 
-- `src/SiNet.App.Wpf/` — WPF surfaces + shared controls (e.g. `Shared/Projects/ProjectSelectorView`)
+- `src/SiNet.App.Wpf/` — **Production desktop host** (WPF surfaces + shell)
 - `src/SiNet.Application/` — Ports, DTOs, query logic
-- `SiNetProjectManagerV2/` — Legacy host (composition root today)
+- `SiNetProjectManagerV2/` — Legacy host kept as code reference / hybrid build; **not** the publish channel
 
 See `.agents/AGENTS.md` for documentation-only round rules.
