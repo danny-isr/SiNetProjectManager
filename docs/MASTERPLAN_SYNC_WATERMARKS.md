@@ -88,6 +88,17 @@ Measured on 2026-08-02: 76 report IDs present in `MP_ProjectHours` and absent fr
 The server ignores `FromDate` on this endpoint and returns the full table (12,295 rows) on every
 run. No rows are lost; the cost is two full 12k MERGE passes per day. Left as-is.
 
+### 2.5 `LastSyncTime` cannot distinguish an idle entity from a dead one
+
+`UpdateWatermarkAsync` — the only writer of `Sync_State.LastSyncTime` — is called from inside the
+`if (batch.Count > 0)` block of each entity method. An entity whose endpoint returns nothing is
+therefore never stamped, and its `LastSyncTime` freezes at the last day data happened to arrive.
+
+Observed on 2026-08-03: `Bids` and `Conversations` both showed `LastSyncTime = 2026-07-04`, which
+reads as "this entity stopped syncing a month ago". Both were in fact being fetched twice a day and
+returning zero rows. The two situations — *not running* and *running but empty* — are
+indistinguishable from the table, which makes the column useless for alerting.
+
 ---
 
 ## 3. Target state
@@ -131,11 +142,37 @@ all hour entities and reports the gap it closes.
 | `MasterPlanApi:HoursLookbackDays` | `14` | Days subtracted from the watermark on every hours request |
 | `MasterPlanApi:ReconcileIntervalDays` | `7` | Minimum days between full reconciliation passes |
 
-### 3.5 Entities affected
+### 3.5 Freshness stamp and staleness warning
 
-Only `ProjectHours`, `ProjectHoursExtended` and `TimeHourReports`. Projects, Companies, Contacts,
-Employees, Bids, Bills, Intakes, Tasks and Conversations filter on `LastUpdated` / `CreatedDate`,
-which the server matches, and are left untouched.
+Separating the two meanings that `LastSyncTime` was carrying (§2.5):
+
+6. **`LastSyncTime` records the last successful pass, not the last non-empty pass.** Every entity
+   stamps it at the end of a successful sync, whether or not rows came back. It answers one
+   question only: *did this entity complete a pass?*
+7. **An entity that returns nothing for a long time warns.** When a batch is empty and the stored
+   watermark is more than `StaleEntityWarningDays` (14) old, the engine logs a `[STALE]` warning.
+   Central logging runs at `Warning`, so a silently dead endpoint becomes visible without lowering
+   the log level.
+
+No schema change: both rules use the existing `Sync_State` columns.
+
+### 3.6 Watermark semantics per entity (audited 2026-08-03)
+
+`LastUpdated` is written by the MasterPlan server at save time, so it only ever moves forward and a
+record can never appear behind the stored watermark. `ReportDate` is a business date the user
+chooses and can be back-dated — which is why only the hour entities lost rows.
+
+| Entity | Watermark field | Server filters on | Match | Verdict |
+| --- | --- | --- | --- | --- |
+| `Projects`, `Companies`, `Contacts`, `Employees`, `Bills`, `Intakes` | `LastUpdated` | `LastUpdated` | yes | Correct — row counts grow against the 30/04 restore baseline |
+| `Bids` | `LastUpdated` | `LastUpdated` | yes | Correct; zero rows returned since 04/07 — see Needs Review |
+| `Conversations` | `CreatedDate` | `CreatedDate` | yes | Correct; zero rows returned since 04/07 — see Needs Review |
+| `Tasks` | `LastUpdated` | *(ignored — server echoes only `dueDate`)* | no | Full pull of 784 rows every run; no loss, wasteful |
+| `TimeHourReports` | `ReportDateTime` | *(ignored)* | no | Full pull of ~12.3k rows every run; no loss (§2.4) |
+| `ProjectHours` | `ReportDate` | `ReportDate` | yes | Back-datable — covered by §3.2 |
+| `ProjectHoursExtended` | `ReportDate` (was `LastUpdated`) | `ReportDate` | fixed | Was §2.1 |
+
+Deletes are not propagated for any entity; this is the standing "no bulk delete" rule.
 
 ---
 
@@ -154,11 +191,19 @@ FULL JOIN (SELECT CAST(ReportDate AS date) D, COUNT(*) Cnt FROM MP_ProjectHoursE
 ORDER BY ReportDay;
 ```
 
+4. Every entity must carry a fresh `LastSyncTime` after a successful run, including the ones that
+   returned nothing:
+
+```sql
+SELECT EntityName, LastWatermark, LastSyncTime FROM Sync_State ORDER BY LastSyncTime;
+```
+
 ---
 
 ## 5. Out of Scope
 
-- Any change to the nine non-hour entities or to their watermark fields.
+- Any change to the watermark **field** of the nine non-hour entities (§3.6 audits them; the
+  freshness stamp in §3.5 applies to all twelve but changes no watermark).
 - Deleting replica rows that no longer exist in MasterPlan (reported only).
 - The monthly backup/restore ETL (`--monthly`) and its watermark initialisation.
 - Schema changes to `MP_*` tables, `Sync_State`, or any EF migration.
@@ -173,9 +218,15 @@ ORDER BY ReportDay;
 | One-off manual watermark reset in `Sync_State` | Dropped | Superseded by the first reconciliation pass, which is automatic and repeatable |
 | Deleting replica rows absent from the API | Not implemented | The engine's "no bulk delete" rule stands; orphans are reported for manual review |
 | Making the lookback window per-entity configurable | Postponed | One shared value for the hour entities is sufficient; revisit if reporting patterns diverge |
+| Adding `LastRecordsFetched` / `LastNonEmptySyncTime` columns to `Sync_State` | Dropped | Would need a schema change; the `[STALE]` warning in §3.5 covers the same alerting need |
+| Making `Tasks` genuinely incremental | Postponed | The server ignores `lastUpdated` on that endpoint; a full pull of 784 rows is cheap enough to leave alone |
 
 ## 7. Needs Review
 
 - The exact server-side semantics of `FromDate` on `GetProjectHoursExtended` are inferred from
   observed behaviour, not from MasterPlan API documentation. The lookback window makes the fix
   correct under either interpretation, but the inference should be confirmed with the vendor.
+- `Bids` (10 replica rows) and `Conversations` (115 rows, newest `CreatedDate` 12/04/2026) have
+  returned zero rows from the API since 04/07/2026. Their replica contents match the 30/04 restore
+  baseline exactly, so nothing has been lost — but whether these features are genuinely unused or
+  the endpoints are broken has not been established. The `[STALE]` warning will surface them daily.

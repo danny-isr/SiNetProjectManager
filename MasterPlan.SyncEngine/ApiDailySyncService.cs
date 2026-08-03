@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -381,7 +381,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Projects", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -423,7 +423,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Companies", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -465,7 +465,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Contacts", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -507,7 +507,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Employees", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -549,7 +549,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Bids", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -591,7 +591,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Bills", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -633,7 +633,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Intakes", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -677,7 +677,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Tasks", result.NewWatermark);
             }
-            LogSyncComplete(result, "LastUpdated");
+            await CompleteEntitySyncAsync(result, "LastUpdated");
         }
         catch (Exception ex)
         {
@@ -714,7 +714,7 @@ public class ApiDailySyncService
                     ? batchMax : result.PreviousWatermark;
                 await UpdateWatermarkAsync("Conversations", result.NewWatermark);
             }
-            LogSyncComplete(result, "CreatedDate");
+            await CompleteEntitySyncAsync(result, "CreatedDate");
         }
         catch (Exception ex)
         {
@@ -759,7 +759,7 @@ public class ApiDailySyncService
                 result.OrphanCandidates = await CountOrphanCandidatesAsync("ProjectHours", hours.Select(h => h.ID));
                 await MarkReconciliationCompleteAsync("ProjectHours");
             }
-            LogSyncComplete(result, "ReportDate");
+            await CompleteEntitySyncAsync(result, "ReportDate");
         }
         catch (Exception ex)
         {
@@ -808,7 +808,7 @@ public class ApiDailySyncService
                 result.OrphanCandidates = await CountOrphanCandidatesAsync("TimeHourReports", reports.Select(r => r.ID));
                 await MarkReconciliationCompleteAsync("TimeHourReports");
             }
-            LogSyncComplete(result, "ReportDateTime");
+            await CompleteEntitySyncAsync(result, "ReportDateTime");
         }
         catch (Exception ex)
         {
@@ -865,7 +865,7 @@ public class ApiDailySyncService
                 result.OrphanCandidates = await CountOrphanCandidatesAsync("ProjectHoursExtended", hours.Select(h => h.ID));
                 await MarkReconciliationCompleteAsync("ProjectHoursExtended");
             }
-            LogSyncComplete(result, "ReportDate");
+            await CompleteEntitySyncAsync(result, "ReportDate");
         }
         catch (Exception ex)
         {
@@ -1699,10 +1699,20 @@ public class ApiDailySyncService
     }
 
     /// <summary>
-    /// Log sync completion for each entity with counts and new watermark.
+    /// An entity that returns nothing for this many days is reported as stale.
     /// </summary>
-    private void LogSyncComplete(EntitySyncResult result, string watermarkColumn)
+    private const int StaleEntityWarningDays = 14;
+
+    /// <summary>
+    /// Close a successful entity sync: stamp the freshness marker, log the counts, and warn when the
+    /// entity has been returning nothing for a long time.
+    /// The stamp is written even for an empty batch, so that "did not run" and "ran and found
+    /// nothing" stop looking identical in <c>Sync_State</c>. See docs/MASTERPLAN_SYNC_WATERMARKS.md §3.5.
+    /// </summary>
+    private async Task CompleteEntitySyncAsync(EntitySyncResult result, string watermarkColumn)
     {
+        await TouchSyncStateAsync(result.EntityName).ConfigureAwait(false);
+
         _logger.LogInformation(
             "[SYNC COMPLETE] Entity={Entity} Fetched={Fetched} Inserted={Inserted} Updated={Updated} Skipped={Skipped} " +
             "PrevWatermark={PrevWatermark} NewWatermark={NewWatermark} WatermarkColumn={WatermarkColumn}",
@@ -1710,6 +1720,35 @@ public class ApiDailySyncService
             result.PreviousWatermark?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "(none)",
             result.NewWatermark?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "(unchanged)",
             watermarkColumn);
+
+        if (result.RecordsFetched == 0
+            && result.PreviousWatermark.HasValue
+            && result.PreviousWatermark.Value < DateTime.UtcNow.AddDays(-StaleEntityWarningDays))
+        {
+            _logger.LogWarning(
+                "[STALE] {Entity}: API returned no rows and {WatermarkColumn} watermark has not moved since {Watermark:yyyy-MM-dd} " +
+                "({Days} days). Either the entity is genuinely idle or the endpoint stopped returning data.",
+                result.EntityName, watermarkColumn, result.PreviousWatermark.Value,
+                (int)(DateTime.UtcNow - result.PreviousWatermark.Value).TotalDays);
+        }
+    }
+
+    /// <summary>
+    /// Record that the entity completed a pass, without touching its watermark.
+    /// </summary>
+    private async Task TouchSyncStateAsync(string entityName)
+    {
+        await using var connection = new SqlConnection(_replicaConnectionString);
+        await connection.ExecuteAsync(@"
+            MERGE Sync_State AS target
+            USING (SELECT @EntityName AS EntityName) AS source
+            ON target.EntityName = source.EntityName
+            WHEN MATCHED THEN
+                UPDATE SET LastSyncTime = GETUTCDATE(), UpdatedAt = GETUTCDATE()
+            WHEN NOT MATCHED THEN
+                INSERT (EntityName, LastWatermark, LastSyncTime, UpdatedAt)
+                VALUES (@EntityName, NULL, GETUTCDATE(), GETUTCDATE());",
+            new { EntityName = entityName }).ConfigureAwait(false);
     }
 
     /// <summary>
