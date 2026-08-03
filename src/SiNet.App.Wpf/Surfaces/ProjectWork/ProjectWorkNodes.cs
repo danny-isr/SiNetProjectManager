@@ -92,6 +92,12 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
 
     /// <summary>Copies the project folder label <c>(number)name</c> to the clipboard («שמור שם פרויקט»).</summary>
     public ICommand? CopyProjectNameCommand { get; set; }
+
+    /// <summary>Collapses every folder node in the tree («כווץ הכל»). Set by the tree view model.</summary>
+    public ICommand? CollapseAllCommand { get; set; }
+
+    /// <summary>Deletes paired stale recover files under this project («מחק recover ישנים»).</summary>
+    public ICommand? DeleteStaleRecoversCommand { get; set; }
 }
 
 /// <summary>A logical project file node. Children are its alternatives.</summary>
@@ -326,4 +332,18 @@ public sealed class VersionNodeVm : ProjectWorkNodeVm
 
     /// <summary>Copies the version full path (or ACC URL) to the clipboard («שמור לזיכרון»).</summary>
     public ICommand? CopyPathCommand { get; set; }
+
+    /// <summary>DEV-003: recover role for tree styling (default = not a recover file).</summary>
+    public RecoverTreeRole RecoverRole { get; init; } = RecoverTreeRole.NotRecover;
+
+    public bool IsRecoverActionable => RecoverRole == RecoverTreeRole.ActionableNewer;
+
+    public bool IsRecoverOrphan => RecoverRole == RecoverTreeRole.Orphan;
+
+    /// <summary>Hebrew tooltip for recover nodes; null for normal files.</summary>
+    public string? RecoverToolTip { get; init; }
+
+    /// <summary>Prefer recover guidance when present; otherwise the file path.</summary>
+    public string? DisplayToolTip =>
+        !string.IsNullOrWhiteSpace(RecoverToolTip) ? RecoverToolTip : FullPath;
 }

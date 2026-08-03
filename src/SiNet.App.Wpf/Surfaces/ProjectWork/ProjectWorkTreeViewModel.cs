@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using Microsoft.Win32;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Inbox;
@@ -73,6 +74,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _index.InFlightChanged += OnInFlightChanged;
         if (_accViewerHost is not null)
             _accViewerHost.TabClosed += OnAccTabClosed;
+
+        CollapseAllCommand = new RelayCommand(_ => CollapseAllFolders());
+        DeleteStaleRecoversCommand = new AsyncRelayCommand(DeleteStaleRecoversAsync, () => _currentProjectId > 0);
     }
 
     /// <summary>True when ACC write operations are enabled by the ACC-write gate.</summary>
@@ -108,6 +112,12 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         private set => SetField(ref _scanStatus, value);
     }
 
+    /// <summary>Collapses every folder in the tree (DEV-003 H).</summary>
+    public ICommand CollapseAllCommand { get; }
+
+    /// <summary>Deletes paired stale recover files across the loaded project (DEV-003 E).</summary>
+    public ICommand DeleteStaleRecoversCommand { get; }
+
     // ── IActiveFileQueryService ──────────────────────────────────────────────
     /// <inheritdoc />
     public bool IsAvailable => RootFolders.Count > 0;
@@ -125,6 +135,9 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _loadCts?.Dispose();
         _loadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _loadCts.Token;
+
+        // DEV-003 G: snapshot expand state before the full rebuild wipes RootFolders.
+        var expandedFolderIds = CaptureExpandedFolderIds();
 
         _currentProjectId = projectId;
         _watcher?.StopAll();
@@ -150,14 +163,18 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             foreach (var rootDto in tree.RootFolders)
             {
                 var node = BuildFolder(rootDto);
+                // Roots start expanded; restore deeper folders after the skeleton is built.
                 node.IsExpanded = true;
                 RootFolders.Add(node);
             }
+
+            RestoreExpandedFolderIds(expandedFolderIds);
 
             await ResolveFolderPathsAsync(projectId, token).ConfigureAwait(true);
             RegisterProviders();
 
             await RunScanAsync(projectId, token).ConfigureAwait(true);
+            (DeleteStaleRecoversCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 
             if (!token.IsCancellationRequested)
                 await StartWatchingAsync(projectId, token).ConfigureAwait(true);
@@ -371,11 +388,31 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         }
 
         var count = 0;
+        var scanned = new List<ScannedFile>();
         await foreach (var sf in _index.ScanFolderAsync(projectId, node.FolderId, destinations, token).ConfigureAwait(true))
         {
             if (token.IsCancellationRequested)
                 break;
-            IntegrateScannedFile(node, sf, defByKey);
+            scanned.Add(sf);
+        }
+
+        var roles = RecoverScanClassifier.Classify(
+            scanned.Select(sf => new RecoverScanClassifier.FileStamp(
+                sf.FileName,
+                sf.SizeBytes,
+                sf.LastModified)));
+
+        foreach (var sf in scanned)
+        {
+            if (token.IsCancellationRequested)
+                break;
+
+            if (roles.TryGetValue(sf.FileName, out var role) && role == RecoverTreeRole.Hidden)
+            {
+                continue;
+            }
+
+            IntegrateScannedFile(node, sf, defByKey, roles.GetValueOrDefault(sf.FileName, RecoverTreeRole.NotRecover));
             count++;
         }
 
@@ -385,7 +422,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private void IntegrateScannedFile(
         ProjectFolderNodeVm folder,
         ScannedFile sf,
-        IReadOnlyDictionary<(int, int), ProjectFileDefinitionDto> defByKey)
+        IReadOnlyDictionary<(int, int), ProjectFileDefinitionDto> defByKey,
+        RecoverTreeRole recoverRole = RecoverTreeRole.NotRecover)
     {
         void Apply()
         {
@@ -429,6 +467,15 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 StorageDestination = sf.Source,
                 ParentFolderId = folder.FolderId,
                 Details = FormatDetails(sf),
+                RecoverRole = recoverRole,
+                RecoverToolTip = recoverRole switch
+                {
+                    RecoverTreeRole.ActionableNewer =>
+                        "recover חדש יותר מה-DWG השמור — לפתוח לשחזור?",
+                    RecoverTreeRole.Orphan =>
+                        "אין קובץ מקור מתאים באותה תיקייה",
+                    _ => null,
+                },
             };
             version.OpenCommand = new AsyncRelayCommand(() => OpenVersionAsync(version));
             if (version.IsAcc)
@@ -1015,7 +1062,170 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             : new AsyncRelayCommand(() => CreateChildFolderAsync(folder));
         folder.CopyPathCommand = new RelayCommand(_ => CopyTextToClipboard(folder.FullPath, requireExistingDirectory: true));
         folder.CopyProjectNameCommand = new RelayCommand(_ => CopyProjectNameToClipboard());
+        folder.CollapseAllCommand = CollapseAllCommand;
+        folder.DeleteStaleRecoversCommand = DeleteStaleRecoversCommand;
     }
+
+    private HashSet<int> CaptureExpandedFolderIds()
+    {
+        var ids = new HashSet<int>();
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (folder.IsExpanded && folder.FolderId != 0)
+            {
+                ids.Add(folder.FolderId);
+            }
+        }
+
+        return ids;
+    }
+
+    private void RestoreExpandedFolderIds(HashSet<int> expandedFolderIds)
+    {
+        if (expandedFolderIds.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (expandedFolderIds.Contains(folder.FolderId))
+            {
+                folder.IsExpanded = true;
+            }
+        }
+    }
+
+    private void CollapseAllFolders()
+    {
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            folder.IsExpanded = false;
+        }
+
+        ScanStatus = "כל התיקיות כווצו.";
+    }
+
+    /// <summary>
+    /// DEV-003 E: re-scan each folder's FileServer listing, delete only paired stale recovers
+    /// (threshold 0; orphans never). Confirm first.
+    /// </summary>
+    private async Task DeleteStaleRecoversAsync()
+    {
+        if (_currentProjectId <= 0 || _scanTargets.Count == 0)
+        {
+            ScanStatus = "אין פרויקט טעון למחיקת recover.";
+            return;
+        }
+
+        var candidates = new List<(string Path, string FileName)>();
+        foreach (var (node, dto) in _scanTargets)
+        {
+            if (string.IsNullOrWhiteSpace(node.FullPath) || !Directory.Exists(node.FullPath))
+            {
+                continue;
+            }
+
+            var stamps = new List<RecoverScanClassifier.FileStamp>();
+            var pathByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in Directory.EnumerateFiles(node.FullPath))
+            {
+                var name = Path.GetFileName(path);
+                if (ShouldSkipPathFromStaleRecoverSweep(name))
+                {
+                    continue;
+                }
+
+                var info = new FileInfo(path);
+                stamps.Add(new RecoverScanClassifier.FileStamp(name, info.Length, info.LastWriteTimeUtc));
+                pathByName[name] = path;
+            }
+
+            var byName = stamps.ToDictionary(s => s.FileName, StringComparer.OrdinalIgnoreCase);
+            foreach (var stamp in stamps)
+            {
+                if (!RecoverFileNaming.TryGetPrimaryFileName(stamp.FileName, out var primaryName))
+                {
+                    continue;
+                }
+
+                if (!byName.TryGetValue(primaryName, out var primary))
+                {
+                    continue;
+                }
+
+                if (!RecoverFileRelevance.IsEligibleForStaleDelete(
+                        hasPrimary: true,
+                        recoverLength: stamp.SizeBytes,
+                        recoverLastWrite: stamp.LastModified ?? DateTime.MinValue,
+                        primaryLastWrite: primary.LastModified ?? DateTime.MinValue))
+                {
+                    continue;
+                }
+
+                if (pathByName.TryGetValue(stamp.FileName, out var fullPath))
+                {
+                    candidates.Add((fullPath, stamp.FileName));
+                }
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            ScanStatus = "לא נמצאו קבצי recover ישנים למחיקה.";
+            return;
+        }
+
+        var sample = string.Join("\n", candidates.Take(8).Select(c => c.FileName));
+        var more = candidates.Count > 8 ? $"\n… ועוד {candidates.Count - 8}" : string.Empty;
+        var confirm = MessageBox.Show(
+            $"למחוק {candidates.Count} קבצי recover ישנים (עם DWG מקור באותה תיקייה)?\n\n{sample}{more}",
+            "מחק recover ישנים",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes)
+        {
+            ScanStatus = "מחיקת recover בוטלה.";
+            return;
+        }
+
+        var deleted = 0;
+        var failed = 0;
+        foreach (var (path, _) in candidates)
+        {
+            try
+            {
+                File.Delete(path);
+                deleted++;
+                try
+                {
+                    var sidecar = path + ".si.json";
+                    if (File.Exists(sidecar))
+                    {
+                        File.Delete(sidecar);
+                    }
+                }
+                catch
+                {
+                    // Sidecar cleanup is best-effort.
+                }
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        ScanStatus = failed == 0
+            ? $"נמחקו {deleted} קבצי recover ישנים."
+            : $"נמחקו {deleted} recover; {failed} נכשלו (קובץ פתוח?).";
+        await RescanAsync().ConfigureAwait(true);
+    }
+
+    private static bool ShouldSkipPathFromStaleRecoverSweep(string fileName) =>
+        fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".si.json", StringComparison.OrdinalIgnoreCase)
+        || fileName.StartsWith("~$", StringComparison.Ordinal);
 
     private async Task CreateChildFolderAsync(ProjectFolderNodeVm parent)
     {

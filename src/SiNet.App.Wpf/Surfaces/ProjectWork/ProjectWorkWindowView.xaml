@@ -39,7 +39,7 @@
                            Visibility="{Binding HasExtensionConflict, Converter={StaticResource BoolToVis}}" />
                 <Button Command="{Binding OpenCommand}" Cursor="Hand"
                         Background="Transparent" BorderThickness="0" Padding="0"
-                        HorizontalContentAlignment="Right" ToolTip="{Binding FullPath}">
+                        HorizontalContentAlignment="Right" ToolTip="{Binding DisplayToolTip}">
                     <TextBlock Text="{Binding Title}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
@@ -50,6 +50,13 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding HasExtensionConflict}" Value="True">
                                         <Setter Property="Foreground" Value="{DynamicResource SiDangerBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsRecoverActionable}" Value="True">
+                                        <Setter Property="Foreground" Value="#FF047857" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsRecoverOrphan}" Value="True">
+                                        <Setter Property="Foreground" Value="#FFEA580C" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -129,6 +136,9 @@
                     <ContextMenu>
                         <MenuItem Header="&#x05E4;&#x05EA;&#x05D7; &#x05EA;&#x05D9;&#x05E7;&#x05D9;&#x05D9;&#x05D4;" Command="{Binding OpenFolderCommand}" />
                         <MenuItem Header="&#x05D9;&#x05E6;&#x05D9;&#x05E8;&#x05EA; &#x05EA;&#x05D9;&#x05E7;&#x05D9;&#x05D9;&#x05D4;" Command="{Binding CreateFolderCommand}" />
+                        <Separator />
+                        <MenuItem Header="&#x05DB;&#x05D5;&#x05D5;&#x05E5; &#x05D4;&#x05DB;&#x05DC;" Command="{Binding CollapseAllCommand}" />
+                        <MenuItem Header="&#x05DE;&#x05D7;&#x05E7; recover &#x05D9;&#x05E9;&#x05E0;&#x05D9;&#x05DD;&#x2026;" Command="{Binding DeleteStaleRecoversCommand}" />
                         <Separator />
                         <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05E9;&#x05DD; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;" Command="{Binding CopyProjectNameCommand}" />
                         <MenuItem Header="&#x05E9;&#x05DE;&#x05D5;&#x05E8; &#x05DC;&#x05D6;&#x05D9;&#x05DB;&#x05E8;&#x05D5;&#x05DF;" Command="{Binding CopyPathCommand}" />
@@ -232,14 +242,27 @@
                                    Margin="8,6,8,2"
                                    FontSize="{DynamicResource SiTextTinyFontSize}"
                                    TextWrapping="Wrap">
-                            <Run Text="ירוק = קבצים פיזיים" Foreground="#FF047857" />
+                            <Run Text="ירוק = קבצים פיזיים / recover חדש" Foreground="#FF047857" />
                             <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
-                            <Run Text="כתום = קובץ חובה חסר" Foreground="#FFEA580C" />
+                            <Run Text="כתום = חובה חסרה / recover יתום" Foreground="#FFEA580C" />
                             <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
                             <Run Text="כחול = לפי סוג פרויקט" Foreground="#FF1565C0" />
                             <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
                             <Run Text="אפור = ריק" Foreground="#FF9CA3AF" />
                         </TextBlock>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,8,4">
+                            <Button Content="מחק recover ישנים…"
+                                    Command="{Binding Tree.DeleteStaleRecoversCommand}"
+                                    Padding="8,2"
+                                    FontSize="{DynamicResource SiTextTinyFontSize}"
+                                    Margin="0,0,6,0"
+                                    ToolTip="מוחק רק recover עם DWG מקור באותה תיקייה שכבר ישן מהמקור. יתומים לא נמחקים." />
+                            <Button Content="כווץ הכל"
+                                    Command="{Binding Tree.CollapseAllCommand}"
+                                    Padding="8,2"
+                                    FontSize="{DynamicResource SiTextTinyFontSize}"
+                                    ToolTip="כווץ את כל התיקיות בעץ" />
+                        </StackPanel>
                         <TreeView x:Name="FileTree" BorderThickness="0" Background="Transparent"
                                   ItemsSource="{Binding Tree.RootFolders}"
                                   ItemContainerStyle="{StaticResource TreeItemStyle}" />

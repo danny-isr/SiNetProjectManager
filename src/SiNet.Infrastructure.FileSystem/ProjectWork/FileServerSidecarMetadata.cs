@@ -16,10 +16,24 @@ public static class FileServerSidecarMetadata
 
     /// <summary>
     /// Returns <see langword="true"/> when the path/name must not appear in a ProjectWork file scan
-    /// (sidecar companions + ephemeral Office owner/lock files).
+    /// (sidecar companions, ephemeral Office owner/lock files, and <c>*.bak</c> backups — DEV-003).
     /// </summary>
     public static bool ShouldSkipFromScan(string fullPathOrName) =>
-        IsMetadataCompanion(fullPathOrName) || IsOfficeOwnerLockFile(fullPathOrName);
+        IsMetadataCompanion(fullPathOrName)
+        || IsOfficeOwnerLockFile(fullPathOrName)
+        || IsBakBackupFile(fullPathOrName);
+
+    /// <summary>
+    /// AutoCAD / editor <c>*.bak</c> siblings (including <c>*_recover*.bak</c>) — never shown in the tree.
+    /// </summary>
+    public static bool IsBakBackupFile(string fullPathOrName)
+    {
+        if (string.IsNullOrWhiteSpace(fullPathOrName))
+            return false;
+
+        var name = Path.GetFileName(fullPathOrName);
+        return name.EndsWith(".bak", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="fullPathOrName"/> is a metadata companion that

@@ -35,6 +35,15 @@ public sealed class FileServerSidecarMetadataTests : IDisposable
         => Assert.True(FileServerSidecarMetadata.IsOfficeOwnerLockFile("~$הצעת מחיר.docx"));
 
     [Fact]
+    public void ShouldSkipFromScan_true_for_bak_backup_files()
+    {
+        Assert.True(FileServerSidecarMetadata.IsBakBackupFile("drawing.dwg.bak"));
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "plan_recover.bak")));
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan("drawing.bak"));
+        Assert.False(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "drawing.dwg")));
+    }
+
+    [Fact]
     public void ShouldSkipFromScan_true_for_office_owner_lock_and_sidecar()
     {
         Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "~$quote.docx")));

@@ -104,7 +104,9 @@ public sealed class GoogleDriveFileStore : IFileStore
             var name = group.Key;
             if (string.IsNullOrEmpty(name))
                 continue;
-            if (IsMetadataCompanion(name) || name.StartsWith("~$", StringComparison.Ordinal))
+            if (IsMetadataCompanion(name)
+                || name.StartsWith("~$", StringComparison.Ordinal)
+                || name.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             var list = group.ToList();

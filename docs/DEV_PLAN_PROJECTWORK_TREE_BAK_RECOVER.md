@@ -3,7 +3,7 @@
 > **Title:** ProjectWork («עבודה» / עץ קבצים) — wishlist for development  
 > **Date:** 03.08.2026  
 > **Updated:** 03.08.2026  
-> **Status:** Planning (implementation on `development`)  
+> **Status:** Implemented on `development` (`SiNet.App.Wpf` 1.0.6) — pending PROD publish + operator verification; ignored-folders (slice F) postponed  
 > **Scope:** `SiNet.App.Wpf` ProjectWork tree + file scan (`FileServerFileStore` / `FileServerSidecarMetadata`). Operator wishlist from PROD pilot + field scan of `U:\יבנה\(1844)יבנה_מזרח\תכנון`. **Documentation only until DEV implements.**  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),  
@@ -114,7 +114,7 @@ Opening the green recover uses the existing AutoCAD open path so the drawing is 
 
 ### 5.1 Ignored folder list
 
-Folders on the ignore list never appear in the tree (Needs Review: settings key + initial list from operator).
+**Postponed (03.08.2026).** Requirement is underspecified: no real folder examples, no decision on name-vs-path / global-vs-per-project / code-vs-settings. Do **not** implement until PROD pastes 2–3 real paths and answers those questions — otherwise we risk hiding important folders.
 
 ### 5.2 Preserve expand on refresh
 
@@ -128,16 +128,18 @@ Watcher / reload must restore expanded folder ids/paths; no surprise auto-collap
 
 ## 6. Implementation slices (ordered for DEV)
 
-| Step | Work | Done when |
-| --- | --- | --- |
-| A | `.bak` skip in scan helper + tests | `.bak` never in tree |
-| B | Recover detect/pair helper + tests (regex from §3.1) | Pure logic covers `_recover` / `_recover000`… |
-| C | Hide irrelevant recovers (stale, 0-byte, non-best variants); show only actionable green (+ orphans orange) | Tree matches §4.2 |
-| D | Open green recover → AutoCAD path | Manual QA |
-| E | «מחק recover ישנים» + threshold setting + **block orphans** + confirm | Deletes only paired stale; orphans untouched |
-| F | Ignored folders | Listed folders absent |
-| G | Preserve expand on rescan + full reload | Expand survives watcher noise |
-| H | Collapse all context menu | Command works |
+| Step | Work | Done when | Status |
+| --- | --- | --- | --- |
+| A | `.bak` skip in scan helper + tests | `.bak` never in tree | Done |
+| B | Recover detect/pair helper + tests (regex from §3.1) | Pure logic covers `_recover` / `_recover000`… | Done |
+| C | Hide irrelevant recovers (stale, 0-byte, non-best variants); show only actionable green (+ orphans orange) | Tree matches §4.2 | Done |
+| D | Open green recover → AutoCAD path | Manual QA | Done (reuse existing open) |
+| E | «מחק recover ישנים» + **threshold default 0** + **block orphans** + confirm | Deletes only paired stale; orphans untouched | Done |
+| F | Ignored folders | Listed folders absent | **Postponed** — see §5.1 |
+| G | Preserve expand on rescan + full reload | Expand survives watcher noise | Done |
+| H | Collapse all context menu | Command works | Done |
+
+**Ship decisions (03.08.2026):** ignore-folders out of scope for this pass; delete threshold default = **0** (any paired recover with `LastWriteTime ≤ primary` is eligible) — constant until product asks for a SystemSettings key.
 
 Version bump `SiNet.App.Wpf` when shipping; publish from PROD after absorb.
 
@@ -160,10 +162,11 @@ Version bump `SiNet.App.Wpf` when shipping; publish from PROD after absorb.
 | Allow delete of orphan recovers | Dropped | No primary = no safe delete |
 | Auto-collapse on refresh | Cancelled | Explicit Collapse all only |
 | Blind full V2 ExcludedExtensions list | Postponed | Start with `.bak` |
+| Ignored folder list (slice F) | **Postponed 03.08.2026** | No concrete examples / match rules from PROD; defer until clarified |
 
 ## 9. Needs Review
 
-- Default **threshold** for “ישן” (0 / 24h / 7d) before first ship.
-- Ignored-folder list contents.
-- AutoCAD open/restore command for green recover.
+- ~~Default **threshold** for “ישן”~~ — shipped default **0** (constant); revisit SystemSettings only if ops ask.
+- Ignored-folder list contents (blocks slice F).
+- AutoCAD open/restore command for green recover (likely shell-open is enough).
 - Theme brushes for green recover + orange orphan.
