@@ -1,0 +1,153 @@
+# AccService — refreshing the Autodesk 3-legged token (ops)
+
+> **Title:** AccService Autodesk refresh-token refresh  
+> **Date:** 03.08.2026  
+> **Status:** Active  
+> **Scope:** How an operator restores Autodesk OAuth for `SiOffice.AccService` on the PROD server when Jumbo→ACC / NativeAccIngest hang with HttpClient 100s timeouts. Documentation only for the procedure; no code changes in this round.
+
+Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md),
+[`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md),
+[`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md),
+[`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md),
+[`SiOffice.AccService/README.md`](../SiOffice.AccService/README.md).
+
+---
+
+## 1. What broke (symptom → cause)
+
+| Symptom | Likely cause |
+| --- | --- |
+| JumboMail window opens, file downloads, then stuck on "מעלה ל-ACC…" | AccService cannot get a 3-legged Autodesk token |
+| `[NativeAccIngest] Failed: HttpClient.Timeout of 100 seconds` | Same — AccService call to Autodesk never completes |
+| AccService central log empty / quiet while client times out | Service is up (TCP/HTTPS) but Autodesk work hangs without Warning lines |
+| Startup log: `refreshTokenFileExists=false` | Confirmed: no refresh token for the **service Windows user** |
+
+**Important split:**
+
+| Store | Path / location | Who must own it |
+| --- | --- | --- |
+| Autodesk **ClientId / ClientSecret** | Windows Credential Manager (`SiNet/…`) | Same Windows account that runs AccService (`SI-ENG\sieng`) |
+| Autodesk **refresh token (3-legged)** | `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json` of that account | **`C:\Users\sieng\AppData\Local\SiNet\Autodesk\refresh_token.json`** |
+
+A token under `Danny` on a workstation **does not** count for AccService. The service only sees **sieng**'s LocalAppData.
+
+There is **no Device Auth** flow. Interactive browser OAuth (`TokenProvider` → localhost:8080) is the mechanism.
+
+---
+
+## 2. Procedure now (PROD server `SI-WIN-2K19`)
+
+### 2.1 Confirm the gap
+
+On the PROD workstation or RDP, read today's AccService log (or yesterday's startup if today is empty):
+
+```powershell
+$day = Get-Date -Format yyyyMMdd
+Get-Content "\\si-win-2k19\AutoCAD Data\log\AccService\SI-WIN-2K19\sieng\AccService-$day.log" -Tail 80
+# Look for: refreshTokenFileExists=false  OR  tokenStoragePath=C:\Users\sieng\AppData\Local\SiNet\Autodesk\...
+```
+
+Also confirm the service listens:
+
+```powershell
+# From any domain machine
+Test-NetConnection SI-WIN-2K19 -Port 8443
+# HTTPS without API key should return 401 on /v1/acc/health paths that require key;
+# /v1/acc/health is documented as unauthenticated in AccService README.
+```
+
+### 2.2 Preferred: double-click on the Server kit (AuthOnce)
+
+On **`SI-WIN-2K19`** (not from a workstation that lacks the Windows service):
+
+1. Open `\\SI-WIN-2K19\AppFolder\AppNet\Server\`
+2. Double-click **`Refresh-AccService-Token.cmd`** (UAC elevation → Administrator).
+3. Enter the Windows password for **`SI-ENG\sieng`** in the **Windows credential dialog** (GUI — not a blank CMD `runas` prompt).
+4. Complete Autodesk login in the browser with an **ACC Account Admin** user.
+5. When AuthOnce prints OK, press Enter in that window.
+6. Read the final banner: **`RESULT: SUCCESS`** or **`RESULT: FAILED`**, then restart check for `SiOfficeAccService`.
+
+Kit files (produced by `SiOffice.AccService.AuthOnce\publish-tool.ps1` and `build\publish-server-kit.ps1`):
+
+| File | Role |
+| --- | --- |
+| `Refresh-AccService-Token.cmd` | Double-click entry (self-elevates) |
+| `Refresh-AccService-Token.ps1` | Stop service → `runas` AuthOnce → start service |
+| `SiOffice.AccService.AuthOnce.exe` | Interactive `TokenProvider` (writes `sieng`'s refresh token) |
+
+Optional force re-login:
+
+```text
+Refresh-AccService-Token.cmd -Force
+```
+
+(or answer **Y** when the script asks).
+
+### 2.3 Manual fallback (no AuthOnce kit)
+
+AccService is a **Windows Service** — it cannot open a browser by itself. Run a short interactive session as the service account:
+
+1. RDP to `SI-WIN-2K19` as **Administrator**.
+2. Start an elevated PowerShell **as `SI-ENG\sieng`** (e.g. `runas /user:SI-ENG\sieng powershell`).
+3. Under that session, run AuthOnce from the Server kit, or temporarily run an interactive host that uses the same vault ClientId/Secret.
+4. Complete the Autodesk browser login with an **ACC Account Admin** user.
+5. Verify the file exists:
+
+```powershell
+# As sieng:
+Test-Path "$env:LOCALAPPDATA\SiNet\Autodesk\refresh_token.json"
+Get-Item "$env:LOCALAPPDATA\SiNet\Autodesk\refresh_token.json" | Format-List FullName, Length, LastWriteTime
+```
+
+6. If you stopped the Windows Service, start it again:
+
+```powershell
+Restart-Service SiOfficeAccService
+```
+
+7. Confirm startup diagnostics now show `refreshTokenFileExists=true` in the AccService log.
+8. From the PROD client: retry JumboMail upload / open «מצב מערכת» and refresh ACC rows.
+
+### 2.4 Alternate: copy a known-good token (same Autodesk app)
+
+Only if the workstation token was issued for the **same Autodesk ClientId** that AccService uses from the vault, and the Autodesk user has ACC admin rights:
+
+1. On a working workstation, locate `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json`.
+2. Copy it to `C:\Users\sieng\AppData\Local\SiNet\Autodesk\refresh_token.json` on the server (create the folder if missing). Ensure the file is readable by `sieng`.
+3. Restart AccService and verify `refreshTokenFileExists=true`.
+
+Do **not** commit this file to git or leave it on the UNC share.
+
+### 2.5 If ClientId/Secret themselves are wrong
+
+That is a vault problem, not the refresh file. Use `Install-OnServer.ps1` / Secret Setup export per [`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md). Fixing secrets alone does **not** create `refresh_token.json`.
+
+---
+
+## 3. Aftercare checklist
+
+- [ ] AccService log: `refreshTokenFileExists=true`
+- [ ] Client Jumbo → stage reaches "הושלם" (not stuck on upload)
+- [ ] No new `[NativeAccIngest] … Timeout of 100 seconds` in local Client log
+- [ ] Optional: open «מצב מערכת» — ACC / AccService rows healthy
+
+---
+
+## 4. Out of Scope
+
+- Implementing Device Auth or a dedicated "Re-auth AccService" button (see [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md))
+- Changing where the refresh token is stored
+- Rotating Autodesk ClientId/Secret in this procedure
+
+## 5. Dropped / Cancelled / Postponed
+
+| Item | Status | Why |
+| --- | --- | --- |
+| Device-code / DeviceAuth for AccService | Not available | `TokenProvider` has no device-code path |
+| Manual-only token refresh without a kit tool | Superseded | Prefer `Server\Refresh-AccService-Token.cmd` + AuthOnce |
+| Auto popup when token missing | Postponed to DEV | Tracked in [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) |
+
+## 6. Needs Review
+
+- Exact UX when `runas` cannot show a browser on a locked / disconnected RDP session — operator must complete login on an interactive desktop.
+- Exact Windows service name on installs that differ from `SiOfficeAccService` (`Get-Service *Acc*`).

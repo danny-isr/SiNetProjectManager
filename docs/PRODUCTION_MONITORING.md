@@ -186,6 +186,8 @@ Complements System Status — does **not** replace infrastructure checks.
 | No in-app log viewer | Operators need PowerShell / Explorer on UNC | Acceptable for pilot; optional later |
 | Standalone stalled-workflow background loop | Relies on human Ops Dashboard | Decide whether to host watchdog in App.Wpf or a service |
 | OPS-P0 backup / secret rotation still Manual Pending | Blind recovery | Complete [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md) and [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) before wide rollout |
+| No admin startup alert popup in App.Wpf | Operator discovers AccService token / sync failures only via logs | DEV: [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md); meanwhile restore token via [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) |
+| AccService Autodesk `refreshTokenFileExists=false` | Jumbo→ACC / NativeAccIngest 100s timeouts while HTTPS still “up” | Follow [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) |
 
 ---
 

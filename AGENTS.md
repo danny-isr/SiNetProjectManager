@@ -68,6 +68,8 @@ Report in the final message: build result, test result, and whether DB/schema ch
 - `docs/ENVIRONMENTS.md` — PROD vs DEV machine roles and config placement
 - `docs/RELEASE_PROCESS.md` — Publish gates, versioning, rollback
 - `docs/PRODUCTION_MONITORING.md` — Live logs and health during pilot
+- `docs/OPS_ACCSERVICE_TOKEN_REFRESH.md` — Restore AccService Autodesk 3-legged refresh token
+- `docs/OPS_STARTUP_ALERTS.md` — Planning: admin startup alerts (DEV; not PROD-only ops)
 - `docs/APP_SHELL.md` — Production shell is `SiNet.App.Wpf` (V2 not shipped)
 - `docs/STANDALONE_NEW_SYSTEM_HOST.md` — Standalone host composition and cutover
 - `docs/WORKFLOW_OPS_DASHBOARD.md` — Workflow runtime ops (closed-world definitions)

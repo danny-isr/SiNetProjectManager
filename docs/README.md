@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README — New System & ops documentation index  
 > **Date:** 02.08.2026  
-> **Updated:** 02.08.2026  
+> **Updated:** 03.08.2026  
 > **Status:** Active  
 > **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
 
@@ -30,6 +30,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) | PROD vs DEV machine roles, config placement, allowed ops, Google/ACC isolation target |
 | [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) | Publish gates, versioning, rollback; who may run `publish-all.ps1` |
 | [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) | Live log tails, System Status, Workflow Ops, pilot routines |
+| [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) | How to restore AccService Autodesk 3-legged refresh token on PROD |
+| [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | **Planning (DEV):** admin startup alerts for sync / AccService / ops gaps |
 | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) | Pilot / expand phases and sign-off log |
 | [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) | App.Wpf replaces V2 as shipped desktop |
 | [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) | Pilot envelope / readiness notes |

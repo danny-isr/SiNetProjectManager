@@ -111,6 +111,51 @@ $fullCmd = @(
 Write-AsciiCmd (Join-Path $DeployDir "Upgrade-AccService.cmd") $upgradeCmd
 Write-AsciiCmd (Join-Path $DeployDir "Install-Full.cmd") $fullCmd
 
+$refreshPs1Source = Join-Path $repoRoot "SiOffice.AccService\Refresh-AccService-Token.ps1"
+if (Test-Path $refreshPs1Source) {
+    Copy-Item $refreshPs1Source (Join-Path $DeployDir "Refresh-AccService-Token.ps1") -Force
+    $refreshCmd = @(
+        "@echo off",
+        "setlocal",
+        "cd /d ""%~dp0""",
+        "net session >nul 2>&1",
+        "if %errorlevel% neq 0 (",
+        "  echo Requesting Administrator elevation...",
+        "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+        "  exit /b",
+        ")",
+        "echo Refresh AccService Autodesk token from:",
+        "echo   %CD%",
+        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%~dp0Refresh-AccService-Token.ps1"" %*",
+        "set ERR=%ERRORLEVEL%",
+        "echo.",
+        "echo Exit code: %ERR%",
+        "pause",
+        "exit /b %ERR%"
+    )
+    Write-AsciiCmd (Join-Path $DeployDir "Refresh-AccService-Token.cmd") $refreshCmd
+}
+else {
+    Write-Host "WARNING: Refresh-AccService-Token.ps1 not found; skipping token-refresh wrappers." -ForegroundColor Yellow
+}
+
+$authOnceCandidates = @(
+    (Join-Path $repoRoot "artifacts\SiOffice.AccService.AuthOnce_Publish\SiOffice.AccService.AuthOnce.exe"),
+    (Join-Path $DeployDir "SiOffice.AccService.AuthOnce.exe")
+)
+$authOnceCopied = $false
+foreach ($candidate in $authOnceCandidates) {
+    if (Test-Path $candidate) {
+        Copy-Item $candidate (Join-Path $DeployDir "SiOffice.AccService.AuthOnce.exe") -Force
+        Write-Host "Copied AuthOnce from $candidate" -ForegroundColor Green
+        $authOnceCopied = $true
+        break
+    }
+}
+if (-not $authOnceCopied) {
+    Write-Host "WARNING: SiOffice.AccService.AuthOnce.exe not staged. Run SiOffice.AccService.AuthOnce\publish-tool.ps1" -ForegroundColor Yellow
+}
+
 $readmeLines = @(
     "SiNet - Server install kit",
     "==========================",
@@ -125,6 +170,10 @@ $readmeLines = @(
     "",
     "Full install (secrets + service):",
     "  Install-Full.cmd",
+    "",
+    "Refresh Autodesk token for AccService (Jumbo/ACC timeouts):",
+    "  Double-click Refresh-AccService-Token.cmd",
+    "  (stops service, runas sieng + browser login, starts service)",
     "",
     "Or from elevated PowerShell (positional Mode - no switches):",
     "  powershell -NoProfile -ExecutionPolicy Bypass -File D:\SharedFolder\AppFolder\AppNet\Server\Install-OnServer.ps1 Upgrade",

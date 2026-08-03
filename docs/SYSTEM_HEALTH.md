@@ -50,6 +50,11 @@ of scope". It is not a regression and no check was deleted. It is, however, a **
 gap**: the standalone host has no visibility into the database, the file server, the AI endpoint, or
 Google Drive folder permissions.
 
+**Additional ops gap (03.08.2026):** App.Wpf has no admin startup popup for Sync_RunFailures /
+AccService Autodesk token missing (V2 had `ShowSyncFailureAlertIfAdmin`). Tracked as Planning in
+[`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md). Token restore procedure:
+[`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md).
+
 ### 1.4 Duplicate contracts (pre-existing defect)
 
 The status contracts exist twice:
