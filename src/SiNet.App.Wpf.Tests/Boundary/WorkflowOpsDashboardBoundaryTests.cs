@@ -54,6 +54,7 @@ public sealed class WorkflowOpsDashboardBoundaryTests
 
         Assert.Contains("IProjectWorkflowPolicyService", source, StringComparison.Ordinal);
         Assert.Contains("GetAllowedWorkflowsAsync", source, StringComparison.Ordinal);
+        Assert.Contains("GetActiveDefinitionsAsync", source, StringComparison.Ordinal);
         Assert.Contains("StartAsync", source, StringComparison.Ordinal);
         Assert.Contains("AppFeatureCodes.WorkflowOpsStart", source, StringComparison.Ordinal);
     }

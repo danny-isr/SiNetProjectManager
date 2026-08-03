@@ -28,4 +28,11 @@ public static class WorkflowCodes
     /// Not mapped to any <see cref="Models.ProjectTypeWorkflowDefinition"/>.
     /// </summary>
     public const string Opinion = "Opinion";
+
+    /// <summary>
+    /// Outsourcing / מיקור חוץ workflow (OUT.*). Simple project-bound quote →
+    /// approve → monitor payments. Not auto-mapped to JobTypes in seed; attach
+    /// via <see cref="Models.ProjectTypeWorkflowDefinition"/> admin when needed.
+    /// </summary>
+    public const string Outsourcing = "Outsourcing";
 }

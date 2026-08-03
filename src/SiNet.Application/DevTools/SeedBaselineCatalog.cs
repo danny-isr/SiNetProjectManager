@@ -13,6 +13,7 @@ public static class SeedBaselineCatalog
         "Review",
         "Proposal",
         "Opinion",
+        "Outsourcing",
     ];
 
     public static IReadOnlyList<string> RequiredUserGroupCodes { get; } =

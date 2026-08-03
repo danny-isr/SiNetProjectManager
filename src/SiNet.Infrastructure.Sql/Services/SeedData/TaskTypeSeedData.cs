@@ -121,6 +121,11 @@ public static class TaskTypeSeedData
         new TaskTypeDefinition(232, TaskTypeCodes.ReviewOpinionInternal,           "בדיקה / אישור פנימי",          true, 232),
         new TaskTypeDefinition(233, TaskTypeCodes.UpdateOpinionDraft,              "עדכון טיוטת חוות דעת",         true, 233),
         new TaskTypeDefinition(234, TaskTypeCodes.SendOpinion,                     "שליחת חוות דעת",                true, 234),
+
+        // ─── Outsourcing workflow (OUT.*) ──────────────────────────────────
+        new TaskTypeDefinition(240, TaskTypeCodes.ReceiveOutsourceQuote,           "קבלת הצעת מחיר מיקור חוץ",     true, 240),
+        new TaskTypeDefinition(241, TaskTypeCodes.ApproveOutsourceQuote,           "אישור הצעת מיקור חוץ",         true, 241),
+        new TaskTypeDefinition(242, TaskTypeCodes.MonitorOutsourcePayments,        "מעקב תשלומי מיקור חוץ",        true, 242),
     };
 
     /// <summary>

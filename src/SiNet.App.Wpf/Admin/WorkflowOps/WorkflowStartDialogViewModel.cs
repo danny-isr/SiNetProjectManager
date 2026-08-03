@@ -18,6 +18,7 @@ public sealed class WorkflowStartDialogViewModel : ObservableObject
     private readonly IProjectQueryService _projects;
     private readonly IProjectWorkflowPolicyService _policy;
     private readonly IWorkflowCommandService _commands;
+    private readonly IWorkflowQueryService _query;
     private readonly ICurrentUserContext? _currentUser;
     private readonly IAuthorizationQueryService? _authorization;
 
@@ -33,12 +34,14 @@ public sealed class WorkflowStartDialogViewModel : ObservableObject
         IProjectQueryService projects,
         IProjectWorkflowPolicyService policy,
         IWorkflowCommandService commands,
+        IWorkflowQueryService query,
         ICurrentUserContext? currentUser = null,
         IAuthorizationQueryService? authorization = null)
     {
         _projects = projects ?? throw new ArgumentNullException(nameof(projects));
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _commands = commands ?? throw new ArgumentNullException(nameof(commands));
+        _query = query ?? throw new ArgumentNullException(nameof(query));
         _currentUser = currentUser;
         _authorization = authorization;
 
@@ -184,12 +187,26 @@ public sealed class WorkflowStartDialogViewModel : ObservableObject
                     SelectedProject.ProjectId,
                     CancellationToken.None)
                 .ConfigureAwait(true);
-            foreach (var def in allowed)
+
+            var usedPolicyFallback = false;
+            IReadOnlyList<WorkflowDefinitionDto> list = allowed;
+            if (list.Count == 0)
+            {
+                // Outsourcing and other unmapped definitions stay startable from ops
+                // until JobType policy is configured (see docs/WORKFLOW_OUTSOURCING.md).
+                list = await _query.GetActiveDefinitionsAsync(CancellationToken.None)
+                    .ConfigureAwait(true);
+                usedPolicyFallback = list.Count > 0;
+            }
+
+            foreach (var def in list)
                 Definitions.Add(def);
             SelectedDefinition = Definitions.FirstOrDefault();
             StatusMessage = Definitions.Count == 0
-                ? "אין תהליכים מותרים לסוג הפרויקט הזה."
-                : string.Empty;
+                ? "אין תהליכים פעילים במערכת."
+                : usedPolicyFallback
+                    ? "אין מיפוי סוג↔תהליך לפרויקט — מוצגות כל התבניות הפעילות."
+                    : string.Empty;
         }
         catch (Exception ex)
         {

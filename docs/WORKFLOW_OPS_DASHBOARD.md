@@ -5,7 +5,8 @@
 > [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (pilot ops routines),  
 > [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md),  
 > [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),  
-> [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md)
+> [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),  
+> [`WORKFLOW_OUTSOURCING.md`](./WORKFLOW_OUTSOURCING.md) (Outsourcing / מיקור חוץ seed)
 
 ## 1. Purpose
 
@@ -30,6 +31,9 @@ It **complements** «מצב מערכת» (SQL / ACC / Gmail / background work). 
 | Runtime instances (start / advance / pause / resume / complete / cancel / recovery) | `IWorkflowCommandService` + `IWorkflowRecoveryService` | This dashboard + instance detail |
 
 Changing stage/transition graphs requires a developer seed change — not an ops UI.
+
+Seeded definitions include Planning, Review, Proposal, Opinion, MaterialIntake, and
+**Outsourcing** (מיקור חוץ — see [`WORKFLOW_OUTSOURCING.md`](./WORKFLOW_OUTSOURCING.md)).
 
 ## 3. Audience and permissions
 

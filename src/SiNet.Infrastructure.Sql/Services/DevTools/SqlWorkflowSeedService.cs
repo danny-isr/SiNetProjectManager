@@ -84,6 +84,10 @@ public class SqlWorkflowSeedService
         //    is NOT auto-mapped to any ProjectType.
         await SeedOpinionWorkflowAsync(ct);
 
+        // 6b. Outsourcing (OUT.*) — simple quote → approve → payments monitor.
+        //     Not auto-mapped to JobTypes; attach via admin policy when needed.
+        await SeedOutsourcingWorkflowAsync(ct);
+
         // 7. ProjectType ↔ PlanningWorkflow mapping (default workflow per JobType).
         await SeedProjectTypeWorkflowMappingsAsync(ct);
 
@@ -791,6 +795,26 @@ public class SqlWorkflowSeedService
             subWorkflowDefinitionCode: null,
             ct,
             stageTasks: OpinionWorkflowSeedData.StageTasks);
+    }
+
+    /// <summary>
+    /// Seeds the standalone Outsourcing (OUT.*) workflow. Project-bound but not
+    /// auto-mapped to JobTypes — started manually from Workflow Ops or after
+    /// admin policy mapping.
+    /// </summary>
+    private async ValueTask SeedOutsourcingWorkflowAsync(CancellationToken ct)
+    {
+        await SeedWorkflowDefinitionAsync(
+            OutsourcingWorkflowSeedData.Code,
+            OutsourcingWorkflowSeedData.Name,
+            OutsourcingWorkflowSeedData.Description,
+            OutsourcingWorkflowSeedData.Stages,
+            OutsourcingWorkflowSeedData.Transitions,
+            stageGroupAssignments: OutsourcingWorkflowSeedData.StageGroupAssignments,
+            subWorkflowStageCode: null,
+            subWorkflowDefinitionCode: null,
+            ct,
+            stageTasks: OutsourcingWorkflowSeedData.StageTasks);
     }
 
     /// <summary>Seeds the Review (REV.*) workflow including subworkflow link to MaterialIntake.</summary>

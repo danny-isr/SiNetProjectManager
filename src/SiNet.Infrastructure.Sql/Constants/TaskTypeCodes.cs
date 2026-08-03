@@ -95,4 +95,9 @@ public static class TaskTypeCodes
     public const string ReviewOpinionInternal         = "ReviewOpinionInternal";
     public const string UpdateOpinionDraft            = "UpdateOpinionDraft";
     public const string SendOpinion                   = "SendOpinion";
+
+    // ─── Outsourcing (OUT.*) — manual quote / approve / payment monitor ───
+    public const string ReceiveOutsourceQuote = "ReceiveOutsourceQuote";
+    public const string ApproveOutsourceQuote = "ApproveOutsourceQuote";
+    public const string MonitorOutsourcePayments = "MonitorOutsourcePayments";
 }

@@ -671,6 +671,7 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
                 _services.GetRequiredService<IProjectQueryService>(),
                 _services.GetRequiredService<IProjectWorkflowPolicyService>(),
                 _commands,
+                _services.GetRequiredService<IWorkflowQueryService>(),
                 _currentUser,
                 _authorization);
             var dialog = new WorkflowStartDialogWindow(startVm);
