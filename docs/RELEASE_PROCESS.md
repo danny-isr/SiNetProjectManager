@@ -2,7 +2,7 @@
 
 > **Title:** Release Process  
 > **Date:** 02.08.2026  
-> **Updated:** 02.08.2026 (branch policy: `release` + `development`, merge release→development)  
+> **Updated:** 03.08.2026 (`release` + `development` branches created; CI filters and machine assignment recorded)  
 > **Status:** Active  
 > **Scope:** How the PROD workstation ships builds to users; what changes are allowed where; gates before `publish-all.ps1`; versioning and rollback. Does not replace channel-level install detail in [`DEPLOYMENT.md`](../DEPLOYMENT.md).
 
@@ -38,7 +38,7 @@ There is **no** GitHub Actions release/publish workflow today. CI (`SiNet.sln`) 
 
 ## 3. Branch policy (decided 02.08.2026)
 
-**Decision:** two long-lived branches — **`release`** (production / ship) and **`development`** (day-to-day DEV work). Exact git names may be adjusted when the branches are created; the **flow** below is binding.
+**Decision:** two long-lived branches — **`release`** (production / ship) and **`development`** (day-to-day DEV work). Both were created on 03.08.2026 from `SiWorkNet10` at commit `2dfef9e`, so all three share that history.
 
 | Branch | Machine / role | Purpose |
 | --- | --- | --- |
@@ -63,13 +63,27 @@ There is **no** GitHub Actions release/publish workflow today. CI (`SiNet.sln`) 
 3. **Hotfixes during pilot:** may be committed on `release` on the PROD machine; still merge into `development` the same day.
 4. Short-lived `feat/…` / `fix/…` branches are optional and should fork from / merge into **`development`**, not from an outdated base.
 
-### 3.2 Transition from today
+### 3.2 Machine → branch assignment
 
-**Current practice until the split exists:** work and CI still use `SiWorkNet10` (see `.github/workflows/ci.yml`). Creating `release` / `development` (or renaming) is an explicit git ops step — not done in this documentation round. Until then, treat `SiWorkNet10` as the single active branch and apply the same *discipline* (PROD keeps shippable; DEV does not publish).
+| Machine | Checked out branch | Publishes |
+| --- | --- | --- |
+| **PROD** (release + ops workstation) | `release` | Yes — `publish-all.ps1` to the UNC share |
+| **DEV** (development workstation) | `development` | No |
+
+On the DEV machine, absorb a shipped fix with:
+
+```powershell
+git fetch origin
+git checkout development
+git merge origin/release
+git push origin development
+```
+
+**`SiWorkNet10` — deprecated, retained.** It was the single active branch until 03.08.2026 and is the common ancestor of both new branches. Status: **no longer the working branch on either machine**; kept because CI history, older documentation and existing references point at it. It may still be pushed to by an automation or a stale checkout, so do not treat it as authoritative. Do not delete it before confirming nothing (CI runs, automations, the DEV checkout) still targets it.
 
 ### 3.3 CI
 
-CI must stay green on the branch being published (`release` once it exists). Updating CI branch filters when the new branches are created is a follow-up.
+CI (`.github/workflows/ci.yml`) runs on pushes to `main`, `master`, `release`, `development` and `SiWorkNet10`, and on every pull request. It must be green on `release` before a publish.
 
 ---
 
@@ -227,8 +241,8 @@ Prefer **app rollback without DB rollback** when the schema did not change.
 
 - Automating publish in GitHub Actions  
 - Implementing in-app version display  
-- Creating the git branches themselves (operator / explicit request)  
 - Schema migrations as part of release (operator-owned; agents must not run them)
+- Deleting `SiWorkNet10` (see §3.2 — deprecated but retained until nothing targets it)
 
 ## 10. Dropped / Cancelled / Postponed
 
@@ -242,7 +256,6 @@ Prefer **app rollback without DB rollback** when the schema did not change.
 
 ## 11. Needs Review
 
-1. Exact git branch names when created (`release` / `development` vs keeping `SiWorkNet10` as one of them).  
-2. Whether every publish must create a git tag.  
-3. Retention policy for last-known-good MSIX outside the mirrored share folder.  
-4. When to update `.github/workflows/ci.yml` branch filters for the new names.
+1. Whether every publish must create a git tag.  
+2. Retention policy for last-known-good MSIX outside the mirrored share folder.  
+3. When `SiWorkNet10` can be deleted — requires confirming that no CI run, automation or DEV checkout still targets it.

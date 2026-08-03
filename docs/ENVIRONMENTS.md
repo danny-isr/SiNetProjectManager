@@ -2,7 +2,7 @@
 
 > **Title:** Environments — Production vs Development  
 > **Date:** 02.08.2026  
-> **Updated:** 02.08.2026 (branch flow, ACC place `SI`, Gmail DEV direction, log level keep Warning)  
+> **Updated:** 03.08.2026 (`release` / `development` branches now exist — see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3.2)  
 > **Status:** Active  
 > **Scope:** Machine roles, configuration placement, allowed/forbidden operations per environment, and the target state for Google/ACC isolation. Documentation only — no code changes in this round.
 
@@ -28,7 +28,7 @@ Both sides must know which machine they are on, which database and external syst
 | Concern | PROD (this machine) | DEV (second machine) |
 | --- | --- | --- |
 | Role | Release station + ops monitoring | Development |
-| Git branch (target) | **`release`** — see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3 | **`development`** (absorbs `release` after every ship) |
+| Git branch | **`release`** — see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3 | **`development`** (absorbs `release` after every ship) |
 | Desktop host | Installed / tested as **`SiNet.App.Wpf`** (MSIX channel) | Usually Debug / F5 under Visual Studio or Cursor |
 | SQL Server | **Production DB** (vault key `SiNet/ConnectionStrings/SiNetDatabase`) | **Development DB** (separate vault value on that machine) |
 | ACC projects | Place = real city / site (**no** `SI` prefix) | Place = **`SI`** only (§5.1) |
