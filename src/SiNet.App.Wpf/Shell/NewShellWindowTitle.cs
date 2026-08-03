@@ -1,3 +1,4 @@
+using System.Reflection;
 using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shell;
@@ -5,7 +6,13 @@ namespace SiNet.App.Wpf.Shell;
 /// <summary>Formats the New System shell window title from the shared project context.</summary>
 public static class NewShellWindowTitle
 {
-    public const string BaseTitle = "שיא חדש — מנהל פרויקטים";
+    public const string BrandTitle = "שיא חדש — מנהל פרויקטים";
+
+    /// <summary>
+    /// Default OS window title when no project is selected.
+    /// Includes the SiNet.App.Wpf package version (<c>AssemblyInformationalVersion</c> / csproj <c>Version</c>).
+    /// </summary>
+    public static string BaseTitle { get; } = $"{BrandTitle} — {ResolveAppVersion()}";
 
     public static string Format(ProjectSummaryDto? project)
     {
@@ -52,5 +59,21 @@ public static class NewShellWindowTitle
         }
 
         return !string.IsNullOrEmpty(number) ? number : null;
+    }
+
+    /// <summary>
+    /// Reads the host assembly version used for publish (prefer InformationalVersion; strip SourceLink <c>+sha</c>).
+    /// </summary>
+    internal static string ResolveAppVersion()
+    {
+        var asm = typeof(NewShellWindowTitle).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(info))
+        {
+            var plus = info.IndexOf('+');
+            return plus > 0 ? info[..plus] : info;
+        }
+
+        return asm.GetName().Version?.ToString(3) ?? "0.0.0";
     }
 }

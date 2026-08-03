@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Projects;
@@ -8,6 +9,15 @@ namespace SiNet.App.Wpf.Tests.Shell;
 
 public sealed class NewShellWindowTitleTests
 {
+    [Fact]
+    public void Base_title_appends_assembly_informational_version()
+    {
+        var expectedVersion = ReadWpfInformationalVersion();
+
+        Assert.Equal($"{NewShellWindowTitle.BrandTitle} — {expectedVersion}", NewShellWindowTitle.BaseTitle);
+        Assert.Equal(expectedVersion, NewShellWindowTitle.ResolveAppVersion());
+    }
+
     [Fact]
     public void No_project_uses_base_window_title()
     {
@@ -19,7 +29,7 @@ public sealed class NewShellWindowTitleTests
     {
         var title = NewShellWindowTitle.Format(Project(1042, "1042", "מגדל השחר"));
 
-        Assert.Equal("שיא חדש — מנהל פרויקטים — 1042 — מגדל השחר", title);
+        Assert.Equal($"{NewShellWindowTitle.BaseTitle} — 1042 — מגדל השחר", title);
     }
 
     [Fact]
@@ -27,7 +37,7 @@ public sealed class NewShellWindowTitleTests
     {
         var title = NewShellWindowTitle.Format(Project(1, "", "  Alpha  "));
 
-        Assert.Equal("שיא חדש — מנהל פרויקטים — Alpha", title);
+        Assert.Equal($"{NewShellWindowTitle.BaseTitle} — Alpha", title);
     }
 
     [Fact]
@@ -35,7 +45,7 @@ public sealed class NewShellWindowTitleTests
     {
         var title = NewShellWindowTitle.Format(Project(2, " 5678 ", ""));
 
-        Assert.Equal("שיא חדש — מנהל פרויקטים — 5678", title);
+        Assert.Equal($"{NewShellWindowTitle.BaseTitle} — 5678", title);
     }
 
     [Fact]
@@ -45,10 +55,10 @@ public sealed class NewShellWindowTitleTests
         var vm = CreateViewModel(context);
 
         await context.SetCurrentProjectAsync(Project(1, "1001", "Alpha"));
-        Assert.Equal("שיא חדש — מנהל פרויקטים — 1001 — Alpha", vm.WindowTitle);
+        Assert.Equal($"{NewShellWindowTitle.BaseTitle} — 1001 — Alpha", vm.WindowTitle);
 
         await context.SetCurrentProjectAsync(Project(2, "2002", "Beta"));
-        Assert.Equal("שיא חדש — מנהל פרויקטים — 2002 — Beta", vm.WindowTitle);
+        Assert.Equal($"{NewShellWindowTitle.BaseTitle} — 2002 — Beta", vm.WindowTitle);
     }
 
     [Fact]
@@ -89,4 +99,14 @@ public sealed class NewShellWindowTitleTests
 
     private static string AppWpfRoot =>
         Path.Combine(Boundary.RepoPaths.RepoRoot, "src", "SiNet.App.Wpf");
+
+    private static string ReadWpfInformationalVersion()
+    {
+        var asm = typeof(NewShellWindowTitle).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        Assert.False(string.IsNullOrWhiteSpace(info));
+
+        var plus = info!.IndexOf('+');
+        return plus > 0 ? info[..plus] : info;
+    }
 }
