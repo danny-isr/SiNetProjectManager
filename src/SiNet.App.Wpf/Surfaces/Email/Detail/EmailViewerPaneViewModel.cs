@@ -5,6 +5,7 @@ namespace SiNet.App.Wpf.Surfaces.Email.Detail;
 
 public sealed class EmailViewerPaneViewModel : ObservableObject
 {
+    private readonly Action<string>? _openBodyLink;
     private string _subject = string.Empty;
     private string _sender = string.Empty;
     private string _receivedDisplay = string.Empty;
@@ -14,6 +15,15 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
     private IReadOnlyList<SiNet.Application.Abstractions.Email.EmailInlineImage> _inlineImages = [];
     private string _accStatusDisplay = string.Empty;
     private IEmailBodyRenderer? _bodyRenderer;
+
+    /// <param name="openBodyLink">
+    /// Receives link clicks the renderer refused to follow in place (DEV-001). Owned by
+    /// <c>EmailDetailViewModel</c> so body links and attachment-strip chips share one open path.
+    /// </param>
+    public EmailViewerPaneViewModel(Action<string>? openBodyLink = null)
+    {
+        _openBodyLink = openBodyLink;
+    }
 
     public string Subject
     {
@@ -57,7 +67,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
 
     public void SetBodyRenderer(IEmailBodyRenderer? bodyRenderer)
     {
-        _bodyRenderer = bodyRenderer;
+        AttachRenderer(bodyRenderer);
         _ = TryRenderRichBodyAsync();
     }
 
@@ -77,7 +87,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         // leaves LoadAsync on an unattached WebView2 (deferred forever → no inline images).
         if (bodyRenderer is not null && _bodyRenderer is null)
         {
-            _bodyRenderer = bodyRenderer;
+            AttachRenderer(bodyRenderer);
         }
 
         UseRichBodyRenderer = false;
@@ -99,6 +109,28 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         OnPropertyChanged(nameof(UseRichBodyRenderer));
         _bodyRenderer?.Clear();
     }
+
+    private void AttachRenderer(IEmailBodyRenderer? bodyRenderer)
+    {
+        if (ReferenceEquals(_bodyRenderer, bodyRenderer))
+        {
+            return;
+        }
+
+        if (_bodyRenderer is not null)
+        {
+            _bodyRenderer.ExternalLinkRequested -= OnExternalLinkRequested;
+        }
+
+        _bodyRenderer = bodyRenderer;
+
+        if (_bodyRenderer is not null)
+        {
+            _bodyRenderer.ExternalLinkRequested += OnExternalLinkRequested;
+        }
+    }
+
+    private void OnExternalLinkRequested(string url) => _openBodyLink?.Invoke(url);
 
     private async Task TryRenderRichBodyAsync()
     {

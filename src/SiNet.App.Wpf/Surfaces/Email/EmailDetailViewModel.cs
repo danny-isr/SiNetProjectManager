@@ -96,7 +96,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
         ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync);
         Workflow = new EmailWorkflowActionsPaneViewModel(ExecuteSelectedWorkflowActionAsync);
-        Viewer = new EmailViewerPaneViewModel();
+        Viewer = new EmailViewerPaneViewModel(OpenBodyLink);
 
         _selectionCoordinator = new EmailDetailSelectionCoordinator(
             emailGateway,
@@ -362,6 +362,27 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         AttachmentStrip.SetExternalDownloadLinks(urls);
     }
 
+    /// <summary>
+    /// A link clicked inside the rendered body. The renderer already cancelled the in-place
+    /// navigation, so the pane keeps showing the message; file-transfer hosts take the same route as
+    /// the attachment-strip chips (download window → ACC), anything else goes to the system browser.
+    /// </summary>
+    private void OpenBodyLink(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        if (EmailExternalDownloadLinkDetector.IsExternalDownloadUrl(url))
+        {
+            OpenExternalDownloadLink(url);
+            return;
+        }
+
+        OpenInSystemBrowser(url);
+    }
+
     private void OpenExternalDownloadLink(string url)
     {
         if (_selectedEmail is null || string.IsNullOrWhiteSpace(url))
@@ -381,6 +402,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
+        OpenInSystemBrowser(url);
+    }
+
+    private void OpenInSystemBrowser(string url)
+    {
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)

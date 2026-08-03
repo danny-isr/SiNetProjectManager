@@ -12,7 +12,7 @@
     <Product>שיא חדש — מנהל פרויקטים</Product>
     <Company>שיא חדש בע״מ</Company>
     <!-- MSIX publish-desktop.ps1 bumps the patch component. -->
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\sinet.ico" />

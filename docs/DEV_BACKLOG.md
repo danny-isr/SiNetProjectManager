@@ -21,7 +21,7 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 
 | ID | Title | Status | Priority | Doc | Requested version bump |
 | --- | --- | --- | --- | --- | --- |
-| DEV-001 | Email body links navigate in-place; Jumbo/WeTransfer must open external download window → ACC | Open | P1 (pilot) | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | Yes — next `SiNet.App.Wpf` publish after fix |
+| DEV-001 | Email body links navigate in-place; Jumbo/WeTransfer must open external download window → ACC | Fixed on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | Done — `SiNet.App.Wpf` 1.0.4 |
 | DEV-002 | Admin startup alerts (sync / AccService token / ops) | Planning | P2 | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | With that feature ship |
 
 ## 3. Done / cancelled

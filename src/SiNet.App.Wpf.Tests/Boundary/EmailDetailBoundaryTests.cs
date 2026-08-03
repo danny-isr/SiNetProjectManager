@@ -133,6 +133,23 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("OpenDownloadLink", handler, StringComparison.Ordinal);
     }
 
+    /// <summary>DEV-001 — see docs/DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md.</summary>
+    [Fact]
+    public void Body_links_leave_the_email_pane_through_the_chip_path()
+    {
+        var renderer = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/WebView2EmailBodyRenderer.cs");
+        var detailVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
+
+        Assert.Contains("NavigationStarting", renderer, StringComparison.Ordinal);
+        Assert.Contains("NewWindowRequested", renderer, StringComparison.Ordinal);
+        Assert.Contains("e.Cancel = true", renderer, StringComparison.Ordinal);
+        Assert.Contains("ExternalLinkRequested", renderer, StringComparison.Ordinal);
+
+        // Detector match must reuse OpenExternalDownloadLink — no second downloader.
+        Assert.Contains("new EmailViewerPaneViewModel(OpenBodyLink)", detailVm, StringComparison.Ordinal);
+        Assert.Contains("EmailExternalDownloadLinkDetector.IsExternalDownloadUrl(url)", detailVm, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Workflow_association_ignores_global_project_override()
     {

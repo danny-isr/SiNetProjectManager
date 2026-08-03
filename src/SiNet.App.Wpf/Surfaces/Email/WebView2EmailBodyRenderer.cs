@@ -33,8 +33,11 @@ public sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
     private ContentControl? _host;
     private EmailBodyRenderRequest? _pendingRequest;
     private bool _webResourceHandlerAttached;
+    private bool _navigationHandlerAttached;
 
     public bool IsAvailable => true;
+
+    public event Action<string>? ExternalLinkRequested;
 
     public void AttachHost(object hostElement)
     {
@@ -95,6 +98,7 @@ public sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
 
             await EnsureInitializedAsync().ConfigureAwait(true);
             EnsureWebResourceHandler();
+            EnsureNavigationHandler();
 
             RegisterInlineImages(request.InlineImages);
             var html = BuildHtmlDocument(request.HtmlBody, request.BodyText);
@@ -169,6 +173,81 @@ public sealed class WebView2EmailBodyRenderer : IEmailBodyRenderer
         core.AddWebResourceRequestedFilter($"https://{InlineImageHost}/*", CoreWebView2WebResourceContext.Image);
         core.WebResourceRequested += OnWebResourceRequested;
         _webResourceHandlerAttached = true;
+    }
+
+    private void EnsureNavigationHandler()
+    {
+        if (_navigationHandlerAttached || _webView?.CoreWebView2 is not { } core)
+        {
+            return;
+        }
+
+        core.NavigationStarting += OnNavigationStarting;
+        core.NewWindowRequested += OnNewWindowRequested;
+        _navigationHandlerAttached = true;
+    }
+
+    private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        if (IsInternalBodyUri(e.Uri))
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        RaiseExternalLink(e.Uri);
+    }
+
+    private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
+    {
+        // target="_blank" must not spawn a bare WebView2 popup outside the download pipeline.
+        e.Handled = true;
+        RaiseExternalLink(e.Uri);
+    }
+
+    private void RaiseExternalLink(string? uri)
+    {
+        if (IsUserFollowableLink(uri))
+        {
+            ExternalLinkRequested?.Invoke(uri!);
+        }
+    }
+
+    /// <summary>
+    /// True for the URIs the body document itself is made of: the <c>NavigateToString</c> document
+    /// (<c>about:blank</c>), data URIs and the inline-image virtual host. Those must keep navigating.
+    /// </summary>
+    internal static bool IsInternalBodyUri(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri)
+            || uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)
+            || uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+        {
+            return true;
+        }
+
+        return parsed.Host.Equals(InlineImageHost, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// True for schemes a click may legitimately hand to the host application. Anything else is
+    /// cancelled silently — an email must not be able to launch <c>file:</c> or custom protocols.
+    /// </summary>
+    internal static bool IsUserFollowableLink(string? uri)
+    {
+        if (IsInternalBodyUri(uri) || !Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+        {
+            return false;
+        }
+
+        return parsed.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || parsed.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            || parsed.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase);
     }
 
     private void RegisterInlineImages(IReadOnlyList<EmailInlineImage> images)

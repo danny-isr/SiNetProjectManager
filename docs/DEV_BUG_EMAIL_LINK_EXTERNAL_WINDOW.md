@@ -2,7 +2,7 @@
 
 > **Title:** In-body hyperlink navigation bypasses Jumbo/WeTransfer → ACC pipeline  
 > **Date:** 03.08.2026  
-> **Status:** Open (implementation on `development`)  
+> **Status:** Implemented on `development` (`SiNet.App.Wpf` 1.0.4) — pending PROD publish + operator verification  
 > **Scope:** `SiNet.App.Wpf` email detail WebView2 body: click handling for file-transfer URLs (JumboMail, WeTransfer, and other hosts already detected by `EmailExternalDownloadLinkDetector`). Documentation-first bug + acceptance for a versioned desktop fix.  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) · Related: [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) (N2 Jumbo), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md)
 
@@ -46,11 +46,11 @@ Workaround today: use the **link chip** on the attachment strip (if shown), whic
 
 ### Acceptance criteria
 
-- [ ] Click JumboMail link in HTML body → `ExternalDownloadBrowserWindow` opens; body still shows the email.
-- [ ] Download in that window → ACC Inbox upload succeeds (with healthy AccService token).
-- [ ] Regression: cid images / mailto still work; chip path still works.
-- [ ] Automated test for navigation cancel + detector routing (behavior name per testing rules).
-- [ ] Desktop package version bumped; published via normal `publish-desktop` / `publish-all` on PROD machine after DEV merge absorb — operator verifies appinstaller update.
+- [ ] Click JumboMail link in HTML body → `ExternalDownloadBrowserWindow` opens; body still shows the email. *(manual, PROD)*
+- [ ] Download in that window → ACC Inbox upload succeeds (with healthy AccService token). *(manual, PROD)*
+- [ ] Regression: cid images / mailto still work; chip path still works. *(manual, PROD)*
+- [x] Automated test for navigation cancel + detector routing (behavior name per testing rules) — `EmailBodyLinkNavigationTests`, `EmailDetailBoundaryTests.Body_links_leave_the_email_pane_through_the_chip_path`.
+- [x] Desktop package version bumped (`1.0.3` → `1.0.4`); publish from the PROD machine after `release` absorb — operator verifies appinstaller update.
 
 ### Version / release request
 
@@ -69,6 +69,19 @@ Workaround today: use the **link chip** on the attachment strip (if shown), whic
 5. Docs-first: keep this file Updated when behavior ships; mark DEV-001 Done in [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).
 
 Complexity: **Low–Medium** (WebView2 event wiring + DI callback). Risk: breaking in-body anchors or image loads if cancel is too broad — guard with detector / scheme checks.
+
+### 4.1 As shipped (03.08.2026, `SiNet.App.Wpf` 1.0.4)
+
+| Piece | Change |
+| --- | --- |
+| `IEmailBodyRenderer` | New `event Action<string>? ExternalLinkRequested` — the renderer refuses the navigation and hands the URL to the host |
+| `WebView2EmailBodyRenderer` | Subscribes `NavigationStarting` (`e.Cancel = true`) and `NewWindowRequested` (`e.Handled = true`, so `target="_blank"` cannot spawn a bare popup) |
+| `WebView2EmailBodyRenderer.IsInternalBodyUri` | Keeps `about:` (the `NavigateToString` document and in-page anchors), `data:` and the inline-image virtual host navigating normally — cid images are untouched |
+| `WebView2EmailBodyRenderer.IsUserFollowableLink` | Only `http`, `https` and `mailto` reach the host; `file:`, `javascript:` and custom protocols are cancelled silently |
+| `EmailViewerPaneViewModel` | Subscribes/unsubscribes the event on the renderer instance that actually received `AttachHost`, and forwards to the callback owned by `EmailDetailViewModel` |
+| `EmailDetailViewModel.OpenBodyLink` | Detector match → `OpenExternalDownloadLink` (identical to the chip path); anything else → system browser via `OpenInSystemBrowser` |
+
+Decision on §7: **all** http(s) body links leave the WebView. Only detector matches go to the download window; the rest open in the system browser, because a body pane that turns into a website has no way back to the message.
 
 ---
 
@@ -89,4 +102,4 @@ Complexity: **Low–Medium** (WebView2 event wiring + DI callback). Risk: breaki
 ## 7. Needs Review
 
 - Exact list of hosts beyond detector defaults (any new Jumbo domains).
-- Whether **all** http(s) body links should leave the email WebView, or only detector matches.
+- ~~Whether **all** http(s) body links should leave the email WebView, or only detector matches.~~ Resolved 03.08.2026 — all of them leave; see §4.1.
