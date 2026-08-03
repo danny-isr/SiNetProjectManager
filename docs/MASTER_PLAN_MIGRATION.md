@@ -69,14 +69,22 @@ MasterPlan.SyncEngine (Task Scheduler)
 
 **In (delivered):**
 - Port `IMasterPlanMappingService` + `SqlMasterPlanMappingService` (Replica `MP_*` + SiData EF)
-- `MasterPlanAutoMatchEngine` (threshold ≥ 6)
+- `MasterPlanAutoMatchEngine` (threshold ≥ 6) — rules tightened 03.08.2026, see below
 - Native `MasterPlanMappingWindow` under App.Wpf; NewShell → מנהלה → מיפוי MasterPlan (`SystemSettingsWrite`)
 - Commands: Load, AutoMatch, Clear, Apply, CompleteMissing, EnableFullSync, Export/Import JSON
 - Vault `ReplicaDatabase` via `IMasterPlanEmployeeConnectionProvider`
 
+**AutoMatch rules (updated 03.08.2026):**
+- Score threshold remains ≥ 6.
+- **Identity evidence is mandatory.** A candidate is accepted only when at least one of:
+  - company/contact **name** match (exact +10 or partial +6), or
+  - company **registration number** match (+10: a 9-digit ח.פ. embedded in the SiNet title equals `MP_Companies.RegistrationNumber`).
+- Email (+8) and phone (+4) remain as **boosters** only. They can no longer accept a match by themselves. Shared office emails (`office@…`, the same address on two unrelated companies) caused CrossSync `Company_TitleIndex` failures on 02–03.08.2026; this rule closes that path.
+- Existing mapped rows are left untouched by AutoMatch (same as before).
+
 **Out (still):**
 - AiMatch / Gemini
-- R01–R03, SyncEngine algorithm changes
+- Re-running AutoMatch over the whole production mapping set after this rule change (operator decides; the 03.08.2026 data fix already corrected the known collisions)
 - Wrapping SiNetSQL `MasterPlanMappingViewModel`
 
 **DB/schema:** None.

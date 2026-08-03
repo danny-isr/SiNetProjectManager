@@ -4,11 +4,15 @@ using System.Text.RegularExpressions;
 namespace SiNet.Application.MasterPlan;
 
 /// <summary>
-/// In-memory AutoMatch for MasterPlan mapping (ported scoring from legacy VM). Threshold ≥ 6.
+/// In-memory AutoMatch for MasterPlan mapping (ported scoring from legacy VM).
+/// Threshold ≥ 6, and a match is accepted only when it has identity evidence
+/// (name and/or registration number) — email/phone alone are not enough.
+/// See docs/MASTER_PLAN_MIGRATION.md §S2 AutoMatch rules.
 /// </summary>
 public static class MasterPlanAutoMatchEngine
 {
     private const int MinScore = 6;
+    private static readonly Regex NineDigitRegistration = new(@"\d{9}", RegexOptions.Compiled);
 
     public static MasterPlanMappingLoadResult Apply(
         MasterPlanMappingLoadResult source)
@@ -66,10 +70,12 @@ public static class MasterPlanAutoMatchEngine
         }
 
         var bestScore = 0;
+        var bestHasIdentity = false;
         MpCompanyOptionDto? best = null;
         var name = NormalizeCompanyName(row.SiNetTitle);
         var email = NormalizeEmail(row.SiNetEmail);
         var phone = NormalizePhone(row.SiNetPhone);
+        var registrationCandidates = ExtractRegistrationNumbers(row.SiNetTitle);
 
         foreach (var option in options)
         {
@@ -79,15 +85,27 @@ public static class MasterPlanAutoMatchEngine
             }
 
             var score = 0;
+            var hasIdentity = false;
             var mpName = NormalizeCompanyName(option.Name);
             if (!string.IsNullOrEmpty(name) && name == mpName)
             {
                 score += 10;
+                hasIdentity = true;
             }
             else if (!string.IsNullOrEmpty(name) && name.Length >= 3 && mpName.Length >= 3
                      && (name.Contains(mpName, StringComparison.Ordinal) || mpName.Contains(name, StringComparison.Ordinal)))
             {
                 score += 6;
+                hasIdentity = true;
+            }
+
+            var mpReg = NormalizeRegistration(option.RegistrationNumber);
+            if (registrationCandidates.Count > 0
+                && !string.IsNullOrEmpty(mpReg)
+                && registrationCandidates.Contains(mpReg))
+            {
+                score += 10;
+                hasIdentity = true;
             }
 
             if (!string.IsNullOrEmpty(email) && email == NormalizeEmail(option.Email))
@@ -103,11 +121,12 @@ public static class MasterPlanAutoMatchEngine
             if (score > bestScore)
             {
                 bestScore = score;
+                bestHasIdentity = hasIdentity;
                 best = option;
             }
         }
 
-        if (best is null || bestScore < MinScore)
+        if (best is null || bestScore < MinScore || !bestHasIdentity)
         {
             return row;
         }
@@ -140,6 +159,7 @@ public static class MasterPlanAutoMatchEngine
         }
 
         var bestScore = 0;
+        var bestHasIdentity = false;
         MpContactOptionDto? best = null;
         var name = NormalizeContactName(row.SiNetFullName);
         var email = NormalizeEmail(row.SiNetEmail);
@@ -161,15 +181,18 @@ public static class MasterPlanAutoMatchEngine
             }
 
             var score = 0;
+            var hasIdentity = false;
             var mpName = NormalizeContactName(option.FullName);
             if (!string.IsNullOrEmpty(name) && name == mpName)
             {
                 score += 10;
+                hasIdentity = true;
             }
             else if (!string.IsNullOrEmpty(name) && name.Length >= 3 && mpName.Length >= 3
                      && (name.Contains(mpName, StringComparison.Ordinal) || mpName.Contains(name, StringComparison.Ordinal)))
             {
                 score += 6;
+                hasIdentity = true;
             }
 
             if (!string.IsNullOrEmpty(email) && email == NormalizeEmail(option.Email))
@@ -193,11 +216,12 @@ public static class MasterPlanAutoMatchEngine
             if (score > bestScore)
             {
                 bestScore = score;
+                bestHasIdentity = hasIdentity;
                 best = option;
             }
         }
 
-        if (best is null || bestScore < MinScore)
+        if (best is null || bestScore < MinScore || !bestHasIdentity)
         {
             return row;
         }
@@ -209,6 +233,33 @@ public static class MasterPlanAutoMatchEngine
             MatchStatus = $"אוטומטי ({bestScore})",
             IsAutoMatch = true,
         };
+    }
+
+    private static HashSet<string> ExtractRegistrationNumbers(string? title)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return result;
+        }
+
+        foreach (Match match in NineDigitRegistration.Matches(title))
+        {
+            result.Add(match.Value);
+        }
+
+        return result;
+    }
+
+    private static string NormalizeRegistration(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var digits = NormalizePhone(value);
+        return digits.Length == 9 ? digits : string.Empty;
     }
 
     private static string NormalizeCompanyName(string? value)
