@@ -1223,7 +1223,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     }
 
     private static bool ShouldSkipPathFromStaleRecoverSweep(string fileName) =>
-        fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)
+        ProjectWorkScanExclusions.IsExcludedExtension(fileName)
         || fileName.EndsWith(".si.json", StringComparison.OrdinalIgnoreCase)
         || fileName.StartsWith("~$", StringComparison.Ordinal);
 

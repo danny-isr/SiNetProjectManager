@@ -106,7 +106,7 @@ public sealed class GoogleDriveFileStore : IFileStore
                 continue;
             if (IsMetadataCompanion(name)
                 || name.StartsWith("~$", StringComparison.Ordinal)
-                || name.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+                || ProjectWorkScanExclusions.IsExcludedExtension(name))
                 continue;
 
             var list = group.ToList();

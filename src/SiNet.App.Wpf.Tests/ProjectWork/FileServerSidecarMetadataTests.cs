@@ -1,4 +1,5 @@
 using System.IO;
+using SiNet.Domain.Files;
 using SiNet.Infrastructure.FileSystem.ProjectWork;
 using Xunit;
 
@@ -34,13 +35,30 @@ public sealed class FileServerSidecarMetadataTests : IDisposable
     public void IsOfficeOwnerLockFile_true_for_word_tilde_dollar_prefix()
         => Assert.True(FileServerSidecarMetadata.IsOfficeOwnerLockFile("~$הצעת מחיר.docx"));
 
-    [Fact]
-    public void ShouldSkipFromScan_true_for_bak_backup_files()
+    [Theory]
+    [InlineData("drawing.bak")]
+    [InlineData("drawing.dwg.bak")]
+    [InlineData("plan_recover.bak")]
+    [InlineData("template.dwt")]
+    [InlineData("lock.dwl")]
+    [InlineData("lock.dwl2")]
+    [InlineData("desktop.ini")]
+    [InlineData("scratch.$ds")]
+    [InlineData("fail.err")]
+    [InlineData("temp.tmp")]
+    [InlineData("trace.log")]
+    [InlineData("tool.exe")]
+    public void ShouldSkipFromScan_true_for_legacy_excluded_extensions(string fileName)
     {
-        Assert.True(FileServerSidecarMetadata.IsBakBackupFile("drawing.dwg.bak"));
-        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "plan_recover.bak")));
-        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan("drawing.bak"));
+        Assert.True(ProjectWorkScanExclusions.IsExcludedExtension(fileName));
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, fileName)));
+    }
+
+    [Fact]
+    public void ShouldSkipFromScan_false_for_normal_project_files()
+    {
         Assert.False(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "drawing.dwg")));
+        Assert.False(ProjectWorkScanExclusions.IsExcludedExtension("quote.pdf"));
     }
 
     [Fact]

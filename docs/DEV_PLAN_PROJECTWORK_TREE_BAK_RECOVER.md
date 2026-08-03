@@ -130,7 +130,7 @@ Watcher / reload must restore expanded folder ids/paths; no surprise auto-collap
 
 | Step | Work | Done when | Status |
 | --- | --- | --- | --- |
-| A | `.bak` skip in scan helper + tests | `.bak` never in tree | Done |
+| A | Full V2 excluded extensions in scan helper + tests | Listed extensions never in tree | Done |
 | B | Recover detect/pair helper + tests (regex from §3.1) | Pure logic covers `_recover` / `_recover000`… | Done |
 | C | Hide irrelevant recovers (stale, 0-byte, non-best variants); show only actionable green (+ orphans orange) | Tree matches §4.2 | Done |
 | D | Open green recover → AutoCAD path | Manual QA | Done (reuse existing open) |
@@ -161,7 +161,7 @@ Version bump `SiNet.App.Wpf` when shipping; publish from PROD after absorb.
 | Hide all recovers including newer | Dropped | Newer recover must stay visible (green) |
 | Allow delete of orphan recovers | Dropped | No primary = no safe delete |
 | Auto-collapse on refresh | Cancelled | Explicit Collapse all only |
-| Blind full V2 ExcludedExtensions list | Postponed | Start with `.bak` |
+| Blind full V2 ExcludedExtensions list | **Done 03.08.2026** | Ported to `ProjectWorkScanExclusions`: `.bak`, `.dwt`, `.dwl`, `.dwl2`, `.ini`, `.$ds`, `.err`, `.tmp`, `.log`, `.exe` |
 | Ignored folder list (slice F) | **Postponed 03.08.2026** | No concrete examples / match rules from PROD; defer until clarified |
 
 ## 9. Needs Review

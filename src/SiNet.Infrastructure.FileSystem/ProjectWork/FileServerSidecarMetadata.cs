@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using SiNet.Domain.Files;
 
 namespace SiNet.Infrastructure.FileSystem.ProjectWork;
 
@@ -16,24 +17,18 @@ public static class FileServerSidecarMetadata
 
     /// <summary>
     /// Returns <see langword="true"/> when the path/name must not appear in a ProjectWork file scan
-    /// (sidecar companions, ephemeral Office owner/lock files, and <c>*.bak</c> backups — DEV-003).
+    /// (sidecar companions, ephemeral Office owner/lock files, and legacy excluded extensions — DEV-003).
     /// </summary>
     public static bool ShouldSkipFromScan(string fullPathOrName) =>
         IsMetadataCompanion(fullPathOrName)
         || IsOfficeOwnerLockFile(fullPathOrName)
-        || IsBakBackupFile(fullPathOrName);
+        || ProjectWorkScanExclusions.IsExcludedExtension(fullPathOrName);
 
     /// <summary>
-    /// AutoCAD / editor <c>*.bak</c> siblings (including <c>*_recover*.bak</c>) — never shown in the tree.
+    /// Legacy alias for <see cref="ProjectWorkScanExclusions.IsExcludedExtension"/> (`.bak` and the rest of the V2 list).
     /// </summary>
-    public static bool IsBakBackupFile(string fullPathOrName)
-    {
-        if (string.IsNullOrWhiteSpace(fullPathOrName))
-            return false;
-
-        var name = Path.GetFileName(fullPathOrName);
-        return name.EndsWith(".bak", StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsBakBackupFile(string fullPathOrName) =>
+        ProjectWorkScanExclusions.IsExcludedExtension(fullPathOrName);
 
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="fullPathOrName"/> is a metadata companion that
