@@ -24,6 +24,8 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 | DEV-001 | Email body links navigate in-place; Jumbo/WeTransfer must open external download window → ACC | Fixed on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | Done — `SiNet.App.Wpf` 1.0.4 |
 | DEV-002 | Admin startup alerts (sync / AccService token / ops) | Planning | P2 | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | With that feature ship |
 | DEV-003 | ProjectWork tree: exclude `.bak`, recover UX (orange/green), ignored folders, preserve expand, Collapse all | Planning | P1 (pilot) | [`DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md`](./DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md) | Yes — after slices A–G ship |
+| DEV-004 | Mark email as read in Gmail when the body is opened (session toggle, default on in Release) | Planning | P1 (pilot) | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §3 | With that feature ship |
+| DEV-005 | «פתח ב-Gmail» button — reply / forward handled by Gmail, no in-app composer | Planning | P2 | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §4 | With that feature ship |
 
 ## 3. Done / cancelled
 
