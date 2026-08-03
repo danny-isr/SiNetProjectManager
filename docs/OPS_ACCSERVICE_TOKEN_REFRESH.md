@@ -56,34 +56,49 @@ Test-NetConnection SI-WIN-2K19 -Port 8443
 # /v1/acc/health is documented as unauthenticated in AccService README.
 ```
 
-### 2.2 Preferred: double-click on the Server kit (AuthOnce)
+### 2.2 Preferred when the server has no usable browser (drop + install)
 
-On **`SI-WIN-2K19`** (not from a workstation that lacks the Windows service):
+Autodesk browser login must happen on a **workstation** (Explorer / your PC), signed in as the
+**ACC Account Admin** Autodesk user (not "whoever Windows user you are"). Then copy the file
+into `sieng`'s LocalAppData on the server.
+
+| Step | Where | Double-click |
+| --- | --- | --- |
+| 1. Export (+ new Autodesk login) | Workstation | `\\SI-WIN-2K19\AppFolder\AppNet\Server\Export-AccAutodeskToken-ToShare.cmd` |
+| 2. Install | `SI-WIN-2K19` as Administrator | `\\SI-WIN-2K19\AppFolder\AppNet\Server\Install-AccAutodeskToken-FromShare.cmd` |
+
+**What Export does now:** if the local token is missing/old, it **backs up and deletes** it, launches
+`SiOffice.AccService.AuthOnce.exe --force` on the workstation (browser Autodesk login as ACC Admin),
+waits until a **new** `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json` exists, then copies it to the drop folder.
+Use `-SkipCreate` only to export an already-fresh file without opening the browser.
+
+**Windows user vs Autodesk user:** copying Danny's file to `sieng` only changes the Windows path.
+The Autodesk identity inside the JSON must still be an ACC Admin for the same ClientId as AccService.
+
+### 2.3 Optional: AuthOnce on the server (often blocked)
+
+On some locked-down servers the browser opens on the wrong session or not at all. Prefer §2.2.
+
+On **`SI-WIN-2K19`** when interactive browser as `sieng` works:
 
 1. Open `\\SI-WIN-2K19\AppFolder\AppNet\Server\`
 2. Double-click **`Refresh-AccService-Token.cmd`** (UAC elevation → Administrator).
-3. Enter the Windows password for **`SI-ENG\sieng`** in the **Windows credential dialog** (GUI — not a blank CMD `runas` prompt).
+3. Enter the Windows password for **`SI-ENG\sieng`** in the **Windows credential dialog**.
 4. Complete Autodesk login in the browser with an **ACC Account Admin** user.
 5. When AuthOnce prints OK, press Enter in that window.
-6. Read the final banner: **`RESULT: SUCCESS`** or **`RESULT: FAILED`**, then restart check for `SiOfficeAccService`.
+6. Read the final banner: **`RESULT: SUCCESS`** or **`RESULT: FAILED`**.
 
-Kit files (produced by `SiOffice.AccService.AuthOnce\publish-tool.ps1` and `build\publish-server-kit.ps1`):
+Kit files (AuthOnce path):
 
 | File | Role |
 | --- | --- |
 | `Refresh-AccService-Token.cmd` | Double-click entry (self-elevates) |
-| `Refresh-AccService-Token.ps1` | Stop service → `runas` AuthOnce → start service |
-| `SiOffice.AccService.AuthOnce.exe` | Interactive `TokenProvider` (writes `sieng`'s refresh token) |
+| `Refresh-AccService-Token.ps1` | Stop service → AuthOnce as sieng → start service |
+| `SiOffice.AccService.AuthOnce.exe` | Interactive `TokenProvider` |
+| `Export-AccAutodeskToken-ToShare.cmd` | Workstation: copy token to drop folder |
+| `Install-AccAutodeskToken-FromShare.cmd` | Server: install drop into sieng + restart service |
 
-Optional force re-login:
-
-```text
-Refresh-AccService-Token.cmd -Force
-```
-
-(or answer **Y** when the script asks).
-
-### 2.3 Manual fallback (no AuthOnce kit)
+### 2.3.1 Manual interactive session (legacy fallback)
 
 AccService is a **Windows Service** — it cannot open a browser by itself. Run a short interactive session as the service account:
 
@@ -108,9 +123,10 @@ Restart-Service SiOfficeAccService
 7. Confirm startup diagnostics now show `refreshTokenFileExists=true` in the AccService log.
 8. From the PROD client: retry JumboMail upload / open «מצב מערכת» and refresh ACC rows.
 
-### 2.4 Alternate: copy a known-good token (same Autodesk app)
+### 2.4 Alternate: manual copy (same as §2.2 without the scripts)
 
-Only if the workstation token was issued for the **same Autodesk ClientId** that AccService uses from the vault, and the Autodesk user has ACC admin rights:
+Prefer §2.2. Manual equivalent: only if the workstation token was issued for the **same Autodesk ClientId**
+that AccService uses from the vault, and the Autodesk user has ACC admin rights:
 
 1. On a working workstation, locate `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json`.
 2. Copy it to `C:\Users\sieng\AppData\Local\SiNet\Autodesk\refresh_token.json` on the server (create the folder if missing). Ensure the file is readable by `sieng`.
