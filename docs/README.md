@@ -4,7 +4,7 @@
 > **Date:** 02.08.2026  
 > **Updated:** 03.08.2026  
 > **Status:** Active  
-> **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
+> **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops, DEV backlog). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 
@@ -15,7 +15,7 @@ Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/A
 | Role | Read first |
 | --- | --- |
 | **PROD machine (release + ops)** | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) → [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) → [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) → [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) |
-| **DEV machine** | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) → [`DEV_TOOLS.md`](./DEV_TOOLS.md) → [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md) |
+| **DEV machine** | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) → [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) → [`DEV_TOOLS.md`](./DEV_TOOLS.md) → [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md) |
 | **Architecture / cutover** | [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md) → [`APP_SHELL.md`](./APP_SHELL.md) → [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md) → [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) |
 | **Email / ACC truth** | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) |
 
@@ -32,6 +32,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) | Live log tails, System Status, Workflow Ops, pilot routines |
 | [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) | How to restore AccService Autodesk 3-legged refresh token on PROD |
 | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | **Planning (DEV):** admin startup alerts for sync / AccService / ops gaps |
+| [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) | Open DEV defects / implementation requests (index) |
+| [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | **DEV-001:** Jumbo/body links must open external download window → ACC |
 | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) | Pilot / expand phases and sign-off log |
 | [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) | App.Wpf replaces V2 as shipped desktop |
 | [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) | Pilot envelope / readiness notes |

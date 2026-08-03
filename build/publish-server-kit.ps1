@@ -156,6 +156,55 @@ if (-not $authOnceCopied) {
     Write-Host "WARNING: SiOffice.AccService.AuthOnce.exe not staged. Run SiOffice.AccService.AuthOnce\publish-tool.ps1" -ForegroundColor Yellow
 }
 
+# Workstation export + server install (preferred when server browser is blocked)
+$tokenScriptPairs = @(
+    @{ Ps1 = "Export-AccAutodeskToken-ToShare.ps1"; Cmd = "Export-AccAutodeskToken-ToShare.cmd"; NeedsAdmin = $false; Echo = "Export Autodesk token to Server drop from:" },
+    @{ Ps1 = "Install-AccAutodeskToken-FromShare.ps1"; Cmd = "Install-AccAutodeskToken-FromShare.cmd"; NeedsAdmin = $true; Echo = "Install Autodesk token from Server drop:" }
+)
+foreach ($pair in $tokenScriptPairs) {
+    $ps1Source = Join-Path $repoRoot ("SiOffice.AccService\{0}" -f $pair.Ps1)
+    if (-not (Test-Path $ps1Source)) {
+        Write-Host ("WARNING: {0} not found; skipping." -f $pair.Ps1) -ForegroundColor Yellow
+        continue
+    }
+    $ps1Dest = Join-Path $DeployDir $pair.Ps1
+    $ps1Text = [System.IO.File]::ReadAllText($ps1Source)
+    $ps1Ascii = -join ($ps1Text.ToCharArray() | ForEach-Object { if ([int]$_ -lt 128) { $_ } else { '-' } })
+    [System.IO.File]::WriteAllText($ps1Dest, $ps1Ascii, [System.Text.Encoding]::ASCII)
+
+    $cmdLines = @(
+        "@echo off",
+        "setlocal",
+        "cd /d ""%~dp0"""
+    )
+    if ($pair.NeedsAdmin) {
+        $cmdLines += @(
+            "net session >nul 2>&1",
+            "if %errorlevel% neq 0 (",
+            "  echo Requesting Administrator elevation...",
+            "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+            "  exit /b",
+            ")"
+        )
+    }
+    $cmdLines += @(
+        ("echo {0}" -f $pair.Echo),
+        "echo   %CD%",
+        ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%~dp0{0}"" %*" -f $pair.Ps1),
+        "set ERR=%ERRORLEVEL%",
+        "echo.",
+        "echo Exit code: %ERR%",
+        "pause",
+        "exit /b %ERR%"
+    )
+    Write-AsciiCmd (Join-Path $DeployDir $pair.Cmd) $cmdLines
+}
+
+$dropDir = Join-Path $DeployDir "AutodeskTokenDrop"
+if (-not (Test-Path $dropDir)) {
+    New-Item -ItemType Directory -Path $dropDir -Force | Out-Null
+}
+
 $readmeLines = @(
     "SiNet - Server install kit",
     "==========================",
@@ -171,9 +220,13 @@ $readmeLines = @(
     "Full install (secrets + service):",
     "  Install-Full.cmd",
     "",
-    "Refresh Autodesk token for AccService (Jumbo/ACC timeouts):",
-    "  Double-click Refresh-AccService-Token.cmd",
-    "  (stops service, runas sieng + browser login, starts service)",
+    "Autodesk 3-legged token for AccService (preferred - no server browser):",
+    "  1) On workstation: Export-AccAutodeskToken-ToShare.cmd",
+    "  2) On SI-WIN-2K19:   Install-AccAutodeskToken-FromShare.cmd",
+    "  Drop folder: AutodeskTokenDrop\",
+    "",
+    "Optional AuthOnce on server (often blocked by server UI policy):",
+    "  Refresh-AccService-Token.cmd",
     "",
     "Or from elevated PowerShell (positional Mode - no switches):",
     "  powershell -NoProfile -ExecutionPolicy Bypass -File D:\SharedFolder\AppFolder\AppNet\Server\Install-OnServer.ps1 Upgrade",

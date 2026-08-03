@@ -195,6 +195,8 @@ Jumbo:
 | **N2-Jumbo-Browser** | App.Wpf `IEmailExternalDownloadBrowserHost`: dedicated WebView2 window, intercept downloads, raise `DownloadCompleted`, `ReportProgress`. Register Singleton in `AddSiNetNewSystemWpf` / standalone host. Wire `EmailWindowViewModel` handler (coordinator + host both present). |
 | **Docs/UI** | Update `EMAIL_DETAIL_COMPONENT.md`: full pipe on standalone; system-browser fallback only when host missing. |
 
+**Follow-up (pilot 03.08.2026):** body HTML clicks still navigate in-place and bypass this window — track as **DEV-001** in [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) / [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).
+
 ### Explicitly out of scope for N2
 
 - `IEmailAccRecoveryExecutor` native (N3)
