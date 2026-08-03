@@ -2,8 +2,9 @@
 
 > **Title:** ProjectWork («עבודה» / עץ קבצים) — wishlist for development  
 > **Date:** 03.08.2026  
+> **Updated:** 03.08.2026  
 > **Status:** Planning (implementation on `development`)  
-> **Scope:** `SiNet.App.Wpf` ProjectWork tree + file scan (`FileServerFileStore` / `FileServerSidecarMetadata`). Operator wishlist from PROD pilot. **Documentation only in this round — no code.**  
+> **Scope:** `SiNet.App.Wpf` ProjectWork tree + file scan (`FileServerFileStore` / `FileServerSidecarMetadata`). Operator wishlist from PROD pilot + field scan of `U:\יבנה\(1844)יבנה_מזרח\תכנון`. **Documentation only until DEV implements.**  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),  
 > `SiNetProjectManagerV2/Docs/Domains/ProjectWork/ProjectWorkWindow2-2026-06-19.md`,  
@@ -13,7 +14,9 @@
 
 ## 1. Why / product intent
 
-Operators working in ProjectWork need a quieter tree: no `.bak` noise; clear treatment of AutoCAD **recover** DWGs vs the saved DWG; ignored folders stay out of the tree; refresh must **not** collapse what the user expanded; and an explicit **Collapse all** action (instead of surprising auto-collapse).
+Quiet ProjectWork tree: no `.bak`; recover files only when they still matter (newer than the saved DWG); bulk delete of **stale** recovers with a safety gate; ignored folders out of the tree; refresh must preserve expand; explicit **Collapse all**.
+
+**Guiding key for recover:** compare `LastWriteTime` of the recover file to the primary DWG it is meant to replace. Date wins over recover sequence numbers (`_recover001` vs `_recover`).
 
 ---
 
@@ -23,113 +26,144 @@ Operators working in ProjectWork need a quieter tree: no `.bak` noise; clear tre
 | --- | --- | --- |
 | Tree VM | `ProjectWorkTreeViewModel` | `LoadTreeAsync`, `RescanAsync`, watcher hookup |
 | Nodes / `IsExpanded` | `ProjectWorkNodes.cs` | TwoWay expand in `ProjectWorkWindowView.xaml` |
-| Scan skip (today) | `FileServerSidecarMetadata.ShouldSkipFromScan` | Only `*.si.json` / companion `.json` + Office `~$` locks — **not** `.bak` / recover |
+| Scan skip (today) | `FileServerSidecarMetadata.ShouldSkipFromScan` | Only sidecars + `~$` — **not** `.bak` / recover |
 | Watcher | `FileServerWatcher` | Debounce ~800ms → `RescanAsync` |
-| `RescanAsync` | Tree VM | Documented to clear **file** nodes only and keep folder skeleton + expand |
-| Extension conflict UI | `HasExtensionConflict` / `ProjectFileExtensionConflict` | Different concern (same base name, different ext) — do not overload blindly |
-| Legacy V2 rules (archive) | `ExcludedExtensions` included `.bak`, `.dwl`, …; `_recover` → external bucket | Reference only — re-implement in New System scan/UI deliberately |
+| Delete file path | Existing ProjectWork delete / file-write commands | Reuse for recover delete; confirm + audit log |
+| Legacy V2 | Archive `ExcludedExtensions` / `_recover` bucket | Reference only |
 
-**Observed gap (pilot):** after expanding folders, something later collapses the tree. `RescanAsync` claims to preserve expand; suspect full `LoadTreeAsync` / `forceReload` / project-context reload rebuilds roots (`IsExpanded = true` only on roots). DEV must verify which path fires and fix **preserve expanded paths** (and selection if cheap).
+**Expand bug (pilot):** tree sometimes collapses after refresh — preserve expand across `RescanAsync` **and** full `LoadTreeAsync`.
 
 ---
 
-## 3. Target rules — files
+## 3. Field scan — how recovers look in the office (1844 / תכנון)
 
-### 3.1 Exclude `.bak`
+Sample root: `U:\יבנה\(1844)יבנה_מזרח\תכנון` (~5,700 `.dwg`/`.bak`; **103** recover-named files).
 
-- Do **not** show `*.bak` in the ProjectWork tree (scan skip, same layer as `ShouldSkipFromScan` or adjacent filter).
-- Prefer extending the central skip helper — one place for FileServer list + any other scanners.
+### 3.1 Naming (100% of samples)
 
-### 3.2 Prefer DWG **without** `recover` in the name
+```text
+{PrimaryFileName}_recover.dwg
+{PrimaryFileName}_recover000.dwg
+{PrimaryFileName}_recover001.dwg
+…
+```
 
-When both exist (same logical drawing family):
+- Regex (case-insensitive): `_recover(\d{0,3})(?=\.[^.]+$)`
+- Strip that suffix → `PrimaryFileName` (same extension).
+- Pairing: primary must live in the **same folder**.
+- Multiple recovers per primary: common (up to 5). **Representative** for date compare = variant with **max `LastWriteTime`** (not max digit suffix).
+- Also saw `_recover*.bak` (few) — disappear with `.bak` exclude.
+- Zero-byte recovers exist → treat as irrelevant (hide; eligible for stale-delete only if paired).
 
-| File | Role |
+### 3.2 Date outcomes in that folder (illustrative)
+
+| Class | Approx. count (families) |
 | --- | --- |
-| Name **without** `recover` (case-insensitive substring in file name) | **Primary** — normal DWG the operator works with |
-| Name **with** `recover` | Secondary / recovery candidate — still visible under rules below |
+| Paired, newest recover **newer** than primary → actionable | ~9 |
+| Paired, newest recover **older** than primary → irrelevant | ~50 |
+| No primary in folder (orphan) | ~23 |
 
-**Priority:** the non-recover file wins as the “main” node / version the UI emphasizes. Do not hide recover entirely.
+---
 
-Exact matching (Needs Review): AutoCAD patterns such as `drawing_recover.dwg`, `Recover.dwg`, autosave names — implement with a small pure helper + tests (`Contains("recover", OrdinalIgnoreCase)` as starting rule unless product refines).
+## 4. Target rules — recover (approved product rules)
 
-### 3.3 Recover coloring + tooltip
+### 4.1 Detect + pair
 
-| Condition | UI |
+1. Detect via regex above (pure helper + unit tests).
+2. `PrimaryName =` strip `_recover` / `_recoverNNN` before extension.
+3. Resolve primary = file with `PrimaryName` in the **same directory**.
+4. Family = all recover variants sharing that primary key in that directory.
+5. `BestRecover` = max `LastWriteTime` in the family (ignore 0-byte when choosing “best” for green if a non-empty newer exists; 0-byte never green).
+
+### 4.2 Visibility — hide what is not relevant
+
+| Condition | Tree visibility |
 | --- | --- |
-| Recover file present | Show in **orange** (recover category) |
-| Recover **LastWriteTime ≤** paired primary DWG | Less relevant — keep orange (or muted orange); optional tooltip: older than saved DWG |
-| Recover **LastWriteTime >** paired primary DWG | **Green** (or distinct “newer recover” brush) + tooltip: Hebrew text along the lines of «קובץ recover חדש יותר מה-DWG השמור — האם לנסות לשחזר לפיו?» |
+| `.bak` (any, including `*_recover*.bak`) | **Never show** (scan exclude) |
+| Recover with `Length == 0` | **Never show** |
+| Recover paired and `BestRecover.LastWriteTime ≤ Primary.LastWriteTime` | **Never show** (irrelevant — primary already newer/equal) |
+| Older recover variants in a family when `BestRecover` is shown | **Never show** (only show `BestRecover` if it is actionable) |
+| Recover paired and `BestRecover.LastWriteTime > Primary.LastWriteTime` | **Show** — green + tooltip «recover חדש יותר מה-DWG השמור — לפתוח לשחזור?» |
+| Recover **orphan** (no primary in folder) | **Show** — distinct style (e.g. orange) + tooltip «אין קובץ מקור מתאים»; **not** deletable via stale-clean |
 
-**Open action:** opening / activating a newer-recover node should drive the existing AutoCAD open/restore path so AutoCAD recovers from that file (reuse current “open DWG” host — do not invent a second CAD launcher). Exact API hook: Needs Review against existing ProjectWork open commands.
+Primary DWG (no `recover` in name) is always the main node when present.
 
-### 3.4 Pairing recover ↔ primary DWG
+### 4.3 Open actionable recover
 
-Needs a deterministic pairing rule (strip `_recover` / ` recover` / suffix patterns). Document the chosen rule in code comments + unit tests. If unpaired recover: still show orange; green rule only when a primary peer exists for comparison.
+Opening the green recover uses the existing AutoCAD open path so the drawing is restored from that file (Needs Review: exact host command).
 
----
+### 4.4 Delete stale recovers (operator action)
 
-## 4. Target rules — folders
-
-### 4.1 Ignored folder list
-
-- Maintain a list of folder names/paths that are **never shown** in the ProjectWork tree.
-- Source of truth: Needs Review — SystemSettings key vs project setting vs hardcoded defaults from V2. Prefer existing settings mechanism if one already exists; do not invent a second store.
-- Apply at scan/tree-build time so watcher events under ignored folders do not resurface nodes.
-
-### 4.2 Expand / refresh preserve
-
-- Any automatic refresh (watcher `RescanAsync`, timed reload, project context tick) must **preserve**:
-  - which folders were expanded (by stable folder id / relative path),
-  - ideally selected node.
-- Full tree rebuild (`LoadTreeAsync`) must restore expand state after rebuild, not only in-place rescan.
-- Do **not** auto-collapse everything to a minimal tree as a side effect of refresh.
-
-### 4.3 Context menu — Collapse all
-
-- Right-click on tree (folder or root chrome): **«כווץ הכל» / Collapse all** — sets `IsExpanded = false` on all folder nodes (or all except configured roots — product choice).
-- This replaces surprising auto-collapse: user opts in when they want a minimal tree.
-- Optional later: «הרחב הכל» — out of scope unless cheap.
+- UI: command / button **«מחק recover ישנים»** (toolbar and/or context menu on ProjectWork).
+- **Configurable age gap** (setting): recover is eligible for delete only if  
+  `Primary.LastWriteTime - Recover.LastWriteTime >= Threshold`  
+  (default Needs Review — e.g. 0 = any recover older/equal than primary; or 1 day / 7 days).  
+  Store via existing SystemSettings (do not invent a second config store).
+- Eligible set = recover files that:
+  1. Have a resolved **primary in the same folder**, and  
+  2. Meet the threshold vs that primary (typically all hidden stale + optionally older variants), and  
+  3. Are not open / locked (standard delete failure handling).
+- **Hard rule:** if there is **no matching primary** → **must not** include that recover in delete. Orphans stay on disk and remain visible until a primary appears or ops handle manually.
+- Confirm dialog: list count (+ optional sample names); require explicit confirm.
+- After delete: `RescanAsync` (preserve expand).
+- No silent auto-delete on scan.
 
 ---
 
-## 5. Implementation slices (ordered for DEV)
+## 5. Target rules — folders / tree chrome
 
-Work top-down; tick / remove from [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) as done.
+### 5.1 Ignored folder list
+
+Folders on the ignore list never appear in the tree (Needs Review: settings key + initial list from operator).
+
+### 5.2 Preserve expand on refresh
+
+Watcher / reload must restore expanded folder ids/paths; no surprise auto-collapse.
+
+### 5.3 Context menu — Collapse all
+
+«כווץ הכל» — user-initiated only.
+
+---
+
+## 6. Implementation slices (ordered for DEV)
 
 | Step | Work | Done when |
 | --- | --- | --- |
-| A | `.bak` skip in scan helper + tests | `.bak` never appears in tree |
-| B | Recover detection helper + primary vs recover priority in tree grouping | Non-recover preferred; recover still listed |
-| C | Orange / green brushes + tooltips by date vs primary | Visual rules match §3.3 |
-| D | Open newer-recover → AutoCAD restore path | Manual QA with sample pair |
-| E | Ignored folders list wired into tree build | Listed folders absent |
-| F | Preserve expand across `RescanAsync` **and** full `LoadTreeAsync` | Expand survives refresh for ≥1–2 minutes under watcher noise |
-| G | Context menu Collapse all | Command works; no unwanted auto-collapse |
+| A | `.bak` skip in scan helper + tests | `.bak` never in tree |
+| B | Recover detect/pair helper + tests (regex from §3.1) | Pure logic covers `_recover` / `_recover000`… |
+| C | Hide irrelevant recovers (stale, 0-byte, non-best variants); show only actionable green (+ orphans orange) | Tree matches §4.2 |
+| D | Open green recover → AutoCAD path | Manual QA |
+| E | «מחק recover ישנים» + threshold setting + **block orphans** + confirm | Deletes only paired stale; orphans untouched |
+| F | Ignored folders | Listed folders absent |
+| G | Preserve expand on rescan + full reload | Expand survives watcher noise |
+| H | Collapse all context menu | Command works |
 
-Version: bump `SiNet.App.Wpf` when shipping; publish from PROD per release process after absorb.
+Version bump `SiNet.App.Wpf` when shipping; publish from PROD after absorb.
 
 ---
 
-## 6. Out of Scope
+## 7. Out of Scope
 
-- Deleting `.bak` / recover files from disk automatically
-- Changing DWG naming convention / `ProjectFileNameParser` schema beyond recover display
-- File Catalog Admin screens
-- Implementing on PROD/`release` without DEV cycle
-- Full V2 parity of every archived `ExcludedExtensions` entry in one shot (start with `.bak`; add `.dwl`/`.tmp` only if product confirms)
+- Auto-delete on every scan without user click
+- Deleting orphan recovers from this UI
+- Cross-folder pairing
+- Changing `ProjectFileNameParser` project naming schema
+- Implementing on PROD without DEV cycle
 
-## 7. Dropped / Cancelled / Postponed
+## 8. Dropped / Cancelled / Postponed
 
 | Item | Status | Why |
 | --- | --- | --- |
-| Hide all recover files completely | Dropped | Operator still needs newer-recover signal |
-| Auto-collapse tree on every refresh | Cancelled as desired behavior | Replace with explicit Collapse all |
-| Port entire V2 ExcludedExtensions list blindly | Postponed | Start with `.bak` + documented recover UX |
+| Show stale recovers in muted orange | **Superseded** | Product: **hide** irrelevant completely |
+| Hide all recovers including newer | Dropped | Newer recover must stay visible (green) |
+| Allow delete of orphan recovers | Dropped | No primary = no safe delete |
+| Auto-collapse on refresh | Cancelled | Explicit Collapse all only |
+| Blind full V2 ExcludedExtensions list | Postponed | Start with `.bak` |
 
-## 8. Needs Review
+## 9. Needs Review
 
-- Exact recover filename patterns used in the office (samples).
-- Ignored-folder list location and initial contents (operator to paste list).
-- Which open-DWG command AutoCAD should use for recover restore.
-- Whether green/orange must follow existing theme resources in `ProjectWorkWindowView.xaml`.
+- Default **threshold** for “ישן” (0 / 24h / 7d) before first ship.
+- Ignored-folder list contents.
+- AutoCAD open/restore command for green recover.
+- Theme brushes for green recover + orange orphan.
