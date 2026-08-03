@@ -84,7 +84,7 @@ public sealed class ProductionPilotBoundaryTests
         Assert.Contains("## 9. Manual smoke", doc, StringComparison.Ordinal);
         Assert.Contains("Not Run", doc, StringComparison.Ordinal);
         Assert.Contains("Blocked by environment/config", doc, StringComparison.Ordinal);
-        Assert.Contains("STANDALONE_PILOT_SMOKE.md", doc, StringComparison.Ordinal);
+        Assert.Contains("SMOKE_CUTOVER_SINET_APP_WPF.md", doc, StringComparison.Ordinal);
         Assert.Contains("Ready for 1–2 internal ACC-filing pilot users", doc, StringComparison.Ordinal);
         Assert.Contains("Email Composite Work Surface Contract", doc, StringComparison.Ordinal);
         Assert.Contains("G-Policy", doc, StringComparison.Ordinal);

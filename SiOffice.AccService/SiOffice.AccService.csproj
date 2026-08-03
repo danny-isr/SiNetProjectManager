@@ -27,7 +27,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- B4 (docs/ACC_SERVICE_DECOUPLING.md): AccBootstrap/provisioning types no longer come
-         from the legacy SiNetSQL project ג€” that project reference was dropped entirely.
+         from the legacy SiNetSQL project — that project reference was dropped entirely.
          CredentialProvider and legacy SystemSettingsService bridges were removed from
          Program.cs/AccEndpoints.cs in favor of CredentialVault + SecretCatalog and
          ISystemSettingsQueryService. -->

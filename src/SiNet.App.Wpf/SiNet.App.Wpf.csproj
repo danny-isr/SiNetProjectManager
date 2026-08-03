@@ -8,9 +8,9 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>SiNet.App.Wpf</RootNamespace>
     <ApplicationIcon>Assets\sinet.ico</ApplicationIcon>
-    <AssemblyTitle>׳³ֲ©׳³ג„¢׳³ֲ ׳³ג€”׳³ג€׳³ֲ© ׳’ג‚¬ג€ ׳³ֲ׳³ֲ ׳³ג€׳³ֲ ׳³ג‚×׳³ֲ¨׳³ג€¢׳³ג„¢׳³ֲ§׳³ֻ׳³ג„¢׳³ֲ</AssemblyTitle>
-    <Product>׳³ֲ©׳³ג„¢׳³ֲ ׳³ג€”׳³ג€׳³ֲ© ׳’ג‚¬ג€ ׳³ֲ׳³ֲ ׳³ג€׳³ֲ ׳³ג‚×׳³ֲ¨׳³ג€¢׳³ג„¢׳³ֲ§׳³ֻ׳³ג„¢׳³ֲ</Product>
-    <Company>׳³ֲ©׳³ג„¢׳³ֲ ׳³ג€”׳³ג€׳³ֲ© ׳³ג€˜׳³ֲ¢׳³ֲ´׳³ֲ</Company>
+    <AssemblyTitle>שיא חדש — מנהל פרויקטים</AssemblyTitle>
+    <Product>שיא חדש — מנהל פרויקטים</Product>
+    <Company>שיא חדש בע״מ</Company>
     <!-- MSIX publish-desktop.ps1 bumps the patch component. -->
     <Version>1.0.3</Version>
   </PropertyGroup>
@@ -45,7 +45,7 @@
 	  that reads the SQL connection string. It cannot move to SiNet.App.Composition: the Secrets module
 	  targets net10.0-windows (Windows Credential Manager) while Composition is platform-neutral
 	  net10.0. All UI code consumes the vault through SiNet.Application.Configuration abstractions
-	  (ISecretVaultStore / ISecretSetupService) ׳³ג€™׳’ג€ֲ¬׳’ג‚¬ֲ see the boundary test in
+	  (ISecretVaultStore / ISecretSetupService) — see the boundary test in
 	  src/SiNet.App.Wpf.Tests/Boundary/WpfSecretsBoundaryTests.cs.
 	-->
     <ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />

@@ -16,27 +16,28 @@ param(
 $ErrorActionPreference = "Stop"
 $projectPath = Join-Path $PSScriptRoot "SiOffice.AccService.AuthOnce.csproj"
 
+# Edit the raw UTF-8 text: Get-Content without -Encoding decodes non-ASCII csproj
+# content as ANSI and XmlDocument.Save then rewrites the whole file, which corrupts
+# any Hebrew metadata and reformats every line.
 if (-not $NoBump) {
     Write-Host "=== Bumping <Version> in csproj ===" -ForegroundColor Cyan
-    [xml]$xmlDoc = Get-Content $projectPath
-    $pgWithVersion = $null
-    foreach ($pg in $xmlDoc.Project.PropertyGroup) {
-        if ($pg.Version) { $pgWithVersion = $pg; break }
-    }
-    if ($pgWithVersion) {
-        $current = [version]$pgWithVersion.Version
+    $csprojUtf8 = New-Object System.Text.UTF8Encoding $false
+    $projectText = [System.IO.File]::ReadAllText($projectPath, $csprojUtf8)
+    $versionMatch = [regex]::Match($projectText, '<Version>[^<]+</Version>')
+    if ($versionMatch.Success) {
+        $current = [version]($versionMatch.Value -replace '</?Version>', '')
         $bumped = [version]::new($current.Major, $current.Minor, $current.Build + 1)
-        $pgWithVersion.Version = $bumped.ToString()
+        $projectText = $projectText.Remove($versionMatch.Index, $versionMatch.Length).Insert(
+            $versionMatch.Index, "<Version>$($bumped.ToString())</Version>")
         Write-Host "Version bumped: $current -> $bumped" -ForegroundColor Yellow
     }
     else {
-        $firstPg = $xmlDoc.Project.PropertyGroup | Select-Object -First 1
-        $verEl = $xmlDoc.CreateElement("Version")
-        $verEl.InnerText = "1.0.0"
-        [void]$firstPg.AppendChild($verEl)
+        $firstPgEnd = $projectText.IndexOf('</PropertyGroup>')
+        if ($firstPgEnd -lt 0) { throw "No <PropertyGroup> found in $projectPath -- cannot seed <Version>." }
+        $projectText = $projectText.Insert($firstPgEnd, "  <Version>1.0.0</Version>$([Environment]::NewLine)  ")
         Write-Host "Seeded <Version>1.0.0</Version>." -ForegroundColor Yellow
     }
-    $xmlDoc.Save($projectPath)
+    [System.IO.File]::WriteAllText($projectPath, $projectText, $csprojUtf8)
 }
 
 Write-Host "`n=== Cleaning output ===" -ForegroundColor Cyan

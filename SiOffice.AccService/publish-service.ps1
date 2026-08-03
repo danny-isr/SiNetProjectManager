@@ -29,23 +29,22 @@ $installerProj = Join-Path $installerDir "SiOffice.AccService.Installer.wixproj"
 # This guarantees that every publish produces a new MSI ProductVersion
 # and FileVersion, so MajorUpgrade replaces the DLL on the server.
 # ---------------------------------------------------------------
+# Edit the raw UTF-8 text: Get-Content without -Encoding decodes non-ASCII csproj
+# content as ANSI and XmlDocument.Save then rewrites the whole file, which corrupts
+# comments/metadata (an em dash in this csproj was already mangled that way).
 if (-not $NoBump) {
     Write-Host "=== Bumping <Version> in csproj ===" -ForegroundColor Cyan
-    [xml]$xmlDoc = Get-Content $projectPath
-    $versionNode = $xmlDoc.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-    if (-not $versionNode) { throw "No <Version> element found in $projectPath" }
+    $csprojUtf8 = New-Object System.Text.UTF8Encoding $false
+    $projectText = [System.IO.File]::ReadAllText($projectPath, $csprojUtf8)
+    $versionMatch = [regex]::Match($projectText, '<Version>[^<]+</Version>')
+    if (-not $versionMatch.Success) { throw "No <Version> element found in $projectPath" }
 
-    $current = [version]$versionNode
+    $current = [version]($versionMatch.Value -replace '</?Version>', '')
     $bumped  = [version]::new($current.Major, $current.Minor, $current.Build + 1)
 
-    # Find the actual XML node and update its inner text
-    foreach ($pg in $xmlDoc.Project.PropertyGroup) {
-        if ($pg.Version) {
-            $pg.Version = $bumped.ToString()
-            break
-        }
-    }
-    $xmlDoc.Save($projectPath)
+    $projectText = $projectText.Remove($versionMatch.Index, $versionMatch.Length).Insert(
+        $versionMatch.Index, "<Version>$($bumped.ToString())</Version>")
+    [System.IO.File]::WriteAllText($projectPath, $projectText, $csprojUtf8)
     Write-Host "Version bumped: $current -> $bumped" -ForegroundColor Yellow
 }
 
