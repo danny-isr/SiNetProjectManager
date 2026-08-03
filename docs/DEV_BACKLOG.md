@@ -4,7 +4,7 @@
 > **Date:** 03.08.2026  
 > **Updated:** 03.08.2026  
 > **Status:** Active  
-> **Scope:** Single index of **open** product/engineering items for the `development` branch. Each item points to a focused doc (bug / planning). Implement on DEV; absorb into `release` only after PROD acceptance. Not a substitute for GitHub Issues — use both if desired.
+> **Scope:** Single index of **open** product/engineering items for the `development` branch. Each item points to a focused doc (bug / planning). Implement on DEV; absorb into `release` only after PROD acceptance. Work the list top-down; mark Done / remove rows as slices land. Not a substitute for GitHub Issues — use both if desired.
 
 Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`AGENTS.md`](../AGENTS.md).
 
@@ -23,6 +23,7 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 | --- | --- | --- | --- | --- | --- |
 | DEV-001 | Email body links navigate in-place; Jumbo/WeTransfer must open external download window → ACC | Fixed on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | Done — `SiNet.App.Wpf` 1.0.4 |
 | DEV-002 | Admin startup alerts (sync / AccService token / ops) | Planning | P2 | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | With that feature ship |
+| DEV-003 | ProjectWork tree: exclude `.bak`, recover UX (orange/green), ignored folders, preserve expand, Collapse all | Planning | P1 (pilot) | [`DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md`](./DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md) | Yes — after slices A–G ship |
 
 ## 3. Done / cancelled
 

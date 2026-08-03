@@ -72,6 +72,7 @@ Report in the final message: build result, test result, and whether DB/schema ch
 - `docs/OPS_STARTUP_ALERTS.md` — Planning: admin startup alerts (DEV; not PROD-only ops)
 - `docs/DEV_BACKLOG.md` — Open DEV defects index (start here on development machine)
 - `docs/DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md` — DEV-001 Jumbo/body link → external window → ACC
+- `docs/DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md` — DEV-003 ProjectWork bak/recover/tree UX wishlist
 - `docs/APP_SHELL.md` — Production shell is `SiNet.App.Wpf` (V2 not shipped)
 - `docs/STANDALONE_NEW_SYSTEM_HOST.md` — Standalone host composition and cutover
 - `docs/WORKFLOW_OPS_DASHBOARD.md` — Workflow runtime ops (closed-world definitions)
