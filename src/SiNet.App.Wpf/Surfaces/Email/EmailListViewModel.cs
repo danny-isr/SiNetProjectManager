@@ -831,6 +831,32 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         return updated;
     }
 
+    /// <summary>
+    /// Optimistic local unread-state patch (DEV-004). Adjusts mailbox unread total when the
+    /// total is exact; page counters refresh from the visible rows.
+    /// </summary>
+    public EmailListRow? PatchRowIsUnread(string messageId, bool isUnread)
+    {
+        var row = _display.FindRowById(messageId);
+        if (row is null || row.IsUnread == isUnread)
+        {
+            return row;
+        }
+
+        var updated = row with { IsUnread = isUnread };
+        PatchAccRow(updated);
+
+        if (MailboxUnreadIsExact)
+        {
+            MailboxUnreadTotal = isUnread
+                ? MailboxUnreadTotal + 1
+                : Math.Max(0, MailboxUnreadTotal - 1);
+        }
+
+        NotifyUnreadDisplayProperties();
+        return updated;
+    }
+
     private bool CanLoadEmails() => !IsBusy && IsConnected;
 
     private bool CanUploadToAccInbox(EmailListRow? row) =>

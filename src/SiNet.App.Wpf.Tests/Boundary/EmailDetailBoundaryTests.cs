@@ -150,6 +150,30 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("EmailExternalDownloadLinkDetector.IsExternalDownloadUrl(url)", detailVm, StringComparison.Ordinal);
     }
 
+    /// <summary>DEV-004 / DEV-005 — see docs/DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md.</summary>
+    [Fact]
+    public void Action_bar_hands_reply_to_gmail_and_marks_read_through_the_modify_port()
+    {
+        var actionBarXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailActionBarView.xaml");
+        var actionBarVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailActionBarViewModel.cs");
+        var detailVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailDetailViewModel.cs");
+        var modifyPort = ReadRepoFile("src/SiNet.Application/Abstractions/Email/IEmailGmailModifyService.cs");
+        var urlBuilder = ReadRepoFile("src/SiNet.Application/Email/GmailMessageUrlBuilder.cs");
+
+        Assert.Contains("פתח ב-Gmail", actionBarXaml, StringComparison.Ordinal);
+        Assert.Contains("סמן כנקרא", actionBarXaml, StringComparison.Ordinal);
+        Assert.Contains("MarkAsReadEnabled", actionBarVm, StringComparison.Ordinal);
+        Assert.Contains("OpenInGmailCommand", actionBarVm, StringComparison.Ordinal);
+        Assert.Contains("GmailMessageUrlBuilder.Build", detailVm, StringComparison.Ordinal);
+        Assert.Contains("TryMarkSelectedEmailAsReadAsync", detailVm, StringComparison.Ordinal);
+        Assert.Contains("MarkAsReadAsync", modifyPort, StringComparison.Ordinal);
+        Assert.Contains("#all/", urlBuilder, StringComparison.Ordinal);
+
+        // Body rendering must still never host Gmail — only the action-bar browser launch may.
+        var viewerXaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailViewerPaneView.xaml");
+        Assert.DoesNotContain("mail.google.com", viewerXaml, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Workflow_association_ignores_global_project_override()
     {

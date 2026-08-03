@@ -44,4 +44,9 @@ public interface IEmailGmailModifyService
         string gmailMessageId,
         EmailTriageStatus status,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Removes the Gmail <c>UNREAD</c> system label from the message.</summary>
+    Task MarkAsReadAsync(
+        string gmailMessageId,
+        CancellationToken cancellationToken = default);
 }

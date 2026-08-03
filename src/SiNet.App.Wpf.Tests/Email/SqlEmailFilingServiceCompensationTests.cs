@@ -155,5 +155,14 @@ public sealed class SqlEmailFilingServiceCompensationTests
         public Task ApplyTriageStatusLabelAsync(
             string gmailMessageId, EmailTriageStatus status, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+
+        public Task MarkAsReadAsync(
+            string gmailMessageId, CancellationToken cancellationToken = default)
+        {
+            MarkedAsReadMessageIds.Add(gmailMessageId);
+            return Task.CompletedTask;
+        }
+
+        public List<string> MarkedAsReadMessageIds { get; } = new();
     }
 }

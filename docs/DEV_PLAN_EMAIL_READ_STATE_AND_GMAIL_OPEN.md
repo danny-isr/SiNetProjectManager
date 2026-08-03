@@ -2,7 +2,7 @@
 
 > **Title:** Email surface — read state and Gmail hand-off  
 > **Date:** 03.08.2026  
-> **Status:** Planning (implementation on `development`) — **documentation only in this round, no code**  
+> **Status:** Implemented on `development` (`SiNet.App.Wpf` 1.0.5) — pending PROD publish + operator verification  
 > **Scope:** `SiNet.App.Wpf` email surface (`EmailDetailViewModel`, `EmailActionBarView`, `EmailListViewModel`) and the Gmail modify port (`IEmailGmailModifyService` / `GmailEmailModifyService`). Two operator gaps found in the PROD pilot.  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) (Gmail label = mailbox truth), [`EMAIL_DETAIL_COMPONENT.md`](./EMAIL_DETAIL_COMPONENT.md), `SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md`
@@ -59,12 +59,21 @@
 
 ### 3.3 Acceptance criteria
 
-- [ ] Release build: opening a message clears bold in the app **and** in Gmail (verify in the browser).
-- [ ] Debug build: opening a message leaves it unread until the operator turns the toggle on.
-- [ ] Toggle off: no `Users.Messages.Modify` call is made.
-- [ ] Gmail failure: the row returns to unread and the status line shows the error — no silent swallow.
-- [ ] Fast arrow-key scrolling through the list does not mark messages whose body never rendered.
-- [ ] Automated: toggle default per build, and “no call when already read”.
+- [ ] Release build: opening a message clears bold in the app **and** in Gmail (verify in the browser). *(manual, PROD)*
+- [ ] Debug build: opening a message leaves it unread until the operator turns the toggle on. *(manual, DEV)*
+- [ ] Toggle off: no `Users.Messages.Modify` call is made. *(manual)*
+- [ ] Gmail failure: the row returns to unread and the status line shows the error — no silent swallow. *(manual)*
+- [ ] Fast arrow-key scrolling through the list does not mark messages whose body never rendered. *(manual)*
+- [x] Automated: toggle default per build, and “no call when already read” (`EmailActionBarReadStateTests`; skip path when `!row.IsUnread` / toggle off in `TryMarkSelectedEmailAsReadAsync`).
+
+### 3.4 As shipped (03.08.2026, `SiNet.App.Wpf` 1.0.5)
+
+| Piece | Change |
+| --- | --- |
+| `IEmailGmailModifyService.MarkAsReadAsync` | Removes system label `UNREAD` via existing `ModifyMessageLabelsAsync` |
+| `EmailActionBarViewModel.MarkAsReadEnabled` | Session toggle; default from `#if DEBUG` |
+| `EmailDetailViewModel.TryMarkSelectedEmailAsReadAsync` | Runs after a successful body load in `RunSelectionPipelineAsync`; optimistic `PatchRowIsUnread` with rollback |
+| `EmailListViewModel.PatchRowIsUnread` | Local row + exact mailbox unread total |
 
 ---
 
@@ -104,11 +113,19 @@ Two constraints to handle:
 
 ### 4.4 Acceptance criteria
 
-- [ ] Button opens the correct message in the browser, in the right account.
-- [ ] Reply / Reply all / Forward inside Gmail behave normally (signature, thread, attachments).
-- [ ] No new OAuth scope is requested and no consent prompt appears.
-- [ ] Body rendering still never navigates to `mail.google.com`; the boundary test is unchanged and green.
-- [ ] Automated: URL builder output, and behavior when the message id is missing.
+- [ ] Button opens the correct message in the browser, in the right account. *(manual, PROD)*
+- [ ] Reply / Reply all / Forward inside Gmail behave normally (signature, thread, attachments). *(manual)*
+- [x] No new OAuth scope is requested and no consent prompt appears. (`GmailModify` / existing scopes unchanged)
+- [x] Body rendering still never navigates to `mail.google.com`; the boundary test is unchanged and green.
+- [x] Automated: URL builder output, and behavior when the message id is missing (`GmailMessageUrlBuilderTests`).
+
+### 4.5 As shipped (03.08.2026, `SiNet.App.Wpf` 1.0.5)
+
+| Piece | Change |
+| --- | --- |
+| `GmailMessageUrlBuilder` | `#all/{gmailMessageId}` with `u/<email>` when `ConnectedAccountEmail` is known, else `u/0` |
+| Action bar | «פתח ב-Gmail» → `OpenInSystemBrowser` |
+| Viewer XAML | Still contains no `mail.google.com` — body stays local HTML |
 
 ---
 
@@ -132,6 +149,6 @@ Two constraints to handle:
 
 ## 7. Needs Review
 
-- Does the app expose the connected Google account address to the UI layer? It decides `u/<email>` vs `u/0`.
+- ~~Does the app expose the connected Google account address to the UI layer?~~ Resolved — `EmailListViewModel.ConnectedAccountEmail` is used by `GmailMessageUrlBuilder`.
 - Should «פתח ב-Gmail» also appear on the email list row context menu, or is the action bar enough?
-- Should the mark-as-read toggle be per-surface (main shell vs the pop-out work-item window) or global to the session?
+- Should the mark-as-read toggle be per-surface (main shell vs the pop-out work-item window) or global to the session? *(shipped: per action-bar instance / per window)*

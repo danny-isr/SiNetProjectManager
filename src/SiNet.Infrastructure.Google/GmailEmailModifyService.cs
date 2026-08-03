@@ -181,6 +181,19 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             cancellationToken).ConfigureAwait(false);
     }
 
+    public Task MarkAsReadAsync(
+        string gmailMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gmailMessageId);
+
+        return ModifyMessageLabelsAsync(
+            gmailMessageId,
+            addLabelIds: [],
+            removeLabelIds: ["UNREAD"],
+            cancellationToken);
+    }
+
     private async Task<string> GetOrCreateStatusLabelAsync(
         EmailTriageStatus status,
         CancellationToken cancellationToken)

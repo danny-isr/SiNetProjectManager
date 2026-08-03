@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Inbox;
+using SiNet.App.Wpf.Shell;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
 
@@ -13,13 +14,28 @@ public sealed class EmailActionBarViewModel : ObservableObject
     private bool _canMoveToProject;
     private bool _showUnassignedLayout;
     private bool _showAssignedLayout;
+    private bool _canOpenInGmail;
+    private bool _markAsReadEnabled = DefaultMarkAsReadEnabled;
+
+    /// <summary>
+    /// Build default for the session toggle (DEV-004). Release marks as read; Debug does not —
+    /// the operator can still flip the toggle in either build.
+    /// </summary>
+    public static bool DefaultMarkAsReadEnabled =>
+#if DEBUG
+        false;
+#else
+        true;
+#endif
 
     public EmailActionBarViewModel(
         Func<Task> fileEmailAsync,
-        Func<Task> moveToProjectAsync)
+        Func<Task> moveToProjectAsync,
+        Action? openInGmail = null)
     {
         FileEmailCommand = new AsyncRelayCommand(fileEmailAsync, () => CanFileEmail);
         MoveToProjectCommand = new AsyncRelayCommand(moveToProjectAsync, () => CanMoveToProject);
+        OpenInGmailCommand = new RelayCommand(_ => openInGmail?.Invoke(), _ => CanOpenInGmail);
     }
 
     public string ActiveProjectDisplay
@@ -84,6 +100,28 @@ public sealed class EmailActionBarViewModel : ObservableObject
         }
     }
 
+    public bool CanOpenInGmail
+    {
+        get => _canOpenInGmail;
+        set
+        {
+            if (SetField(ref _canOpenInGmail, value))
+            {
+                (OpenInGmailCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Session-scoped: when on, a successful body load removes the Gmail <c>UNREAD</c> label.
+    /// Resets to <see cref="DefaultMarkAsReadEnabled"/> on every app launch.
+    /// </summary>
+    public bool MarkAsReadEnabled
+    {
+        get => _markAsReadEnabled;
+        set => SetField(ref _markAsReadEnabled, value);
+    }
+
     public bool ShowUnassignedLayout
     {
         get => _showUnassignedLayout;
@@ -118,10 +156,12 @@ public sealed class EmailActionBarViewModel : ObservableObject
 
     public ICommand FileEmailCommand { get; }
     public ICommand MoveToProjectCommand { get; }
+    public ICommand OpenInGmailCommand { get; }
 
-    public void RefreshCommandStates(bool canFile, bool canMove)
+    public void RefreshCommandStates(bool canFile, bool canMove, bool canOpenInGmail = false)
     {
         CanFileEmail = canFile;
         CanMoveToProject = canMove;
+        CanOpenInGmail = canOpenInGmail;
     }
 }

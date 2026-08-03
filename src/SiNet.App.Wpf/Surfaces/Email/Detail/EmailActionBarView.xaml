@@ -49,7 +49,19 @@
                 </TextBlock.Style>
             </TextBlock>
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal">
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <CheckBox Content="סמן כנקרא"
+                      IsChecked="{Binding MarkAsReadEnabled}"
+                      VerticalAlignment="Center"
+                      Margin="0,0,8,0"
+                      FontSize="{DynamicResource SiTextSmallFontSize}"
+                      ToolTip="כשפעיל — פתיחת גוף המייל מסירה את תווית UNREAD ב-Gmail. נשמר להרצה הנוכחית בלבד." />
+            <Button Content="פתח ב-Gmail"
+                    Command="{Binding OpenInGmailCommand}"
+                    Padding="8,2"
+                    Margin="0,0,4,0"
+                    FontSize="{DynamicResource SiTextSmallFontSize}"
+                    ToolTip="פותח את המייל ב-Gmail בדפדפן — משם Reply / Forward" />
             <Button Content="שייך לפרויקט"
                     Command="{Binding FileEmailCommand}"
                     Padding="8,2"

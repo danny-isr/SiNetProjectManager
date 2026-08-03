@@ -35,6 +35,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private readonly IShellContentHost? _shellContentHost;
     private readonly IEmailInboxQueryService? _inboxQuery;
     private readonly IAccResolvedDocsUrlLauncher? _accLauncher;
+    private readonly IEmailGmailModifyService? _gmailModify;
     private EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private EmailListRow? _selectedEmail;
@@ -70,7 +71,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
         IShellContentHost? shellContentHost = null,
         IEmailInboxQueryService? inboxQuery = null,
-        IAccResolvedDocsUrlLauncher? accLauncher = null)
+        IAccResolvedDocsUrlLauncher? accLauncher = null,
+        IEmailGmailModifyService? gmailModify = null)
     {
         ArgumentNullException.ThrowIfNull(emailList);
         ArgumentNullException.ThrowIfNull(emailGateway);
@@ -92,9 +94,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _shellContentHost = shellContentHost;
         _inboxQuery = inboxQuery;
         _accLauncher = accLauncher;
+        _gmailModify = gmailModify;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
-        ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync);
+        ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync, OpenSelectedEmailInGmail);
         Workflow = new EmailWorkflowActionsPaneViewModel(ExecuteSelectedWorkflowActionAsync);
         Viewer = new EmailViewerPaneViewModel(OpenBodyLink);
 
@@ -322,6 +325,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             await _externalDownloadHandler
                 .MergeExternalDownloadsIntoViewerAsync(row, loadVersion)
                 .ConfigureAwait(true);
+        }
+
+        if (HasLoadedBodyForCurrentSelection(row.Id)
+            && IsCurrentSelection(row.Id, loadVersion))
+        {
+            await TryMarkSelectedEmailAsReadAsync(row, loadVersion).ConfigureAwait(true);
         }
     }
 
@@ -891,7 +900,69 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                      && isFiled
                      && _moveToProjectService?.IsAvailable == true
                      && _selectedEmail?.InboxMessageId is > 0
-                     && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason));
+                     && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason),
+            canOpenInGmail: hasSelection && !string.IsNullOrWhiteSpace(_selectedEmail?.Id));
+    }
+
+    private void OpenSelectedEmailInGmail()
+    {
+        if (_selectedEmail is null || string.IsNullOrWhiteSpace(_selectedEmail.Id))
+        {
+            SetStatus("לא נבחר מייל.");
+            return;
+        }
+
+        var url = GmailMessageUrlBuilder.Build(
+            _selectedEmail.Id,
+            _emailList.ConnectedAccountEmail);
+        OpenInSystemBrowser(url);
+    }
+
+    /// <summary>
+    /// DEV-004: after a successful body load, remove Gmail <c>UNREAD</c> when the session toggle is on.
+    /// Optimistic local update with rollback — mailbox remains the source of truth.
+    /// </summary>
+    private async Task TryMarkSelectedEmailAsReadAsync(EmailListRow row, int loadVersion)
+    {
+        if (!ActionBar.MarkAsReadEnabled
+            || _gmailModify is null
+            || !row.IsUnread
+            || string.IsNullOrWhiteSpace(row.Id))
+        {
+            return;
+        }
+
+        var patched = _emailList.PatchRowIsUnread(row.Id, isUnread: false);
+        if (patched is not null
+            && string.Equals(_selectedEmail?.Id, patched.Id, StringComparison.Ordinal))
+        {
+            _selectedEmail = patched;
+        }
+
+        try
+        {
+            await _gmailModify.MarkAsReadAsync(row.Id, CancellationToken.None).ConfigureAwait(true);
+            if (!IsCurrentSelection(row.Id, loadVersion))
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsCurrentSelection(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            var reverted = _emailList.PatchRowIsUnread(row.Id, isUnread: true);
+            if (reverted is not null
+                && string.Equals(_selectedEmail?.Id, reverted.Id, StringComparison.Ordinal))
+            {
+                _selectedEmail = reverted;
+            }
+
+            SetStatus($"סימון כנקרא נכשל: {ex.Message}");
+        }
     }
 
     private Task RefreshInboxAttachmentsAsync() =>

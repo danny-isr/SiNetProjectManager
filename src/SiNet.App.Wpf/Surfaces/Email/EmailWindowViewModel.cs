@@ -149,7 +149,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IEmailAlternativeNamePromptHost? alternativeNamePrompt = null,
         IShellContentHost? shellContentHost = null,
         IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null,
-        IProjectWorkSurfaceHost? projectWorkHost = null)
+        IProjectWorkSurfaceHost? projectWorkHost = null,
+        IEmailGmailModifyService? gmailModify = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -198,7 +199,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             alternativeNamePrompt,
             shellContentHost,
             emailInboxQuery,
-            accResolvedDocsUrlLauncher);
+            accResolvedDocsUrlLauncher,
+            gmailModify);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null
             ? new EmailExternalDownloadHandler(
