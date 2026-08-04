@@ -14,11 +14,15 @@ namespace SiNet.Infrastructure.FileSystem.ProjectWork;
 public sealed class FileServerFileStore : IFileStore
 {
     private readonly IProjectFolderPathResolver _folderPathResolver;
+    private readonly IProjectWorkScanExclusionPolicy _scanExclusions;
 
-    public FileServerFileStore(IProjectFolderPathResolver folderPathResolver)
+    public FileServerFileStore(
+        IProjectFolderPathResolver folderPathResolver,
+        IProjectWorkScanExclusionPolicy? scanExclusions = null)
     {
         ArgumentNullException.ThrowIfNull(folderPathResolver);
         _folderPathResolver = folderPathResolver;
+        _scanExclusions = scanExclusions ?? new SettingsBackedProjectWorkScanExclusionPolicy();
     }
 
     /// <inheritdoc />
@@ -51,8 +55,8 @@ public sealed class FileServerFileStore : IFileStore
                 continue;
             }
 
-            // Sidecars + Office ~$ owner/lock files (Word open) — skip from the project tree.
-            if (FileServerSidecarMetadata.ShouldSkipFromScan(fi.FullName))
+            // Sidecars (hard-coded) + settings-backed exclusion rules (DEV-006).
+            if (FileServerSidecarMetadata.ShouldSkipFromScan(fi.FullName, _scanExclusions.CurrentRules))
                 continue;
 
             var parsed = ProjectFileNameParser.TryParse(fi.Name);

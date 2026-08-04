@@ -70,6 +70,15 @@ public sealed class FileServerSidecarMetadataTests : IDisposable
     }
 
     [Fact]
+    public void ShouldSkipFromScan_respects_custom_rules_without_tilde_prefix()
+    {
+        var rules = ProjectWorkScanExclusions.Parse(".bak");
+        Assert.False(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "~$quote.docx"), rules));
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "old.bak"), rules));
+        Assert.True(FileServerSidecarMetadata.ShouldSkipFromScan(Path.Combine(_dir, "quote.docx.si.json"), rules));
+    }
+
+    [Fact]
     public void TryReadSourceFileName_reads_source_from_sidecar()
     {
         var data = Path.Combine(_dir, "x.pdf");

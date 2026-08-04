@@ -33,6 +33,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private readonly IProjectFolderPathResolver? _folderPathResolver;
     private readonly IAccWritePolicy? _writePolicy;
     private readonly IProjectFolderWriteService? _folderWrite;
+    private readonly IProjectWorkScanExclusionPolicy? _scanExclusions;
 
     private readonly Dictionary<int, ProjectFolderNodeVm> _foldersById = new();
     private readonly List<(ProjectFolderNodeVm Node, ProjectFolderDto Dto)> _scanTargets = new();
@@ -56,7 +57,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         IFileServerWatcher? watcher = null,
         IProjectFolderPathResolver? folderPathResolver = null,
         IAccWritePolicy? writePolicy = null,
-        IProjectFolderWriteService? folderWrite = null)
+        IProjectFolderWriteService? folderWrite = null,
+        IProjectWorkScanExclusionPolicy? scanExclusions = null)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(index);
@@ -71,6 +73,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _folderPathResolver = folderPathResolver;
         _writePolicy = writePolicy;
         _folderWrite = folderWrite;
+        _scanExclusions = scanExclusions;
         _index.InFlightChanged += OnInFlightChanged;
         if (_accViewerHost is not null)
             _accViewerHost.TabClosed += OnAccTabClosed;
@@ -1222,10 +1225,10 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         await RescanAsync().ConfigureAwait(true);
     }
 
-    private static bool ShouldSkipPathFromStaleRecoverSweep(string fileName) =>
-        ProjectWorkScanExclusions.IsExcludedExtension(fileName)
-        || fileName.EndsWith(".si.json", StringComparison.OrdinalIgnoreCase)
-        || fileName.StartsWith("~$", StringComparison.Ordinal);
+    private bool ShouldSkipPathFromStaleRecoverSweep(string fileName) =>
+        fileName.EndsWith(".si.json", StringComparison.OrdinalIgnoreCase)
+        || (_scanExclusions?.ShouldExclude(fileName)
+            ?? ProjectWorkScanExclusions.IsExcludedExtension(fileName));
 
     private async Task CreateChildFolderAsync(ProjectFolderNodeVm parent)
     {

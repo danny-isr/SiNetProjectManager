@@ -23,17 +23,20 @@ public sealed class GoogleDriveFileStore : IFileStore
     private readonly IProjectDriveFolderResolver _folderResolver;
     private readonly GmailOptions _options;
     private readonly IAppLogger _logger;
+    private readonly IProjectWorkScanExclusionPolicy _scanExclusions;
 
     public GoogleDriveFileStore(
         IGoogleDriveFileService drive,
         IProjectDriveFolderResolver folderResolver,
         GmailOptions options,
-        IAppLogger logger)
+        IAppLogger logger,
+        IProjectWorkScanExclusionPolicy? scanExclusions = null)
     {
         _drive = drive ?? throw new ArgumentNullException(nameof(drive));
         _folderResolver = folderResolver ?? throw new ArgumentNullException(nameof(folderResolver));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _scanExclusions = scanExclusions ?? new SettingsBackedProjectWorkScanExclusionPolicy();
     }
 
     /// <inheritdoc />
@@ -104,9 +107,8 @@ public sealed class GoogleDriveFileStore : IFileStore
             var name = group.Key;
             if (string.IsNullOrEmpty(name))
                 continue;
-            if (IsMetadataCompanion(name)
-                || name.StartsWith("~$", StringComparison.Ordinal)
-                || ProjectWorkScanExclusions.IsExcludedExtension(name))
+            // Sidecars hard-coded; lock/noise rules via settings-backed policy (DEV-006).
+            if (IsMetadataCompanion(name) || _scanExclusions.ShouldExclude(name))
                 continue;
 
             var list = group.ToList();

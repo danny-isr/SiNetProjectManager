@@ -3,6 +3,7 @@ namespace SiNet.App.Wpf.Admin.Settings;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
+using SiNet.Application.ProjectWork;
 using SiNet.Application.Settings;
 using SiNet.App.Wpf.Admin.UserGroups;
 
@@ -50,6 +51,7 @@ public sealed class SettingsViewModelFactory
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
     private readonly IUserGroupsWindowFactory? _userGroupsWindowFactory;
+    private readonly IProjectWorkScanExclusionPolicy? _scanExclusionPolicy;
 
     public SettingsViewModelFactory(
         IAppSettingsService appSettings,
@@ -69,7 +71,8 @@ public sealed class SettingsViewModelFactory
         IClipboardTextWriter clipboardTextWriter,
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser = null,
-        IUserGroupsWindowFactory? userGroupsWindowFactory = null)
+        IUserGroupsWindowFactory? userGroupsWindowFactory = null,
+        IProjectWorkScanExclusionPolicy? scanExclusionPolicy = null)
     {
         _appSettings = appSettings;
         _systemQuery = systemQuery;
@@ -89,6 +92,7 @@ public sealed class SettingsViewModelFactory
         _authorization = authorization;
         _currentUser = currentUser;
         _userGroupsWindowFactory = userGroupsWindowFactory;
+        _scanExclusionPolicy = scanExclusionPolicy;
     }
 
     public SettingsViewModel Create(SettingsSurfaceScope scope)
@@ -111,5 +115,6 @@ public sealed class SettingsViewModelFactory
             _authorization,
             _currentUser,
             scope,
-            _userGroupsWindowFactory);
+            _userGroupsWindowFactory,
+            _scanExclusionPolicy);
 }

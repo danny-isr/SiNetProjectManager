@@ -13,6 +13,7 @@ using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Identity;
+using SiNet.Application.ProjectWork;
 using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Admin.Settings;
@@ -31,6 +32,7 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly IAuthorizationQueryService _authorization;
     private readonly ICurrentUserContext? _currentUser;
     private readonly IUserGroupsWindowFactory? _userGroupsWindowFactory;
+    private readonly IProjectWorkScanExclusionPolicy? _scanExclusionPolicy;
 
     private UserLoggingSettingsDto _loadedLogging = null!;
     private UserAppearanceSettingsDto _loadedAppearance = null!;
@@ -67,7 +69,8 @@ public sealed class SettingsViewModel : ObservableObject
         IAuthorizationQueryService authorization,
         ICurrentUserContext? currentUser,
         SettingsSurfaceScope scope,
-        IUserGroupsWindowFactory? userGroupsWindowFactory = null)
+        IUserGroupsWindowFactory? userGroupsWindowFactory = null,
+        IProjectWorkScanExclusionPolicy? scanExclusionPolicy = null)
     {
         _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
         _systemQuery = systemQuery ?? throw new ArgumentNullException(nameof(systemQuery));
@@ -81,6 +84,7 @@ public sealed class SettingsViewModel : ObservableObject
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _currentUser = currentUser;
         _userGroupsWindowFactory = userGroupsWindowFactory;
+        _scanExclusionPolicy = scanExclusionPolicy;
         Scope = scope;
 
         AvailableFonts = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(f => f).ToList();
@@ -216,6 +220,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string _accBootstrapAdminEmail = string.Empty;
     private string _accProjectTemplateName = string.Empty;
     private string _accManualUploadAllowedExtensions = SystemSettingsDefaults.AccManualUploadAllowedExtensions;
+    private string _projectWorkScanExclusionRules = SystemSettingsDefaults.ProjectWorkScanExclusionRules;
     private string _inspectionTemplatesFolderId = string.Empty;
     private string _inspectionReportsFolderId = string.Empty;
     private string _reportsOutputRoot = string.Empty;
@@ -530,6 +535,12 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _accManualUploadAllowedExtensions;
         set => SetField(ref _accManualUploadAllowedExtensions, value);
+    }
+
+    public string ProjectWorkScanExclusionRules
+    {
+        get => _projectWorkScanExclusionRules;
+        set => SetField(ref _projectWorkScanExclusionRules, value);
     }
 
     public string InspectionTemplatesFolderId
@@ -988,7 +999,9 @@ public sealed class SettingsViewModel : ObservableObject
 
             if (CanEditSystemSettings)
             {
-                await _systemCommand.SaveSystemSettingsAsync(BuildSystemDto()).ConfigureAwait(true);
+                var systemDto = BuildSystemDto();
+                await _systemCommand.SaveSystemSettingsAsync(systemDto).ConfigureAwait(true);
+                _scanExclusionPolicy?.ReplaceRules(systemDto.ProjectWork.ScanExclusionRules);
                 messages.Add("הגדרות מערכת נשמרו. " + CentralLoggingSettingsDto.RequiresRestartMessage);
             }
 
@@ -1183,7 +1196,11 @@ public sealed class SettingsViewModel : ObservableObject
             new AppLogLevelsDto(ParseLevel(AccServiceFileLevel), ParseLevel(AccServiceCentralLevel)),
             new AppLogLevelsDto(ParseLevel(SyncEngineFileLevel), ParseLevel(SyncEngineCentralLevel)),
             !string.IsNullOrWhiteSpace(CentralLogPath)),
-        new WorkflowSystemSettingsDto(Math.Max(1, WorkflowMaxOpenChildInstances)));
+        new WorkflowSystemSettingsDto(Math.Max(1, WorkflowMaxOpenChildInstances)),
+        new ProjectWorkSystemSettingsDto(
+            string.IsNullOrWhiteSpace(ProjectWorkScanExclusionRules)
+                ? SystemSettingsDefaults.ProjectWorkScanExclusionRules
+                : ProjectWorkScanExclusionRules.Trim()));
 
     private void ApplyUserSettings(UserAppSettingsDto user)
     {
@@ -1221,6 +1238,7 @@ public sealed class SettingsViewModel : ObservableObject
         AccBootstrapAdminEmail = system.Acc.AccBootstrapAdminEmail;
         AccProjectTemplateName = system.Acc.AccProjectTemplateName;
         AccManualUploadAllowedExtensions = system.Acc.AccManualUploadAllowedExtensions;
+        ProjectWorkScanExclusionRules = system.ProjectWork.ScanExclusionRules;
         InspectionTemplatesFolderId = system.Inspection.InspectionTemplatesFolderId;
         InspectionReportsFolderId = system.Inspection.InspectionReportsFolderId;
         ReportsOutputRoot = system.Inspection.ReportsOutputRoot;

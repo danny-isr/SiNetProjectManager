@@ -226,6 +226,10 @@
                     <TextBox Text="{Binding AccProjectTemplateName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                     <TextBlock Text="סיומות העלאה ידנית"/>
                     <TextBox Text="{Binding AccManualUploadAllowedExtensions, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
+                    <TextBlock Text="סיומות / קידומות להסתרה בעץ עבודה"/>
+                    <TextBox Text="{Binding ProjectWorkScanExclusionRules, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
+                    <TextBlock Text="מופרד בפסיקים. סיומת מתחילה בנקודה (למשל .bak); קידומת שם בלי נקודה (למשל ~$). קבצי *.si.json תמיד מוסתרים."
+                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <Button Content="פתח ניהול קבוצות"
                             Command="{Binding OpenUserGroupsCommand}"
                             Style="{DynamicResource SiPrimaryButtonStyle}"

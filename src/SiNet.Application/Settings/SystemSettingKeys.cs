@@ -44,6 +44,12 @@ public static class SystemSettingKeys
     public const string AccManualUploadAllowedExtensions = "AccManualUploadAllowedExtensions";
     public const string WorkflowMaxOpenChildInstances = "Workflow.MaxOpenChildInstances";
 
+    /// <summary>
+    /// CSV of ProjectWork scan exclusion rules: tokens starting with <c>.</c> are extensions;
+    /// other tokens (e.g. <c>~$</c>) are file-name prefixes. Sidecar companions stay hard-coded.
+    /// </summary>
+    public const string ProjectWorkScanExclusionRules = "ProjectWork.ScanExclusionRules";
+
     public static IReadOnlyList<string> AllManaged { get; } =
     [
         DefaultProjectTitle,
@@ -77,6 +83,7 @@ public static class SystemSettingKeys
         AccViewerMaxTabs,
         AccManualUploadAllowedExtensions,
         WorkflowMaxOpenChildInstances,
+        ProjectWorkScanExclusionRules,
         .. LoggingSettingKeys.All,
     ];
 }

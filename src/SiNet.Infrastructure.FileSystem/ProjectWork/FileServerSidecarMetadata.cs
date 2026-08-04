@@ -17,12 +17,22 @@ public static class FileServerSidecarMetadata
 
     /// <summary>
     /// Returns <see langword="true"/> when the path/name must not appear in a ProjectWork file scan
-    /// (sidecar companions, ephemeral Office owner/lock files, and legacy excluded extensions — DEV-003).
+    /// (sidecar companions + settings-backed exclusion rules — DEV-006).
+    /// Office lock prefix <c>~$</c> is part of the editable CSV default, not a hard-coded skip.
     /// </summary>
     public static bool ShouldSkipFromScan(string fullPathOrName) =>
-        IsMetadataCompanion(fullPathOrName)
-        || IsOfficeOwnerLockFile(fullPathOrName)
-        || ProjectWorkScanExclusions.IsExcludedExtension(fullPathOrName);
+        ShouldSkipFromScan(fullPathOrName, ProjectWorkScanExclusions.Default);
+
+    /// <summary>
+    /// Same as <see cref="ShouldSkipFromScan(string)"/> using an explicit rule set
+    /// (typically from <c>IProjectWorkScanExclusionPolicy.CurrentRules</c>).
+    /// </summary>
+    public static bool ShouldSkipFromScan(string fullPathOrName, ParsedProjectWorkScanExclusions rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        return IsMetadataCompanion(fullPathOrName)
+            || ProjectWorkScanExclusions.Matches(fullPathOrName, rules);
+    }
 
     /// <summary>
     /// Legacy alias for <see cref="ProjectWorkScanExclusions.IsExcludedExtension"/> (`.bak` and the rest of the V2 list).
@@ -58,8 +68,8 @@ public static class FileServerSidecarMetadata
 
     /// <summary>
     /// Word / Excel / PowerPoint create a short-lived owner file <c>~$Document.docx</c> next to the
-    /// real document while it is open. It is not a project deliverable and must not appear in the tree
-    /// (looks like a duplicate of the open file).
+    /// real document while it is open. Prefer settings-backed exclusion (default CSV includes <c>~$</c>);
+    /// this helper remains for diagnostics / tests.
     /// </summary>
     public static bool IsOfficeOwnerLockFile(string fullPathOrName)
     {

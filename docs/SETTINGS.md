@@ -39,6 +39,7 @@ Defaults in `SystemSettingsDefaults`.
 | --- | --- | --- |
 | Email/office | `DefaultProjectTitle`, `OfficeManagementProjectId`, `HourPriceDefault`, `InboxFolderName`, `InboxProjectName`, `AccViewerMaxTabs` | ManagementSettings |
 | ACC | `AccService.BaseUrl`, `AccBootstrapAdminEmail`, `AccProjectTemplateName`, `AccManualUploadAllowedExtensions` | ManagementSettings |
+| ProjectWork | `ProjectWork.ScanExclusionRules` | Native Settings (DEV-006) |
 | Inspection | `InspectionTemplatesFolderId`, `InspectionReportsFolderId`, `ReportsOutputRoot`, `StampTemplatePath` | ManagementSettings |
 | Status labels | `StatusLabel_*` | ManagementSettings |
 | AI | `Ollama*`, `AiModel.*`, `AiProvider.*`, `AiConfiguredCloudModels` | ManagementSettings + AiModelCatalog |

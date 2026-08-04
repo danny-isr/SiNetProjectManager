@@ -1,3 +1,5 @@
+using SiNet.Domain.Files;
+
 namespace SiNet.Application.Settings;
 
 /// <summary>Email routing and office workflow globals.</summary>
@@ -48,6 +50,10 @@ public sealed record AiSystemSettingsDto(
 public sealed record WorkflowSystemSettingsDto(
     int MaxOpenChildInstances);
 
+/// <summary>ProjectWork scan / tree filter globals (DEV-006).</summary>
+public sealed record ProjectWorkSystemSettingsDto(
+    string ScanExclusionRules);
+
 /// <summary>
 /// All global/admin settings from <c>dbo.SystemSettings</c>. Includes centralized logging.
 /// </summary>
@@ -58,7 +64,8 @@ public sealed record SystemSettingsDto(
     InspectionStatusLabelsDto StatusLabels,
     AiSystemSettingsDto Ai,
     CentralLoggingSettingsDto Logging,
-    WorkflowSystemSettingsDto Workflow);
+    WorkflowSystemSettingsDto Workflow,
+    ProjectWorkSystemSettingsDto ProjectWork);
 
 /// <summary>Legacy defaults when DB rows are missing (from ManagementSettingsWindow / catalog).</summary>
 public static class SystemSettingsDefaults
@@ -69,6 +76,7 @@ public static class SystemSettingsDefaults
     public const string AccViewerMaxTabs = "10";
     public const string InboxFolderNameFallback = "_Inbox";
     public const string AccManualUploadAllowedExtensions = ".pdf,.dwf,.dwg";
+    public const string ProjectWorkScanExclusionRules = ProjectWorkScanExclusions.DefaultRulesCsv;
     public const string OllamaBaseUrl = "http://localhost:11434";
     public const string OllamaModel = "gemma3:4b";
     public const string StatusLabelPassed = "מקובל";

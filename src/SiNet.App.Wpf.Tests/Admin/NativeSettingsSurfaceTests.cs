@@ -499,7 +499,8 @@ public sealed class NativeSettingsSurfaceTests
                 new AiModelLevelSelectionDto("deep-model", "openai"),
                 "model-a,model-b"),
             log,
-            new WorkflowSystemSettingsDto(3));
+            new WorkflowSystemSettingsDto(3),
+            new ProjectWorkSystemSettingsDto(".bak,.tmp,~$"));
     }
 
     private static SettingsViewModel CreateViewModel(
@@ -703,7 +704,8 @@ public sealed class NativeSettingsSurfaceTests
                 new AiModelLevelSelectionDto(string.Empty, string.Empty),
                 string.Empty),
             log,
-            new WorkflowSystemSettingsDto(SystemSettingsDefaults.WorkflowMaxOpenChildInstances));
+            new WorkflowSystemSettingsDto(SystemSettingsDefaults.WorkflowMaxOpenChildInstances),
+            new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules));
     }
 
     private static string NewShellFactoryPath => Path.Combine(

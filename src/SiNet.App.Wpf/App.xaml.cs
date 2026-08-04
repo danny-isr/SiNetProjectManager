@@ -11,6 +11,7 @@ using SiNet.Application.Common;
 using SiNet.Application.Configuration;
 using SiNet.Application.Data;
 using SiNet.Application.Identity;
+using SiNet.Application.ProjectWork;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
@@ -325,6 +326,11 @@ public partial class App : System.Windows.Application
 
             StandaloneHostLoggingBootstrap.Info(
                 $"[STARTUP] Acc host config applied. BaseUrl={(hostConfig.AccServiceBaseUrl ?? "(local)")}");
+
+            if (_services.GetService<IProjectWorkScanExclusionPolicy>() is { } scanExclusions)
+            {
+                await scanExclusions.RefreshAsync(_shutdownCts.Token).ConfigureAwait(true);
+            }
         }
         catch (Exception ex)
         {
