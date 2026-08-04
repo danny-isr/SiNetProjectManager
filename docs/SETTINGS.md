@@ -190,26 +190,53 @@ Settings UI: color picker + preview swatch + hex (secondary) + reset.
 
 Font: `SiFontFamily`, `SiTextTinyFontSize` … `SiTextHugeFontSize`
 
-Brushes (appearance JSON / runtime-applied): `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroundBrush`
+Brushes (appearance JSON / runtime-applied by `WpfThemeRuntimeApplier`): `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroundBrush`
 
-Brushes (static structural / semantic defaults — not yet in appearance JSON):
+Brushes (static structural / semantic — **product-fixed app tokens** in `BrushResources.xaml`; **not** overwritten by the user color picker):
 
 | Key | Default | Role |
 | --- | --- | --- |
 | `SiBorderBrush` | `#E5E7EB` | Borders / dividers |
 | `SiMutedForegroundBrush` | `#6B7280` | Secondary text |
 | `SiSurfaceBrush` | `#F7F8FA` | Secondary panels |
-| `SiOnPrimaryBrush` | `#FFFFFF` | Text/icons on primary or brand bars |
+| `SiOnPrimaryBrush` | `#FFFFFF` | Text/icons on primary / success / brand bars |
 | `SiDangerBrush` | `#DC2626` | Error / danger accents |
+| `SiDangerSurfaceBrush` | `#FFEBEE` | Soft danger / delete action backgrounds |
 | `SiWarningBrush` | `#D97706` | Warning accents |
-| `SiSuccessBrush` | `#059669` | Success accents |
+| `SiSuccessBrush` | `#059669` | Success accents / confirm actions |
+| `SiTreePhysicalBrush` | `#047857` | ProjectWork: physical files / actionable recover |
+| `SiTreeMissingBrush` | `#EA580C` | ProjectWork: required missing / recover orphan |
+| `SiTreeTypeBrush` | `#1565C0` | ProjectWork: type-defined (defs only / no physical) |
+| `SiTreeEmptyBrush` | `#9CA3AF` | ProjectWork: empty folder / unfiled |
+
+Appearance (4 user colors) and semantic/state brushes are separate: Settings UI edits only appearance JSON; tree/status tokens stay dictionary defaults unless product changes them in code. XAML binds both via `{DynamicResource Si…}` so Structural/semantic keys resolve from the merged dictionary (applier does not replace them).
 
 Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiRoundedButtonBase` (CornerRadius 6), implicit `Button`,
-`SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`
+`SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`,
+implicit `Menu` / `MenuItem` / `ContextMenu` / `TreeView` (typography inheritance — see policy below)
 
 XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml`.
 
 **V2 host:** production runs under `SiNetProjectManagerV2` — theme XAML is **not** in V2 `App.xaml`. `ThemeResourceLoader.EnsureApplicationResourcesMerged()` merges dictionaries into `Application.Current.Resources` at New System startup and before shell/native windows open.
+
+### Typography wiring policy (menus, trees, KPIs)
+
+| Surface / control | Token / style | Notes |
+| --- | --- | --- |
+| `Menu`, `MenuItem`, `ContextMenu` | `SiFontFamily` + `SiTextNormalFontSize` | Implicit styles in `ThemeStyles.xaml`. Shell `ItemContainerStyle` must `BasedOn` the implicit `MenuItem` style so command bindings keep theme fonts. |
+| Tree node titles (folder / file / alternative / version) | `SiTextNormalFontSize` (+ `SiFontFamily` when set explicitly) | ProjectWork, FileCatalog, FileTreePicker. Prefer TreeView inherit **and** explicit title `TextBlock` bindings. |
+| KPI / summary numbers | `SiTextLargeFontSize` or `SiTextLargeStyle` | Do **not** use literal `FontSize="20"`. Prefer Large over inventing new tokens. |
+| App-wide implicit `TextBlock` | **Not used** | No global TextBlock style. Wire Menu/ContextMenu + tree conventions + known hotspots only. |
+
+### Semantic / state color wiring (Phase 4)
+
+| Surface | Tokens | Notes |
+| --- | --- | --- |
+| `ProjectWorkWindowView` tree + legend | `SiTreePhysicalBrush`, `SiTreeMissingBrush`, `SiTreeTypeBrush`, `SiTreeEmptyBrush` | Folder/file/version recover state; legend `Run`s use the same keys. In-flight upload / extension conflict keep `SiSuccessBrush` / `SiDangerBrush`. |
+| `FileCatalogView` confirm / delete | `SiSuccessBrush` + `SiOnPrimaryBrush`; `SiDangerSurfaceBrush` + `SiDangerBrush` | Save/confirm greens and soft-red delete — not user appearance colors. |
+| Host / orphan fix | `SiBackgroundBrush` | `ProjectTypeWorkflowPolicyView` must not reference missing `SiWindowBackgroundBrush`. |
+
+Do **not** expose Phase-4 semantic brushes in Settings appearance UI.
 
 ### Runtime
 
@@ -232,17 +259,18 @@ Logging applier remains separate — appearance preview/save does **not** call `
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow`, `ProjectSelectorView`, `ProjectWorkWindowView`, User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome), `StartupModeSelectionWindow` (theme buttons + SiNet mark). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
+`NewShellWindow` (incl. top `Menu` typography), `ProjectSelectorView`, `ProjectWorkWindowView` (**tree titles + ContextMenus** on theme Normal; **tree state colors** via `SiTree*` semantic brushes), `FileCatalogView` / `FileTreePickerWindow` (tree titles; FileCatalog confirm/delete status brushes), Projects / Workflow Ops dashboards (KPI Large tokens), User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome), `StartupModeSelectionWindow` (theme buttons + SiNet mark), `ProjectTypeWorkflowPolicyView` (`SiBackgroundBrush`). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
 
 **Intentional exceptions (keep hardcoded):**
 
 - Email/Inspection **title-bar brand chrome** (`#1976D2` / `#2E7D32` + on-primary text)
-- Splash surfaces (`StartupSplashWindow`, V2 `SplashWindow`) use fixed SiNet brand teal `#0B6E99` (not live theme)
+- Splash / mode-selection brand sizes (`StartupSplashWindow`, `StartupModeSelectionWindow`, V2 `SplashWindow`) — fixed SiNet brand teal `#0B6E99` and intentional brand FontSizes (not live theme scale; not user appearance)
 - Semantic row tints in User Management DataGrid
-- Workflow **node/legend** colors and status chips (email / quote / inspection banners)
-- Tree state colors in ProjectWork (physical / missing / type / empty)
+- Workflow **node/legend** colors and status chips (email / quote / inspection banners) — one-off / brand canvas art; consolidate only if a hex becomes a repeated shared status token
+- Decorative / one-off tints (FileCatalog folder gold icon, modal scrims, dashboard alternating rows)
 - `SiCardStyle` (still deferred)
 - Legacy V2 windows outside New System
+- No app-wide implicit `TextBlock` style (see wiring policy above)
 
 ---
 

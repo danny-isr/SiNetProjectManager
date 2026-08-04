@@ -36,7 +36,9 @@
                  TextChanged="OnFilterChanged"
                  ToolTip="סינון לפי שם תיקייה, קובץ או חלופה"/>
 
-        <TreeView Grid.Row="3" x:Name="Tree">
+        <TreeView Grid.Row="3" x:Name="Tree"
+                  FontFamily="{DynamicResource SiFontFamily}"
+                  FontSize="{DynamicResource SiTextNormalFontSize}">
             <TreeView.ItemContainerStyle>
                 <Style TargetType="TreeViewItem">
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -54,6 +56,8 @@
                                   Checked="OnItemChecked"
                                   Unchecked="OnItemUnchecked"/>
                         <TextBlock Text="{Binding Title}"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextNormalFontSize}"
                                    FontWeight="{Binding TitleWeight}"
                                    MouseDown="OnTitleMouseDown"/>
                     </StackPanel>

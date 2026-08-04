@@ -40,7 +40,9 @@
                 <Button Command="{Binding OpenCommand}" Cursor="Hand"
                         Background="Transparent" BorderThickness="0" Padding="0"
                         HorizontalContentAlignment="Right" ToolTip="{Binding DisplayToolTip}">
-                    <TextBlock Text="{Binding Title}">
+                    <TextBlock Text="{Binding Title}"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextNormalFontSize}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource SiPrimaryBrush}" />
@@ -52,11 +54,11 @@
                                         <Setter Property="Foreground" Value="{DynamicResource SiDangerBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsRecoverActionable}" Value="True">
-                                        <Setter Property="Foreground" Value="#FF047857" />
+                                        <Setter Property="Foreground" Value="{DynamicResource SiTreePhysicalBrush}" />
                                         <Setter Property="FontWeight" Value="SemiBold" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsRecoverOrphan}" Value="True">
-                                        <Setter Property="Foreground" Value="#FFEA580C" />
+                                        <Setter Property="Foreground" Value="{DynamicResource SiTreeMissingBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -78,7 +80,9 @@
 
         <!-- Alternative: contains versions. Right-click to add a version. -->
         <HierarchicalDataTemplate DataType="{x:Type local:AlternativeNodeVm}" ItemsSource="{Binding Children}">
-            <TextBlock Foreground="{DynamicResource SiMutedForegroundBrush}">
+            <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}"
+                       Foreground="{DynamicResource SiMutedForegroundBrush}">
                 <TextBlock.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="&#x05D2;&#x05E8;&#x05E1;&#x05D4; &#x05D7;&#x05D3;&#x05E9;&#x05D4;&#x2026;" Command="{Binding AddVersionCommand}" />
@@ -100,20 +104,23 @@
                                   Visibility="{Binding CanAddFromTemplate, Converter={StaticResource BoolToVis}}" />
                     </ContextMenu>
                 </StackPanel.ContextMenu>
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold">
+                <TextBlock Text="{Binding Title}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextNormalFontSize}"
+                           FontWeight="SemiBold">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <!-- Defined without physical: blue -->
-                            <Setter Property="Foreground" Value="#FF1565C0" />
+                            <Setter Property="Foreground" Value="{DynamicResource SiTreeTypeBrush}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsUnfiled}" Value="True">
-                                    <Setter Property="Foreground" Value="#FF9CA3AF" />
+                                    <Setter Property="Foreground" Value="{DynamicResource SiTreeEmptyBrush}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsRequiredMissing}" Value="True">
-                                    <Setter Property="Foreground" Value="#FFEA580C" />
+                                    <Setter Property="Foreground" Value="{DynamicResource SiTreeMissingBrush}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding HasPhysicalVersions}" Value="True">
-                                    <Setter Property="Foreground" Value="#FF047857" />
+                                    <Setter Property="Foreground" Value="{DynamicResource SiTreePhysicalBrush}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -131,7 +138,9 @@
         <!-- Folder: contains subfolders + files.
              Gray = empty; Blue = defs only; Orange = required missing; Green = physical. -->
         <HierarchicalDataTemplate DataType="{x:Type local:ProjectFolderNodeVm}" ItemsSource="{Binding Children}">
-            <TextBlock FontWeight="SemiBold">
+            <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}"
+                       FontWeight="SemiBold">
                 <TextBlock.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="&#x05E4;&#x05EA;&#x05D7; &#x05EA;&#x05D9;&#x05E7;&#x05D9;&#x05D9;&#x05D4;" Command="{Binding OpenFolderCommand}" />
@@ -146,7 +155,7 @@
                 </TextBlock.ContextMenu>
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="#FF9CA3AF" />
+                        <Setter Property="Foreground" Value="{DynamicResource SiTreeEmptyBrush}" />
                         <Style.Triggers>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
@@ -154,18 +163,18 @@
                                     <Condition Binding="{Binding HasPhysicalFiles}" Value="False" />
                                     <Condition Binding="{Binding HasRequiredMissing}" Value="False" />
                                 </MultiDataTrigger.Conditions>
-                                <Setter Property="Foreground" Value="#FF1565C0" />
+                                <Setter Property="Foreground" Value="{DynamicResource SiTreeTypeBrush}" />
                             </MultiDataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
                                     <Condition Binding="{Binding HasPhysicalFiles}" Value="True" />
                                     <Condition Binding="{Binding HasRequiredMissing}" Value="False" />
                                 </MultiDataTrigger.Conditions>
-                                <Setter Property="Foreground" Value="#FF047857" />
+                                <Setter Property="Foreground" Value="{DynamicResource SiTreePhysicalBrush}" />
                             </MultiDataTrigger>
                             <!-- Orange wins over green when a task-gated file is missing under this folder. -->
                             <DataTrigger Binding="{Binding HasRequiredMissing}" Value="True">
-                                <Setter Property="Foreground" Value="#FFEA580C" />
+                                <Setter Property="Foreground" Value="{DynamicResource SiTreeMissingBrush}" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -242,13 +251,13 @@
                                    Margin="8,6,8,2"
                                    FontSize="{DynamicResource SiTextTinyFontSize}"
                                    TextWrapping="Wrap">
-                            <Run Text="ירוק = קבצים פיזיים / recover חדש" Foreground="#FF047857" />
+                            <Run Text="ירוק = קבצים פיזיים / recover חדש" Foreground="{DynamicResource SiTreePhysicalBrush}" />
                             <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
-                            <Run Text="כתום = חובה חסרה / recover יתום" Foreground="#FFEA580C" />
+                            <Run Text="כתום = חובה חסרה / recover יתום" Foreground="{DynamicResource SiTreeMissingBrush}" />
                             <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
-                            <Run Text="כחול = לפי סוג פרויקט" Foreground="#FF1565C0" />
+                            <Run Text="כחול = לפי סוג פרויקט" Foreground="{DynamicResource SiTreeTypeBrush}" />
                             <Run Text=" · " Foreground="{DynamicResource SiMutedForegroundBrush}" />
-                            <Run Text="אפור = ריק" Foreground="#FF9CA3AF" />
+                            <Run Text="אפור = ריק" Foreground="{DynamicResource SiTreeEmptyBrush}" />
                         </TextBlock>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,8,4">
                             <Button Content="מחק recover ישנים…"
@@ -264,6 +273,8 @@
                                     ToolTip="כווץ את כל התיקיות בעץ" />
                         </StackPanel>
                         <TreeView x:Name="FileTree" BorderThickness="0" Background="Transparent"
+                                  FontFamily="{DynamicResource SiFontFamily}"
+                                  FontSize="{DynamicResource SiTextNormalFontSize}"
                                   ItemsSource="{Binding Tree.RootFolders}"
                                   ItemContainerStyle="{StaticResource TreeItemStyle}" />
                     </DockPanel>

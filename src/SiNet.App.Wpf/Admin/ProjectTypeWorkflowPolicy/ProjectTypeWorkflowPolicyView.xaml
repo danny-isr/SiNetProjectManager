@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="640" d:DesignWidth="1000"
              FlowDirection="RightToLeft"
-             Background="{DynamicResource SiWindowBackgroundBrush}">
+             Background="{DynamicResource SiBackgroundBrush}">
 
     <Grid Margin="12">
         <Grid.RowDefinitions>

@@ -109,7 +109,7 @@
                                 <Button Content="✕"
                                         Width="22" Height="22"
                                         Padding="0"
-                                        FontSize="11"
+                                        FontSize="{DynamicResource SiTextSmallFontSize}"
                                         ToolTip="הסר קובץ מצורף"
                                         Tag="{Binding}"
                                         Click="RemoveAttachment_Click"

@@ -21,8 +21,14 @@ public static class ThemeResourceKeys
     public const string SurfaceBrush = "SiSurfaceBrush";
     public const string OnPrimaryBrush = "SiOnPrimaryBrush";
     public const string DangerBrush = "SiDangerBrush";
+    public const string DangerSurfaceBrush = "SiDangerSurfaceBrush";
     public const string WarningBrush = "SiWarningBrush";
     public const string SuccessBrush = "SiSuccessBrush";
+
+    public const string TreePhysicalBrush = "SiTreePhysicalBrush";
+    public const string TreeMissingBrush = "SiTreeMissingBrush";
+    public const string TreeTypeBrush = "SiTreeTypeBrush";
+    public const string TreeEmptyBrush = "SiTreeEmptyBrush";
 
     public const string TextTinyStyle = "SiTextTinyStyle";
     public const string TextSmallStyle = "SiTextSmallStyle";
@@ -56,6 +62,23 @@ public static class ThemeResourceKeys
         ForegroundBrush,
     ];
 
+    /// <summary>Product-fixed structural / state brushes (not overwritten by the color picker).</summary>
+    public static IReadOnlyList<string> SemanticBrushKeys { get; } =
+    [
+        BorderBrush,
+        MutedForegroundBrush,
+        SurfaceBrush,
+        OnPrimaryBrush,
+        DangerBrush,
+        DangerSurfaceBrush,
+        WarningBrush,
+        SuccessBrush,
+        TreePhysicalBrush,
+        TreeMissingBrush,
+        TreeTypeBrush,
+        TreeEmptyBrush,
+    ];
+
     /// <summary>All theme brush keys defined in BrushResources.xaml (appearance + structural/semantic).</summary>
     public static IReadOnlyList<string> AllBrushKeys { get; } =
     [
@@ -68,7 +91,12 @@ public static class ThemeResourceKeys
         SurfaceBrush,
         OnPrimaryBrush,
         DangerBrush,
+        DangerSurfaceBrush,
         WarningBrush,
         SuccessBrush,
+        TreePhysicalBrush,
+        TreeMissingBrush,
+        TreeTypeBrush,
+        TreeEmptyBrush,
     ];
 }

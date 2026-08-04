@@ -54,8 +54,8 @@
 | --- | --- | --- |
 | FloatingInspectionView | src/SiNet.App.Wpf/Surfaces/Inspection/InspectionWindowView | Partial structural parity |
 | EmailManagementView | src/SiNet.App.Wpf/Surfaces/Email/EmailWindowView | Started / partial (read-only production pilot polish) |
-| ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/ProjectWorkWindowView | Replaced (V2 menu + task launcher; legacy view no longer opened) |
-| FileManagerView | src/SiNet.App.Wpf/Admin/FileCatalog/ | **Reconnected** — native admin window + menu; see [`FILE_CATALOG_ADMIN.md`](./FILE_CATALOG_ADMIN.md) |
+| ProjectWorkView | src/SiNet.App.Wpf/Surfaces/ProjectWork/ProjectWorkWindowView | Replaced (V2 menu + task launcher; legacy view no longer opened). **Theme:** tree titles + ContextMenus on `SiTextNormalFontSize` / Menu styles; tree state colors via `SiTree*` semantic brushes (`SETTINGS.md` §9). |
+| FileManagerView | src/SiNet.App.Wpf/Admin/FileCatalog/ | **Reconnected** — native admin window + menu; see [`FILE_CATALOG_ADMIN.md`](./FILE_CATALOG_ADMIN.md). Tree titles + headers use theme font tokens; confirm/delete use `SiSuccess*` / `SiDanger*` semantic brushes. |
 | TaskPanelView | src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView | **Started / Pilot** — Task Workbench (queue + CRUD, 2026-07-06) |
 | FloatingProjectTasksView | src/SiNet.App.Wpf/Surfaces/Tasks/... (TBD) | Not started |
 | WorkflowManagementWindow | src/SiNet.App.Wpf/Surfaces/Workflow/... (TBD) | Not started (full hub). **Partial:** Policy tab → `Admin/ProjectTypeWorkflowPolicy/` mapping window |
@@ -96,8 +96,9 @@ seam is already proven by prior slices. The visual clone lives at
 - Per-report-card action buttons (open template, export, send email, delete) shown on selection.
 - [DEBUG] fill button, help (?) buttons, "reset size" chrome, and the work-window/file-service
   warning banners.
-- Inspector/admin pickers, series picker, manual template URL, reviewed-version textbox, and the
-  shared application font-size dynamic resources.
+- Inspector/admin pickers, series picker, manual template URL, reviewed-version textbox.
+  (Shared Stage 6 font-size dynamic resources are live app-wide for menus/trees/KPIs —
+  see `SETTINGS.md` §9; Inspection brand chrome / remaining visual gaps above still apply.)
 
 ## Email window - EmailManagementView
 

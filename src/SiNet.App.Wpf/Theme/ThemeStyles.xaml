@@ -277,4 +277,30 @@
         </Setter>
     </Style>
 
+    <!-- Menu / ContextMenu typography — no app-wide TextBlock implicit style. -->
+    <Style TargetType="Menu">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <Style TargetType="ContextMenu">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
+    <!-- TreeView inheritance for node titles; surfaces should also set titles explicitly. -->
+    <Style TargetType="TreeView">
+        <Setter Property="FontFamily" Value="{DynamicResource SiFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}"/>
+    </Style>
+
 </ResourceDictionary>

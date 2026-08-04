@@ -6,12 +6,19 @@
     <SolidColorBrush x:Key="SiBackgroundBrush" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="SiForegroundBrush" Color="#000000"/>
 
-    <!-- Structural / semantic defaults (not yet in appearance JSON) -->
+    <!-- Structural / semantic defaults (product-fixed; not overwritten by user appearance) -->
     <SolidColorBrush x:Key="SiBorderBrush" Color="#E5E7EB"/>
     <SolidColorBrush x:Key="SiMutedForegroundBrush" Color="#6B7280"/>
     <SolidColorBrush x:Key="SiSurfaceBrush" Color="#F7F8FA"/>
     <SolidColorBrush x:Key="SiOnPrimaryBrush" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="SiDangerBrush" Color="#DC2626"/>
+    <SolidColorBrush x:Key="SiDangerSurfaceBrush" Color="#FFEBEE"/>
     <SolidColorBrush x:Key="SiWarningBrush" Color="#D97706"/>
     <SolidColorBrush x:Key="SiSuccessBrush" Color="#059669"/>
+
+    <!-- ProjectWork tree state colors (product-fixed semantic tokens) -->
+    <SolidColorBrush x:Key="SiTreePhysicalBrush" Color="#047857"/>
+    <SolidColorBrush x:Key="SiTreeMissingBrush" Color="#EA580C"/>
+    <SolidColorBrush x:Key="SiTreeTypeBrush" Color="#1565C0"/>
+    <SolidColorBrush x:Key="SiTreeEmptyBrush" Color="#9CA3AF"/>
 </ResourceDictionary>

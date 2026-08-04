@@ -32,48 +32,42 @@
                 <StackPanel>
                     <TextBlock Text="סה״כ מוצגים" Style="{DynamicResource SiTextTinyStyle}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding TotalCountText}" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding TotalCountText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="פעילים" Style="{DynamicResource SiTextTinyStyle}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding ActiveCountText}" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding ActiveCountText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="סגורים" Style="{DynamicResource SiTextTinyStyle}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding ClosedCountText}" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding ClosedCountText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="עם תהליך פתוח" Style="{DynamicResource SiTextTinyStyle}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding WithOpenWorkflowText}" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding WithOpenWorkflowText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="ללא תהליך" Style="{DynamicResource SiTextTinyStyle}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding WithoutOpenWorkflowText}" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding WithoutOpenWorkflowText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="משימות פתוחות" Style="{DynamicResource SiTextTinyStyle}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding OpenTasksSumText}" Style="{DynamicResource SiTextNormalStyle}"
-                               FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding OpenTasksSumText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8">

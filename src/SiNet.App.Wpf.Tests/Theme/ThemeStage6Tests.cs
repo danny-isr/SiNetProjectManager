@@ -343,6 +343,118 @@ public sealed class ThemeStage6Tests
     }
 
     [Fact]
+    public void ThemeStyles_menu_item_uses_dynamic_normal_font_size()
+    {
+        var styles = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "ThemeStyles.xaml"));
+        var menuItemMatch = Regex.Match(
+            styles,
+            @"<Style\s+TargetType=""MenuItem"">[\s\S]*?</Style>",
+            RegexOptions.CultureInvariant);
+        Assert.True(menuItemMatch.Success, "Implicit MenuItem style missing from ThemeStyles.xaml.");
+        Assert.Contains(
+            $"FontSize\" Value=\"{{DynamicResource {ThemeResourceKeys.TextNormalFontSize}}}\"",
+            menuItemMatch.Value,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"FontFamily\" Value=\"{{DynamicResource {ThemeResourceKeys.FontFamily}}}\"",
+            menuItemMatch.Value,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProjectWork_folder_title_template_references_theme_normal_font()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "ProjectWork", "ProjectWorkWindowView.xaml"));
+        var folderTemplate = ExtractXamlSection(
+            xaml,
+            "DataType=\"{x:Type local:ProjectFolderNodeVm}\"",
+            "x:Key=\"TreeItemStyle\"");
+        Assert.Contains(ThemeResourceKeys.TextNormalFontSize, folderTemplate, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.FontFamily, folderTemplate, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Theme_defines_semantic_tree_and_danger_surface_brushes()
+    {
+        foreach (var key in new[]
+                 {
+                     ThemeResourceKeys.TreePhysicalBrush,
+                     ThemeResourceKeys.TreeMissingBrush,
+                     ThemeResourceKeys.TreeTypeBrush,
+                     ThemeResourceKeys.TreeEmptyBrush,
+                     ThemeResourceKeys.DangerSurfaceBrush,
+                 })
+        {
+            Assert.Contains(key, ThemeResourceKeys.SemanticBrushKeys);
+            Assert.Contains(key, ThemeResourceKeys.AllBrushKeys);
+            Assert.DoesNotContain(key, ThemeResourceKeys.AppearanceBrushKeys);
+        }
+    }
+
+    [Fact]
+    public void ProjectWork_tree_templates_use_semantic_state_brushes_not_raw_hex()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "ProjectWork", "ProjectWorkWindowView.xaml"));
+        Assert.Contains(ThemeResourceKeys.TreePhysicalBrush, xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.TreeMissingBrush, xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.TreeTypeBrush, xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.TreeEmptyBrush, xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("#FF047857", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#FFEA580C", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#FF1565C0", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#FF9CA3AF", xaml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FileCatalog_confirm_and_delete_use_semantic_status_brushes()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Admin", "FileCatalog", "FileCatalogView.xaml"));
+        Assert.Contains(ThemeResourceKeys.SuccessBrush, xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.OnPrimaryBrush, xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.DangerSurfaceBrush, xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.DangerBrush, xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Background=\"#4CAF50\"", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Background=\"#FFEBEE\"", xaml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ProjectTypeWorkflowPolicy_uses_si_background_brush_not_orphan_window_key()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Admin", "ProjectTypeWorkflowPolicy", "ProjectTypeWorkflowPolicyView.xaml"));
+        Assert.Contains("SiBackgroundBrush", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiWindowBackgroundBrush", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NewShell_menu_item_container_style_based_on_implicit_menu_item()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Shell", "NewShellWindow.xaml"));
+        Assert.Contains(
+            "BasedOn=\"{StaticResource {x:Type MenuItem}}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Projects/Dashboard/ProjectsDashboardView.xaml")]
+    [InlineData("Admin/WorkflowOps/WorkflowOpsDashboardView.xaml")]
+    public void Dashboard_kpi_numbers_use_large_theme_style_not_literal_20(string relativePath)
+    {
+        var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
+        Assert.DoesNotContain("FontSize=\"20\"", content, StringComparison.Ordinal);
+        Assert.Contains("SiTextLargeStyle", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FileCatalog_uses_si_background_brush_not_orphan_window_key()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Admin", "FileCatalog", "FileCatalogView.xaml"));
+        Assert.Contains("SiBackgroundBrush", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SiWindowBackgroundBrush", xaml, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.TextNormalFontSize, xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TaskWorkbench_compact_buttons_use_shared_rounded_button_base()
     {
         var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "Tasks", "TaskWorkbenchView.xaml"));

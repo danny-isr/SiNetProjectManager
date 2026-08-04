@@ -66,25 +66,25 @@
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="פעילים" Style="{DynamicResource SiTextTinyStyle}" Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding ActiveCountText}" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding ActiveCountText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="הושלמו היום" Style="{DynamicResource SiTextTinyStyle}" Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding CompletedTodayText}" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding CompletedTodayText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="בוטלו היום" Style="{DynamicResource SiTextTinyStyle}" Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding CancelledTodayText}" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding CancelledTodayText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,6,0">
                 <StackPanel>
                     <TextBlock Text="חשודים כתקועים" Style="{DynamicResource SiTextTinyStyle}" Foreground="{DynamicResource SiSecondaryBrush}" />
-                    <TextBlock Text="{Binding StalledCountText}" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" FontSize="20" />
+                    <TextBlock Text="{Binding StalledCountText}" Style="{DynamicResource SiTextLargeStyle}" />
                 </StackPanel>
             </Border>
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="10,8">

@@ -69,7 +69,9 @@
                        Text="{Binding SelectedEmployeesSummary}"
                        TextTrimming="CharacterEllipsis"
                        VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text=" ▼" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <TextBlock Grid.Column="1" Text=" ▼"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"
+                       VerticalAlignment="Center" Margin="8,0,0,0"/>
           </Grid>
         </ToggleButton>
 

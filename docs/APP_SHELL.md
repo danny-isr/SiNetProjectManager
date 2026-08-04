@@ -212,6 +212,10 @@ Rules:
   `CurrentUserContext` or `IsAdmin` checks inside `NewShellViewModel`.
 - The menu carries **no business logic** and never mutates workflow (see §10 and
   `AI_DEVELOPMENT_GUIDE.md` rule 11).
+- **Typography:** shell `Menu` / `MenuItem` use Stage 6 theme tokens (`SiFontFamily` +
+  `SiTextNormalFontSize`) via implicit styles in `ThemeStyles.xaml`. Local
+  `ItemContainerStyle` must `BasedOn` the implicit `MenuItem` style so command bindings
+  do not drop theme fonts (see `SETTINGS.md` §9).
 
 Initial menu (P3 + P6 + native admin):
 
@@ -425,7 +429,8 @@ ILoggingRuntimeApplier           → host applies user logging toggle
 Native **הגדרות אישיות** + **הגדרות מערכת** — `SettingsWindow` in `SiNet.App.Wpf/Admin/Settings`
 (personal vs admin menu entries; see `SETTINGS.md` §5).
 
-**Stage 6 theme:** per-user typography/colors via `IThemeRuntimeApplier` — see `SETTINGS.md` §9.
+**Stage 6 theme:** per-user typography/colors via `IThemeRuntimeApplier` — see `SETTINGS.md` §9
+(incl. shell menu typography, tree/KPI wiring, and Phase 4 product-fixed semantic/state brushes).
 
 Guardrails: reads/writes behind Application ports; no schema/migrations; `SiNet.App.Wpf` does not touch
 legacy settings types directly.

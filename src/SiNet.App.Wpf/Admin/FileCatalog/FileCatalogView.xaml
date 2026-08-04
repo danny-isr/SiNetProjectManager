@@ -7,7 +7,7 @@
              mc:Ignorable="d"
              d:DesignHeight="640" d:DesignWidth="1100"
              FlowDirection="RightToLeft"
-             Background="{DynamicResource SiWindowBackgroundBrush}">
+             Background="{DynamicResource SiBackgroundBrush}">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -37,7 +37,10 @@
                     </ContextMenu>
                 </StackPanel.ContextMenu>
                 <TextBlock Text="📁" Margin="0,0,5,0" Foreground="#FFDAA520"/>
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Title}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextNormalFontSize}"
+                           FontWeight="SemiBold"/>
             </StackPanel>
         </HierarchicalDataTemplate>
     </UserControl.Resources>
@@ -64,7 +67,8 @@
                         ToolTip="שינוי שם סוג העבודה הנבחר" Padding="8,4" Margin="0,0,12,0"/>
                 <Button Content="רענון" Command="{Binding RefreshCommand}" Padding="10,4" Margin="0,0,8,0"/>
                 <Button Content="שמור שינויים" Command="{Binding SaveChangesCommand}"
-                        Padding="10,4" Background="#4CAF50" Foreground="White" FontWeight="Bold"/>
+                        Padding="10,4" Background="{DynamicResource SiSuccessBrush}"
+                        Foreground="{DynamicResource SiOnPrimaryBrush}" FontWeight="Bold"/>
             </StackPanel>
         </Border>
 
@@ -83,6 +87,8 @@
                 <TextBlock Text="תיקיות פרויקט" FontWeight="Bold" Margin="0,0,0,5"/>
                 <TreeView x:Name="FolderTree" Grid.Row="1"
                           ItemsSource="{Binding FolderTree}"
+                          FontFamily="{DynamicResource SiFontFamily}"
+                          FontSize="{DynamicResource SiTextNormalFontSize}"
                           BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1"
                           PreviewMouseRightButtonDown="FolderTree_OnPreviewMouseRightButtonDown"
                           SelectedItemChanged="FolderTree_OnSelectedItemChanged"/>
@@ -98,14 +104,18 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                    <TextBlock Text="קבצים" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Text="קבצים" FontWeight="Bold"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"
+                               VerticalAlignment="Center"/>
                     <TextBlock Text=" — תצוגה:" VerticalAlignment="Center" Margin="8,0,0,0"
                                Foreground="{DynamicResource SiSecondaryBrush}"/>
                     <TextBlock Text="{Binding FolderFilterCaption}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="4,0,0,0"/>
                     <Button Content="הוסף קובץ" Command="{Binding AddFileCommand}"
                             Margin="10,0,0,0" Padding="8,2"/>
                     <Button Content="מחק נבחר" Command="{Binding DeleteFileCommand}"
-                            Margin="5,0,0,0" Padding="8,2" Background="#FFEBEE" Foreground="#D32F2F"/>
+                            Margin="5,0,0,0" Padding="8,2"
+                            Background="{DynamicResource SiDangerSurfaceBrush}"
+                            Foreground="{DynamicResource SiDangerBrush}"/>
                 </StackPanel>
 
                 <DataGrid Grid.Row="1"
@@ -172,12 +182,16 @@
                     Padding="20" CornerRadius="6" Width="360"
                     BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="{Binding DialogHeader}" FontWeight="Bold" FontSize="16" Margin="0,0,0,12"/>
+                    <TextBlock Text="{Binding DialogHeader}" FontWeight="Bold"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"
+                               Margin="0,0,0,12"/>
                     <TextBlock Text="שם:" Margin="0,0,0,4"/>
                     <TextBox Text="{Binding DialogInput, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16" Padding="6"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                         <Button Content="אישור" Command="{Binding ConfirmDialogCommand}"
-                                Width="90" Margin="0,0,10,0" Padding="6" Background="#4CAF50" Foreground="White" FontWeight="Bold"/>
+                                Width="90" Margin="0,0,10,0" Padding="6"
+                                Background="{DynamicResource SiSuccessBrush}"
+                                Foreground="{DynamicResource SiOnPrimaryBrush}" FontWeight="Bold"/>
                         <Button Content="ביטול" Command="{Binding CancelDialogCommand}" Width="90" Padding="6"/>
                     </StackPanel>
                 </StackPanel>

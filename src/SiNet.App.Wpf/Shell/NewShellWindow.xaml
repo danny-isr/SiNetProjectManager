@@ -63,7 +63,7 @@
                 </HierarchicalDataTemplate>
             </Menu.Resources>
             <Menu.ItemContainerStyle>
-                <Style TargetType="MenuItem">
+                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
                     <Setter Property="Command" Value="{Binding OpenCommand}" />
                     <Setter Property="ToolTip" Value="{Binding Description}" />
                     <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
