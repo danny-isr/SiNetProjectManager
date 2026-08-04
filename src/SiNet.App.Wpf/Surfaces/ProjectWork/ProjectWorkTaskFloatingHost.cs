@@ -1,5 +1,6 @@
 using System.Windows;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Theme;
 using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.WorkSurfaces;
@@ -82,6 +83,7 @@ public sealed class ProjectWorkTaskFloatingHost(
             MinHeight = 480,
             FlowDirection = FlowDirection.RightToLeft,
         };
+        ThemeWindowChrome.ApplyThemedWindowBackground(host);
         TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow(host);
 
         host.Closed += (_, _) =>

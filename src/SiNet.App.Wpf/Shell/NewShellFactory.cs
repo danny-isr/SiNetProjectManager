@@ -744,6 +744,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 FlowDirection = FlowDirection.RightToLeft,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
             };
+            ThemeWindowChrome.ApplyThemedWindowBackground(window);
             ShowWindow(window);
         }
         catch (Exception ex)

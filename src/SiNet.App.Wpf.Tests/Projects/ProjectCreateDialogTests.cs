@@ -394,6 +394,8 @@ public sealed class ProjectCreateDialogBoundaryTests
         Assert.Contains("SiComboBoxStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("SiPrimaryButtonStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("JobTypes", xaml, StringComparison.Ordinal);
+        Assert.Contains("SiTextNormalFontSize", xaml, StringComparison.Ordinal);
+        Assert.Contains("SiFontFamily", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

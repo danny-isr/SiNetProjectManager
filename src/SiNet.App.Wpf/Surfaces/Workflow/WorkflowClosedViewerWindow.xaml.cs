@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using SiNet.App.Wpf.Infrastructure;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Surfaces.Workflow;
 
@@ -21,6 +22,7 @@ public partial class WorkflowClosedViewerWindow : Window
     public WorkflowClosedViewerWindow(WorkflowClosedViewerViewModel viewModel)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = ViewModel;
         Loaded += OnLoaded;

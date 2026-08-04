@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Shell;
 
@@ -18,6 +19,7 @@ public partial class NewShellWindow : Window
         IEmailSurfaceHost? emailSurfaceHost = null)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
 
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _emailSurfaceHost = emailSurfaceHost;

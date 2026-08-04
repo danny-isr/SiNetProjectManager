@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 
@@ -17,6 +18,7 @@ internal sealed class StringPromptDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
 
         _input = new TextBox { Text = initial ?? string.Empty, Margin = new Thickness(0, 8, 0, 12) };
         _input.SelectAll();

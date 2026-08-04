@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -60,6 +61,7 @@ internal sealed class WpfEmailAlternativeNamePromptHost : IEmailAlternativeNameP
             FlowDirection = FlowDirection.RightToLeft,
             Owner = owner is { IsVisible: true } ? owner : null,
         };
+        ThemeWindowChrome.ApplyThemedWindowBackground(dialog);
 
         string? result = null;
         ok.Click += (_, _) =>

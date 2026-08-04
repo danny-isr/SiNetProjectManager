@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.WorkSurfaces;
 
@@ -26,6 +27,7 @@ public partial class EmailWindowView : Window
     public EmailWindowView(EmailWindowViewModel viewModel)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         ViewModel = viewModel;
         DataContext = viewModel;
         EmailSurfaceHost.DataContext = viewModel;

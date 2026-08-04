@@ -412,6 +412,68 @@ public sealed class ThemeStage6Tests
     }
 
     [Fact]
+    public void ThemeWindowChrome_applies_font_family_and_normal_size()
+    {
+        var source = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "ThemeWindowChrome.cs"));
+        Assert.Contains("FontFamilyProperty", source, StringComparison.Ordinal);
+        Assert.Contains("FontSizeProperty", source, StringComparison.Ordinal);
+        Assert.Contains("ThemeResourceKeys.FontFamily", source, StringComparison.Ordinal);
+        Assert.Contains("ThemeResourceKeys.TextNormalFontSize", source, StringComparison.Ordinal);
+        Assert.Contains("BackgroundProperty", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeStyles_window_and_usercontrol_inherit_normal_font()
+    {
+        var styles = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "ThemeStyles.xaml"));
+        foreach (var target in new[] { "Window", "UserControl" })
+        {
+            var match = Regex.Match(
+                styles,
+                $@"<Style\s+TargetType=""{target}"">[\s\S]*?</Style>",
+                RegexOptions.CultureInvariant);
+            Assert.True(match.Success, $"Implicit {target} style missing from ThemeStyles.xaml.");
+            Assert.Contains(
+                $"FontSize\" Value=\"{{DynamicResource {ThemeResourceKeys.TextNormalFontSize}}}\"",
+                match.Value,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                $"FontFamily\" Value=\"{{DynamicResource {ThemeResourceKeys.FontFamily}}}\"",
+                match.Value,
+                StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void ProjectCreate_job_types_checkbox_uses_theme_normal_font()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Shared", "Projects", "ProjectCreateDialogView.xaml"));
+        var jobTypes = ExtractXamlSection(xaml, "ItemsSource=\"{Binding JobTypes}\"", "</ItemsControl>");
+        Assert.Contains(ThemeResourceKeys.TextNormalFontSize, jobTypes, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.FontFamily, jobTypes, StringComparison.Ordinal);
+        var checkBoxOpen = Regex.Match(jobTypes, @"<CheckBox[\s\S]*?/>", RegexOptions.CultureInvariant);
+        Assert.True(checkBoxOpen.Success, "JobTypes CheckBox template missing.");
+        Assert.Contains(ThemeResourceKeys.TextNormalFontSize, checkBoxOpen.Value, StringComparison.Ordinal);
+        Assert.Contains(ThemeResourceKeys.FontFamily, checkBoxOpen.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Production_window_font_inheritance_is_structural()
+    {
+        var chrome = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "ThemeWindowChrome.cs"));
+        Assert.Contains("FontSizeProperty", chrome, StringComparison.Ordinal);
+        Assert.Contains("ThemeResourceKeys.TextNormalFontSize", chrome, StringComparison.Ordinal);
+
+        var styles = File.ReadAllText(Path.Combine(AppWpfRoot, "Theme", "ThemeStyles.xaml"));
+        var windowStyle = Regex.Match(
+            styles,
+            @"<Style\s+TargetType=""Window"">[\s\S]*?</Style>",
+            RegexOptions.CultureInvariant);
+        Assert.True(windowStyle.Success, "Implicit Window style required for font inheritance.");
+        Assert.Contains(ThemeResourceKeys.TextNormalFontSize, windowStyle.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ProjectWork_folder_title_template_references_theme_normal_font()
     {
         var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "ProjectWork", "ProjectWorkWindowView.xaml"));

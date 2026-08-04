@@ -1,4 +1,5 @@
 using System.Windows;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.Identity;
 
 namespace SiNet.App.Wpf.DevTools;
@@ -13,6 +14,7 @@ public partial class DebugAuthorizationRoleSelectorWindow : Window
     public DebugAuthorizationRoleSelectorWindow(IDebugAuthorizationRoleOverrideService overrideService)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         _overrideService = overrideService ?? throw new ArgumentNullException(nameof(overrideService));
         Loaded += OnLoaded;
         WireWarnings();

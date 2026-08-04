@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.WorkSurfaces;
 
@@ -158,6 +159,7 @@ public partial class ProjectWorkWindowView : UserControl, IDisposable
             Topmost = false,
             Content = _accFloatHost,
         };
+        ThemeWindowChrome.ApplyThemedWindowBackground(_accFloatWindow);
         AccDockToggleButton.Content = "החזר לפאנל";
         _accFloatWindow.Closed += (_, _) =>
         {

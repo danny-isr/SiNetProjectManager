@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using SiNet.App.Wpf.Surfaces.Tasks;
+using SiNet.App.Wpf.Theme;
 using SiNet.Application.WorkSurfaces;
 
 namespace SiNet.App.Wpf.Surfaces.Inspection;
@@ -21,6 +22,7 @@ public partial class InspectionWindowView : Window
     public InspectionWindowView(InspectionWindowViewModel viewModel)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         ViewModel = viewModel;
         DataContext = viewModel;
         Loaded += OnLoaded;

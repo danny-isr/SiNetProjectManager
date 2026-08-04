@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using SiNet.App.Wpf.Theme;
 
 namespace SiNet.App.Wpf.Shared.Pickers;
 
@@ -28,6 +29,7 @@ public partial class FileTreePickerWindow : Window
         string headerText)
     {
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         _mode = mode;
         HeaderText.Text = headerText ?? string.Empty;
 

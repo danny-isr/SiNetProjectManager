@@ -15,6 +15,7 @@ public partial class StartupModeSelectionWindow : Window
         // V2 host App.xaml does not merge App.Wpf theme dictionaries — ensure Si* resources exist.
         ThemeResourceLoader.EnsureApplicationResourcesMerged();
         InitializeComponent();
+        ThemeWindowChrome.ApplyThemedWindowBackground(this);
         DataContext = _viewModel;
     }
 

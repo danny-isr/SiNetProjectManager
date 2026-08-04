@@ -215,6 +215,7 @@ Appearance (4 user colors) and semantic/state brushes are separate: Settings UI 
 
 Styles: `SiTextTinyStyle` … `SiTextHugeStyle`, `SiRoundedButtonBase` (CornerRadius 6), implicit `Button`,
 `SiPrimaryButtonStyle`, `SiSecondaryButtonStyle`, `SiTextBoxStyle`, `SiComboBoxStyle`, `SiSectionHeaderStyle`,
+implicit `Window` / `UserControl` (Normal typography inheritance roots),
 implicit `Menu` / `MenuItem` / `ContextMenu` / `TreeView` (typography inheritance — see policy below)
 
 XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml`.
@@ -223,15 +224,27 @@ XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResourc
 
 ### Typography wiring policy (menus, trees, KPIs, Email)
 
-**Rule:** no literal `FontSize="N"` in `src/SiNet.App.Wpf` production XAML except the splash / mode-selection brand allowlist below. Every visible `TextBlock` / `Label` must use `SiText*FontSize` DynamicResource or `SiText*Style` / `SiSectionHeaderStyle` (explicit per control — **no** app-wide implicit `TextBlock` style). `Run`s inherit from the parent `TextBlock`.
+**Inheritance model (preferred structural fix):** `FontFamily` + `FontSize` are set on **Window** and **UserControl** roots via:
+
+1. Implicit styles in `ThemeStyles.xaml` (`TargetType="Window"` / `TargetType="UserControl"` → `SiFontFamily` + `SiTextNormalFontSize`)
+2. `ThemeWindowChrome.ApplyThemedWindowBackground` — also binds the same keys on the instance (covers code-built `new Window` and V2-hosted surfaces)
+
+Naked text (`TextBlock` without an explicit size, `CheckBox`/`RadioButton` content strings, `ListBox`/`ComboBox` default item text, `GroupBox.Header` / `TabItem.Header` / `DataGrid` cells that inherit) then follows `BaseFontSize`. Explicit Tiny/Small/Medium/Large (or Email map tokens) on children **still win** over the parent Normal size.
+
+**Why prior sweeps kept missing:** they wired many individual `TextBlock`s to DynamicResource tokens but left Window roots without `FontSize`. Anything that never got a per-control sprinkle (CheckBox lists, default item templates, headers, code-built prompts) stayed at the WPF system default (~12) and ignored Settings.
+
+**OS title-bar limitation:** the caption drawn by Windows for `Window.Title` is **not** controlled by WPF `FontSize` / theme tokens. WPF cannot scale the OS title bar. In-window headers (Email/Inspection brand bars, shell header, dialog section titles) must use `SiTextMediumFontSize` / `SiTextLargeStyle` (etc.) and **do** scale with `BaseFontSize`.
+
+**Rule:** no literal `FontSize="N"` in `src/SiNet.App.Wpf` production XAML except the splash / mode-selection brand allowlist below. Prefer Window/UserControl inheritance for Normal body text; use explicit `SiText*FontSize` / `SiText*Style` / `SiSectionHeaderStyle` where hierarchy is intentional (Email map, section headers, KPIs). **No** app-wide implicit `TextBlock` style. `Run`s inherit from the parent `TextBlock`.
 
 | Surface / control | Token / style | Notes |
 | --- | --- | --- |
+| `Window` / `UserControl` roots | `SiFontFamily` + `SiTextNormalFontSize` | Implicit styles + `ThemeWindowChrome`. Primary inheritance path for naked text. |
 | `Menu`, `MenuItem`, `ContextMenu` | `SiFontFamily` + `SiTextNormalFontSize` | Implicit styles in `ThemeStyles.xaml`. Shell `ItemContainerStyle` must `BasedOn` the implicit `MenuItem` style so command bindings keep theme fonts. |
 | Tree node titles (folder / file / alternative / version) | `SiTextNormalFontSize` (+ `SiFontFamily` when set explicitly) | ProjectWork, FileCatalog, FileTreePicker. Prefer TreeView inherit **and** explicit title `TextBlock` bindings. |
 | KPI / summary numbers | `SiTextLargeFontSize` or `SiTextLargeStyle` | Do **not** use literal `FontSize="20"`. Prefer Large over inventing new tokens. |
 | Email hierarchy (keep distinct scales) | see table below | Do **not** flatten everything to Normal. |
-| App-wide implicit `TextBlock` | **Not used** | No global TextBlock style. Wire Menu/ContextMenu + tree conventions + known hotspots only. |
+| App-wide implicit `TextBlock` | **Not used** | No global TextBlock style — Window inheritance covers naked Normal text. |
 
 #### Email typography scale map
 
@@ -296,11 +309,12 @@ Logging applier remains separate — appearance preview/save does **not** call `
 
 ### Connected native surfaces (Stage 6)
 
-`NewShellWindow` (incl. top `Menu` typography), `ProjectSelectorView`, `ProjectWorkWindowView` (**tree titles + ContextMenus** on theme Normal; **tree state colors** via `SiTree*` semantic brushes), `FileCatalogView` / `FileTreePickerWindow` (tree titles; FileCatalog confirm/delete status brushes), Projects / Workflow Ops dashboards (KPI Large tokens), User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome), `StartupModeSelectionWindow` (theme buttons + SiNet mark), `ProjectTypeWorkflowPolicyView` (`SiBackgroundBrush`). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground`.
+`NewShellWindow` (incl. top `Menu` typography), `ProjectSelectorView`, `ProjectWorkWindowView` (**tree titles + ContextMenus** on theme Normal; **tree state colors** via `SiTree*` semantic brushes), `FileCatalogView` / `FileTreePickerWindow` (tree titles; FileCatalog confirm/delete status brushes), Projects / Workflow Ops dashboards (KPI Large tokens), User Management, Add User, Action Permissions, Secret Setup, `SettingsView`/`SettingsWindow`, `SystemStatusWindow`, `InspectionShellView`, Email visual clone (**content** areas beyond title chrome), Inspection visual clone (non-brand chrome), `TaskWorkbenchView`, quote dialogs, `ResetOptionsDialog`, `ExternalDownloadBrowserWindow`, `ProvisioningPasswordWindow`, MasterPlan mapping + R01/R02/R03 report windows, Workflow canvas/closed viewer (non-semantic chrome), `StartupModeSelectionWindow` (theme buttons + SiNet mark), `ProjectTypeWorkflowPolicyView` (`SiBackgroundBrush`), `ProjectCreateDialogView` (job-type CheckBoxes on Normal tokens). Host windows use `ThemeWindowChrome.ApplyThemedWindowBackground` (background + Normal font inheritance).
 
 **Intentional exceptions (keep hardcoded):**
 
 - Email/Inspection **title-bar brand chrome colors** (`#1976D2` / `#2E7D32` + on-primary text) — colors only; title **text sizes** still use `SiTextMediumFontSize` / Normal chrome
+- **OS window title caption** (`Window.Title`) — not theme-scalable; WPF limitation (see inheritance model above)
 - Splash / mode-selection **brand title sizes only** (`StartupSplashWindow`, `StartupModeSelectionWindow` brand mark titles `FontSize="20"` / `"13"` / splash status `"12"`; V2 `SplashWindow` same) — fixed SiNet brand teal `#0B6E99` / green titles; **not** live theme scale. Mode-selection helper copy + radio options **do** use Stage 6 tokens.
 - Full host/dialog **initial** window `Height`/`Width` when user-resizable (see chrome height policy above)
 - Semantic row tints in User Management DataGrid
