@@ -272,7 +272,8 @@
                                         Padding="8" Margin="0,10,0,6">
                                     <StackPanel>
                                         <TextBlock Text="טריגר" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,4"
-                                                   FontFamily="{DynamicResource SiFontFamily}"/>
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
                                         <TextBlock Text="{Binding SelectedTransition.TriggerType}" FontWeight="SemiBold"
                                                    Style="{DynamicResource SiTextSmallStyle}"/>
                                         <TextBlock Text="{Binding SelectedTransition.TriggerHe}"
@@ -315,7 +316,8 @@
                                         Padding="8" Margin="0,0,0,6">
                                     <StackPanel>
                                         <TextBlock Text="תנאי" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,0,4"
-                                                   FontFamily="{DynamicResource SiFontFamily}"/>
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
                                         <TextBlock Text="{Binding SelectedTransition.ConditionType}" FontWeight="SemiBold"
                                                    Style="{DynamicResource SiTextSmallStyle}"/>
                                         <TextBlock Text="{Binding SelectedTransition.ConditionHe}"
@@ -332,7 +334,8 @@
                                         Padding="8" Margin="0,0,0,6">
                                     <StackPanel>
                                         <TextBlock Text="פעולות" FontWeight="Bold" Foreground="#6A1B9A" Margin="0,0,0,4"
-                                                   FontFamily="{DynamicResource SiFontFamily}"/>
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
                                         <TextBlock Text="אין פעולות במעבר זה"
                                                    Style="{DynamicResource SiTextSmallStyle}" Foreground="#7B1FA2"
                                                    Visibility="{Binding SelectedTransition.HasNoActions, Converter={StaticResource BoolToVis}}"/>

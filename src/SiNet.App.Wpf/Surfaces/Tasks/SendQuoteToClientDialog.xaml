@@ -61,22 +61,30 @@
 
         <TextBlock DockPanel.Dock="Top"
                    Text="{Binding ProjectLine}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextTinyFontSize}"
                    Foreground="{DynamicResource SiSecondaryBrush}"
                    Margin="0,0,0,4"/>
 
         <TextBlock DockPanel.Dock="Top"
                    Text="{Binding ModeLine}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextTinyFontSize}"
                    Foreground="{DynamicResource SiMutedForegroundBrush}"
                    Margin="0,0,0,4"/>
 
         <TextBlock DockPanel.Dock="Top"
                    Text="{Binding StatusMessage}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
                    Foreground="{DynamicResource SiForegroundBrush}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,8"/>
 
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <TextBlock Text="קבצים מצורפים"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextMediumFontSize}"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource SiSecondaryBrush}"
                        Margin="0,0,0,4"/>
@@ -100,6 +108,8 @@
                                 ToolTip="לחץ לצפייה ב-PDF המתויק">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding FileName}"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}"
                                            VerticalAlignment="Center"
                                            MaxWidth="220"
                                            TextTrimming="CharacterEllipsis"
@@ -122,6 +132,8 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
             <TextBlock Text="אין קבצים מצורפים"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"
                        Foreground="{DynamicResource SiMutedForegroundBrush}"
                        Visibility="{Binding HasNoAttachments, Converter={StaticResource BooleanToVisibilityConverter}}"/>
         </StackPanel>
@@ -138,19 +150,31 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="אל:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="אל:"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       VerticalAlignment="Center" Margin="0,0,8,6"/>
             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ToText, UpdateSourceTrigger=PropertyChanged}"
                      Margin="0,0,0,6" MinHeight="28"/>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="עותק:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="עותק:"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       VerticalAlignment="Center" Margin="0,0,8,6"/>
             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CcText, UpdateSourceTrigger=PropertyChanged}"
                      Margin="0,0,0,6" MinHeight="28"/>
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="נושא:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="נושא:"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       VerticalAlignment="Center" Margin="0,0,8,6"/>
             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SubjectText, UpdateSourceTrigger=PropertyChanged}"
                      Margin="0,0,0,6" MinHeight="28"/>
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Text="גוף:" VerticalAlignment="Top" Margin="0,4,8,0"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="גוף:"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       VerticalAlignment="Top" Margin="0,4,8,0"/>
             <TextBox Grid.Row="3" Grid.Column="1"
                      Text="{Binding BodyText, UpdateSourceTrigger=PropertyChanged}"
                      AcceptsReturn="True" TextWrapping="Wrap"

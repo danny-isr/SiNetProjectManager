@@ -32,6 +32,8 @@
 
     <StackPanel Grid.Row="1" Margin="0,0,0,12">
       <TextBlock Text="חודש / שנה" FontWeight="SemiBold" Margin="0,0,0,8"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextMediumFontSize}"
                  Foreground="{DynamicResource SiForegroundBrush}"/>
       <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
         <ComboBox Width="80"
@@ -46,6 +48,8 @@
       </StackPanel>
 
       <TextBlock Text="עובדים" FontWeight="SemiBold" Margin="0,0,0,6"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextMediumFontSize}"
                  Foreground="{DynamicResource SiForegroundBrush}"/>
       <Grid>
         <Grid.ColumnDefinitions>
@@ -68,8 +72,11 @@
             <TextBlock Grid.Column="0"
                        Text="{Binding SelectedEmployeesSummary}"
                        TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center"/>
+                       VerticalAlignment="Center"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
             <TextBlock Grid.Column="1" Text=" ▼"
+                       FontFamily="{DynamicResource SiFontFamily}"
                        FontSize="{DynamicResource SiTextTinyFontSize}"
                        VerticalAlignment="Center" Margin="8,0,0,0"/>
           </Grid>
@@ -78,6 +85,8 @@
         <TextBlock Grid.Column="0"
                    Text="{Binding CurrentUserEmployeeText}"
                    VerticalAlignment="Center"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
                    Foreground="{DynamicResource SiMutedForegroundBrush}"
                    Visibility="{Binding IsNotAdminMode, Converter={StaticResource BoolToVis}}"/>
 
@@ -110,13 +119,15 @@
               <TextBox Text="{Binding EmployeeSearchText, UpdateSourceTrigger=PropertyChanged}"
                        Style="{DynamicResource SiTextBoxStyle}"
                        Margin="0,0,0,6"/>
-              <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+              <ScrollViewer MaxHeight="{DynamicResource SiPopupListMaxHeight}" VerticalScrollBarVisibility="Auto">
                 <ItemsControl ItemsSource="{Binding FilteredEmployees}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
                       <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                 Content="{Binding Name}"
-                                Margin="2,3"/>
+                                Margin="2,3"
+                                FontFamily="{DynamicResource SiFontFamily}"
+                                FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -175,14 +186,19 @@
       <TextBlock Grid.Row="1"
                  Text="{Binding ViewSummary}"
                  FontWeight="SemiBold"
+                 FontFamily="{DynamicResource SiFontFamily}"
                  FontSize="{DynamicResource SiTextNormalFontSize}"
                  Foreground="{DynamicResource SiForegroundBrush}"/>
     </Grid>
 
     <StackPanel Grid.Row="3" Margin="0,8,0,0">
       <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextSmallFontSize}"
                  Foreground="{DynamicResource SiMutedForegroundBrush}"/>
       <TextBlock Text="{Binding ResultUrl}" TextWrapping="Wrap" Margin="0,6,0,0"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextTinyFontSize}"
                  Foreground="{DynamicResource SiPrimaryBrush}"/>
     </StackPanel>
 

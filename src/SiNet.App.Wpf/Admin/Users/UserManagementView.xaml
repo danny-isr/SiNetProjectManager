@@ -13,7 +13,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*" MinHeight="0"/>
-            <RowDefinition Height="Auto" MaxHeight="260"/>
+            <RowDefinition Height="Auto" MaxHeight="{DynamicResource SiPopupListMaxHeight}"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -26,11 +26,15 @@
                        Text="* יש שינויים שלא נשמרו"
                        Foreground="DarkOrange"
                        Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibility}}"/>
-            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="12,0,0,0"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Text="חיפוש:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock Text="חיפוש:" VerticalAlignment="Center" Margin="0,0,8,0"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
             <TextBox Width="260"
                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                      VerticalContentAlignment="Center"/>
@@ -125,40 +129,58 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="שם תצוגה:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="שם תצוגה:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,8,4"/>
-                <TextBlock Grid.Row="0" Grid.Column="2" Text="LoginName:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="LoginName:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding LoginName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="Email:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Email:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,8,4"/>
-                <TextBlock Grid.Row="1" Grid.Column="2" Text="ACC הרשאת:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="ACC הרשאת:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <ComboBox Grid.Row="1" Grid.Column="3"
                           ItemsSource="{Binding DataContext.AvailableAccUserTypes, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding AccUserType, UpdateSourceTrigger=PropertyChanged}"
                           Margin="0,4">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Converter={StaticResource AccUserTypeDisplayConverter}}"/>
+                            <TextBlock Text="{Binding Converter={StaticResource AccUserTypeDisplayConverter}}"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextNormalFontSize}"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="תפקיד:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="תפקיד:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <ComboBox Grid.Row="2" Grid.Column="1"
                           ItemsSource="{Binding DataContext.AvailableRoles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Role, UpdateSourceTrigger=PropertyChanged}"
                           Margin="0,4,8,4">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Converter={StaticResource RoleDisplayConverter}}"/>
+                            <TextBlock Text="{Binding Converter={StaticResource RoleDisplayConverter}}"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextNormalFontSize}"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <TextBlock Grid.Row="2" Grid.Column="2" Text="פעיל:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="פעיל:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <CheckBox Grid.Row="2" Grid.Column="3" IsChecked="{Binding IsActive}" Margin="0,4"/>
 
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="MasterPlan:" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="MasterPlan:" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3"
                           ItemsSource="{Binding DataContext.MasterPlanEmployees, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedValuePath="Id"
@@ -166,7 +188,9 @@
                           SelectedValue="{Binding MasterPlanEmployeeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                           Margin="0,4"/>
 
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="הערות:" VerticalAlignment="Top"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="הערות:" VerticalAlignment="Top"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
                 <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
                          Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
                          AcceptsReturn="True" Height="60" TextWrapping="Wrap" Margin="0,4"/>
@@ -174,6 +198,8 @@
         </Border>
 
         <TextBlock Grid.Row="4" Margin="0,8,0,0" Foreground="Gray"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextTinyFontSize}"
                    Text="בחר משתמש לעריכה. MasterPlan employees נטענים מ-ReplicaDatabase + MasterPlanDatabase (דרך host connection provider)."/>
     </Grid>
 </UserControl>

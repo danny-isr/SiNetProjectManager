@@ -25,7 +25,9 @@
         <TextBlock DockPanel.Dock="Bottom"
                    Text="{Binding StatusMessage}"
                    Margin="0,8,0,0"
-                   TextWrapping="Wrap"/>
+                   TextWrapping="Wrap"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
         <Grid>
             <Grid.RowDefinitions>

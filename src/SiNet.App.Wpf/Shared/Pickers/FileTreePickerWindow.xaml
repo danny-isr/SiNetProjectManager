@@ -21,11 +21,15 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" x:Name="HeaderText"
-                   Margin="0,0,0,8" TextWrapping="Wrap"/>
+                   Margin="0,0,0,8" TextWrapping="Wrap"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
 
         <DockPanel Grid.Row="1" x:Name="TypeFilterPanel" Margin="0,0,0,8" Visibility="Collapsed">
             <TextBlock Text="סוג פרויקט:" VerticalAlignment="Center" Margin="0,0,8,0"
-                       FontWeight="SemiBold"/>
+                       FontWeight="SemiBold"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
             <ComboBox x:Name="TypeFilterBox"
                       DisplayMemberPath="Title"
                       SelectionChanged="OnTypeFilterChanged"/>
@@ -48,7 +52,9 @@
             <TreeView.ItemTemplate>
                 <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Icon}" Margin="0,0,4,0"/>
+                        <TextBlock Text="{Binding Icon}" Margin="0,0,4,0"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
                         <CheckBox Margin="0,0,4,0"
                                   IsChecked="{Binding IsChecked, Mode=TwoWay}"
                                   IsEnabled="{Binding IsSelectable}"
@@ -69,7 +75,9 @@
                    Text="לא נמצאו קבצים זמינים לבחירה"
                    Foreground="#888"
                    Margin="0,8,0,0"
-                   Visibility="Collapsed"/>
+                   Visibility="Collapsed"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal"
                     HorizontalAlignment="Left" Margin="0,8,0,0">

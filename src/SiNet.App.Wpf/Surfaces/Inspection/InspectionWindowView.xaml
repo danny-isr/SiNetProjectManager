@@ -86,7 +86,9 @@
                             <ControlTemplate TargetType="ToggleButton">
                                 <Border x:Name="PinBorder" Background="Transparent" CornerRadius="4" Padding="4">
                                     <TextBlock x:Name="PinIcon" Text="📌" HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" Opacity="0.5" />
+                                               VerticalAlignment="Center" Opacity="0.5"
+                                               FontFamily="{DynamicResource SiFontFamily}"
+                                               FontSize="{DynamicResource SiTextTinyFontSize}" />
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsChecked" Value="True">
@@ -112,7 +114,9 @@
                             <ControlTemplate TargetType="ToggleButton">
                                 <Border x:Name="DockBorder" Background="Transparent" CornerRadius="4" Padding="4">
                                     <TextBlock x:Name="DockIcon" Text="🏠" HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" Opacity="0.5" />
+                                               VerticalAlignment="Center" Opacity="0.5"
+                                               FontFamily="{DynamicResource SiFontFamily}"
+                                               FontSize="{DynamicResource SiTextTinyFontSize}" />
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsChecked" Value="True">
@@ -317,6 +321,7 @@
 
                             <TextBlock Text="{Binding ValidationSummary}"
                                        Foreground="#C62828"
+                                       FontFamily="{DynamicResource SiFontFamily}"
                                        FontSize="{DynamicResource SiTextSmallFontSize}"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,4"
@@ -684,6 +689,7 @@
                                                        Margin="0,0,4,0" />
 
                                             <TextBlock Grid.Column="3" Text="💬"
+                                                       FontFamily="{DynamicResource SiFontFamily}"
                                                        FontSize="{DynamicResource SiTextSmallFontSize}" VerticalAlignment="Center"
                                                        Margin="0,0,4,0"
                                                        ToolTip="התקבלה תגובת מתכנן">

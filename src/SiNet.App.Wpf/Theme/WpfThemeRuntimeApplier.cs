@@ -29,6 +29,10 @@ public sealed class WpfThemeRuntimeApplier : IThemeRuntimeApplier
         resources[ThemeResourceKeys.TextLargeFontSize] = computed.TextLargeFontSize;
         resources[ThemeResourceKeys.TextHugeFontSize] = computed.TextHugeFontSize;
 
+        resources[ThemeResourceKeys.ControlRowHeight] = computed.ControlRowHeight;
+        resources[ThemeResourceKeys.CompactControlRowHeight] = computed.CompactControlRowHeight;
+        resources[ThemeResourceKeys.PopupListMaxHeight] = computed.PopupListMaxHeight;
+
         resources[ThemeResourceKeys.ForegroundBrush] = CreateBrush(computed.ForegroundColor);
         resources[ThemeResourceKeys.BackgroundBrush] = CreateBrush(computed.BackgroundColor);
         resources[ThemeResourceKeys.PrimaryBrush] = CreateBrush(computed.PrimaryColor);

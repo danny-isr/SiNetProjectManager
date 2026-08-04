@@ -9,4 +9,8 @@
     <sys:Double x:Key="SiTextMediumFontSize">14.4</sys:Double>
     <sys:Double x:Key="SiTextLargeFontSize">18</sys:Double>
     <sys:Double x:Key="SiTextHugeFontSize">21.6</sys:Double>
+    <!-- Chrome heights — overwritten with fonts by WpfThemeRuntimeApplier -->
+    <sys:Double x:Key="SiControlRowHeight">26</sys:Double>
+    <sys:Double x:Key="SiCompactControlRowHeight">24</sys:Double>
+    <sys:Double x:Key="SiPopupListMaxHeight">280</sys:Double>
 </ResourceDictionary>

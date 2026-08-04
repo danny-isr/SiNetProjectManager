@@ -76,6 +76,10 @@
 
                            FontWeight="SemiBold"
 
+                           FontFamily="{DynamicResource SiFontFamily}"
+
+                           FontSize="{DynamicResource SiTextSmallFontSize}"
+
                            Foreground="#333" />
 
                 <TextBlock Text="{Binding ErrorMessage}"

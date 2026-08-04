@@ -15,6 +15,8 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top"
                            Text="{Binding StatusMessage}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"
                            Foreground="{DynamicResource SiSecondaryBrush}"
                            TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <StackPanel Orientation="Horizontal">
@@ -56,8 +58,12 @@
                                TextWrapping="Wrap" Margin="0,0,0,6"/>
                     <StackPanel Grid.Row="1" Margin="0,0,0,8">
                         <TextBlock Text="{Binding FromDisplay}"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"
                                    Foreground="{DynamicResource SiMutedForegroundBrush}"/>
                         <TextBlock Text="{Binding DateDisplay}"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"
                                    Foreground="{DynamicResource SiMutedForegroundBrush}"
                                    Margin="0,2,0,0"/>
                         <TextBlock Text="{Binding PromptHint}"
@@ -69,6 +75,8 @@
 
                     <DockPanel Grid.Row="2">
                         <TextBlock DockPanel.Dock="Top" Text="קבצים מקושרים"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextMediumFontSize}"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource SiForegroundBrush}"
                                    Margin="0,0,0,6"/>
@@ -88,6 +96,8 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="{Binding FileName}"
+                                                   FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextNormalFontSize}"
                                                    TextWrapping="Wrap" VerticalAlignment="Center"
                                                    Foreground="{DynamicResource SiForegroundBrush}"/>
                                         <Button Grid.Column="1" Content="פתח ב-ACC"

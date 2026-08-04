@@ -48,6 +48,8 @@
       <StackPanel>
         <TextBlock Text="בחר כיצד להפעיל את מנהל הפרויקטים של שיא חדש."
                    TextWrapping="Wrap"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
                    Foreground="{DynamicResource SiMutedForegroundBrush}"
                    Margin="0,0,0,14"/>
 
@@ -59,7 +61,10 @@
                 Background="{DynamicResource SiSurfaceBrush}">
           <RadioButton Content="מערכת חדשה (New System) — מעטפת נקייה"
                        IsChecked="{Binding IsNewSystemSelected}"
-                       GroupName="StartupMode"/>
+                       GroupName="StartupMode"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}"
+                       Foreground="{DynamicResource SiForegroundBrush}"/>
         </Border>
 
         <Border BorderBrush="{DynamicResource SiBorderBrush}"
@@ -69,7 +74,10 @@
                 Background="{DynamicResource SiSurfaceBrush}">
           <RadioButton Content="מערכת רגילה (Legacy) — התנהגות ייצור נוכחית"
                        IsChecked="{Binding IsLegacySelected}"
-                       GroupName="StartupMode"/>
+                       GroupName="StartupMode"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}"
+                       Foreground="{DynamicResource SiForegroundBrush}"/>
         </Border>
       </StackPanel>
     </DockPanel>

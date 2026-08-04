@@ -59,7 +59,9 @@
             <Menu.Resources>
                 <HierarchicalDataTemplate DataType="{x:Type local:NewShellMenuItem}"
                                           ItemsSource="{Binding Children}">
-                    <TextBlock Text="{Binding Title}" ToolTip="{Binding Description}" />
+                    <TextBlock Text="{Binding Title}" ToolTip="{Binding Description}"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextNormalFontSize}" />
                 </HierarchicalDataTemplate>
             </Menu.Resources>
             <Menu.ItemContainerStyle>
@@ -97,7 +99,9 @@
         <Grid Margin="0">
             <TextBlock Text="בחר פריט מהתפריט כדי לפתוח מסך."
                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.85">
+                       Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.85"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Visibility" Value="Visible" />

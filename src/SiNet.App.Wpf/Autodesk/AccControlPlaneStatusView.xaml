@@ -8,7 +8,9 @@
             CornerRadius="4"
             Padding="8">
         <StackPanel>
-            <TextBlock Text="{Binding HintText, ElementName=Root}" Opacity="0.7" TextWrapping="Wrap">
+            <TextBlock Text="{Binding HintText, ElementName=Root}" Opacity="0.7" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Visibility" Value="Visible"/>
@@ -23,11 +25,21 @@
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
-            <TextBlock Text="{Binding ModeSummary, ElementName=Root}" Margin="0,8,0,0" TextWrapping="Wrap"/>
-            <TextBlock Text="{Binding KeySummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-            <TextBlock Text="{Binding ProjectsSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-            <TextBlock Text="{Binding HealthSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-            <TextBlock Text="{Binding DiagnosticsSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding ModeSummary, ElementName=Root}" Margin="0,8,0,0" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
+            <TextBlock Text="{Binding KeySummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
+            <TextBlock Text="{Binding ProjectsSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
+            <TextBlock Text="{Binding HealthSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
+            <TextBlock Text="{Binding DiagnosticsSummary, ElementName=Root}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"/>
         </StackPanel>
     </Border>
 </UserControl>

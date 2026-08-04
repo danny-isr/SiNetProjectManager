@@ -178,6 +178,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="MaxDropDownHeight" Value="{DynamicResource SiPopupListMaxHeight}"/>
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
         <Setter Property="Template">

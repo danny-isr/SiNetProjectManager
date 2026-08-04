@@ -55,6 +55,26 @@ public sealed class ThemeStage6Tests
     }
 
     [Fact]
+    public void Theme_calculator_computes_chrome_heights_from_font_sizes()
+    {
+        var appearance = TypographyThemeDefaults.CreateDefaultAppearance();
+        var computed = ThemeCalculator.Compute(appearance);
+
+        Assert.Equal(26.0, computed.ControlRowHeight);
+        Assert.Equal(24.0, computed.CompactControlRowHeight);
+        Assert.Equal(280.0, computed.PopupListMaxHeight);
+
+        var large = ThemeCalculator.Compute(appearance with { BaseFontSize = 18 });
+        Assert.Equal(
+            ThemeCalculator.ComputeChromeSize(large.TextNormalFontSize, ThemeCalculator.ControlRowHeightPerNormal),
+            large.ControlRowHeight);
+        Assert.Equal(
+            ThemeCalculator.ComputeChromeSize(large.TextNormalFontSize, ThemeCalculator.PopupListMaxHeightPerNormal),
+            large.PopupListMaxHeight);
+        Assert.True(large.PopupListMaxHeight > computed.PopupListMaxHeight);
+    }
+
+    [Fact]
     public void JsonAppSettingsService_round_trips_all_theme_fields_and_preserves_unknown()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "sinet-theme-test-" + Guid.NewGuid().ToString("N"));
@@ -308,6 +328,8 @@ public sealed class ThemeStage6Tests
         Assert.Contains("EnsureApplicationResourcesMerged", applierSource, StringComparison.Ordinal);
         Assert.Contains("Theme/TypographyResources.xaml", loaderSource, StringComparison.Ordinal);
         Assert.Contains("ThemeStyles.xaml", loaderSource, StringComparison.Ordinal);
+        Assert.Contains("ThemeResourceKeys.PopupListMaxHeight", applierSource, StringComparison.Ordinal);
+        Assert.Contains("ThemeResourceKeys.ControlRowHeight", applierSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -330,6 +352,11 @@ public sealed class ThemeStage6Tests
             Assert.Contains($"x:Key=\"{key}\"", typography, StringComparison.Ordinal);
         }
 
+        foreach (var key in ThemeResourceKeys.AllChromeSizeKeys)
+        {
+            Assert.Contains($"x:Key=\"{key}\"", typography, StringComparison.Ordinal);
+        }
+
         foreach (var key in ThemeResourceKeys.AllBrushKeys)
         {
             Assert.Contains($"x:Key=\"{key}\"", brushes, StringComparison.Ordinal);
@@ -340,6 +367,29 @@ public sealed class ThemeStage6Tests
         Assert.Contains("CornerRadius=\"6\"", styles, StringComparison.Ordinal);
         Assert.Contains("SiComboBoxToggleButtonTemplate", styles, StringComparison.Ordinal);
         Assert.Contains("SiRoundedButtonBase", styles, StringComparison.Ordinal);
+        Assert.Contains(
+            $"MaxDropDownHeight\" Value=\"{{DynamicResource {ThemeResourceKeys.PopupListMaxHeight}}}\"",
+            styles,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProjectSelector_results_popup_uses_theme_popup_list_max_height()
+    {
+        var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Shared", "Projects", "ProjectSelectorView.xaml"));
+        Assert.Contains(
+            $"MaxHeight=\"{{DynamicResource {ThemeResourceKeys.PopupListMaxHeight}}}\"",
+            xaml,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"280\"", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            $"MinHeight\" Value=\"{{DynamicResource {ThemeResourceKeys.ControlRowHeight}}}\"",
+            xaml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"MinHeight\" Value=\"{{DynamicResource {ThemeResourceKeys.CompactControlRowHeight}}}\"",
+            xaml,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -504,6 +554,8 @@ public sealed class ThemeStage6Tests
     [InlineData("Surfaces/Email/Detail/EmailActionBarView.xaml")]
     [InlineData("Surfaces/Email/Detail/EmailAttachmentStripView.xaml")]
     [InlineData("Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml")]
+    [InlineData("Surfaces/Email/EmailSurfaceView.xaml")]
+    [InlineData("Surfaces/Email/ExternalDownloadBrowserWindow.xaml")]
     [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
     [InlineData("Surfaces/Tasks/TaskWorkbenchView.xaml")]
     [InlineData("Surfaces/Tasks/TaskCreateDialogView.xaml")]
@@ -635,6 +687,8 @@ public sealed class ThemeStage6Tests
     [InlineData("Surfaces/Email/Detail/EmailActionBarView.xaml")]
     [InlineData("Surfaces/Email/Detail/EmailAttachmentStripView.xaml")]
     [InlineData("Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml")]
+    [InlineData("Surfaces/Email/EmailSurfaceView.xaml")]
+    [InlineData("Surfaces/Email/ExternalDownloadBrowserWindow.xaml")]
     [InlineData("Surfaces/Inspection/InspectionWindowView.xaml")]
     [InlineData("Surfaces/Tasks/TaskWorkbenchView.xaml")]
     [InlineData("Surfaces/Tasks/TaskCreateDialogView.xaml")]
@@ -646,6 +700,111 @@ public sealed class ThemeStage6Tests
         var matches = Regex.Matches(content, @"FontSize\s*=\s*""[0-9]");
         Assert.True(matches.Count == 0,
             $"Hardcoded FontSize literals found in {relativePath}: {string.Join(", ", matches.Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value))}");
+    }
+
+    [Fact]
+    public void App_wpf_xaml_has_no_literal_fontsize_outside_splash_allowlist()
+    {
+        var allowlist = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            Path.Combine("Shell", "StartupSplashWindow.xaml"),
+            Path.Combine("Shell", "StartupModeSelectionWindow.xaml"),
+        };
+
+        var violations = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(AppWpfRoot, "*.xaml", SearchOption.AllDirectories))
+        {
+            if (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var relative = Path.GetRelativePath(AppWpfRoot, path);
+            if (allowlist.Contains(relative))
+            {
+                continue;
+            }
+
+            var content = File.ReadAllText(path);
+            var matches = Regex.Matches(content, @"FontSize\s*=\s*""[0-9]");
+            if (matches.Count == 0)
+            {
+                continue;
+            }
+
+            violations.Add($"{relative}: {string.Join(", ", matches.Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value))}");
+        }
+
+        Assert.True(violations.Count == 0,
+            "Literal FontSize outside splash/mode-selection allowlist:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Splash_allowlist_keeps_intentional_brand_fontsize_literals()
+    {
+        var splash = File.ReadAllText(Path.Combine(AppWpfRoot, "Shell", "StartupSplashWindow.xaml"));
+        var mode = File.ReadAllText(Path.Combine(AppWpfRoot, "Shell", "StartupModeSelectionWindow.xaml"));
+        Assert.Contains("FontSize=\"20\"", splash, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"13\"", splash, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"20\"", mode, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"13\"", mode, StringComparison.Ordinal);
+        // Non-brand copy on mode-selection must still scale with theme.
+        Assert.Contains("SiTextSmallFontSize", mode, StringComparison.Ordinal);
+        Assert.Contains("SiTextNormalFontSize", mode, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Surfaces/Email/EmailListItemCard.xaml")]
+    [InlineData("Surfaces/Email/EmailListFilterBar.xaml")]
+    [InlineData("Surfaces/Email/EmailLabelGroupHeader.xaml")]
+    [InlineData("Surfaces/Email/EmailSurfaceView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailViewerPaneView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailActionBarView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailAttachmentStripView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailWorkflowActionsPaneView.xaml")]
+    [InlineData("Surfaces/Email/Detail/EmailDetailView.xaml")]
+    [InlineData("Surfaces/Email/EmailWindowView.xaml")]
+    [InlineData("Surfaces/Email/EmailWorkItemWindow.xaml")]
+    [InlineData("Surfaces/Email/EmailListView.xaml")]
+    public void Email_textblocks_opt_into_stage6_fontsize_or_sitext_style(string relativePath)
+    {
+        var content = File.ReadAllText(Path.Combine(AppWpfRoot, relativePath));
+        content = Regex.Replace(content, @"<!--.*?-->", string.Empty, RegexOptions.Singleline);
+        var openings = Regex.Matches(content, @"<TextBlock(?![\.\w])\b([^>]*)>", RegexOptions.Singleline);
+        var naked = new List<string>();
+        foreach (System.Text.RegularExpressions.Match match in openings)
+        {
+            var attrs = match.Groups[1].Value;
+            if (attrs.Contains("FontSize", StringComparison.Ordinal)
+                || Regex.IsMatch(attrs, @"SiText\w+Style|SiSectionHeaderStyle"))
+            {
+                continue;
+            }
+
+            // Nested Style BasedOn SiText* counts (property-element after opening tag).
+            var after = content.AsSpan(match.Index + match.Length);
+            var peek = after.Length > 400 ? after[..400].ToString() : after.ToString();
+            if (Regex.IsMatch(peek, @"<TextBlock\.Style>[\s\S]*?BasedOn\s*=\s*""\{StaticResource SiText")
+                || Regex.IsMatch(peek, @"<TextBlock\.Style>[\s\S]*?BasedOn\s*=\s*""\{StaticResource SiSectionHeaderStyle"))
+            {
+                continue;
+            }
+
+            naked.Add(Regex.Replace(match.Value, @"\s+", " ").Trim());
+        }
+
+        Assert.True(naked.Count == 0,
+            $"{relativePath} has TextBlocks without Stage 6 FontSize/Style:{Environment.NewLine}{string.Join(Environment.NewLine, naked)}");
+    }
+
+    [Fact]
+    public void Email_list_card_keeps_distinct_scale_hierarchy()
+    {
+        var content = File.ReadAllText(Path.Combine(AppWpfRoot, "Surfaces", "Email", "EmailListItemCard.xaml"));
+        Assert.Contains("SiTextNormalFontSize", content, StringComparison.Ordinal); // subject
+        Assert.Contains("SiTextSmallFontSize", content, StringComparison.Ordinal);  // sender / snippet
+        Assert.Contains("SiTextTinyFontSize", content, StringComparison.Ordinal);   // meta / chips
     }
 
     [Fact]

@@ -37,7 +37,8 @@
 
             <GroupBox Grid.Column="1">
                 <GroupBox.Header>
-                    <TextBlock>
+                    <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}">
                         <Run Text="מורשים ל: "/>
                         <Run Text="{Binding SelectedAction.DisplayName, Mode=OneWay}"/>
                     </TextBlock>
@@ -55,6 +56,8 @@
                             <DataTemplate>
                                 <CheckBox Content="{Binding DisplayName}"
                                           IsChecked="{Binding IsAuthorized, Mode=TwoWay}"
+                                          FontFamily="{DynamicResource SiFontFamily}"
+                                          FontSize="{DynamicResource SiTextSmallFontSize}"
                                           Checked="UserCheckBox_Changed"
                                           Unchecked="UserCheckBox_Changed"/>
                             </DataTemplate>
@@ -65,6 +68,8 @@
         </Grid>
 
         <TextBlock Grid.Row="2" Margin="0,8,0,0" Foreground="Gray"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextTinyFontSize}"
                    Text="סמן משתמשים מורשים לכל פעולה ולחץ שמור."/>
     </Grid>
 </UserControl>

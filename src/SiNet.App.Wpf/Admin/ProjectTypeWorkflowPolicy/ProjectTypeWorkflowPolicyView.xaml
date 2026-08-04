@@ -25,7 +25,9 @@
                 <TextBlock Text="{Binding UnmappedSummary}"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center"
-                           FontWeight="SemiBold"/>
+                           FontWeight="SemiBold"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
             </DockPanel>
         </Border>
 
@@ -37,7 +39,9 @@
             </Grid.ColumnDefinitions>
 
             <DockPanel Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Text="סוג פרויקט (JobType)" FontWeight="Bold" Margin="0,0,0,6"/>
+                <TextBlock DockPanel.Dock="Top" Text="סוג פרויקט (JobType)" FontWeight="Bold" Margin="0,0,0,6"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}"/>
                 <ListBox ItemsSource="{Binding JobTypes}"
                          SelectedItem="{Binding SelectedJobType}"
                          DisplayMemberPath="Title"/>
@@ -46,7 +50,9 @@
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"/>
 
             <DockPanel Grid.Column="2" Margin="8,0,0,0">
-                <TextBlock DockPanel.Dock="Top" Text="מיפויי תהליך לסוג הנבחר" FontWeight="Bold" Margin="0,0,0,6"/>
+                <TextBlock DockPanel.Dock="Top" Text="מיפויי תהליך לסוג הנבחר" FontWeight="Bold" Margin="0,0,0,6"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}"/>
                 <DataGrid ItemsSource="{Binding Mappings}"
                           SelectedItem="{Binding SelectedMapping}"
                           AutoGenerateColumns="False"
@@ -75,14 +81,20 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="הוסף / עדכן מיפוי:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                    <TextBlock Text="הוסף / עדכן מיפוי:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"/>
                     <ComboBox ItemsSource="{Binding ActiveWorkflowDefinitions}"
                               SelectedItem="{Binding SelectedDefinitionToAdd}"
                               DisplayMemberPath="Name"
                               Width="260" Margin="0,0,8,0"/>
                     <CheckBox Content="ברירת מחדל" IsChecked="{Binding AddAsDefault}"
-                              VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Text="סדר:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                              VerticalAlignment="Center" Margin="0,0,8,0"
+                              FontFamily="{DynamicResource SiFontFamily}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                    <TextBlock Text="סדר:" VerticalAlignment="Center" Margin="0,0,4,0"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding AddSortOrder, UpdateSourceTrigger=PropertyChanged}"
                              Width="48" Margin="0,0,8,0"/>
                     <Button Content="שמור מיפוי" Command="{Binding AddMappingCommand}" Padding="10,4"/>
@@ -98,6 +110,8 @@
         </Border>
 
         <TextBlock Grid.Row="3" Margin="0,8,0,0" Text="{Binding StatusMessage}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
                    Foreground="{DynamicResource SiMutedForegroundBrush}"/>
     </Grid>
 </UserControl>

@@ -36,6 +36,8 @@
 
         <TextBlock DockPanel.Dock="Top"
                    Text="{Binding PromptHint}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextNormalFontSize}"
                    Foreground="{DynamicResource SiSecondaryBrush}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,10"/>
@@ -50,9 +52,13 @@
                            Foreground="{DynamicResource SiForegroundBrush}"
                            TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <TextBlock Text="{Binding FromDisplay}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextTinyFontSize}"
                            Foreground="{DynamicResource SiMutedForegroundBrush}"
                            Margin="0,0,0,3"/>
                 <TextBlock Text="{Binding DateDisplay}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextTinyFontSize}"
                            Foreground="{DynamicResource SiMutedForegroundBrush}"/>
             </StackPanel>
         </Border>

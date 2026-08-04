@@ -13,7 +13,9 @@
         </Grid.RowDefinitions>
 
         <Border Background="#FFFFE0" BorderBrush="#FFCC00" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,15">
-            <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FlowDirection="RightToLeft">
+            <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FlowDirection="RightToLeft"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}">
                 <Run Text="מצב בדיקת הרשאות — משנה את הרשאות המשתמש הנוכחי ב־DB." FontWeight="Bold"/>
                 <LineBreak/>
                 <Run Text="חלון זה מיועד לבדיקות (Debug) בלבד ולא קיים ב־Release / Production."/>
@@ -21,15 +23,27 @@
         </Border>
 
         <StackPanel Grid.Row="1" Margin="0,0,0,15">
-            <TextBlock Text="משתמש נוכחי:" FontWeight="Bold" Margin="0,0,0,5"/>
-            <TextBlock x:Name="LoginNameText" Text="LoginName: " Margin="0,0,0,2"/>
-            <TextBlock x:Name="DisplayNameText" Text="DisplayName: " Margin="0,0,0,2"/>
-            <TextBlock x:Name="CurrentRoleText" Text="Current Role: " Margin="0,0,0,2"/>
-            <TextBlock x:Name="IsActiveText" Text="Is Active: " Margin="0,0,0,2"/>
+            <TextBlock Text="משתמש נוכחי:" FontWeight="Bold" Margin="0,0,0,5"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextMediumFontSize}"/>
+            <TextBlock x:Name="LoginNameText" Text="LoginName: " Margin="0,0,0,2"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"/>
+            <TextBlock x:Name="DisplayNameText" Text="DisplayName: " Margin="0,0,0,2"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"/>
+            <TextBlock x:Name="CurrentRoleText" Text="Current Role: " Margin="0,0,0,2"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"/>
+            <TextBlock x:Name="IsActiveText" Text="Is Active: " Margin="0,0,0,2"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextTinyFontSize}"/>
         </StackPanel>
 
         <StackPanel Grid.Row="2">
-            <TextBlock Text="בחר Role לטעינה (ישנה ב־DB):" FontWeight="Bold" Margin="0,0,0,10"/>
+            <TextBlock Text="בחר Role לטעינה (ישנה ב־DB):" FontWeight="Bold" Margin="0,0,0,10"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextMediumFontSize}"/>
 
             <RadioButton x:Name="RbNoChange" Content="No Change (Continue with current)" IsChecked="True" Margin="0,0,0,5"/>
             <RadioButton x:Name="RbAdmin" Content="Administrator / Active" Margin="0,0,0,5"/>
@@ -39,8 +53,12 @@
             <RadioButton x:Name="RbInactive" Content="Employee / Inactive" Margin="0,0,0,5"/>
 
             <TextBlock x:Name="WarningTextUnauthorized" Foreground="Red" TextWrapping="Wrap" Margin="0,10,0,0" FontWeight="Bold"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
                        Text="בחירה זו תחסום את הכניסה לאפליקציה לאחר המשך ההפעלה. ודא שיש Restore." Visibility="Collapsed"/>
             <TextBlock x:Name="WarningTextInactive" Foreground="Red" TextWrapping="Wrap" Margin="0,10,0,0" FontWeight="Bold"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
                        Text="בחירה זו תהפוך את המשתמש ללא פעיל ותחסום את הכניסה. ודא שיש Restore." Visibility="Collapsed"/>
         </StackPanel>
 

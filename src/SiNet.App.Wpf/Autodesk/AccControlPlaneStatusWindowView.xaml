@@ -26,11 +26,15 @@
                         Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="ACC Inbox bootstrap (כתיבה מבוקרת)"
-                                   FontWeight="SemiBold"/>
+                                   FontWeight="SemiBold"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
                         <TextBlock Text="הפעולה מבצעת ensure לפרויקט Inbox, לתיקיית _Inbox ולהגדרות הגישה דרך ה-service/local mode הפעיל. לאחר הצלחה ימולאו projectId ו-folderId לבדיקה מיידית."
                                    Margin="0,6,0,0"
                                    Opacity="0.75"
-                                   TextWrapping="Wrap"/>
+                                   TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal"
                                     HorizontalAlignment="Left"
                                     Margin="0,8,0,0">
@@ -41,15 +45,21 @@
                         <TextBlock Text="{Binding InboxBootstrapSummary}"
                                    Margin="0,8,0,0"
                                    Opacity="0.85"
-                                   TextWrapping="Wrap"/>
+                                   TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
                         <TextBlock Text="ACC Inbox reconciliation (קריאה בלבד)"
                                    FontWeight="SemiBold"
-                                   Margin="0,12,0,0"/>
+                                   Margin="0,12,0,0"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
                         <TextBlock Text="הזן EmailInboxMessage.Id או MessageUniqueId כדי לבדוק מה באמת קיים ב-ACC Inbox. התוצאה משתמשת ב-reconciliation read-only דרך ה-port החדש, בלי לבצע כתיבה."
                                    Margin="0,6,0,0"
                                    Opacity="0.75"
-                                   TextWrapping="Wrap"/>
+                                   TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170"/>
@@ -86,13 +96,15 @@
                         <TextBlock Text="{Binding ReconciliationSummary}"
                                    Margin="0,8,0,0"
                                    Opacity="0.85"
-                                   TextWrapping="Wrap"/>
+                                   TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <DataGrid ItemsSource="{Binding ReconciliationItems}"
                                   SelectedItem="{Binding SelectedReconciliationItem}"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
                                   IsReadOnly="True"
-                                  MaxHeight="220"
+                                  MaxHeight="{DynamicResource SiPopupListMaxHeight}"
                                   Margin="0,8,0,0">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Attachment"
@@ -115,11 +127,15 @@
 
                         <TextBlock Text="בדיקת resolve של פריט ACC (קריאה בלבד)"
                                    FontWeight="SemiBold"
-                                   Margin="0,12,0,0"/>
+                                   Margin="0,12,0,0"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
                         <TextBlock Text="הזן projectId, folderId ו-fileName כדי לבדוק שה-service/local mode מצליח לפתור פריט אמיתי ב-ACC."
                                    Margin="0,6,0,0"
                                    Opacity="0.75"
-                                   TextWrapping="Wrap"/>
+                                   TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <autodesk:AccReadOnlyDocumentBrowserView DataContext="{Binding Browser}"/>
                     </StackPanel>
                 </Border>
@@ -130,7 +146,9 @@
                    Text="{Binding SummaryMessage}"
                    Margin="0,12,0,0"
                    TextWrapping="Wrap"
-                   Foreground="{DynamicResource SiSecondaryBrush}"/>
+                   Foreground="{DynamicResource SiSecondaryBrush}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
             <Button Content="טען דוגמה מה-DB"

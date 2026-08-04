@@ -59,7 +59,9 @@
                 <TextBlock Grid.Column="0"
                            Text="{Binding Sender}"
                            TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding Sender}">
+                           ToolTip="{Binding Sender}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Setter Property="FontWeight" Value="Normal" />
@@ -82,7 +84,9 @@
             <TextBlock Text="{Binding Subject}"
                        Margin="0,2,0,0"
                        TextTrimming="CharacterEllipsis"
-                       ToolTip="{Binding Subject}">
+                       ToolTip="{Binding Subject}"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextNormalFontSize}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="FontWeight" Value="Normal" />

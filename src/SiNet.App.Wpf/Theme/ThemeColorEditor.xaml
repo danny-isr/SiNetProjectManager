@@ -12,7 +12,9 @@
         </Grid.ColumnDefinitions>
 
         <TextBlock Grid.Column="0" Text="{Binding Label, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                   VerticalAlignment="Center"/>
+                   VerticalAlignment="Center"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
         <Border x:Name="ColorSwatch" Grid.Column="1" Width="28" Height="28" Margin="4,0"
                 BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" CornerRadius="2"/>

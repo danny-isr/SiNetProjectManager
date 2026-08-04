@@ -69,10 +69,17 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#x2709;" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBlock Text="&#x2709;"
+                               Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
+                               Foreground="{DynamicResource SiForegroundBrush}" />
                     <TextBlock Text="{Binding AccountStatusDisplay}"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
                                Foreground="{DynamicResource SiForegroundBrush}" />
                     <ToggleButton Style="{StaticResource ToggleActionButton}"
                                   IsChecked="{Binding ShowUnreadFilterActive, Mode=OneWay}"
@@ -92,7 +99,8 @@
                                Visibility="{Binding ShowAllEmailsPaging, Converter={StaticResource BoolToVis}}">
                         <TextBlock.ToolTip>
                             <StackPanel>
-                                <TextBlock>
+                                <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}">
                                     <Run Text="נטענו " />
                                     <Run Text="{Binding DisplayedCount, Mode=OneWay}" />
                                     <Run Text=" · הבא: " />
@@ -102,6 +110,8 @@
                                 </TextBlock>
                                 <TextBlock Text="{Binding MailboxDiagnostics}"
                                            Margin="0,2,0,0"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}"
                                            Visibility="{Binding ShowMailboxDiagnostics, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </TextBlock.ToolTip>

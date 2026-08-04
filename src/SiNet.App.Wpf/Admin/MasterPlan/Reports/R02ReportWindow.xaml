@@ -15,14 +15,24 @@
             Margin="0,12,0,0"/>
     <StackPanel>
       <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-        <TextBlock Text="מתאריך:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <TextBlock Text="מתאריך:" VerticalAlignment="Center" Margin="0,0,8,0"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
         <DatePicker SelectedDate="{Binding StartDate}" Width="140" Margin="0,0,16,0"/>
-        <TextBlock Text="עד:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <TextBlock Text="עד:" VerticalAlignment="Center" Margin="0,0,8,0"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
         <DatePicker SelectedDate="{Binding EndDate}" Width="140"/>
       </StackPanel>
-      <CheckBox Content="החרג שורות עם 0 שעות" IsChecked="{Binding ExcludeZeroHours}" Margin="0,0,0,12"/>
-      <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"/>
-      <TextBlock Text="{Binding ResultUrl}" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="DarkBlue"/>
+      <CheckBox Content="החרג שורות עם 0 שעות" IsChecked="{Binding ExcludeZeroHours}" Margin="0,0,0,12"
+                FontFamily="{DynamicResource SiFontFamily}"
+                FontSize="{DynamicResource SiTextSmallFontSize}"/>
+      <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextSmallFontSize}"/>
+      <TextBlock Text="{Binding ResultUrl}" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="DarkBlue"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextTinyFontSize}"/>
     </StackPanel>
   </DockPanel>
 </Window>

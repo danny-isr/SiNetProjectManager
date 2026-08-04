@@ -35,6 +35,8 @@
                           VerticalAlignment="Center" Margin="0,0,4,0"
                           ToolTip="&#x05E4;&#x05EA;&#x05D5;&#x05D7;/&#x05E1;&#x05D2;&#x05D5;&#x05E8; &#x05D8;&#x05D0;&#x05D1; ACC"/>
                 <TextBlock Text="&#x26A0;" Foreground="{DynamicResource SiDangerBrush}" VerticalAlignment="Center" Margin="0,0,4,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextTinyFontSize}"
                            ToolTip="&#x05D4;&#x05EA;&#x05E0;&#x05D2;&#x05E9;&#x05D5;&#x05EA; &#x05E1;&#x05D9;&#x05D5;&#x05DE;&#x05D5;&#x05EA;"
                            Visibility="{Binding HasExtensionConflict, Converter={StaticResource BoolToVis}}" />
                 <Button Command="{Binding OpenCommand}" Cursor="Hand"
@@ -66,12 +68,14 @@
                     </TextBlock>
                 </Button>
                 <TextBlock Margin="8,0,0,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextTinyFontSize}"
                            Foreground="{DynamicResource SiSuccessBrush}"
                            VerticalAlignment="Center"
                            Text="&#x2191; &#x05DE;&#x05E2;&#x05DC;&#x05D4;&#x2026;"
                            Visibility="{Binding IsInFlight, Converter={StaticResource BoolToVis}}" />
                 <TextBlock Text="{Binding Details}" Margin="10,0,0,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextTinyFontSize}"
                            Foreground="{DynamicResource SiMutedForegroundBrush}"
                            VerticalAlignment="Center" />
@@ -129,6 +133,7 @@
                 <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="3"
                         Background="{DynamicResource SiSurfaceBrush}" VerticalAlignment="Center">
                     <TextBlock Text="{Binding StorageLabel}"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextTinyFontSize}"
                                Foreground="{DynamicResource SiSecondaryBrush}" />
                 </Border>
@@ -203,10 +208,12 @@
             <!-- Header: project context -->
             <StackPanel Grid.Row="0" Margin="0,0,0,8">
                 <TextBlock Text="{Binding Title}"
+                           FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextLargeFontSize}"
                            FontWeight="Bold"
                            Foreground="{DynamicResource SiForegroundBrush}" />
                 <TextBlock Text="{Binding ActiveProjectDisplay}"
+                           FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextNormalFontSize}"
                            Foreground="{DynamicResource SiMutedForegroundBrush}"
                            Margin="0,2,0,0"
@@ -231,6 +238,7 @@
                     CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
                     Visibility="{Binding IsTaskMode, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="{Binding TaskHeader}"
+                           FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextMediumFontSize}"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource SiForegroundBrush}" />
@@ -249,6 +257,7 @@
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top"
                                    Margin="8,6,8,2"
+                                   FontFamily="{DynamicResource SiFontFamily}"
                                    FontSize="{DynamicResource SiTextTinyFontSize}"
                                    TextWrapping="Wrap">
                             <Run Text="ירוק = קבצים פיזיים / recover חדש" Foreground="{DynamicResource SiTreePhysicalBrush}" />
@@ -298,6 +307,7 @@
                         <ContentControl x:Name="AccViewerHost">
                             <Border Background="{DynamicResource SiSurfaceBrush}" Padding="14">
                                 <TextBlock TextWrapping="Wrap"
+                                           FontFamily="{DynamicResource SiFontFamily}"
                                            FontSize="{DynamicResource SiTextNormalFontSize}"
                                            Foreground="{DynamicResource SiMutedForegroundBrush}"
                                            VerticalAlignment="Top"
@@ -319,6 +329,7 @@
 
                 <TextBlock Grid.Column="0" Text="&#x05EA;&#x05D5;&#x05E6;&#x05D0;&#x05D4;:"
                            VerticalAlignment="Center" Margin="0,0,8,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextNormalFontSize}"
                            Foreground="{DynamicResource SiForegroundBrush}" />
 
@@ -329,7 +340,9 @@
                           MinWidth="180" VerticalAlignment="Center">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding DisplayName}">
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextNormalFontSize}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource SiForegroundBrush}" />
@@ -365,10 +378,12 @@
                     CornerRadius="4">
                 <StackPanel>
                     <TextBlock Text="{Binding StatusMessage}"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"
                                Foreground="{DynamicResource SiMutedForegroundBrush}"
                                TextWrapping="Wrap" />
                     <TextBlock Text="{Binding Tree.ScanStatus}"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"
                                Foreground="{DynamicResource SiMutedForegroundBrush}"
                                TextWrapping="Wrap" Margin="0,2,0,0" />

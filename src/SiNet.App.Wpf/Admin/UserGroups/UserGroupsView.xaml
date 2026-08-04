@@ -16,7 +16,9 @@
             <TextBlock DockPanel.Dock="Top" Text="קבוצות" FontWeight="SemiBold" Margin="0,0,0,8"
                        Style="{DynamicResource SiTextNormalStyle}"/>
             <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                <TextBlock Text="קבוצה חדשה" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Text="קבוצה חדשה" FontWeight="SemiBold" Margin="0,0,0,4"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}"/>
                 <TextBox Text="{Binding NewGroupCode, UpdateSourceTrigger=PropertyChanged}"
                          Margin="0,0,0,4" FlowDirection="LeftToRight"
                          ToolTip="קוד (אנגלית)"/>
@@ -60,19 +62,27 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="קוד:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="קוד:" VerticalAlignment="Center" Margin="0,0,0,6"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding EditCode, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,6" FlowDirection="LeftToRight"/>
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שם:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="שם:" VerticalAlignment="Center" Margin="0,0,0,6"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,6"/>
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="תיאור:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="תיאור:" VerticalAlignment="Center" Margin="0,0,0,6"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EditDescription, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,6"/>
                 </Grid>
 
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                     <TextBlock Text="ברירת מחדל:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"
                                ToolTip="נשמר אוטומטית בבחירה מהרשימה"/>
                     <ComboBox Width="220"
                               ItemsSource="{Binding Members}"
@@ -89,7 +99,9 @@
 
                 <Separator Margin="0,0,0,8"/>
                 <DockPanel Margin="0,0,0,6">
-                    <TextBlock Text="חברי קבוצה" FontWeight="SemiBold" DockPanel.Dock="Right"/>
+                    <TextBlock Text="חברי קבוצה" FontWeight="SemiBold" DockPanel.Dock="Right"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextMediumFontSize}"/>
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" HorizontalAlignment="Left">
                         <ComboBox Width="200"
                                   ItemsSource="{Binding AvailableUsers}"
@@ -141,7 +153,9 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Margin="2">
-                            <TextBlock FontWeight="SemiBold">
+                            <TextBlock FontWeight="SemiBold"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextNormalFontSize}">
                                 <Run Text="{Binding WorkflowCode, Mode=OneWay}"/>
                                 <Run Text="."/>
                                 <Run Text="{Binding StageCode, Mode=OneWay}"/>

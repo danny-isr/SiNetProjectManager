@@ -36,7 +36,9 @@
                                   CommandParameter="{Binding}"/>
                     </ContextMenu>
                 </StackPanel.ContextMenu>
-                <TextBlock Text="📁" Margin="0,0,5,0" Foreground="#FFDAA520"/>
+                <TextBlock Text="📁" Margin="0,0,5,0" Foreground="#FFDAA520"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextNormalFontSize}"/>
                 <TextBlock Text="{Binding Title}"
                            FontFamily="{DynamicResource SiFontFamily}"
                            FontSize="{DynamicResource SiTextNormalFontSize}"
@@ -56,7 +58,9 @@
                 BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="0,0,0,1"
                 Background="{DynamicResource SiSurfaceBrush}">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="סינון לפי סוג עבודה:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+                <TextBlock Text="סינון לפי סוג עבודה:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}"/>
                 <ComboBox ItemsSource="{Binding JobTypes}"
                           SelectedItem="{Binding SelectedJobType}"
                           DisplayMemberPath="Title"
@@ -84,7 +88,9 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <TextBlock Text="תיקיות פרויקט" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="תיקיות פרויקט" FontWeight="Bold" Margin="0,0,0,5"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}"/>
                 <TreeView x:Name="FolderTree" Grid.Row="1"
                           ItemsSource="{Binding FolderTree}"
                           FontFamily="{DynamicResource SiFontFamily}"
@@ -105,11 +111,16 @@
 
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
                     <TextBlock Text="קבצים" FontWeight="Bold"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextMediumFontSize}"
                                VerticalAlignment="Center"/>
                     <TextBlock Text=" — תצוגה:" VerticalAlignment="Center" Margin="8,0,0,0"
-                               Foreground="{DynamicResource SiSecondaryBrush}"/>
-                    <TextBlock Text="{Binding FolderFilterCaption}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="4,0,0,0"/>
+                               Foreground="{DynamicResource SiSecondaryBrush}"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                    <TextBlock Text="{Binding FolderFilterCaption}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="4,0,0,0"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextNormalFontSize}"/>
                     <Button Content="הוסף קובץ" Command="{Binding AddFileCommand}"
                             Margin="10,0,0,0" Padding="8,2"/>
                     <Button Content="מחק נבחר" Command="{Binding DeleteFileCommand}"
@@ -174,7 +185,9 @@
         </Grid>
 
         <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Margin="0,8,0,0"
-                   Foreground="{DynamicResource SiSecondaryBrush}"/>
+                   Foreground="{DynamicResource SiSecondaryBrush}"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
         <Grid Background="#7F000000" Visibility="{Binding IsDialogOpen, Converter={StaticResource BoolToVis}}"
               Grid.RowSpan="3">
@@ -183,9 +196,12 @@
                     BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1">
                 <StackPanel>
                     <TextBlock Text="{Binding DialogHeader}" FontWeight="Bold"
+                               FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextMediumFontSize}"
                                Margin="0,0,0,12"/>
-                    <TextBlock Text="שם:" Margin="0,0,0,4"/>
+                    <TextBlock Text="שם:" Margin="0,0,0,4"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding DialogInput, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16" Padding="6"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                         <Button Content="אישור" Command="{Binding ConfirmDialogCommand}"

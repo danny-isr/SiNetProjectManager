@@ -24,7 +24,10 @@
                                Foreground="{DynamicResource SiSecondaryBrush}"
                                FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}" />
-                    <TextBlock Text="  •  " Foreground="{DynamicResource SiSecondaryBrush}" />
+                    <TextBlock Text="  •  "
+                               Foreground="{DynamicResource SiSecondaryBrush}"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}" />
                     <TextBlock Text="{Binding ReceivedDisplay}"
                                Foreground="{DynamicResource SiSecondaryBrush}"
                                FontFamily="{DynamicResource SiFontFamily}"
@@ -37,6 +40,8 @@
                    TextWrapping="Wrap"
                    Foreground="#4527A0"
                    FontWeight="SemiBold"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"
                    Margin="12,8,12,0">
             <TextBlock.Style>
                 <Style TargetType="TextBlock">

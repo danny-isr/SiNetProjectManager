@@ -35,7 +35,8 @@
                  BorderThickness="1">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock>
+                    <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextNormalFontSize}">
                         <Run Text="{Binding ProjectNumber, Mode=OneWay}" />
                         <Run Text=" · " />
                         <Run Text="{Binding ProjectName, Mode=OneWay}" />

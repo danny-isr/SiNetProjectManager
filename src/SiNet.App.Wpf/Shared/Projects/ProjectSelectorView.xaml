@@ -17,13 +17,13 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <Style x:Key="CompactTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource SiTextBoxStyle}">
-            <Setter Property="Height" Value="26" />
+            <Setter Property="MinHeight" Value="{DynamicResource SiControlRowHeight}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Padding" Value="4,0" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
-                    <Setter Property="Height" Value="24" />
+                    <Setter Property="MinHeight" Value="{DynamicResource SiCompactControlRowHeight}" />
                     <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
@@ -33,12 +33,12 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Width" Value="128" />
-            <Setter Property="Height" Value="26" />
+            <Setter Property="MinHeight" Value="{DynamicResource SiControlRowHeight}" />
             <Setter Property="FontSize" Value="{DynamicResource SiTextNormalFontSize}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
                     <Setter Property="Width" Value="88" />
-                    <Setter Property="Height" Value="24" />
+                    <Setter Property="MinHeight" Value="{DynamicResource SiCompactControlRowHeight}" />
                     <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
@@ -70,13 +70,14 @@
         </Style>
 
         <Style x:Key="ToggleButtonStyle" TargetType="Button" BasedOn="{StaticResource SiSecondaryButtonStyle}">
-            <Setter Property="Width" Value="26" />
+            <Setter Property="MinWidth" Value="{DynamicResource SiControlRowHeight}" />
+            <Setter Property="MinHeight" Value="{DynamicResource SiControlRowHeight}" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="3,0,0,0" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
-                    <Setter Property="Width" Value="24" />
-                    <Setter Property="Height" Value="24" />
+                    <Setter Property="MinWidth" Value="{DynamicResource SiCompactControlRowHeight}" />
+                    <Setter Property="MinHeight" Value="{DynamicResource SiCompactControlRowHeight}" />
                     <Setter Property="FontSize" Value="{DynamicResource SiTextTinyFontSize}" />
                 </DataTrigger>
             </Style.Triggers>
@@ -84,13 +85,14 @@
 
         <Style x:Key="RefreshButtonStyle" TargetType="Button" BasedOn="{StaticResource SiSecondaryButtonStyle}">
             <Setter Property="Padding" Value="6,2" />
-            <Setter Property="MinWidth" Value="26" />
+            <Setter Property="MinWidth" Value="{DynamicResource SiControlRowHeight}" />
+            <Setter Property="MinHeight" Value="{DynamicResource SiControlRowHeight}" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CompactMode, ElementName=Root}" Value="True">
                     <Setter Property="Padding" Value="4,1" />
-                    <Setter Property="MinWidth" Value="24" />
-                    <Setter Property="Height" Value="24" />
+                    <Setter Property="MinWidth" Value="{DynamicResource SiCompactControlRowHeight}" />
+                    <Setter Property="MinHeight" Value="{DynamicResource SiCompactControlRowHeight}" />
                     <Setter Property="Margin" Value="0,0,4,0" />
                     <Setter Property="FontSize" Value="{DynamicResource SiTextSmallFontSize}" />
                 </DataTrigger>
@@ -130,7 +132,7 @@
             <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
                     BorderThickness="1"
                     Background="{DynamicResource SiBackgroundBrush}"
-                    MaxHeight="280"
+                    MaxHeight="{DynamicResource SiPopupListMaxHeight}"
                     Width="{Binding ActualWidth, ElementName=SearchBox}">
                 <ListBox x:Name="ResultsList"
                          ItemsSource="{Binding Projects}"
@@ -138,17 +140,30 @@
                          ScrollViewer.CanContentScroll="True"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="MinHeight" Value="{DynamicResource SiControlRowHeight}" />
+                            <Setter Property="Padding" Value="6,2" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding ProjectNumber}" Style="{DynamicResource SiTextNormalStyle}" FontWeight="Bold"
                                            Foreground="{DynamicResource SiPrimaryBrush}" />
-                                <TextBlock Text=" &#x2014; " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.6" />
+                                <TextBlock Text=" &#x2014; " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.6"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}" />
                                 <TextBlock Text="{Binding ProjectName}" Style="{DynamicResource SiTextNormalStyle}" />
-                                <TextBlock Text="  ·  " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.4" />
+                                <TextBlock Text="  ·  " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.4"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}" />
                                 <TextBlock Text="{Binding PlaceName}" Style="{DynamicResource SiTextSmallStyle}"
                                            Foreground="{DynamicResource SiSecondaryBrush}" />
-                                <TextBlock Text="  ·  " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.4" />
+                                <TextBlock Text="  ·  " Foreground="{DynamicResource SiSecondaryBrush}" Opacity="0.4"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}" />
                                 <TextBlock Text="{Binding CompanyName}" Style="{DynamicResource SiTextSmallStyle}"
                                            Foreground="{DynamicResource SiSecondaryBrush}" />
                             </StackPanel>

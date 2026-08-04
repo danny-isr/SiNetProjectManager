@@ -190,6 +190,8 @@ Settings UI: color picker + preview swatch + hex (secondary) + reset.
 
 Font: `SiFontFamily`, `SiTextTinyFontSize` … `SiTextHugeFontSize`
 
+Chrome sizes (computed from Normal/Small font; runtime-applied with fonts): `SiControlRowHeight`, `SiCompactControlRowHeight`, `SiPopupListMaxHeight`
+
 Brushes (appearance JSON / runtime-applied by `WpfThemeRuntimeApplier`): `SiPrimaryBrush`, `SiSecondaryBrush`, `SiBackgroundBrush`, `SiForegroundBrush`
 
 Brushes (static structural / semantic — **product-fixed app tokens** in `BrushResources.xaml`; **not** overwritten by the user color picker):
@@ -219,14 +221,49 @@ XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResourc
 
 **V2 host:** production runs under `SiNetProjectManagerV2` — theme XAML is **not** in V2 `App.xaml`. `ThemeResourceLoader.EnsureApplicationResourcesMerged()` merges dictionaries into `Application.Current.Resources` at New System startup and before shell/native windows open.
 
-### Typography wiring policy (menus, trees, KPIs)
+### Typography wiring policy (menus, trees, KPIs, Email)
+
+**Rule:** no literal `FontSize="N"` in `src/SiNet.App.Wpf` production XAML except the splash / mode-selection brand allowlist below. Every visible `TextBlock` / `Label` must use `SiText*FontSize` DynamicResource or `SiText*Style` / `SiSectionHeaderStyle` (explicit per control — **no** app-wide implicit `TextBlock` style). `Run`s inherit from the parent `TextBlock`.
 
 | Surface / control | Token / style | Notes |
 | --- | --- | --- |
 | `Menu`, `MenuItem`, `ContextMenu` | `SiFontFamily` + `SiTextNormalFontSize` | Implicit styles in `ThemeStyles.xaml`. Shell `ItemContainerStyle` must `BasedOn` the implicit `MenuItem` style so command bindings keep theme fonts. |
 | Tree node titles (folder / file / alternative / version) | `SiTextNormalFontSize` (+ `SiFontFamily` when set explicitly) | ProjectWork, FileCatalog, FileTreePicker. Prefer TreeView inherit **and** explicit title `TextBlock` bindings. |
 | KPI / summary numbers | `SiTextLargeFontSize` or `SiTextLargeStyle` | Do **not** use literal `FontSize="20"`. Prefer Large over inventing new tokens. |
+| Email hierarchy (keep distinct scales) | see table below | Do **not** flatten everything to Normal. |
 | App-wide implicit `TextBlock` | **Not used** | No global TextBlock style. Wire Menu/ContextMenu + tree conventions + known hotspots only. |
+
+#### Email typography scale map
+
+| Role | Token | Examples |
+| --- | --- | --- |
+| Window / work-item titles | `SiTextMediumFontSize` | `EmailWindowView` header, `EmailWorkItemWindow` subject bar |
+| Empty-state hero glyph | `SiTextHugeFontSize` | Detail empty ✉ |
+| List card subject (primary) | `SiTextNormalFontSize` | `EmailListItemCard` subject |
+| Detail subject / body fallback | `SiTextNormalFontSize` | `EmailViewerPaneView` subject + plain body |
+| Chrome labels / action bar / status | `SiTextSmallFontSize` | Filter account status, action bar, workflow pane, surface chrome, sender in detail |
+| List card sender / snippet / attachment | `SiTextSmallFontSize` | Sender, snippet, paperclip count |
+| Meta / chips / page info / timestamps | `SiTextTinyFontSize` | Date, label chips, ACC badges, unread chip, paging tooltip |
+
+### Chrome height policy (scalable text hosts)
+
+Chrome that hosts Stage 6 scalable text **must not** use absolute `Height` / `MaxHeight` that ignore `BaseFontSize`. Prefer:
+
+| Approach | When |
+| --- | --- |
+| Theme chrome tokens (`SiControlRowHeight`, `SiCompactControlRowHeight`, `SiPopupListMaxHeight`) | Toolbar rows, popup/dropdown list caps, `ComboBox.MaxDropDownHeight` |
+| `MinHeight` (token or content) + grow | Inputs / buttons that must not clip larger fonts |
+| `MaxHeight` as token or viewport fraction | Scrollable lists that need a cap |
+| Content-driven layout (no fixed height) | Dialogs whose size can follow content + `MinWidth`/`MinHeight` |
+
+Resolved chrome sizes: `ThemeCalculator.Compute()` from Normal/Small font sizes (same live apply path as fonts). Resource keys: `SiControlRowHeight`, `SiCompactControlRowHeight`, `SiPopupListMaxHeight`.
+
+**Fixed-size exceptions (do not theme-scale):**
+
+- Full host / dialog **initial** `Width`/`Height` when the window is user-resizable (`MinWidth`/`MinHeight` present) — e.g. `NewShellWindow`, Email/Inspection/Task workbench, quote dialogs
+- Splash / mode-selection brand layout sizes (see intentional color/size exceptions below)
+- Decorative chrome (progress bars, icons, brand mark ellipses)
+- Design-time only `d:DesignHeight` / `d:DesignWidth`
 
 ### Semantic / state color wiring (Phase 4)
 
@@ -263,14 +300,16 @@ Logging applier remains separate — appearance preview/save does **not** call `
 
 **Intentional exceptions (keep hardcoded):**
 
-- Email/Inspection **title-bar brand chrome** (`#1976D2` / `#2E7D32` + on-primary text)
-- Splash / mode-selection brand sizes (`StartupSplashWindow`, `StartupModeSelectionWindow`, V2 `SplashWindow`) — fixed SiNet brand teal `#0B6E99` and intentional brand FontSizes (not live theme scale; not user appearance)
+- Email/Inspection **title-bar brand chrome colors** (`#1976D2` / `#2E7D32` + on-primary text) — colors only; title **text sizes** still use `SiTextMediumFontSize` / Normal chrome
+- Splash / mode-selection **brand title sizes only** (`StartupSplashWindow`, `StartupModeSelectionWindow` brand mark titles `FontSize="20"` / `"13"` / splash status `"12"`; V2 `SplashWindow` same) — fixed SiNet brand teal `#0B6E99` / green titles; **not** live theme scale. Mode-selection helper copy + radio options **do** use Stage 6 tokens.
+- Full host/dialog **initial** window `Height`/`Width` when user-resizable (see chrome height policy above)
 - Semantic row tints in User Management DataGrid
 - Workflow **node/legend** colors and status chips (email / quote / inspection banners) — one-off / brand canvas art; consolidate only if a hex becomes a repeated shared status token
 - Decorative / one-off tints (FileCatalog folder gold icon, modal scrims, dashboard alternating rows)
 - `SiCardStyle` (still deferred)
-- Legacy V2 windows outside New System
+- Legacy V2 windows outside New System (still may contain literal FontSizes; out of Stage 6 gate)
 - No app-wide implicit `TextBlock` style (see wiring policy above)
+- Settings appearance **preview** samples bind `Preview*FontSize` (live computed sizes for the Settings UI itself — not hardcoded literals)
 
 ---
 

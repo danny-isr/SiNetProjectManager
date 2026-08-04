@@ -11,7 +11,11 @@
             <Button Content="אישור" Padding="14,8" Margin="0,0,8,0" IsDefault="True" Click="Ok_Click"/>
             <Button Content="ביטול" Padding="14,8" IsCancel="True" Click="Cancel_Click"/>
         </StackPanel>
-        <TextBlock DockPanel.Dock="Top" Text="בחר מייל להמשך Reply-All:" Margin="0,0,0,8"/>
+        <TextBlock DockPanel.Dock="Top"
+                   Text="בחר מייל להמשך Reply-All:"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextNormalFontSize}"
+                   Margin="0,0,0,8"/>
         <ListBox x:Name="EmailList" DisplayMemberPath="Display" />
     </DockPanel>
 </Window>

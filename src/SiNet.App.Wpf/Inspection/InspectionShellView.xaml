@@ -30,8 +30,12 @@
                 Background="#FFF3E0" BorderBrush="#FFB300" BorderThickness="1"
                 Visibility="{Binding IsTaskMode, Converter={StaticResource BoolToVisibility}}">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Task mode" FontWeight="SemiBold" Margin="0,0,8,0" />
-                <TextBlock Text="{Binding TaskStatusMessage}" TextWrapping="Wrap" Opacity="0.9" />
+                <TextBlock Text="Task mode" FontWeight="SemiBold" Margin="0,0,8,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}" />
+                <TextBlock Text="{Binding TaskStatusMessage}" TextWrapping="Wrap" Opacity="0.9"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
             </StackPanel>
         </Border>
 
@@ -50,22 +54,30 @@
                 Visibility="{Binding CanCompleteInTaskMode, Converter={StaticResource BoolToVisibility}}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Complete task" FontWeight="SemiBold" VerticalAlignment="Center"
-                           Margin="0,0,12,0" />
+                           Margin="0,0,12,0"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextMediumFontSize}" />
 
                 <TextBlock Text="Event code (dev):" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85"
-                           Visibility="{Binding NeedsManualCompletionEventCode, Converter={StaticResource BoolToVisibility}}" />
+                           Visibility="{Binding NeedsManualCompletionEventCode, Converter={StaticResource BoolToVisibility}}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
                 <TextBox Width="160" VerticalAlignment="Center" Margin="0,0,12,0"
                          Visibility="{Binding NeedsManualCompletionEventCode, Converter={StaticResource BoolToVisibility}}"
                          Text="{Binding CompletionEventCode, UpdateSourceTrigger=PropertyChanged}" />
 
                 <TextBlock Text="User id (dev):" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85"
-                           Visibility="{Binding NeedsManualActingUserId, Converter={StaticResource BoolToVisibility}}" />
+                           Visibility="{Binding NeedsManualActingUserId, Converter={StaticResource BoolToVisibility}}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
                 <TextBox Width="60" VerticalAlignment="Center" Margin="0,0,12,0"
                          Visibility="{Binding NeedsManualActingUserId, Converter={StaticResource BoolToVisibility}}"
                          Text="{Binding ActingUserId, UpdateSourceTrigger=PropertyChanged}" />
 
                 <TextBlock Text="Result:" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85"
-                           Visibility="{Binding HasMultipleAllowedResultCodes, Converter={StaticResource BoolToVisibility}}" />
+                           Visibility="{Binding HasMultipleAllowedResultCodes, Converter={StaticResource BoolToVisibility}}"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
                 <ComboBox Width="140" VerticalAlignment="Center" Margin="0,0,12,0"
                           ItemsSource="{Binding AllowedResultCodes}"
                           SelectedItem="{Binding SelectedResultCode, Mode=TwoWay}"
@@ -110,13 +122,19 @@
                 </DataGrid>
             </TabItem>
             <TabItem Header="{Binding Drawings.Title}">
-                <TextBlock Text="{Binding Drawings.Placeholder}" Margin="12" Opacity="0.8" />
+                <TextBlock Text="{Binding Drawings.Placeholder}" Margin="12" Opacity="0.8"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
             </TabItem>
             <TabItem Header="{Binding ReviewedPlan.Title}">
-                <TextBlock Text="{Binding ReviewedPlan.Placeholder}" Margin="12" Opacity="0.8" />
+                <TextBlock Text="{Binding ReviewedPlan.Placeholder}" Margin="12" Opacity="0.8"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
             </TabItem>
             <TabItem Header="{Binding Report.Title}">
-                <TextBlock Text="{Binding Report.Placeholder}" Margin="12" Opacity="0.8" />
+                <TextBlock Text="{Binding Report.Placeholder}" Margin="12" Opacity="0.8"
+                           FontFamily="{DynamicResource SiFontFamily}"
+                           FontSize="{DynamicResource SiTextSmallFontSize}" />
             </TabItem>
         </TabControl>
     </Grid>

@@ -108,18 +108,32 @@
 
             <TabItem Header="התנהגות (משתמש)" Visibility="{Binding CanViewPersonalSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditPersonalSettings}">
                 <StackPanel Margin="12" MaxWidth="640">
-                    <CheckBox Content="אפשר מספר מופעים (Multiple Instances)" IsChecked="{Binding AllowMultipleInstances}" Margin="0,0,0,8"/>
-                    <TextBlock Text="דורש restart" Opacity="0.6" Margin="0,0,0,16"/>
-                    <CheckBox Content="Authorization test mode (DEBUG)" IsChecked="{Binding EnableAuthorizationTestMode}" Margin="0,0,0,8"/>
-                    <TextBlock Text="ללא UI ב-legacy — נשמר ב-JSON בלבד; דורש restart" Opacity="0.6" TextWrapping="Wrap"/>
+                    <CheckBox Content="אפשר מספר מופעים (Multiple Instances)" IsChecked="{Binding AllowMultipleInstances}" Margin="0,0,0,8"
+                              FontFamily="{DynamicResource SiFontFamily}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                    <TextBlock Text="דורש restart" Opacity="0.6" Margin="0,0,0,16"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
+                    <CheckBox Content="Authorization test mode (DEBUG)" IsChecked="{Binding EnableAuthorizationTestMode}" Margin="0,0,0,8"
+                              FontFamily="{DynamicResource SiFontFamily}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                    <TextBlock Text="ללא UI ב-legacy — נשמר ב-JSON בלבד; דורש restart" Opacity="0.6" TextWrapping="Wrap"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
                 </StackPanel>
             </TabItem>
 
             <TabItem Header="לוג מקומי (משתמש)" Visibility="{Binding CanViewPersonalSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditPersonalSettings}">
                 <StackPanel Margin="12" MaxWidth="640">
-                    <CheckBox Content="הפעל רישום לוג לקובץ" IsChecked="{Binding LoggingEnabled}" Margin="0,0,0,12"/>
-                    <TextBlock Text="מוחל מיד דרך ILoggingRuntimeApplier" Opacity="0.6" Margin="0,0,0,12"/>
-                    <TextBlock Text="תיקיית לוג"/>
+                    <CheckBox Content="הפעל רישום לוג לקובץ" IsChecked="{Binding LoggingEnabled}" Margin="0,0,0,12"
+                              FontFamily="{DynamicResource SiFontFamily}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                    <TextBlock Text="מוחל מיד דרך ILoggingRuntimeApplier" Opacity="0.6" Margin="0,0,0,12"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
+                    <TextBlock Text="תיקיית לוג"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <Grid Margin="0,4,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -133,11 +147,17 @@
 
             <TabItem Header="חלונות צפים (משתמש)" Visibility="{Binding CanViewPersonalSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditPersonalSettings}">
                 <StackPanel Margin="12" MaxWidth="640">
-                    <TextBlock Text="שקיפות פעילה"/>
+                    <TextBlock Text="שקיפות פעילה"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <Slider Minimum="0.1" Maximum="1" Value="{Binding FloatingActiveOpacity}" Margin="0,4,0,12"/>
-                    <TextBlock Text="שקיפות רקע"/>
+                    <TextBlock Text="שקיפות רקע"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <Slider Minimum="0.1" Maximum="1" Value="{Binding FloatingIdleOpacity}" Margin="0,4,0,12"/>
-                    <TextBlock Text="גיאומטריה נשמרת אוטומטית ב-legacy — לא נערך כאן." Opacity="0.6" TextWrapping="Wrap"/>
+                    <TextBlock Text="גיאומטריה נשמרת אוטומטית ב-legacy — לא נערך כאן." Opacity="0.6" TextWrapping="Wrap"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
                 </StackPanel>
             </TabItem>
 
@@ -168,23 +188,41 @@
             <TabItem Header="משרד / דוא&quot;ל (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                     <StackPanel MaxWidth="640">
-                        <TextBlock Text="{Binding RestartRequiredHint}" Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                        <TextBlock Text="פרויקט ברירת מחדל לדוא&quot;ל"/>
+                        <TextBlock Text="{Binding RestartRequiredHint}" Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
+                        <TextBlock Text="פרויקט ברירת מחדל לדוא&quot;ל"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding DefaultProjectTitle, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="מספר פרויקט ניהול משרד"/>
+                        <TextBlock Text="מספר פרויקט ניהול משרד"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding OfficeManagementProjectId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="מחיר שעה (ברירת מחדל)"/>
+                        <TextBlock Text="מחיר שעה (ברירת מחדל)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding HourPriceDefault, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="תיקיית Inbox ב-ACC"/>
+                        <TextBlock Text="תיקיית Inbox ב-ACC"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding InboxFolderName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="שם פרויקט Inbox (נגזר / stored)"/>
+                        <TextBlock Text="שם פרויקט Inbox (נגזר / stored)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding InboxProjectName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="מגבלת טאבים ACC"/>
+                        <TextBlock Text="מגבלת טאבים ACC"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding AccViewerMaxTabs, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                        <TextBlock Text="מכסת מופעי תת-תהליך פתוחים במקביל (למשל קליטת חומר)"/>
+                        <TextBlock Text="מכסת מופעי תת-תהליך פתוחים במקביל (למשל קליטת חומר)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding WorkflowMaxOpenChildInstances, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
                         <TextBlock Text="ברירת מחדל: 2. לא ניתן לפתוח מופע נוסף מעבר למכסה לפני הכרעה/סיום של מופע קיים."
-                                   Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                   Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -192,12 +230,18 @@
             <TabItem Header="ACC (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                 <StackPanel Margin="12" MaxWidth="640">
-                    <TextBlock Text="AccService Base URL"/>
+                    <TextBlock Text="AccService Base URL"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding AccServiceBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="Pinned Certificate Thumbprints (מופרד ב-; )"/>
+                    <TextBlock Text="Pinned Certificate Thumbprints (מופרד ב-; )"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding AccServicePinnedCertificateThumbprints, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
                     <TextBlock Text="Thumbprint של תעודת AccService (self-signed). מועתק מ-Secret Setup → Test או מלוג ההפעלה של השירות. לא סוד."
-                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
                     <autodesk:AccControlPlaneStatusView Margin="0,0,0,12"
                                                          HintText="{Binding AccServiceRuntimeHint}"
                                                          ModeSummary="{Binding AccServiceRuntimeModeSummary}"
@@ -212,24 +256,38 @@
                             Margin="0,0,0,12">
                         <StackPanel>
                             <TextBlock Text="בדיקת resolve חיה של פריט ACC (runtime בלבד)"
-                                       FontWeight="SemiBold"/>
+                                       FontWeight="SemiBold"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextMediumFontSize}"/>
                             <TextBlock Text="בדיקה זו משתמשת ב-runtime הנוכחי של ההוסט בלבד. היא לא קוראת מה-Base URL שנערך למעלה עד שלא נשמר ומאותחל מחדש."
                                        Margin="0,6,0,0"
                                        Opacity="0.75"
-                                       TextWrapping="Wrap"/>
+                                       TextWrapping="Wrap"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextTinyFontSize}"/>
                             <autodesk:AccReadOnlyDocumentBrowserView DataContext="{Binding AccBrowser}"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="Bootstrap Admin Email"/>
+                    <TextBlock Text="Bootstrap Admin Email"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding AccBootstrapAdminEmail, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="שם תבנית פרויקט ACC (stored — ללא refresh מ-ACC)"/>
+                    <TextBlock Text="שם תבנית פרויקט ACC (stored — ללא refresh מ-ACC)"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding AccProjectTemplateName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="סיומות העלאה ידנית"/>
+                    <TextBlock Text="סיומות העלאה ידנית"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding AccManualUploadAllowedExtensions, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="סיומות / קידומות להסתרה בעץ עבודה"/>
+                    <TextBlock Text="סיומות / קידומות להסתרה בעץ עבודה"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding ProjectWorkScanExclusionRules, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
                     <TextBlock Text="מופרד בפסיקים. סיומת מתחילה בנקודה (למשל .bak); קידומת שם בלי נקודה (למשל ~$). קבצי *.si.json תמיד מוסתרים."
-                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
                     <Button Content="פתח ניהול קבוצות"
                             Command="{Binding OpenUserGroupsCommand}"
                             Style="{DynamicResource SiPrimaryButtonStyle}"
@@ -242,26 +300,42 @@
 
             <TabItem Header="ביקורת / Drive (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
                 <StackPanel Margin="12" MaxWidth="640">
-                    <TextBlock Text="תיקיית תבניות ביקורת (Folder ID)"/>
+                    <TextBlock Text="תיקיית תבניות ביקורת (Folder ID)"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding InspectionTemplatesFolderId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="תיקיית דוחות ביקורת (Folder ID)"/>
+                    <TextBlock Text="תיקיית דוחות ביקורת (Folder ID)"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding InspectionReportsFolderId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="Reports output root (ללא UI ב-legacy)"/>
+                    <TextBlock Text="Reports output root (ללא UI ב-legacy)"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding ReportsOutputRoot, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
-                    <TextBlock Text="נתיב תבנית חותמת"/>
+                    <TextBlock Text="נתיב תבנית חותמת"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding StampTemplatePath, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
                 </StackPanel>
             </TabItem>
 
             <TabItem Header="תוויות סטטוס ביקורת" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
                 <StackPanel Margin="12" MaxWidth="640">
-                    <TextBlock Text="מקובל"/>
+                    <TextBlock Text="מקובל"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding StatusLabelPassed, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
-                    <TextBlock Text="הערה"/>
+                    <TextBlock Text="הערה"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding StatusLabelFailed, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
-                    <TextBlock Text="הערה חוזרת"/>
+                    <TextBlock Text="הערה חוזרת"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding StatusLabelRecurringFailed, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
-                    <TextBlock Text="לא רלוונטי"/>
+                    <TextBlock Text="לא רלוונטי"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextSmallFontSize}"/>
                     <TextBox Text="{Binding StatusLabelNotApplicable, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
                 </StackPanel>
             </TabItem>
@@ -269,33 +343,49 @@
             <TabItem Header="AI (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                     <StackPanel MaxWidth="640">
-                        <TextBlock Text="Ollama URL"/>
+                        <TextBlock Text="Ollama URL"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding OllamaBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
-                        <TextBlock Text="Ollama Model"/>
+                        <TextBlock Text="Ollama Model"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding OllamaModel, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,16"/>
-                        <TextBlock Text="Simple — model / provider"/>
+                        <TextBlock Text="Simple — model / provider"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBox Text="{Binding AiModelSimple, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding AiProviderSimple, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                         </StackPanel>
-                        <TextBlock Text="QualityCheck"/>
+                        <TextBlock Text="QualityCheck"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBox Text="{Binding AiModelQualityCheck, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding AiProviderQualityCheck, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                         </StackPanel>
-                        <TextBlock Text="Writing"/>
+                        <TextBlock Text="Writing"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBox Text="{Binding AiModelWriting, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding AiProviderWriting, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                         </StackPanel>
-                        <TextBlock Text="DeepAnalysis"/>
+                        <TextBlock Text="DeepAnalysis"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBox Text="{Binding AiModelDeepAnalysis, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding AiProviderDeepAnalysis, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                         </StackPanel>
-                        <TextBlock Text="Configured cloud models CSV"/>
+                        <TextBlock Text="Configured cloud models CSV"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding AiConfiguredCloudModelsCsv, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" MinHeight="48" Margin="0,4,0,8"/>
-                        <TextBlock Text="AiModelCatalogWindow — deferred; CSV נשמר כאן." Opacity="0.6" TextWrapping="Wrap"/>
+                        <TextBlock Text="AiModelCatalogWindow — deferred; CSV נשמר כאן." Opacity="0.6" TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -303,8 +393,12 @@
             <TabItem Header="לוג מרכזי (גלובלי)" Visibility="{Binding CanViewSystemSettings, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanEditSystemSettings}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                     <StackPanel MaxWidth="640">
-                        <TextBlock Text="{Binding CentralLoggingRestartHint}" Foreground="#B71C1C" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                        <TextBlock Text="נתיב לוג מרכזי (UNC)"/>
+                        <TextBlock Text="{Binding CentralLoggingRestartHint}" Foreground="#B71C1C" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
+                        <TextBlock Text="נתיב לוג מרכזי (UNC)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <Grid Margin="0,4,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -313,20 +407,32 @@
                             <TextBox Text="{Binding CentralLogPath, UpdateSourceTrigger=PropertyChanged}"/>
                             <Button Grid.Column="1" Content="בדוק כתיבה" Command="{Binding ProbeCentralLogPathCommand}" Margin="8,0,0,0" Padding="8,4"/>
                         </Grid>
-                        <TextBlock Text="שמירה מקומית (ימים)"/>
+                        <TextBlock Text="שמירה מקומית (ימים)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding LocalRetentionDays, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
-                        <TextBlock Text="שמירה מרכזית (ימים)"/>
+                        <TextBlock Text="שמירה מרכזית (ימים)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding CentralRetentionDays, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,16"/>
-                        <TextBlock Text="Client — קובץ מקומי"/>
+                        <TextBlock Text="Client — קובץ מקומי"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding ClientFileLevel}" Margin="0,4,0,8"/>
-                        <TextBlock Text="Client — מרכזי"/>
+                        <TextBlock Text="Client — מרכזי"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding ClientCentralLevel}" Margin="0,4,0,8"/>
-                        <TextBlock Text="AccService — מקומי / מרכזי"/>
+                        <TextBlock Text="AccService — מקומי / מרכזי"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                             <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding AccServiceFileLevel}" Width="160" Margin="0,0,8,0"/>
                             <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding AccServiceCentralLevel}" Width="160"/>
                         </StackPanel>
-                        <TextBlock Text="SyncEngine — מקומי / מרכזי"/>
+                        <TextBlock Text="SyncEngine — מקומי / מרכזי"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                             <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SyncEngineFileLevel}" Width="160" Margin="0,0,8,0"/>
                             <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SyncEngineCentralLevel}" Width="160"/>
@@ -357,7 +463,9 @@
             </TabItem>
         </TabControl>
 
-        <TextBlock Grid.Row="1" Text="{Binding SummaryMessage}" Margin="0,12,0,8" TextWrapping="Wrap"/>
+        <TextBlock Grid.Row="1" Text="{Binding SummaryMessage}" Margin="0,12,0,8" TextWrapping="Wrap"
+                   FontFamily="{DynamicResource SiFontFamily}"
+                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
             <Button Content="שמור" Command="{Binding SaveCommand}" Style="{DynamicResource SiPrimaryButtonStyle}" Margin="0,0,8,0"/>

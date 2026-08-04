@@ -11,6 +11,15 @@ public static class ThemeResourceKeys
     public const string TextLargeFontSize = "SiTextLargeFontSize";
     public const string TextHugeFontSize = "SiTextHugeFontSize";
 
+    /// <summary>Toolbar / input row MinHeight scaled from Normal font (default 26 @ 12).</summary>
+    public const string ControlRowHeight = "SiControlRowHeight";
+
+    /// <summary>Compact toolbar row MinHeight scaled from Small font (default 24 @ 10.8).</summary>
+    public const string CompactControlRowHeight = "SiCompactControlRowHeight";
+
+    /// <summary>Popup / dropdown list MaxHeight scaled from Normal font (default 280 @ 12).</summary>
+    public const string PopupListMaxHeight = "SiPopupListMaxHeight";
+
     public const string PrimaryBrush = "SiPrimaryBrush";
     public const string SecondaryBrush = "SiSecondaryBrush";
     public const string BackgroundBrush = "SiBackgroundBrush";
@@ -51,6 +60,14 @@ public static class ThemeResourceKeys
         TextMediumFontSize,
         TextLargeFontSize,
         TextHugeFontSize,
+    ];
+
+    /// <summary>Chrome heights derived from font sizes (see docs/SETTINGS.md §9 chrome height policy).</summary>
+    public static IReadOnlyList<string> AllChromeSizeKeys { get; } =
+    [
+        ControlRowHeight,
+        CompactControlRowHeight,
+        PopupListMaxHeight,
     ];
 
     /// <summary>Brushes driven by per-user appearance JSON.</summary>
