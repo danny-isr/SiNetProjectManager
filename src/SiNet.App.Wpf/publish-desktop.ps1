@@ -199,7 +199,8 @@ else {
         if ($CertPfxPassword) { $signArgs += @("/p", $CertPfxPassword) }
     }
     elseif ($CertThumbprint) {
-        $signArgs += @("/sha1", $CertThumbprint, "/sm:no")
+        # CurrentUser\My (default). Do not pass /sm — that selects LocalMachine and "/sm:no" is invalid.
+        $signArgs += @("/sha1", $CertThumbprint)
     }
     else {
         $cert = Get-ChildItem Cert:\CurrentUser\My |
