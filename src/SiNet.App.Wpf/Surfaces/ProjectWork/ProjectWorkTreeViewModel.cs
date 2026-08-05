@@ -15,14 +15,14 @@ namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 
 /// <summary>
 /// Owns the unified project file/folder tree for the ProjectWork surface: loads the DB-defined folder
-/// skeleton via <see cref="IProjectFileQueryService"/>, scans every relevant storage backend through
-/// <see cref="IFileIndexService"/>, and integrates scanned files into folder/file/alternative/version
-/// nodes. Also serves as the process-wide <see cref="IActiveFileQueryService"/> / <see cref="IFileOpenService"/>
-/// provider while a tree is loaded. Phase 1 is read-only (no drag/drop, replace or ACC write).
+/// skeleton via <see cref="IProjectFileQueryService"/>, overlays disk-only user folders (DEV-012),
+/// scans every relevant storage backend through <see cref="IFileIndexService"/>, and integrates
+/// scanned files into folder/file/alternative/version nodes. Also serves as the process-wide
+/// <see cref="IActiveFileQueryService"/> / <see cref="IFileOpenService"/> provider while a tree is loaded.
 /// </summary>
 public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQueryService, IFileOpenService, IDisposable
 {
-    private const string UnfiledBucketTitle = "\u05DC\u05D0 \u05DE\u05E9\u05D5\u05D9\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8";
+    private const string UnfiledBucketTitle = "\u05E7\u05D5\u05D1\u05E5 \u05E9\u05D0\u05D9\u05E0\u05D5 \u05E9\u05D9\u05D9\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8";
 
     private readonly IProjectFileQueryService _query;
     private readonly IFileIndexService _index;
@@ -32,13 +32,13 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private readonly IFileServerWatcher? _watcher;
     private readonly IProjectFolderPathResolver? _folderPathResolver;
     private readonly IAccWritePolicy? _writePolicy;
-    private readonly IProjectFolderWriteService? _folderWrite;
     private readonly IProjectWorkScanExclusionPolicy? _scanExclusions;
 
     private readonly Dictionary<int, ProjectFolderNodeVm> _foldersById = new();
     private readonly List<(ProjectFolderNodeVm Node, ProjectFolderDto Dto)> _scanTargets = new();
     private CancellationTokenSource? _loadCts;
     private bool _disposed;
+    private int _nextUserFolderId = -1;
 
     private bool _isScanning;
     private string _scanStatus = string.Empty;
@@ -72,7 +72,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _watcher = watcher;
         _folderPathResolver = folderPathResolver;
         _writePolicy = writePolicy;
-        _folderWrite = folderWrite;
+        _ = folderWrite; // DEV-012: tree create is disk-only; catalog write service unused here.
         _scanExclusions = scanExclusions;
         _index.InFlightChanged += OnInFlightChanged;
         if (_accViewerHost is not null)
@@ -141,12 +141,14 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
         // DEV-003 G: snapshot expand state before the full rebuild wipes RootFolders.
         var expandedFolderIds = CaptureExpandedFolderIds();
+        var expandedPaths = CaptureExpandedFolderPaths();
 
         _currentProjectId = projectId;
         _watcher?.StopAll();
         RootFolders.Clear();
         _foldersById.Clear();
         _scanTargets.Clear();
+        _nextUserFolderId = -1;
 
         try
         {
@@ -174,6 +176,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             RestoreExpandedFolderIds(expandedFolderIds);
 
             await ResolveFolderPathsAsync(projectId, token).ConfigureAwait(true);
+            DiscoverDiskFoldersUnderRoots();
+            RestoreExpandedFolderPaths(expandedPaths);
             RegisterProviders();
 
             await RunScanAsync(projectId, token).ConfigureAwait(true);
@@ -196,19 +200,30 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     }
 
     /// <summary>
-    /// Re-scans every folder's files in place (debounced file-watcher trigger), preserving the folder
-    /// skeleton and its expand/selection state — only file/alternative/version nodes are rebuilt.
+    /// Re-scans folders: re-discovers disk-only user folders, rebuilds file nodes, preserves expand.
     /// </summary>
     public async Task RescanAsync(CancellationToken cancellationToken = default)
     {
         if (_currentProjectId <= 0 || _scanTargets.Count == 0)
             return;
 
+        var expandedFolderIds = CaptureExpandedFolderIds();
+        var expandedPaths = CaptureExpandedFolderPaths();
+
+        RemoveAllUserDiskFolders();
+        DiscoverDiskFoldersUnderRoots();
+
         foreach (var (node, dto) in _scanTargets)
         {
             ClearFileNodes(node);
             AddFileDefNodes(node, dto);
         }
+
+        foreach (var user in EnumerateFolders(RootFolders).Where(static f => f.IsUserCreated))
+            ClearFileNodes(user);
+
+        RestoreExpandedFolderIds(expandedFolderIds);
+        RestoreExpandedFolderPaths(expandedPaths);
 
         await RunScanAsync(_currentProjectId, cancellationToken).ConfigureAwait(true);
     }
@@ -226,6 +241,13 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 if (token.IsCancellationRequested)
                     break;
                 scannedCount += await ScanFolderAsync(projectId, node, dto, token).ConfigureAwait(true);
+            }
+
+            foreach (var user in EnumerateFolders(RootFolders).Where(static f => f.IsUserCreated))
+            {
+                if (token.IsCancellationRequested)
+                    break;
+                scannedCount += await ScanUserFolderAsync(user, token).ConfigureAwait(true);
             }
 
             foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
@@ -280,6 +302,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         {
             if (token.IsCancellationRequested)
                 break;
+            if (folder.IsUserCreated || folder.FolderId <= 0)
+                continue;
             try
             {
                 var path = await _folderPathResolver
@@ -293,6 +317,146 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 // Path resolution failures leave FullPath null; open/copy commands surface that.
             }
         }
+    }
+
+    private void DiscoverDiskFoldersUnderRoots()
+    {
+        _nextUserFolderId = -1;
+        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+            DiscoverDiskFoldersRecursive(root);
+    }
+
+    private void RemoveAllUserDiskFolders()
+    {
+        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+            RemoveUserDiskFolders(root);
+    }
+
+    private static void RemoveUserDiskFolders(ProjectFolderNodeVm folder)
+    {
+        for (var i = folder.Children.Count - 1; i >= 0; i--)
+        {
+            if (folder.Children[i] is not ProjectFolderNodeVm child)
+                continue;
+
+            if (child.IsUserCreated)
+            {
+                folder.Children.RemoveAt(i);
+                continue;
+            }
+
+            RemoveUserDiskFolders(child);
+        }
+    }
+
+    private void DiscoverDiskFoldersRecursive(ProjectFolderNodeVm parent)
+    {
+        if (string.IsNullOrWhiteSpace(parent.FullPath) || !Directory.Exists(parent.FullPath))
+            return;
+
+        IEnumerable<string> dirs;
+        try
+        {
+            dirs = Directory.EnumerateDirectories(parent.FullPath).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var dir in dirs)
+        {
+            string name;
+            try
+            {
+                name = Path.GetFileName(dir);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            var existing = parent.Children
+                .OfType<ProjectFolderNodeVm>()
+                .FirstOrDefault(c => string.Equals(c.Title, name, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is null)
+            {
+                existing = new ProjectFolderNodeVm
+                {
+                    FolderId = _nextUserFolderId--,
+                    Title = name,
+                    FullPath = dir,
+                    IsUserCreated = true,
+                };
+                WireFolderCommands(existing);
+                InsertFolderChild(parent, existing);
+            }
+            else if (existing.IsUserCreated || string.IsNullOrWhiteSpace(existing.FullPath))
+            {
+                existing.FullPath = dir;
+            }
+
+            DiscoverDiskFoldersRecursive(existing);
+        }
+    }
+
+    private static void InsertFolderChild(ProjectFolderNodeVm parent, ProjectFolderNodeVm child)
+    {
+        var insertAt = parent.Children.Count;
+        for (var i = 0; i < parent.Children.Count; i++)
+        {
+            if (parent.Children[i] is ProjectFileNodeVm)
+            {
+                insertAt = i;
+                break;
+            }
+        }
+
+        parent.Children.Insert(insertAt, child);
+    }
+
+    private async Task<int> ScanUserFolderAsync(ProjectFolderNodeVm node, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(node.FullPath))
+            return 0;
+
+        var store = _index.GetStore(FileStorageDestination.FileServer);
+        if (store is null)
+            return 0;
+
+        var defByKey = new Dictionary<(int, int), ProjectFileDefinitionDto>();
+        var scanned = new List<ScannedFile>();
+        await foreach (var sf in store.ListFilesAsync(node.FullPath, token).ConfigureAwait(true))
+        {
+            if (token.IsCancellationRequested)
+                break;
+            scanned.Add(sf);
+        }
+
+        var roles = RecoverScanClassifier.Classify(
+            scanned.Select(sf => new RecoverScanClassifier.FileStamp(
+                sf.FileName,
+                sf.SizeBytes,
+                sf.LastModified)));
+
+        var count = 0;
+        foreach (var sf in scanned)
+        {
+            if (token.IsCancellationRequested)
+                break;
+
+            if (roles.TryGetValue(sf.FileName, out var role) && role == RecoverTreeRole.Hidden)
+                continue;
+
+            IntegrateScannedFile(node, sf, defByKey, roles.GetValueOrDefault(sf.FileName, RecoverTreeRole.NotRecover));
+            count++;
+        }
+
+        return count;
     }
 
     private static IEnumerable<ProjectFolderNodeVm> EnumerateFolders(IEnumerable<ProjectWorkNodeVm> nodes)
@@ -1060,9 +1224,12 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private void WireFolderCommands(ProjectFolderNodeVm folder)
     {
         folder.OpenFolderCommand = new AsyncRelayCommand(() => OpenFolderInExplorerAsync(folder));
-        folder.CreateFolderCommand = _folderWrite is null
-            ? null
-            : new AsyncRelayCommand(() => CreateChildFolderAsync(folder));
+        folder.CreateFolderCommand = new AsyncRelayCommand(
+            () => CreateChildFolderAsync(folder),
+            () => !string.IsNullOrWhiteSpace(folder.FullPath));
+        folder.DeleteFolderCommand = new AsyncRelayCommand(
+            () => DeleteUserFolderAsync(folder),
+            () => folder.CanDeleteFolder);
         folder.CopyPathCommand = new RelayCommand(_ => CopyTextToClipboard(folder.FullPath, requireExistingDirectory: true));
         folder.CopyProjectNameCommand = new RelayCommand(_ => CopyProjectNameToClipboard());
         folder.CollapseAllCommand = CollapseAllCommand;
@@ -1075,27 +1242,45 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         foreach (var folder in EnumerateFolders(RootFolders))
         {
             if (folder.IsExpanded && folder.FolderId != 0)
-            {
                 ids.Add(folder.FolderId);
-            }
         }
 
         return ids;
     }
 
+    private HashSet<string> CaptureExpandedFolderPaths()
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (folder.IsExpanded && !string.IsNullOrWhiteSpace(folder.FullPath))
+                paths.Add(folder.FullPath!);
+        }
+
+        return paths;
+    }
+
     private void RestoreExpandedFolderIds(HashSet<int> expandedFolderIds)
     {
         if (expandedFolderIds.Count == 0)
-        {
             return;
-        }
 
         foreach (var folder in EnumerateFolders(RootFolders))
         {
             if (expandedFolderIds.Contains(folder.FolderId))
-            {
                 folder.IsExpanded = true;
-            }
+        }
+    }
+
+    private void RestoreExpandedFolderPaths(HashSet<string> expandedPaths)
+    {
+        if (expandedPaths.Count == 0)
+            return;
+
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (!string.IsNullOrWhiteSpace(folder.FullPath) && expandedPaths.Contains(folder.FullPath!))
+                folder.IsExpanded = true;
         }
     }
 
@@ -1122,7 +1307,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         }
 
         var candidates = new List<(string Path, string FileName)>();
-        foreach (var (node, dto) in _scanTargets)
+        foreach (var node in EnumerateFolders(RootFolders))
         {
             if (string.IsNullOrWhiteSpace(node.FullPath) || !Directory.Exists(node.FullPath))
             {
@@ -1232,8 +1417,11 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private async Task CreateChildFolderAsync(ProjectFolderNodeVm parent)
     {
-        if (_folderWrite is null || _currentProjectId <= 0)
+        if (_currentProjectId <= 0 || string.IsNullOrWhiteSpace(parent.FullPath))
+        {
+            ScanStatus = "לא ניתן ליצור תיקייה — נתיב האב לא זוהה.";
             return;
+        }
 
         System.Windows.Window? owner = null;
         if (System.Windows.Application.Current?.Windows is { Count: > 0 } windows)
@@ -1254,26 +1442,92 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         if (string.IsNullOrWhiteSpace(name))
             return;
 
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            ScanStatus = "שם התיקייה מכיל תווים לא חוקיים.";
+            return;
+        }
+
+        var dest = Path.Combine(parent.FullPath, name);
         try
         {
-            var result = await _folderWrite
-                .CreateChildFolderAsync(parent.FolderId, name, _currentProjectId, CancellationToken.None)
-                .ConfigureAwait(true);
-            if (!result.Success)
+            if (Directory.Exists(dest)
+                || parent.Children.OfType<ProjectFolderNodeVm>()
+                    .Any(c => string.Equals(c.Title, name, StringComparison.OrdinalIgnoreCase)))
             {
-                ScanStatus = string.IsNullOrWhiteSpace(result.ErrorMessage)
-                    ? "יצירת תיקייה נכשלה."
-                    : result.ErrorMessage!;
+                ScanStatus = $"כבר קיימת תיקייה בשם '{name}'.";
                 return;
             }
 
+            Directory.CreateDirectory(dest);
+            var child = new ProjectFolderNodeVm
+            {
+                FolderId = _nextUserFolderId--,
+                Title = name,
+                FullPath = dest,
+                IsUserCreated = true,
+            };
+            WireFolderCommands(child);
+            InsertFolderChild(parent, child);
+            parent.IsExpanded = true;
+            RefreshHasFiles(parent);
+            (child.DeleteFolderCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             ScanStatus = $"נוצרה תיקייה: {name}";
-            await LoadProjectAsync(_currentProjectId, CancellationToken.None).ConfigureAwait(true);
+            await Task.CompletedTask.ConfigureAwait(true);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             ScanStatus = $"יצירת תיקייה נכשלה: {ex.Message}";
         }
+    }
+
+    private async Task DeleteUserFolderAsync(ProjectFolderNodeVm folder)
+    {
+        if (!folder.CanDeleteFolder || string.IsNullOrWhiteSpace(folder.FullPath))
+            return;
+
+        var confirm = MessageBox.Show(
+            $"למחוק את התיקייה הידנית '{folder.Title}'?\nהתיקייה ריקה ואין בה קבצים.",
+            "מחיקת תיקייה",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            if (Directory.Exists(folder.FullPath))
+                Directory.Delete(folder.FullPath, recursive: true);
+
+            var parent = FindParentFolder(folder);
+            if (parent is not null)
+            {
+                parent.Children.Remove(folder);
+                RefreshHasFiles(parent);
+            }
+            else
+            {
+                RootFolders.Remove(folder);
+            }
+
+            ScanStatus = $"נמחקה תיקייה: {folder.Title}";
+            await Task.CompletedTask.ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ScanStatus = $"מחיקת תיקייה נכשלה: {ex.Message}";
+        }
+    }
+
+    private ProjectFolderNodeVm? FindParentFolder(ProjectFolderNodeVm target)
+    {
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (folder.Children.Contains(target))
+                return folder;
+        }
+
+        return null;
     }
 
     private void WireVersionCommands(VersionNodeVm version)

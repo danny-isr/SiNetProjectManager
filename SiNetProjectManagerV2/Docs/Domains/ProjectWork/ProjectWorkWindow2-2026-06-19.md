@@ -1,8 +1,10 @@
 # ProjectWork / Window 2
 
-- **Updated date:** 19.06.2026
+- **Updated date:** 05.08.2026
 - **Status:** Active — Source of truth
 - **Scope:** The `ProjectWorkView` screen, unified file and folder tree loading, Drag & Drop mechanics, ACC viewing via WebView2, project-contextual commands, and the manual ACC integration capabilities.
+
+> **App.Wpf (05.08.2026 / DEV-012):** Tree load merges the DB `ProjectFolders` skeleton with **disk-only** subdirectories (`IsUserCreated`). Catalog folders keep blue/green/orange/gray; user folders use purple when non-empty and gray when empty. Context «יצירת תיקייה» creates a disk directory only (no `ProjectFolders` row). «מחק תיקייה» is shown only for empty user folders. Unmatched physical files stay in the Unfiled bucket tagged «קובץ שאינו שייך לפרויקט». See [`docs/DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](../../../../docs/DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md).
 
 ## 1. Purpose
 The **ProjectWorkView** screen is the main workspace where a user manages project folders and files.
@@ -36,6 +38,8 @@ The **ProjectWorkView** screen is the main workspace where a user manages projec
 
 ### 4.2. Unified tree behavior and sorting
 - **Folder and file tree:** The tree panel displays a unified structure merging DB data and local storage folders.
+- **Disk overlay (App.Wpf):** After the DB skeleton and path resolve, enumerate physical subdirectories. A directory whose name does not match a catalog child becomes an `IsUserCreated` node (synthetic negative folder id). Empty user folders are shown. File scan runs for catalog and user paths; unmatched files go to the Unfiled bucket.
+- **Folder colors (App.Wpf):** Catalog non-empty = existing type/physical/missing brushes; catalog empty = gray; user non-empty = purple; user empty = gray.
 - **Sorting behavior:** 
   - Versions are sorted by version number, placing the newest/highest version first.
   - Alternatives are sorted by the newest version date once integrated into the tree.
@@ -44,8 +48,10 @@ The **ProjectWorkView** screen is the main workspace where a user manages projec
 The tree nodes provide context-specific actions:
 - **ProjectFolderNode:** 
   - Open folder.
-  - Create folder.
-  - Rename and delete are available for user-created folders. DB-defined folders can be opened and can host created subfolders, but they are not treated as freely deletable user folders.
+  - Create folder (App.Wpf: disk-only user folder under the parent path; does not insert `ProjectFolders`).
+  - Delete folder (App.Wpf: only when `IsUserCreated` and the subtree has no physical files).
+  - Rename (legacy V2); App.Wpf rename of folders is out of DEV-012 scope.
+  - DB-defined folders can be opened and can host created subfolders, but they are never deletable from this menu (even when empty).
 - **ProjectFileNode:** 
   - Add alternative.
   - Add alternative from template (available when `TemplateLocation` exists and conditions allow).

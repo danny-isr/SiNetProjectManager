@@ -32,6 +32,7 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 | DEV-009 | Gmail project label identity by `(Number)` + `Email.AutoSyncProjectLabelNames` (per mailbox); duplicate decision UI | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §4 · [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Layer B keep/delete dialog |
 | DEV-010 | «דוח קריסות תחנה» — local Event Log crash report (Civil 3D + machine), CSV + Markdown for AI, shared folder per machine | Implementing | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | With that feature ship |
 | DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader integrity checklist later |
+| DEV-012 | ProjectWork: show disk-only folders/files, purple/gray colors, delete empty user folders only | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) | With that feature ship |
 
 ## 3. Done / cancelled
 

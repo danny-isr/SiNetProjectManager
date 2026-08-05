@@ -34,11 +34,16 @@ public abstract class ProjectWorkNodeVm : ObservableObject
     public ObservableCollection<ProjectWorkNodeVm> Children { get; } = new();
 }
 
-/// <summary>A DB-defined project folder node. Children are subfolders and file nodes.</summary>
+/// <summary>A project folder node (catalog DB row or disk-only user overlay). Children are subfolders and file nodes.</summary>
 public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
 {
     /// <summary>DB folder id (non-positive for synthetic / user-created folders).</summary>
     public int FolderId { get; init; }
+
+    /// <summary>
+    /// True when this node is a physical directory without a matching <c>ProjectFolders</c> row (DEV-012).
+    /// </summary>
+    public bool IsUserCreated { get; init; }
 
     /// <summary>Resolved absolute file-server path, when known.</summary>
     public string? FullPath { get; set; }
@@ -54,7 +59,11 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
         set
         {
             if (SetField(ref _hasPhysicalFiles, value))
+            {
                 OnPropertyChanged(nameof(HasFiles));
+                OnPropertyChanged(nameof(CanDeleteFolder));
+                OnPropertyChanged(nameof(IsEmpty));
+            }
         }
     }
 
@@ -74,6 +83,12 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
         set => SetField(ref _hasRequiredMissing, value);
     }
 
+    /// <summary>No physical files in this folder subtree (empty child dirs do not count as content).</summary>
+    public bool IsEmpty => !HasPhysicalFiles;
+
+    /// <summary>User folder that is empty — only then may the tree offer delete (DEV-012).</summary>
+    public bool CanDeleteFolder => IsUserCreated && IsEmpty;
+
     /// <summary>Alias for <see cref="HasPhysicalFiles"/> — kept for existing callers/tests.</summary>
     public bool HasFiles
     {
@@ -84,8 +99,11 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
     /// <summary>Opens this folder in Windows Explorer. Set by the tree view model.</summary>
     public ICommand? OpenFolderCommand { get; set; }
 
-    /// <summary>Creates a child user folder under this folder. Set by the tree view model.</summary>
+    /// <summary>Creates a child user folder under this folder (disk only). Set by the tree view model.</summary>
     public ICommand? CreateFolderCommand { get; set; }
+
+    /// <summary>Deletes this folder when <see cref="CanDeleteFolder"/> is true. Set by the tree view model.</summary>
+    public ICommand? DeleteFolderCommand { get; set; }
 
     /// <summary>Copies the folder full path to the clipboard («שמור לזיכרון»).</summary>
     public ICommand? CopyPathCommand { get; set; }

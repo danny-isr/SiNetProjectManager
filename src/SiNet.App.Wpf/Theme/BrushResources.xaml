@@ -21,4 +21,5 @@
     <SolidColorBrush x:Key="SiTreeMissingBrush" Color="#EA580C"/>
     <SolidColorBrush x:Key="SiTreeTypeBrush" Color="#1565C0"/>
     <SolidColorBrush x:Key="SiTreeEmptyBrush" Color="#9CA3AF"/>
+    <SolidColorBrush x:Key="SiTreeUserFolderBrush" Color="#7B1FA2"/>
 </ResourceDictionary>
