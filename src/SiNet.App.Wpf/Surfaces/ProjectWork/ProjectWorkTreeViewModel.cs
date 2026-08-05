@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -16,13 +17,13 @@ namespace SiNet.App.Wpf.Surfaces.ProjectWork;
 /// <summary>
 /// Owns the unified project file/folder tree for the ProjectWork surface: loads the DB-defined folder
 /// skeleton via <see cref="IProjectFileQueryService"/>, overlays disk-only user folders (DEV-012),
-/// scans every relevant storage backend through <see cref="IFileIndexService"/>, and integrates
-/// scanned files into folder/file/alternative/version nodes. Also serves as the process-wide
+/// and lazily scans files on expand with unload on collapse (DEV-013). Also serves as the process-wide
 /// <see cref="IActiveFileQueryService"/> / <see cref="IFileOpenService"/> provider while a tree is loaded.
 /// </summary>
 public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQueryService, IFileOpenService, IDisposable
 {
     private const string UnfiledBucketTitle = "\u05E7\u05D5\u05D1\u05E5 \u05E9\u05D0\u05D9\u05E0\u05D5 \u05E9\u05D9\u05D9\u05DA \u05DC\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8";
+    private const int IoDegreeOfParallelism = 4;
 
     private readonly IProjectFileQueryService _query;
     private readonly IFileIndexService _index;
@@ -35,9 +36,11 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private readonly IProjectWorkScanExclusionPolicy? _scanExclusions;
 
     private readonly Dictionary<int, ProjectFolderNodeVm> _foldersById = new();
+    private readonly Dictionary<int, ProjectFolderDto> _folderDtos = new();
     private readonly List<(ProjectFolderNodeVm Node, ProjectFolderDto Dto)> _scanTargets = new();
     private CancellationTokenSource? _loadCts;
     private bool _disposed;
+    private bool _suppressExpandHandlers;
     private int _nextUserFolderId = -1;
 
     private bool _isScanning;
@@ -129,8 +132,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     public int? CurrentProjectNumber => _currentProjectNumber;
 
     /// <summary>
-    /// Loads the tree for a project: builds the DB folder skeleton, then scans and integrates files.
-    /// Cancels any in-flight load for a previous project.
+    /// Loads the tree for a project: DB skeleton + one-level disk children + probe; scans only expanded folders (DEV-013).
     /// </summary>
     public async Task LoadProjectAsync(int projectId, CancellationToken cancellationToken = default)
     {
@@ -139,7 +141,6 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _loadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _loadCts.Token;
 
-        // DEV-003 G: snapshot expand state before the full rebuild wipes RootFolders.
         var expandedFolderIds = CaptureExpandedFolderIds();
         var expandedPaths = CaptureExpandedFolderPaths();
 
@@ -147,6 +148,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _watcher?.StopAll();
         RootFolders.Clear();
         _foldersById.Clear();
+        _folderDtos.Clear();
         _scanTargets.Clear();
         _nextUserFolderId = -1;
 
@@ -165,22 +167,63 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             _currentProjectNumber = tree.ProjectNumber;
             _currentProjectNameAndNumber = tree.ProjectNameAndNumber;
 
-            foreach (var rootDto in tree.RootFolders)
+            _suppressExpandHandlers = true;
+            try
             {
-                var node = BuildFolder(rootDto);
-                // Roots start expanded; restore deeper folders after the skeleton is built.
-                node.IsExpanded = true;
-                RootFolders.Add(node);
+                foreach (var rootDto in tree.RootFolders)
+                {
+                    var node = BuildFolder(rootDto);
+                    RootFolders.Add(node);
+                }
+
+                await ResolveFolderPathsAsync(projectId, token).ConfigureAwait(true);
+
+                foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+                    DiscoverDiskChildrenOneLevel(root);
+
+                await ProbeFoldersParallelAsync(EnumerateFolders(RootFolders).ToList(), token).ConfigureAwait(true);
+
+                foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+                    root.IsExpanded = true;
+
+                RestoreExpandedFolderIds(expandedFolderIds);
+                RestoreExpandedFolderPaths(expandedPaths);
+            }
+            finally
+            {
+                _suppressExpandHandlers = false;
             }
 
-            RestoreExpandedFolderIds(expandedFolderIds);
-
-            await ResolveFolderPathsAsync(projectId, token).ConfigureAwait(true);
-            DiscoverDiskFoldersUnderRoots();
-            RestoreExpandedFolderPaths(expandedPaths);
             RegisterProviders();
 
-            await RunScanAsync(projectId, token).ConfigureAwait(true);
+            IsScanning = true;
+            ScanStatus = "טוען תיקיות פתוחות…";
+            var scannedCount = 0;
+            try
+            {
+                foreach (var folder in EnumerateFolders(RootFolders).Where(static f => f.IsExpanded).ToList())
+                {
+                    if (token.IsCancellationRequested)
+                        break;
+                    scannedCount += await ExpandFolderAsync(folder, token).ConfigureAwait(true);
+                }
+
+                foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+                {
+                    RefreshHasFiles(root);
+                    RefreshExtensionConflicts(root);
+                }
+
+                ScanStatus = token.IsCancellationRequested
+                    ? "הסריקה בוטלה"
+                    : $"מוכן — נסרקו {scannedCount} קבצים בתיקיות הפתוחות";
+            }
+            finally
+            {
+                IsScanning = false;
+                _activeHub.NotifyAvailabilityChanged();
+            }
+
             (DeleteStaleRecoversCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 
             if (!token.IsCancellationRequested)
@@ -200,54 +243,51 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     }
 
     /// <summary>
-    /// Re-scans folders: re-discovers disk-only user folders, rebuilds file nodes, preserves expand.
+    /// Rescans: rediscovers one level under expanded folders, reloads file nodes only for expanded folders.
     /// </summary>
     public async Task RescanAsync(CancellationToken cancellationToken = default)
     {
         if (_currentProjectId <= 0 || _scanTargets.Count == 0)
             return;
 
-        var expandedFolderIds = CaptureExpandedFolderIds();
+        var token = cancellationToken;
         var expandedPaths = CaptureExpandedFolderPaths();
 
-        RemoveAllUserDiskFolders();
-        DiscoverDiskFoldersUnderRoots();
-
-        foreach (var (node, dto) in _scanTargets)
+        _suppressExpandHandlers = true;
+        try
         {
-            ClearFileNodes(node);
-            AddFileDefNodes(node, dto);
+            foreach (var folder in EnumerateFolders(RootFolders).ToList())
+            {
+                if (folder.LoadState == ProjectFolderLoadState.Expanded || folder.IsExpanded)
+                    UnloadFolderContentsCore(folder, collapseChildren: false);
+            }
+
+            foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+                DiscoverDiskChildrenOneLevel(root);
+
+            foreach (var folder in EnumerateFolders(RootFolders))
+            {
+                if (!string.IsNullOrWhiteSpace(folder.FullPath) && expandedPaths.Contains(folder.FullPath!))
+                    folder.IsExpanded = true;
+            }
+        }
+        finally
+        {
+            _suppressExpandHandlers = false;
         }
 
-        foreach (var user in EnumerateFolders(RootFolders).Where(static f => f.IsUserCreated))
-            ClearFileNodes(user);
+        await ProbeFoldersParallelAsync(EnumerateFolders(RootFolders).ToList(), token).ConfigureAwait(true);
 
-        RestoreExpandedFolderIds(expandedFolderIds);
-        RestoreExpandedFolderPaths(expandedPaths);
-
-        await RunScanAsync(_currentProjectId, cancellationToken).ConfigureAwait(true);
-    }
-
-    private async Task RunScanAsync(int projectId, CancellationToken token)
-    {
         IsScanning = true;
-        ScanStatus = "\u05e1\u05d5\u05e8\u05e7 \u05e7\u05d1\u05e6\u05d9\u05dd\u2026"; // "Scanning files…"
-
+        ScanStatus = "מרענן תיקיות פתוחות…";
         try
         {
             var scannedCount = 0;
-            foreach (var (node, dto) in _scanTargets)
+            foreach (var folder in EnumerateFolders(RootFolders).Where(static f => f.IsExpanded).ToList())
             {
                 if (token.IsCancellationRequested)
                     break;
-                scannedCount += await ScanFolderAsync(projectId, node, dto, token).ConfigureAwait(true);
-            }
-
-            foreach (var user in EnumerateFolders(RootFolders).Where(static f => f.IsUserCreated))
-            {
-                if (token.IsCancellationRequested)
-                    break;
-                scannedCount += await ScanUserFolderAsync(user, token).ConfigureAwait(true);
+                scannedCount += await ExpandFolderAsync(folder, token).ConfigureAwait(true);
             }
 
             foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
@@ -256,9 +296,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 RefreshExtensionConflicts(root);
             }
 
-            ScanStatus = token.IsCancellationRequested
-                ? "\u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d1\u05d5\u05d8\u05dc\u05d4" // "Scan cancelled"
-                : $"\u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05e1\u05ea\u05d9\u05d9\u05de\u05d4 \u2014 {scannedCount} \u05e7\u05d1\u05e6\u05d9\u05dd"; // "Scan finished — N files"
+            ScanStatus = $"רוענן — {scannedCount} קבצים בתיקיות הפתוחות";
         }
         finally
         {
@@ -267,12 +305,33 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         }
     }
 
+    /// <summary>Expands a folder and waits until its file scan completes (tests / callers).</summary>
+    public async Task ExpandAndWaitAsync(ProjectFolderNodeVm folder, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        if (folder.LoadState == ProjectFolderLoadState.Expanded)
+            return;
+
+        _suppressExpandHandlers = true;
+        try
+        {
+            folder.IsExpanded = true;
+        }
+        finally
+        {
+            _suppressExpandHandlers = false;
+        }
+
+        await ExpandFolderAsync(folder, cancellationToken).ConfigureAwait(true);
+    }
+
     private async Task StartWatchingAsync(int projectId, CancellationToken token)
     {
         if (_watcher is null)
             return;
 
-        var paths = EnumerateFolders(RootFolders)
+        // DEV-013: watch roots only (IncludeSubdirectories covers the tree).
+        var paths = RootFolders.OfType<ProjectFolderNodeVm>()
             .Select(f => f.FullPath)
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Cast<string>()
@@ -298,58 +357,32 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         if (_folderPathResolver is null)
             return;
 
-        foreach (var folder in EnumerateFolders(RootFolders))
-        {
-            if (token.IsCancellationRequested)
-                break;
-            if (folder.IsUserCreated || folder.FolderId <= 0)
-                continue;
-            try
+        var folders = EnumerateFolders(RootFolders)
+            .Where(f => !f.IsUserCreated && f.FolderId > 0)
+            .ToList();
+
+        await Parallel.ForEachAsync(
+            folders,
+            new ParallelOptions { MaxDegreeOfParallelism = IoDegreeOfParallelism, CancellationToken = token },
+            async (folder, ct) =>
             {
-                var path = await _folderPathResolver
-                    .ResolveFileServerFolderPathAsync(projectId, folder.FolderId, token)
-                    .ConfigureAwait(true);
-                if (!string.IsNullOrWhiteSpace(path))
-                    folder.FullPath = path;
-            }
-            catch
-            {
-                // Path resolution failures leave FullPath null; open/copy commands surface that.
-            }
-        }
+                try
+                {
+                    var path = await _folderPathResolver
+                        .ResolveFileServerFolderPathAsync(projectId, folder.FolderId, ct)
+                        .ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(path))
+                        folder.FullPath = path;
+                }
+                catch
+                {
+                    // leave FullPath null
+                }
+            }).ConfigureAwait(true);
     }
 
-    private void DiscoverDiskFoldersUnderRoots()
-    {
-        _nextUserFolderId = -1;
-        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
-            DiscoverDiskFoldersRecursive(root);
-    }
-
-    private void RemoveAllUserDiskFolders()
-    {
-        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
-            RemoveUserDiskFolders(root);
-    }
-
-    private static void RemoveUserDiskFolders(ProjectFolderNodeVm folder)
-    {
-        for (var i = folder.Children.Count - 1; i >= 0; i--)
-        {
-            if (folder.Children[i] is not ProjectFolderNodeVm child)
-                continue;
-
-            if (child.IsUserCreated)
-            {
-                folder.Children.RemoveAt(i);
-                continue;
-            }
-
-            RemoveUserDiskFolders(child);
-        }
-    }
-
-    private void DiscoverDiskFoldersRecursive(ProjectFolderNodeVm parent)
+    /// <summary>Discovers immediate disk subfolders only (DEV-013 — not recursive).</summary>
+    private void DiscoverDiskChildrenOneLevel(ProjectFolderNodeVm parent)
     {
         if (string.IsNullOrWhiteSpace(parent.FullPath) || !Directory.Exists(parent.FullPath))
             return;
@@ -391,6 +424,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                     Title = name,
                     FullPath = dir,
                     IsUserCreated = true,
+                    LoadState = ProjectFolderLoadState.Skeleton,
                 };
                 WireFolderCommands(existing);
                 InsertFolderChild(parent, existing);
@@ -399,8 +433,6 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             {
                 existing.FullPath = dir;
             }
-
-            DiscoverDiskFoldersRecursive(existing);
         }
     }
 
@@ -419,7 +451,172 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         parent.Children.Insert(insertAt, child);
     }
 
-    private async Task<int> ScanUserFolderAsync(ProjectFolderNodeVm node, CancellationToken token)
+    private async Task ProbeFoldersParallelAsync(IReadOnlyList<ProjectFolderNodeVm> folders, CancellationToken token)
+    {
+        if (folders.Count == 0)
+            return;
+
+        await Parallel.ForEachAsync(
+            folders,
+            new ParallelOptions { MaxDegreeOfParallelism = IoDegreeOfParallelism, CancellationToken = token },
+            (folder, _) =>
+            {
+                var hasPhysical = ProbeHasPhysicalFiles(folder.FullPath);
+                folder.HasPhysicalFiles = hasPhysical;
+                if (folder.LoadState == ProjectFolderLoadState.Skeleton)
+                    folder.LoadState = ProjectFolderLoadState.Probed;
+                return ValueTask.CompletedTask;
+            }).ConfigureAwait(true);
+    }
+
+    private bool ProbeHasPhysicalFiles(string? folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+            return false;
+
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+            {
+                var name = Path.GetFileName(path);
+                if (ShouldSkipPathFromStaleRecoverSweep(name))
+                    continue;
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private async Task<int> ExpandFolderAsync(ProjectFolderNodeVm folder, CancellationToken token)
+    {
+        if (folder.LoadState == ProjectFolderLoadState.Expanded)
+            return 0;
+
+        DiscoverDiskChildrenOneLevel(folder);
+
+        ClearFileNodes(folder);
+        ProjectFolderDto? dto = null;
+        if (_folderDtos.TryGetValue(folder.FolderId, out var mapped))
+        {
+            dto = mapped;
+            AddFileDefNodes(folder, dto);
+        }
+
+        var count = 0;
+        if (folder.IsUserCreated || folder.FolderId <= 0 || dto is null)
+            count = await ScanFolderByPathAsync(folder, token).ConfigureAwait(true);
+        else
+            count = await ScanFolderAsync(_currentProjectId, folder, dto, token).ConfigureAwait(true);
+
+        folder.LoadState = ProjectFolderLoadState.Expanded;
+        folder.HasPhysicalFiles = count > 0
+            || folder.Children.OfType<ProjectFolderNodeVm>().Any(c => c.HasPhysicalFiles);
+
+        var childFolders = folder.Children.OfType<ProjectFolderNodeVm>().ToList();
+        if (childFolders.Count > 0)
+            await ProbeFoldersParallelAsync(childFolders, token).ConfigureAwait(true);
+
+        return count;
+    }
+
+    private void UnloadFolderContents(ProjectFolderNodeVm folder)
+    {
+        UnloadFolderContentsCore(folder, collapseChildren: true);
+        var parent = FindParentFolder(folder);
+        if (parent is not null)
+            RefreshHasFiles(parent);
+        else
+            RefreshHasFiles(folder);
+    }
+
+    private void UnloadFolderContentsCore(ProjectFolderNodeVm folder, bool collapseChildren)
+    {
+        foreach (var child in folder.Children.OfType<ProjectFolderNodeVm>().ToList())
+        {
+            UnloadFolderContentsCore(child, collapseChildren: true);
+            if (collapseChildren)
+            {
+                var prev = _suppressExpandHandlers;
+                _suppressExpandHandlers = true;
+                try
+                {
+                    child.IsExpanded = false;
+                }
+                finally
+                {
+                    _suppressExpandHandlers = prev;
+                }
+            }
+        }
+
+        ClearFileNodes(folder);
+        if (_folderDtos.TryGetValue(folder.FolderId, out var dto))
+            AddFileDefNodes(folder, dto);
+
+        folder.LoadState = ProjectFolderLoadState.Probed;
+        // Keep HasPhysicalFiles from probe / prior knowledge; refresh cheaply.
+        if (!string.IsNullOrWhiteSpace(folder.FullPath))
+            folder.HasPhysicalFiles = ProbeHasPhysicalFiles(folder.FullPath);
+    }
+
+    private async Task OnFolderExpandStateChangedAsync(ProjectFolderNodeVm folder)
+    {
+        if (_suppressExpandHandlers || _currentProjectId <= 0)
+            return;
+
+        if (folder.IsExpanded)
+        {
+            IsScanning = true;
+            ScanStatus = $"טוען: {folder.Title}…";
+            try
+            {
+                var token = _loadCts?.Token ?? CancellationToken.None;
+                var count = await ExpandFolderAsync(folder, token).ConfigureAwait(true);
+                RefreshHasFiles(folder);
+                var root = FindRoot(folder) ?? folder;
+                RefreshHasFiles(root);
+                RefreshExtensionConflicts(root);
+                ScanStatus = $"נטענו {count} קבצים ב־{folder.Title}";
+            }
+            catch (OperationCanceledException)
+            {
+                ScanStatus = "הסריקה בוטלה";
+            }
+            catch (Exception ex)
+            {
+                ScanStatus = $"טעינת תיקייה נכשלה: {ex.Message}";
+            }
+            finally
+            {
+                IsScanning = false;
+                _activeHub.NotifyAvailabilityChanged();
+            }
+        }
+        else
+        {
+            UnloadFolderContents(folder);
+            ScanStatus = $"שוחרר תוכן: {folder.Title}";
+        }
+    }
+
+    private ProjectFolderNodeVm? FindRoot(ProjectFolderNodeVm folder)
+    {
+        var current = folder;
+        while (true)
+        {
+            var parent = FindParentFolder(current);
+            if (parent is null)
+                return current;
+            current = parent;
+        }
+    }
+
+    private async Task<int> ScanFolderByPathAsync(ProjectFolderNodeVm node, CancellationToken token)
     {
         if (string.IsNullOrWhiteSpace(node.FullPath))
             return 0;
@@ -429,13 +626,23 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             return 0;
 
         var defByKey = new Dictionary<(int, int), ProjectFileDefinitionDto>();
-        var scanned = new List<ScannedFile>();
-        await foreach (var sf in store.ListFilesAsync(node.FullPath, token).ConfigureAwait(true))
+        if (_folderDtos.TryGetValue(node.FolderId, out var dto))
         {
-            if (token.IsCancellationRequested)
-                break;
-            scanned.Add(sf);
+            foreach (var f in dto.Files)
+            {
+                if (f.ProjectType is { } t && f.Number is { } n)
+                    defByKey[(t, n)] = f;
+            }
         }
+
+        var path = node.FullPath;
+        var scanned = await Task.Run(async () =>
+        {
+            var list = new List<ScannedFile>();
+            await foreach (var sf in store.ListFilesAsync(path, token).ConfigureAwait(false))
+                list.Add(sf);
+            return list;
+        }, token).ConfigureAwait(true);
 
         var roles = RecoverScanClassifier.Classify(
             scanned.Select(sf => new RecoverScanClassifier.FileStamp(
@@ -486,9 +693,11 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         {
             FolderId = dto.FolderId,
             Title = dto.Name,
+            LoadState = ProjectFolderLoadState.Skeleton,
         };
         WireFolderCommands(node);
         _foldersById[dto.FolderId] = node;
+        _folderDtos[dto.FolderId] = dto;
 
         foreach (var childDto in dto.Children)
             node.Children.Add(BuildFolder(childDto));
@@ -556,11 +765,30 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
         var count = 0;
         var scanned = new List<ScannedFile>();
-        await foreach (var sf in _index.ScanFolderAsync(projectId, node.FolderId, destinations, token).ConfigureAwait(true))
+        // DEV-013: prefer already-resolved FullPath for FileServer to avoid N+1 path resolve.
+        if (!string.IsNullOrWhiteSpace(node.FullPath)
+            && destinations.Count == 1
+            && destinations.Contains(FileStorageDestination.FileServer))
         {
-            if (token.IsCancellationRequested)
-                break;
-            scanned.Add(sf);
+            scanned = await Task.Run(async () =>
+            {
+                var list = new List<ScannedFile>();
+                var store = _index.GetStore(FileStorageDestination.FileServer);
+                if (store is null)
+                    return list;
+                await foreach (var sf in store.ListFilesAsync(node.FullPath!, token).ConfigureAwait(false))
+                    list.Add(sf);
+                return list;
+            }, token).ConfigureAwait(true);
+        }
+        else
+        {
+            await foreach (var sf in _index.ScanFolderAsync(projectId, node.FolderId, destinations, token).ConfigureAwait(true))
+            {
+                if (token.IsCancellationRequested)
+                    break;
+                scanned.Add(sf);
+            }
         }
 
         var roles = RecoverScanClassifier.Classify(
@@ -721,6 +949,10 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             if (file.IsRequiredMissing)
                 hasRequiredMissing = true;
         }
+
+        // DEV-013: collapsed / not-yet-scanned folders keep presence from probe, not only version nodes.
+        if (folder.LoadState != ProjectFolderLoadState.Expanded && !hasPhysical)
+            hasPhysical = ProbeHasPhysicalFiles(folder.FullPath);
 
         foreach (var child in folder.Children.OfType<ProjectFolderNodeVm>())
         {
@@ -1223,6 +1455,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private void WireFolderCommands(ProjectFolderNodeVm folder)
     {
+        folder.PropertyChanged -= OnFolderPropertyChanged;
+        folder.PropertyChanged += OnFolderPropertyChanged;
         folder.OpenFolderCommand = new AsyncRelayCommand(() => OpenFolderInExplorerAsync(folder));
         folder.CreateFolderCommand = new AsyncRelayCommand(
             () => CreateChildFolderAsync(folder),
@@ -1234,6 +1468,15 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         folder.CopyProjectNameCommand = new RelayCommand(_ => CopyProjectNameToClipboard());
         folder.CollapseAllCommand = CollapseAllCommand;
         folder.DeleteStaleRecoversCommand = DeleteStaleRecoversCommand;
+    }
+
+    private void OnFolderPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ProjectFolderNodeVm folder)
+            return;
+        if (e.PropertyName != nameof(ProjectWorkNodeVm.IsExpanded))
+            return;
+        _ = OnFolderExpandStateChangedAsync(folder);
     }
 
     private HashSet<int> CaptureExpandedFolderIds()
@@ -1286,12 +1529,24 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
 
     private void CollapseAllFolders()
     {
-        foreach (var folder in EnumerateFolders(RootFolders))
+        _suppressExpandHandlers = true;
+        try
         {
-            folder.IsExpanded = false;
+            foreach (var folder in EnumerateFolders(RootFolders).ToList())
+            {
+                folder.IsExpanded = false;
+                UnloadFolderContentsCore(folder, collapseChildren: false);
+            }
+        }
+        finally
+        {
+            _suppressExpandHandlers = false;
         }
 
-        ScanStatus = "כל התיקיות כווצו.";
+        foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
+            RefreshHasFiles(root);
+
+        ScanStatus = "כל התיקיות כווצו והתוכן שוחרר מהזיכרון.";
     }
 
     /// <summary>

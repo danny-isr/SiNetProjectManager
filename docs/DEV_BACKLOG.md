@@ -33,6 +33,7 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 | DEV-010 | «דוח קריסות תחנה» — local Event Log crash report (Civil 3D + machine), CSV + Markdown for AI, shared folder per machine | Implementing | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | With that feature ship |
 | DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader integrity checklist later |
 | DEV-012 | ProjectWork: show disk-only folders/files, purple/gray colors, delete empty user folders only | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) | With that feature ship |
+| DEV-013 | ProjectWork lazy scan: expand-on-demand, unload on collapse, probe colors, DOP-4 parallel IO | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_LAZY_SCAN.md`](./DEV_PLAN_PROJECTWORK_LAZY_SCAN.md) | With that feature ship |
 
 ## 3. Done / cancelled
 

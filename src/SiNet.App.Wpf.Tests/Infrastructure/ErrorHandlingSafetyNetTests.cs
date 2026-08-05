@@ -33,7 +33,8 @@ public sealed class ErrorHandlingSafetyNetTests
         {
             var command = new AsyncRelayCommand(() => throw new InvalidOperationException("boom"));
             command.Execute(null);
-            await Task.Delay(50);
+            for (var i = 0; i < 40 && reported is null; i++)
+                await Task.Delay(25);
             Assert.NotNull(reported);
             Assert.IsType<InvalidOperationException>(reported);
         }

@@ -34,6 +34,19 @@ public abstract class ProjectWorkNodeVm : ObservableObject
     public ObservableCollection<ProjectWorkNodeVm> Children { get; } = new();
 }
 
+/// <summary>Lazy-load state for a ProjectWork folder (DEV-013).</summary>
+public enum ProjectFolderLoadState
+{
+    /// <summary>Folder node exists; children/files not probed or scanned yet.</summary>
+    Skeleton = 0,
+
+    /// <summary>Presence probe done (colors); file version nodes not loaded.</summary>
+    Probed = 1,
+
+    /// <summary>Files scanned and child folders discovered one level (folder is expanded).</summary>
+    Expanded = 2,
+}
+
 /// <summary>A project folder node (catalog DB row or disk-only user overlay). Children are subfolders and file nodes.</summary>
 public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
 {
@@ -44,6 +57,9 @@ public sealed class ProjectFolderNodeVm : ProjectWorkNodeVm
     /// True when this node is a physical directory without a matching <c>ProjectFolders</c> row (DEV-012).
     /// </summary>
     public bool IsUserCreated { get; init; }
+
+    /// <summary>DEV-013 lazy-load state.</summary>
+    public ProjectFolderLoadState LoadState { get; set; } = ProjectFolderLoadState.Skeleton;
 
     /// <summary>Resolved absolute file-server path, when known.</summary>
     public string? FullPath { get; set; }

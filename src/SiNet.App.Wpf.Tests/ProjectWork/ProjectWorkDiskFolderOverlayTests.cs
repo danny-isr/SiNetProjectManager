@@ -125,9 +125,52 @@ public sealed class ProjectWorkDiskFolderOverlayTests : IDisposable
         var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
         var manual = catalog.Children.OfType<ProjectFolderNodeVm>().Single(f => f.Title == "Scratch");
         Assert.True(manual.IsUserCreated);
+        // DEV-013: nested folder is probed for color; files load only after expand.
         Assert.True(manual.HasPhysicalFiles);
         Assert.False(manual.CanDeleteFolder);
+
+        await vm.ExpandAndWaitAsync(manual);
+        Assert.Equal(ProjectFolderLoadState.Expanded, manual.LoadState);
         Assert.Contains(manual.Children.OfType<ProjectFileNodeVm>(), f => f.IsUnfiled);
+    }
+
+    [Fact]
+    public async Task Collapse_unloads_file_nodes_but_keeps_folder_and_probe()
+    {
+        var catalogPath = Path.Combine(_root, "Drawings");
+        Directory.CreateDirectory(catalogPath);
+        var loose = Path.Combine(catalogPath, "readme.txt");
+        await File.WriteAllTextAsync(loose, "x");
+
+        var store = new FakeFileStore(
+            FileStorageDestination.FileServer,
+            (_, fid) => fid == 10 ? catalogPath : null,
+            h => h == catalogPath
+                ?
+                [
+                    new ScannedFile(
+                        FileStorageDestination.FileServer,
+                        "readme.txt",
+                        loose,
+                        1,
+                        DateTime.UtcNow,
+                        Parsed: null),
+                ]
+                : Array.Empty<ScannedFile>());
+
+        var vm = CreateVm(10, catalogPath, store);
+        await vm.LoadProjectAsync(5);
+
+        var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
+        Assert.Equal(ProjectFolderLoadState.Expanded, catalog.LoadState);
+        Assert.Contains(catalog.Children.OfType<ProjectFileNodeVm>(), f => f.IsUnfiled);
+
+        catalog.IsExpanded = false;
+
+        Assert.Equal(ProjectFolderLoadState.Probed, catalog.LoadState);
+        Assert.DoesNotContain(catalog.Children.OfType<ProjectFileNodeVm>(), f => f.IsUnfiled);
+        Assert.Contains(catalog.Children.OfType<ProjectFileNodeVm>(), f => f.FileId == 100);
+        Assert.True(catalog.HasPhysicalFiles);
     }
 
     private ProjectWorkTreeViewModel CreateVm(

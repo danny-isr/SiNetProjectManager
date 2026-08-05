@@ -40,6 +40,7 @@ public sealed class FileServerFileStore : IFileStore
         if (string.IsNullOrWhiteSpace(folderHandle) || !Directory.Exists(folderHandle))
             yield break;
 
+        var yieldCounter = 0;
         foreach (var path in Directory.EnumerateFiles(folderHandle))
         {
             if (cancellationToken.IsCancellationRequested)
@@ -60,8 +61,7 @@ public sealed class FileServerFileStore : IFileStore
                 continue;
 
             var parsed = ProjectFileNameParser.TryParse(fi.Name);
-            var sourceFileName = FileServerSidecarMetadata.TryReadSourceFileName(fi.FullName);
-
+            // DEV-013: defer sidecar SourceFileName IO until a caller needs it (open / metadata).
             yield return new ScannedFile(
                 Source: FileStorageDestination.FileServer,
                 FileName: fi.Name,
@@ -69,9 +69,11 @@ public sealed class FileServerFileStore : IFileStore
                 SizeBytes: fi.Exists ? fi.Length : 0,
                 LastModified: fi.Exists ? fi.LastWriteTime : null,
                 Parsed: parsed,
-                SourceFileName: sourceFileName);
+                SourceFileName: null);
 
-            await Task.Yield();
+            // Yield periodically so large folders stay responsive without per-file scheduling cost.
+            if ((++yieldCounter & 31) == 0)
+                await Task.Yield();
         }
     }
 
