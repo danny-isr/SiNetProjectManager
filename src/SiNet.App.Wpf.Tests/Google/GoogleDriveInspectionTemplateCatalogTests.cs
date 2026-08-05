@@ -66,7 +66,8 @@ public sealed class GoogleDriveInspectionTemplateCatalogTests
                     new AppLogLevelsDto(LogLevelDto.Error, LogLevelDto.Error),
                     false),
                 new WorkflowSystemSettingsDto(2),
-                new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules)));
+                new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules),
+                SystemSettingsDefaults.Diagnostics));
         }
     }
 

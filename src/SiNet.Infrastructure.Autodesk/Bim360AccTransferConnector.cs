@@ -66,6 +66,13 @@ internal sealed class Bim360AccTransferConnector(ITokenProvider? tokenProvider) 
         CancellationToken cancellationToken = default) =>
         CreateService().HideItemAsync(projectId, itemId, cancellationToken);
 
+    public Task RenameFolderAsync(
+        string projectId,
+        string folderId,
+        string newFolderName,
+        CancellationToken cancellationToken = default) =>
+        CreateService().RenameFolderAsync(projectId, folderId, newFolderName, cancellationToken);
+
     public Task<AccMetadataResult<IReadOnlyDictionary<string, string?>>> GetItemCustomAttributesAsync(
         string projectId,
         string itemId,

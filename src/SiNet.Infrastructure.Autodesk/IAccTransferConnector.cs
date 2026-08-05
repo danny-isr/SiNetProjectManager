@@ -55,6 +55,13 @@ internal interface IAccTransferConnector
         string itemId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Renames an ACC Docs folder (id stable). DEV-008 Layer A.</summary>
+    Task RenameFolderAsync(
+        string projectId,
+        string folderId,
+        string newFolderName,
+        CancellationToken cancellationToken = default);
+
     Task<AccMetadataResult<IReadOnlyDictionary<string, string?>>> GetItemCustomAttributesAsync(
         string projectId,
         string itemId,

@@ -60,4 +60,23 @@ public static class ProjectQueryServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers project update, rename orchestrator, and Gmail label sync ports (DEV-008 / DEV-009).
+    /// </summary>
+    public static IServiceCollection AddSiNetProjectUpdateSql(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddTransient<IProjectUpdateService, SqlProjectUpdateService>();
+        services.AddTransient<IProjectRenameOrchestrator>(sp =>
+            new ProjectRenameOrchestrator(
+                sp.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>(),
+                sp.GetService<IProjectDriveRootRenameService>(),
+                sp.GetService<SiNet.Application.Abstractions.Autodesk.IAccFolderRenameService>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<ProjectRenameOrchestrator>>()));
+        services.AddTransient<IProjectGmailLabelSyncService, ProjectGmailLabelSyncService>();
+
+        return services;
+    }
 }

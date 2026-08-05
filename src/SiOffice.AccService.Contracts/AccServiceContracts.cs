@@ -25,7 +25,13 @@ public sealed record EnsureProjectMappingRequest(int SiProjectId);
 /// <summary>Request body for <c>POST /v1/acc/projects/{accProjectId}/attribute-defs/ensure</c>.</summary>
 public sealed record EnsureAttributeDefsRequest(string AccFolderId, int? SiProjectId);
 
-/// <summary>Response wrapper for endpoints that return only a boolean outcome.</summary>
+/// <summary>Request body for <c>POST /v1/acc/projects/{projectId}/folders/{folderId}/rename</c>.</summary>
+public sealed record RenameFolderRequest(string NewName);
+
+/// <summary>Response for folder rename — folder id is stable.</summary>
+public sealed record RenameFolderResponse(string FolderId, string NewName);
+
+/// <summary>Response for endpoints that return a simple success flag.</summary>
 public sealed record BoolResultDto(bool Success);
 
 /// <summary>Response wrapper for endpoints that return a free-text summary line.</summary>

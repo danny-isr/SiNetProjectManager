@@ -283,6 +283,9 @@ public sealed class GoogleDriveFileStoreTests
             return Task.FromResult(new GoogleDriveFileEntry(fileId, newName, 0, DateTime.UtcNow));
         }
 
+        public Task<string?> FindFolderIdByNameAsync(string folderName, string parentId, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
+
         public Task<IReadOnlyList<string>> GetParentIdsAsync(string fileId, CancellationToken cancellationToken = default)
             => Task.FromResult(Parents.TryGetValue(fileId, out var p) ? p : Array.Empty<string>());
     }

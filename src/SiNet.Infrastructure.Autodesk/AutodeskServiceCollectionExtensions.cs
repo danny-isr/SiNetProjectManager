@@ -61,6 +61,7 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<LocalAccFolderPathService>();
         services.AddTransient<LocalAccFolderBrowserService>();
         services.AddTransient<LocalAccItemService>();
+        services.AddTransient<LocalAccFolderRenameService>();
         services.AddTransient<LocalAccItemMetadataService>();
         services.AddTransient<LocalAccProjectTreeSearchService>();
         services.AddHttpClient<RemoteAccProjectCatalogService>()
@@ -82,6 +83,9 @@ public static class AutodeskServiceCollectionExtensions
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddHttpClient<RemoteAccItemService>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        services.AddHttpClient<RemoteAccFolderRenameService>()
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
         services.AddHttpClient<RemoteAccItemMetadataService>()
@@ -114,6 +118,7 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<IAccFileDownloadService, ModeSwitchingAccFileDownloadService>();
         services.AddTransient<IAccFolderBrowserService, ModeSwitchingAccFolderBrowserService>();
         services.AddTransient<IAccItemService, ModeSwitchingAccItemService>();
+        services.AddTransient<IAccFolderRenameService, ModeSwitchingAccFolderRenameService>();
         services.AddTransient<SiNet.Application.Abstractions.Autodesk.Metadata.IAccItemMetadataService, ModeSwitchingAccItemMetadataService>();
         services.AddTransient<IAccProjectTreeSearchService, ModeSwitchingAccProjectTreeSearchService>();
         services.AddTransient<IAccInboxBootstrapService>(sp =>

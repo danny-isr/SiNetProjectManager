@@ -141,6 +141,11 @@
                             Command="{Binding RefreshPageCommand}"
                             Style="{StaticResource ActionButton}"
                             IsEnabled="{Binding CanRefreshEmails}" />
+                    <Button Content="סנכרן שמות לייבלים"
+                            Command="{Binding SyncProjectLabelNamesCommand}"
+                            Style="{StaticResource ActionButton}"
+                            Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}"
+                            ToolTip="מעדכן שמות לייבלים לפי NameAndNumber של הפרויקטים" />
                     <Button Content="התנתק"
                             Command="{Binding DisconnectCommand}"
                             Style="{StaticResource ActionButton}"

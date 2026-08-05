@@ -49,4 +49,28 @@ public interface IEmailGmailModifyService
     Task MarkAsReadAsync(
         string gmailMessageId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renames an existing user label to <paramref name="newFullPath"/> (Gmail Labels.Update).
+    /// </summary>
+    Task RenameLabelAsync(
+        string labelId,
+        string newFullPath,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a user label (Gmail Labels.Delete). Messages keep their other labels;
+    /// the label itself is removed from the mailbox.
+    /// </summary>
+    Task DeleteLabelAsync(
+        string labelId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all Gmail message ids that currently carry <paramref name="labelId"/>
+    /// (paginated). Used before label delete so the journal can retain associations.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListMessageIdsByLabelAsync(
+        string labelId,
+        CancellationToken cancellationToken = default);
 }

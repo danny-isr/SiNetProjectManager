@@ -84,6 +84,7 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
             "בוטל",
             "טיוטה",
             "חשוד כתקוע",
+            "מסלול יתום (סוג הוסר)",
         };
         WorkflowNameFilterOptions = new ObservableCollection<string> { "(הכל)" };
         StatusFilter = "(הכל)";
@@ -470,6 +471,7 @@ public sealed class WorkflowOpsDashboardViewModel : ObservableObject, IDisposabl
                 "בוטל" => q.Where(r => r.Status == WorkflowStatus.Cancelled),
                 "טיוטה" => q.Where(r => r.Status == WorkflowStatus.Draft),
                 "חשוד כתקוע" => q.Where(r => r.IsStalled),
+                "מסלול יתום (סוג הוסר)" => q.Where(r => r.IsOrphanTrack),
                 _ => q,
             };
         }

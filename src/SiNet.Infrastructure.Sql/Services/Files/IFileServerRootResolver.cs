@@ -37,7 +37,7 @@ public sealed class FileServerRootResolver : IFileServerRootResolver
     }
 
     /// <summary>Native equivalent of the legacy <c>Project.GetProjectFullPath()</c> extension.</summary>
-    internal static string? BuildProjectFullPath(Project? project)
+    public static string? BuildProjectFullPath(Project? project)
     {
         if (project?.Place == null || string.IsNullOrWhiteSpace(project.NameAndNumber))
             return null;

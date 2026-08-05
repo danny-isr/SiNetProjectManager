@@ -20,6 +20,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.DevToolsReset,
             AppFeatureCodes.DevToolsSeed,
             AppFeatureCodes.ProjectCreate,
+            AppFeatureCodes.ProjectUpdate,
             AppFeatureCodes.ReportsManagement,
             AppFeatureCodes.SystemSettingsWrite,
             AppFeatureCodes.UsersManage,
@@ -48,6 +49,8 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenEmailSurface, true)]
     [InlineData(AppRole.Employee, AppFeatureCodes.ProjectCreate, false)]
     [InlineData(AppRole.Management, AppFeatureCodes.ProjectCreate, true)]
+    [InlineData(AppRole.Employee, AppFeatureCodes.ProjectUpdate, false)]
+    [InlineData(AppRole.Management, AppFeatureCodes.ProjectUpdate, true)]
     [InlineData(AppRole.Management, AppFeatureCodes.UsersManage, false)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.UsersManage, true)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.ActionPermissionsManage, true)]

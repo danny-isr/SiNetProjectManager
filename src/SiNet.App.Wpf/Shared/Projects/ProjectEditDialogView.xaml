@@ -1,0 +1,158 @@
+<UserControl x:Class="SiNet.App.Wpf.Shared.Projects.ProjectEditDialogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:projects="clr-namespace:SiNet.App.Wpf.Shared.Projects"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="מספר פרויקט (לא ניתן לשינוי)" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Grid.Row="1" Text="{Binding ProjectNumberDisplay}" Style="{DynamicResource SiTextNormalStyle}" Margin="0,0,0,12"/>
+
+            <TextBlock Grid.Row="2" Text="שם נוכחי" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Grid.Row="3" Text="{Binding ProjectTitle}" Style="{DynamicResource SiTextNormalStyle}" Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="4" Text="שינוי שם (מתוזמר)" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <Grid Grid.Row="5" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Text="{Binding RenameTitle, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{DynamicResource SiTextBoxStyle}" MaxLength="24"/>
+                <Button Grid.Column="1" Content="שנה שם…" MinWidth="100" Margin="8,0,0,0"
+                        Command="{Binding RenameCommand}"
+                        Style="{DynamicResource SiSecondaryButtonStyle}"/>
+            </Grid>
+
+            <TextBlock Grid.Row="6" Text="מקום" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <Grid Grid.Row="7" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox ItemsSource="{Binding Places}"
+                          SelectedItem="{Binding SelectedPlace}"
+                          DisplayMemberPath="DisplayLabel"
+                          Style="{DynamicResource SiComboBoxStyle}"/>
+                <Button Grid.Column="1" Content="..." Width="36" Margin="8,0,0,0"
+                        Command="{Binding OpenPlacePickerCommand}"
+                        Style="{DynamicResource SiPrimaryButtonStyle}"/>
+            </Grid>
+
+            <TextBlock Grid.Row="8" Text="חברה" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <Grid Grid.Row="9" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox ItemsSource="{Binding Companies}"
+                          SelectedItem="{Binding SelectedCompany}"
+                          DisplayMemberPath="Title"
+                          Style="{DynamicResource SiComboBoxStyle}"/>
+                <Button Grid.Column="1" Content="..." Width="36" Margin="8,0,0,0"
+                        Command="{Binding OpenCompanyPickerCommand}"
+                        Style="{DynamicResource SiPrimaryButtonStyle}"/>
+            </Grid>
+
+            <TextBlock Grid.Row="10" Text="איש קשר" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <ComboBox Grid.Row="11"
+                      ItemsSource="{Binding Contacts}"
+                      SelectedItem="{Binding SelectedContact}"
+                      DisplayMemberPath="DisplayName"
+                      Style="{DynamicResource SiComboBoxStyle}"
+                      Margin="0,0,0,12"/>
+
+            <TextBlock Grid.Row="12" Text="שייך לפרויקט (אב)" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <projects:ProjectSelectorView Grid.Row="13"
+                                          DataContext="{Binding ParentProjectSelector}"
+                                          CompactMode="True"
+                                          SearchBoxWidth="280"
+                                          ShowUserFilter="False"
+                                          Margin="0,0,0,12"/>
+
+            <TextBlock Grid.Row="14" Text="סטטוס" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <ComboBox Grid.Row="15"
+                      ItemsSource="{Binding Statuses}"
+                      SelectedItem="{Binding SelectedStatus}"
+                      DisplayMemberPath="DisplayName"
+                      Style="{DynamicResource SiComboBoxStyle}"
+                      Margin="0,0,0,12"/>
+
+            <TextBlock Grid.Row="16" Text="למי הוגש" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBox Grid.Row="17" Text="{Binding ApproveDescription, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}" Margin="0,0,0,12"/>
+
+            <TextBlock Grid.Row="18" Text="סוגי פרויקט / אחראי / ערך חוזה" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <DataGrid Grid.Row="19"
+                      ItemsSource="{Binding JobTypes}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      HeadersVisibility="Column"
+                      MaxHeight="280"
+                      Margin="0,0,0,12"
+                      FontFamily="{DynamicResource SiFontFamily}"
+                      FontSize="{DynamicResource SiTextNormalFontSize}">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="כלול" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                    <DataGridTextColumn Header="סוג" Binding="{Binding Title}" IsReadOnly="True" Width="*"/>
+                    <DataGridTemplateColumn Header="אחראי" Width="160">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding Workers}"
+                                          SelectedItem="{Binding AdminWorker, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="DisplayName"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="ערך" Binding="{Binding BidValueText, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <TextBlock Grid.Row="20"
+                       Text="{Binding ValidationMessage}"
+                       Foreground="#C62828"
+                       Style="{DynamicResource SiTextSmallStyle}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,8"/>
+
+            <StackPanel Grid.Row="21" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="שמור"
+                        Command="{Binding SaveCommand}"
+                        Style="{DynamicResource SiPrimaryButtonStyle}"
+                        MinWidth="120" Margin="0,0,8,0"
+                        IsDefault="True"/>
+                <Button Content="ביטול"
+                        Command="{Binding CancelCommand}"
+                        MinWidth="80"
+                        IsCancel="True"/>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

@@ -107,7 +107,8 @@ public sealed class ProjectWorkScanExclusionsTests
                     new AppLogLevelsDto(LogLevelDto.Error, LogLevelDto.Error),
                     false),
                 new WorkflowSystemSettingsDto(2),
-                projectWork));
+                projectWork,
+                SystemSettingsDefaults.Diagnostics));
         }
     }
 }

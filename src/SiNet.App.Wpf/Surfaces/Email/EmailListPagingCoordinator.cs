@@ -272,6 +272,7 @@ internal sealed class EmailListPagingCoordinator
     {
         try
         {
+            await _owner.TrySyncProjectLabelNamesAsync().ConfigureAwait(true);
             var labels = await _owner.EmailGateway.GetMailboxLabelsAsync().ConfigureAwait(true);
             _owner.AvailableLabels.Clear();
             foreach (var label in labels)

@@ -150,7 +150,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IShellContentHost? shellContentHost = null,
         IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null,
         IProjectWorkSurfaceHost? projectWorkHost = null,
-        IEmailGmailModifyService? gmailModify = null)
+        IEmailGmailModifyService? gmailModify = null,
+        IProjectGmailLabelSyncService? projectLabelSync = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -178,7 +179,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             moveToProjectCoordinator: null,
             accIngestQueue,
             ingestSessionEnsurer,
-            threadMappingSync);
+            threadMappingSync,
+            projectLabelSync);
 
         EmailDetail = new EmailDetailViewModel(
             EmailList,

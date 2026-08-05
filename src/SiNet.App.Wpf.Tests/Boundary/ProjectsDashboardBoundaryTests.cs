@@ -26,6 +26,8 @@ public sealed class ProjectsDashboardBoundaryTests
         Assert.Contains("IProjectFilterOptionsService", source, StringComparison.Ordinal);
         Assert.Contains("ICurrentProjectContext", source, StringComparison.Ordinal);
         Assert.Contains("IProjectWorkSurfaceHost", source, StringComparison.Ordinal);
+        Assert.Contains("EditSelectedCommand", source, StringComparison.Ordinal);
+        Assert.Contains("IProjectEditDialogFactory", source, StringComparison.Ordinal);
         Assert.DoesNotContain("IWorkflowCommandService", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SaveChanges", source, StringComparison.Ordinal);
     }

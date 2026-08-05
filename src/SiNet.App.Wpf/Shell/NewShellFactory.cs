@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Autodesk;
+using SiNet.App.Wpf.Admin.Diagnostics;
 using SiNet.App.Wpf.Admin.FileCatalog;
 using SiNet.App.Wpf.Admin.MasterPlan;
 using SiNet.App.Wpf.Admin.MasterPlan.Reports;
@@ -306,6 +307,12 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "מצב מערכת",
                 OpenNativeSystemStatus,
                 "מצב מערכות־משנה ועבודת רקע (מערכת חדשה)"));
+
+            // DEV-010: a user whose machine keeps crashing must be able to produce the report himself.
+            admin.Add(new NewShellMenuItem(
+                "דוח קריסות תחנה",
+                OpenNativeWorkstationCrashReport,
+                "דוח קריסות Civil 3D ואירועי מכונה מיומן האירועים המקומי"));
         }
 
 #if DEBUG
@@ -621,6 +628,26 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת מצב מערכת: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+    private void OpenNativeWorkstationCrashReport()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<WorkstationCrashReportWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת דוח קריסות תחנה: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

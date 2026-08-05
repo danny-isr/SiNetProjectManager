@@ -23,6 +23,8 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Text="מספר פרויקט" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
@@ -78,34 +80,47 @@
                                           ShowUserFilter="False"
                                           Margin="0,0,0,12"/>
 
-            <TextBlock Grid.Row="12" Text="סוגי פרויקט" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <Border Grid.Row="13" BorderBrush="{DynamicResource SiSecondaryBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,12" MaxHeight="{DynamicResource SiPopupListMaxHeight}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ItemsControl ItemsSource="{Binding JobTypes}"
-                                  FontFamily="{DynamicResource SiFontFamily}"
-                                  FontSize="{DynamicResource SiTextNormalFontSize}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <CheckBox Content="{Binding Title}"
-                                          IsChecked="{Binding IsSelected}"
-                                          FontFamily="{DynamicResource SiFontFamily}"
-                                          FontSize="{DynamicResource SiTextNormalFontSize}"
-                                          Foreground="{DynamicResource SiForegroundBrush}"
-                                          Margin="0,2"/>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </Border>
+            <TextBlock Grid.Row="12" Text="למי הוגש" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBox Grid.Row="13" Text="{Binding ApproveDescription, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{DynamicResource SiTextBoxStyle}" Margin="0,0,0,12"/>
 
-            <TextBlock Grid.Row="14"
+            <TextBlock Grid.Row="14" Text="סוגי פרויקט / אחראי / ערך חוזה" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <DataGrid Grid.Row="15"
+                      ItemsSource="{Binding JobTypes}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      HeadersVisibility="Column"
+                      MaxHeight="220"
+                      Margin="0,0,0,12"
+                      FontFamily="{DynamicResource SiFontFamily}"
+                      FontSize="{DynamicResource SiTextNormalFontSize}">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="כלול" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                    <DataGridTextColumn Header="סוג" Binding="{Binding Title}" IsReadOnly="True" Width="*"/>
+                    <DataGridTemplateColumn Header="אחראי" Width="150">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding Workers}"
+                                          SelectedItem="{Binding AdminWorker, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="DisplayName"
+                                          FontFamily="{DynamicResource SiFontFamily}"
+                                          FontSize="{DynamicResource SiTextNormalFontSize}"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="ערך" Binding="{Binding BidValueText, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <TextBlock Grid.Row="16"
                        Text="{Binding ValidationMessage}"
                        Foreground="#C62828"
                        Style="{DynamicResource SiTextSmallStyle}"
                        TextWrapping="Wrap"
                        Margin="0,0,0,8"/>
 
-            <StackPanel Grid.Row="15" Orientation="Horizontal" HorizontalAlignment="Left">
+            <StackPanel Grid.Row="17" Orientation="Horizontal" HorizontalAlignment="Left">
                 <Button Content="{Binding PrimaryActionLabel}"
                         Command="{Binding CreateCommand}"
                         Style="{DynamicResource SiPrimaryButtonStyle}"

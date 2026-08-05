@@ -213,6 +213,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string _hourPriceDefault = SystemSettingsDefaults.HourPriceDefault;
     private string _inboxFolderName = SystemSettingsDefaults.InboxFolderNameFallback;
     private string? _inboxProjectName;
+    private bool _autoSyncProjectLabelNames = SystemSettingsDefaults.EmailAutoSyncProjectLabelNames;
     private int _accViewerMaxTabs = 10;
     private int _workflowMaxOpenChildInstances = SystemSettingsDefaults.WorkflowMaxOpenChildInstances;
     private string _accServiceBaseUrl = string.Empty;
@@ -221,6 +222,10 @@ public sealed class SettingsViewModel : ObservableObject
     private string _accProjectTemplateName = string.Empty;
     private string _accManualUploadAllowedExtensions = SystemSettingsDefaults.AccManualUploadAllowedExtensions;
     private string _projectWorkScanExclusionRules = SystemSettingsDefaults.ProjectWorkScanExclusionRules;
+    private string _crashReportSharePath = SystemSettingsDefaults.DiagnosticsCrashReportSharePath;
+    private string _crashAppFilters = SystemSettingsDefaults.DiagnosticsCrashAppFilters;
+    private int _crashLookbackDays = SystemSettingsDefaults.DiagnosticsCrashLookbackDays;
+    private int _crashReportRetentionDays = SystemSettingsDefaults.DiagnosticsCrashReportRetentionDays;
     private string _inspectionTemplatesFolderId = string.Empty;
     private string _inspectionReportsFolderId = string.Empty;
     private string _reportsOutputRoot = string.Empty;
@@ -495,6 +500,12 @@ public sealed class SettingsViewModel : ObservableObject
         set => SetField(ref _inboxProjectName, value);
     }
 
+    public bool AutoSyncProjectLabelNames
+    {
+        get => _autoSyncProjectLabelNames;
+        set => SetField(ref _autoSyncProjectLabelNames, value);
+    }
+
     public int AccViewerMaxTabs
     {
         get => _accViewerMaxTabs;
@@ -541,6 +552,31 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _projectWorkScanExclusionRules;
         set => SetField(ref _projectWorkScanExclusionRules, value);
+    }
+
+    /// <summary>Empty falls back to <c>{CentralLogPath}\CrashReports</c> (DEV-010).</summary>
+    public string CrashReportSharePath
+    {
+        get => _crashReportSharePath;
+        set => SetField(ref _crashReportSharePath, value);
+    }
+
+    public string CrashAppFilters
+    {
+        get => _crashAppFilters;
+        set => SetField(ref _crashAppFilters, value);
+    }
+
+    public int CrashLookbackDays
+    {
+        get => _crashLookbackDays;
+        set => SetField(ref _crashLookbackDays, value);
+    }
+
+    public int CrashReportRetentionDays
+    {
+        get => _crashReportRetentionDays;
+        set => SetField(ref _crashReportRetentionDays, value);
     }
 
     public string InspectionTemplatesFolderId
@@ -1163,7 +1199,8 @@ public sealed class SettingsViewModel : ObservableObject
             HourPriceDefault.Trim(),
             InboxFolderName.Trim(),
             string.IsNullOrWhiteSpace(InboxProjectName) ? null : InboxProjectName.Trim(),
-            AccViewerMaxTabs),
+            AccViewerMaxTabs,
+            AutoSyncProjectLabelNames),
         new AccSystemSettingsDto(
             NormalizeAccServiceBaseUrl(AccServiceBaseUrl),
             NormalizePinnedCertificateThumbprints(AccServicePinnedCertificateThumbprints),
@@ -1200,7 +1237,14 @@ public sealed class SettingsViewModel : ObservableObject
         new ProjectWorkSystemSettingsDto(
             string.IsNullOrWhiteSpace(ProjectWorkScanExclusionRules)
                 ? SystemSettingsDefaults.ProjectWorkScanExclusionRules
-                : ProjectWorkScanExclusionRules.Trim()));
+                : ProjectWorkScanExclusionRules.Trim()),
+        new DiagnosticsSystemSettingsDto(
+            CrashReportSharePath?.Trim() ?? string.Empty,
+            string.IsNullOrWhiteSpace(CrashAppFilters)
+                ? SystemSettingsDefaults.DiagnosticsCrashAppFilters
+                : CrashAppFilters.Trim(),
+            Math.Max(1, CrashLookbackDays),
+            Math.Max(1, CrashReportRetentionDays)));
 
     private void ApplyUserSettings(UserAppSettingsDto user)
     {
@@ -1231,6 +1275,7 @@ public sealed class SettingsViewModel : ObservableObject
         HourPriceDefault = system.EmailOffice.HourPriceDefault;
         InboxFolderName = system.EmailOffice.InboxFolderName;
         InboxProjectName = system.EmailOffice.InboxProjectName;
+        AutoSyncProjectLabelNames = system.EmailOffice.AutoSyncProjectLabelNames;
         AccViewerMaxTabs = system.EmailOffice.AccViewerMaxTabs;
         WorkflowMaxOpenChildInstances = system.Workflow.MaxOpenChildInstances;
         AccServiceBaseUrl = system.Acc.AccServiceBaseUrl;
@@ -1239,6 +1284,10 @@ public sealed class SettingsViewModel : ObservableObject
         AccProjectTemplateName = system.Acc.AccProjectTemplateName;
         AccManualUploadAllowedExtensions = system.Acc.AccManualUploadAllowedExtensions;
         ProjectWorkScanExclusionRules = system.ProjectWork.ScanExclusionRules;
+        CrashReportSharePath = system.Diagnostics.CrashReportSharePath;
+        CrashAppFilters = system.Diagnostics.CrashAppFilters;
+        CrashLookbackDays = system.Diagnostics.CrashLookbackDays;
+        CrashReportRetentionDays = system.Diagnostics.CrashReportRetentionDays;
         InspectionTemplatesFolderId = system.Inspection.InspectionTemplatesFolderId;
         InspectionReportsFolderId = system.Inspection.InspectionReportsFolderId;
         ReportsOutputRoot = system.Inspection.ReportsOutputRoot;

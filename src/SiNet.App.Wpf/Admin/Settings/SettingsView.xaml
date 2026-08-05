@@ -211,6 +211,15 @@
                                    FontFamily="{DynamicResource SiFontFamily}"
                                    FontSize="{DynamicResource SiTextSmallFontSize}"/>
                         <TextBox Text="{Binding InboxProjectName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
+                        <CheckBox Content="סנכרון אוטומטי של שמות לייבלים בפרויקט (Gmail)"
+                                  IsChecked="{Binding AutoSyncProjectLabelNames}"
+                                  Margin="0,0,0,12"
+                                  FontFamily="{DynamicResource SiFontFamily}"
+                                  FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                        <TextBlock Text="כשפעיל: בכניסה למייל / רענון לייבלים — עדכון שם עלה לפי NameAndNumber (זהות לפי מספר)."
+                                   Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
                         <TextBlock Text="מגבלת טאבים ACC"
                                    FontFamily="{DynamicResource SiFontFamily}"
                                    FontSize="{DynamicResource SiTextSmallFontSize}"/>
@@ -437,6 +446,31 @@
                             <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SyncEngineFileLevel}" Width="160" Margin="0,0,8,0"/>
                             <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SyncEngineCentralLevel}" Width="160"/>
                         </StackPanel>
+                        <TextBlock Text="דוח קריסות תחנה"
+                                   FontWeight="SemiBold"
+                                   Margin="0,16,0,4"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextMediumFontSize}"/>
+                        <TextBlock Text="תיקיית דוחות קריסה (ריק = תיקיית CrashReports תחת נתיב הלוג המרכזי)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                        <TextBox Text="{Binding CrashReportSharePath, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
+                        <TextBlock Text="אפליקציות למעקב (מופרד בפסיקים)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                        <TextBox Text="{Binding CrashAppFilters, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
+                        <TextBlock Text="טווח ברירת מחדל לדוח (ימים)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                        <TextBox Text="{Binding CrashLookbackDays, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8"/>
+                        <TextBlock Text="שמירת דוחות קריסה (ימים)"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                        <TextBox Text="{Binding CrashReportRetentionDays, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
+                        <TextBlock Text="דוחות ישנים מהסף נמחקים מתיקיית המחשב בלבד, ותמיד נשמרים חמשת הדוחות האחרונים."
+                                   Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   FontFamily="{DynamicResource SiFontFamily}"
+                                   FontSize="{DynamicResource SiTextTinyFontSize}"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

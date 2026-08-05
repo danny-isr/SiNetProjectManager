@@ -36,6 +36,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private readonly IGoogleIngestSessionEnsurer? _ingestSessionEnsurer;
     private readonly ICurrentProjectContext? _currentProject;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly IProjectGmailLabelSyncService? _projectLabelSync;
 
     private readonly EmailListRowDisplayCoordinator _display;
     private readonly EmailListGroupingCoordinator _grouping;
@@ -93,11 +94,13 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         IEmailMoveToProjectCoordinator? moveToProjectCoordinator = null,
         IEmailAccIngestQueue? accIngestQueue = null,
         IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
-        IEmailThreadMappingSyncService? threadMappingSync = null)
+        IEmailThreadMappingSyncService? threadMappingSync = null,
+        IProjectGmailLabelSyncService? projectLabelSync = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
         _threadMappingSync = threadMappingSync;
+        _projectLabelSync = projectLabelSync;
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _filingService = filingService;
         _statusService = statusService;
@@ -154,6 +157,9 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         RefreshPageCommand = new AsyncRelayCommand(() => _paging.ReloadForContextAsync(), CanLoadEmails);
         ApplyFiltersCommand = new AsyncRelayCommand(() => _paging.ReloadForContextAsync(), CanLoadEmails);
         ClearFiltersCommand = new AsyncRelayCommand(() => _paging.ClearFiltersAsync(), () => !IsBusy);
+        SyncProjectLabelNamesCommand = new AsyncRelayCommand(
+            () => TrySyncProjectLabelNamesAsync(force: true),
+            () => IsConnected && !IsBusy && _projectLabelSync is not null);
         ToggleGroupByLabelCommand = new RelayCommand(_ => _grouping.ToggleGroupByLabel());
         ToggleAttachmentsOnlyCommand = new AsyncRelayCommand(() => _paging.ToggleAttachmentsOnlyAsync(), CanLoadEmails);
         ToggleUnreadOnlyCommand = new AsyncRelayCommand(() => _paging.ToggleUnreadOnlyAsync(), CanLoadEmails);
@@ -615,6 +621,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public ICommand RefreshPageCommand { get; }
     public ICommand ApplyFiltersCommand { get; }
     public ICommand ClearFiltersCommand { get; }
+    public ICommand SyncProjectLabelNamesCommand { get; }
     public ICommand ToggleGroupByLabelCommand { get; }
     public ICommand ToggleAttachmentsOnlyCommand { get; }
     public ICommand ToggleUnreadOnlyCommand { get; }
@@ -664,6 +671,105 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
         await _paging.RefreshAccountProfileAsync().ConfigureAwait(true);
         await _paging.LoadLabelsAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// When <c>Email.AutoSyncProjectLabelNames</c> is on (or <paramref name="force"/>), rename
+    /// Gmail project leaf labels to current <c>NameAndNumber</c>. Duplicate numbers open a
+    /// keep/delete decision dialog (DEV-009 Layer B).
+    /// </summary>
+    internal async Task TrySyncProjectLabelNamesAsync(bool force = false)
+    {
+        if (_projectLabelSync is null || !IsConnected)
+            return;
+
+        try
+        {
+            var result = await _projectLabelSync.SyncAsync(force, CancellationToken.None).ConfigureAwait(true);
+            if (!force && !result.SettingEnabled)
+                return;
+
+            result = await ResolveDuplicateLabelDecisionsAsync(result).ConfigureAwait(true);
+
+            var ambiguousOnly = result.NeedsUserDecision
+                .GroupBy(i => i.ProjectNumber)
+                .Where(g => g.Count() == 1)
+                .SelectMany(g => g)
+                .ToList();
+            if (ambiguousOnly.Count > 0)
+            {
+                var lines = string.Join(
+                    Environment.NewLine,
+                    ambiguousOnly.Select(i => $"• ({i.ProjectNumber}) {i.CurrentFullPath}: {i.Message}"));
+                System.Windows.MessageBox.Show(
+                    "נותרו לייבלים שלא ניתן ליישב אוטומטית (למשל מספר כפול ב-DB):"
+                    + Environment.NewLine + lines,
+                    "סנכרון שמות לייבלים",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
+
+            if (result.RenamedCount > 0)
+            {
+                SetStatusMessage($"סונכרנו {result.RenamedCount} שמות לייבלים.");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning($"[EmailList] Label name sync failed: {ex}");
+            SetLoadWarning($"סנכרון שמות לייבלים נכשל: {ex.Message}");
+        }
+    }
+
+    private async Task<ProjectGmailLabelSyncResult> ResolveDuplicateLabelDecisionsAsync(
+        ProjectGmailLabelSyncResult result)
+    {
+        if (_projectLabelSync is null)
+            return result;
+
+        var duplicateItems = result.NeedsUserDecision
+            .GroupBy(i => i.ProjectNumber)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .ToList();
+        if (duplicateItems.Count == 0)
+            return result;
+
+        var dialog = new GmailDuplicateLabelDecisionDialog(duplicateItems);
+        var owner = System.Windows.Application.Current?.Windows
+            .OfType<System.Windows.Window>()
+            .FirstOrDefault(w => w.IsActive);
+        if (owner is not null)
+            dialog.Owner = owner;
+
+        if (dialog.ShowDialog() != true)
+            return result;
+
+        var errorLines = new List<string>();
+        foreach (var (number, keepId) in dialog.KeepSelections)
+        {
+            var resolve = await _projectLabelSync
+                .ResolveDuplicateLeavesAsync(number, keepId, CancellationToken.None)
+                .ConfigureAwait(true);
+            if (resolve.Errors.Count > 0)
+            {
+                errorLines.AddRange(
+                    resolve.Errors.Select(e => $"({number}) {e}"));
+            }
+        }
+
+        if (errorLines.Count > 0)
+        {
+            System.Windows.MessageBox.Show(
+                "חלק מהמחיקות נכשלו:" + Environment.NewLine
+                + string.Join(Environment.NewLine, errorLines),
+                "סנכרון שמות לייבלים",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
+
+        // Re-sync so the survivor is renamed to NameAndNumber when auto-sync / force applies.
+        return await _projectLabelSync.SyncAsync(force: true, CancellationToken.None).ConfigureAwait(true);
     }
 
     public bool TrySelectByInboxCorrelation(

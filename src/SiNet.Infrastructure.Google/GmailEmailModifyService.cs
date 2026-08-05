@@ -194,6 +194,76 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             cancellationToken);
     }
 
+    public async Task RenameLabelAsync(
+        string labelId,
+        string newFullPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(labelId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newFullPath);
+
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        var update = new Label { Id = labelId, Name = newFullPath.Trim() };
+        await gmail.Users.Labels.Update(update, "me", labelId)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task DeleteLabelAsync(
+        string labelId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(labelId);
+
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        await gmail.Users.Labels.Delete("me", labelId)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<string>> ListMessageIdsByLabelAsync(
+        string labelId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(labelId);
+
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        var ids = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        string? pageToken = null;
+
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var listRequest = gmail.Users.Messages.List("me");
+            listRequest.LabelIds = new[] { labelId.Trim() };
+            listRequest.MaxResults = 500;
+            listRequest.PageToken = pageToken;
+
+            var listResponse = await GmailRetry.ExecuteAsync(
+                    ct => listRequest.ExecuteAsync(ct),
+                    _logger,
+                    $"Messages.List(labelId '{labelId}')",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (listResponse.Messages is { Count: > 0 })
+            {
+                foreach (var message in listResponse.Messages)
+                {
+                    if (!string.IsNullOrWhiteSpace(message.Id) && seen.Add(message.Id))
+                        ids.Add(message.Id);
+                }
+            }
+
+            pageToken = listResponse.NextPageToken;
+        }
+        while (!string.IsNullOrEmpty(pageToken));
+
+        return ids;
+    }
+
     private async Task<string> GetOrCreateStatusLabelAsync(
         EmailTriageStatus status,
         CancellationToken cancellationToken)

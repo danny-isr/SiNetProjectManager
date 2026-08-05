@@ -11,6 +11,7 @@ using SiNet.Application.Configuration;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Autodesk;
+using SiNet.Infrastructure.Diagnostics;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
@@ -60,6 +61,9 @@ public static class StandaloneHostServiceCollectionExtensions
         services.AddSiNetSql(sqlConnectionString, configureSql ?? (_ => { }));
         services.AddSiNetSystemSettingsSql();
         services.AddSiNetAuthorizationSql();
+
+        // Workstation crash report (DEV-010) — Event Log + WMI, net10.0-windows only.
+        services.AddSiNetWorkstationDiagnostics();
         services.AddSiNetFilingServices();
 
         // Prefer Drive catalog over EmptyInspectionTemplateCatalog (TryAdd in WorkSurfaces).

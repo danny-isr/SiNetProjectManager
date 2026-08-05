@@ -115,7 +115,12 @@ public sealed class SqlSystemSettingsService
                 Get(SystemSettingKeys.HourPriceDefault, SystemSettingsDefaults.HourPriceDefault),
                 Get(SystemSettingKeys.InboxFolderName, SystemSettingsDefaults.InboxFolderNameFallback),
                 map.TryGetValue(SystemSettingKeys.InboxProjectName, out var ipn) ? ipn : null,
-                ParseInt(Get(SystemSettingKeys.AccViewerMaxTabs, SystemSettingsDefaults.AccViewerMaxTabs), 10)),
+                ParseInt(Get(SystemSettingKeys.AccViewerMaxTabs, SystemSettingsDefaults.AccViewerMaxTabs), 10),
+                ParseBool(
+                    Get(
+                        SystemSettingKeys.EmailAutoSyncProjectLabelNames,
+                        SystemSettingsDefaults.EmailAutoSyncProjectLabelNames ? "true" : "false"),
+                    SystemSettingsDefaults.EmailAutoSyncProjectLabelNames)),
             new AccSystemSettingsDto(
                 Get(SystemSettingKeys.AccServiceBaseUrl, string.Empty),
                 Get(SystemSettingKeys.AccServicePinnedCertificateThumbprints, string.Empty),
@@ -148,7 +153,19 @@ public sealed class SqlSystemSettingsService
                     SystemSettingsDefaults.WorkflowMaxOpenChildInstances))),
             new ProjectWorkSystemSettingsDto(
                 Get(SystemSettingKeys.ProjectWorkScanExclusionRules,
-                    SystemSettingsDefaults.ProjectWorkScanExclusionRules)));
+                    SystemSettingsDefaults.ProjectWorkScanExclusionRules)),
+            new DiagnosticsSystemSettingsDto(
+                Get(SystemSettingKeys.DiagnosticsCrashReportSharePath, string.Empty),
+                Get(SystemSettingKeys.DiagnosticsCrashAppFilters,
+                    SystemSettingsDefaults.DiagnosticsCrashAppFilters),
+                Math.Max(1, ParseInt(
+                    Get(SystemSettingKeys.DiagnosticsCrashLookbackDays,
+                        SystemSettingsDefaults.DiagnosticsCrashLookbackDays.ToString()),
+                    SystemSettingsDefaults.DiagnosticsCrashLookbackDays)),
+                Math.Max(1, ParseInt(
+                    Get(SystemSettingKeys.DiagnosticsCrashReportRetentionDays,
+                        SystemSettingsDefaults.DiagnosticsCrashReportRetentionDays.ToString()),
+                    SystemSettingsDefaults.DiagnosticsCrashReportRetentionDays))));
     }
 
     internal static CentralLoggingSettingsDto MapLoggingDto(IReadOnlyList<SystemSetting> rows)
@@ -182,6 +199,8 @@ public sealed class SqlSystemSettingsService
             (SystemSettingKeys.HourPriceDefault, settings.EmailOffice.HourPriceDefault.Trim()),
             (SystemSettingKeys.InboxFolderName, settings.EmailOffice.InboxFolderName.Trim()),
             (SystemSettingKeys.AccViewerMaxTabs, settings.EmailOffice.AccViewerMaxTabs.ToString()),
+            (SystemSettingKeys.EmailAutoSyncProjectLabelNames,
+                settings.EmailOffice.AutoSyncProjectLabelNames ? "true" : "false"),
             (SystemSettingKeys.AccServiceBaseUrl, settings.Acc.AccServiceBaseUrl.Trim()),
             (SystemSettingKeys.AccServicePinnedCertificateThumbprints, settings.Acc.AccServicePinnedCertificateThumbprints.Trim()),
             (SystemSettingKeys.AccBootstrapAdminEmail, settings.Acc.AccBootstrapAdminEmail.Trim()),
@@ -210,6 +229,14 @@ public sealed class SqlSystemSettingsService
                 Math.Max(1, settings.Workflow.MaxOpenChildInstances).ToString()),
             (SystemSettingKeys.ProjectWorkScanExclusionRules,
                 settings.ProjectWork.ScanExclusionRules.Trim()),
+            (SystemSettingKeys.DiagnosticsCrashReportSharePath,
+                settings.Diagnostics.CrashReportSharePath.Trim()),
+            (SystemSettingKeys.DiagnosticsCrashAppFilters,
+                settings.Diagnostics.CrashAppFilters.Trim()),
+            (SystemSettingKeys.DiagnosticsCrashLookbackDays,
+                Math.Max(1, settings.Diagnostics.CrashLookbackDays).ToString()),
+            (SystemSettingKeys.DiagnosticsCrashReportRetentionDays,
+                Math.Max(1, settings.Diagnostics.CrashReportRetentionDays).ToString()),
         };
 
         if (!string.IsNullOrWhiteSpace(settings.EmailOffice.InboxProjectName))
@@ -297,6 +324,21 @@ public sealed class SqlSystemSettingsService
 
     private static int ParseInt(string? value, int fallback)
         => int.TryParse(value, out var parsed) ? parsed : fallback;
+
+    private static bool ParseBool(string? value, bool fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback;
+        if (bool.TryParse(value.Trim(), out var parsed))
+            return parsed;
+        if (string.Equals(value.Trim(), "1", StringComparison.Ordinal)
+            || string.Equals(value.Trim(), "yes", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(value.Trim(), "0", StringComparison.Ordinal)
+            || string.Equals(value.Trim(), "no", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return fallback;
+    }
 
     private static LogLevelDto ParseLevel(string? value, LogLevelDto fallback)
     {

@@ -13,9 +13,9 @@ public partial class ProjectsDashboardView : UserControl
     private void OnProjectsGridMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is ProjectsDashboardViewModel vm
-            && vm.OpenSelectedCommand.CanExecute(null))
+            && vm.EditSelectedCommand.CanExecute(null))
         {
-            vm.OpenSelectedCommand.Execute(null);
+            vm.EditSelectedCommand.Execute(null);
         }
     }
 }

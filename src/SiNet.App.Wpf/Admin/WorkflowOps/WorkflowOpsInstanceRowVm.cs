@@ -33,6 +33,7 @@ public sealed class WorkflowOpsInstanceRowVm : ObservableObject
             _ => Status.ToString(),
         };
         Notes = Truncate(instance.Notes, 80);
+        IsOrphanTrack = WorkflowOrphanTrackMarkers.IsMarked(instance.Notes);
         LastActivityUtc = instance.StageTransitions.Count > 0
             ? instance.StageTransitions.Max(t => t.TransitionedAtUtc)
             : instance.CreatedAtUtc;
@@ -52,6 +53,7 @@ public sealed class WorkflowOpsInstanceRowVm : ObservableObject
     public WorkflowStatus Status { get; }
     public string StatusLabel { get; }
     public string Notes { get; }
+    public bool IsOrphanTrack { get; }
     public DateTime LastActivityUtc { get; }
     public DateTime LastActivityLocal { get; }
     public string DurationText { get; }

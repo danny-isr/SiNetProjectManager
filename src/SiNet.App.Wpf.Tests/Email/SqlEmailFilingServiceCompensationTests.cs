@@ -163,6 +163,18 @@ public sealed class SqlEmailFilingServiceCompensationTests
             return Task.CompletedTask;
         }
 
+        public Task RenameLabelAsync(
+            string labelId, string newFullPath, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task DeleteLabelAsync(
+            string labelId, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<IReadOnlyList<string>> ListMessageIdsByLabelAsync(
+            string labelId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
         public List<string> MarkedAsReadMessageIds { get; } = new();
     }
 }

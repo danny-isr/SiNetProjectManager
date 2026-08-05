@@ -14,6 +14,9 @@ public static class AppFeatureCodes
     public const string DevToolsReset = "DevTools.Reset";
     public const string DevToolsSeed = "DevTools.Seed";
     public const string ProjectCreate = "Project.Create";
+
+    /// <summary>Edit project metadata / job types / rename («עדכון פרויקט»).</summary>
+    public const string ProjectUpdate = "Project.Update";
     public const string ReportsManagement = "Reports.Management";
     public const string SystemSettingsWrite = "System.Settings.Write";
     public const string UsersManage = "Users.Manage";

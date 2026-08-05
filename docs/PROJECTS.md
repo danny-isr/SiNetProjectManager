@@ -462,7 +462,22 @@ ProjectDashboardRowDto
 ProjectDashboardQuery
 ICurrentProjectContext
 ProjectChangedEventArgs
+IProjectCreateService / CreateProjectCommand
+IProjectUpdateService / ProjectEditDto
+IProjectRenameOrchestrator
+IProjectGmailLabelSyncService
 ```
+
+### Project edit + verified rename
+
+See [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md).
+
+- **Open:** double-click in «ריכוז פרויקטים» → edit dialog (`Project.Update`). Toolbar «פתח פרויקט» still opens Project Work.
+- **Editable:** place, company, contact, parent, status, `ApproveDescription`, job-type membership, per-type `AdminWorkerId`, per-type `Bid.BidValue`.
+- **Immutable:** project number.
+- **Rename (dedicated button):** FileServer → ACC Docs folder → Drive root → then DB `Title`. Gmail labels are **not** renamed centrally (per-mailbox; identity = `(Number)` — see Email SoT). **ACC rename is P0** — without it, ACC-mapped projects must not be considered shippable (split-brain risk after FileServer). See plan Layers A–C.
+- **Job-type remove:** warn if workflows exist; never hard-delete instances; mark orphan tracks; repair in integrity/Ops (DEV-011).
+- **Create parity:** create dialog also captures per-type admin worker + contract value (+ «למי הוגש»).
 
 Intended shapes (defined in detail in the migration plan; summarized here as the target contract):
 

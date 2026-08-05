@@ -280,6 +280,7 @@ public sealed class SqlInspectionWorkspaceTests
                     new AppLogLevelsDto(LogLevelDto.Information, LogLevelDto.Warning),
                     false),
                 new WorkflowSystemSettingsDto(SystemSettingsDefaults.WorkflowMaxOpenChildInstances),
-                new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules)));
+                new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules),
+                SystemSettingsDefaults.Diagnostics));
     }
 }

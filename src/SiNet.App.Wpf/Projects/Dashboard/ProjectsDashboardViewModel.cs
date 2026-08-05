@@ -3,7 +3,9 @@ using System.Windows;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
 
@@ -21,6 +23,8 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
     private readonly ICurrentProjectContext _currentProject;
     private readonly IProjectWorkSurfaceHost? _projectWorkHost;
     private readonly IPlaceCatalogService? _placeCatalog;
+    private readonly IProjectEditDialogFactory? _editDialogFactory;
+    private readonly IAuthorizationQueryService? _authorization;
 
     private CancellationTokenSource? _loadCts;
     private bool _isBusy;
@@ -51,13 +55,17 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         IProjectFilterOptionsService filterOptions,
         ICurrentProjectContext currentProject,
         IProjectWorkSurfaceHost? projectWorkHost = null,
-        IPlaceCatalogService? placeCatalog = null)
+        IPlaceCatalogService? placeCatalog = null,
+        IProjectEditDialogFactory? editDialogFactory = null,
+        IAuthorizationQueryService? authorization = null)
     {
         _dashboardQuery = dashboardQuery ?? throw new ArgumentNullException(nameof(dashboardQuery));
         _filterOptions = filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
         _projectWorkHost = projectWorkHost;
         _placeCatalog = placeCatalog;
+        _editDialogFactory = editDialogFactory;
+        _authorization = authorization;
 
         Rows = new ObservableCollection<ProjectsDashboardRowVm>();
         StatusFilterOptions = new ObservableCollection<ProjectFilterOptionDto>();
@@ -66,6 +74,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         OpenSelectedCommand = new AsyncRelayCommand(OpenSelectedAsync, () => Selected is not null);
+        EditSelectedCommand = new AsyncRelayCommand(EditSelectedAsync, () => Selected is not null);
     }
 
     public ObservableCollection<ProjectsDashboardRowVm> Rows { get; }
@@ -202,6 +211,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
             if (!SetField(ref _selected, value))
                 return;
             (OpenSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (EditSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
@@ -266,6 +276,8 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
     public ICommand RefreshCommand { get; }
     public ICommand OpenSelectedCommand { get; }
+
+    public ICommand EditSelectedCommand { get; }
 
     public async Task LoadAsync()
     {
@@ -345,6 +357,54 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
             System.Diagnostics.Trace.TraceWarning($"[ProjectsDashboard] OpenSelected failed: {ex}");
             MessageBox.Show(
                 $"שגיאה בפתיחת הפרויקט: {ex.Message}",
+                "ריכוז פרויקטים",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    internal async Task EditSelectedAsync()
+    {
+        if (Selected is null)
+            return;
+
+        if (_editDialogFactory is null)
+        {
+            StatusMessage = "דיאלוג עדכון פרויקט אינו זמין.";
+            return;
+        }
+
+        try
+        {
+            if (_authorization is not null)
+            {
+                var allowed = await _authorization
+                    .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.ProjectUpdate, CancellationToken.None)
+                    .ConfigureAwait(true);
+                if (!allowed)
+                {
+                    MessageBox.Show(
+                        "אין הרשאה לעדכון פרויקט (Project.Update).",
+                        "ריכוז פרויקטים",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+            }
+
+            var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+                ?? System.Windows.Application.Current?.MainWindow;
+            var result = await _editDialogFactory
+                .ShowDialogAsync(owner, Selected.ProjectId, CancellationToken.None)
+                .ConfigureAwait(true);
+            if (result.Confirmed)
+                await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning($"[ProjectsDashboard] EditSelected failed: {ex}");
+            MessageBox.Show(
+                $"שגיאה בפתיחת עדכון פרויקט: {ex.Message}",
                 "ריכוז פרויקטים",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

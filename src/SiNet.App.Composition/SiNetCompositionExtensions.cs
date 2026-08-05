@@ -51,6 +51,7 @@ public static class SiNetCompositionExtensions
         services.AddTransient<IOpenQuoteProjectDecisionService, OpenQuoteProjectDecisionService>();
         services.AddSiNetProjectQuerySql();
         services.AddSiNetProjectCreateSql();
+        services.AddSiNetProjectUpdateSql();
         services.AddSiNetEmailReadSql();
         services.AddSiNetEmailWriteSql();
         services.AddSiNetEmailAccSql();

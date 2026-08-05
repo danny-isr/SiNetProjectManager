@@ -28,10 +28,21 @@ Business process (projects, tasks, workflow structure, `ProjectFile` tree) remai
 
 During FileQuoteMaterial QA (2026-07), a proposed fix treated SQL `ProjectId` as “already filed” so Move could proceed without a Gmail project label. That approach was **rejected**. Mailbox association stays Gmail-label-only; if File fails, surface the real Gmail error — do not bypass the label.
 
+## Project label identity (per mailbox)
+
+- Gmail project labels live **per user mailbox** — they are not a shared office tree. A centralized project rename **must not** rename labels for all users.
+- **Identity** of a project leaf label is the **number in parentheses at the start of the leaf name** (`^\((\d+)\)` → `Project.Number`), not the full display string after the number. Parser: `EmailProjectLabelParser`.
+- Leaves are only considered under the configured root / place hierarchy (`Gmail.RootLabel` / `פרויקטים_משרד/...`).
+- Optional SystemSetting **`Email.AutoSyncProjectLabelNames`**: when on, for the **signed-in mailbox only**, rename leaf labels whose `(Number)` matches a project so the leaf equals current `NameAndNumber`. Duplicate numbers in one mailbox require an **explicit keep/delete decision UI** (no silent merge; warn-only MessageBox is insufficient — see [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §4.1).
+- **Label change journal:** per-mailbox JSON under `%LocalAppData%\SiNet\GmailLabelJournal\` logging `LabelId` + old/new full path for renames/deletes performed by SiNet, retained **at most 30 days**. On **delete / duplicate merge**, also store the Gmail **message id list** that had that label before removal (mandatory capture; fail closed if list or journal write cannot be obtained). See plan §4.2.
+- When the setting is off, filing/association still uses `(Number)`; leaf titles may lag after a project rename until the user syncs.
+
 ## Code anchors
 
 - Label predicate: `src/SiNet.Application/Email/EmailGmailLabelNames.cs`
+- Number extract: `EmailProjectLabelParser.TryExtractProjectIdFromDisplaySegment` (maps to `Project.Number`)
 - Row mapping: `EmailListRowMapper` → `IsFiledToProject` from Gmail `labelNames`
 - Filing order: `SqlEmailFilingService` — Gmail attach first, SQL sync best-effort, compensate by removing label if SQL fails
 - Move gate: `EmailDetailViewModel` passes `_selectedEmail.IsFiledToProject` into eligibility
 - ACC move: `NativeEmailMoveToProjectExecutor` verifies ACC; Move/Lock attributes are SoT for “already moved”
+- Label name sync: `IProjectGmailLabelSyncService` (DEV-009)

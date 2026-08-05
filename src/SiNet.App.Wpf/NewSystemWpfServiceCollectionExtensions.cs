@@ -46,6 +46,10 @@ public static class NewSystemWpfServiceCollectionExtensions
         services.AddSiNetRuntimeStatus();
         services.AddTransient<SystemStatusViewModel>();
         services.AddTransient<SystemStatusWindow>();
+
+        // «דוח קריסות תחנה» (DEV-010). Adapters come from AddSiNetWorkstationDiagnostics() in the host.
+        services.AddTransient<Admin.Diagnostics.WorkstationCrashReportViewModel>();
+        services.AddTransient<Admin.Diagnostics.WorkstationCrashReportWindow>();
         services.AddTransient<WorkflowOpsDashboardViewModel>(sp =>
             new WorkflowOpsDashboardViewModel(
                 sp.GetRequiredService<IWorkflowQueryService>(),
@@ -63,7 +67,9 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetRequiredService<IProjectFilterOptionsService>(),
                 sp.GetRequiredService<ICurrentProjectContext>(),
                 sp.GetService<IProjectWorkSurfaceHost>(),
-                sp.GetService<IPlaceCatalogService>()));
+                sp.GetService<IPlaceCatalogService>(),
+                sp.GetService<IProjectEditDialogFactory>(),
+                sp.GetService<IAuthorizationQueryService>()));
         services.AddTransient<ProjectsDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();

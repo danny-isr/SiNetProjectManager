@@ -50,6 +50,9 @@ public static class NewSystemServiceCollectionExtensions
         services.AddSiNetSerilogLogging();
         services.AddSiNetUserLoggingSettings();
         SiNet.Infrastructure.Sql.SystemSettingsServiceCollectionExtensions.AddSiNetSystemSettingsSql(services);
+        // «דוח קריסות תחנה» (DEV-010) — the shell menu item exists in both hosts.
+        SiNet.Infrastructure.Diagnostics.WorkstationDiagnosticsServiceCollectionExtensions
+            .AddSiNetWorkstationDiagnostics(services);
         services.AddTransient<IAccInboxBootstrapLocalExecutor, LegacyHostLocalAccInboxBootstrapExecutor>();
         services.AddSingleton<ILoggingRuntimeApplier, LegacyLoggingRuntimeApplier>();
         SiNet.App.Wpf.Theme.ThemeServiceCollectionExtensions.AddSiNetThemeWpf(services);

@@ -31,6 +31,9 @@ public interface IGoogleDriveFileService
     /// <summary>Renames a Drive file in place; returns updated metadata.</summary>
     Task<GoogleDriveFileEntry> RenameFileAsync(string fileId, string newName, CancellationToken cancellationToken = default);
 
+    /// <summary>Finds a direct child folder by exact name under <paramref name="parentId"/>.</summary>
+    Task<string?> FindFolderIdByNameAsync(string folderName, string parentId, CancellationToken cancellationToken = default);
+
     /// <summary>Returns parent folder ids for <paramref name="fileId"/> (Shared Drive aware).</summary>
     Task<IReadOnlyList<string>> GetParentIdsAsync(string fileId, CancellationToken cancellationToken = default);
 }

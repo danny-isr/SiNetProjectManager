@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 
 namespace SiNet.App.Wpf.Shared.Projects;
@@ -10,11 +12,17 @@ namespace SiNet.App.Wpf.Shared.Projects;
 public sealed class JobTypeOptionViewModel : ObservableObject
 {
     private bool _isSelected;
+    private UserLookupDto? _adminWorker;
+    private string _bidValueText = "0";
 
-    public JobTypeOptionViewModel(JobTypeDto jobType, bool isSelected = false)
+    public JobTypeOptionViewModel(
+        JobTypeDto jobType,
+        bool isSelected = false,
+        IReadOnlyList<UserLookupDto>? workers = null)
     {
         JobType = jobType ?? throw new ArgumentNullException(nameof(jobType));
         _isSelected = isSelected;
+        Workers = workers ?? [];
     }
 
     public JobTypeDto JobType { get; }
@@ -23,10 +31,35 @@ public sealed class JobTypeOptionViewModel : ObservableObject
 
     public string Title => JobType.Title;
 
+    public IReadOnlyList<UserLookupDto> Workers { get; }
+
     public bool IsSelected
     {
         get => _isSelected;
         set => SetField(ref _isSelected, value);
+    }
+
+    public UserLookupDto? AdminWorker
+    {
+        get => _adminWorker;
+        set => SetField(ref _adminWorker, value);
+    }
+
+    public string BidValueText
+    {
+        get => _bidValueText;
+        set => SetField(ref _bidValueText, value ?? "0");
+    }
+
+    public CreateProjectJobTypeLine ToLine()
+    {
+        if (!decimal.TryParse(BidValueText, NumberStyles.Number, CultureInfo.CurrentCulture, out var bid)
+            && !decimal.TryParse(BidValueText, NumberStyles.Number, CultureInfo.InvariantCulture, out bid))
+        {
+            bid = 0m;
+        }
+
+        return new CreateProjectJobTypeLine(Id, AdminWorker?.UserId, bid);
     }
 }
 
@@ -37,6 +70,7 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
     private readonly IPlaceCatalogService _places;
     private readonly ICompanyCatalogService _companies;
     private readonly IJobTypeQueryService _jobTypes;
+    private readonly IUserLookupService? _users;
     private readonly InMemoryCurrentProjectContext _parentProjectContext = new();
 
     private string _projectNumberDisplay = "—";
@@ -44,6 +78,7 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
     private PlaceDto? _selectedPlace;
     private CompanyDto? _selectedCompany;
     private ContactDto? _selectedContact;
+    private string _approveDescription = string.Empty;
     private string _validationMessage = string.Empty;
     private bool _isSaving;
     private bool _disposed;
@@ -54,12 +89,14 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
         ICompanyCatalogService companies,
         IJobTypeQueryService jobTypes,
         IProjectQueryService projectQuery,
-        IProjectFilterOptionsService projectFilterOptions)
+        IProjectFilterOptionsService projectFilterOptions,
+        IUserLookupService? users = null)
     {
         _createService = createService ?? throw new ArgumentNullException(nameof(createService));
         _places = places ?? throw new ArgumentNullException(nameof(places));
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
         _jobTypes = jobTypes ?? throw new ArgumentNullException(nameof(jobTypes));
+        _users = users;
 
         ParentProjectSelector = new ProjectSelectorViewModel(projectQuery, projectFilterOptions, _parentProjectContext);
         Places = [];
@@ -144,6 +181,12 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
         }
     }
 
+    public string ApproveDescription
+    {
+        get => _approveDescription;
+        set => SetField(ref _approveDescription, value ?? string.Empty);
+    }
+
     public string ValidationMessage
     {
         get => _validationMessage;
@@ -207,11 +250,14 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
             Companies.Add(company);
         }
 
+        var workers = _users is null
+            ? (IReadOnlyList<UserLookupDto>)[]
+            : await _users.GetActiveUsersAsync(cancellationToken).ConfigureAwait(true);
         var defaultJobTypeId = await _jobTypes.ResolveDefaultJobTypeIdAsync(cancellationToken).ConfigureAwait(true);
         JobTypes.Clear();
         foreach (var jobType in await _jobTypes.ListAsync(cancellationToken).ConfigureAwait(true))
         {
-            var option = new JobTypeOptionViewModel(jobType, isSelected: jobType.Id == defaultJobTypeId);
+            var option = new JobTypeOptionViewModel(jobType, isSelected: jobType.Id == defaultJobTypeId, workers);
             option.PropertyChanged += (_, args) =>
             {
                 if (args.PropertyName == nameof(JobTypeOptionViewModel.IsSelected))
@@ -264,14 +310,17 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            var selectedLines = JobTypes.Where(j => j.IsSelected).Select(j => j.ToLine()).ToList();
             var result = await _createService.CreateAsync(new CreateProjectCommand(
                     name,
                     SelectedPlace!.Id,
                     SelectedCompany!.Id,
                     SelectedContact!.Id,
-                    JobTypes.Where(j => j.IsSelected).Select(j => j.Id).ToList(),
+                    selectedLines.Select(l => l.JobTypeId).ToList(),
                     ParentProjectId: _parentProjectContext.CurrentProject?.ProjectId,
-                    EmailMessageId: EmailMessageId))
+                    EmailMessageId: EmailMessageId,
+                    ApproveDescription: string.IsNullOrWhiteSpace(ApproveDescription) ? null : ApproveDescription.Trim(),
+                    JobTypeLines: selectedLines))
                 .ConfigureAwait(true);
 
             if (!result.Succeeded)

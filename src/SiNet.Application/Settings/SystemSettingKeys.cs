@@ -13,6 +13,12 @@ public static class SystemSettingKeys
     public const string ReportsOutputRoot = "ReportsOutputRoot";
     public const string InboxProjectName = "InboxProjectName";
     public const string InboxFolderName = "InboxFolderName";
+
+    /// <summary>
+    /// When true, email enter / label refresh may rename Gmail project leaf labels to current
+    /// <c>NameAndNumber</c> (identity = leading <c>(Number)</c>). Stored as "true"/"false".
+    /// </summary>
+    public const string EmailAutoSyncProjectLabelNames = "Email.AutoSyncProjectLabelNames";
     public const string AccServiceBaseUrl = "AccService.BaseUrl";
 
     /// <summary>
@@ -50,6 +56,21 @@ public static class SystemSettingKeys
     /// </summary>
     public const string ProjectWorkScanExclusionRules = "ProjectWork.ScanExclusionRules";
 
+    /// <summary>
+    /// Root folder for workstation crash reports (DEV-010). Empty means «derive from
+    /// <see cref="LoggingSettingKeys.CentralLogPath"/>». Reports land under <c>{root}\{MachineName}\</c>.
+    /// </summary>
+    public const string DiagnosticsCrashReportSharePath = "Diagnostics.CrashReportSharePath";
+
+    /// <summary>CSV of process-name fragments the crash report treats as «our» applications.</summary>
+    public const string DiagnosticsCrashAppFilters = "Diagnostics.CrashAppFilters";
+
+    /// <summary>Default number of days a crash report looks back.</summary>
+    public const string DiagnosticsCrashLookbackDays = "Diagnostics.CrashLookbackDays";
+
+    /// <summary>Age after which a saved crash report may be deleted from the share.</summary>
+    public const string DiagnosticsCrashReportRetentionDays = "Diagnostics.CrashReportRetentionDays";
+
     public static IReadOnlyList<string> AllManaged { get; } =
     [
         DefaultProjectTitle,
@@ -59,6 +80,7 @@ public static class SystemSettingKeys
         ReportsOutputRoot,
         InboxProjectName,
         InboxFolderName,
+        EmailAutoSyncProjectLabelNames,
         AccServiceBaseUrl,
         AccServicePinnedCertificateThumbprints,
         AccProjectTemplateName,
@@ -84,6 +106,10 @@ public static class SystemSettingKeys
         AccManualUploadAllowedExtensions,
         WorkflowMaxOpenChildInstances,
         ProjectWorkScanExclusionRules,
+        DiagnosticsCrashReportSharePath,
+        DiagnosticsCrashAppFilters,
+        DiagnosticsCrashLookbackDays,
+        DiagnosticsCrashReportRetentionDays,
         .. LoggingSettingKeys.All,
     ];
 }

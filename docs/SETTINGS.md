@@ -37,9 +37,10 @@ Defaults in `SystemSettingsDefaults`.
 
 | Group | Keys | Legacy UI |
 | --- | --- | --- |
-| Email/office | `DefaultProjectTitle`, `OfficeManagementProjectId`, `HourPriceDefault`, `InboxFolderName`, `InboxProjectName`, `AccViewerMaxTabs` | ManagementSettings |
+| Email/office | `DefaultProjectTitle`, `OfficeManagementProjectId`, `HourPriceDefault`, `InboxFolderName`, `InboxProjectName`, `AccViewerMaxTabs`, `Email.AutoSyncProjectLabelNames` | ManagementSettings / Native Settings |
 | ACC | `AccService.BaseUrl`, `AccBootstrapAdminEmail`, `AccProjectTemplateName`, `AccManualUploadAllowedExtensions` | ManagementSettings |
 | ProjectWork | `ProjectWork.ScanExclusionRules` | Native Settings (DEV-006) |
+| Diagnostics | `Diagnostics.CrashReportSharePath`, `Diagnostics.CrashAppFilters`, `Diagnostics.CrashLookbackDays`, `Diagnostics.CrashReportRetentionDays` | Native Settings (DEV-010) |
 | Inspection | `InspectionTemplatesFolderId`, `InspectionReportsFolderId`, `ReportsOutputRoot`, `StampTemplatePath` | ManagementSettings |
 | Status labels | `StatusLabel_*` | ManagementSettings |
 | AI | `Ollama*`, `AiModel.*`, `AiProvider.*`, `AiConfiguredCloudModels` | ManagementSettings + AiModelCatalog |
@@ -49,6 +50,11 @@ Defaults in `SystemSettingsDefaults`.
 
 `AccService.BaseUrl` validation mirrors legacy expectations: empty = local mode; otherwise it must
 be an absolute `http`/`https` URL and is normalized without a trailing slash on save.
+
+`Diagnostics.*` defaults (DEV-010): share path empty — an empty value derives
+`{Logging.CentralLogPath}\CrashReports`; app filters `acad.exe,civil 3d,aecc,revit.exe`; lookback
+`14` days; retention `180` days. Producing a report needs no feature code, but editing these keys
+stays under `System.Settings.Write`. Behavior: [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md).
 
 ### 2.3 Status colors (separate tables)
 

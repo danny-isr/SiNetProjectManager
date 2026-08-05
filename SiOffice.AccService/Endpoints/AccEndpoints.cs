@@ -577,6 +577,41 @@ internal static class AccEndpoints
             return Results.Ok(new { FolderId = folderId });
         });
 
+        // ── ACC Docs folder rename (DEV-008 Layer A) ─────────────────────────
+        // Folder URN stays stable; only the display name changes. Used by
+        // verified project rename (Remote mode) via RemoteAccFolderRenameService.
+        v1.MapPost("/projects/{projectId}/folders/{folderId}/rename", async (
+            string projectId,
+            string folderId,
+            RenameFolderRequest? body,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new ErrorDto("projectId is required."));
+            if (string.IsNullOrWhiteSpace(folderId))
+                return Results.BadRequest(new ErrorDto("folderId is required."));
+            if (body is null || string.IsNullOrWhiteSpace(body.NewName))
+                return Results.BadRequest(new ErrorDto("newName is required."));
+
+            var normalizedProjectId = NormalizeProjectId(projectId);
+            var bim360 = new Bim360Service(tokenProvider);
+            try
+            {
+                await bim360.RenameFolderAsync(
+                    normalizedProjectId,
+                    folderId.Trim(),
+                    body.NewName.Trim(),
+                    ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new ErrorDto("Folder rename failed.", ex.Message));
+            }
+
+            return Results.Ok(new RenameFolderResponse(folderId.Trim(), body.NewName.Trim()));
+        });
+
         // ── Read-only ACC folder browse ──────────────────────────────────────
         v1.MapGet("/projects/{projectId}/folders/browse", async (
             string projectId,

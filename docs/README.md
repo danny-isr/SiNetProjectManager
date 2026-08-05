@@ -36,7 +36,9 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | **DEV-001:** Jumbo/body links must open external download window → ACC |
 | [`DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md`](./DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md) | **DEV-003:** ProjectWork bak/recover hide-stale + delete stale + tree UX |
 | [`DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md`](./DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md) | **DEV-006/007:** editable scan exclusions; open-with by extension |
+| [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) | **DEV-008/009:** project edit + verified rename; Gmail label sync by number |
 | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) | **DEV-004/005:** mark email as read; «פתח ב-Gmail» for reply/forward |
+| [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | **DEV-010:** «דוח קריסות תחנה» — Event Log crash report + AI export |
 | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) | Pilot / expand phases and sign-off log |
 | [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) | App.Wpf replaces V2 as shipped desktop |
 | [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) | Pilot envelope / readiness notes |

@@ -99,6 +99,8 @@ public static class ProjectContextServiceCollectionExtensions
 
         services.AddTransient<ProjectCreateDialogViewModel>();
         services.AddTransient<IProjectCreateDialogFactory, ProjectCreateDialogFactory>();
+        services.AddTransient<ProjectEditDialogViewModel>();
+        services.AddTransient<IProjectEditDialogFactory, ProjectEditDialogFactory>();
 
         // Standalone attachment tagging UI hosts. V2 may override with hierarchical pickers.
         services.TryAddTransient<IEmailAttachmentProjectFilePickerHost, WpfEmailAttachmentProjectFilePickerHost>();

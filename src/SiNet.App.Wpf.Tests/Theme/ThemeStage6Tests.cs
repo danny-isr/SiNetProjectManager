@@ -445,16 +445,13 @@ public sealed class ThemeStage6Tests
     }
 
     [Fact]
-    public void ProjectCreate_job_types_checkbox_uses_theme_normal_font()
+    public void ProjectCreate_job_types_grid_uses_theme_normal_font()
     {
         var xaml = File.ReadAllText(Path.Combine(AppWpfRoot, "Shared", "Projects", "ProjectCreateDialogView.xaml"));
-        var jobTypes = ExtractXamlSection(xaml, "ItemsSource=\"{Binding JobTypes}\"", "</ItemsControl>");
+        var jobTypes = ExtractXamlSection(xaml, "ItemsSource=\"{Binding JobTypes}\"", "</DataGrid>");
         Assert.Contains(ThemeResourceKeys.TextNormalFontSize, jobTypes, StringComparison.Ordinal);
         Assert.Contains(ThemeResourceKeys.FontFamily, jobTypes, StringComparison.Ordinal);
-        var checkBoxOpen = Regex.Match(jobTypes, @"<CheckBox[\s\S]*?/>", RegexOptions.CultureInvariant);
-        Assert.True(checkBoxOpen.Success, "JobTypes CheckBox template missing.");
-        Assert.Contains(ThemeResourceKeys.TextNormalFontSize, checkBoxOpen.Value, StringComparison.Ordinal);
-        Assert.Contains(ThemeResourceKeys.FontFamily, checkBoxOpen.Value, StringComparison.Ordinal);
+        Assert.Contains("DataGridCheckBoxColumn", jobTypes, StringComparison.Ordinal);
     }
 
     [Fact]

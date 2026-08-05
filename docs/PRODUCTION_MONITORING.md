@@ -144,7 +144,18 @@ Authoritative behavior: [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.m
 
 Complements System Status — does **not** replace infrastructure checks.
 
-### 5.3 Watchdog note
+### 5.3 «דוח קריסות תחנה» (Workstation crash report)
+
+| Item | Detail |
+| --- | --- |
+| UI | `WorkstationCrashReportWindow` under **מנהלה** |
+| Permission | Any signed-in user (no feature code) |
+| Source | Local Windows Event Log — `Application` (Civil 3D / acad crashes) + `System` (bugcheck, power, WHEA, disk) |
+| Output | CSV + Markdown for offline AI analysis, saved per machine under the configured share |
+
+Use it when a user reports repeated Civil 3D crashes or a machine that reboots on its own. It is about **the workstation**, not about SiNet's own logs. Authoritative behavior: [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md).
+
+### 5.4 Watchdog note
 
 `StalledWorkflowWatchdog` exists in the New System SQL infrastructure, but an **automatic background loop** is historically wired on the legacy V2 host. On standalone `SiNet.App.Wpf`, treat recovery as **operator-driven** via the Ops Dashboard / `IWorkflowRecoveryService` until a dedicated background host loop is approved and documented.
 

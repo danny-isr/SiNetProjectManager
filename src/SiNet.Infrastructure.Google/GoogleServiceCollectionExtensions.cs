@@ -4,7 +4,9 @@ using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
+using SiNet.Application.Email;
 using SiNet.Application.MasterPlan.Reports;
+using SiNet.Application.Projects;
 using SiNet.Application.ProjectWork;
 using SiNet.Infrastructure.Google.ProjectWork;
 using SiNet.Infrastructure.Google.Reports;
@@ -59,9 +61,11 @@ public static class GoogleServiceCollectionExtensions
         // user re-consents, SendAsync reports RequiresConsent rather than throwing.
         services.AddSingleton<IEmailSender, GmailEmailSender>();
         services.AddSingleton<IEmailGmailModifyService, GmailEmailModifyService>();
+        services.AddSingleton<IGmailLabelChangeJournal, LocalGmailLabelChangeJournal>();
 
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
         services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();
+        services.AddSingleton<IProjectDriveRootRenameService, GoogleDriveProjectRootRenameService>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IFileStore, GoogleDriveFileStore>());
 
         // MasterPlan Reports (R01/R02/R03) — require IR0xReportDataSource from AddSiNetUserManagementSql.

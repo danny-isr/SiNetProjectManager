@@ -41,6 +41,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AccService", "SiOf
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiOffice.AutodeskConnector", "..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj", "{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNet.Infrastructure.Diagnostics", "src\SiNet.Infrastructure.Diagnostics\SiNet.Infrastructure.Diagnostics.csproj", "{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -267,6 +269,18 @@ Global
 		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x64.Build.0 = Release|Any CPU
 		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x86.ActiveCfg = Release|Any CPU
 		{F8CFD783-F495-46F1-BAD0-E1F28DA3D3EB}.Release|x86.Build.0 = Release|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Debug|x64.Build.0 = Debug|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Debug|x86.Build.0 = Debug|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Release|x64.ActiveCfg = Release|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Release|x64.Build.0 = Release|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Release|x86.ActiveCfg = Release|Any CPU
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -288,5 +302,6 @@ Global
 		{76144B99-6442-4EB5-BF50-5AC41095DE57} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{8C193F1A-B734-4294-9391-0C47DC08F7D2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{3F7A9C2E-6B1D-4A85-9E3C-7D4F1B8A2C90} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7CC0ACD1-2EAB-464D-BD5E-6751176AD128} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

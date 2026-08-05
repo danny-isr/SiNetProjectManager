@@ -500,7 +500,8 @@ public sealed class NativeSettingsSurfaceTests
                 "model-a,model-b"),
             log,
             new WorkflowSystemSettingsDto(3),
-            new ProjectWorkSystemSettingsDto(".bak,.tmp,~$"));
+            new ProjectWorkSystemSettingsDto(".bak,.tmp,~$"),
+            new DiagnosticsSystemSettingsDto("\\\\server\\crash", "acad.exe", 7, 30));
     }
 
     private static SettingsViewModel CreateViewModel(
@@ -705,7 +706,8 @@ public sealed class NativeSettingsSurfaceTests
                 string.Empty),
             log,
             new WorkflowSystemSettingsDto(SystemSettingsDefaults.WorkflowMaxOpenChildInstances),
-            new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules));
+            new ProjectWorkSystemSettingsDto(SystemSettingsDefaults.ProjectWorkScanExclusionRules),
+            SystemSettingsDefaults.Diagnostics);
     }
 
     private static string NewShellFactoryPath => Path.Combine(

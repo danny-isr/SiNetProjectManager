@@ -78,10 +78,10 @@ Button **פתח מצב מערכת** opens the existing `SystemStatusWindow`.
 | Started | `CreatedAtUtc` (local) |
 | Stage | `CurrentStage.Name` |
 | Duration | now − Created (active) or Completed − Created |
-| Status | `WorkflowStatus` + badge «חשוד כתקוע» |
+| Status | `WorkflowStatus` + badge «חשוד כתקוע»; filter «מסלול יתום (סוג הוסר)» via Notes `[ORPHAN-TRACK]` (DEV-011) |
 | Notes | Truncated `Notes` |
 
-Filters: status, workflow name, project/user text. Auto-refresh 20s + manual refresh.
+Filters: status (incl. orphan-track), workflow name, project/user text. Auto-refresh 20s + manual refresh.
 
 **B2:** A project may have several active instances of the same definition (one per JobType track).
 The grid must list **each** instance; do not collapse to one “best” row per project.

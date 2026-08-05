@@ -13,6 +13,12 @@ public sealed record ContactDto(int Id, int CompanyId, string DisplayName);
 
 public sealed record JobTypeDto(int Id, string Title);
 
+/// <summary>Selected job type on create, with optional admin worker + contract value.</summary>
+public sealed record CreateProjectJobTypeLine(
+    int JobTypeId,
+    int? AdminWorkerId = null,
+    decimal BidValue = 0m);
+
 public sealed record CreateProjectCommand(
     string Title,
     int PlaceId,
@@ -20,7 +26,9 @@ public sealed record CreateProjectCommand(
     int ContactId,
     IReadOnlyList<int> JobTypeIds,
     int? ParentProjectId = null,
-    int? EmailMessageId = null);
+    int? EmailMessageId = null,
+    string? ApproveDescription = null,
+    IReadOnlyList<CreateProjectJobTypeLine>? JobTypeLines = null);
 
 public sealed record CreateProjectResult(
     bool Succeeded,

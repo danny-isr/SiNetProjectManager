@@ -420,6 +420,13 @@ public sealed class AccFileTransferTests : IDisposable
             return Task.FromResult(true);
         }
 
+        public Task RenameFolderAsync(
+            string projectId,
+            string folderId,
+            string newFolderName,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
         public Task<AccMetadataResult<IReadOnlyDictionary<string, string?>>> GetItemCustomAttributesAsync(string projectId, string itemId, CancellationToken cancellationToken = default)
         {
             var value = CustomAttributes.TryGetValue(itemId, out var attributes)

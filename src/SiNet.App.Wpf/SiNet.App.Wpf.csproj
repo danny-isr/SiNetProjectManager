@@ -12,7 +12,7 @@
     <Product>שיא חדש — מנהל פרויקטים</Product>
     <Company>שיא חדש בע״מ</Company>
     <!-- MSIX publish-desktop.ps1 bumps the patch component. -->
-    <Version>1.0.13</Version>
+    <Version>1.0.15</Version>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\sinet.ico" />
@@ -49,5 +49,12 @@
 	  src/SiNet.App.Wpf.Tests/Boundary/WpfSecretsBoundaryTests.cs.
 	-->
     <ProjectReference Include="..\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
+    <!--
+	  Same constraint as Secrets above: SiNet.Infrastructure.Diagnostics reads the Windows Event Log
+	  and WMI, so it targets net10.0-windows and cannot live in the platform-neutral
+	  SiNet.App.Composition. Only StandaloneHostServiceCollectionExtensions.cs references it; the
+	  crash report UI consumes SiNet.Application.Diagnostics ports (docs/DEV_PLAN_WORKSTATION_CRASH_REPORT.md).
+	-->
+    <ProjectReference Include="..\SiNet.Infrastructure.Diagnostics\SiNet.Infrastructure.Diagnostics.csproj" />
   </ItemGroup>
 </Project>

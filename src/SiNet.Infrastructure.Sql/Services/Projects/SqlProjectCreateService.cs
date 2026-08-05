@@ -84,10 +84,8 @@ internal sealed class SqlProjectCreateService(
             return CreateProjectResult.Fail("יש לבחור מקום, חברה ואיש קשר.");
         }
 
-        var jobTypeIds = (command.JobTypeIds ?? Array.Empty<int>())
-            .Where(id => id > 0)
-            .Distinct()
-            .ToList();
+        var jobTypeLines = ResolveJobTypeLines(command);
+        var jobTypeIds = jobTypeLines.Select(l => l.JobTypeId).ToList();
         if (jobTypeIds.Count == 0)
         {
             return CreateProjectResult.Fail("יש לבחור לפחות סוג פרויקט אחד.");
@@ -143,6 +141,9 @@ internal sealed class SqlProjectCreateService(
             Contacts = contact,
             OnerProjectId = parent?.Id,
             OnerProject = parent,
+            ApproveDescription = string.IsNullOrWhiteSpace(command.ApproveDescription)
+                ? null
+                : command.ApproveDescription.Trim(),
             Created = DateTime.Now,
             Modified = DateTime.Now,
         };
@@ -167,14 +168,27 @@ internal sealed class SqlProjectCreateService(
         db.Projects.Add(project);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        var lineById = jobTypeLines.ToDictionary(l => l.JobTypeId);
         foreach (var jobType in jobTypes)
         {
+            var line = lineById[jobType.Id];
             db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject
             {
                 ProjectId = project.Id,
                 ProjectTypeId = jobType.Id,
                 Title = jobType.Title,
+                AdminWorkerId = line.AdminWorkerId,
                 Created = DateTime.Now,
+            });
+
+            db.Bids.Add(new Bid
+            {
+                ProjectsId = project.Id,
+                JobTypeId = jobType.Id,
+                BidValue = line.BidValue,
+                BidSubmission = DateTime.Now,
+                Description = string.Empty,
+                Vat = 0,
             });
         }
 
@@ -248,5 +262,23 @@ internal sealed class SqlProjectCreateService(
         }
 
         return CreateProjectResult.Ok(project.Id, title, place.Title, warning);
+    }
+
+    private static List<CreateProjectJobTypeLine> ResolveJobTypeLines(CreateProjectCommand command)
+    {
+        if (command.JobTypeLines is { Count: > 0 })
+        {
+            return command.JobTypeLines
+                .Where(l => l.JobTypeId > 0)
+                .GroupBy(l => l.JobTypeId)
+                .Select(g => g.First())
+                .ToList();
+        }
+
+        return (command.JobTypeIds ?? Array.Empty<int>())
+            .Where(id => id > 0)
+            .Distinct()
+            .Select(id => new CreateProjectJobTypeLine(id))
+            .ToList();
     }
 }

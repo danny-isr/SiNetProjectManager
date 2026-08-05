@@ -271,6 +271,19 @@ public sealed class GoogleDriveFileService : IGoogleDriveFileService
     }
 
     /// <inheritdoc />
+    public async Task<string?> FindFolderIdByNameAsync(
+        string folderName,
+        string parentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(parentId);
+
+        var drive = await RequireDriveAsync(cancellationToken).ConfigureAwait(false);
+        return await FindFolderAsync(drive, folderName, parentId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<string>> GetParentIdsAsync(string fileId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

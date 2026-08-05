@@ -28,6 +28,10 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 | DEV-007 | Open-with by extension (ACC / Drive / Windows Shell) | Planning (direction approved) | P2 | [`DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md`](./DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md) §4 | With that feature ship |
 | DEV-004 | Mark email as read in Gmail when the body is opened (session toggle, default on in Release) | Fixed on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §3 | Done — `SiNet.App.Wpf` 1.0.5 |
 | DEV-005 | «פתח ב-Gmail» button — reply / forward handled by Gmail, no in-app composer | Fixed on `development` — awaiting PROD publish + verify | P2 | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §4 | Done — `SiNet.App.Wpf` 1.0.5 |
+| DEV-008 | Project edit dialog + verified rename (FS/ACC/Drive→DB); dashboard double-click; create parity (worker + bid) | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) | Layer A done; Layer B/C in progress |
+| DEV-009 | Gmail project label identity by `(Number)` + `Email.AutoSyncProjectLabelNames` (per mailbox); duplicate decision UI | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §4 · [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Layer B keep/delete dialog |
+| DEV-010 | «דוח קריסות תחנה» — local Event Log crash report (Civil 3D + machine), CSV + Markdown for AI, shared folder per machine | Implementing | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | With that feature ship |
+| DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader integrity checklist later |
 
 ## 3. Done / cancelled
 

@@ -87,12 +87,12 @@ only under **תהליכים פתוחים**.
 
 ### 4.4 Drill-down
 
-Double-click (or explicit open action):
+| Action | Behavior |
+| --- | --- |
+| **Double-click** row | Open **עדכון פרויקט** (`ProjectEdit` dialog) for that project — see [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) |
+| Toolbar **«פתח פרויקט»** | Set `ICurrentProjectContext` from the row + open Project Work browse (`IProjectWorkSurfaceHost.TryOpenBrowseAsync`) |
 
-1. Set `ICurrentProjectContext` from the row (via `ProjectSummaryDto` projection).
-2. Open Project Work browse (`IProjectWorkSurfaceHost.TryOpenBrowseAsync`).
-
-No workflow mutation, no status edits from this screen.
+No workflow mutation and no status edits **inside the grid**. Metadata edits happen only in the edit dialog (feature `Project.Update`).
 
 ## 5. Data sources (no parallel stack)
 
@@ -126,14 +126,15 @@ IProjectDashboardQueryService
 
 - Email / ACC backlog columns
 - Excel / Sheets export
-- Editing project status from the grid
+- Editing project status **from the grid** (edit dialog is in scope — see §4.4)
 - Auto-refresh / realtime
 - Server-side paging
 - Assigned-user id filter (Worker remains a display string)
 
 ## 8. Guardrails
 
-- Read-only: no `SaveChanges`, no workflow commands, no schema/migrations.
+- Grid load path stays read-only (no `SaveChanges` / workflow commands from the dashboard query).
+- Writes go through `IProjectUpdateService` / `IProjectRenameOrchestrator` opened from the edit dialog — not inline grid editors.
 - No duplication of the Project Selector.
 - No duplication of Workflow Ops (instance-centric health stays there).
 - Feature access deny-by-default via `AppFeatureCodes` + `AppFeatureAuthorization`.
