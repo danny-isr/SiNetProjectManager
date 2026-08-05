@@ -135,6 +135,84 @@ public sealed class ProjectWorkDiskFolderOverlayTests : IDisposable
     }
 
     [Fact]
+    public async Task Rescan_removes_user_folder_deleted_outside_app()
+    {
+        var catalogPath = Path.Combine(_root, "Drawings");
+        Directory.CreateDirectory(catalogPath);
+        var manualPath = Path.Combine(catalogPath, "ManualNotes");
+        Directory.CreateDirectory(manualPath);
+
+        var vm = CreateVm(catalogFolderId: 10, catalogPath);
+        await vm.LoadProjectAsync(5);
+
+        var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
+        Assert.Contains(catalog.Children.OfType<ProjectFolderNodeVm>(), f => f.Title == "ManualNotes");
+
+        Directory.Delete(manualPath, recursive: true);
+        await vm.RescanAsync();
+
+        Assert.DoesNotContain(catalog.Children.OfType<ProjectFolderNodeVm>(), f => f.Title == "ManualNotes");
+    }
+
+    [Fact]
+    public async Task Rescan_adds_user_folder_created_outside_app()
+    {
+        var catalogPath = Path.Combine(_root, "Drawings");
+        Directory.CreateDirectory(catalogPath);
+
+        var vm = CreateVm(catalogFolderId: 10, catalogPath);
+        await vm.LoadProjectAsync(5);
+
+        var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
+        Assert.DoesNotContain(catalog.Children.OfType<ProjectFolderNodeVm>(), f => f.Title == "NewScratch");
+
+        Directory.CreateDirectory(Path.Combine(catalogPath, "NewScratch"));
+        await vm.RescanAsync();
+
+        Assert.Contains(catalog.Children.OfType<ProjectFolderNodeVm>(), f => f.Title == "NewScratch" && f.IsUserCreated);
+    }
+
+    [Fact]
+    public async Task Rescan_adds_and_removes_unfiled_file_in_expanded_folder()
+    {
+        var catalogPath = Path.Combine(_root, "Drawings");
+        Directory.CreateDirectory(catalogPath);
+        var loose = Path.Combine(catalogPath, "readme.txt");
+
+        var scanned = new List<ScannedFile>();
+        var store = new FakeFileStore(
+            FileStorageDestination.FileServer,
+            (_, fid) => fid == 10 ? catalogPath : null,
+            h => string.Equals(h, catalogPath, StringComparison.OrdinalIgnoreCase)
+                ? scanned.ToArray()
+                : Array.Empty<ScannedFile>());
+
+        var vm = CreateVm(10, catalogPath, store);
+        await vm.LoadProjectAsync(5);
+
+        var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
+        Assert.DoesNotContain(catalog.Children.OfType<ProjectFileNodeVm>(), f => f.IsUnfiled);
+
+        await File.WriteAllTextAsync(loose, "x");
+        scanned.Add(new ScannedFile(
+            FileStorageDestination.FileServer,
+            "readme.txt",
+            loose,
+            1,
+            DateTime.UtcNow,
+            Parsed: null));
+        await vm.RescanAsync();
+
+        Assert.Contains(catalog.Children.OfType<ProjectFileNodeVm>(), f => f.IsUnfiled);
+
+        File.Delete(loose);
+        scanned.Clear();
+        await vm.RescanAsync();
+
+        Assert.DoesNotContain(catalog.Children.OfType<ProjectFileNodeVm>(), f => f.IsUnfiled);
+    }
+
+    [Fact]
     public async Task Collapse_unloads_file_nodes_but_keeps_folder_and_probe()
     {
         var catalogPath = Path.Combine(_root, "Drawings");

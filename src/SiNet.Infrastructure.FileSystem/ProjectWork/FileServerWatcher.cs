@@ -4,10 +4,10 @@ using SiNet.Application.ProjectWork;
 namespace SiNet.Infrastructure.FileSystem.ProjectWork;
 
 /// <summary>
-/// <see cref="IFileServerWatcher"/> over <see cref="FileSystemWatcher"/>. Watches each root path
-/// recursively and coalesces bursts of file events into a single debounced callback (default 800ms) so
-/// a rescan runs once after copying/saving settles. Not thread-affine — the callback fires on a timer
-/// thread; callers marshal to the UI thread as needed.
+/// <see cref="IFileServerWatcher"/> over <see cref="FileSystemWatcher"/>. Watches each folder path
+/// (non-recursive) and coalesces bursts of file events into a single debounced callback (default 800ms)
+/// carrying the last affected path. Not thread-affine — the callback fires on a timer thread; callers
+/// marshal to the UI thread as needed.
 /// </summary>
 public sealed class FileServerWatcher : IFileServerWatcher
 {
@@ -16,13 +16,14 @@ public sealed class FileServerWatcher : IFileServerWatcher
     private readonly object _gate = new();
     private readonly List<FileSystemWatcher> _watchers = new();
     private Timer? _debounceTimer;
-    private Action? _onChanged;
+    private Action<string?>? _onChanged;
+    private string? _lastAffectedPath;
     private bool _disposed;
 
     /// <inheritdoc />
-    public void Watch(IEnumerable<string> rootPaths, Action onChangedDebounced)
+    public void Watch(IEnumerable<string> folderPaths, Action<string?> onChangedDebounced)
     {
-        ArgumentNullException.ThrowIfNull(rootPaths);
+        ArgumentNullException.ThrowIfNull(folderPaths);
         ArgumentNullException.ThrowIfNull(onChangedDebounced);
 
         lock (_gate)
@@ -32,8 +33,9 @@ public sealed class FileServerWatcher : IFileServerWatcher
 
             StopAllCore();
             _onChanged = onChangedDebounced;
+            _lastAffectedPath = null;
 
-            foreach (var path in rootPaths.Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var path in folderPaths.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
                     continue;
@@ -42,7 +44,7 @@ public sealed class FileServerWatcher : IFileServerWatcher
                 {
                     var watcher = new FileSystemWatcher(path)
                     {
-                        IncludeSubdirectories = true,
+                        IncludeSubdirectories = false,
                         NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
                                        | NotifyFilters.LastWrite | NotifyFilters.Size,
                     };
@@ -68,14 +70,17 @@ public sealed class FileServerWatcher : IFileServerWatcher
             StopAllCore();
     }
 
-    private void OnFileSystemEvent(object sender, FileSystemEventArgs e) => ScheduleDebounced();
+    private void OnFileSystemEvent(object sender, FileSystemEventArgs e)
+        => ScheduleDebounced(e.FullPath);
 
-    private void ScheduleDebounced()
+    private void ScheduleDebounced(string? affectedPath)
     {
         lock (_gate)
         {
             if (_disposed || _onChanged is null)
                 return;
+            if (!string.IsNullOrWhiteSpace(affectedPath))
+                _lastAffectedPath = affectedPath;
             _debounceTimer ??= new Timer(_ => FireDebounced());
             _debounceTimer.Change(DebounceInterval, Timeout.InfiniteTimeSpan);
         }
@@ -83,14 +88,17 @@ public sealed class FileServerWatcher : IFileServerWatcher
 
     private void FireDebounced()
     {
-        Action? callback;
+        Action<string?>? callback;
+        string? path;
         lock (_gate)
         {
             if (_disposed)
                 return;
             callback = _onChanged;
+            path = _lastAffectedPath;
+            _lastAffectedPath = null;
         }
-        callback?.Invoke();
+        callback?.Invoke(path);
     }
 
     private void StopAllCore()
@@ -113,6 +121,7 @@ public sealed class FileServerWatcher : IFileServerWatcher
         }
         _watchers.Clear();
         _debounceTimer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _lastAffectedPath = null;
     }
 
     /// <inheritdoc />

@@ -27,7 +27,7 @@ Quiet ProjectWork tree: no `.bak`; recover files only when they still matter (ne
 | Tree VM | `ProjectWorkTreeViewModel` | `LoadTreeAsync`, `RescanAsync`, watcher hookup |
 | Nodes / `IsExpanded` | `ProjectWorkNodes.cs` | TwoWay expand in `ProjectWorkWindowView.xaml` |
 | Scan skip (today) | `FileServerSidecarMetadata.ShouldSkipFromScan` | Only sidecars + `~$` — **not** `.bak` / recover |
-| Watcher | `FileServerWatcher` | Debounce ~800ms → `RescanAsync` |
+| Watcher | `FileServerWatcher` | Debounce ~800ms → reconcile Expanded folders only (see DEV-013) |
 | Delete file path | Existing ProjectWork delete / file-write commands | Reuse for recover delete; confirm + audit log |
 | Legacy V2 | Archive `ExcludedExtensions` / `_recover` bucket | Reference only |
 

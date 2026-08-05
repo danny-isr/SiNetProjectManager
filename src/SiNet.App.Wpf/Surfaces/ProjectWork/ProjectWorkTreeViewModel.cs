@@ -39,9 +39,14 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     private readonly Dictionary<int, ProjectFolderDto> _folderDtos = new();
     private readonly List<(ProjectFolderNodeVm Node, ProjectFolderDto Dto)> _scanTargets = new();
     private CancellationTokenSource? _loadCts;
+    private Timer? _reconcilePollTimer;
+    private int _reconcileBusy;
+    private bool _reconcilePending;
+    private string? _reconcilePendingPath;
     private bool _disposed;
     private bool _suppressExpandHandlers;
     private int _nextUserFolderId = -1;
+    private static readonly TimeSpan ReconcilePollInterval = TimeSpan.FromSeconds(20);
 
     private bool _isScanning;
     private string _scanStatus = string.Empty;
@@ -145,6 +150,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         var expandedPaths = CaptureExpandedFolderPaths();
 
         _currentProjectId = projectId;
+        StopReconcilePoll();
         _watcher?.StopAll();
         RootFolders.Clear();
         _foldersById.Clear();
@@ -179,7 +185,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 await ResolveFolderPathsAsync(projectId, token).ConfigureAwait(true);
 
                 foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
-                    DiscoverDiskChildrenOneLevel(root);
+                    SyncDiskChildrenOneLevel(root);
 
                 await ProbeFoldersParallelAsync(EnumerateFolders(RootFolders).ToList(), token).ConfigureAwait(true);
 
@@ -262,14 +268,18 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                     UnloadFolderContentsCore(folder, collapseChildren: false);
             }
 
-            foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
-                DiscoverDiskChildrenOneLevel(root);
+            foreach (var folder in EnumerateFolders(RootFolders).Where(static f => f.IsExpanded).ToList())
+                SyncDiskChildrenOneLevel(folder);
 
             foreach (var folder in EnumerateFolders(RootFolders))
             {
                 if (!string.IsNullOrWhiteSpace(folder.FullPath) && expandedPaths.Contains(folder.FullPath!))
                     folder.IsExpanded = true;
             }
+
+            // After restore, sync any newly expanded paths that were not synced above.
+            foreach (var folder in EnumerateFolders(RootFolders).Where(static f => f.IsExpanded).ToList())
+                SyncDiskChildrenOneLevel(folder);
         }
         finally
         {
@@ -302,6 +312,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         {
             IsScanning = false;
             _activeHub.NotifyAvailabilityChanged();
+            RefreshWatchSet();
         }
     }
 
@@ -325,31 +336,203 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         await ExpandFolderAsync(folder, cancellationToken).ConfigureAwait(true);
     }
 
-    private async Task StartWatchingAsync(int projectId, CancellationToken token)
+    private Task StartWatchingAsync(int projectId, CancellationToken token)
     {
-        if (_watcher is null)
+        _ = projectId;
+        _ = token;
+        RefreshWatchSet();
+        StartReconcilePoll();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Watches FullPath of each Expanded folder only (non-recursive). Collapse stops listening.
+    /// </summary>
+    private void RefreshWatchSet()
+    {
+        if (_watcher is null || _disposed)
             return;
 
-        // DEV-013: watch roots only (IncludeSubdirectories covers the tree).
-        var paths = RootFolders.OfType<ProjectFolderNodeVm>()
-            .Select(f => f.FullPath)
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Cast<string>()
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
+        var paths = CaptureExpandedFolderPaths().ToList();
         if (paths.Count == 0)
+        {
+            _watcher.StopAll();
+            return;
+        }
+
+        _watcher.Watch(paths, OnWatchedPathChanged);
+    }
+
+    private void OnWatchedPathChanged(string? affectedPath)
+    {
+        if (_disposed || _currentProjectId <= 0)
             return;
 
-        _watcher.Watch(paths, () =>
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        void Run() => _ = ReconcileExpandedAsync(affectedPath);
+        if (dispatcher is null || dispatcher.CheckAccess())
+            Run();
+        else
+            dispatcher.BeginInvoke(Run);
+    }
+
+    private void StartReconcilePoll()
+    {
+        StopReconcilePoll();
+        if (_disposed || _currentProjectId <= 0)
+            return;
+
+        _reconcilePollTimer = new Timer(
+            _ => OnWatchedPathChanged(null),
+            null,
+            ReconcilePollInterval,
+            ReconcilePollInterval);
+    }
+
+    private void StopReconcilePoll()
+    {
+        _reconcilePollTimer?.Dispose();
+        _reconcilePollTimer = null;
+    }
+
+    /// <summary>
+    /// Background reconcile for open folders: sync disk subfolders (add/remove user) + refresh files.
+    /// </summary>
+    private async Task ReconcileExpandedAsync(string? affectedPath)
+    {
+        if (_disposed || _currentProjectId <= 0)
+            return;
+
+        if (Interlocked.CompareExchange(ref _reconcileBusy, 1, 0) != 0)
         {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            void Rescan() => _ = RescanAsync();
-            if (dispatcher is null || dispatcher.CheckAccess())
-                Rescan();
-            else
-                dispatcher.BeginInvoke(Rescan);
-        });
+            _reconcilePendingPath = affectedPath;
+            _reconcilePending = true;
+            return;
+        }
+
+        try
+        {
+            while (!_disposed)
+            {
+                _reconcilePending = false;
+                var path = affectedPath;
+
+                var token = _loadCts?.Token ?? CancellationToken.None;
+                var targets = ResolveReconcileTargets(path);
+                foreach (var folder in targets)
+                {
+                    if (token.IsCancellationRequested || _disposed)
+                        break;
+
+                    var diskDirs = await EnumerateDiskDirectoriesAsync(folder.FullPath, token).ConfigureAwait(true);
+                    SyncDiskChildrenOneLevel(folder, diskDirs);
+
+                    var childFolders = folder.Children.OfType<ProjectFolderNodeVm>().ToList();
+                    if (childFolders.Count > 0)
+                        await ProbeFoldersParallelAsync(childFolders, token).ConfigureAwait(true);
+
+                    if (folder.IsExpanded && folder.LoadState == ProjectFolderLoadState.Expanded)
+                        await RefreshExpandedFolderFilesAsync(folder, token).ConfigureAwait(true);
+
+                    RefreshHasFiles(folder);
+                    var root = FindRoot(folder) ?? folder;
+                    RefreshHasFiles(root);
+                    RefreshExtensionConflicts(root);
+                }
+
+                RefreshWatchSet();
+
+                if (!_reconcilePending)
+                    break;
+
+                affectedPath = _reconcilePendingPath;
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _reconcileBusy, 0);
+            if (_reconcilePending && !_disposed)
+            {
+                _reconcilePending = false;
+                var pending = _reconcilePendingPath;
+                _ = ReconcileExpandedAsync(pending);
+            }
+        }
+    }
+
+    private List<ProjectFolderNodeVm> ResolveReconcileTargets(string? affectedPath)
+    {
+        var expanded = EnumerateFolders(RootFolders).Where(static f => f.IsExpanded).ToList();
+        if (expanded.Count == 0)
+            return [];
+
+        var matched = FindExpandedFolderForPath(affectedPath);
+        if (matched is not null)
+            return [matched];
+
+        return expanded;
+    }
+
+    private ProjectFolderNodeVm? FindExpandedFolderForPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        ProjectFolderNodeVm? best = null;
+        foreach (var folder in EnumerateFolders(RootFolders))
+        {
+            if (!folder.IsExpanded || string.IsNullOrWhiteSpace(folder.FullPath))
+                continue;
+
+            if (!IsSameOrUnderPath(folder.FullPath!, path))
+                continue;
+
+            if (best is null || folder.FullPath!.Length > best.FullPath!.Length)
+                best = folder;
+        }
+
+        return best;
+    }
+
+    private static bool IsSameOrUnderPath(string folderPath, string candidatePath)
+    {
+        try
+        {
+            var folderFull = Path.GetFullPath(folderPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var candidateFull = Path.GetFullPath(candidatePath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(folderFull, candidateFull, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var prefix = folderFull + Path.DirectorySeparatorChar;
+            return candidateFull.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static Task<string[]> EnumerateDiskDirectoriesAsync(string? folderPath, CancellationToken token)
+    {
+        return Task.Run(
+            () =>
+            {
+                token.ThrowIfCancellationRequested();
+                if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+                    return Array.Empty<string>();
+
+                try
+                {
+                    return Directory.EnumerateDirectories(folderPath).ToArray();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    return Array.Empty<string>();
+                }
+            },
+            token);
     }
 
     private async Task ResolveFolderPathsAsync(int projectId, CancellationToken token)
@@ -381,30 +564,40 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             }).ConfigureAwait(true);
     }
 
-    /// <summary>Discovers immediate disk subfolders only (DEV-013 — not recursive).</summary>
-    private void DiscoverDiskChildrenOneLevel(ProjectFolderNodeVm parent)
+    /// <summary>Syncs immediate disk subfolders: add missing user folders, remove deleted user folders.</summary>
+    private void SyncDiskChildrenOneLevel(ProjectFolderNodeVm parent)
     {
+        string[] dirs;
         if (string.IsNullOrWhiteSpace(parent.FullPath) || !Directory.Exists(parent.FullPath))
-            return;
-
-        IEnumerable<string> dirs;
-        try
         {
-            dirs = Directory.EnumerateDirectories(parent.FullPath).ToList();
+            dirs = [];
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        else
         {
-            return;
+            try
+            {
+                dirs = Directory.EnumerateDirectories(parent.FullPath).ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                dirs = [];
+            }
         }
 
-        foreach (var dir in dirs)
+        SyncDiskChildrenOneLevel(parent, dirs);
+    }
+
+    private void SyncDiskChildrenOneLevel(ProjectFolderNodeVm parent, IReadOnlyList<string> diskDirectories)
+    {
+        var diskByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in diskDirectories)
         {
             string name;
             try
             {
                 name = Path.GetFileName(dir);
             }
-            catch
+            catch (Exception ex) when (ex is ArgumentException or PathTooLongException)
             {
                 continue;
             }
@@ -412,6 +605,11 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             if (string.IsNullOrWhiteSpace(name))
                 continue;
 
+            diskByName[name] = dir;
+        }
+
+        foreach (var (name, dir) in diskByName)
+        {
             var existing = parent.Children
                 .OfType<ProjectFolderNodeVm>()
                 .FirstOrDefault(c => string.Equals(c.Title, name, StringComparison.OrdinalIgnoreCase));
@@ -433,6 +631,18 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             {
                 existing.FullPath = dir;
             }
+        }
+
+        var staleUserFolders = parent.Children
+            .OfType<ProjectFolderNodeVm>()
+            .Where(c => c.IsUserCreated && !diskByName.ContainsKey(c.Title))
+            .ToList();
+
+        foreach (var stale in staleUserFolders)
+        {
+            UnloadFolderContentsCore(stale, collapseChildren: true);
+            parent.Children.Remove(stale);
+            _foldersById.Remove(stale.FolderId);
         }
     }
 
@@ -497,7 +707,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         if (folder.LoadState == ProjectFolderLoadState.Expanded)
             return 0;
 
-        DiscoverDiskChildrenOneLevel(folder);
+        SyncDiskChildrenOneLevel(folder);
 
         ClearFileNodes(folder);
         ProjectFolderDto? dto = null;
@@ -522,6 +732,31 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             await ProbeFoldersParallelAsync(childFolders, token).ConfigureAwait(true);
 
         return count;
+    }
+
+    /// <summary>
+    /// Re-lists files for an already-expanded folder and rebuilds version nodes (add + remove missing).
+    /// Keeps child folder nodes intact.
+    /// </summary>
+    private async Task RefreshExpandedFolderFilesAsync(ProjectFolderNodeVm folder, CancellationToken token)
+    {
+        ClearFileNodes(folder);
+        ProjectFolderDto? dto = null;
+        if (_folderDtos.TryGetValue(folder.FolderId, out var mapped))
+        {
+            dto = mapped;
+            AddFileDefNodes(folder, dto);
+        }
+
+        int count;
+        if (folder.IsUserCreated || folder.FolderId <= 0 || dto is null)
+            count = await ScanFolderByPathAsync(folder, token).ConfigureAwait(true);
+        else
+            count = await ScanFolderAsync(_currentProjectId, folder, dto, token).ConfigureAwait(true);
+
+        folder.LoadState = ProjectFolderLoadState.Expanded;
+        folder.HasPhysicalFiles = count > 0
+            || folder.Children.OfType<ProjectFolderNodeVm>().Any(c => c.HasPhysicalFiles);
     }
 
     private void UnloadFolderContents(ProjectFolderNodeVm folder)
@@ -595,12 +830,14 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             {
                 IsScanning = false;
                 _activeHub.NotifyAvailabilityChanged();
+                RefreshWatchSet();
             }
         }
         else
         {
             UnloadFolderContents(folder);
             ScanStatus = $"שוחרר תוכן: {folder.Title}";
+            RefreshWatchSet();
         }
     }
 
@@ -1546,6 +1783,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         foreach (var root in RootFolders.OfType<ProjectFolderNodeVm>())
             RefreshHasFiles(root);
 
+        RefreshWatchSet();
         ScanStatus = "כל התיקיות כווצו והתוכן שוחרר מהזיכרון.";
     }
 
@@ -2095,6 +2333,7 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
         _index.InFlightChanged -= OnInFlightChanged;
         if (_accViewerHost is not null)
             _accViewerHost.TabClosed -= OnAccTabClosed;
+        StopReconcilePoll();
         _loadCts?.Cancel();
         _loadCts?.Dispose();
         _watcher?.Dispose();

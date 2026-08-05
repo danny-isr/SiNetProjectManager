@@ -20,10 +20,12 @@ public sealed class FileServerWatcherTests : IDisposable
         using var watcher = new FileServerWatcher();
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var callbackCount = 0;
+        string? lastPath = null;
 
-        watcher.Watch(new[] { _dir }, () =>
+        watcher.Watch(new[] { _dir }, path =>
         {
             Interlocked.Increment(ref callbackCount);
+            lastPath = path;
             tcs.TrySetResult();
         });
 
@@ -33,6 +35,7 @@ public sealed class FileServerWatcherTests : IDisposable
 
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5)));
         Assert.Same(tcs.Task, completed);
+        Assert.False(string.IsNullOrWhiteSpace(lastPath));
 
         // Give the debounce window time to prove it doesn't fire repeatedly for the same burst.
         await Task.Delay(TimeSpan.FromMilliseconds(1200));
@@ -43,7 +46,7 @@ public sealed class FileServerWatcherTests : IDisposable
     public void Watch_ignores_missing_paths_without_throwing()
     {
         using var watcher = new FileServerWatcher();
-        watcher.Watch(new[] { Path.Combine(_dir, "missing") }, () => { });
+        watcher.Watch(new[] { Path.Combine(_dir, "missing") }, _ => { });
         watcher.StopAll();
     }
 
