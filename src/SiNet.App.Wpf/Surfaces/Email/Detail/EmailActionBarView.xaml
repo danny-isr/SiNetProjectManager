@@ -67,7 +67,7 @@
                     Padding="8,2"
                     Margin="0,0,4,0"
                     FontSize="{DynamicResource SiTextSmallFontSize}"
-                    ToolTip="שייך מייל לפרויקט (פותח בחירה אם לא נבחר פרויקט למעלה)">
+                    ToolTip="שייך מייל לפרויקט — בוחרים פרויקט בחלון נפרד בלי לשנות את הפרויקט הפעיל באפליקציה">
                 <Button.Style>
                     <Style TargetType="Button">
                         <Setter Property="Visibility" Value="Collapsed" />

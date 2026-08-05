@@ -214,11 +214,14 @@ public sealed record EmailListRow(
         {
             if (!IsLinked)
             {
-                return ProjectLinkDisplay;
+                return string.Empty;
             }
 
             if (!string.IsNullOrWhiteSpace(ProjectNumber) && !string.IsNullOrWhiteSpace(ProjectName))
             {
+                // Avoid "1042 — (1042)Name" when ProjectName is already the leaf.
+                if (ProjectName.Contains(ProjectNumber, StringComparison.Ordinal))
+                    return ProjectName;
                 return $"{ProjectNumber} — {ProjectName}";
             }
 
@@ -226,9 +229,19 @@ public sealed record EmailListRow(
         }
     }
 
-    public string? ProjectDiagnosticsTooltip => ProjectId is int id
-        ? $"ProjectId: {id}"
-        : null;
+    public string? ProjectDiagnosticsTooltip
+    {
+        get
+        {
+            if (IsLinked && !string.IsNullOrWhiteSpace(FiledProjectLabelPath))
+                return $"תווית Gmail: {FiledProjectLabelPath}";
+            if (IsLinked && !string.IsNullOrWhiteSpace(ProjectDisplay))
+                return $"משויך: {ProjectDisplay}";
+            if (!IsLinked && ProjectId is int sqlId)
+                return $"לא משויך ב-Gmail (קישור במסד ProjectId: {sqlId})";
+            return null;
+        }
+    }
 
     public string ThreadLinkButtonText
     {

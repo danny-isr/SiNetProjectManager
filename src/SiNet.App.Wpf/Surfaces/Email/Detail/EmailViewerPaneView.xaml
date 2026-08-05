@@ -13,6 +13,40 @@
         </Grid.RowDefinitions>
         <Border Grid.Row="0" Background="{DynamicResource SiBackgroundBrush}" BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="0,0,0,1" Padding="12,8">
             <StackPanel>
+                <ItemsControl ItemsSource="{Binding LabelChips}"
+                              Margin="0,0,0,6"
+                              FlowDirection="RightToLeft">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLabelChips}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#F0F4FF"
+                                    BorderBrush="#C5CAE9"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="6,2"
+                                    Margin="0,0,4,4">
+                                <TextBlock Text="{Binding DisplayName}"
+                                           FontSize="{DynamicResource SiTextTinyFontSize}"
+                                           Foreground="#3949AB"
+                                           TextWrapping="NoWrap" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
                 <TextBlock Text="{Binding Subject}"
                            FontWeight="Bold"
                            FontFamily="{DynamicResource SiFontFamily}"

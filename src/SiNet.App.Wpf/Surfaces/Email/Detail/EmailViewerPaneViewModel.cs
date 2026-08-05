@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using SiNet.App.Wpf.Inspection;
+using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email.Detail;
 
 namespace SiNet.App.Wpf.Surfaces.Email.Detail;
@@ -12,7 +14,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
     private string _bodyText = string.Empty;
     private string? _htmlBody;
     private string? _gmailMessageId;
-    private IReadOnlyList<SiNet.Application.Abstractions.Email.EmailInlineImage> _inlineImages = [];
+    private IReadOnlyList<EmailInlineImage> _inlineImages = [];
     private string _accStatusDisplay = string.Empty;
     private IEmailBodyRenderer? _bodyRenderer;
 
@@ -23,6 +25,19 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
     public EmailViewerPaneViewModel(Action<string>? openBodyLink = null)
     {
         _openBodyLink = openBodyLink;
+        LabelChips = new ObservableCollection<EmailLabelChip>();
+    }
+
+    public ObservableCollection<EmailLabelChip> LabelChips { get; }
+
+    public bool HasLabelChips => LabelChips.Count > 0;
+
+    public void SetLabelChips(IEnumerable<EmailLabelChip> chips)
+    {
+        LabelChips.Clear();
+        foreach (var chip in chips)
+            LabelChips.Add(chip);
+        OnPropertyChanged(nameof(HasLabelChips));
     }
 
     public string Subject
@@ -105,6 +120,7 @@ public sealed class EmailViewerPaneViewModel : ObservableObject
         _gmailMessageId = null;
         _inlineImages = [];
         AccStatusDisplay = string.Empty;
+        SetLabelChips([]);
         UseRichBodyRenderer = false;
         OnPropertyChanged(nameof(UseRichBodyRenderer));
         _bodyRenderer?.Clear();

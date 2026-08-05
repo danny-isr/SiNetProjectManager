@@ -117,8 +117,10 @@ public sealed class EmailListViewModelPagingTests
 
         await sut.RefreshPageAsync();
 
-        Assert.Equal("1042 — North", sut.Emails[0].ProjectDisplay);
-        Assert.Equal(EmailProjectLinkState.Linked, sut.Emails[0].ProjectLinkState);
+        // SQL enrichment alone must not mark «משויך» (Gmail project label is SoT).
+        Assert.Equal(EmailProjectLinkState.Unlinked, sut.Emails[0].ProjectLinkState);
+        Assert.False(sut.Emails[0].IsFiledToProject);
+        Assert.Equal("לא משויך", sut.Emails[0].ProjectLinkDisplay);
     }
 
     [Fact]

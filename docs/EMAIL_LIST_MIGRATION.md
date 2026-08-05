@@ -159,12 +159,19 @@ The list component receives `EmailListProjectContext` through `ApplyProjectConte
 
 | UI element | Source |
 | --- | --- |
-| Label chips | `EmailSummary.LabelChips` from Gmail `Label.Color` (fallback `#F0F4FF` / `#5C6BC0`) |
+| List badge «משויך» / «לא משויך» | **Gmail project label only** (`IsFiledToProject`) — same SoT as File/Unfile/Move. SQL `ProjectId` alone must **not** show green «משויך». |
+| `LinkedProjectBadge` | Project leaf / number parsed from the Gmail project label path |
+| Label chips (list) | User labels from `EmailSummary` (system labels filtered); max 3 + overflow on the card |
+| Label chips (detail viewer) | **All** user labels on the selected message as chips; project labels first; `OfficeSystem_*` / Personal last; **not** filtered by active shell project |
 | Row background | Legacy priority: pending `#F3E5F5`, personal/irrelevant `#E3F2FD`, filed-to-current-project `#C8E6C9`, filed-other `#E0E0E0` |
 
-Row colors refresh when `ICurrentProjectContext.CurrentProject` changes.
+Row colors refresh when `ICurrentProjectContext.CurrentProject` changes. Detail label chips refresh from the selected message’s labels, independent of shell project.
 
-Viewer action bar (`LinkToProject`, reply, archive) remains deferred via `ShowDeferredWriteActions`.
+### Quick file from action bar
+
+Action-bar **«שייך לפרויקט»** uses a **local** project selector / `IEmailFilingProjectPickerHost` and `IEmailFilingService.FileToProjectAsync` with an explicit `TargetProjectId`. It must **not** call `ICurrentProjectContext.SetCurrentProjectAsync` on the app singleton.
+
+Viewer action bar (`LinkToProject`, reply, archive) remains deferred via `ShowDeferredWriteActions` where still gated; quick file above is in scope for native Wpf.
 
 ## Explicitly deferred
 

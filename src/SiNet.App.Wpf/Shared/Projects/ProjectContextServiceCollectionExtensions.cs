@@ -105,6 +105,7 @@ public static class ProjectContextServiceCollectionExtensions
         // Standalone attachment tagging UI hosts. V2 may override with hierarchical pickers.
         services.TryAddTransient<IEmailAttachmentProjectFilePickerHost, WpfEmailAttachmentProjectFilePickerHost>();
         services.TryAddTransient<IEmailAlternativeNamePromptHost, WpfEmailAlternativeNamePromptHost>();
+        services.TryAddTransient<IEmailFilingProjectPickerHost, WpfEmailFilingProjectPickerHost>();
 
         services.AddSiNetWorkSurfaces();
     }

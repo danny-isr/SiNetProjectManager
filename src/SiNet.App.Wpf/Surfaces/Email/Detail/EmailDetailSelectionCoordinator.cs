@@ -65,16 +65,20 @@ internal sealed class EmailDetailSelectionCoordinator
     public async Task LoadSelectedEmailWithAccPipelineAsync(
         EmailListRow row,
         int loadVersion,
-        Func<string, bool> isBodyLoadedForMessage)
+        Func<string, bool> isBodyLoadedForMessage,
+        CancellationToken cancellationToken = default)
     {
-        row = await LoadBodyIfNeededAsync(row, loadVersion, isBodyLoadedForMessage).ConfigureAwait(true);
+        row = await LoadBodyIfNeededAsync(row, loadVersion, isBodyLoadedForMessage, cancellationToken)
+            .ConfigureAwait(true);
+        cancellationToken.ThrowIfCancellationRequested();
         await RunAccPipelineAsync(row, loadVersion).ConfigureAwait(true);
     }
 
     public async Task<EmailListRow> LoadBodyIfNeededAsync(
         EmailListRow row,
         int loadVersion,
-        Func<string, bool> isBodyLoadedForMessage)
+        Func<string, bool> isBodyLoadedForMessage,
+        CancellationToken cancellationToken = default)
     {
         if (isBodyLoadedForMessage(row.Id))
         {
@@ -82,7 +86,7 @@ internal sealed class EmailDetailSelectionCoordinator
             return _emailList.FindRowById(row.Id) ?? row;
         }
 
-        await LoadSelectedEmailDetailsAsync(row.Id, loadVersion).ConfigureAwait(true);
+        await LoadSelectedEmailDetailsAsync(row.Id, loadVersion, cancellationToken).ConfigureAwait(true);
         return _emailList.FindRowById(row.Id) ?? row;
     }
 
@@ -140,14 +144,19 @@ internal sealed class EmailDetailSelectionCoordinator
         _bumpLoadVersion();
         var loadVersion = _getLoadVersion();
         PrepareSelectedEmailDetailsLoading();
-        return LoadSelectedEmailDetailsAsync(selected.Id, loadVersion);
+        return LoadSelectedEmailDetailsAsync(selected.Id, loadVersion, CancellationToken.None);
     }
 
-    public async Task LoadSelectedEmailDetailsAsync(string messageId, int loadVersion)
+    public async Task LoadSelectedEmailDetailsAsync(
+        string messageId,
+        int loadVersion,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var details = await _emailGateway.GetDetailsAsync(messageId).ConfigureAwait(true);
+            var details = await _emailGateway
+                .GetDetailsAsync(messageId, cancellationToken)
+                .ConfigureAwait(true);
             if (!ShouldApplySelectedEmailLoad(messageId, loadVersion))
             {
                 return;
@@ -165,6 +174,10 @@ internal sealed class EmailDetailSelectionCoordinator
             _setStatusMessage(details.HasAttachments
                 ? $"נטען תוכן המייל ו-{details.Attachments.Count} קבצים מצורפים."
                 : "נטען תוכן המייל המלא.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

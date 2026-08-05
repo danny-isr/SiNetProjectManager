@@ -10,11 +10,19 @@
 
 | Concern | Source of truth | Database role |
 | --- | --- | --- |
-| Mailbox “email filed to project” (`IsFiledToProject`, File / Unfile / Move gate) | **Gmail project label** under `פרויקטים_משרד/...` (`EmailGmailLabelNames.IsProjectLabel`) | Best-effort mirror after Gmail label attach — **not** proof of filing |
+| Mailbox “email filed to project” (`IsFiledToProject`, File / Unfile / Move gate, **list badge «משויך»**) | **Gmail project label** under `פרויקטים_משרד/...` (`EmailGmailLabelNames.IsProjectLabel`) | Best-effort mirror after Gmail label attach — **not** proof of filing |
 | Physical file present in ACC / Inbox | **ACC** item / version / folder (reconcile / browse / download) | `AccItemId` etc. are **cache/helper only** |
 | Inbox tag / move / lock metadata on an ACC item | **ACC custom attributes** | DB mirror is helper only |
 
 Business process (projects, tasks, workflow structure, `ProjectFile` tree) remains a **DB** concern — that does **not** override the rows above.
+
+### List UI: «משויך» / «לא משויך»
+
+- Green **«משויך»** on the email list card means the message has a **Gmail project label** (`IsFiledToProject`), not merely `EmailInboxMessage.ProjectId` or thread mapping in SQL.
+- **`LinkedProjectBadge`** shows the project leaf / number from that Gmail label (parser), not a bare SQL id.
+- SQL `ProjectId` alone → **«לא משויך»** (optional muted “קישור במסד” hint only — never green «משויך»).
+- Quick **«שייך לפרויקט»** in the email action bar files via `IEmailFilingService` with an explicit `TargetProjectId` and **must not** change the app’s global `ICurrentProjectContext`.
+- Detail viewer shows **all** user Gmail labels as chips (system labels filtered); `OfficeSystem_Personal` / triage labels sort last; not filtered by the active shell project.
 
 ## Forbidden (do not “fix” this way)
 

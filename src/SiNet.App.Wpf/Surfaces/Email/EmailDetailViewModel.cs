@@ -214,12 +214,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         _selectedEmail = row;
         OnPropertyChanged(nameof(HasSelectedEmail));
-        SyncViewerHeader();
 
         if (row is null)
         {
             _loadedBodyMessageId = null;
             _selectionCoordinator.ClearSelectedEmailDetails();
+            Viewer.Clear();
             AttachmentStrip.Clear();
             Workflow.Clear();
             RefreshActionBarState();
@@ -228,18 +228,19 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         var loadVersion = ++_selectedEmailLoadVersion;
 
-        // Always reset viewer details when the loaded body belongs to a different message.
-        // HasLoadedBodyForCurrentSelection must key off _loadedBodyMessageId (not only
-        // _selectedEmail.Id, which is already updated above).
+        // Clear body/attachments before updating the header so Subject never pairs with a
+        // previous message's body during fast selection changes.
         if (!HasLoadedBodyForCurrentSelection(row.Id))
         {
             _selectionCoordinator.PrepareSelectedEmailDetailsLoading();
             SelectedAccStatusDisplay = string.Empty;
         }
 
+        SyncViewerHeader();
+
         try
         {
-            await RunSelectionPipelineAsync(row, loadVersion).ConfigureAwait(true);
+            await RunSelectionPipelineAsync(row, loadVersion, ct).ConfigureAwait(true);
             if (ct.IsCancellationRequested || !IsCurrentSelection(row.Id, loadVersion))
             {
                 return;
@@ -312,11 +313,17 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _bodyRenderer?.Clear();
     }
 
-    private async Task RunSelectionPipelineAsync(EmailListRow row, int loadVersion)
+    private async Task RunSelectionPipelineAsync(EmailListRow row, int loadVersion, CancellationToken cancellationToken)
     {
         await _selectionCoordinator
-            .LoadSelectedEmailWithAccPipelineAsync(row, loadVersion, HasLoadedBodyForCurrentSelection)
+            .LoadSelectedEmailWithAccPipelineAsync(
+                row,
+                loadVersion,
+                HasLoadedBodyForCurrentSelection,
+                cancellationToken)
             .ConfigureAwait(true);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (_externalDownloadHandler is not null
             && HasLoadedBodyForCurrentSelection(row.Id)
@@ -326,6 +333,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 .MergeExternalDownloadsIntoViewerAsync(row, loadVersion)
                 .ConfigureAwait(true);
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (HasLoadedBodyForCurrentSelection(row.Id)
             && IsCurrentSelection(row.Id, loadVersion))
@@ -345,6 +354,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         Viewer.Subject = _selectedEmail.Subject;
         Viewer.Sender = _selectedEmail.Sender;
         Viewer.ReceivedDisplay = _selectedEmail.ReceivedDisplay;
+        Viewer.SetLabelChips(EmailListRowMapper.OrderDisplayLabelChips(_selectedEmail.DisplayLabelChips));
     }
 
     private bool HasLoadedBodyForCurrentSelection(string messageId) =>
@@ -467,20 +477,22 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         var project = _currentProject.CurrentProject;
-        if (project is null)
+        // Prefer explicit picker so filing never depends on (or mutates) the shell active project.
+        if (_filingProjectPicker is { IsAvailable: true })
         {
-            if (_filingProjectPicker is null || !_filingProjectPicker.IsAvailable)
-            {
-                SetStatus("בחר פרויקט לפני שיוך מייל.");
-                return;
-            }
-
-            project = await _filingProjectPicker.PickProjectAsync().ConfigureAwait(true);
-            if (project is null)
+            var picked = await _filingProjectPicker.PickProjectAsync().ConfigureAwait(true);
+            if (picked is null)
             {
                 SetStatus("שיוך בוטל.");
                 return;
             }
+
+            project = picked;
+        }
+        else if (project is null)
+        {
+            SetStatus("בחר פרויקט לפני שיוך מייל.");
+            return;
         }
 
         var selectedId = _selectedEmail.Id;
