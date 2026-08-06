@@ -160,6 +160,10 @@ public sealed class JsonAppSettingsService : IAppSettingsService
             FloatingTasks = ReadGeometry(obj, "FloatingTasks", defaults.FloatingTasks),
             FloatingInspection = ReadGeometry(obj, "FloatingInspection", defaults.FloatingInspection),
             EnableAuthorizationTestMode = GetBool(obj, "EnableAuthorizationTestMode", defaults.EnableAuthorizationTestMode),
+            EmailProjectSelectorControlWidth = ClampSelectorWidth(
+                GetDouble(obj, "EmailProjectSelectorControlWidth", defaults.EmailProjectSelectorControlWidth)),
+            EmailProjectSelectorPopupWidth = ClampSelectorWidth(
+                GetDouble(obj, "EmailProjectSelectorPopupWidth", defaults.EmailProjectSelectorPopupWidth)),
         };
     }
 
@@ -187,6 +191,8 @@ public sealed class JsonAppSettingsService : IAppSettingsService
         WriteGeometry(root, "FloatingTasks", settings.FloatingTasks);
         WriteGeometry(root, "FloatingInspection", settings.FloatingInspection);
         root["EnableAuthorizationTestMode"] = settings.EnableAuthorizationTestMode;
+        root["EmailProjectSelectorControlWidth"] = settings.EmailProjectSelectorControlWidth;
+        root["EmailProjectSelectorPopupWidth"] = settings.EmailProjectSelectorPopupWidth;
     }
 
     private static FloatingWindowGeometryDto ReadGeometry(
@@ -237,4 +243,6 @@ public sealed class JsonAppSettingsService : IAppSettingsService
     }
 
     private static double ClampOpacity(double value) => Math.Clamp(value, 0.1, 1.0);
+
+    private static double ClampSelectorWidth(double value) => Math.Clamp(value, 160, 900);
 }

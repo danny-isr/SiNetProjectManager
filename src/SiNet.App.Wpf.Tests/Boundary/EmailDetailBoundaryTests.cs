@@ -150,7 +150,7 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("EmailExternalDownloadLinkDetector.IsExternalDownloadUrl(url)", detailVm, StringComparison.Ordinal);
     }
 
-    /// <summary>DEV-004 / DEV-005 — see docs/DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md.</summary>
+    /// <summary>DEV-004 / DEV-005 / DEV-016 — mark-read on handling completion; Gmail hand-off.</summary>
     [Fact]
     public void Action_bar_hands_reply_to_gmail_and_marks_read_through_the_modify_port()
     {
@@ -161,11 +161,14 @@ public sealed class EmailDetailBoundaryTests
         var urlBuilder = ReadRepoFile("src/SiNet.Application/Email/GmailMessageUrlBuilder.cs");
 
         Assert.Contains("פתח ב-Gmail", actionBarXaml, StringComparison.Ordinal);
+        Assert.Contains("לידיעה בלבד", actionBarXaml, StringComparison.Ordinal);
         Assert.Contains("סמן כנקרא", actionBarXaml, StringComparison.Ordinal);
         Assert.Contains("MarkAsReadEnabled", actionBarVm, StringComparison.Ordinal);
+        Assert.Contains("MarkAsFyiCommand", actionBarVm, StringComparison.Ordinal);
         Assert.Contains("OpenInGmailCommand", actionBarVm, StringComparison.Ordinal);
         Assert.Contains("GmailMessageUrlBuilder.Build", detailVm, StringComparison.Ordinal);
-        Assert.Contains("TryMarkSelectedEmailAsReadAsync", detailVm, StringComparison.Ordinal);
+        Assert.Contains("MarkEmailAsReadAfterHandlingAsync", detailVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryMarkSelectedEmailAsReadAsync", detailVm, StringComparison.Ordinal);
         Assert.Contains("MarkAsReadAsync", modifyPort, StringComparison.Ordinal);
         Assert.Contains("#all/", urlBuilder, StringComparison.Ordinal);
 

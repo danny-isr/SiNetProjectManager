@@ -16,10 +16,14 @@ internal static partial class EmailListViewModelTestFixtures
 
     internal sealed class LabelGroupingEmailGateway : IEmailGateway
     {
+        internal static readonly string SampleProjectLabelPath =
+            EmailGmailLabelNames.RootLabel + "/City/(1)Demo";
+
         internal static readonly IReadOnlyList<GmailLabelInfo> Labels =
         [
             new GmailLabelInfo("Label_Work", "Work"),
             new GmailLabelInfo("Label_Clients", "Clients"),
+            new GmailLabelInfo("Label_Proj", SampleProjectLabelPath),
         ];
 
         public int MailboxPageCalls { get; private set; }
@@ -68,7 +72,7 @@ internal static partial class EmailListViewModelTestFixtures
                 {
                     return Task.FromResult(new EmailMailboxPage(
                     [
-                        CreateSummary("label-work-page-1", "Work extra"),
+                        CreateSummary("label-work-page-1", "Work extra", [SampleProjectLabelPath], SampleProjectLabelPath),
                     ],
                     query.PageSize,
                     "label-Label_Work-page-2",
@@ -80,7 +84,7 @@ internal static partial class EmailListViewModelTestFixtures
                     var messageId = DuplicateSecondLabelPage ? "label-work-page-1" : "label-work-page-2";
                     return Task.FromResult(new EmailMailboxPage(
                     [
-                        CreateSummary(messageId, "Work page 2"),
+                        CreateSummary(messageId, "Work page 2", [SampleProjectLabelPath], SampleProjectLabelPath),
                     ],
                     query.PageSize,
                     null,
@@ -103,6 +107,11 @@ internal static partial class EmailListViewModelTestFixtures
                     "Work only",
                     ["INBOX", "Work"],
                     "Work"),
+                CreateSummary(
+                    "msg-proj",
+                    "Project mail",
+                    ["INBOX", SampleProjectLabelPath],
+                    SampleProjectLabelPath),
             ],
             query.PageSize,
             "global-page-2",

@@ -16,6 +16,7 @@ using AccBrowserHost = SiNet.Application.Email.Acc.IEmailExternalDownloadBrowser
 using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 using SiNet.Domain.ValueObjects;
@@ -151,7 +152,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null,
         IProjectWorkSurfaceHost? projectWorkHost = null,
         IEmailGmailModifyService? gmailModify = null,
-        IProjectGmailLabelSyncService? projectLabelSync = null)
+        IProjectGmailLabelSyncService? projectLabelSync = null,
+        IAppSettingsService? appSettings = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -231,7 +233,12 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         _selectedFolder = Folders.FirstOrDefault();
         _selectedStatus = StatusOptions.FirstOrDefault();
 
-        ProjectSelector = new ProjectSelectorViewModel(projectQuery, filterOptions, _currentProject);
+        ProjectSelector = new ProjectSelectorViewModel(
+            projectQuery,
+            filterOptions,
+            _currentProject,
+            appSettings: appSettings,
+            persistSelectorWidths: true);
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
@@ -842,6 +849,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     {
         await EmailList.ApplyProjectContextAsync(BuildEmailListProjectContext(_currentProject.CurrentProject))
             .ConfigureAwait(true);
+
+        // DEV-017: same Gmail Id after reload does not raise SelectedEmailChanged — force detail refresh.
+        await EmailDetail.ApplySelectionAsync(EmailList.SelectedEmail).ConfigureAwait(true);
     }
 
     /// <summary>

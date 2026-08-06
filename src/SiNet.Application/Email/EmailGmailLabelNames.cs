@@ -7,6 +7,7 @@ public static class EmailGmailLabelNames
     public const string Pending = "OfficeSystem_Pending";
     public const string Personal = "OfficeSystem_Personal";
     public const string Irrelevant = "OfficeSystem_Irrelevant";
+    public const string Fyi = "OfficeSystem_Fyi";
 
     public static bool IsProjectLabel(string labelName, string rootLabel = RootLabel) =>
         labelName.StartsWith($"{rootLabel}/", StringComparison.OrdinalIgnoreCase)

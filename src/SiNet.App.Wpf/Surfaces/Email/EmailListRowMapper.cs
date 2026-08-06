@@ -372,6 +372,7 @@ internal static class EmailListRowMapper
             EmailTriageStatus.Pending => EmailGmailLabelNames.Pending,
             EmailTriageStatus.Personal => EmailGmailLabelNames.Personal,
             EmailTriageStatus.Irrelevant => EmailGmailLabelNames.Irrelevant,
+            EmailTriageStatus.Fyi => EmailGmailLabelNames.Fyi,
             _ => null,
         };
         var labelChipNames = row.LabelChipNames?.ToList() ?? [];
@@ -383,9 +384,17 @@ internal static class EmailListRowMapper
         {
             EmailTriageStatus.Pending => "#F3E5F5",
             EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant => "#E3F2FD",
+            EmailTriageStatus.Fyi => "#E8F5E9",
             _ => row.RowBackgroundColor,
         };
-        var updated = row with { RowBackgroundColor = background };
+        var clearsUnread = status is EmailTriageStatus.Personal
+            or EmailTriageStatus.Irrelevant
+            or EmailTriageStatus.Fyi;
+        var updated = row with
+        {
+            RowBackgroundColor = background,
+            IsUnread = clearsUnread ? false : row.IsUnread,
+        };
         return ApplyLabelDisplayFields(updated, labelChipNames);
     }
     public static IReadOnlyList<EmailLabelChip> FilterDisplayLabelChips(

@@ -224,14 +224,19 @@ public sealed class EmailListMigrationBoundaryTests
     }
 
     [Fact]
-    public void Multi_label_email_can_appear_in_multiple_label_groups_documented()
+    public void Project_switch_forces_detail_selection_refresh()
     {
-        var doc = ReadRepoFile("docs/EMAIL_LIST_MIGRATION.md");
+        var windowVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWindowViewModel.cs");
+        Assert.Contains("ApplyProjectContextFromWorkbenchAsync", windowVm, StringComparison.Ordinal);
+        Assert.Contains("EmailDetail.ApplySelectionAsync(EmailList.SelectedEmail)", windowVm, StringComparison.Ordinal);
+    }
 
-        Assert.Contains("more than one group", doc, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LabelId", doc, StringComparison.Ordinal);
-        Assert.Contains("1000", doc, StringComparison.Ordinal);
-        Assert.Contains("dedupe", doc, StringComparison.OrdinalIgnoreCase);
+    [Fact]
+    public void CanRefreshEmails_notifies_when_IsBusy_changes()
+    {
+        var listVm = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
+        Assert.Contains("OnPropertyChanged(nameof(CanRefreshEmails))", listVm, StringComparison.Ordinal);
+        Assert.Contains("CanRefreshEmails => IsConnected && !IsBusy", listVm, StringComparison.Ordinal);
     }
 
     [Fact]

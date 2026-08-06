@@ -400,6 +400,19 @@ This is **not** the same concern as:
   label operations, or inventing a SQL-only “effectively filed” shortcut
   (e.g. `ProjectId == currentProject`) to bypass the label.
 
+#### Two-stage handling and Gmail read state
+
+Mailbox triage is **two stages**:
+
+1. **Classify:** file to a project label, or mark Personal / Irrelevant
+   (`OfficeSystem_*`). Personal and Irrelevant also remove system `UNREAD`
+   (handling finished). Filing alone does **not** clear `UNREAD`.
+2. **Act on filed mail:** «לידיעה בלבד» (`OfficeSystem_Fyi`) or a successful
+   real Workflow removes `UNREAD`. `FileOnly` / file / move alone do not.
+
+Selecting or opening a message in the app must **not** remove `UNREAD`.
+Detail: [`docs/DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](../../../../docs/DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md).
+
 #### Forbidden fixes / regressions
 
 - Inferring “משויך לפרויקט” from SQL `ProjectId`, `IsAssociatedToProject`,

@@ -12,6 +12,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
     internal const string PendingLabelName = "OfficeSystem_Pending";
     internal const string PersonalLabelName = "OfficeSystem_Personal";
     internal const string IrrelevantLabelName = "OfficeSystem_Irrelevant";
+    internal const string FyiLabelName = "OfficeSystem_Fyi";
 
     private readonly GmailClientProvider _provider = provider ?? throw new ArgumentNullException(nameof(provider));
     private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -174,10 +175,14 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         CancellationToken cancellationToken = default)
     {
         var labelId = await GetOrCreateStatusLabelAsync(status, cancellationToken).ConfigureAwait(false);
+        // DEV-016: Personal / Irrelevant / Fyi finish handling — also clear UNREAD in the same modify.
+        var removeUnread = status is EmailTriageStatus.Personal
+            or EmailTriageStatus.Irrelevant
+            or EmailTriageStatus.Fyi;
         await ModifyMessageLabelsAsync(
             gmailMessageId,
             addLabelIds: [labelId],
-            removeLabelIds: [],
+            removeLabelIds: removeUnread ? ["UNREAD"] : [],
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -273,6 +278,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             EmailTriageStatus.Pending => PendingLabelName,
             EmailTriageStatus.Personal => PersonalLabelName,
             EmailTriageStatus.Irrelevant => IrrelevantLabelName,
+            EmailTriageStatus.Fyi => FyiLabelName,
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
         };
 

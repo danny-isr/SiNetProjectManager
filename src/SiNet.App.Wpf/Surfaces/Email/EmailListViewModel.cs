@@ -187,6 +187,10 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
             row => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Irrelevant),
             _filing.CanSetEmailStatus,
             allowConcurrentParameters: true);
+        MarkAsFyiCommand = new AsyncRelayCommand<EmailListRow>(
+            row => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Fyi),
+            _filing.CanMarkAsFyi,
+            allowConcurrentParameters: true);
         UploadToAccInboxCommand = new AsyncRelayCommand<EmailListRow>(UploadToAccInboxAsync, CanUploadToAccInbox, allowConcurrentParameters: true);
         ConnectCommand = new AsyncRelayCommand(() => _paging.ConnectAsync(), () => !IsBusy);
         DisconnectCommand = new AsyncRelayCommand(() => _paging.DisconnectGmailAsync(), () => IsConnected && !IsBusy);
@@ -418,6 +422,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         {
             if (SetField(ref _isBusy, value))
             {
+                OnPropertyChanged(nameof(CanRefreshEmails));
                 RaiseCommandStates();
             }
         }
@@ -631,6 +636,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public ICommand MarkAsPendingCommand { get; }
     public ICommand MarkAsPersonalCommand { get; }
     public ICommand MarkAsIrrelevantCommand { get; }
+    public ICommand MarkAsFyiCommand { get; }
     public ICommand UploadToAccInboxCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
@@ -901,6 +907,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public bool CanFileEmailToProject(EmailListRow? row) => _filing.CanFileEmailToProject(row);
 
     public bool CanAttemptFileEmailToProject(EmailListRow? row) => _filing.CanAttemptFileEmailToProject(row);
+
+    public bool CanMarkAsFyi(EmailListRow? row) => _filing.CanMarkAsFyi(row);
 
     public Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row) => _filing.FileEmailToProjectAsync(row);
 

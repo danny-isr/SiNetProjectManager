@@ -18,8 +18,7 @@ public sealed class EmailListViewModelGroupingTests
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
 
         Assert.NotEmpty(sut.DisplayGroups);
-        Assert.Contains(sut.DisplayGroups, static g => g.LabelId == "Label_Work");
-        Assert.Contains(sut.DisplayGroups, static g => g.LabelId == "Label_Clients");
+        Assert.Contains(sut.DisplayGroups, static g => g.LabelId == EmailListGroupBuilder.UnfiledGroupId);
     }
 
     [Fact]
@@ -27,7 +26,7 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == EmailListGroupBuilder.UnfiledGroupId);
         Assert.True(group.IsExpanded);
         group.CollapseCommand.Execute(null);
         Assert.False(group.IsExpanded);
@@ -41,21 +40,21 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == EmailListGroupBuilder.UnfiledGroupId);
         Assert.Contains("נטענו", group.HeaderStatus, StringComparison.Ordinal);
         Assert.Contains(group.LoadedCount.ToString(), group.HeaderStatus, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Multi_label_email_appears_in_multiple_label_groups()
+    public async Task Multi_label_email_appears_in_exactly_one_group()
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var workGroup = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
-        var clientsGroup = sut.DisplayGroups.First(static g => g.LabelId == "Label_Clients");
-
-        Assert.Contains(workGroup.Emails, static row => row.Id == "msg-multi");
-        Assert.Contains(clientsGroup.Emails, static row => row.Id == "msg-multi");
+        var memberships = sut.DisplayGroups.Count(g => g.Emails.Any(r => r.Id == "msg-multi"));
+        Assert.Equal(1, memberships);
+        Assert.Contains(
+            sut.DisplayGroups.First(static g => g.LabelId == EmailListGroupBuilder.UnfiledGroupId).Emails,
+            static row => row.Id == "msg-multi");
     }
 
     [Fact]
@@ -63,10 +62,10 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
-        Assert.Equal("Label_Work", gateway.LastLabelGroupQuery?.LabelId);
+        Assert.Equal("Label_Proj", gateway.LastLabelGroupQuery?.LabelId);
         Assert.Equal(EmailMailboxScope.Label, gateway.LastLabelGroupQuery?.MailboxScope);
     }
 
@@ -75,11 +74,11 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
 
-        Assert.Equal("Label_Work", gateway.LastLabelGroupQuery?.LabelId);
-        Assert.NotEqual("Work", gateway.LastLabelGroupQuery?.LabelId);
+        Assert.Equal("Label_Proj", gateway.LastLabelGroupQuery?.LabelId);
+        Assert.NotEqual(group.LabelDisplayName, gateway.LastLabelGroupQuery?.LabelId);
     }
 
     [Fact]
@@ -87,7 +86,7 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
         Assert.True(gateway.LabelPageCalls.Count >= 2);
@@ -99,7 +98,7 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway { DuplicateSecondLabelPage = true };
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
         Assert.Equal(1, group.Emails.Count(static row => row.Id == "label-work-page-1"));
@@ -110,7 +109,7 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
 
@@ -128,7 +127,7 @@ public sealed class EmailListViewModelGroupingTests
         await sut.LoadNextPageAsync();
         var globalMailboxCalls = gateway.MailboxPageCalls;
 
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
 
         Assert.Equal(globalMailboxCalls, gateway.MailboxPageCalls);
@@ -140,14 +139,14 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         await sut.LoadMoreForLabelGroupForTestsAsync(group);
         Assert.Equal("label-Label_Work-page-2", group.NextPageToken);
 
         sut.SearchText = "hello";
         await sut.ApplyFiltersAsync();
 
-        var rebuilt = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var rebuilt = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         Assert.Null(rebuilt.NextPageToken);
         Assert.True(rebuilt.HasMore);
     }
@@ -160,7 +159,7 @@ public sealed class EmailListViewModelGroupingTests
             FailLabelPageOnToken = "label-Label_Work-page-2",
         };
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work");
+        var group = sut.DisplayGroups.First(static g => g.LabelId == "Label_Proj");
         var countBeforeFailure = group.LoadedCount;
         await sut.LoadAllForLabelGroupForTestsAsync(group);
 
@@ -331,7 +330,7 @@ public sealed class EmailListViewModelGroupingTests
     {
         var gateway = new EmailListViewModelTestFixtures.LabelGroupingEmailGateway();
         var sut = await EmailListViewModelTestFixtures.CreateLabelGroupingSutAsync(gateway);
-        var groupRow = sut.DisplayGroups.First(static g => g.LabelId == "Label_Work").Emails.First();
+        var groupRow = sut.DisplayGroups.First(static g => g.LabelId == EmailListGroupBuilder.UnfiledGroupId).Emails.First();
 
         var resolved = sut.ResolveSelectionRowForTests(groupRow.Id);
 

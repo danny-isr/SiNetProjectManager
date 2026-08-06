@@ -55,13 +55,30 @@
                       VerticalAlignment="Center"
                       Margin="0,0,8,0"
                       FontSize="{DynamicResource SiTextSmallFontSize}"
-                      ToolTip="כשפעיל — פתיחת גוף המייל מסירה את תווית UNREAD ב-Gmail. נשמר להרצה הנוכחית בלבד." />
+                      ToolTip="לא בשימוש לפתיחת גוף — המייל מסומן כנקרא רק בסיום טיפול (אישי / לא רלוונטי / לידיעה / Workflow). נשמר להרצה הנוכחית בלבד." />
             <Button Content="פתח ב-Gmail"
                     Command="{Binding OpenInGmailCommand}"
                     Padding="8,2"
                     Margin="0,0,4,0"
                     FontSize="{DynamicResource SiTextSmallFontSize}"
                     ToolTip="פותח את המייל ב-Gmail בדפדפן — משם Reply / Forward" />
+            <Button Content="לידיעה בלבד"
+                    Command="{Binding MarkAsFyiCommand}"
+                    Padding="8,2"
+                    Margin="0,0,4,0"
+                    FontSize="{DynamicResource SiTextSmallFontSize}"
+                    ToolTip="מסיים טיפול במייל משויך בלי Workflow — מסמן כנקרא">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowAssignedLayout}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
             <Button Content="שייך לפרויקט"
                     Command="{Binding FileEmailCommand}"
                     Padding="8,2"

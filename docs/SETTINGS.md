@@ -28,6 +28,7 @@ in New System replaces legacy `SettingsWindow` + `ManagementSettingsWindow` for 
 | `LogDirectory` | "" | Partial runtime |
 | `FloatingWindowActiveOpacity` / `IdleOpacity` | 1.0 / 0.7 | Runtime (floating windows) |
 | `FloatingTasks*` / `FloatingInspection*` geometry | NaN / defaults | Next window open |
+| `EmailProjectSelectorControlWidth` / `EmailProjectSelectorPopupWidth` | 280 / 360 | Runtime (Email ProjectSelector; DEV-017) |
 | `EnableAuthorizationTestMode` | false | **Restart** (no legacy UI) |
 
 ### 2.2 Global — `dbo.SystemSettings`

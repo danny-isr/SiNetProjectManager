@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using SiNet.Application.Projects;
@@ -20,6 +21,13 @@ public partial class ProjectSelectorView : UserControl
             typeof(double),
             typeof(ProjectSelectorView),
             new PropertyMetadata(340d));
+
+    public static readonly DependencyProperty PopupWidthProperty =
+        DependencyProperty.Register(
+            nameof(PopupWidth),
+            typeof(double),
+            typeof(ProjectSelectorView),
+            new PropertyMetadata(360d));
 
     public static readonly DependencyProperty CompactModeProperty =
         DependencyProperty.Register(
@@ -82,6 +90,13 @@ public partial class ProjectSelectorView : UserControl
     {
         get => (double)GetValue(SearchBoxWidthProperty);
         set => SetValue(SearchBoxWidthProperty, value);
+    }
+
+    /// <summary>Width of the results popup (independent of <see cref="SearchBoxWidth"/>).</summary>
+    public double PopupWidth
+    {
+        get => (double)GetValue(PopupWidthProperty);
+        set => SetValue(PopupWidthProperty, value);
     }
 
     /// <summary>When <see langword="true"/>, uses smaller controls and margins for toolbar embedding.</summary>
@@ -212,6 +227,19 @@ public partial class ProjectSelectorView : UserControl
         }
 
         viewModel.CloseResults();
+    }
+
+    private void ControlWidthThumb_OnDragDelta(object sender, DragDeltaEventArgs e)
+    {
+        // RTL: dragging toward outer edge increases width (HorizontalChange inverted).
+        var delta = FlowDirection == FlowDirection.RightToLeft ? -e.HorizontalChange : e.HorizontalChange;
+        SearchBoxWidth = Math.Clamp(SearchBoxWidth + delta, 160, 900);
+    }
+
+    private void PopupWidthThumb_OnDragDelta(object sender, DragDeltaEventArgs e)
+    {
+        var delta = FlowDirection == FlowDirection.RightToLeft ? -e.HorizontalChange : e.HorizontalChange;
+        PopupWidth = Math.Clamp(PopupWidth + delta, 160, 900);
     }
 
     private bool IsInsideSelectorOrPopup(DependencyObject element)

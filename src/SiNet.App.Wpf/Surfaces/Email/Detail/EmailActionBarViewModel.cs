@@ -15,27 +15,26 @@ public sealed class EmailActionBarViewModel : ObservableObject
     private bool _showUnassignedLayout;
     private bool _showAssignedLayout;
     private bool _canOpenInGmail;
+    private bool _canMarkAsFyi;
     private bool _markAsReadEnabled = DefaultMarkAsReadEnabled;
 
     /// <summary>
-    /// Build default for the session toggle (DEV-004). Release marks as read; Debug does not —
-    /// the operator can still flip the toggle in either build.
+    /// Session toggle leftover from DEV-004 — default off; not wired to body load (DEV-016).
     /// </summary>
-    public static bool DefaultMarkAsReadEnabled =>
-#if DEBUG
-        false;
-#else
-        true;
-#endif
+    public static bool DefaultMarkAsReadEnabled => false;
 
     public EmailActionBarViewModel(
         Func<Task> fileEmailAsync,
         Func<Task> moveToProjectAsync,
-        Action? openInGmail = null)
+        Action? openInGmail = null,
+        Func<Task>? markAsFyiAsync = null)
     {
         FileEmailCommand = new AsyncRelayCommand(fileEmailAsync, () => CanFileEmail);
         MoveToProjectCommand = new AsyncRelayCommand(moveToProjectAsync, () => CanMoveToProject);
         OpenInGmailCommand = new RelayCommand(_ => openInGmail?.Invoke(), _ => CanOpenInGmail);
+        MarkAsFyiCommand = new AsyncRelayCommand(
+            markAsFyiAsync ?? (() => Task.CompletedTask),
+            () => CanMarkAsFyi);
     }
 
     public string ActiveProjectDisplay
@@ -112,8 +111,20 @@ public sealed class EmailActionBarViewModel : ObservableObject
         }
     }
 
+    public bool CanMarkAsFyi
+    {
+        get => _canMarkAsFyi;
+        set
+        {
+            if (SetField(ref _canMarkAsFyi, value))
+            {
+                (MarkAsFyiCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     /// <summary>
-    /// Session-scoped: when on, a successful body load removes the Gmail <c>UNREAD</c> label.
+    /// Session-scoped leftover from DEV-004; not used for body-load mark-read (DEV-016).
     /// Resets to <see cref="DefaultMarkAsReadEnabled"/> on every app launch.
     /// </summary>
     public bool MarkAsReadEnabled
@@ -157,11 +168,13 @@ public sealed class EmailActionBarViewModel : ObservableObject
     public ICommand FileEmailCommand { get; }
     public ICommand MoveToProjectCommand { get; }
     public ICommand OpenInGmailCommand { get; }
+    public ICommand MarkAsFyiCommand { get; }
 
-    public void RefreshCommandStates(bool canFile, bool canMove, bool canOpenInGmail = false)
+    public void RefreshCommandStates(bool canFile, bool canMove, bool canOpenInGmail = false, bool canMarkAsFyi = false)
     {
         CanFileEmail = canFile;
         CanMoveToProject = canMove;
         CanOpenInGmail = canOpenInGmail;
+        CanMarkAsFyi = canMarkAsFyi;
     }
 }

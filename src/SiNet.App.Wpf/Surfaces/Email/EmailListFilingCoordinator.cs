@@ -57,6 +57,10 @@ internal sealed class EmailListFilingCoordinator
         && row is not null
         && (_owner.GetCurrentUserId() ?? 0) > 0;
 
+    /// <summary>Stage-2 FYI — only when the message is already filed to a project.</summary>
+    public bool CanMarkAsFyi(EmailListRow? row) =>
+        CanSetEmailStatus(row) && row is { IsFiledToProject: true };
+
     public bool IsActionEnabled(EmailListRow? row, EmailContextMenuAction action) =>
         action switch
         {
@@ -65,6 +69,7 @@ internal sealed class EmailListFilingCoordinator
             EmailContextMenuAction.Unfile => CanUnfileEmail(row),
             EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
                 => CanSetEmailStatus(row),
+            EmailContextMenuAction.MarkFyi => CanMarkAsFyi(row),
             _ => false,
         };
 
@@ -82,6 +87,7 @@ internal sealed class EmailListFilingCoordinator
             EmailContextMenuAction.Unfile => DescribeUnfileDisabledReason(row),
             EmailContextMenuAction.MarkPending or EmailContextMenuAction.MarkPersonal or EmailContextMenuAction.MarkIrrelevant
                 => DescribeSetStatusDisabledReason(row),
+            EmailContextMenuAction.MarkFyi => DescribeMarkAsFyiDisabledReason(row),
             _ => "הפעולה אינה זמינה.",
         };
     }
@@ -294,8 +300,15 @@ internal sealed class EmailListFilingCoordinator
             EmailTriageStatus.Pending => ("מסמן מייל כממתין לטיפול...", "מסמן כממתין...", "המייל סומן כממתין לטיפול."),
             EmailTriageStatus.Personal => ("מסמן מייל כאישי...", "מסמן כאישי...", "המייל סומן כאישי."),
             EmailTriageStatus.Irrelevant => ("מסמן מייל כלא רלוונטי...", "מסמן כלא רלוונטי...", "המייל סומן כלא רלוונטי."),
+            EmailTriageStatus.Fyi => ("מסמן מייל כלידיעה בלבד...", "מסמן כלידיעה...", "המייל סומן כלידיעה בלבד."),
             _ => ("מעדכן סטטוס מייל...", "מעדכן סטטוס...", "סטטוס המייל עודכן."),
         };
+
+        if (status is EmailTriageStatus.Fyi && !CanMarkAsFyi(row))
+        {
+            _owner.SetLoadWarning(DescribeMarkAsFyiDisabledReason(row));
+            return;
+        }
 
         var removeOnSuccess = status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant;
 
@@ -479,11 +492,33 @@ internal sealed class EmailListFilingCoordinator
     {
         if (status is EmailTriageStatus.Personal or EmailTriageStatus.Irrelevant)
         {
+            AdjustUnreadTotalIfClearing(row);
             return row;
         }
 
         var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
-        return refreshed ?? EmailListRowMapper.BuildOptimisticStatusRow(row, status);
+        var result = refreshed ?? EmailListRowMapper.BuildOptimisticStatusRow(row, status);
+        if (status is EmailTriageStatus.Fyi)
+        {
+            AdjustUnreadTotalIfClearing(row);
+            if (result.IsUnread)
+            {
+                result = result with { IsUnread = false };
+            }
+        }
+
+        return result;
+    }
+
+    private void AdjustUnreadTotalIfClearing(EmailListRow row)
+    {
+        if (!row.IsUnread || !_owner.MailboxUnreadIsExact)
+        {
+            return;
+        }
+
+        _owner.SetMailboxUnreadTotal(Math.Max(0, _owner.MailboxUnreadTotal - 1));
+        _owner.NotifyUnreadDisplayProperties();
     }
 
     private async Task<EmailListRow?> RefreshRowFromGmailAsync(EmailListRow row)
@@ -646,5 +681,20 @@ internal sealed class EmailListFilingCoordinator
         }
 
         return "לא ניתן לעדכן סטטוס.";
+    }
+
+    private string? DescribeMarkAsFyiDisabledReason(EmailListRow? row)
+    {
+        if (!CanSetEmailStatus(row))
+        {
+            return DescribeSetStatusDisabledReason(row);
+        }
+
+        if (row is not { IsFiledToProject: true })
+        {
+            return "שייך את המייל לפרויקט לפני סימון כלידיעה בלבד.";
+        }
+
+        return "לא ניתן לסמן כלידיעה בלבד.";
     }
 }

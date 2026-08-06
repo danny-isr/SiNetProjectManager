@@ -2,10 +2,10 @@
 
 > **Title:** Email surface — read state and Gmail hand-off  
 > **Date:** 03.08.2026  
-> **Status:** Implemented on `development` (`SiNet.App.Wpf` 1.0.5) — pending PROD publish + operator verification  
+> **Status:** DEV-005 shipped; **DEV-004 trigger superseded** by two-stage triage (06.08.2026) — see [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md)  
 > **Scope:** `SiNet.App.Wpf` email surface (`EmailDetailViewModel`, `EmailActionBarView`, `EmailListViewModel`) and the Gmail modify port (`IEmailGmailModifyService` / `GmailEmailModifyService`). Two operator gaps found in the PROD pilot.  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
-> Related: [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) (Gmail label = mailbox truth), [`EMAIL_DETAIL_COMPONENT.md`](./EMAIL_DETAIL_COMPONENT.md), `SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md`
+> Related: [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) (mark-read on handling completion), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) (Gmail label = mailbox truth), [`EMAIL_DETAIL_COMPONENT.md`](./EMAIL_DETAIL_COMPONENT.md), `SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md`
 
 ---
 
@@ -36,44 +36,29 @@
 
 ## 3. DEV-004 — mark as read
 
-### 3.1 Target behavior
+> **Superseded trigger (06.08.2026 / DEV-016):** mark as read only when **handling finishes** (Personal / Irrelevant / FYI / successful Workflow except FileOnly). Opening or selecting a message must **not** clear `UNREAD`. Full matrix: [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md).
 
-1. When the **body of a message finishes rendering successfully**, and the toggle is on, the app removes the `UNREAD` label from that Gmail message.
-   - Trigger is the completed body load, **not** list selection: arrow-keying through the list must not burn through the mailbox.
-2. The action bar gets a toggle: **«סמן כנקרא»**.
-   - Default **on** in Release, **off** in Debug (`#if DEBUG` chooses the initial value only).
-   - The operator can flip it in **both** builds; a Release operator can stop marking, a developer can switch it on to verify.
-   - State lives in memory for the session (decided 03.08.2026). It resets to the build default on every launch. No new settings store.
-3. Local state updates optimistically: `IsUnread = false` on the row plus the unread counters. If the Gmail call fails, the row reverts and the status line reports it — the mailbox stays the source of truth.
-4. A message already read in Gmail is never re-modified (no call when `IsUnread` is already false).
+### 3.1 Target behavior (current)
 
-### 3.2 Changes
+1. **Do not** remove `UNREAD` after body load / list selection.
+2. Action bar toggle **«סמן כנקרא»** (session escape hatch): default **off** in **all** builds; not wired to the selection pipeline.
+3. Terminal triage and successful real Workflow call `MarkAsReadAsync` with optimistic local `IsUnread = false` and rollback on Gmail failure.
+4. A message already read in Gmail is never re-modified.
 
-| Layer | Change |
+### 3.2 Historical ship (03.08.2026, `SiNet.App.Wpf` 1.0.5) — for archaeology
+
+| Piece | Change then |
 | --- | --- |
-| `IEmailGmailModifyService` | New `Task MarkAsReadAsync(string gmailMessageId, CancellationToken ct)` |
-| `GmailEmailModifyService` | Implement via the existing `ModifyMessageLabelsAsync(add: [], remove: ["UNREAD"])` |
-| `EmailActionBarViewModel` | `MarkAsReadEnabled` toggle + build-dependent default |
-| `EmailDetailViewModel` | After a successful body load, call the port when the toggle is on; optimistic local update with rollback |
-| `EmailListViewModel` | Reuse the existing unread counters — no parallel counting |
+| `IEmailGmailModifyService.MarkAsReadAsync` | Removes system label `UNREAD` via `ModifyMessageLabelsAsync` |
+| `EmailActionBarViewModel.MarkAsReadEnabled` | Session toggle; default was Release=on / Debug=off |
+| `EmailDetailViewModel.TryMarkSelectedEmailAsReadAsync` | Ran after successful body load when toggle on |
 
-### 3.3 Acceptance criteria
+### 3.3 Acceptance criteria (updated)
 
-- [ ] Release build: opening a message clears bold in the app **and** in Gmail (verify in the browser). *(manual, PROD)*
-- [ ] Debug build: opening a message leaves it unread until the operator turns the toggle on. *(manual, DEV)*
-- [ ] Toggle off: no `Users.Messages.Modify` call is made. *(manual)*
-- [ ] Gmail failure: the row returns to unread and the status line shows the error — no silent swallow. *(manual)*
-- [ ] Fast arrow-key scrolling through the list does not mark messages whose body never rendered. *(manual)*
-- [x] Automated: toggle default per build, and “no call when already read” (`EmailActionBarReadStateTests`; skip path when `!row.IsUnread` / toggle off in `TryMarkSelectedEmailAsReadAsync`).
-
-### 3.4 As shipped (03.08.2026, `SiNet.App.Wpf` 1.0.5)
-
-| Piece | Change |
-| --- | --- |
-| `IEmailGmailModifyService.MarkAsReadAsync` | Removes system label `UNREAD` via existing `ModifyMessageLabelsAsync` |
-| `EmailActionBarViewModel.MarkAsReadEnabled` | Session toggle; default from `#if DEBUG` |
-| `EmailDetailViewModel.TryMarkSelectedEmailAsReadAsync` | Runs after a successful body load in `RunSelectionPipelineAsync`; optimistic `PatchRowIsUnread` with rollback |
-| `EmailListViewModel.PatchRowIsUnread` | Local row + exact mailbox unread total |
+- [ ] Opening / selecting a message does **not** clear unread in app or Gmail. *(manual)*
+- [ ] Personal / Irrelevant / FYI / successful Workflow (not FileOnly) clear unread. *(manual + automated)*
+- [ ] Filing alone leaves unread. *(manual + automated)*
+- [x] Port `MarkAsReadAsync` remains the single Gmail write for removing `UNREAD`.
 
 ---
 

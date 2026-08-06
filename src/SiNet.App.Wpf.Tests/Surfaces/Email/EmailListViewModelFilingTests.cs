@@ -229,6 +229,34 @@ public sealed class EmailListViewModelFilingTests
     }
 
     [Fact]
+    public async Task Mark_fyi_calls_status_when_filed()
+    {
+        var status = new EmailListViewModelTestFixtures.RecordingStatusService();
+        var sut = EmailListViewModelTestFixtures.CreateWriteCapableSut(status: status);
+        var row = EmailListViewModelTestFixtures.CreateRow(inboxMessageId: 5, isFiledToProject: true) with
+        {
+            IsUnread = true,
+        };
+
+        Assert.True(sut.CanMarkAsFyi(row));
+        await sut.MarkAsFyiForTestsAsync(row);
+
+        Assert.True(status.StatusCalled);
+        Assert.Equal(EmailTriageStatus.Fyi, status.LastStatus);
+    }
+
+    [Fact]
+    public void Mark_fyi_disabled_when_not_filed()
+    {
+        var status = new EmailListViewModelTestFixtures.RecordingStatusService();
+        var sut = EmailListViewModelTestFixtures.CreateWriteCapableSut(status: status);
+        var row = EmailListViewModelTestFixtures.CreateRow(inboxMessageId: 5, isFiledToProject: false);
+
+        Assert.False(sut.CanMarkAsFyi(row));
+        Assert.NotNull(sut.GetContextMenuDisabledReason(row, EmailContextMenuAction.MarkFyi));
+    }
+
+    [Fact]
     public async Task Email_action_sets_status_message_immediately()
     {
         var filing = new EmailListViewModelTestFixtures.DelayingFilingService();
@@ -565,7 +593,7 @@ public sealed class EmailListViewModelFilingTests
     }
 
     [Fact]
-    public async Task Mark_pending_moves_row_to_pending_group_without_manual_refresh_if_grouped()
+    public async Task Mark_pending_moves_row_to_unfiled_group_without_manual_refresh_if_grouped()
     {
         var status = new EmailListViewModelTestFixtures.RecordingStatusService();
         var gateway = new EmailListViewModelTestFixtures.RegroupingActionEmailGateway(loadFiledInitially: false);
@@ -574,10 +602,11 @@ public sealed class EmailListViewModelFilingTests
         gateway.ConfigurePendingSummary(row.Id);
         await sut.MarkAsPendingForTestsAsync(row);
 
+        // DEV-017: Pending is not a dedicated display bucket — falls into «לא מתויג».
         Assert.Contains(
             sut.DisplayGroups,
             group => group.Emails.Any(email => email.Id == row.Id)
-                && string.Equals(group.LabelDisplayName, EmailGmailLabelNames.Pending, StringComparison.Ordinal));
+                && string.Equals(group.LabelDisplayName, EmailListGroupBuilder.UnfiledDisplayName, StringComparison.Ordinal));
     }
 
     [Fact]

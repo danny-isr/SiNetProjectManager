@@ -20,13 +20,22 @@ public sealed class ProjectSelectorModularityTests
     [Fact]
     public void ViewModel_constructor_accepts_only_project_ports()
     {
+        // Primary ctor: project ports + optional debounce / settings persistence (DEV-017 widths).
         var ctor = typeof(ProjectSelectorViewModel).GetConstructors()
-            .Single(c => c.GetParameters().Length == 4);
+            .Single(c =>
+            {
+                var parameters = c.GetParameters();
+                return parameters.Length >= 3
+                    && parameters[0].ParameterType == typeof(IProjectQueryService)
+                    && parameters[1].ParameterType == typeof(IProjectFilterOptionsService)
+                    && parameters[2].ParameterType == typeof(ICurrentProjectContext);
+            });
 
         var parameters = ctor.GetParameters();
         Assert.Equal(typeof(IProjectQueryService), parameters[0].ParameterType);
         Assert.Equal(typeof(IProjectFilterOptionsService), parameters[1].ParameterType);
         Assert.Equal(typeof(ICurrentProjectContext), parameters[2].ParameterType);
+        Assert.True(parameters.Length >= 3);
     }
 
     [Fact]

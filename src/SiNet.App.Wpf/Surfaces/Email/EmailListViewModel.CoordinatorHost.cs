@@ -17,6 +17,9 @@ public sealed partial class EmailListViewModel
     internal Task UnfileEmailForTestsAsync(EmailListRow? row) => _filing.UnfileEmailAsync(row);
     internal Task MarkAsPersonalForTestsAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Personal);
     internal Task MarkAsPendingForTestsAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Pending);
+    internal Task MarkAsFyiAsync(EmailListRow? row) => _filing.SetEmailStatusAsync(row, EmailTriageStatus.Fyi);
+    internal Task MarkAsFyiForTestsAsync(EmailListRow? row) => MarkAsFyiAsync(row);
+    internal bool CanMarkAsFyiForTests(EmailListRow? row) => CanMarkAsFyi(row);
     internal void ApplyLocalEmailMutationForTests(EmailListRow row) => _display.ApplyLocalEmailMutation(row);
     internal EmailListRow? ResolveSelectionRowForTests(string rowId) => _display.ResolveSelectionRow(rowId);
     internal void ClearEmailStateForTests() => _paging.ClearEmailState();
@@ -144,6 +147,7 @@ public sealed partial class EmailListViewModel
         (MarkAsPendingCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (MarkAsPersonalCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (MarkAsIrrelevantCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (MarkAsFyiCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
     }
 
     private sealed class CoordinatorGroupBridge

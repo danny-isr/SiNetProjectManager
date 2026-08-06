@@ -40,7 +40,8 @@
                            Margin="0,0,8,0" />
                 <projects:ProjectSelectorView DataContext="{Binding ProjectSelector}"
                                               CompactMode="True"
-                                              SearchBoxWidth="280"
+                                              SearchBoxWidth="{Binding ControlWidth, Mode=TwoWay}"
+                                              PopupWidth="{Binding PopupWidth, Mode=TwoWay}"
                                               ShowUserFilter="False"
                                               VerticalAlignment="Center" />
                 <TextBlock Text="{Binding ActiveProjectDisplay}"

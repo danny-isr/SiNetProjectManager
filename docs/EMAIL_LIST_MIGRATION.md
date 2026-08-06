@@ -80,7 +80,7 @@ Multi-label messages appear once in the flat list. `PrimaryLabel` is used for di
 | Aspect | Behavior |
 | --- | --- |
 | UI | `EmailLabelGroupViewModel` per label — `Expander` header + inner email list |
-| Multi-label | A message with several labels may appear in **more than one group** |
+| Multi-label | DEV-017: each message appears in **exactly one** group (Personal → Irrelevant → selected project → other project → לא מתויג) |
 | In-group dedupe | Same `GmailMessageId` never duplicated within one group |
 | Seed | Groups built from the current global page (50 items) |
 | Per-label paging | `Load more` / `Load all` via `GetMailboxPageAsync` with `EmailMailboxQuery.LabelId` |

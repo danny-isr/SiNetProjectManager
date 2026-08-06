@@ -178,7 +178,8 @@ Hosts tune the control without forking XAML:
 
 | Property | Default | Purpose |
 | --- | --- | --- |
-| `SearchBoxWidth` | `340` | Width of the search editor + ▼ toggle |
+| `SearchBoxWidth` | `340` | Width of the search editor + ▼ toggle (user-resizable on Email; see DEV-017) |
+| `PopupWidth` | `360` | Width of the results popup (independent of control width; DEV-017) |
 | `CompactMode` | `True` | Smaller height, margins, labels, and combo widths |
 | `ShowFilters` | `True` | Job Type + Status filter strip |
 | `ShowUserFilter` | `False` | User filter (deferred; hidden until semantics exist) |

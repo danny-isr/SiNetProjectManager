@@ -6,27 +6,23 @@ namespace SiNet.App.Wpf.Tests.Surfaces.Email;
 public sealed class EmailActionBarReadStateTests
 {
     [Fact]
-    public void Mark_as_read_toggle_defaults_from_the_build()
+    public void Mark_as_read_toggle_defaults_off_in_all_builds()
     {
         var bar = new EmailActionBarViewModel(() => Task.CompletedTask, () => Task.CompletedTask);
 
-        Assert.Equal(EmailActionBarViewModel.DefaultMarkAsReadEnabled, bar.MarkAsReadEnabled);
-#if DEBUG
+        Assert.False(EmailActionBarViewModel.DefaultMarkAsReadEnabled);
         Assert.False(bar.MarkAsReadEnabled);
-#else
-        Assert.True(bar.MarkAsReadEnabled);
-#endif
     }
 
     [Fact]
-    public void Operator_can_flip_the_mark_as_read_toggle_in_either_build()
+    public void Operator_can_flip_the_mark_as_read_toggle()
     {
         var bar = new EmailActionBarViewModel(() => Task.CompletedTask, () => Task.CompletedTask)
         {
-            MarkAsReadEnabled = !EmailActionBarViewModel.DefaultMarkAsReadEnabled,
+            MarkAsReadEnabled = true,
         };
 
-        Assert.Equal(!EmailActionBarViewModel.DefaultMarkAsReadEnabled, bar.MarkAsReadEnabled);
+        Assert.True(bar.MarkAsReadEnabled);
     }
 
     [Fact]
@@ -46,5 +42,26 @@ public sealed class EmailActionBarReadStateTests
         Assert.True(bar.OpenInGmailCommand.CanExecute(null));
         bar.OpenInGmailCommand.Execute(null);
         Assert.True(opened);
+    }
+
+    [Fact]
+    public void Fyi_command_is_disabled_until_can_mark_as_fyi()
+    {
+        var called = false;
+        var bar = new EmailActionBarViewModel(
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            openInGmail: null,
+            markAsFyiAsync: () =>
+            {
+                called = true;
+                return Task.CompletedTask;
+            });
+
+        Assert.False(bar.MarkAsFyiCommand.CanExecute(null));
+        bar.CanMarkAsFyi = true;
+        Assert.True(bar.MarkAsFyiCommand.CanExecute(null));
+        bar.MarkAsFyiCommand.Execute(null);
+        Assert.True(called);
     }
 }

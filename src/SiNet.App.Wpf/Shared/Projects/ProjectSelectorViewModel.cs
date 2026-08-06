@@ -6,6 +6,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Shared.Projects;
 
@@ -33,9 +34,12 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     private readonly IProjectQueryService _projectQuery;
     private readonly IProjectFilterOptionsService _filterOptionsService;
     private readonly ICurrentProjectContext _currentProject;
+    private readonly IAppSettingsService? _appSettings;
+    private readonly bool _persistSelectorWidths;
     private readonly TimeSpan _debounce;
 
     private CancellationTokenSource? _pendingReloadCts;
+    private CancellationTokenSource? _pendingWidthSaveCts;
     private long _reloadRequestId;
 
     private string _editorText = string.Empty;
@@ -52,6 +56,8 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     private bool _isResultsOpen;
     private bool _suppressOpenResultsOnNextFocus;
     private string _statusMessage = string.Empty;
+    private double _controlWidth = UserAppSettingsDefaults.EmailProjectSelectorControlWidth;
+    private double _popupWidth = UserAppSettingsDefaults.EmailProjectSelectorPopupWidth;
 
     public ProjectSelectorViewModel()
         : this(new FakeProjectQueryService(), new FakeProjectFilterOptionsService(), new InMemoryCurrentProjectContext())
@@ -77,12 +83,16 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService filterOptionsService,
         ICurrentProjectContext currentProject,
-        TimeSpan debounce = default)
+        TimeSpan debounce = default,
+        IAppSettingsService? appSettings = null,
+        bool persistSelectorWidths = false)
     {
         _projectQuery = projectQuery ?? throw new ArgumentNullException(nameof(projectQuery));
         _filterOptionsService = filterOptionsService ?? throw new ArgumentNullException(nameof(filterOptionsService));
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
         _debounce = debounce < TimeSpan.Zero ? TimeSpan.Zero : debounce;
+        _appSettings = appSettings;
+        _persistSelectorWidths = persistSelectorWidths && appSettings is not null;
 
         Projects = new ObservableCollection<ProjectSummaryDto>();
         StatusOptions = new ObservableCollection<ProjectFilterOptionDto> { AllStatusesFilterOption };
@@ -114,6 +124,34 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     public ObservableCollection<ProjectFilterOptionDto> JobTypeOptions { get; }
 
     public ObservableCollection<ProjectFilterOptionDto> StatusOptions { get; }
+
+    /// <summary>Width of the search box + toggle (DEV-017).</summary>
+    public double ControlWidth
+    {
+        get => _controlWidth;
+        set
+        {
+            var clamped = Math.Clamp(value, 160, 900);
+            if (SetField(ref _controlWidth, clamped))
+            {
+                QueuePersistWidths();
+            }
+        }
+    }
+
+    /// <summary>Width of the results popup, independent of <see cref="ControlWidth"/> (DEV-017).</summary>
+    public double PopupWidth
+    {
+        get => _popupWidth;
+        set
+        {
+            var clamped = Math.Clamp(value, 160, 900);
+            if (SetField(ref _popupWidth, clamped))
+            {
+                QueuePersistWidths();
+            }
+        }
+    }
 
     public bool IsUserFilterAvailable => false;
 
@@ -264,8 +302,72 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        await LoadPersistedWidthsAsync(cancellationToken).ConfigureAwait(true);
         await LoadFilterOptionsAsync(cancellationToken).ConfigureAwait(true);
         await LoadAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    private async Task LoadPersistedWidthsAsync(CancellationToken cancellationToken)
+    {
+        if (!_persistSelectorWidths || _appSettings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var settings = await _appSettings.GetUserAppSettingsAsync(cancellationToken).ConfigureAwait(true);
+            _controlWidth = Math.Clamp(settings.EmailProjectSelectorControlWidth, 160, 900);
+            _popupWidth = Math.Clamp(settings.EmailProjectSelectorPopupWidth, 160, 900);
+            OnPropertyChanged(nameof(ControlWidth));
+            OnPropertyChanged(nameof(PopupWidth));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Keep defaults — layout persistence must not block selector open.
+        }
+    }
+
+    private void QueuePersistWidths()
+    {
+        if (!_persistSelectorWidths || _appSettings is null)
+        {
+            return;
+        }
+
+        _pendingWidthSaveCts?.Cancel();
+        _pendingWidthSaveCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _pendingWidthSaveCts = cts;
+        _ = PersistWidthsDebouncedAsync(cts.Token);
+    }
+
+    private async Task PersistWidthsDebouncedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(400, cancellationToken).ConfigureAwait(true);
+            var current = await _appSettings!.GetUserAppSettingsAsync(cancellationToken).ConfigureAwait(true);
+            await _appSettings.SaveUserAppSettingsAsync(
+                current with
+                {
+                    EmailProjectSelectorControlWidth = ControlWidth,
+                    EmailProjectSelectorPopupWidth = PopupWidth,
+                },
+                cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded
+        }
+        catch
+        {
+            // Persistence failures are non-fatal for the selector.
+        }
     }
 
     public async Task LoadFilterOptionsAsync(CancellationToken cancellationToken = default)
@@ -607,5 +709,9 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         var pending = Interlocked.Exchange(ref _pendingReloadCts, null);
         pending?.Cancel();
         pending?.Dispose();
+
+        var widthPending = Interlocked.Exchange(ref _pendingWidthSaveCts, null);
+        widthPending?.Cancel();
+        widthPending?.Dispose();
     }
 }

@@ -6,4 +6,6 @@ public enum EmailTriageStatus
     Pending,
     Personal,
     Irrelevant,
+    /// <summary>Stage-2 FYI — filed project mail that needs no further workflow.</summary>
+    Fyi,
 }

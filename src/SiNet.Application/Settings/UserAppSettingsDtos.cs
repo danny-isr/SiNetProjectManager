@@ -38,7 +38,9 @@ public sealed record UserAppSettingsDto(
     UserFloatingWindowOpacityDto FloatingOpacity,
     FloatingWindowGeometryDto FloatingTasks,
     FloatingWindowGeometryDto FloatingInspection,
-    bool EnableAuthorizationTestMode);
+    bool EnableAuthorizationTestMode,
+    double EmailProjectSelectorControlWidth = 280,
+    double EmailProjectSelectorPopupWidth = 360);
 
 /// <summary>Legacy defaults from <c>AppSettings</c> constructor.</summary>
 public static class UserAppSettingsDefaults
@@ -55,6 +57,8 @@ public static class UserAppSettingsDefaults
     public const double FloatingTasksHeight = 560;
     public const double FloatingInspectionWidth = 420;
     public const double FloatingInspectionHeight = 850;
+    public const double EmailProjectSelectorControlWidth = 280;
+    public const double EmailProjectSelectorPopupWidth = 360;
 
     public static UserAppSettingsDto Create() => new(
         TypographyThemeDefaults.CreateDefaultAppearance(),
@@ -67,5 +71,7 @@ public static class UserAppSettingsDefaults
         new UserFloatingWindowOpacityDto(FloatingActiveOpacity, FloatingIdleOpacity),
         new FloatingWindowGeometryDto(double.NaN, double.NaN, FloatingTasksWidth, FloatingTasksHeight),
         new FloatingWindowGeometryDto(double.NaN, double.NaN, FloatingInspectionWidth, FloatingInspectionHeight),
-        EnableAuthorizationTestMode: false);
+        EnableAuthorizationTestMode: false,
+        EmailProjectSelectorControlWidth,
+        EmailProjectSelectorPopupWidth);
 }

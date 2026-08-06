@@ -97,7 +97,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _gmailModify = gmailModify;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
-        ActionBar = new EmailActionBarViewModel(FileSelectedEmailAsync, MoveSelectedEmailToProjectAsync, OpenSelectedEmailInGmail);
+        ActionBar = new EmailActionBarViewModel(
+            FileSelectedEmailAsync,
+            MoveSelectedEmailToProjectAsync,
+            OpenSelectedEmailInGmail,
+            MarkSelectedEmailAsFyiAsync);
         Workflow = new EmailWorkflowActionsPaneViewModel(ExecuteSelectedWorkflowActionAsync);
         Viewer = new EmailViewerPaneViewModel(OpenBodyLink);
 
@@ -334,13 +338,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 .ConfigureAwait(true);
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (HasLoadedBodyForCurrentSelection(row.Id)
-            && IsCurrentSelection(row.Id, loadVersion))
-        {
-            await TryMarkSelectedEmailAsReadAsync(row, loadVersion).ConfigureAwait(true);
-        }
+        // DEV-016: do not mark as read on body load — only on handling completion.
     }
 
     private void SyncViewerHeader()
@@ -851,6 +849,13 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
             await RefreshWorkflowContextAsync().ConfigureAwait(true);
 
+            if (result.Succeeded
+                && !string.Equals(action.ActionCode, EmailSuggestedActionCodes.FileOnly, StringComparison.Ordinal)
+                && _selectedEmail is { } mailAfterWorkflow)
+            {
+                await MarkEmailAsReadAfterHandlingAsync(mailAfterWorkflow).ConfigureAwait(true);
+            }
+
             // Keep a clear top-of-pane message after refresh (banner + status line).
             if (result.Succeeded
                 && (string.Equals(action.ActionCode, EmailSuggestedActionCodes.CreatePriceQuote, StringComparison.Ordinal)
@@ -913,7 +918,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                      && _moveToProjectService?.IsAvailable == true
                      && _selectedEmail?.InboxMessageId is > 0
                      && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason),
-            canOpenInGmail: hasSelection && !string.IsNullOrWhiteSpace(_selectedEmail?.Id));
+            canOpenInGmail: hasSelection && !string.IsNullOrWhiteSpace(_selectedEmail?.Id),
+            canMarkAsFyi: hasSelection
+                          && isFiled
+                          && _emailList.CanMarkAsFyi(_selectedEmail));
     }
 
     private void OpenSelectedEmailInGmail()
@@ -931,13 +939,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// DEV-004: after a successful body load, remove Gmail <c>UNREAD</c> when the session toggle is on.
+    /// DEV-016: remove Gmail <c>UNREAD</c> after handling finishes (Workflow / explicit call).
     /// Optimistic local update with rollback — mailbox remains the source of truth.
     /// </summary>
-    private async Task TryMarkSelectedEmailAsReadAsync(EmailListRow row, int loadVersion)
+    private async Task MarkEmailAsReadAfterHandlingAsync(EmailListRow row)
     {
-        if (!ActionBar.MarkAsReadEnabled
-            || _gmailModify is null
+        if (_gmailModify is null
             || !row.IsUnread
             || string.IsNullOrWhiteSpace(row.Id))
         {
@@ -954,18 +961,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         try
         {
             await _gmailModify.MarkAsReadAsync(row.Id, CancellationToken.None).ConfigureAwait(true);
-            if (!IsCurrentSelection(row.Id, loadVersion))
-            {
-                return;
-            }
         }
         catch (Exception ex)
         {
-            if (!IsCurrentSelection(row.Id, loadVersion))
-            {
-                return;
-            }
-
             var reverted = _emailList.PatchRowIsUnread(row.Id, isUnread: true);
             if (reverted is not null
                 && string.Equals(_selectedEmail?.Id, reverted.Id, StringComparison.Ordinal))
@@ -975,6 +973,18 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
             SetStatus($"סימון כנקרא נכשל: {ex.Message}");
         }
+    }
+
+    private async Task MarkSelectedEmailAsFyiAsync()
+    {
+        if (_selectedEmail is null)
+        {
+            SetStatus("לא נבחר מייל.");
+            return;
+        }
+
+        await _emailList.MarkAsFyiAsync(_selectedEmail).ConfigureAwait(true);
+        RefreshActionBarState();
     }
 
     private Task RefreshInboxAttachmentsAsync() =>
