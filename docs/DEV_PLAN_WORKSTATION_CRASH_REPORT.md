@@ -8,6 +8,8 @@
 
 Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md), [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`SETTINGS.md`](./SETTINGS.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).
 
+**Round 2 (DEV-014):** [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) extends §2 (event sources), §4 (captured data) and §8 (out of scope) of this document with BIOS/firmware facts, full WHEA payload, crash artifacts, per-crash context, and a corrected incident-counting model.
+
 ---
 
 ## 1. Purpose

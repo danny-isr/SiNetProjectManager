@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README — New System & ops documentation index  
 > **Date:** 02.08.2026  
-> **Updated:** 03.08.2026  
+> **Updated:** 06.08.2026  
 > **Status:** Active  
 > **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops, DEV backlog). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
 
@@ -39,6 +39,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) | **DEV-008/009:** project edit + verified rename; Gmail label sync by number |
 | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) | **DEV-004/005:** mark email as read; «פתח ב-Gmail» for reply/forward |
 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | **DEV-010:** «דוח קריסות תחנה» — Event Log crash report + AI export |
+| [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | **DEV-014:** crash report round 2 — BIOS/WHEA/CER evidence, incident grouping |
 | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) | Pilot / expand phases and sign-off log |
 | [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) | App.Wpf replaces V2 as shipped desktop |
 | [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) | Pilot envelope / readiness notes |
