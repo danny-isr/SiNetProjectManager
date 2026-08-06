@@ -6,6 +6,31 @@ namespace SiNet.App.Wpf.Tests.Diagnostics;
 public sealed class WheaEventParserTests
 {
     [Fact]
+    public void WhenEvent19MessageSaysCorrectedThenIsCorrectedAndRawXmlOmitted()
+    {
+        const string xml =
+            """
+            <Event>
+              <EventData>
+                <Data Name="ErrorSource">Machine Check Exception</Data>
+                <Data Name="ApicId">0x2</Data>
+                <Data Name="MCABank">0</Data>
+              </EventData>
+            </Event>
+            """;
+
+        var details = WheaEventParser.TryParse(
+            xml,
+            eventId: 19,
+            message: "A corrected hardware error has occurred.");
+
+        Assert.NotNull(details);
+        Assert.True(details!.IsCorrected);
+        Assert.Null(details.RawXml);
+        Assert.Equal("0", details.McaBank);
+    }
+
+    [Fact]
     public void WhenUncorrectedWheaXmlThenFieldsAndRawXmlAreKept()
     {
         const string xml =
@@ -22,12 +47,10 @@ public sealed class WheaEventParserTests
             </Event>
             """;
 
-        var details = WheaEventParser.TryParse(xml, eventId: 19);
+        var details = WheaEventParser.TryParse(xml, eventId: 18, message: "An uncorrected hardware error has occurred.");
 
         Assert.NotNull(details);
         Assert.False(details!.IsCorrected);
-        Assert.Equal("0", details.McaBank);
-        Assert.Equal("0x2", details.ApicId);
         Assert.NotNull(details.RawXml);
         Assert.Contains("MCABank", details.RawXml, StringComparison.Ordinal);
     }
@@ -63,7 +86,7 @@ public sealed class WheaEventParserTests
                 LogName = "System",
                 EventId = 19,
                 ProviderName = "Microsoft-Windows-WHEA-Logger",
-                Whea = new WheaDetailsDto(null, "1", "0", null, null, null, false, null),
+                Whea = new WheaDetailsDto(null, "1", "0", null, null, null, true, null),
             },
             new WorkstationCrashEventDto
             {
@@ -71,7 +94,7 @@ public sealed class WheaEventParserTests
                 LogName = "System",
                 EventId = 19,
                 ProviderName = "Microsoft-Windows-WHEA-Logger",
-                Whea = new WheaDetailsDto(null, "1", "0", null, null, null, false, null),
+                Whea = new WheaDetailsDto(null, "1", "0", null, null, null, true, null),
             },
         };
 
@@ -79,9 +102,10 @@ public sealed class WheaEventParserTests
     }
 
     [Fact]
-    public void WhenMicrocodeBytesThenHexIsLowercase()
+    public void WhenMicrocodeBytesLittleEndianThenFormattedAsHexDword()
     {
-        Assert.Equal("0a0b", MemoryModuleFacts.FormatMicrocode([0x0a, 0x0b]));
+        // Raw dump would look like 20010000; LE DWORD is 0x120.
+        Assert.Equal("0x120", MemoryModuleFacts.FormatMicrocode([0x20, 0x01, 0x00, 0x00]));
     }
 
     [Fact]
@@ -94,5 +118,52 @@ public sealed class WheaEventParserTests
         };
 
         Assert.True(MemoryModuleFacts.HasMixedDimms(modules));
+    }
+
+    [Fact]
+    public void WhenWerOnlyReportIdClusterThenItIsNotAnIncident()
+    {
+        var now = new DateTimeOffset(2026, 8, 6, 12, 0, 0, TimeSpan.FromHours(3));
+        var report = WorkstationCrashReportBuilder.Build(
+            new WorkstationCrashQuery(now.AddDays(-14), ["acad.exe"], CrashReportScope.Both, 2000),
+            WorkstationCrashReportBuilderTests.TestContext,
+            WorkstationCrashReportBuilderTests.TestMachine,
+            [
+                new WorkstationCrashEventDto
+                {
+                    TimeCreated = now.AddHours(-1),
+                    LogName = "Application",
+                    EventId = 1001,
+                    ProviderName = "Windows Error Reporting",
+                    AppName = "MsMpEng.exe",
+                    ReportId = "WER-ONLY-1",
+                    Message = "WER",
+                },
+            ],
+            now);
+
+        Assert.Empty(report.Incidents);
+        Assert.Equal(0, report.Summary.OtherApplicationCrashIncidents);
+    }
+
+    [Fact]
+    public void WhenMachineHasMinidumpsThenBugcheckFlagIsTrue()
+    {
+        var now = new DateTimeOffset(2026, 8, 6, 12, 0, 0, TimeSpan.FromHours(3));
+        var machine = WorkstationCrashReportBuilderTests.TestMachine with
+        {
+            KernelMinidumpCount = 5,
+            KernelMinidumpFileNames = ["a.dmp", "b.dmp"],
+        };
+
+        var report = WorkstationCrashReportBuilder.Build(
+            new WorkstationCrashQuery(now.AddDays(-14), ["acad.exe"], CrashReportScope.Both, 2000),
+            WorkstationCrashReportBuilderTests.TestContext,
+            machine,
+            [],
+            now);
+
+        Assert.True(report.Summary.HasBugCheck);
+        Assert.Contains("Kernel minidump", WorkstationCrashReportFormatter.ToMarkdown(report), StringComparison.Ordinal);
     }
 }

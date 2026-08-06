@@ -281,13 +281,13 @@ public sealed class WorkstationCrashReportViewModel : ObservableObject
             new[]
             {
                 $"תקריות: {summary.IncidentCount}",
-                $"קריסות Civil/מסונן: {summary.CivilApplicationCrashIncidents}",
-                $"תליות: {summary.ApplicationHangIncidents}",
+                $"קריסות מסוננות: {summary.CivilApplicationCrashIncidents}",
+                $"תליות מסוננות: {summary.ApplicationHangIncidents}",
                 $"אפליקציות אחרות: {summary.OtherApplicationCrashIncidents}",
                 $"חומרה: {summary.HardwareErrorIncidents}",
                 $"כיבויים: {summary.UnexpectedShutdownIncidents}",
                 $"ליום: {summary.IncidentsPerDay.ToString("F2", CultureInfo.InvariantCulture)}",
-                summary.HasBugCheck ? "מסך כחול: כן" : "מסך כחול: לא",
+                summary.HasBugCheck ? "מסך כחול/minidump: כן" : "מסך כחול/minidump: לא",
                 summary.HasHardwareEvents ? "אירועי חומרה: כן" : "אירועי חומרה: לא",
                 summary.HasUnexpectedShutdown ? "כיבוי לא תקין: כן" : "כיבוי לא תקין: לא",
                 summary.HasRepeatWheaBank ? "בנק WHEA חוזר: כן" : "בנק WHEA חוזר: לא",

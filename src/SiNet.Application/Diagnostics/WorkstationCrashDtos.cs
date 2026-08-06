@@ -163,7 +163,9 @@ public sealed record MachineProfileDto(
     DateTimeOffset? BiosReleaseDate = null,
     string? CpuMicrocode = null,
     IReadOnlyList<MemoryModuleDto>? MemoryModules = null,
-    bool HasMixedDimms = false);
+    bool HasMixedDimms = false,
+    int KernelMinidumpCount = 0,
+    IReadOnlyList<string>? KernelMinidumpFileNames = null);
 
 /// <summary>The user's own words about why the report exists.</summary>
 public sealed record CrashReportContextDto(

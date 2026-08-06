@@ -60,6 +60,7 @@ public sealed class WmiMachineProfileProvider : IMachineProfileProvider
         var totalMemoryBytes = computer?.UInt64("TotalPhysicalMemory");
         var memoryModules = ReadMemoryModules(warnings);
         var mixedDimms = MemoryModuleFacts.HasMixedDimms(memoryModules);
+        var (minidumpCount, minidumpNames) = ReadKernelMinidumps(warnings);
 
         return new MachineProfileDto(
             Environment.MachineName,
@@ -87,7 +88,36 @@ public sealed class WmiMachineProfileProvider : IMachineProfileProvider
             ParseWmiDate(bios?.String("ReleaseDate")),
             ReadCpuMicrocode(warnings),
             memoryModules,
-            mixedDimms);
+            mixedDimms,
+            minidumpCount,
+            minidumpNames);
+    }
+
+    private static (int Count, IReadOnlyList<string> Names) ReadKernelMinidumps(List<string> warnings)
+    {
+        try
+        {
+            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Minidump");
+            if (!Directory.Exists(folder))
+                return (0, []);
+
+            var files = Directory.EnumerateFiles(folder, "*.dmp")
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .ToList();
+
+            var names = files
+                .Take(MemoryModuleFacts.MaxMinidumpNamesInReport)
+                .Select(f => f.Name)
+                .ToList();
+
+            return (files.Count, names);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add($"Kernel minidumps: {ex.Message}");
+            return (0, []);
+        }
     }
 
     private static IReadOnlyList<MemoryModuleDto> ReadMemoryModules(List<string> warnings)

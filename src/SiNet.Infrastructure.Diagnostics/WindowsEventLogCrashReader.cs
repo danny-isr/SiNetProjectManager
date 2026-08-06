@@ -108,11 +108,12 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
         var xml = TryGet(record.ToXml);
         var data = ReadEventData(xml);
         var provider = record.ProviderName ?? string.Empty;
+        var message = Truncate(TryGet(record.FormatDescription));
         WheaDetailsDto? whea = null;
         if (provider.Contains("WHEA-Logger", StringComparison.OrdinalIgnoreCase)
             && record.Id is 17 or 18 or 19)
         {
-            whea = WheaEventParser.TryParse(xml, record.Id);
+            whea = WheaEventParser.TryParse(xml, record.Id, message);
         }
 
         return new WorkstationCrashEventDto
@@ -131,7 +132,7 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
             AppPath = data.Get("AppPath", 10),
             ModulePath = data.Get("ModulePath", 11),
             ReportId = data.Get("IntegratorReportId", 12) ?? data.Get("ReportId", 12),
-            Message = Truncate(TryGet(record.FormatDescription)),
+            Message = message,
             Whea = whea,
         };
     }

@@ -3,13 +3,13 @@ using System.Xml.Linq;
 
 namespace SiNet.Application.Diagnostics;
 
-/// <summary>Pure helpers for WHEA XML payloads (DEV-014 slice B).</summary>
+/// <summary>Pure helpers for WHEA XML payloads (DEV-014 / DEV-015).</summary>
 public static class WheaEventParser
 {
     public const int RawXmlCapChars = 4000;
     public const int UncorrectedXmlAppendixCap = 5;
 
-    public static WheaDetailsDto? TryParse(string? eventXml, int eventId)
+    public static WheaDetailsDto? TryParse(string? eventXml, int eventId, string? message = null)
     {
         if (string.IsNullOrWhiteSpace(eventXml))
             return null;
@@ -25,9 +25,9 @@ public static class WheaEventParser
                     e => e.Value?.Trim() ?? string.Empty,
                     StringComparer.OrdinalIgnoreCase);
 
-            var isCorrected = eventId == 17;
+            var isCorrected = ClassifyCorrected(eventId, named, message);
             string? raw = null;
-            if (!isCorrected && eventId is 18 or 19)
+            if (!isCorrected)
             {
                 raw = eventXml.Length <= RawXmlCapChars
                     ? eventXml
@@ -50,6 +50,42 @@ public static class WheaEventParser
         }
     }
 
+    /// <summary>
+    /// Event id alone is insufficient (Event 19 is often a corrected MCE). Prefer explicit
+    /// severity / wording from the payload and message (DEV-015).
+    /// </summary>
+    public static bool ClassifyCorrected(
+        int eventId,
+        IReadOnlyDictionary<string, string> named,
+        string? message)
+    {
+        if (eventId == 17)
+            return true;
+
+        var severity = Get(named, "ErrorSeverity")
+                       ?? Get(named, "Severity")
+                       ?? Get(named, "ErrorType");
+        var blob = string.Join(' ', named.Values);
+        if (!string.IsNullOrWhiteSpace(message))
+            blob = blob + ' ' + message;
+        if (!string.IsNullOrWhiteSpace(severity))
+            blob = blob + ' ' + severity;
+
+        if (ContainsWord(blob, "uncorrected") || ContainsWord(blob, "fatal"))
+            return false;
+
+        if (ContainsWord(blob, "corrected"))
+            return true;
+
+        // Fallbacks when the payload is silent.
+        return eventId switch
+        {
+            18 => false,
+            19 => false, // treat as uncorrected only when wording is absent — prefer not to hide
+            _ => eventId == 17,
+        };
+    }
+
     public static bool HasRepeatBank(IEnumerable<WorkstationCrashEventDto> events)
     {
         return events
@@ -60,14 +96,18 @@ public static class WheaEventParser
             .Any(g => g.Count() >= 2);
     }
 
+    private static bool ContainsWord(string blob, string token)
+        => blob.Contains(token, StringComparison.OrdinalIgnoreCase);
+
     private static string? Get(IReadOnlyDictionary<string, string> named, string key)
         => named.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 }
 
-/// <summary>Pure helpers for DIMM inventory facts (DEV-014 slice A).</summary>
+/// <summary>Pure helpers for DIMM / microcode facts (DEV-014 / DEV-015).</summary>
 public static class MemoryModuleFacts
 {
     public const int MaxModulesInReport = 8;
+    public const int MaxMinidumpNamesInReport = 20;
 
     public static bool HasMixedDimms(IReadOnlyList<MemoryModuleDto> modules)
     {
@@ -81,12 +121,23 @@ public static class MemoryModuleFacts
         return parts > 1;
     }
 
+    /// <summary>
+    /// <c>Update Revision</c> is little-endian. Bytes <c>20 01 00 00</c> become <c>0x120</c>, not
+    /// the raw hex dump <c>20010000</c> (DEV-015).
+    /// </summary>
     public static string FormatMicrocode(byte[]? updateRevision)
     {
         if (updateRevision is null || updateRevision.Length == 0)
             return string.Empty;
 
-        // REG_BINARY is little-endian on Windows; present as lowercase hex without separators.
-        return Convert.ToHexString(updateRevision).ToLowerInvariant();
+        if (updateRevision.Length >= 4)
+        {
+            var value = BitConverter.ToUInt32(updateRevision, 0);
+            return string.Create(CultureInfo.InvariantCulture, $"0x{value:x}");
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"0x{Convert.ToHexString(updateRevision).ToLowerInvariant()}");
     }
 }

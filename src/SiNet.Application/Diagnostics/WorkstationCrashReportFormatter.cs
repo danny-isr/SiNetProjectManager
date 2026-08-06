@@ -74,7 +74,7 @@ public static class WorkstationCrashReportFormatter
 
         AppendUserContext(builder, report.Context);
         AppendMachineProfile(builder, machine);
-        AppendSummary(builder, summary);
+        AppendSummary(builder, summary, machine);
         AppendIncidents(builder, report.Incidents);
         AppendBuckets(builder, summary);
         AppendEvents(builder, report.Events, report.Query.AppNameFilters);
@@ -139,6 +139,16 @@ public static class WorkstationCrashReportFormatter
             AppendRow(builder, "Autodesk products", string.Join("; ", machine.InstalledAutodeskProducts));
 
         builder.AppendLine();
+
+        if (machine.KernelMinidumpCount > 0)
+        {
+            builder.AppendLine("### Kernel minidumps (paths only — not parsed)");
+            builder.AppendLine();
+            builder.AppendLine(Invariant($"- Count: {machine.KernelMinidumpCount} under %SystemRoot%\\Minidump"));
+            foreach (var name in machine.KernelMinidumpFileNames ?? [])
+                builder.AppendLine(Invariant($"- {name}"));
+            builder.AppendLine();
+        }
 
         var modules = machine.MemoryModules ?? [];
         if (modules.Count > 0)
@@ -212,7 +222,10 @@ public static class WorkstationCrashReportFormatter
         return $"{left} {right}";
     }
 
-    private static void AppendSummary(StringBuilder builder, CrashReportSummaryDto summary)
+    private static void AppendSummary(
+        StringBuilder builder,
+        CrashReportSummaryDto summary,
+        MachineProfileDto machine)
     {
         builder.AppendLine("## Facts");
         builder.AppendLine();
@@ -222,15 +235,16 @@ public static class WorkstationCrashReportFormatter
         AppendRow(builder, "Incidents (grouped)", summary.IncidentCount.ToString(CultureInfo.InvariantCulture));
         AppendRow(builder, "Incidents per day", summary.IncidentsPerDay.ToString("F2", CultureInfo.InvariantCulture));
         AppendRow(builder, "Records per day", summary.RecordsPerDay.ToString("F2", CultureInfo.InvariantCulture));
-        AppendRow(builder, "Civil / filtered app crashes", summary.CivilApplicationCrashIncidents.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "Application hangs", summary.ApplicationHangIncidents.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "Other application crashes", summary.OtherApplicationCrashIncidents.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "Unexpected shutdowns", summary.UnexpectedShutdownIncidents.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "Filtered app crashes (matches app filters)", summary.CivilApplicationCrashIncidents.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "Filtered app hangs (matches app filters)", summary.ApplicationHangIncidents.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "Other app crash incidents (not in filters)", summary.OtherApplicationCrashIncidents.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "Unexpected shutdown incidents", summary.UnexpectedShutdownIncidents.ToString(CultureInfo.InvariantCulture));
         AppendRow(builder, "Hardware error incidents", summary.HardwareErrorIncidents.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "Application crash records", summary.ApplicationCrashCount.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "Application crash records (all apps)", summary.ApplicationCrashCount.ToString(CultureInfo.InvariantCulture));
         AppendRow(builder, "Critical machine records", summary.CriticalCount.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "Correlated app crashes", summary.CorrelatedCount.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "Bugcheck present", summary.HasBugCheck ? "yes" : "no");
+        AppendRow(builder, "Correlated filtered app crashes", summary.CorrelatedCount.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "Bugcheck present (Event Log or Minidump)", summary.HasBugCheck ? "yes" : "no");
+        AppendRow(builder, "Kernel minidump files", machine.KernelMinidumpCount.ToString(CultureInfo.InvariantCulture));
         AppendRow(builder, "Hardware events present", summary.HasHardwareEvents ? "yes" : "no");
         AppendRow(builder, "Unexpected shutdown present", summary.HasUnexpectedShutdown ? "yes" : "no");
         AppendRow(builder, "Repeat WHEA bank/APIC", summary.HasRepeatWheaBank ? "yes" : "no");
@@ -372,11 +386,15 @@ public static class WorkstationCrashReportFormatter
             .Take(WheaEventParser.UncorrectedXmlAppendixCap)
             .ToList();
 
-        if (uncorrected.Count == 0)
-            return;
-
-        builder.AppendLine("## WHEA raw XML appendix (uncorrected only)");
+        builder.AppendLine("## WHEA raw XML appendix (uncorrected events only)");
         builder.AppendLine();
+
+        if (uncorrected.Count == 0)
+        {
+            builder.AppendLine("No uncorrected WHEA payloads in this window (corrected MCEs are omitted here).");
+            builder.AppendLine();
+            return;
+        }
 
         foreach (var e in uncorrected)
         {

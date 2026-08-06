@@ -40,7 +40,7 @@ public static class WorkstationCrashReportBuilder
 
         var correlated = ApplyCorrelation(classified);
         var (eventsWithIncidents, incidents) = GroupIncidents(correlated, query.AppNameFilters);
-        var summary = Summarize(eventsWithIncidents, incidents, query, generatedAt);
+        var summary = Summarize(eventsWithIncidents, incidents, query, generatedAt, machine);
 
         return new WorkstationCrashReport(
             generatedAt, context, machine, query, eventsWithIncidents, summary, incidents);
@@ -302,14 +302,12 @@ public static class WorkstationCrashReportBuilder
         IReadOnlyList<WorkstationCrashEventDto> members,
         IReadOnlyList<string> appFilters)
     {
-        var primary = members.FirstOrDefault(e => e.EventId is 1000 or 1002)
-                      ?? members.FirstOrDefault(e => e.Severity == CrashSeverity.AppCrash)
-                      ?? members.FirstOrDefault();
+        // DEV-015: WER-only ReportId clusters are Supporting detail, not incidents.
+        var primary = members.FirstOrDefault(e => e.EventId is 1000 or 1002);
         if (primary is null)
             return null;
 
-        if (primary.EventId == 1002
-            || (primary.EventId == 1001 && members.Any(m => m.EventId == 1002)))
+        if (primary.EventId == 1002)
         {
             return MatchesAppFilter(primary, appFilters)
                 ? CrashIncidentKind.ApplicationHang
@@ -369,19 +367,22 @@ public static class WorkstationCrashReportBuilder
         IReadOnlyList<WorkstationCrashEventDto> events,
         IReadOnlyList<CrashIncidentDto> incidents,
         WorkstationCrashQuery query,
-        DateTimeOffset generatedAt)
+        DateTimeOffset generatedAt,
+        MachineProfileDto machine)
     {
         var appCrashes = events.Where(e => e.Severity == CrashSeverity.AppCrash).ToList();
         var criticals = events.Where(e => e.Severity == CrashSeverity.Critical).ToList();
         var days = query.LookbackDays(generatedAt);
         var incidentCount = incidents.Count;
+        var hasBugCheckEvent = events.Any(e => e.EventId == 1001 && Has(e.ProviderName, "BugCheck"));
+        var hasBugCheck = hasBugCheckEvent || machine.KernelMinidumpCount > 0;
 
         return new CrashReportSummaryDto(
             events.Count,
             appCrashes.Count,
             criticals.Count,
             events.Count(e => !string.IsNullOrEmpty(e.CorrelatedWith)),
-            events.Any(e => e.EventId == 1001 && Has(e.ProviderName, "BugCheck")),
+            hasBugCheck,
             events.Any(e => IsHardwareEvent(e.ProviderName, e.EventId)),
             events.Any(e => (e.EventId == 41 && Has(e.ProviderName, "Kernel-Power"))
                             || (e.EventId == 6008 && Has(e.ProviderName, "EventLog"))),
