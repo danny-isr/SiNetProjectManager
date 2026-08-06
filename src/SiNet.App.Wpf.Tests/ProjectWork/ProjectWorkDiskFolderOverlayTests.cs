@@ -213,6 +213,99 @@ public sealed class ProjectWorkDiskFolderOverlayTests : IDisposable
     }
 
     [Fact]
+    public async Task Merge_preserves_file_and_alternative_IsExpanded_and_adds_new_file()
+    {
+        var catalogPath = Path.Combine(_root, "Drawings");
+        Directory.CreateDirectory(catalogPath);
+        var first = Path.Combine(catalogPath, "a.txt");
+        await File.WriteAllTextAsync(first, "1");
+
+        var scanned = new List<ScannedFile>
+        {
+            new(
+                FileStorageDestination.FileServer,
+                "a.txt",
+                first,
+                1,
+                DateTime.UtcNow,
+                Parsed: null),
+        };
+        var store = new FakeFileStore(
+            FileStorageDestination.FileServer,
+            (_, fid) => fid == 10 ? catalogPath : null,
+            h => string.Equals(h, catalogPath, StringComparison.OrdinalIgnoreCase)
+                ? scanned.ToArray()
+                : Array.Empty<ScannedFile>());
+
+        var vm = CreateVm(10, catalogPath, store);
+        await vm.LoadProjectAsync(5);
+
+        var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
+        var unfiled = catalog.Children.OfType<ProjectFileNodeVm>().Single(f => f.IsUnfiled);
+        var alt = Assert.Single(unfiled.Children.OfType<AlternativeNodeVm>());
+        unfiled.IsExpanded = true;
+        alt.IsExpanded = true;
+
+        var second = Path.Combine(catalogPath, "b.txt");
+        await File.WriteAllTextAsync(second, "2");
+        scanned.Add(new ScannedFile(
+            FileStorageDestination.FileServer,
+            "b.txt",
+            second,
+            1,
+            DateTime.UtcNow,
+            Parsed: null));
+
+        await vm.MergeExpandedFolderFilesAsync(catalog);
+
+        Assert.Same(unfiled, catalog.Children.OfType<ProjectFileNodeVm>().Single(f => f.IsUnfiled));
+        Assert.True(unfiled.IsExpanded);
+        Assert.True(alt.IsExpanded);
+        Assert.Contains(unfiled.Children.OfType<AlternativeNodeVm>(), a => a.AlternativeName == "b.txt");
+        Assert.Equal(2, unfiled.Children.OfType<AlternativeNodeVm>().Count());
+    }
+
+    [Fact]
+    public async Task Merge_removes_missing_file_server_version_without_replacing_siblings()
+    {
+        var catalogPath = Path.Combine(_root, "Drawings");
+        Directory.CreateDirectory(catalogPath);
+        var keepPath = Path.Combine(catalogPath, "keep.txt");
+        var dropPath = Path.Combine(catalogPath, "drop.txt");
+        await File.WriteAllTextAsync(keepPath, "k");
+        await File.WriteAllTextAsync(dropPath, "d");
+
+        var scanned = new List<ScannedFile>
+        {
+            new(FileStorageDestination.FileServer, "keep.txt", keepPath, 1, DateTime.UtcNow, null),
+            new(FileStorageDestination.FileServer, "drop.txt", dropPath, 1, DateTime.UtcNow, null),
+        };
+        var store = new FakeFileStore(
+            FileStorageDestination.FileServer,
+            (_, fid) => fid == 10 ? catalogPath : null,
+            h => string.Equals(h, catalogPath, StringComparison.OrdinalIgnoreCase)
+                ? scanned.ToArray()
+                : Array.Empty<ScannedFile>());
+
+        var vm = CreateVm(10, catalogPath, store);
+        await vm.LoadProjectAsync(5);
+
+        var catalog = Assert.IsType<ProjectFolderNodeVm>(Assert.Single(vm.RootFolders));
+        var unfiled = catalog.Children.OfType<ProjectFileNodeVm>().Single(f => f.IsUnfiled);
+        unfiled.IsExpanded = true;
+        Assert.Equal(2, unfiled.Children.OfType<AlternativeNodeVm>().Count());
+
+        File.Delete(dropPath);
+        scanned.RemoveAll(s => s.FileName == "drop.txt");
+        await vm.MergeExpandedFolderFilesAsync(catalog);
+
+        Assert.Same(unfiled, catalog.Children.OfType<ProjectFileNodeVm>().Single(f => f.IsUnfiled));
+        Assert.True(unfiled.IsExpanded);
+        Assert.Contains(unfiled.Children.OfType<AlternativeNodeVm>(), a => a.AlternativeName == "keep.txt");
+        Assert.DoesNotContain(unfiled.Children.OfType<AlternativeNodeVm>(), a => a.AlternativeName == "drop.txt");
+    }
+
+    [Fact]
     public async Task Collapse_unloads_file_nodes_but_keeps_folder_and_probe()
     {
         var catalogPath = Path.Combine(_root, "Drawings");

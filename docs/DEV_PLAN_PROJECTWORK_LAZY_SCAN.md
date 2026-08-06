@@ -15,7 +15,7 @@
 2. **Unload on collapse** — remove File/Alt/Version nodes; keep folder skeleton + probe flags; re-scan on next expand.
 3. **Presence probe** — cheap check for physical files (for gray/purple/green) without building version nodes.
 4. **Parallel IO** — `SemaphoreSlim(4)` / DOP-4; enumerate off UI; integrate/unload on UI only.
-5. **Watcher (expanded only)** — `FileSystemWatcher` on **FullPath of each Expanded folder only** (`IncludeSubdirectories = false`). Debounce ~800ms with last-affected path → background reconcile of that open folder (and soft poll every ~20s for UNC misses). No watch / no file scan of collapsed folders.
-6. **Disk reconcile (add + remove)** — for each open folder: sync immediate disk subfolders (**add** user folders, **remove** missing `IsUserCreated`); refresh file nodes (**add** new scanned files, **drop** versions whose FileServer path disappeared). Catalog (DB) folders stay in the tree when missing on disk; probe/color updates.
+5. **Watcher (expanded only, structural)** — `FileSystemWatcher` on **FullPath of each Expanded folder only** (`IncludeSubdirectories = false`). NotifyFilter = `FileName | DirectoryName` only; events = Created / Deleted / Renamed (not Changed / LastWrite). Debounce ~800ms with last-affected path → background reconcile of that open folder. Soft poll every ~20s for UNC: **folders + probe only** (no file-node rebuild). No watch of collapsed folders.
+6. **Disk reconcile (differential)** — sync immediate disk subfolders (**add** user folders, **remove** missing `IsUserCreated`). On watcher path: **merge** file versions in-place (**add** missing, **drop** FileServer versions whose path disappeared) without `ClearFileNodes`, so file/alternative `IsExpanded` is preserved. Catalog (DB) folders stay in the tree when missing on disk; probe/color updates.
 
 No EF/schema changes. DEV-012 rules unchanged.

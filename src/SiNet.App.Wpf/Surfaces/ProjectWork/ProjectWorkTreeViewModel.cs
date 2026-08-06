@@ -418,6 +418,8 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 var path = affectedPath;
 
                 var token = _loadCts?.Token ?? CancellationToken.None;
+                // Poll (null path): folders + probe only. Watcher path: also merge files in-place.
+                var mergeFiles = path is not null;
                 var targets = ResolveReconcileTargets(path);
                 foreach (var folder in targets)
                 {
@@ -431,8 +433,12 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                     if (childFolders.Count > 0)
                         await ProbeFoldersParallelAsync(childFolders, token).ConfigureAwait(true);
 
-                    if (folder.IsExpanded && folder.LoadState == ProjectFolderLoadState.Expanded)
-                        await RefreshExpandedFolderFilesAsync(folder, token).ConfigureAwait(true);
+                    if (mergeFiles
+                        && folder.IsExpanded
+                        && folder.LoadState == ProjectFolderLoadState.Expanded)
+                    {
+                        await MergeExpandedFolderFilesAsync(folder, token).ConfigureAwait(true);
+                    }
 
                     RefreshHasFiles(folder);
                     var root = FindRoot(folder) ?? folder;
@@ -735,28 +741,146 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
     }
 
     /// <summary>
-    /// Re-lists files for an already-expanded folder and rebuilds version nodes (add + remove missing).
-    /// Keeps child folder nodes intact.
+    /// Differential file sync for an already-expanded folder: add missing versions, drop vanished
+    /// FileServer versions. Reuses existing file/alternative nodes so TreeView IsExpanded is preserved.
     /// </summary>
-    private async Task RefreshExpandedFolderFilesAsync(ProjectFolderNodeVm folder, CancellationToken token)
+    internal async Task MergeExpandedFolderFilesAsync(
+        ProjectFolderNodeVm folder,
+        CancellationToken token = default)
     {
-        ClearFileNodes(folder);
-        ProjectFolderDto? dto = null;
-        if (_folderDtos.TryGetValue(folder.FolderId, out var mapped))
+        ArgumentNullException.ThrowIfNull(folder);
+
+        var scanned = await ListFolderScannedFilesAsync(folder, token).ConfigureAwait(true);
+        var presentFileServerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sf in scanned)
         {
-            dto = mapped;
-            AddFileDefNodes(folder, dto);
+            if (sf.Source == FileStorageDestination.FileServer && !string.IsNullOrWhiteSpace(sf.NativeId))
+                presentFileServerIds.Add(sf.NativeId);
         }
 
-        int count;
-        if (folder.IsUserCreated || folder.FolderId <= 0 || dto is null)
-            count = await ScanFolderByPathAsync(folder, token).ConfigureAwait(true);
-        else
-            count = await ScanFolderAsync(_currentProjectId, folder, dto, token).ConfigureAwait(true);
+        PruneMissingFileServerVersions(folder, presentFileServerIds);
+
+        var defByKey = BuildDefByKey(folder);
+        var roles = RecoverScanClassifier.Classify(
+            scanned.Select(sf => new RecoverScanClassifier.FileStamp(
+                sf.FileName,
+                sf.SizeBytes,
+                sf.LastModified)));
+
+        var count = 0;
+        foreach (var sf in scanned)
+        {
+            if (token.IsCancellationRequested)
+                break;
+
+            if (roles.TryGetValue(sf.FileName, out var role) && role == RecoverTreeRole.Hidden)
+                continue;
+
+            IntegrateScannedFile(folder, sf, defByKey, roles.GetValueOrDefault(sf.FileName, RecoverTreeRole.NotRecover));
+            count++;
+        }
 
         folder.LoadState = ProjectFolderLoadState.Expanded;
         folder.HasPhysicalFiles = count > 0
+            || folder.Children.OfType<ProjectFileNodeVm>()
+                .Any(f => f.Children.OfType<AlternativeNodeVm>().Any(a => a.Children.Count > 0))
             || folder.Children.OfType<ProjectFolderNodeVm>().Any(c => c.HasPhysicalFiles);
+    }
+
+    private async Task<List<ScannedFile>> ListFolderScannedFilesAsync(
+        ProjectFolderNodeVm folder,
+        CancellationToken token)
+    {
+        _folderDtos.TryGetValue(folder.FolderId, out var dto);
+
+        if (folder.IsUserCreated || folder.FolderId <= 0 || dto is null)
+        {
+            if (string.IsNullOrWhiteSpace(folder.FullPath))
+                return [];
+
+            return await ListFileServerFilesAsync(folder.FullPath!, token).ConfigureAwait(true);
+        }
+
+        var destinations = new HashSet<FileStorageDestination> { FileStorageDestination.FileServer };
+        foreach (var f in dto.Files)
+            destinations.Add(f.StorageDestination);
+
+        if (!string.IsNullOrWhiteSpace(folder.FullPath)
+            && destinations.Count == 1
+            && destinations.Contains(FileStorageDestination.FileServer))
+        {
+            return await ListFileServerFilesAsync(folder.FullPath!, token).ConfigureAwait(true);
+        }
+
+        var scanned = new List<ScannedFile>();
+        await foreach (var sf in _index.ScanFolderAsync(
+                           _currentProjectId, folder.FolderId, destinations, token).ConfigureAwait(true))
+        {
+            if (token.IsCancellationRequested)
+                break;
+            scanned.Add(sf);
+        }
+
+        return scanned;
+    }
+
+    private async Task<List<ScannedFile>> ListFileServerFilesAsync(string folderPath, CancellationToken token)
+    {
+        var store = _index.GetStore(FileStorageDestination.FileServer);
+        if (store is null)
+            return [];
+
+        return await Task.Run(
+            async () =>
+            {
+                var list = new List<ScannedFile>();
+                await foreach (var sf in store.ListFilesAsync(folderPath, token).ConfigureAwait(false))
+                    list.Add(sf);
+                return list;
+            },
+            token).ConfigureAwait(true);
+    }
+
+    private Dictionary<(int, int), ProjectFileDefinitionDto> BuildDefByKey(ProjectFolderNodeVm folder)
+    {
+        var defByKey = new Dictionary<(int, int), ProjectFileDefinitionDto>();
+        if (!_folderDtos.TryGetValue(folder.FolderId, out var dto))
+            return defByKey;
+
+        foreach (var f in dto.Files)
+        {
+            if (f.ProjectType is { } t && f.Number is { } n)
+                defByKey[(t, n)] = f;
+        }
+
+        return defByKey;
+    }
+
+    private static void PruneMissingFileServerVersions(
+        ProjectFolderNodeVm folder,
+        IReadOnlySet<string> presentFileServerIds)
+    {
+        foreach (var file in folder.Children.OfType<ProjectFileNodeVm>().ToList())
+        {
+            foreach (var alt in file.Children.OfType<AlternativeNodeVm>().ToList())
+            {
+                foreach (var version in alt.Children.OfType<VersionNodeVm>().ToList())
+                {
+                    if (version.StorageDestination != FileStorageDestination.FileServer)
+                        continue;
+                    if (string.IsNullOrWhiteSpace(version.FullPath))
+                        continue;
+                    if (!presentFileServerIds.Contains(version.FullPath))
+                        alt.Children.Remove(version);
+                }
+
+                if (alt.Children.Count == 0)
+                    file.Children.Remove(alt);
+            }
+
+            if (file.IsUnfiled && file.Children.Count == 0)
+                folder.Children.Remove(file);
+        }
     }
 
     private void UnloadFolderContents(ProjectFolderNodeVm folder)
@@ -1086,6 +1210,12 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
                 fileNode.Children.Add(alt);
             }
 
+            if (FindExistingVersion(alt, sf) is not null)
+            {
+                folder.HasFiles = true;
+                return;
+            }
+
             var versionNumber = sf.Parsed?.Version ?? (alt.Children.Count + 1);
             var version = new VersionNodeVm
             {
@@ -1126,6 +1256,33 @@ public sealed class ProjectWorkTreeViewModel : ObservableObject, IActiveFileQuer
             Apply();
         else
             dispatcher.Invoke(Apply);
+    }
+
+    private static VersionNodeVm? FindExistingVersion(AlternativeNodeVm alt, ScannedFile sf)
+    {
+        foreach (var version in alt.Children.OfType<VersionNodeVm>())
+        {
+            if (version.StorageDestination != sf.Source)
+                continue;
+
+            var match = sf.Source switch
+            {
+                FileStorageDestination.FileServer =>
+                    !string.IsNullOrWhiteSpace(version.FullPath)
+                    && string.Equals(version.FullPath, sf.NativeId, StringComparison.OrdinalIgnoreCase),
+                FileStorageDestination.Acc =>
+                    !string.IsNullOrWhiteSpace(version.AccItemId)
+                    && string.Equals(version.AccItemId, sf.NativeId, StringComparison.Ordinal),
+                FileStorageDestination.GoogleDrive =>
+                    !string.IsNullOrWhiteSpace(version.DriveFileId)
+                    && string.Equals(version.DriveFileId, sf.NativeId, StringComparison.Ordinal),
+                _ => false,
+            };
+            if (match)
+                return version;
+        }
+
+        return null;
     }
 
     private ProjectFileNodeVm FindOrReuseFiledNode(ProjectFolderNodeVm folder, ProjectFileDefinitionDto def)

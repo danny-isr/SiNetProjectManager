@@ -5,9 +5,10 @@ namespace SiNet.Infrastructure.FileSystem.ProjectWork;
 
 /// <summary>
 /// <see cref="IFileServerWatcher"/> over <see cref="FileSystemWatcher"/>. Watches each folder path
-/// (non-recursive) and coalesces bursts of file events into a single debounced callback (default 800ms)
-/// carrying the last affected path. Not thread-affine — the callback fires on a timer thread; callers
-/// marshal to the UI thread as needed.
+/// (non-recursive) for structural name changes only (create/delete/rename) and coalesces bursts into a
+/// single debounced callback (default 800ms) carrying the last affected path. LastWrite/size changes
+/// are ignored so open editors (e.g. AutoCAD) do not thrash the tree. Not thread-affine — the callback
+/// fires on a timer thread; callers marshal to the UI thread as needed.
 /// </summary>
 public sealed class FileServerWatcher : IFileServerWatcher
 {
@@ -45,12 +46,10 @@ public sealed class FileServerWatcher : IFileServerWatcher
                     var watcher = new FileSystemWatcher(path)
                     {
                         IncludeSubdirectories = false,
-                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
-                                       | NotifyFilters.LastWrite | NotifyFilters.Size,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
                     };
                     watcher.Created += OnFileSystemEvent;
                     watcher.Deleted += OnFileSystemEvent;
-                    watcher.Changed += OnFileSystemEvent;
                     watcher.Renamed += OnFileSystemEvent;
                     watcher.EnableRaisingEvents = true;
                     _watchers.Add(watcher);
@@ -110,7 +109,6 @@ public sealed class FileServerWatcher : IFileServerWatcher
                 watcher.EnableRaisingEvents = false;
                 watcher.Created -= OnFileSystemEvent;
                 watcher.Deleted -= OnFileSystemEvent;
-                watcher.Changed -= OnFileSystemEvent;
                 watcher.Renamed -= OnFileSystemEvent;
                 watcher.Dispose();
             }
