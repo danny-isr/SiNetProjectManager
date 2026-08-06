@@ -46,10 +46,20 @@ public sealed class WmiMachineProfileProvider : IMachineProfileProvider
 
         var os = QueryFirst("SELECT Caption, Version, LastBootUpTime FROM Win32_OperatingSystem", warnings);
         var cpu = QueryFirst("SELECT Name, NumberOfLogicalProcessors FROM Win32_Processor", warnings);
-        var computer = QueryFirst("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem", warnings);
+        var computer = QueryFirst(
+            "SELECT TotalPhysicalMemory, Manufacturer, Model FROM Win32_ComputerSystem",
+            warnings);
+        var board = QueryFirst(
+            "SELECT Manufacturer, Product, Version, SerialNumber FROM Win32_BaseBoard",
+            warnings);
+        var bios = QueryFirst(
+            "SELECT SMBIOSBIOSVersion, Manufacturer, ReleaseDate FROM Win32_BIOS",
+            warnings);
 
         var (freeGb, totalGb) = ReadSystemDrive(warnings);
         var totalMemoryBytes = computer?.UInt64("TotalPhysicalMemory");
+        var memoryModules = ReadMemoryModules(warnings);
+        var mixedDimms = MemoryModuleFacts.HasMixedDimms(memoryModules);
 
         return new MachineProfileDto(
             Environment.MachineName,
@@ -65,7 +75,66 @@ public sealed class WmiMachineProfileProvider : IMachineProfileProvider
             ReadAutodeskProducts(warnings),
             ReadUptime(os),
             ReadLastWindowsUpdate(warnings),
-            warnings);
+            warnings,
+            computer?.String("Manufacturer"),
+            computer?.String("Model"),
+            board?.String("Manufacturer"),
+            board?.String("Product"),
+            board?.String("Version"),
+            board?.String("SerialNumber"),
+            bios?.String("Manufacturer"),
+            bios?.String("SMBIOSBIOSVersion"),
+            ParseWmiDate(bios?.String("ReleaseDate")),
+            ReadCpuMicrocode(warnings),
+            memoryModules,
+            mixedDimms);
+    }
+
+    private static IReadOnlyList<MemoryModuleDto> ReadMemoryModules(List<string> warnings)
+    {
+        var modules = Query(
+                "SELECT Manufacturer, PartNumber, Capacity, Speed, ConfiguredClockSpeed, BankLabel, DeviceLocator FROM Win32_PhysicalMemory",
+                warnings)
+            .Select(row =>
+            {
+                var capacityBytes = row.UInt64("Capacity");
+                return new MemoryModuleDto(
+                    row.String("Manufacturer"),
+                    row.String("PartNumber"),
+                    capacityBytes is { } c ? c / BytesPerGb : 0d,
+                    row.Int("Speed"),
+                    row.Int("ConfiguredClockSpeed"),
+                    row.String("BankLabel"),
+                    row.String("DeviceLocator"));
+            })
+            .Take(MemoryModuleFacts.MaxModulesInReport)
+            .ToList();
+
+        return modules;
+    }
+
+    private static string? ReadCpuMicrocode(List<string> warnings)
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(
+                @"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+            if (key?.GetValue("Update Revision") is not byte[] bytes)
+                return null;
+
+            var hex = MemoryModuleFacts.FormatMicrocode(bytes);
+            return string.IsNullOrWhiteSpace(hex) ? null : hex;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            warnings.Add($"CPU microcode: {ex.Message}");
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            warnings.Add($"CPU microcode: {ex.Message}");
+            return null;
+        }
     }
 
     private static (double FreeGb, double TotalGb) ReadSystemDrive(List<string> warnings)

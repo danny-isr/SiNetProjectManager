@@ -73,6 +73,18 @@ public sealed class WorkstationCrashReportFormatterTests
     }
 
     [Fact]
+    public void WhenRenderingMarkdownThenFirmwareAndIncidentsSectionsAreIncluded()
+    {
+        var markdown = WorkstationCrashReportFormatter.ToMarkdown(
+            BuildReport(AppCrash(Now.AddHours(-1), reportId: "R-9"), Wer(Now.AddHours(-1).AddSeconds(1), reportId: "R-9")));
+
+        Assert.Contains("BIOS", markdown, StringComparison.Ordinal);
+        Assert.Contains("## Incidents", markdown, StringComparison.Ordinal);
+        Assert.Contains("IncidentId", WorkstationCrashReportFormatter.ToCsv(
+            BuildReport(AppCrash(Now.AddHours(-1)))), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WhenThereAreNoEventsThenTheMarkdownSaysSoInsteadOfRenderingAnEmptyTable()
     {
         var markdown = WorkstationCrashReportFormatter.ToMarkdown(BuildReport());

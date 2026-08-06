@@ -248,7 +248,7 @@ public sealed class WorkstationCrashReportViewModel : ObservableObject
             _report = WorkstationCrashReportBuilder.Build(query, context, machine, events, generatedAt);
             ApplyReport(_report);
             HasReport = true;
-            Status = $"הדוח מוכן: {_report.Summary.TotalEvents} אירועים.";
+            Status = $"הדוח מוכן: {_report.Summary.IncidentCount} תקריות ({_report.Summary.TotalRecords} רשומות).";
         }
         catch (OperationCanceledException)
         {
@@ -280,13 +280,17 @@ public sealed class WorkstationCrashReportViewModel : ObservableObject
             " · ",
             new[]
             {
-                $"קריסות תוכנה: {summary.ApplicationCrashCount}",
-                $"אירועים קריטיים: {summary.CriticalCount}",
-                $"מקושרים: {summary.CorrelatedCount}",
-                $"ליום: {summary.CrashesPerDay.ToString("F2", CultureInfo.InvariantCulture)}",
+                $"תקריות: {summary.IncidentCount}",
+                $"קריסות Civil/מסונן: {summary.CivilApplicationCrashIncidents}",
+                $"תליות: {summary.ApplicationHangIncidents}",
+                $"אפליקציות אחרות: {summary.OtherApplicationCrashIncidents}",
+                $"חומרה: {summary.HardwareErrorIncidents}",
+                $"כיבויים: {summary.UnexpectedShutdownIncidents}",
+                $"ליום: {summary.IncidentsPerDay.ToString("F2", CultureInfo.InvariantCulture)}",
                 summary.HasBugCheck ? "מסך כחול: כן" : "מסך כחול: לא",
                 summary.HasHardwareEvents ? "אירועי חומרה: כן" : "אירועי חומרה: לא",
                 summary.HasUnexpectedShutdown ? "כיבוי לא תקין: כן" : "כיבוי לא תקין: לא",
+                summary.HasRepeatWheaBank ? "בנק WHEA חוזר: כן" : "בנק WHEA חוזר: לא",
             });
 
         var machine = report.Machine;
@@ -297,10 +301,11 @@ public sealed class WorkstationCrashReportViewModel : ObservableObject
             {
                 machine.MachineName,
                 machine.OsCaption,
+                string.IsNullOrWhiteSpace(machine.BiosVersion) ? null : $"BIOS {machine.BiosVersion}",
                 machine.CpuName,
                 $"{machine.TotalMemoryGb.ToString("F1", CultureInfo.InvariantCulture)} GB RAM",
                 gpu is null ? "GPU: לא זוהה" : $"{gpu.Name} ({gpu.DriverVersion ?? "?"})",
-            });
+            }.Where(s => !string.IsNullOrWhiteSpace(s))!);
     }
 
     private DateTimeOffset? BuildLastOccurrence()

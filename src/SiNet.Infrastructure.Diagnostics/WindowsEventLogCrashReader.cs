@@ -6,9 +6,8 @@ using SiNet.Application.Diagnostics;
 namespace SiNet.Infrastructure.Diagnostics;
 
 /// <summary>
-/// Reads crash-related records from the local <c>Application</c> and <c>System</c> event logs.
-/// Replaces the ad-hoc <c>Get-WinEvent</c> script with the same event ids plus the machine-health
-/// events that usually explain a repeatedly crashing workstation (DEV-010).
+/// Reads crash-related records from the local <c>Application</c> and <c>System</c> event logs
+/// (DEV-010 + DEV-014 WHEA payload retention).
 /// </summary>
 public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
 {
@@ -19,7 +18,6 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
     private static readonly int[] ApplicationEventIds = [1000, 1001, 1002, 1026];
     private static readonly int[] SystemEventIds = [41, 55, 6008, 1001, 17, 18, 19, 7, 11, 153];
 
-    /// <summary>Provider fragment + accepted event ids. Anything else in the raw query is dropped.</summary>
     private static readonly (string ProviderFragment, int[] EventIds)[] SystemAllowList =
     [
         ("Kernel-Power", [41]),
@@ -43,14 +41,10 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
                 var results = new List<WorkstationCrashEventDto>();
 
                 if (query.Scope != CrashReportScope.MachineOnly)
-                {
                     results.AddRange(Read(ApplicationLog, ApplicationEventIds, query, cancellationToken));
-                }
 
                 if (query.Scope != CrashReportScope.ApplicationOnly)
-                {
                     results.AddRange(Read(SystemLog, SystemEventIds, query, cancellationToken));
-                }
 
                 return results.OrderByDescending(e => e.TimeCreated).ToList();
             },
@@ -76,25 +70,14 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
 
             using var record = reader.ReadEvent();
             if (record is null)
-            {
                 break;
-            }
 
             var dto = Map(record, logName);
             if (dto is null)
-            {
                 continue;
-            }
 
             if (logName == SystemLog && !IsAllowedSystemEvent(dto.ProviderName, dto.EventId))
-            {
                 continue;
-            }
-
-            if (logName == ApplicationLog && !MatchesAppFilter(dto, query.AppNameFilters))
-            {
-                continue;
-            }
 
             results.Add(dto);
         }
@@ -117,39 +100,27 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
             providerName.Contains(entry.ProviderFragment, StringComparison.OrdinalIgnoreCase)
             && entry.EventIds.Contains(eventId));
 
-    private static bool MatchesAppFilter(
-        WorkstationCrashEventDto dto,
-        IReadOnlyList<string> filters)
-    {
-        if (filters.Count == 0)
-        {
-            return true;
-        }
-
-        var haystack = string.Join(
-            ' ',
-            new[] { dto.AppName, dto.AppPath, dto.Message }.Where(v => !string.IsNullOrWhiteSpace(v)));
-
-        return filters.Any(f =>
-            !string.IsNullOrWhiteSpace(f)
-            && haystack.Contains(f.Trim(), StringComparison.OrdinalIgnoreCase));
-    }
-
     private static WorkstationCrashEventDto? Map(EventRecord record, string logName)
     {
         if (record.TimeCreated is not { } timeCreated)
-        {
             return null;
-        }
 
-        var data = ReadEventData(record);
+        var xml = TryGet(record.ToXml);
+        var data = ReadEventData(xml);
+        var provider = record.ProviderName ?? string.Empty;
+        WheaDetailsDto? whea = null;
+        if (provider.Contains("WHEA-Logger", StringComparison.OrdinalIgnoreCase)
+            && record.Id is 17 or 18 or 19)
+        {
+            whea = WheaEventParser.TryParse(xml, record.Id);
+        }
 
         return new WorkstationCrashEventDto
         {
             TimeCreated = new DateTimeOffset(timeCreated),
             LogName = logName,
             EventId = record.Id,
-            ProviderName = record.ProviderName ?? string.Empty,
+            ProviderName = provider,
             LevelDisplayName = TryGet(() => record.LevelDisplayName),
             AppName = data.Get("AppName", 0),
             AppVersion = data.Get("AppVersion", 1),
@@ -161,20 +132,14 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
             ModulePath = data.Get("ModulePath", 11),
             ReportId = data.Get("IntegratorReportId", 12) ?? data.Get("ReportId", 12),
             Message = Truncate(TryGet(record.FormatDescription)),
+            Whea = whea,
         };
     }
 
-    /// <summary>
-    /// Application Error / Hang records expose either named <c>Data</c> elements (Windows 10+) or the
-    /// legacy positional template. Both are supported so the report is not empty on older builds.
-    /// </summary>
-    private static EventDataBag ReadEventData(EventRecord record)
+    private static EventDataBag ReadEventData(string? xml)
     {
-        var xml = TryGet(record.ToXml);
         if (string.IsNullOrWhiteSpace(xml))
-        {
             return EventDataBag.Empty;
-        }
 
         try
         {
@@ -201,9 +166,7 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
     private static string? Truncate(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-        {
             return null;
-        }
 
         var trimmed = value.Trim();
         return trimmed.Length <= MessageCap ? trimmed : trimmed[..MessageCap] + "…";
@@ -233,14 +196,10 @@ public sealed class WindowsEventLogCrashReader : IWorkstationEventLogReader
         public string? Get(string name, int positionalIndex)
         {
             if (named.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value))
-            {
                 return value.Trim();
-            }
 
             if (named.Count > 0 || positionalIndex >= positional.Count)
-            {
                 return null;
-            }
 
             var fallback = positional[positionalIndex];
             return string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim();

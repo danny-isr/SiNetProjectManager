@@ -34,7 +34,7 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 | DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader integrity checklist later |
 | DEV-012 | ProjectWork: show disk-only folders/files, purple/gray colors, delete empty user folders only | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) | With that feature ship |
 | DEV-013 | ProjectWork lazy scan: expand-on-demand, unload on collapse, probe colors, DOP-4 parallel IO | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_LAZY_SCAN.md`](./DEV_PLAN_PROJECTWORK_LAZY_SCAN.md) | With that feature ship |
-| DEV-014 | Crash report round 2: incident grouping (fix «incidents per day»), WHEA bank/address payload, BIOS+DIMM facts — then context form, plugin inventory, CER/WER/dump index | Approved — Ship 1 (C+B+A) ready to implement on `development` | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Two ships, one bump each |
+| DEV-014 | Crash report round 2: incident grouping (fix «incidents per day»), WHEA bank/address payload, BIOS+DIMM facts — then context form, plugin inventory, CER/WER/dump index | Ship 1 (C+B+A) implemented on `development` — Ship 2 pending | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Two ships, one bump each |
 
 ## 3. Done / cancelled
 

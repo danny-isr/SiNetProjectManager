@@ -2,8 +2,8 @@
 
 > **Title:** Workstation crash report — deep diagnostics (DEV-014)
 > **Date:** 06.08.2026
-> **Updated:** 06.08.2026
-> **Status:** Approved (principles) — ready to implement on `development`
+> **Updated:** 06.08.2026 (Ship 1 implemented)
+> **Status:** Ship 1 (C+B+A) implemented on `development` — Ship 2 (E+D+F) not started  
 > **Scope:** Extends the shipped DEV-010 crash report with the data an external hardware/Civil 3D analyst asked for: BIOS/firmware facts, WHEA payload fields, an artifact index, per-crash human context, and a corrected incident-counting model. Local machine only. No remote inspection, no diagnosis by the app, no file copying.
 
 Related: [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) (base feature — this document extends §2, §4 and §8 of it), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md), [`SETTINGS.md`](./SETTINGS.md), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md).

@@ -94,6 +94,59 @@ public sealed class WorkstationCrashReportBuilderTests
     }
 
     [Fact]
+    public void WhenAppErrorAndWerShareReportIdThenTheyFormOneIncident()
+    {
+        var report = Build(
+        [
+            AppCrash(Now.AddMinutes(-30), reportId: "R-1"),
+            Wer(Now.AddMinutes(-30).AddSeconds(2), reportId: "R-1"),
+        ]);
+
+        Assert.Equal(1, report.Incidents.Count);
+        Assert.Equal(CrashIncidentKind.ApplicationCrash, report.Incidents[0].Kind);
+        Assert.Equal(2, report.Incidents[0].RecordCount);
+        Assert.All(report.Events, e => Assert.Equal(report.Incidents[0].IncidentId, e.IncidentId));
+        Assert.Equal(1, report.Summary.IncidentCount);
+        Assert.Equal(report.Summary.IncidentsPerDay, Math.Round(1 / 14d, 2));
+    }
+
+    [Fact]
+    public void WhenKernelPowerAndEventLogAreCloseThenTheyFormOneShutdownIncident()
+    {
+        var report = Build(
+        [
+            Critical(Now.AddHours(-2), "Microsoft-Windows-Kernel-Power", 41),
+            Critical(Now.AddHours(-2).AddMinutes(1), "EventLog", 6008),
+        ]);
+
+        Assert.Equal(1, report.Summary.UnexpectedShutdownIncidents);
+        Assert.Equal(1, report.Incidents.Count);
+        Assert.Equal(CrashIncidentKind.UnexpectedShutdown, report.Incidents[0].Kind);
+    }
+
+    [Fact]
+    public void WhenOtherAppCrashesThenTheyAreCountedSeparately()
+    {
+        var report = Build(
+        [
+            AppCrash(Now.AddHours(-1)),
+            new WorkstationCrashEventDto
+            {
+                TimeCreated = Now.AddHours(-2),
+                LogName = "Application",
+                EventId = 1000,
+                ProviderName = "Application Error",
+                AppName = "chrome.exe",
+                ModuleName = "chrome.dll",
+                ExceptionCode = "0xc0000005",
+            },
+        ]);
+
+        Assert.Equal(1, report.Summary.CivilApplicationCrashIncidents);
+        Assert.Equal(1, report.Summary.OtherApplicationCrashIncidents);
+    }
+
+    [Fact]
     public void WhenBugCheckIsPresentThenTheSummaryFlagsIt()
     {
         var report = Build([Critical(Now.AddHours(-2), "BugCheck", 1001)]);
@@ -164,12 +217,21 @@ public sealed class WorkstationCrashReportBuilderTests
         ["AutoCAD Civil 3D 2026 (26.0)"],
         TimeSpan.FromHours(30),
         new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero),
-        []);
+        [],
+        SystemManufacturer: "Dell Inc.",
+        SystemModel: "Precision 5860",
+        BiosVersion: "1.2.3",
+        MemoryModules:
+        [
+            new MemoryModuleDto("Samsung", "M123", 32d, 4800, 5600, "BANK 0", "DIMM_A1"),
+            new MemoryModuleDto("Samsung", "M123", 32d, 4800, 5600, "BANK 1", "DIMM_A2"),
+        ]);
 
     internal static WorkstationCrashEventDto AppCrash(
         DateTimeOffset time,
         string? module = "acdb25.dll",
-        string? message = null)
+        string? message = null,
+        string? reportId = null)
         => new()
         {
             TimeCreated = time,
@@ -181,6 +243,19 @@ public sealed class WorkstationCrashReportBuilderTests
             ModuleName = module,
             ExceptionCode = "0xc0000005",
             Message = message,
+            ReportId = reportId,
+        };
+
+    internal static WorkstationCrashEventDto Wer(DateTimeOffset time, string? reportId = null)
+        => new()
+        {
+            TimeCreated = time,
+            LogName = "Application",
+            EventId = 1001,
+            ProviderName = "Windows Error Reporting",
+            AppName = "acad.exe",
+            ReportId = reportId,
+            Message = "WER bucket",
         };
 
     internal static WorkstationCrashEventDto Critical(DateTimeOffset time, string provider, int eventId)
