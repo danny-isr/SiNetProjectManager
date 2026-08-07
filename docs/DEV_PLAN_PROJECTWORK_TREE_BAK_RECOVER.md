@@ -3,7 +3,7 @@
 > **Title:** ProjectWork («עבודה» / עץ קבצים) — wishlist for development  
 > **Date:** 03.08.2026  
 > **Updated:** 03.08.2026  
-> **Status:** On `release` tip (cited ship **1.0.6**; tip App.Wpf **1.0.22**) — **Needs Review:** operator verification; ignored-folders (slice F) postponed (see [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
+> **Status:** On `release` tip (cited ship **1.0.6**; tip App.Wpf **1.0.23**) -- **Needs Review:** operator verification; ignored-folders (slice F) postponed (see [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
 > **Scope:** `SiNet.App.Wpf` ProjectWork tree + file scan (`FileServerFileStore` / `FileServerSidecarMetadata`). Operator wishlist from PROD pilot + field scan of `U:\יבנה\(1844)יבנה_מזרח\תכנון`. **Documentation only until DEV implements.**  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),  

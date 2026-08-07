@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
 
@@ -12,12 +13,14 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// </summary>
 internal sealed class WpfEmailFilingProjectPickerHost(
     IProjectQueryService projectQuery,
-    IProjectFilterOptionsService filterOptions) : IEmailFilingProjectPickerHost
+    IProjectFilterOptionsService filterOptions,
+    IAppSettingsService? appSettings = null) : IEmailFilingProjectPickerHost
 {
     private readonly IProjectQueryService _projectQuery =
         projectQuery ?? throw new ArgumentNullException(nameof(projectQuery));
     private readonly IProjectFilterOptionsService _filterOptions =
         filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
+    private readonly IAppSettingsService? _appSettings = appSettings;
 
     public bool IsAvailable => true;
 
@@ -38,7 +41,11 @@ internal sealed class WpfEmailFilingProjectPickerHost(
     private ProjectSummaryDto? ShowDialog()
     {
         var localContext = new InMemoryCurrentProjectContext();
-        var selector = new ProjectSelectorViewModel(_projectQuery, _filterOptions, localContext);
+        var selector = new ProjectSelectorViewModel(
+            _projectQuery,
+            _filterOptions,
+            localContext,
+            appSettings: _appSettings);
         _ = selector.InitializeAsync();
 
         var window = new Window

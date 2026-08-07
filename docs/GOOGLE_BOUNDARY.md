@@ -1,8 +1,10 @@
 # Google Boundary
 
-> **Status:** Active — ProjectWork Drive + MasterPlan Reports Sheets (S3, 2026-07-28)  
+> **Status:** Active -- ProjectWork Drive + MasterPlan Reports Sheets (S3, 2026-07-28)
+> **Date:** 28.07.2026
+> **Updated:** 07.08.2026 (As-Is -- desktop host vs V2 reference; §2.1 wording)
+> **Scope:** Current code truth for Google/Gmail/Drive/Sheets across App.Wpf (production desktop) and V2 reference host.
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
-> **Updated:** 07.08.2026 (As-Is -- desktop host vs V2 reference)
 
 This document records the **current code truth** for Google/Gmail/Drive/Sheets across the clean stack
 and the legacy host. It exists to prevent doc/code drift while the refactor is split between:
@@ -61,12 +63,10 @@ decision for any behavior change.
 
 | Host | Google runtime path | `AddSiNetGoogle()` | `AddSiNetSecrets()` | Result |
 | --- | --- | --- | --- | --- |
-| `SiNetProjectManagerV2` production host | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` for active legacy flows; native Gmail module is registered only for future New System consumers | Yes, via `AddSiNetNewSystemGraph()` | Yes, via `AddSiNetNewSystemGraph()` | Vault and native Gmail auth/session services are available to the New System graph, but production Google behavior remains legacy until a window/runtime slice explicitly adopts them |
-| `SiNet.App.Wpf` standalone New System | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` (+ Drive/Sheets for ProjectWork / Reports) | Yes | Yes | Production New System host for the limited pilot; vault-first client-secrets; GmailSend adoption still gated by G-Policy **except** Proposal `SendQuoteToClient` (see §4.1) |
+| `SiNetProjectManagerV2` (reference / hybrid; **not** the shipped desktop) | Legacy `GoogleService` / `GoogleAuthService` / `GmailOutboundMailService` for V2 Legacy flows; native Gmail module may also be registered for the deprecated V2 New System graph | Yes, via `AddSiNetNewSystemGraph()` when that path runs | Yes, via `AddSiNetNewSystemGraph()` | Code reference only -- **not** the production publish channel. Production desktop Google path is `SiNet.App.Wpf` (row below). |
+| **`SiNet.App.Wpf` (production desktop host)** | Native `GmailClientProvider` / `GmailEmailGateway` / `GmailEmailSender` (+ Drive/Sheets for ProjectWork / Reports) | Yes | Yes | **Production** New System host for the limited pilot; vault-first client-secrets; GmailSend adoption still gated by G-Policy **except** Proposal `SendQuoteToClient` (see §4.1) |
 
-Implication: native Gmail/Drive/Sheets on standalone are the **New System pilot** path. Legacy
-`GoogleService` remains the V2 Legacy production path until cutover. G-Policy still blocks broad
-Send/Reply/Forward window adoption in New System WPF.
+Implication: native Gmail/Drive/Sheets on **`SiNet.App.Wpf`** are the **production desktop** Google path for the pilot. Legacy `GoogleService` remains only on the **V2 reference** host. G-Policy still blocks broad Send/Reply/Forward window adoption in New System WPF.
 
 ## 3. Native Gmail Module Boundary
 
@@ -173,7 +173,7 @@ Rules:
 - No WPF window should resolve `GmailClientProvider` directly for connect/state behavior.
 - No gateway should orchestrate OAuth on its own; gateways consume the shared provider/session.
 - The standalone harness keeps `SINET_GOOGLE_TOKEN_STORE` as a token-store override only.
-- The legacy production host now also registers the native Gmail module inside the New System graph,
+- The V2 reference host also registers the native Gmail module inside the New System graph,
   but that registration is **additive foundation wiring only**. It does not switch active legacy
   Google flows away from `GoogleService`.
 

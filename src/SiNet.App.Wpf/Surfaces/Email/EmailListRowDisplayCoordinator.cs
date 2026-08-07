@@ -113,6 +113,37 @@ internal sealed class EmailListRowDisplayCoordinator
         return true;
     }
 
+    /// <summary>
+    /// Injects a task-target row that is not on the current Gmail page, then selects it.
+    /// Keeps PendingTaskSelection so later ReplaceRows re-applies the inbox id patch.
+    /// </summary>
+    public EmailListRow InjectAndSelectTaskRow(EmailListRow row, int inboxMessageId)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var withInbox = inboxMessageId > 0 && row.InboxMessageId != inboxMessageId
+            ? row with { InboxMessageId = inboxMessageId }
+            : row;
+
+        var existing = FindRowById(withInbox.Id);
+        if (existing is null)
+        {
+            _owner.Emails.Insert(0, withInbox);
+            _applyGrouping();
+            _rebuildDisplayGroups();
+        }
+        else
+        {
+            withInbox = existing.InboxMessageId == inboxMessageId
+                ? existing
+                : _owner.PatchRowInboxMessageId(existing.Id, inboxMessageId) ?? existing;
+        }
+
+        _owner.SelectedEmail = FindRowById(withInbox.Id) ?? withInbox;
+        _owner.NotifyUnreadDisplayProperties();
+        return _owner.SelectedEmail;
+    }
+
     private (EmailListRow? Match, string MatchedBy) FindByInboxCorrelation(
         string? messageUniqueId,
         string? internetMessageId,
@@ -124,12 +155,13 @@ internal sealed class EmailListRowDisplayCoordinator
         if (!string.IsNullOrWhiteSpace(messageUniqueId) || !string.IsNullOrWhiteSpace(internetMessageId))
         {
             match = _owner.Emails.FirstOrDefault(row =>
-                EmailMessageIdMatcher.Matches(row.InternetMessageId, internetMessageId)
+                (!string.IsNullOrWhiteSpace(messageUniqueId)
+                    && string.Equals(row.Id, messageUniqueId, StringComparison.OrdinalIgnoreCase))
+                || EmailMessageIdMatcher.Matches(row.InternetMessageId, internetMessageId)
                 || EmailMessageIdMatcher.Matches(row.InternetMessageId, messageUniqueId));
-            if (match is not null)
-            {
-                return (match, "messageId");
-            }
+            // When message ids were provided, never fall back to subject/from
+            // (FileMaterial six decisions — exact id only; avoids twin subject+from picks).
+            return (match, match is null ? "(none)" : "messageId");
         }
 
         if (!string.IsNullOrWhiteSpace(subject))
@@ -206,6 +238,18 @@ internal sealed class EmailListRowDisplayCoordinator
                 _owner.NotifyUnreadDisplayProperties();
                 return;
             }
+
+            // Pending target not on this page yet (may be injected later via GetById/rfc822msgid).
+            // Do not replace with the first row — that stole the task email in manual QA.
+            if (_owner.SelectedEmail is { } current
+                && PendingMatchesRow(pending, current))
+            {
+                _owner.NotifyUnreadDisplayProperties();
+                return;
+            }
+
+            _owner.NotifyUnreadDisplayProperties();
+            return;
         }
 
         var projectGroup = _owner.GetProjectGroup();
@@ -217,6 +261,23 @@ internal sealed class EmailListRowDisplayCoordinator
               ?? selectionPool.FirstOrDefault()
               ?? projectGroup?.Emails.FirstOrDefault();
         _owner.NotifyUnreadDisplayProperties();
+    }
+
+    private static bool PendingMatchesRow(EmailListViewModel.EmailTaskSelectionTarget pending, EmailListRow row)
+    {
+        if (!string.IsNullOrWhiteSpace(pending.MessageUniqueId)
+            && string.Equals(row.Id, pending.MessageUniqueId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(pending.InternetMessageId)
+            && EmailMessageIdMatcher.Matches(row.InternetMessageId, pending.InternetMessageId))
+        {
+            return true;
+        }
+
+        return pending.InboxMessageId is int id && id > 0 && row.InboxMessageId == id;
     }
 
     public void RefreshRowBackgrounds()

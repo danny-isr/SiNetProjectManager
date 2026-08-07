@@ -2,7 +2,7 @@
 
 > **Title:** Email grouping order/membership, project-switch stuck detail, refresh enablement, ProjectSelector widths  
 > **Date:** 06.08.2026  
-> **Status:** On `release` tip @ `3bfe152` (ship **1.0.22**) — **Needs Review:** operator/pilot verify ([`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b); local WIP may extend selector polish
+> **Status:** On `release` tip @ `127dc0e` (ship **1.0.23**) -- **Needs Review:** operator/pilot verify ([`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b); may have further local polish
 > **Scope:** `SiNet.App.Wpf` Email surface + shared `ProjectSelectorView`; per-user `settings.json`. No SQL schema.  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) (DEV-016), [`PROJECTS.md`](./PROJECTS.md), [`SETTINGS.md`](./SETTINGS.md)
@@ -54,4 +54,4 @@ Main window size unchanged.
 
 **RTL fix:** resize uses absolute screen mouse delta from `DragStarted` (not inverted `HorizontalChange`) so the grip follows the mouse smoothly instead of jumping min↔max.
 
-**Persist fix:** write widths on drag-completed + dispose-if-dirty (not only 400ms debounce, which was lost on close); load sync in selector ctor; set VM properties from the Thumb handlers.
+**Persist fix:** write widths on drag-completed + dispose-if-dirty; load sync in selector ctor; set VM properties from the Thumb handlers. Widths are **shared for all ProjectSelector hosts** (not Email-only).

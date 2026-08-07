@@ -69,9 +69,18 @@ public sealed class EmailDetailAttachmentItem : ObservableObject
 
     public ObservableCollection<EmailProjectAlternativeOption> AvailableAlternatives { get; }
 
-    public string DisplayLabel => string.IsNullOrWhiteSpace(Size)
-        ? $"{FileName}  ({Kind})"
-        : $"{FileName}  ({Kind}, {Size})";
+    public string DisplayLabel
+    {
+        get
+        {
+            var displayName = string.Equals(FileName, "00_Email.pdf", StringComparison.OrdinalIgnoreCase)
+                ? "תוכן המייל (PDF)"
+                : FileName;
+            return string.IsNullOrWhiteSpace(Size)
+                ? $"{displayName}  ({Kind})"
+                : $"{displayName}  ({Kind}, {Size})";
+        }
+    }
 
     public bool IsTagged => ProjectFileId is > 0;
 

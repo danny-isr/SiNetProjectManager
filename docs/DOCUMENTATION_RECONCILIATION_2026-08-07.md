@@ -2,29 +2,44 @@
 
 > **Title:** Documentation reconciliation (As-Is alignment)
 > **Date:** 07.08.2026
-> **Status:** Active / Current Source of Truth (for this reconciliation round)
-> **Classification:** Active / Current Source of Truth (ledger) + points to corrected Active docs
-> **Scope:** Align repository documentation with code, scripts, branches, and publish process. **Documentation only** -- no code, XAML, DI, DB, migrations, seed, publish scripts, GitHub settings, commit, push, or PR in this round.
+> **Updated:** 07.08.2026 (post-push follow-up -- tip advanced to `127dc0e` / App.Wpf **1.0.23**)
+> **Status:** Active (follow-up corrections) -- original measurement block below is a **Historical Snapshot**
+> **Classification:** Active ledger for contradiction tracking; §1 original baseline = Historical Snapshot
+> **Scope:** Align repository documentation with code, scripts, branches, and publish process. The first pass was documentation-first; a later mixed git commit also included pre-existing ProjectSelector WIP (see §1.2).
 
 ---
 
-## 1. Baseline (verified)
+## 1. Baselines
+
+### 1.0 Current tip (verified post-push follow-up)
 
 | Item | Value |
 | --- | --- |
-| Reconciliation date | **2026-08-07** |
-| Remote tip (`origin/release`) | `3bfe152ea3527d37662d08a60358123ce477f0a5` -- `chore(release): ship SiNet.App.Wpf 1.0.22 after email triage and crash accuracy` |
-| Remote tip (`origin/development`) | **Identical** to `origin/release` (`3bfe152`) -- `git rev-list --left-right --count` = `0 0` |
-| `origin/SiWorkNet10` | `2dfef9e3ab9564ce8abfbc29acd979a9db519682` -- **38 commits behind** `origin/release` |
-| GitHub default branch | **`SiWorkNet10`** (via `git remote show origin` -- `HEAD branch`) -- **not** changed in this round |
-| Product version on tip | `SiNet.App.Wpf` `<Version>` **1.0.22** |
-| Local workspace note | Checkout may lag tip with unrelated WIP; **remote tip** is the product baseline for claims |
+| Verified | **2026-08-07** (follow-up after operator review) |
+| Remote tip (`origin/release`) | `127dc0e101bf36d071622ea8761ab24b5084d342` -- `chore(release): ship SiNet.App.Wpf 1.0.23 after ProjectSelector width persistence` |
+| Remote tip (`origin/development`) | **Identical** to `origin/release` (`127dc0e`) -- left-right count `0 0` |
+| `origin/SiWorkNet10` | `2dfef9e` -- **41 commits behind** `origin/release` |
+| GitHub default branch | Still **`SiWorkNet10`** (not changed) |
+| Product version on tip | `SiNet.App.Wpf` `<Version>` **1.0.23** |
 
-**Confirmed vs prior assumptions:**
+### 1.1 Original reconciliation baseline (Historical Snapshot)
 
-- `release` = ship branch; `development` = DEV branch; tips identical at `3bfe152` -- **confirmed**.
-- `SiWorkNet10` 38 behind, still default, deprecated -- **confirmed**.
-- Version **1.0.22** on tip -- **confirmed** (local lagging checkout may still show 1.0.21).
+Measured at the start of the docs-only pass (same calendar day). **Do not** treat as current tip.
+
+| Item | Value |
+| --- | --- |
+| Remote tip then | `3bfe152` -- ship App.Wpf **1.0.22** |
+| `SiWorkNet10` then | **38 commits** behind `release` |
+| Product version then | **1.0.22** |
+
+### 1.2 Git commit note (mixed commit)
+
+Wording for the push that landed the reconciliation:
+
+- During the documentation review itself, **no additional product code was authored as part of the review**.
+- Commit `13e12ac` (`fix(projects): persist ProjectSelector widths and reconcile As-Is docs`) was a **mixed commit**: documentation changes **plus** pre-existing WIP (`ProjectSelector*`, `EmailWindowViewModel`, tests).
+- Accurate statement: **לא נכתב קוד נוסף במסגרת סקירת התיעוד, אך ה־commit כלל WIP קיים.**
+- Later ship `127dc0e` bumped App.Wpf to **1.0.23** after that work.
 
 **Dimension glossary (mandatory):**
 
@@ -34,7 +49,7 @@
 | Build configuration | `Debug`, `Release` | Compile / `#if DEBUG` |
 | Runtime environment | Development, Production | Vault, DB, ACC, Gmail, Drive |
 | Rollout stage | Local -- Candidate -- Pilot -- Production -- Wide | Ops approval |
-| Product version | `1.0.22` | Component `<Version>` |
+| Product version | e.g. `1.0.23` (current tip) | Component `<Version>` |
 
 ---
 
@@ -103,13 +118,26 @@
 
 ## 5. Needs Review (remaining)
 
-1. **Pilot/ops:** Whether UNC share and pilot PCs actually run App.Wpf **1.0.22** (ship commits -- install proof).
+1. **Pilot/ops:** Whether UNC share and pilot PCs actually run App.Wpf **1.0.23** (ship commits -- install proof).
 2. **`SiNet.secrets` path** on the share -- still under `SiNetProjectManagerV2\` or moved.
 3. **GitHub default branch** change away from `SiWorkNet10` (separate recommendation).
 4. **DEV-008/009/010/011** completeness vs tip (Implementing rows).
-5. **Workflow business** stage-by-stage redesign -- postponed; do not invent business rules from seed alone.
-6. **ServiceCatalog** path still points at legacy `SiNetSQL` seed class -- confirm New System seed ownership narrative in a later docs pass.
-7. Local workspace WIP (ProjectSelector polish) vs remote tip -- do not merge assumptions.
+5. **Workflow business** stage-by-step redesign -- postponed; do not invent business rules from seed alone.
+6. **ServiceCatalog** legacy SiNetSQL seed class path -- confirm New System seed ownership narrative in a later docs pass.
+7. `MoveToProject-Decisions-2026-05-24.md` -- linked from V2 Docs README but **file not in repo**. **Interim/canonical FileMaterial Target:** [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) (2026-08-07). Restore historical decisions file from git/Archive if still needed for Legacy audit.
+
+### 5.1 Follow-up fixes (operator review 2026-08-07)
+
+| ID | Issue | Fix |
+| --- | --- | --- |
+| R-019 | Ledger still claimed Current SoT at `3bfe152` / 1.0.22 after tip advanced | §1.0 current tip `127dc0e` / **1.0.23**; original baseline Historical |
+| R-020 | Mixed commit wording | §1.2 -- docs review did not author new product code; commit included existing WIP |
+| R-021 | `GOOGLE_BOUNDARY` §2.1 called V2 "production host" | Renamed to V2 reference / hybrid host |
+| R-022 | ServiceCatalog desktop publish script | Point to `src/SiNet.App.Wpf/publish-desktop.ps1` |
+| R-023 | `DEPLOYMENT.md` SecretImport path `src\SiNet.SecretImport\...` | Correct to `SiNet.SecretImport\publish-tool.ps1` |
+| R-024 | `SECRETS-MANAGEMENT` said publish from DEV machine | PROD workstation only |
+| R-025 | Broken links (MoveToProject-Decisions, Email-ManualQA runbook, chat GUID) | Marked / repaired |
+| R-026 | Missing Date/Status/Scope on updated docs | Metadata filled on deficient headers |
 
 ---
 

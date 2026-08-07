@@ -470,7 +470,34 @@ Outcomes for skip: reuse `SkippedNoAttachments` / add clear status text, or `Ski
 
 **Fix:** `TryShortCircuitAlreadyProcessedAsync` must **not** short-circuit `Uploaded` when body attachment (`AttachmentIndex = -11`) has no `AccItemId` and `IEmailBodyPdfRenderer` is registered. Re-enter ingest to call `TryUploadBodyPdfAsync` again. Do not demote `Moved`.
 
-**UI note:** `00_Email.pdf` lives in the **message folder** (not `Attachments/`) and is not taggable in the strip.
+**UI note (historical As-Is before FileMaterial six decisions):** `00_Email.pdf` lived in the message folder and was not taggable. **Target:** selectable as «תוכן המייל (PDF)» when the operator opts in — still not business material by default. Full rules: [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md).
+
+---
+
+## FileMaterial / MoveToProject — six decisions (pointer)
+
+> **Canonical Target (full):** [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md)  
+> **Date:** 2026-08-07  
+> **Status:** Documentation source of truth for FileMaterial filing. Do not implement from this short summary alone.
+
+### Existing State (As-Is gaps — historical)
+
+| Decision | As-Is (pre–six decisions) |
+| --- | --- |
+| **1. AlreadyMovedToProject** | Truthy Move metadata → always failure — no compare to current ProjectFile / alt target. |
+| **2. TotalCount + reconcile** | `TotalCount` only tagged rows with AccItemId (or ZIP); missing AccItemId excluded. |
+| **3. FiledButMoveMetadataFailed** | Metadata write fail → warning only; still counted moved. |
+| **4. Dismiss + workflow** | Dismiss on `AllFilesTransferred` even when Complete fails / advance pending. |
+| **5. Email body PDF** | `00_Email.pdf` not taggable; empty-email auto-`Moved`. |
+| **6. Direct email locate** | Correlation against **current Gmail page** only; subject/from fallback possible. |
+
+### Target (six decisions) — summary only
+
+See [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) §§1–15 for full flow, success/open conditions, TotalCount, reconcile, metadata fail, dismiss, body PDF, locate, dropped mechanisms, and tests.
+
+### Out of Scope / Dropped
+
+Documented in [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) §15 (no new retry/fallback/locator/pending table; no page scan; no subject/from pick; no re-upload after verify; no default body-as-business; no dismiss on AllFilesTransferred alone; no immediate deletion of inactive code).
 
 ---
 

@@ -54,3 +54,17 @@ During FileQuoteMaterial QA (2026-07), a proposed fix treated SQL `ProjectId` as
 - Move gate: `EmailDetailViewModel` passes `_selectedEmail.IsFiledToProject` into eligibility
 - ACC move: `NativeEmailMoveToProjectExecutor` verifies ACC; Move/Lock attributes are SoT for “already moved”
 - Label name sync: `IProjectGmailLabelSyncService` (DEV-009)
+
+## FileMaterial / MoveToProject (six decisions)
+
+**Canonical Target:** [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) (full flow, success/open gates, TotalCount, dismiss, locate, dropped mechanisms).
+
+Summary aligned with SoT above:
+
+| Concern | Source of truth |
+| --- | --- |
+| Already filed to project folder | ACC Move/Lock custom attributes — **verify target ids** before treating as success |
+| Physical presence in Inbox | ACC (reconcile / recovery); DB `AccItemId` is cache only |
+| Task / window close | Files verified **and** `CompleteAsync` with `TaskClosed` **and** workflow advance not pending (not `AllFilesTransferred` alone) |
+| Mailbox association | Unchanged — Gmail project label |
+| Email body PDF | Optional tagged `00_Email.pdf` only — never automatic required material |

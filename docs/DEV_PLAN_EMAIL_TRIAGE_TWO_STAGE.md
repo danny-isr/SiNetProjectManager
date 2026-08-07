@@ -2,7 +2,7 @@
 
 > **Title:** Email surface — two-stage handling, mark-read on completion, FYI action, project group leaf header  
 > **Date:** 06.08.2026  
-> **Status:** On `release` tip @ `3bfe152` (ship **1.0.22**) — **Needs Review:** operator/pilot verify ([`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
+> **Status:** On `release` tip @ `127dc0e` (App.Wpf **1.0.23**; feature shipped from **1.0.22**) -- **Needs Review:** operator/pilot verify ([`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
 > **Scope:** `SiNet.App.Wpf` email list/detail, Gmail triage/modify ports. No SQL schema. No city-level grouping.  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) (DEV-004 superseded for trigger), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md), `SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md`

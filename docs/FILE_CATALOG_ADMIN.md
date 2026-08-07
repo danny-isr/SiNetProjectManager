@@ -1,7 +1,9 @@
 # File Catalog Admin («ניהול קבצים»)
 
-> **Status:** Implemented (New System) — full admin parity with legacy FileManager  
-> **Date:** 2026-07-30  
+> **Status:** Implemented (New System) -- full admin parity with legacy FileManager
+> **Date:** 2026-07-30
+> **Updated:** 07.08.2026
+> **Scope:** Administrator file/folder catalog window in App.Wpf (`Shell.OpenFileCatalogAdmin`).
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
 
 > **Legacy reference:** `FileManagerView` + `FileManagerViewModel` (V2 menu «ניהול קבצים», Administrator)  

@@ -1,5 +1,11 @@
 # מדריך פריסה — SiNetProjectManager Solution
 
+> **Title:** Deployment guide (solution-level)
+> **Date:** 02.08.2026
+> **Updated:** 07.08.2026 (App.Wpf channel 3; SecretImport path; tip follow-up)
+> **Status:** Active / Current Source of Truth (publish channels)
+> **Scope:** How to run `publish-all.ps1` and per-channel scripts to `\\SI-WIN-2K19\AppFolder\AppNet\`. PROD workstation only for UNC publish.
+
 מדריך מסודר לפריסה של הרכיבים מסביבת העבודה אל שרת הקבצים `\\SI-WIN-2K19`.
 
 > **סביבות ותהליך שחרור (2026-08-02 / עדכון 07.08.2026):** תפקידי מכונות PROD/DEV, שערי שחרור ו-rollback —
@@ -24,7 +30,7 @@
 | 1 | `SiOffice.AccService` | Windows Service | `SiOffice.AccService\publish-service.ps1` | `SiProjecNet2026-Full\` (MSI) |
 | 2 | `MasterPlan.SyncEngine` | Console (Task Scheduler) | `MasterPlan.SyncEngine\publish-console.ps1` | `MasterPlan.SyncEngine\` (`DeployDir` -- לא `MasterPlanSync\`) |
 | 3 | **`SiNet.App.Wpf`** | WPF Desktop (production) | `src\SiNet.App.Wpf\publish-desktop.ps1` | `SiNet.App.Wpf\` (MSIX + `.appinstaller`) |
-| 4 | `SiNet.SecretImport` | portable EXE | `src\SiNet.SecretImport\publish-tool.ps1` | `SiNet.SecretImport\` |
+| 4 | `SiNet.SecretImport` | portable EXE | `SiNet.SecretImport\publish-tool.ps1` | `SiNet.SecretImport\` |
 
 **היסטורי (לא ערוץ פאבליש):** `SiNetProjectManagerV2` -- נשאר בריפו כ-reference; ראה `SiNetProjectManagerV2\DEPLOYMENT.md` (Superseded).
 

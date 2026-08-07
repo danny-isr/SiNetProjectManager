@@ -6,6 +6,7 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Shared.Projects;
 
@@ -90,7 +91,8 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
         IJobTypeQueryService jobTypes,
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService projectFilterOptions,
-        IUserLookupService? users = null)
+        IUserLookupService? users = null,
+        IAppSettingsService? appSettings = null)
     {
         _createService = createService ?? throw new ArgumentNullException(nameof(createService));
         _places = places ?? throw new ArgumentNullException(nameof(places));
@@ -98,7 +100,11 @@ public sealed class ProjectCreateDialogViewModel : ObservableObject, IDisposable
         _jobTypes = jobTypes ?? throw new ArgumentNullException(nameof(jobTypes));
         _users = users;
 
-        ParentProjectSelector = new ProjectSelectorViewModel(projectQuery, projectFilterOptions, _parentProjectContext);
+        ParentProjectSelector = new ProjectSelectorViewModel(
+            projectQuery,
+            projectFilterOptions,
+            _parentProjectContext,
+            appSettings: appSettings);
         Places = [];
         Companies = [];
         Contacts = [];

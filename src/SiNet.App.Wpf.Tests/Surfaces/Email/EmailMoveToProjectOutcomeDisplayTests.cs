@@ -67,8 +67,11 @@ public sealed class EmailMoveToProjectOutcomeDisplayTests
     }
 
     [Theory]
+    [InlineData("AlreadyMovedToProject", null, "הקובץ כבר הועבר ליעד הנוכחי ב-ACC (אומת).")]
+    [InlineData("AlreadyMovedConflict", null, "הקובץ כבר תויק ליעד אחר ב-ACC — לא ניתן להעביר שוב ליעד הנוכחי.")]
+    [InlineData("FiledButMoveMetadataFailed", null, "הקובץ תויק פיזית, אך השלמת מטא-דאטת Move/Lock ב-ACC נכשלה.")]
+    [InlineData("MissingAccItemId", null, "חסר קישור ל-ACC Inbox (AccItemId) — יש להעלות/לשחזר ואז לנסות שוב.")]
     [InlineData("Locked", null, "הקובץ נעול לעריכה ב-ACC (כנראה כבר תויק בעבר).")]
-    [InlineData("AlreadyMovedToProject", null, "הקובץ כבר הועבר לפרויקט לפי מטא-דאטה של ACC.")]
     [InlineData("MissingInAcc", null, "הקובץ חסר ב-ACC Inbox — נדרש שחזור/רענון.")]
     [InlineData("DownloadFailed", null, "הורדת הקובץ מ-ACC נכשלה.")]
     [InlineData("NoFilingTag", null, "לא נמצא תיוג יעד (ProjectFile) לתיוק.")]

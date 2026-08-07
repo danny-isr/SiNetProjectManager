@@ -785,6 +785,71 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         string? fromAddress) =>
         _display.TrySelectByInboxCorrelation(messageUniqueId, internetMessageId, subject, fromAddress);
 
+    /// <summary>
+    /// Direct task email locate: GetByIdAsync / rfc822msgid AllMail, then inject+select.
+    /// Returns null when Gmail cannot resolve the message.
+    /// </summary>
+    internal async Task<EmailListRow?> TryLocateAndSelectTaskEmailAsync(
+        string? gmailMessageId,
+        string? internetMessageId,
+        int inboxMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (TrySelectByInboxCorrelation(gmailMessageId, internetMessageId, subject: null, fromAddress: null))
+        {
+            return PatchRowInboxMessageId(SelectedEmail?.Id ?? string.Empty, inboxMessageId) ?? SelectedEmail;
+        }
+
+        EmailSummary? summary = null;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(gmailMessageId))
+            {
+                summary = await EmailGateway.GetByIdAsync(gmailMessageId.Trim(), cancellationToken)
+                    .ConfigureAwait(true);
+            }
+
+            if (summary is null && !string.IsNullOrWhiteSpace(internetMessageId))
+            {
+                var raw = internetMessageId.Trim().Trim('<', '>');
+                var page = await EmailGateway.GetMailboxPageAsync(
+                    new EmailMailboxQuery
+                    {
+                        MailboxScope = EmailMailboxScope.AllMail,
+                        FreeText = $"rfc822msgid:{raw}",
+                        PageSize = 5,
+                    },
+                    pageToken: null,
+                    cancellationToken).ConfigureAwait(true);
+                summary = page.Items.FirstOrDefault();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (summary is null)
+        {
+            return null;
+        }
+
+        var (rows, _) = await EmailListRowMapper.MapSummariesAsync(
+            [summary],
+            ThreadLinkQuery,
+            GetCurrentProject).ConfigureAwait(true);
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        return _display.InjectAndSelectTaskRow(rows[0], inboxMessageId);
+    }
+
     private EmailTaskSelectionTarget? _pendingTaskSelection;
 
     /// <summary>

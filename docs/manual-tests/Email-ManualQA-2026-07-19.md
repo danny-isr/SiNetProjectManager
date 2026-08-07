@@ -1,8 +1,12 @@
 # Email («מיילים») — מעקב בדיקה ידנית
 
-> Session resume: 2026-07-19  
-> Related chat: [Email window UX + ACC](7d540bca-119e-4d75-9f1a-3aa3aea79697)  
-> Runbook: [`docs/manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md`](../../../docs/manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md)  
+> **Title:** Email manual QA session log
+> **Date:** 19.07.2026
+> **Status:** Historical Snapshot / Operational Checklist (session log)
+> **Scope:** Manual email surface checks from 2026-07-19; not current rollout sign-off.
+> Session resume: 2026-07-19
+> Related Cursor chat id (local transcript, not a GitHub URL): `7d540bca-119e-4d75-9f1a-3aa3aea79697`
+> Runbook: [`PROPOSAL_WORKFLOW_MANUAL_TEST.md`](./PROPOSAL_WORKFLOW_MANUAL_TEST.md)
 > Legend: `OK` | `FAIL` | `SKIP` | `AUTO` | `PENDING_LIVE`
 
 ## Automated guardrails (this session)

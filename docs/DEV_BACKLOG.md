@@ -10,7 +10,8 @@
 
 Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md), [`AGENTS.md`](../AGENTS.md).
 
-**Baseline (07.08.2026):** `origin/release` = `origin/development` = `3bfe152` · `SiNet.App.Wpf` **1.0.22**.
+**Baseline (updated 07.08.2026):** `origin/release` = `origin/development` = `127dc0e` · `SiNet.App.Wpf` **1.0.23**.
+(Original reconciliation snapshot was `3bfe152` / **1.0.22** -- Historical; see [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md) §1.)
 Ship commits on `release` (e.g. `chore(release): ship SiNet.App.Wpf 1.0.xx`) indicate **intent to publish to the UNC share**. That is **not** the same as:
 
 - pilot machines confirmed on that MSIX, or
@@ -49,7 +50,7 @@ Status vocabulary:
 
 ## 2b. On `release` tip — ops verify (Needs Review)
 
-Code for these IDs is present on `origin/release` @ `3bfe152` (App.Wpf **1.0.22** and prior ship commits). **Do not** treat as Done until operator verify is recorded.
+Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.
 
 | ID | Title | Evidence on tip | Doc | Earliest cited ship |
 | --- | --- | --- | --- | --- |
@@ -59,9 +60,9 @@ Code for these IDs is present on `origin/release` @ `3bfe152` (App.Wpf **1.0.22*
 | DEV-006 | ProjectWork editable scan exclusions | On tip | [`DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md`](./DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md) §3 | 1.0.8 |
 | DEV-012 | ProjectWork disk-only folders | On tip (`ship 1.0.17`) | [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) | 1.0.17 |
 | DEV-013 | ProjectWork lazy scan | On tip (`ship 1.0.18`) | [`DEV_PLAN_PROJECTWORK_LAZY_SCAN.md`](./DEV_PLAN_PROJECTWORK_LAZY_SCAN.md) | 1.0.18 |
-| DEV-015 | Crash report accuracy | On tip (`ship 1.0.22`) | [`DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md) | 1.0.22 |
-| DEV-016 | Email two-stage triage | On tip (`ship 1.0.22`) | [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | 1.0.22 |
-| DEV-017 | Email UX / ProjectSelector dual widths | On tip (`ship 1.0.22`); local WIP may add more selector polish | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | 1.0.22 |
+| DEV-015 | Crash report accuracy | On tip (`ship 1.0.22`+) | [`DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md) | 1.0.22 |
+| DEV-016 | Email two-stage triage | On tip (`ship 1.0.22`+) | [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | 1.0.22 |
+| DEV-017 | Email UX / ProjectSelector dual widths | On tip (`ship 1.0.23`) | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | 1.0.23 |
 
 | ID | Title | Notes |
 | --- | --- | --- |
@@ -89,7 +90,7 @@ Code for these IDs is present on `origin/release` @ `3bfe152` (App.Wpf **1.0.22*
 
 ## 6. Needs Review
 
-1. Operator confirmation that pilot PCs actually received MSIX builds through 1.0.22.
+1. Operator confirmation that pilot PCs actually received MSIX builds through **1.0.23**.
 2. Whether DEV-008/009/010/011 partial layers are fully on tip or still diverging on a local DEV workspace.
 3. Whether PROD wants GitHub Issues mirrored 1:1 with this index.
 4. Local workspace note (07.08.2026): checkout may lag `origin/development` by the ship commit and may hold uncommitted ProjectSelector polish — do not confuse with remote tip.

@@ -1,7 +1,9 @@
 # AccService ↔ SiNetSQL decoupling
 
-> Status: **B4 done — SiNetSQL `ProjectReference` dropped from AccService (B5 goal reached early)**  
-> Date: 2026-07-28  
+> Status: **B4 done -- SiNetSQL `ProjectReference` dropped from AccService (B5 goal reached early)**
+> Date: 2026-07-28
+> Updated: 07.08.2026
+> Scope: AccService decoupling from SiNetSQL assembly / ProjectReference; host bootstrap and logging notes.
 > Working branches: `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
 
 > Related: [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md), [`LOGGING.md`](./LOGGING.md),

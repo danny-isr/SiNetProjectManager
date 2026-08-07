@@ -13,17 +13,15 @@ using SiNetSQL.Models;
 namespace SiNet.Infrastructure.Sql.Services.Email.Acc;
 
 /// <summary>
-/// Native MoveToProject backend. Files every tagged inbox attachment
-/// (<c>ProjectFileId != null</c> AND (<c>AccItemId != null</c> or a ZIP folder))
-/// through <see cref="IProjectFileFilingService"/>, stamps ACC Move/Lock metadata on the
-/// source inbox item, flips the message to <see cref="EmailInboxStatus.Moved"/> on a fully
-/// successful run, and — when the command carries a <c>TaskId</c> — reports task completion
-/// through <see cref="ITaskCompletionService"/> (the single bridge back into workflow).
+/// Native MoveToProject backend. Files every <b>required</b> tagged business attachment
+/// (ProjectFile tag; AccItemId may still be missing — counted in TotalCount) through
+/// <see cref="IProjectFileFilingService"/>, stamps ACC Move/Lock metadata, and flips the
+/// message to <see cref="EmailInboxStatus.Moved"/> only when every required item is filed
+/// or verified at the current target with Move/Lock metadata complete.
 /// <para>
-/// Backend-only: no WPF/UI. Task-completion failures are non-fatal to the filing operation.
-/// This is the native port of the legacy
-/// <c>SiNetSQL.Domain.Actions.Handlers.MoveToProjectProcessActionHandler</c>, replacing the
-/// host <c>LegacyEmailMoveToProjectExecutor</c> bridge.
+/// Backend-only: no WPF/UI. When <c>TaskId</c> is present, task close is owned by the UI
+/// (<c>EmailDetailViewModel</c> → <see cref="ITaskCompletionService"/>); executor reporting
+/// is inactive for that path (FileMaterial six decisions 2026-08).
 /// </para>
 /// </summary>
 public sealed class NativeEmailMoveToProjectExecutor(
@@ -33,7 +31,9 @@ public sealed class NativeEmailMoveToProjectExecutor(
     IAccFileUploadService accUploadService,
     IAccFolderBrowserService folderBrowserService,
     IAccItemMetadataService metadataService,
-    ITaskCompletionService taskCompletionService) : IEmailMoveToProjectExecutor
+    ITaskCompletionService taskCompletionService,
+    IEmailAccStatusService? accStatusService = null,
+    IEmailAccRecoveryExecutor? recoveryExecutor = null) : IEmailMoveToProjectExecutor
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
     private readonly IProjectFileFilingService _filingService = filingService;
@@ -42,6 +42,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
     private readonly IAccFolderBrowserService _folderBrowserService = folderBrowserService;
     private readonly IAccItemMetadataService _metadataService = metadataService;
     private readonly ITaskCompletionService _taskCompletionService = taskCompletionService;
+    private readonly IEmailAccStatusService? _accStatusService = accStatusService;
+    private readonly IEmailAccRecoveryExecutor? _recoveryExecutor = recoveryExecutor;
 
     private sealed record InboxItem(string ItemId, string DisplayName);
 
@@ -75,22 +77,32 @@ public sealed class NativeEmailMoveToProjectExecutor(
             return Deferred("ההודעה אינה משויכת לפרויקט. יש לשייך תחילה לפרויקט.");
         }
 
-        // Empty-email shortcut: no attachments at all → mark Moved immediately.
+        // INACTIVE (FileMaterial six decisions 2026-08): empty-email auto-Moved shortcut.
+        // Empty / no-business-attachments must go through UI (include 00_Email.pdf or confirm no material).
+        // Previously: message.Status = Moved + Succeeded "ההודעה תויקה (ללא קבצים)."
         if (message.Attachments.Count == 0)
         {
-            message.Status = EmailInboxStatus.Moved;
-            message.UpdatedAtUtc = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            return new EmailMoveToProjectCoordinatorResult(
-                EmailMoveToProjectOutcome.Succeeded, "ההודעה תויקה (ללא קבצים).", 0, 0);
+            return Deferred(
+                "אין צרופות להעברה.\n" +
+                "ניתן לבחור «תוכן המייל (PDF)» לתיוק, או לאשר שאין חומר ממסך התיוק.");
         }
 
+        // Reconcile + Gmail recovery for missing AccItemId before counting/filing.
+        await TryReconcileAndRecoverAsync(db, message, command, cancellationToken).ConfigureAwait(false);
+
+        // Reload attachments after recovery may have filled AccItemId.
+        message = await db.EmailInboxMessages
+            .Include(m => m.Attachments)
+            .FirstOrDefaultAsync(m => m.Id == emailMessageId, cancellationToken)
+            .ConfigureAwait(false);
+        if (message is null)
+        {
+            return Failed("ההודעה לא נמצאה.");
+        }
+
+        // Required = tagged business items (incl. missing AccItemId). Body PDF only if tagged.
         var taggedNeedingFiling = message.Attachments
-            .Where(a => a.ProjectFileId.HasValue
-                        && (!string.IsNullOrEmpty(a.AccItemId)
-                            || (!string.IsNullOrEmpty(a.AccVersionId)
-                                && a.OriginalFileName != null
-                                && a.OriginalFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))))
+            .Where(IsRequiredBusinessAttachment)
             .ToList();
 
         // TEMP WF-DEBUG
@@ -100,24 +112,13 @@ public sealed class NativeEmailMoveToProjectExecutor(
             $"executor state inbox={message.Id} project={projectId} attachments={message.Attachments.Count} tagged={taggedNeedingFiling.Count} withProjectFileId={withProjectFileId} withAccItemId={withAccItemId} accProjectId={(string.IsNullOrEmpty(message.InboxAccProjectId) ? "(missing)" : "present")} accFolderId={(string.IsNullOrEmpty(message.InboxAccFolderId) ? "(missing)" : "present")} status={message.Status} task={command.TaskId?.ToString() ?? "(none)"}");
 
         // Never treat "nothing to file" as success — including when a TaskId is present.
-        // (Manual QA: tagged=0 + TaskId returned Succeeded "0/0", completed the workflow, and closed the UI.)
         if (taggedNeedingFiling.Count == 0)
         {
-            string deferredMessage;
-            if (withProjectFileId == 0)
-            {
-                deferredMessage =
-                    "אין קבצים מתויגים ליעד בפרויקט.\n" +
-                    "ליד כל צרופה לחץ «בחר קובץ», בחר יעד ואלטרנטיבה, ואז העבר לפרויקט.";
-            }
-            else
-            {
-                deferredMessage =
-                    $"יש {withProjectFileId} קבצים מתויגים אך אינם מוכנים להעברה (חסר קישור ל-ACC Inbox).\n" +
-                    "ודא שהצרופות הועלו ל-ACC ואז נסה שוב.";
-            }
+            var deferredMessage =
+                "אין קבצים מתויגים ליעד בפרויקט.\n" +
+                "ליד כל צרופה לחץ «בחר קובץ», בחר יעד ואלטרנטיבה, ואז העבר לפרויקט.\n" +
+                "אם אין צרופות עסקיות — בחר תוכן המייל (PDF) או אשר שאין חומר.";
 
-            // TEMP WF-DEBUG
             SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
                 $"executor DEFERRED empty-tagged: {deferredMessage.Replace('\n', ' ')}");
             return Deferred(deferredMessage);
@@ -145,7 +146,6 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
         int movedCount = 0;
         int failedCount = 0;
-        int warningCount = 0;
         int alreadySameSourceCount = 0;
         var filedInboxAttachmentIdsThisRun = new List<int>();
         var attachmentFailures = new List<EmailMoveToProjectAttachmentFailure>();
@@ -227,21 +227,37 @@ public sealed class NativeEmailMoveToProjectExecutor(
                         new Dictionary<string, string?>(StringComparer.Ordinal));
                 }
 
-                if (IsTruthy(metadataRead.Attributes, SidecarMetadata.InboxAccAttributeNames.LockLockedForEditing))
+                if (IsTruthy(metadataRead.Attributes, SidecarMetadata.InboxAccAttributeNames.MoveMovedToProject))
                 {
-                    Trace.TraceWarning($"[MoveToProject] Attachment Id={att.Id} is locked by ACC metadata; skipping filing.");
-                    // TEMP WF-DEBUG
-                    SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: locked by ACC metadata");
-                    RecordFailure(attachmentFailures, ref failedCount, att, "Locked");
+                    var (movedTagFileId, movedTagAltId) = ResolveFilingTag(metadataRead.Attributes, att);
+                    if (movedTagFileId is null)
+                    {
+                        RecordFailure(attachmentFailures, ref failedCount, att, "AlreadyMovedConflict",
+                            "הקובץ מסומן כהועבר ב-ACC אך אין תיוג יעד נוכחי להשוואה.");
+                        continue;
+                    }
+
+                    if (MatchesCurrentMoveTarget(
+                            metadataRead.Attributes, projectId, movedTagFileId.Value, movedTagAltId))
+                    {
+                        alreadySameSourceCount++;
+                        filedInboxAttachmentIdsThisRun.Add(att.Id);
+                        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
+                            $"att={att.Id} '{att.OriginalFileName}' VERIFIED already at current target");
+                        continue;
+                    }
+
+                    RecordFailure(attachmentFailures, ref failedCount, att, "AlreadyMovedConflict",
+                        "הקובץ כבר תויק ליעד אחר לפי מטא-דאטת ACC.");
                     continue;
                 }
 
-                if (IsTruthy(metadataRead.Attributes, SidecarMetadata.InboxAccAttributeNames.MoveMovedToProject))
+                // Locked without MoveMovedToProject (or after conflict path above).
+                if (IsTruthy(metadataRead.Attributes, SidecarMetadata.InboxAccAttributeNames.LockLockedForEditing))
                 {
-                    Trace.TraceWarning($"[MoveToProject] Attachment Id={att.Id} already moved by ACC metadata; skipping filing.");
-                    // TEMP WF-DEBUG
-                    SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: already moved by ACC metadata");
-                    RecordFailure(attachmentFailures, ref failedCount, att, "AlreadyMovedToProject");
+                    Trace.TraceWarning($"[MoveToProject] Attachment Id={att.Id} is locked by ACC metadata; skipping filing.");
+                    SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: locked by ACC metadata");
+                    RecordFailure(attachmentFailures, ref failedCount, att, "Locked");
                     continue;
                 }
 
@@ -256,11 +272,16 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
                 if (isZipFolder)
                 {
-                    var (zipMoved, zipFailed, zipSameSource, zipWarnings) = await FileZipFolderAsync(
+                    var (zipMoved, zipFailed, zipSameSource, zipMetadataIncomplete) = await FileZipFolderAsync(
                         db, message, att, projectId, projectFileId.Value, projectAlternativeId, command, cancellationToken)
                         .ConfigureAwait(false);
 
-                    if (zipFailed && !zipMoved)
+                    if (zipMetadataIncomplete)
+                    {
+                        RecordFailure(attachmentFailures, ref failedCount, att, "FiledButMoveMetadataFailed",
+                            "תיוק תיקיית ZIP הצליח פיזית אך מטא-דאטת Move/Lock נכשלה.");
+                    }
+                    else if (zipFailed && !zipMoved && !zipSameSource)
                     {
                         RecordFailure(attachmentFailures, ref failedCount, att, "ZipFilingFailed");
                     }
@@ -268,9 +289,14 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     {
                         movedCount += zipMoved ? 1 : 0;
                         alreadySameSourceCount += zipSameSource ? 1 : 0;
-                        warningCount += zipWarnings;
                         filedInboxAttachmentIdsThisRun.Add(att.Id);
                     }
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(att.AccItemId))
+                {
+                    RecordFailure(attachmentFailures, ref failedCount, att, "MissingAccItemId");
                     continue;
                 }
 
@@ -309,11 +335,6 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 };
 
                 var result = await _filingService.FileAsync(request, cancellationToken).ConfigureAwait(false);
-                filedInboxAttachmentIdsThisRun.Add(att.Id);
-                if (result.AlreadySameSource)
-                    alreadySameSourceCount++;
-                else
-                    movedCount++;
 
                 var movedAtUtc = DateTime.UtcNow;
                 var moveMetadataResult = await WriteMoveLockMetadataAsync(
@@ -321,10 +342,21 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     .ConfigureAwait(false);
                 if (!moveMetadataResult.Success)
                 {
-                    warningCount++;
+                    // INACTIVE (FileMaterial six decisions 2026-08): previous behavior only raised
+                    // warningCount and still counted the attachment as fully moved.
+                    // Target: physical file may exist, but Move/Lock incomplete → process failure.
+                    RecordFailure(attachmentFailures, ref failedCount, att, "FiledButMoveMetadataFailed",
+                        moveMetadataResult.ErrorMessage);
                     Trace.TraceWarning(
                         $"[MoveToProject] Attachment Id={att.Id} filed but Move/Lock metadata write failed: {moveMetadataResult.ErrorMessage}");
+                    continue;
                 }
+
+                filedInboxAttachmentIdsThisRun.Add(att.Id);
+                if (result.AlreadySameSource)
+                    alreadySameSourceCount++;
+                else
+                    movedCount++;
             }
             catch (OperationCanceledException)
             {
@@ -343,7 +375,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
             }
         }
 
-        if (failedCount == 0 && (movedCount + alreadySameSourceCount) > 0)
+        if (failedCount == 0 && (movedCount + alreadySameSourceCount) >= taggedNeedingFiling.Count
+            && taggedNeedingFiling.Count > 0)
         {
             var refreshed = await db.EmailInboxMessages
                 .FirstOrDefaultAsync(m => m.Id == emailMessageId, cancellationToken)
@@ -360,28 +393,18 @@ public sealed class NativeEmailMoveToProjectExecutor(
                              && taggedNeedingFiling.Count > 0
                              && (movedCount + alreadySameSourceCount) >= taggedNeedingFiling.Count;
 
-        // Task-completion reporting — only when every tagged file was transferred.
+        // INACTIVE (FileMaterial six decisions 2026-08): executor ReportTaskCompletionAsync when TaskId set.
+        // UI EmailDetailViewModel owns CompleteAsync + dismiss gating. Kept method for reference / non-UI tooling.
         if (allTransferred && command.TaskId is int taskId && taskId > 0)
         {
-            try
-            {
-                await ReportTaskCompletionAsync(
-                    db, taskId, message, filedInboxAttachmentIdsThisRun, command.UserId ?? 0, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Trace.TraceError($"[MoveToProject] Task completion reporting failed (filing itself succeeded). {ex}");
-            }
+            Trace.TraceInformation(
+                $"[MoveToProject] Skipping executor task completion for TaskId={taskId}; UI owns CompleteAsync.");
+            // Previously: await ReportTaskCompletionAsync(...)
         }
 
         // TEMP WF-DEBUG
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
-            $"executor done inbox={message.Id} moved={movedCount} failed={failedCount} sameSource={alreadySameSourceCount} warnings={warningCount} of {taggedNeedingFiling.Count} allTransferred={allTransferred}");
+            $"executor done inbox={message.Id} moved={movedCount} failed={failedCount} sameSource={alreadySameSourceCount} of {taggedNeedingFiling.Count} allTransferred={allTransferred}");
 
         var messageText = EmailMoveToProjectOutcomeDisplay.Build(
             movedCount, taggedNeedingFiling.Count, attachmentFailures, alreadySameSourceCount);
@@ -407,7 +430,99 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 alreadySameSourceCount);
     }
 
-    private async Task<(bool Moved, bool Failed, bool SameSource, int Warnings)> FileZipFolderAsync(
+    private async Task TryReconcileAndRecoverAsync(
+        SiNetSQLDbContext db,
+        EmailInboxMessage message,
+        EmailMoveToProjectCommand command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_accStatusService is not null)
+            {
+                await _accStatusService
+                    .GetStatusByInboxMessageIdAsync(message.Id, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (_recoveryExecutor is null || string.IsNullOrWhiteSpace(message.MessageUniqueId))
+            {
+                return;
+            }
+
+            // Gmail-only recover: never pass external Jumbo/WeTransfer rows to Gmail re-ingest.
+            var missingGmailIds = await db.EmailInboxAttachments
+                .AsNoTracking()
+                .Where(a => a.MessageId == message.Id
+                            && a.ProjectFileId != null
+                            && string.IsNullOrEmpty(a.AccItemId)
+                            && !a.IsExternalDownload)
+                .Select(a => a.Id)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            // ZIP folders use AccVersionId without AccItemId — exclude those from "missing".
+            var zipFolderIds = await db.EmailInboxAttachments
+                .AsNoTracking()
+                .Where(a => a.MessageId == message.Id
+                            && a.ProjectFileId != null
+                            && string.IsNullOrEmpty(a.AccItemId)
+                            && !string.IsNullOrEmpty(a.AccVersionId)
+                            && a.OriginalFileName != null
+                            && a.OriginalFileName.EndsWith(".zip"))
+                .Select(a => a.Id)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var recoverIds = missingGmailIds.Except(zipFolderIds).ToList();
+            if (recoverIds.Count == 0)
+            {
+                return;
+            }
+
+            await _recoveryExecutor
+                .RecoverMissingAttachmentsAsync(
+                    message.Id,
+                    message.MessageUniqueId,
+                    recoverIds,
+                    command.UserId?.ToString(CultureInfo.InvariantCulture) ?? Environment.UserName,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"[MoveToProject] Reconcile/recovery before move failed (non-fatal): {ex.Message}");
+        }
+    }
+
+    private static bool IsRequiredBusinessAttachment(EmailInboxAttachment a)
+    {
+        if (!a.ProjectFileId.HasValue)
+            return false;
+
+        var fileName = a.SavedFileName ?? a.OriginalFileName;
+        if (string.Equals(fileName, "manifest.json", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (string.Equals(fileName, AccInboxLayout.EmailBodyFileName, StringComparison.OrdinalIgnoreCase)
+            || a.AttachmentIndex == AccInboxLayout.EmailBodyAttachmentIndex)
+        {
+            // Body PDF is required only when explicitly tagged (ProjectFileId already required above).
+            return true;
+        }
+
+        // Other system/inline rows (negative index) are not business material.
+        if (a.AttachmentIndex < 0)
+            return false;
+
+        return true;
+    }
+
+    private async Task<(bool Moved, bool Failed, bool SameSource, bool MetadataIncomplete)> FileZipFolderAsync(
         SiNetSQLDbContext db,
         EmailInboxMessage message,
         EmailInboxAttachment att,
@@ -446,7 +561,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
         if (folderItems.Count == 0)
         {
             Trace.TraceWarning($"[MoveToProject] ZIP folder URN={att.AccVersionId} is empty or not found in ACC.");
-            return (false, true, false, 0);
+            return (false, true, false, false);
         }
 
         int folderMovedCount = 0;
@@ -514,11 +629,10 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
         if (folderFailedCount > 0 && folderMovedCount == 0)
         {
-            return (false, true, false, 0);
+            return (false, true, false, false);
         }
 
         var itemMovedAtUtc = DateTime.UtcNow;
-        var warnings = 0;
         var folderMoveMetadataResult = lastFilingResult is null
             ? AccItemMetadataResult.Fail(null, "ZIP folder filing completed without a final filing result for metadata write.")
             : await WriteMoveLockMetadataAsync(
@@ -527,14 +641,17 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
         if (!folderMoveMetadataResult.Success)
         {
-            warnings++;
+            // INACTIVE: previously warningCount++ and still treated ZIP as fully moved.
             Trace.TraceWarning(
                 $"[MoveToProject] ZIP attachment Id={att.Id} filed but Move/Lock metadata write failed: {folderMoveMetadataResult.ErrorMessage}");
+            return (folderMovedCount > 0, false, folderSameSourceCount > 0 && folderMovedCount == 0, true);
         }
 
-        return (folderMovedCount > 0, false, folderSameSourceCount > 0 && folderMovedCount == 0, warnings);
+        return (folderMovedCount > 0, false, folderSameSourceCount > 0 && folderMovedCount == 0, false);
     }
 
+    // INACTIVE for TaskId path (FileMaterial six decisions 2026-08): UI owns CompleteAsync.
+    // Retained for potential non-UI tooling; do not call from MoveAsync when TaskId is set.
     private async Task ReportTaskCompletionAsync(
         SiNetSQLDbContext db,
         int taskId,
@@ -684,6 +801,23 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 attachment.SavedFileName ?? attachment.OriginalFileName,
                 ct)
             .ConfigureAwait(false);
+    }
+
+    private static bool MatchesCurrentMoveTarget(
+        IReadOnlyDictionary<string, string?> attributes,
+        int projectId,
+        int projectFileId,
+        int? projectAlternativeId)
+    {
+        var targetProjectId = TryGetInt(attributes, SidecarMetadata.InboxAccAttributeNames.MoveTargetProjectId);
+        var targetProjectFileId = TryGetInt(attributes, SidecarMetadata.InboxAccAttributeNames.MoveTargetProjectFileId);
+        if (targetProjectId != projectId || targetProjectFileId != projectFileId)
+            return false;
+
+        var targetAlt = TryGetInt(attributes, SidecarMetadata.InboxAccAttributeNames.MoveTargetProjectAlternativeId);
+        var expectedAlt = projectAlternativeId is > 0 ? projectAlternativeId : null;
+        var actualAlt = targetAlt is > 0 ? targetAlt : null;
+        return expectedAlt == actualAlt;
     }
 
     private static bool IsTruthy(IReadOnlyDictionary<string, string?> attributes, string key)

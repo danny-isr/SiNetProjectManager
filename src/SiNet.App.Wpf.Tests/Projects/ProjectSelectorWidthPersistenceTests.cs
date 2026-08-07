@@ -18,6 +18,7 @@ public sealed class ProjectSelectorWidthPersistenceTests
     {
         var stored = UserAppSettingsDefaults.Create();
         var appSettings = new Mock<IAppSettingsService>();
+        appSettings.SetupGet(s => s.UserSettingsFilePath).Returns(@"C:\temp\sinet-test-settings.json");
         appSettings
             .Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => stored);
@@ -43,6 +44,7 @@ public sealed class ProjectSelectorWidthPersistenceTests
     {
         var stored = UserAppSettingsDefaults.Create();
         var appSettings = new Mock<IAppSettingsService>();
+        appSettings.SetupGet(s => s.UserSettingsFilePath).Returns(@"C:\temp\sinet-test-settings.json");
         appSettings
             .Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => stored);
@@ -89,6 +91,7 @@ public sealed class ProjectSelectorWidthPersistenceTests
     {
         var stored = UserAppSettingsDefaults.Create();
         var appSettings = new Mock<IAppSettingsService>();
+        appSettings.SetupGet(s => s.UserSettingsFilePath).Returns(@"C:\temp\sinet-test-settings.json");
         appSettings
             .Setup(s => s.GetUserAppSettingsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => stored);

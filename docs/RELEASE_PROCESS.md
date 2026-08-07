@@ -19,7 +19,7 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`PRODUCTION_MONITORING.md`](./
 | Build configuration | `Debug`, `Release` | Compile / `#if DEBUG` |
 | Runtime environment | Development, Production | Vault, DB, ACC, Gmail, Drive |
 | Rollout stage | Local -- Candidate -- Pilot -- Production -- Wide | Ops approval |
-| Product version | e.g. `1.0.22` | Component `<Version>` (tip verified 2026-08-07) |
+| Product version | e.g. `1.0.23` | Component `<Version>` (tip verified 2026-08-07 follow-up) |
 
 **GitHub default branch** is still **`SiWorkNet10`** (ops/GitHub setting) -- deprecated as working SoT; change is **Needs Review** (not done in this docs round).
 
@@ -276,4 +276,4 @@ Prefer **app rollback without DB rollback** when the schema did not change.
 2. Retention policy for last-known-good MSIX outside the mirrored share folder.
 3. When `SiWorkNet10` can be deleted -- requires confirming that no CI run, automation or DEV checkout still targets it.
 4. Whether GitHub **default branch** should switch from `SiWorkNet10` to `release` or `development`.
-5. Ops verify that pilot UNC install actually runs App.Wpf **1.0.22**.
+5. Ops verify that pilot UNC install actually runs App.Wpf **1.0.23**.

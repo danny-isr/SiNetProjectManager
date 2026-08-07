@@ -272,8 +272,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             projectQuery,
             filterOptions,
             _currentProject,
-            appSettings: appSettings,
-            persistSelectorWidths: appSettings is not NullAppSettingsService);
+            appSettings: appSettings);
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
@@ -698,8 +697,36 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         var correlated = EmailList.TrySelectByInboxCorrelation(
             inboxMessage.MessageUniqueId,
             inboxMessage.InternetMessageId,
-            inboxMessage.Subject,
-            inboxMessage.FromAddress);
+            subject: null,
+            fromAddress: null);
+
+        if (!correlated)
+        {
+            EmailListRow? located;
+            try
+            {
+                located = await EmailList.TryLocateAndSelectTaskEmailAsync(
+                    inboxMessage.MessageUniqueId,
+                    inboxMessage.InternetMessageId,
+                    inboxMessageId).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage =
+                    $"מייל המשימה לא נטען מ-Gmail: {ex.Message}. המשימה נשארת פתוחה — אין בחירת מייל חלופי.";
+                return;
+            }
+
+            if (located is null)
+            {
+                StatusMessage =
+                    $"מייל \"{inboxMessage.Subject}\" לא נמצא ב-Gmail (לפי מזהה מדויק). " +
+                    "המשימה נשארת פתוחה — אין בחירת מייל חלופי.";
+                return;
+            }
+
+            correlated = true;
+        }
 
         if (correlated)
         {
@@ -725,7 +752,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        StatusMessage = $"מייל \"{inboxMessage.Subject}\" לא נמצא בעמוד Gmail הנוכחי.";
+        StatusMessage =
+            $"מייל \"{inboxMessage.Subject}\" לא נמצא ב-Gmail. המשימה נשארת פתוחה — אין בחירת מייל חלופי.";
     }
 
     private async Task ApplyFollowQuoteHintsAsync(WorkSurfaceContext context, EmailOpenHints hints)

@@ -131,13 +131,17 @@ same operation (no confirmation dialog). `PRP.Approved` and `PRP.Rejected` are *
 
 ### 2.3 — `PRP.FileMaterial` → `PRP.MaterialCheck`  (`AllRequiredTasksClosed`)
 
-- **Note:** this stage closes via the file-filing pipeline (`ReviewMaterialFiled`), **not** a picked result
-  code. The transition fires on `AllRequiredTasksClosed`.
+- **Canonical filing Target:** [`FILEMATERIAL_MOVETOPROJECT.md`](../FILEMATERIAL_MOVETOPROJECT.md)
+  (TotalCount / AlreadyMoved verify / metadata fail / dismiss only after `CompleteAsync` +
+  `TaskClosed` + advance — **not** `AllFilesTransferred` alone; optional «תוכן המייל (PDF)»;
+  direct Gmail locate by id).
+- **Note:** this stage closes when the `FileQuoteMaterial` task closes; the transition fires on
+  `AllRequiredTasksClosed`. Do not treat Move transfer alone as stage advance.
 - **Prerequisite:** Seed includes catalog PDF **דרישת_המזמין_להצעת_מחיר** (`QuoteClientRequest`) under
   **תכתובת → ניהול_כספי → הצעת_מחיר**. Tag a PDF from the email ACC attachments onto that required slot
   (typical client request material).
 - **Action:** file material against the `FileQuoteMaterial` task until it closes (email filing /
-  MoveToProject, or complete via the ProjectWork surface if that is how the task is exposed).
+  MoveToProject per FILEMATERIAL doc, or complete via the ProjectWork surface if that is how the task is exposed).
 - **Expected `[WF-STEP]` logs:**
   - `TaskCompletion.Closure | task=<T3> … taskClosed=True …`
   - `Evaluator.Rule | instance=<I> trigger=AllRequiredTasksClosed rule=<r> (stage <file>→<matcheck>) cond=AllTasksComplete json=(none) met=True`

@@ -1,6 +1,9 @@
 # ACC Boundary
 
-> **Status:** Wave 1 fast-finish implemented - clean ACC runtime boundary closed for inbox + file-tree privileged flows (2026-07-04)  
+> **Status:** Wave 1 fast-finish implemented - clean ACC runtime boundary closed for inbox + file-tree privileged flows (2026-07-04)
+> **Date:** 04.07.2026
+> **Updated:** 07.08.2026
+> **Scope:** ACC / Autodesk boundary across App.Wpf clean stack and remaining V2/legacy runtime ownership.
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
 
 This document records the current ACC / Autodesk boundary across the clean stack and the still-live

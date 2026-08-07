@@ -5,7 +5,8 @@ namespace SiNet.Application.Email.Acc;
 /// so the UI can show an explicit reason (not just a failure count).
 /// <para>
 /// Kind values mirror the native executor vocabulary:
-/// <c>Locked</c>, <c>AlreadyMovedToProject</c>, <c>MissingInAcc</c>,
+/// <c>Locked</c>, <c>AlreadyMovedToProject</c>, <c>AlreadyMovedConflict</c>,
+/// <c>FiledButMoveMetadataFailed</c>, <c>MissingInAcc</c>, <c>MissingAccItemId</c>,
 /// <c>DownloadFailed</c>, <c>NoFilingTag</c>, <c>FilingFailed</c>, <c>ZipFilingFailed</c>.
 /// </para>
 /// </summary>

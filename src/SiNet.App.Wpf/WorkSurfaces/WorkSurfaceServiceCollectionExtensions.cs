@@ -1,10 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Projects;
 using SiNet.Application.ProjectWork;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.WorkSurfaces;
 
@@ -17,7 +20,11 @@ public static class WorkSurfaceServiceCollectionExtensions
         services.AddTransient<InspectionWindowViewModel>();
         services.AddSingleton<IInspectionWindowFactory, InspectionWindowFactory>();
         services.AddTransient<SiNet.App.Wpf.Surfaces.ProjectWork.ProjectWorkTreeViewModel>();
-        services.AddTransient<SiNet.App.Wpf.Shared.Projects.ProjectSelectorViewModel>();
+        services.AddTransient(sp => new ProjectSelectorViewModel(
+            sp.GetRequiredService<IProjectQueryService>(),
+            sp.GetRequiredService<IProjectFilterOptionsService>(),
+            sp.GetRequiredService<ICurrentProjectContext>(),
+            appSettings: sp.GetService<IAppSettingsService>()));
         services.AddTransient<ProjectWorkWindowViewModel>();
         services.AddSingleton<IProjectWorkWindowFactory, ProjectWorkWindowFactory>();
         services.AddSingleton<ITaskSurfaceWindowCoordinator, TaskSurfaceWindowCoordinator>();

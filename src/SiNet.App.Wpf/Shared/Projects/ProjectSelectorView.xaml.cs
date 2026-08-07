@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using SiNet.Application.Projects;
@@ -87,7 +88,34 @@ public partial class ProjectSelectorView : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        DataContextChanged += OnDataContextChanged;
         LostKeyboardFocus += OnLostKeyboardFocus;
+        BindWidthPropertiesToViewModel();
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e) =>
+        BindWidthPropertiesToViewModel();
+
+    /// <summary>
+    /// All hosts share ControlWidth/PopupWidth from the VM (persisted in settings.json).
+    /// </summary>
+    private void BindWidthPropertiesToViewModel()
+    {
+        if (DataContext is not ProjectSelectorViewModel)
+        {
+            return;
+        }
+
+        SetBinding(SearchBoxWidthProperty, new Binding(nameof(ProjectSelectorViewModel.ControlWidth))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        });
+        SetBinding(PopupWidthProperty, new Binding(nameof(ProjectSelectorViewModel.PopupWidth))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        });
     }
 
     /// <summary>Width of the search TextBox + ▼ toggle group.</summary>

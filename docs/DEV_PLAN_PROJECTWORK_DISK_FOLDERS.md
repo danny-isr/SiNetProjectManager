@@ -2,7 +2,7 @@
 
 > **Title:** Show manual disk folders/files in «בעבודה 2», purple/gray colors, delete only empty user folders  
 > **Date:** 05.08.2026  
-> **Status:** On `release` tip @ `3bfe152` (App.Wpf line through **1.0.22**) — **Needs Review:** operator/pilot verify (see [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
+> **Status:** On `release` tip @ `127dc0e` (App.Wpf **1.0.23**; feature on tip since earlier ships) -- **Needs Review:** operator/pilot verify (see [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
 > **Scope:** `SiNet.App.Wpf` ProjectWork tree — merge filesystem directories with DB catalog; no EF schema change  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: ProjectWorkWindow2 domain doc, Archive `IsUserCreated`, DEV-003 recover plan

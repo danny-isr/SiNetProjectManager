@@ -583,6 +583,11 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         SetStatus("מעביר את הקבצים לפרויקט… הפעולה עשויה להימשך עד דקה.");
         try
         {
+            if (!await TryResolveEmptyAttachmentsPolicyAsync().ConfigureAwait(true))
+            {
+                return;
+            }
+
             await RefreshMoveEligibilityAsync().ConfigureAwait(true);
             if (!string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
             {
@@ -611,7 +616,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
             PresentMoveOutcomeToUser(result);
 
-            var taskCompleted = false;
+            var mayDismissFilingSurface = false;
             string? completionBlockReason = null;
             // Close / complete only when EVERY tagged file was transferred.
             if (result.AllFilesTransferred
@@ -634,11 +639,28 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                         $"העברה הצליחה אך השלמת המשימה נכשלה: {completion.ErrorMessage ?? "unknown error"}.";
                     SetStatus(failText);
                     PresentMoveOutcomeDialog(failText, succeeded: false);
+                    // Do NOT dismiss — CompleteAsync failed (FileMaterial six decisions).
+                }
+                else if (completion.WorkflowAdvancePending)
+                {
+                    var pendingText =
+                        "הקבצים תויקו והמשימה נסגרה, אך מעבר ה-workflow ממתין להשלמה.\n" +
+                        "החלון נשאר פתוח — ניתן לטפל דרך מסך ה-Ops / שחזור workflow הקיים.";
+                    SetStatus(pendingText);
+                    PresentMoveOutcomeDialog(pendingText, succeeded: false);
+                    // Do NOT dismiss while advance is pending.
+                }
+                else if (completion.TaskClosed)
+                {
+                    mayDismissFilingSurface = true;
+                    SetStatus("העברה והשלמת משימת התיוק הושלמו.");
                 }
                 else
                 {
-                    taskCompleted = true;
-                    SetStatus("העברה והשלמת משימת התיוק הושלמו.");
+                    var incompleteText =
+                        "העברה הצליחה אך המשימה לא נסגרה במלואה. החלון נשאר פתוח.";
+                    SetStatus(incompleteText);
+                    PresentMoveOutcomeDialog(incompleteText, succeeded: false);
                 }
             }
             else if (result.AllFilesTransferred
@@ -650,6 +672,10 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 SetStatus(blocked);
                 PresentMoveOutcomeDialog(blocked, succeeded: false);
             }
+            else if (result.AllFilesTransferred && _workSurfaceContext?.TaskId is null)
+            {
+                // Manual Move without a filing task — no work-item window to dismiss.
+            }
 
             if (_selectedEmail is not null)
             {
@@ -657,8 +683,9 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
             }
 
-            // Window closes only after all files transferred — never on partial/empty/failed.
-            if (result.AllFilesTransferred && _workSurfaceContext?.TaskId is not null)
+            // Dismiss only after files transferred AND CompleteAsync succeeded with TaskClosed
+            // (not WorkflowAdvancePending). INACTIVE: dismiss on AllFilesTransferred alone.
+            if (mayDismissFilingSurface && _workSurfaceContext?.TaskId is not null)
             {
                 TryDismissFilingSurface();
             }
@@ -1591,6 +1618,112 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
 
         completionEventCode = _workSurfaceContext.CompletionEventCode;
         actingUserId = userId;
+        return true;
+    }
+
+    /// <summary>
+    /// When there are no business attachments to file, ask: include email body PDF / confirm no material / back.
+    /// Returns <c>false</c> when Move should abort (Back, or after "no material" completion path).
+    /// </summary>
+    private async Task<bool> TryResolveEmptyAttachmentsPolicyAsync()
+    {
+        static bool IsEmailBodyPdf(EmailDetailAttachmentItem a) =>
+            string.Equals(a.FileName, "00_Email.pdf", StringComparison.OrdinalIgnoreCase);
+
+        var strip = AttachmentStrip.Attachments;
+        var businessItems = strip.Where(a => a.IsTaggable && a.InboxAttachmentId > 0 && !IsEmailBodyPdf(a)).ToList();
+        var bodyItem = strip.FirstOrDefault(a => a.InboxAttachmentId > 0 && IsEmailBodyPdf(a));
+
+        if (businessItems.Count > 0)
+        {
+            return true;
+        }
+
+        // No business attachments — require explicit choice when a filing task is active.
+        if (_workSurfaceContext?.TaskId is null)
+        {
+            return true;
+        }
+
+        var choice = MessageBox.Show(
+            "אין צרופות עסקיות למייל זה.\n\n" +
+            "כן — לכלול את «תוכן המייל (PDF)» בתיוק (יש לבחור יעד לקובץ).\n" +
+            "לא — לאשר שאין חומר ולהשלים את המשימה.\n" +
+            "ביטול — חזרה בלי פעולה.",
+            "תיוק חומר — ללא צרופות",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+
+        if (choice == MessageBoxResult.Cancel)
+        {
+            SetStatus("ההעברה בוטלה.");
+            return false;
+        }
+
+        if (choice == MessageBoxResult.No)
+        {
+            // Confirm no material → Complete → MaterialCheck without Move.
+            if (_taskCompletionService is null)
+            {
+                SetStatus("לא ניתן לאשר «אין חומר»: שירות השלמה לא זמין.");
+                PresentMoveOutcomeDialog(StatusMessage, succeeded: false);
+                return false;
+            }
+
+            if (!TryResolveTaskCompletionParams(out var eventCode, out var userId, out var blockReason))
+            {
+                SetStatus($"לא ניתן לאשר «אין חומר»: {blockReason ?? "פרמטרי השלמה חסרים"}.");
+                PresentMoveOutcomeDialog(StatusMessage, succeeded: false);
+                return false;
+            }
+
+            var taskId = _workSurfaceContext.TaskId.Value;
+            WorkflowDebugTrace.Step("Email.Move", $"no-material confirm task={taskId}");
+            var completion = await _taskCompletionService.CompleteAsync(
+                new CompleteTaskCommand(taskId, eventCode, TaskResultCode: null, CompletedTaskLinkIds: null, userId),
+                CancellationToken.None).ConfigureAwait(true);
+
+            if (!completion.Success)
+            {
+                var fail = $"אישור «אין חומר» נכשל: {completion.ErrorMessage ?? "unknown"}.";
+                SetStatus(fail);
+                PresentMoveOutcomeDialog(fail, succeeded: false);
+                return false;
+            }
+
+            if (completion.WorkflowAdvancePending)
+            {
+                var pending =
+                    "אושר שאין חומר והמשימה נסגרה, אך מעבר ה-workflow ממתין.\nהחלון נשאר פתוח.";
+                SetStatus(pending);
+                PresentMoveOutcomeDialog(pending, succeeded: false);
+                return false;
+            }
+
+            if (completion.TaskClosed)
+            {
+                SetStatus("אושר שאין חומר — המשימה הושלמה.");
+                TryDismissFilingSurface();
+            }
+
+            return false;
+        }
+
+        // Yes — include body PDF.
+        if (bodyItem is null)
+        {
+            SetStatus("תוכן המייל (PDF) עדיין לא זמין ב-ACC. העלה ל-Inbox ואז בחר יעד לתיוק.");
+            PresentMoveOutcomeDialog(StatusMessage, succeeded: false);
+            return false;
+        }
+
+        if (!bodyItem.IsTagged)
+        {
+            SetStatus("בחר יעד («בחר קובץ») עבור «תוכן המייל (PDF)» ואז העבר שוב.");
+            PresentMoveOutcomeDialog(StatusMessage, succeeded: false);
+            return false;
+        }
+
         return true;
     }
 

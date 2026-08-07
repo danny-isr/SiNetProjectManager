@@ -1,20 +1,26 @@
 ﻿# SiNetProjectManager - מדריך התקנה ופריסה (Secrets)
 
-> **המסמך הזה הוא מקור האמת לסדר התקנת סודות.** פריסת דסקטופ: ערוץ 3 = **`SiNet.App.Wpf`** (לא V2).
-> Ledger: [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md).
+> **Title:** Secrets and install order
+> **Date:** 26.05.2026
+> **Updated:** 07.08.2026 (PROD-only publish; desktop host = App.Wpf)
+> **Status:** Active / Operational Checklist
+> **Scope:** Order of operations for vault secrets, `.secrets` export/import, and server install. Publish to UNC is **PROD workstation only** -- see [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) and [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md).
+> **Reconciliation:** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md)
+>
+> מקור האמת לסדר התקנת סודות. פריסת דסקטופ: ערוץ 3 = **`SiNet.App.Wpf`** (לא V2).
 > **Needs Review:** האם `SiNet.secrets` על ה-share עדיין תחת `SiNetProjectManagerV2\` או הועבר.
-
-> **המסמך הזה הוא מקור האמת היחיד.** כל פעם שצריך לפרוס משהו או להחליף מפתחות - תפתח את זה ותעשה לפי הסדר.
 
 ---
 
 ## TL;DR - מה עושים ב-99% מהמקרים
 
-**1. במחשב הפיתוח (PowerShell):**
+**1. במחשב ה-PROD (תחנת השחרור בלבד -- PowerShell):**
 ```powershell
 cd D:\repos2026\SiNetProjectManager_GitHub
 powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
 ```
+
+> **אסור** להריץ `publish-all.ps1` ל-UNC הפרודקשן ממחשב ה-DEV. ראה `docs/ENVIRONMENTS.md` / `docs/RELEASE_PROCESS.md`.
 
 **2. בשרת SI-WIN-2K19 (PowerShell as Administrator):**
 ```powershell
@@ -67,7 +73,7 @@ Thumbprint pins של AccService **אינם** ב-vault — הם ב-System Setting
 
 ## 3. זרימה מלאה
 
-### שלב 1: עדכון מפתחות במחשב הפיתוח
+### שלב 1: עדכון מפתחות (במחשב PROD או DEV -- vault מקומי)
 
 1. הרץ את WPF **`SiNet.App.Wpf`** → פתח `SecretSetupWindow` (מנהלה → מפתחות וסודות).
 2. מלא/עדכן שדות → **שמור** (כל הנקודות ירוקות).
@@ -75,7 +81,7 @@ Thumbprint pins של AccService **אינם** ב-vault — הם ב-System Setting
 
 הקובץ מוצפן AES-256 + PBKDF2.
 
-### שלב 2: פרסום הכל לרשת (במחשב הפיתוח)
+### שלב 2: פרסום הכל לרשת (**מחשב PROD בלבד**)
 
 ```powershell
 cd D:\repos2026\SiNetProjectManager_GitHub

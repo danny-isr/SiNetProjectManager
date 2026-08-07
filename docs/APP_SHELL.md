@@ -4,6 +4,7 @@
 > **Date:** 02.08.2026
 > **Updated:** 07.08.2026 (As-Is reconciliation -- production path, ProjectSelector placement, branch SoT)
 > **Status:** Active / Current Source of Truth (shell As-Is + remaining isolation goals)
+> **Scope:** Production desktop shell (`NewShellWindow`), menu/factory, project context wiring, vs deprecated V2 dual-mode host.
 > **Working branches:** `release` (ship) + `development` (DEV) -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
 > **New solution:** `SiNet.sln` · **Legacy/functional reference:** `SiNetProjectManager.sln` / `SiNetProjectManagerV2` (code reference; not the publish channel)
 > **Reconciliation ledger:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
@@ -516,7 +517,7 @@ Slice 3+ (ongoing)
 
 ## 16. Needs Review
 
-1. Whether pilot PCs actually run App.Wpf **1.0.22** from the UNC share (ops verify).
+1. Whether pilot PCs actually run App.Wpf **1.0.23** from the UNC share (ops verify).
 2. Whether any operator still launches V2 hybrid by mistake (should not).
 3. Vault/DB `SecretSetupWindow` still on legacy type in New System startup -- open decision in §3.
 

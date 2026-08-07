@@ -1,6 +1,10 @@
 # SiNetProjectManagerV2 -- Deployment Guide (MSIX + Auto-Update)
 
 > **Classification:** **Superseded / Historical Snapshot** (07.08.2026)
+> **Date:** 26.05.2026
+> **Updated:** 07.08.2026
+> **Status:** Superseded (desktop channel)
+> **Scope:** Historical V2 MSIX pipeline only. Production desktop publish is `src/SiNet.App.Wpf/publish-desktop.ps1`.
 > **Desktop production SoT:** [`docs/RELEASE_PROCESS.md`](../docs/RELEASE_PROCESS.md), root [`DEPLOYMENT.md`](../DEPLOYMENT.md), `src/SiNet.App.Wpf/publish-desktop.ps1`
 > **Why superseded:** `publish-all.ps1` channel 3 is **`SiNet.App.Wpf`**, not V2. This file remains as reference for the historical V2 MSIX pipeline only.
 > **Reconciliation:** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](../docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md)

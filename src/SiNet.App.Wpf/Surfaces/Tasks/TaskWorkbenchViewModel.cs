@@ -13,6 +13,7 @@ using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Diagnostics;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 
@@ -83,7 +84,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         IProjectFilterOptionsService? projectFilterOptions = null,
         ITaskCreateDialogFactory? taskCreateDialogFactory = null,
         IWorkSurfaceLauncher? workSurfaceLauncher = null,
-        ITaskListChangeNotifier? taskListChangeNotifier = null)
+        ITaskListChangeNotifier? taskListChangeNotifier = null,
+        IAppSettingsService? appSettings = null)
     {
         _taskQuery = taskQuery ?? throw new ArgumentNullException(nameof(taskQuery));
         _taskNavigation = taskNavigation ?? throw new ArgumentNullException(nameof(taskNavigation));
@@ -105,7 +107,10 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         if (projectQuery is not null && projectFilterOptions is not null)
         {
             LocalProjectFilterSelector = new ProjectSelectorViewModel(
-                projectQuery, projectFilterOptions, _localProjectFilterContext);
+                projectQuery,
+                projectFilterOptions,
+                _localProjectFilterContext,
+                appSettings: appSettings);
             HasLocalProjectFilter = true;
             _localProjectFilterContext.CurrentProjectChanged += OnLocalProjectFilterChanged;
         }

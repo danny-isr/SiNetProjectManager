@@ -81,7 +81,7 @@ See [`Decisions\README.md`](Decisions/README.md). Active decision documents:
 
 Existing decision-style docs still in place (not yet relocated):
 
-- [`MoveToProject-Decisions-2026-05-24.md`](MoveToProject-Decisions-2026-05-24.md)
+- ~~[`MoveToProject-Decisions-2026-05-24.md`](MoveToProject-Decisions-2026-05-24.md)~~ -- **missing from repo** (Needs Review: restore from git history/Archive or replace). **Current FileMaterial / MoveToProject Target:** [`docs/FILEMATERIAL_MOVETOPROJECT.md`](../../docs/FILEMATERIAL_MOVETOPROJECT.md). Also: [`docs/EMAIL_ACC_SOURCE_OF_TRUTH.md`](../../docs/EMAIL_ACC_SOURCE_OF_TRUTH.md) + [`Domains/Email/EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md).
 - `SiNetSQL\docs\WorkflowDecisions.md` (in the SiNetSQL repository)
 
 ## 5. Archive

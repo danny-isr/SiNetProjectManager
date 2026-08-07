@@ -32,7 +32,7 @@
 
 | Layer | Meaning | Example |
 | --- | --- | --- |
-| Repo tip | What `origin/release` / `origin/development` contain | Ship commit `3bfe152`, App.Wpf **1.0.22** (verified 2026-08-07) |
+| Repo tip | What `origin/release` / `origin/development` contain | Ship commit `127dc0e`, App.Wpf **1.0.23** (verified 2026-08-07 follow-up; earlier reconciliation snapshot was `3bfe152` / 1.0.22) |
 | Automated tests | What CI / local `dotnet test` proved on a given commit | §8.1 Historical Snapshot |
 | Interactive smoke | Operator checklist on a machine | §9 -- **Not Run** unless signed |
 | Ops install | What pilot PCs actually run from UNC | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) -- **Needs Review** |
@@ -214,7 +214,7 @@ Useful classes (non-exhaustive): `StandaloneHostCompositionTests`,
 
 > **Classification:** Historical Snapshot. Measured on branch `SiWorkNet10` on 2026-08-02 after the
 > cutover / Workflow Ops runtime slice (offline + Live skipped). **Do not** treat these counts as
-> evidence for current tip (`origin/release` / `development` @ `3bfe152`, App.Wpf 1.0.22). Re-run
+> evidence for current tip (`origin/release` / `development` @ `127dc0e`, App.Wpf **1.0.23**). Re-run
 > tests on the branch under review.
 
 Measured on branch `SiWorkNet10` after the cutover / Workflow Ops runtime slice (offline + Live skipped):

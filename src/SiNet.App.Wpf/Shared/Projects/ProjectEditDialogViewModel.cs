@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Shared.Projects;
 
@@ -105,7 +106,8 @@ public sealed class ProjectEditDialogViewModel : ObservableObject, IDisposable
         IJobTypeQueryService jobTypes,
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService filterOptions,
-        IUserLookupService users)
+        IUserLookupService users,
+        IAppSettingsService? appSettings = null)
     {
         _updateService = updateService ?? throw new ArgumentNullException(nameof(updateService));
         _renameOrchestrator = renameOrchestrator ?? throw new ArgumentNullException(nameof(renameOrchestrator));
@@ -116,7 +118,11 @@ public sealed class ProjectEditDialogViewModel : ObservableObject, IDisposable
         _filterOptions = filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
         _users = users ?? throw new ArgumentNullException(nameof(users));
 
-        ParentProjectSelector = new ProjectSelectorViewModel(_projectQuery, filterOptions, _parentProjectContext);
+        ParentProjectSelector = new ProjectSelectorViewModel(
+            _projectQuery,
+            filterOptions,
+            _parentProjectContext,
+            appSettings: appSettings);
         Places = [];
         Companies = [];
         Contacts = [];

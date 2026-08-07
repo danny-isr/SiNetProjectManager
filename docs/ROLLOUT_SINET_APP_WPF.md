@@ -2,9 +2,10 @@
 
 > **Title:** Rollout checklist -- SiNet.App.Wpf
 > **Date:** 02.08.2026
-> **Updated:** 07.08.2026 (As-Is reconciliation -- metadata + repo-vs-ops evidence; checkboxes remain unchecked)
+> **Updated:** 07.08.2026 (tip `127dc0e` / 1.0.23; checkboxes remain unchecked)
 > **Status:** Active / Operational checklist (phases not signed off)
 > **Classification:** Active checklist -- **unchecked does not mean Done**
+> **Scope:** Pilot / expand phases and sign-off log for App.Wpf. Distinguishes repo tip from ops install evidence.
 > **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 >
 > Related: [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md),
@@ -23,7 +24,7 @@
 
 | Evidence | Status (2026-08-07) | Notes |
 | --- | --- | --- |
-| Repo tip `origin/release` == `origin/development` | Verified | Commit `3bfe152` -- ship App.Wpf **1.0.22** |
+| Repo tip `origin/release` == `origin/development` | Verified | Commit `127dc0e` -- ship App.Wpf **1.0.23** |
 | Ship commits / publish scripts target App.Wpf | Verified in repo | Channel 3 = `SiNet.App.Wpf` |
 | UNC share install on pilot PCs | **Needs Review** | Not proven by docs alone |
 | Interactive smoke checklist | **Not Run** / unchecked below | Operator must sign |

@@ -12,7 +12,7 @@ Define how files are filed into projects, how they relate to ACC, and how `MoveT
 - **Storage Destination** (ACC / File Server / Google Drive) for the **physical existence** of a file.
 - **Gmail** is a read-only ingestion source only — never a permanent management destination.
 - `ProjectFileInstance` is **not** a source of truth — it is a runtime projection (see below).
-- `MoveToProject-Decisions-2026-05-24.md` remains the authoritative decision log for `MoveToProject` behavior.
+- `MoveToProject-Decisions-2026-05-24.md` is **missing from repo**. For **FileMaterial / App.Wpf MoveToProject** six decisions, use [`docs/FILEMATERIAL_MOVETOPROJECT.md`](../../../../docs/FILEMATERIAL_MOVETOPROJECT.md) as the current Target. Do not invent behavior from Legacy-only assumptions when they conflict with that document.
 
 ## Core principles
 1. Filing of files happens **after** project creation. During "פתיחת פרויקט" the user reviews attachments (already uploaded to ACC Inbox); actual filing occurs once the project exists.

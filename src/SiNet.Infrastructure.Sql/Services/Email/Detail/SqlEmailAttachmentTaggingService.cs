@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Diagnostics;
 using SiNet.Application.Email.Detail;
+using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -453,7 +454,9 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
     }
 
     private static bool IsTaggableAttachment(int attachmentIndex, string fileName) =>
-        attachmentIndex >= 0
-        && !string.Equals(fileName, "00_Email.pdf", StringComparison.OrdinalIgnoreCase)
-        && !string.Equals(fileName, "manifest.json", StringComparison.OrdinalIgnoreCase);
+        !string.Equals(fileName, "manifest.json", StringComparison.OrdinalIgnoreCase)
+        && (
+            attachmentIndex >= 0
+            || (attachmentIndex == AccInboxLayout.EmailBodyAttachmentIndex
+                && string.Equals(fileName, AccInboxLayout.EmailBodyFileName, StringComparison.OrdinalIgnoreCase)));
 }

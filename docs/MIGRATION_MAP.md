@@ -1,6 +1,10 @@
 # SiNet Migration Map
 
 > **Classification:** Historical Snapshot / migration ledger (keep body; branch header retargeted 07.08.2026)
+> **Date:** 27.06.2026
+> **Updated:** 07.08.2026
+> **Status:** Historical Snapshot
+> **Scope:** Slice-by-slice ledger of the move from `SiNetProjectManager.sln` into `SiNet.sln`. Not ops SoT.
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
 > **Frozen reference (recover old code here):** `Before_refactoring`
 > Tracks the move from the legacy `SiNetProjectManager.sln` into the clean `SiNet.sln`.

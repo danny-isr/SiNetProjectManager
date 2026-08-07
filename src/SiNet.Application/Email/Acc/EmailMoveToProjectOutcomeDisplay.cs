@@ -75,8 +75,15 @@ public static class EmailMoveToProjectOutcomeDisplay
         kind switch
         {
             "Locked" => "הקובץ נעול לעריכה ב-ACC (כנראה כבר תויק בעבר).",
-            "AlreadyMovedToProject" => "הקובץ כבר הועבר לפרויקט לפי מטא-דאטה של ACC.",
+            "AlreadyMovedToProject" => "הקובץ כבר הועבר ליעד הנוכחי ב-ACC (אומת).",
+            "AlreadyMovedConflict" => string.IsNullOrWhiteSpace(detail)
+                ? "הקובץ כבר תויק ליעד אחר ב-ACC — לא ניתן להעביר שוב ליעד הנוכחי."
+                : HumanizeDetail(detail),
+            "FiledButMoveMetadataFailed" => string.IsNullOrWhiteSpace(detail)
+                ? "הקובץ תויק פיזית, אך השלמת מטא-דאטת Move/Lock ב-ACC נכשלה."
+                : HumanizeDetail(detail),
             "MissingInAcc" => "הקובץ חסר ב-ACC Inbox — נדרש שחזור/רענון.",
+            "MissingAccItemId" => "חסר קישור ל-ACC Inbox (AccItemId) — יש להעלות/לשחזר ואז לנסות שוב.",
             "DownloadFailed" => "הורדת הקובץ מ-ACC נכשלה.",
             "NoFilingTag" => "לא נמצא תיוג יעד (ProjectFile) לתיוק.",
             "ZipFilingFailed" => string.IsNullOrWhiteSpace(detail)

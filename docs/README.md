@@ -19,7 +19,7 @@ As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DO
 | **DEV machine** | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) → [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) → [`DEV_TOOLS.md`](./DEV_TOOLS.md) → [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md) |
 | **Architecture / cutover** | [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md) → [`APP_SHELL.md`](./APP_SHELL.md) → [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md) → [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) |
 | **Docs As-Is alignment** | [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md) |
-| **Email / ACC truth** | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) |
+| **Email / ACC truth** | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) → FileMaterial: [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) |
 
 Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md).
 
@@ -86,10 +86,11 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md) | Project context migration notes |
 | [`TASK_MODEL_RULES.md`](./TASK_MODEL_RULES.md) | Task model rules |
 | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Gmail label / ACC / DB truth |
+| [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) | **FileMaterial / MoveToProject** — six decisions Target (canonical) |
 | [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) | Email list migration |
 | [`EMAIL_DETAIL_COMPONENT.md`](./EMAIL_DETAIL_COMPONENT.md) | Email detail component |
 | [`EMAIL_FILING_SERVICE_DESIGN.md`](./EMAIL_FILING_SERVICE_DESIGN.md) | `IEmailFilingService` design |
-| [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) | Email → ACC Inbox ingest |
+| [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) | Email → ACC Inbox ingest (N1–N5; FileMaterial pointer) |
 | [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md) | ACC client / AccService boundary |
 | [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md) | ACC control plane / TLS status |
 | [`ACC_SERVICE_DECOUPLING.md`](./ACC_SERVICE_DECOUPLING.md) | AccService decoupling from SiNetSQL |

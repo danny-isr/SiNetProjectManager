@@ -8,6 +8,7 @@ using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Identity;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 using SiNet.Application.Tasks;
 
 namespace SiNet.App.Wpf.Surfaces.Tasks;
@@ -37,13 +38,18 @@ public sealed class TaskCreateDialogViewModel : ObservableObject, IDisposable
         ICurrentUserContext currentUser,
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService projectFilterOptions,
-        IAuthorizationQueryService? authorization = null)
+        IAuthorizationQueryService? authorization = null,
+        IAppSettingsService? appSettings = null)
     {
         _workbench = workbench ?? throw new ArgumentNullException(nameof(workbench));
         _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
         _authorization = authorization;
 
-        ProjectSelector = new ProjectSelectorViewModel(projectQuery, projectFilterOptions, _dialogProjectContext);
+        ProjectSelector = new ProjectSelectorViewModel(
+            projectQuery,
+            projectFilterOptions,
+            _dialogProjectContext,
+            appSettings: appSettings);
         Users = [];
         TaskTypes = [];
         Statuses = [];

@@ -21,7 +21,7 @@ Do **not** conflate these:
 | **Build configuration** | `Debug`, `Release` | Compile / `#if DEBUG` (role selector, DevTools menu). |
 | **Runtime environment** | Development, Production | Vault connection strings, DB `SystemSettings`, ACC place-name, Gmail/Drive targets. |
 | **Rollout stage** | Local -- Candidate -- Pilot -- Production -- Wide | Ops approval of who may install. |
-| **Product version** | e.g. `1.0.22` | Component `<Version>`. |
+| **Product version** | e.g. `1.0.23` | Component `<Version>`. |
 
 **Important:** **`Debug` != Development runtime.** An operator can run a **Release** build on the DEV machine against the **DEV** vault/DB, or (mistakenly) a Debug build pointed at production SQL. Machine role + vault/DB target define the runtime environment -- not the MSBuild configuration alone.
 

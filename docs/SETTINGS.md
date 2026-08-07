@@ -1,6 +1,10 @@
-# Settings — New System (Stage 5)
+# Settings -- New System (Stage 5)
 
-> **Status:** Stage 5 slice 2 (2026-07-03) — full settings ports + native Settings UI.
+> **Title:** Settings (Stage 5 / Stage 6 theme)
+> **Date:** 03.07.2026
+> **Updated:** 07.08.2026 (production host wording)
+> **Status:** Active / Current Source of Truth (settings ports + native UI)
+> **Scope:** Per-user JSON + global SystemSettings + theme/appearance in `SiNet.App.Wpf`.
 > **Related:** [`LOGGING.md`](./LOGGING.md), [`APP_SHELL.md`](./APP_SHELL.md) §11.
 
 ---
@@ -28,7 +32,7 @@ in New System replaces legacy `SettingsWindow` + `ManagementSettingsWindow` for 
 | `LogDirectory` | "" | Partial runtime |
 | `FloatingWindowActiveOpacity` / `IdleOpacity` | 1.0 / 0.7 | Runtime (floating windows) |
 | `FloatingTasks*` / `FloatingInspection*` geometry | NaN / defaults | Next window open |
-| `EmailProjectSelectorControlWidth` / `EmailProjectSelectorPopupWidth` | 280 / 360 | Runtime (Email ProjectSelector; DEV-017) |
+| `EmailProjectSelectorControlWidth` / `EmailProjectSelectorPopupWidth` | 280 / 360 | Runtime — shared ProjectSelector widths (Email, ProjectWork, filing picker, dialogs; DEV-017) |
 | `EnableAuthorizationTestMode` | false | **Restart** (no legacy UI) |
 
 ### 2.2 Global — `dbo.SystemSettings`

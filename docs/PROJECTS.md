@@ -1,7 +1,8 @@
 # SiNet Project Domain — Target State
 
-> **Status:** Active target documentation (source of truth) — 2026-06-27
+> **Status:** Active target documentation (source of truth) -- 2026-06-27
 > **Updated:** 07.08.2026 (As-Is reconciliation -- branch SoT; live shell = NewShellWindow)
+> **Scope:** Project domain / Current Project / shared ProjectSelector behavior for New System hosts.
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
 > **Read together with:** [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md),
 > [`MIGRATION_MAP.md`](./MIGRATION_MAP.md), [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md),
@@ -180,8 +181,10 @@ Hosts tune the control without forking XAML:
 
 | Property | Default | Purpose |
 | --- | --- | --- |
-| `SearchBoxWidth` | `340` | Width of the search editor + ▼ toggle (user-resizable on Email; see DEV-017) |
-| `PopupWidth` | `360` | Width of the results popup (independent of control width; DEV-017) |
+| `SearchBoxWidth` | `340` | Width of the search editor + ▼ toggle (user-resizable; shared persist — DEV-017) |
+| `PopupWidth` | `360` | Width of the results popup (independent of control width) |
+
+Widths persist in `settings.json` (`EmailProjectSelectorControlWidth` / `EmailProjectSelectorPopupWidth`) for **all** ProjectSelector hosts (Email, ProjectWork, filing picker, task filter, create/edit dialogs) — not Email-only.
 | `CompactMode` | `True` | Smaller height, margins, labels, and combo widths |
 | `ShowFilters` | `True` | Job Type + Status filter strip |
 | `ShowUserFilter` | `False` | User filter (deferred; hidden until semantics exist) |

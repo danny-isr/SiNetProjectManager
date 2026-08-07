@@ -86,14 +86,17 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         ICurrentProjectContext currentProject,
         TimeSpan debounce = default,
         IAppSettingsService? appSettings = null,
-        bool persistSelectorWidths = false)
+        bool persistSelectorWidths = true)
     {
         _projectQuery = projectQuery ?? throw new ArgumentNullException(nameof(projectQuery));
         _filterOptionsService = filterOptionsService ?? throw new ArgumentNullException(nameof(filterOptionsService));
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
         _debounce = debounce < TimeSpan.Zero ? TimeSpan.Zero : debounce;
         _appSettings = appSettings;
-        _persistSelectorWidths = persistSelectorWidths && appSettings is not null;
+        // Shared across Email / ProjectWork / filing picker / dialogs (same settings.json keys).
+        _persistSelectorWidths = persistSelectorWidths
+            && appSettings is not null
+            && !string.IsNullOrWhiteSpace(appSettings.UserSettingsFilePath);
 
         Projects = new ObservableCollection<ProjectSummaryDto>();
         StatusOptions = new ObservableCollection<ProjectFilterOptionDto> { AllStatusesFilterOption };
@@ -111,7 +114,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             });
         ClearSelectionCommand = new RelayCommand(_ => ClearSelection(), _ => CanClearSelection);
 
-        // Load widths before first bind so Email reopen shows last sizes (JsonAppSettings is sync I/O).
+        // Load widths before first bind so reopen shows last sizes (JsonAppSettings is sync I/O).
         TryLoadPersistedWidthsSync();
 
         _selectedProject = _currentProject.CurrentProject;

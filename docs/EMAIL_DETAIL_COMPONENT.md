@@ -54,6 +54,14 @@ See plan: IEmailBodyRenderer, IEmailAccIngestionService, IEmailAttachmentTagging
   attachments does not ingest. See `docs/NATIVE_EMAIL_ACC_INGEST.md` §N4.3.
 - “העלה ל-ACC” requires attachments **or** `IsFiledToProject`.
 
+### FileMaterial / MoveToProject (six decisions)
+
+Canonical Target: [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md).
+
+- `00_Email.pdf` is taggable as «תוכן המייל (PDF)» only when opted in; not required by default.
+- Move dismiss / `WorkItemDismissRequested` only after `AllFilesTransferred` **and** successful `CompleteAsync` with `TaskClosed` and no `WorkflowAdvancePending` — never on transfer flag alone.
+- Empty business attachments: Yes (include body PDF) / No (confirm no material → Complete) / Back.
+
 ### InboxMessageId resolution for tagging (thread-safe)
 
 When refreshing SQL attachment tag state for the selected Gmail row:

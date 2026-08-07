@@ -1,7 +1,9 @@
 # SiNet Target Architecture
 
 > **Status:** Planning / Target State (architecture rules) + Existing (production host = App.Wpf)
+> **Date:** 27.06.2026
 > **Updated:** 07.08.2026 (As-Is reconciliation -- branch SoT; pre-production claim split)
+> **Scope:** Target clean architecture rules and Existing State notes for the production App.Wpf host.
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
 > **Frozen reference (do not modify):** `Before_refactoring`
 > **New solution:** `SiNet.sln` · **Legacy/functional reference:** `SiNetProjectManager.sln`
