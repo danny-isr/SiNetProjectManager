@@ -2,7 +2,7 @@
 
 > **Title:** In-body hyperlink navigation bypasses Jumbo/WeTransfer → ACC pipeline  
 > **Date:** 03.08.2026  
-> **Status:** Implemented on `development` (`SiNet.App.Wpf` 1.0.4) — pending PROD publish + operator verification  
+> **Status:** On `release` tip (cited ship **1.0.4**; tip App.Wpf **1.0.22**) — **Needs Review:** operator verification (see [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
 > **Scope:** `SiNet.App.Wpf` email detail WebView2 body: click handling for file-transfer URLs (JumboMail, WeTransfer, and other hosts already detected by `EmailExternalDownloadLinkDetector`). Documentation-first bug + acceptance for a versioned desktop fix.  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) · Related: [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) (N2 Jumbo), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md)
 

@@ -2,7 +2,8 @@
 
 > **Status:** Implemented (New System) — full admin parity with legacy FileManager  
 > **Date:** 2026-07-30  
-> **Branch:** `SiWorkNet10`  
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
+
 > **Legacy reference:** `FileManagerView` + `FileManagerViewModel` (V2 menu «ניהול קבצים», Administrator)  
 > **New surface:** `src/SiNet.App.Wpf/Admin/FileCatalog/` · menu **מנהלה → ניהול קבצים** · feature `Shell.OpenFileCatalogAdmin`
 

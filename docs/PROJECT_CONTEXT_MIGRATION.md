@@ -1,7 +1,8 @@
 # Project Context Migration — Cross-Application Project Selector & Current Project
 
-> **Status:** Partially implemented — 2026-07-03 (shared selector + real read-only query; migration sequencing doc)
-> **Working branch:** `SiWorkNet10`
+> **Status:** Historical Snapshot / migration sequencing -- 2026-07-03 (shared selector + real read-only query)
+> **Classification:** Historical Snapshot -- [`PROJECTS.md`](./PROJECTS.md) wins on target behavior
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
 > **Target document (source of truth):** [`PROJECTS.md`](./PROJECTS.md)
 > **Read together with:** [`PROJECTS.md`](./PROJECTS.md),
 > [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md),

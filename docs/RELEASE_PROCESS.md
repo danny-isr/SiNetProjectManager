@@ -1,12 +1,27 @@
 # Release Process — SiNet.App.Wpf and companion channels
 
-> **Title:** Release Process  
-> **Date:** 02.08.2026  
-> **Updated:** 03.08.2026 (`release` + `development` branches created; CI filters and machine assignment recorded)  
-> **Status:** Active  
+> **Title:** Release Process
+> **Date:** 02.08.2026
+> **Updated:** 07.08.2026 (As-Is reconciliation -- branches exist; version in OS title; dimensions; SyncEngine folder; default branch note)
+> **Status:** Active / Current Source of Truth
 > **Scope:** How the PROD workstation ships builds to users; what changes are allowed where; gates before `publish-all.ps1`; versioning and rollback. Does not replace channel-level install detail in [`DEPLOYMENT.md`](../DEPLOYMENT.md).
+> **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
 Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md), [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md), [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md), [`BUILD_SIBLING_PINS.md`](./BUILD_SIBLING_PINS.md).
+
+---
+
+## 0. Dimension separation (do not conflate)
+
+| Dimension | Examples | Meaning |
+| --- | --- | --- |
+| Git branch | `development`, `release`, `SiWorkNet10` | Code flow. Working SoT = `release` + `development`. |
+| Build configuration | `Debug`, `Release` | Compile / `#if DEBUG` |
+| Runtime environment | Development, Production | Vault, DB, ACC, Gmail, Drive |
+| Rollout stage | Local -- Candidate -- Pilot -- Production -- Wide | Ops approval |
+| Product version | e.g. `1.0.22` | Component `<Version>` (tip verified 2026-08-07) |
+
+**GitHub default branch** is still **`SiWorkNet10`** (ops/GitHub setting) -- deprecated as working SoT; change is **Needs Review** (not done in this docs round).
 
 ---
 
@@ -162,7 +177,7 @@ Channels (authoritative list in `publish-all.ps1`):
 | # | Component | Output | Share folder |
 | --- | --- | --- | --- |
 | 1 | `SiOffice.AccService` | WiX MSI | `...\SiProjecNet2026-Full\` |
-| 2 | `MasterPlan.SyncEngine` | self-contained EXE | `...\MasterPlan.SyncEngine\` (script path; confirm on share) |
+| 2 | `MasterPlan.SyncEngine` | self-contained EXE | `...\MasterPlan.SyncEngine\` (`DeployDir` in `publish-console.ps1` -- not `MasterPlanSync\`; a stale comment in `publish-all.ps1` may still say otherwise) |
 | 3 | **`SiNet.App.Wpf`** | MSIX + `.appinstaller` | `...\SiNet.App.Wpf\` |
 | 4 | `SiNet.SecretImport` | portable EXE | `...\SiNet.SecretImport\` |
 
@@ -184,9 +199,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\SharedFolder\AppFolder\Ap
 
 1. Confirm new MSIX / `.appinstaller` timestamps on the UNC share.  
 2. Commit bumped `<Version>` values in the relevant `.csproj` files (publish scripts bump patch by default unless `-NoBump`).  
-3. **Merge `release` → `development`** (once those branches exist) so production fixes are absorbed — see §3.1.  
-4. Optional git tag on the shipped `release` commit (`Needs Review` — see §11).  
-5. Run post-release monitoring: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) §4.  
+3. **Merge `release` → `development`** so production fixes are absorbed -- see §3.1. Both branches have existed since 03.08.2026.
+4. Optional git tag on the shipped `release` commit (`Needs Review` -- see §11).
+5. Run post-release monitoring: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) §4.
 6. Pilot users: next app launch picks up MSIX update via `.appinstaller` (`OnLaunch` checks).
 
 First-time install on a user PC:
@@ -210,7 +225,7 @@ First-time install on a user PC:
 
 There is **no** single monorepo version. MSIX package version is four-part; revision must remain `0` for `.appinstaller` updates.
 
-**Gap (documented, not fixed here):** `SiNet.App.Wpf` does **not** show the version in the shell title today (legacy V2 did). Operators must correlate UNC file version / csproj / optional git tag. Showing version in UI is a recommended follow-up code slice.
+**As-Is (verified):** `SiNet.App.Wpf` **does** show the product version in the **OS window title** via `NewShellWindowTitle` (bound from `NewShellViewModel.WindowTitle`; assembly informational version from csproj `<Version>`). Operators can also correlate UNC MSIX / `.appinstaller` timestamps and optional git tags. There is no separate in-chrome "About" version widget -- that is optional polish, not a missing title.
 
 ---
 
@@ -240,9 +255,10 @@ Prefer **app rollback without DB rollback** when the schema did not change.
 ## 9. Out of Scope
 
 - Automating publish in GitHub Actions  
-- Implementing in-app version display  
 - Schema migrations as part of release (operator-owned; agents must not run them)
-- Deleting `SiWorkNet10` (see §3.2 — deprecated but retained until nothing targets it)
+- Deleting `SiWorkNet10` (see §3.2 -- deprecated but retained until nothing targets it)
+- Changing the GitHub default branch away from `SiWorkNet10` (separate ops recommendation)
+- Editing the stale `MasterPlanSync\` comment inside `publish-all.ps1` in a docs-only round
 
 ## 10. Dropped / Cancelled / Postponed
 
@@ -256,6 +272,8 @@ Prefer **app rollback without DB rollback** when the schema did not change.
 
 ## 11. Needs Review
 
-1. Whether every publish must create a git tag.  
-2. Retention policy for last-known-good MSIX outside the mirrored share folder.  
-3. When `SiWorkNet10` can be deleted — requires confirming that no CI run, automation or DEV checkout still targets it.
+1. Whether every publish must create a git tag.
+2. Retention policy for last-known-good MSIX outside the mirrored share folder.
+3. When `SiWorkNet10` can be deleted -- requires confirming that no CI run, automation or DEV checkout still targets it.
+4. Whether GitHub **default branch** should switch from `SiWorkNet10` to `release` or `development`.
+5. Ops verify that pilot UNC install actually runs App.Wpf **1.0.22**.

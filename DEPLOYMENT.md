@@ -2,11 +2,11 @@
 
 מדריך מסודר לפריסה של הרכיבים מסביבת העבודה אל שרת הקבצים `\\SI-WIN-2K19`.
 
-> **סביבות ותהליך שחרור (2026-08-02):** תפקידי מכונות PROD/DEV, שערי שחרור ו-rollback —
+> **סביבות ותהליך שחרור (2026-08-02 / עדכון 07.08.2026):** תפקידי מכונות PROD/DEV, שערי שחרור ו-rollback —
 > [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md), [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
 > ניטור אחרי פאבליש: [`docs/PRODUCTION_MONITORING.md`](docs/PRODUCTION_MONITORING.md).
 > ערוץ הדסקטופ הנוכחי הוא **`SiNet.App.Wpf`** (לא V2) — ראה גם [`docs/DESKTOP_CUTOVER.md`](docs/DESKTOP_CUTOVER.md).
-> חלק מהנתיבים ההיסטוריים ל-V2 בהמשך המסמך נשארים להפניה; מקור האמת לערוץ 3 הוא `publish-all.ps1`.
+> מקור האמת לערוצים: `publish-all.ps1`. Ledger: [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md).
 >
 > **ערכת שרת (בלי D:\repos):** אחרי `publish-all.ps1` נוצרת תיקייה עצמאית
 > `\\SI-WIN-2K19\AppFolder\AppNet\Server\` עם MSI + SecretImport + `Install-OnServer.ps1`.
@@ -15,21 +15,24 @@
 
 ---
 
-## 🗂️ סקירה כללית
+## סקירה כללית
 
-הפתרון מורכב משלושה רכיבים, ולכל אחד יש סקריפט פריסה משלו ויעד משלו:
+הפתרון מורכב מארבעה ערוצי פריסה דרך **`publish-all.ps1`**, ולכל אחד יש סקריפט ויעד משלו:
 
-| רכיב | סוג | סקריפט | יעד ב-`\\SI-WIN-2K19\AppFolder\AppNet\` |
-|---|---|---|---|
-| `SiOffice.AccService` | Windows Service | `SiOffice.AccService\publish-service.ps1` | `SiProjecNet2026-Full\` (MSI) |
-| `MasterPlan.SyncEngine` | Console (Task Scheduler) | `MasterPlan.SyncEngine\publish-console.ps1` | `MasterPlan.SyncEngine\` |
-| `SiNetProjectManagerV2` | WPF Desktop | `SiNetProjectManagerV2\publish-desktop.ps1` | `SiNetProjectManagerV2\` (MSIX + auto-update) |
+| # | רכיב | סוג | סקריפט | יעד ב-`\\SI-WIN-2K19\AppFolder\AppNet\` |
+|---|---|---|---|---|
+| 1 | `SiOffice.AccService` | Windows Service | `SiOffice.AccService\publish-service.ps1` | `SiProjecNet2026-Full\` (MSI) |
+| 2 | `MasterPlan.SyncEngine` | Console (Task Scheduler) | `MasterPlan.SyncEngine\publish-console.ps1` | `MasterPlan.SyncEngine\` (`DeployDir` -- לא `MasterPlanSync\`) |
+| 3 | **`SiNet.App.Wpf`** | WPF Desktop (production) | `src\SiNet.App.Wpf\publish-desktop.ps1` | `SiNet.App.Wpf\` (MSIX + `.appinstaller`) |
+| 4 | `SiNet.SecretImport` | portable EXE | `src\SiNet.SecretImport\publish-tool.ps1` | `SiNet.SecretImport\` |
 
-מעל שלושתם יש סקריפט-על: **`publish-all.ps1`** ש-מ-pulls אותם ברצף.
+**היסטורי (לא ערוץ פאבליש):** `SiNetProjectManagerV2` -- נשאר בריפו כ-reference; ראה `SiNetProjectManagerV2\DEPLOYMENT.md` (Superseded).
+
+מעל הכל יש סקריפט-על: **`publish-all.ps1`** שמריץ אותם ברצף.
 
 ---
 
-## 🚀 שימוש יומיומי - להריץ הכל בפעם אחת
+## שימוש יומיומי - להריץ הכל בפעם אחת
 
 זה מה שאתה רוצה לעשות ברוב הזמן. מסביבת העבודה, PowerShell:
 
@@ -39,20 +42,21 @@ git pull
 powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
 ```
 
-זה ירוץ את שלושת הערוצים ברצף:
+זה ירוץ את הערוצים ברצף:
 1. **AccService** → MSBuild + WiX → MSI → העלאה ל-`SiProjecNet2026-Full`.
 2. **SyncEngine** → `dotnet publish` self-contained single-file → robocopy ל-`MasterPlan.SyncEngine`.
-3. **DesktopV2** → MSBuild + MakeAppx + SignTool → MSIX + `.appinstaller` → robocopy ל-`SiNetProjectManagerV2`.
+3. **Desktop (`SiNet.App.Wpf`)** → MSBuild + MakeAppx + SignTool → MSIX + `.appinstaller` → robocopy ל-`SiNet.App.Wpf`.
+4. **SecretImport** → portable EXE.
 
 כל רכיב מבמפ את ה-`<Version>` שלו ב-csproj עצמאית. אם רכיב נכשל - הסקריפט עוצר ולא ממשיך.
 
 ---
 
-## 🎯 פריסה חלקית - רק רכיב אחד
+## פריסה חלקית - רק רכיב אחד
 
-### רק WPF Desktop:
+### רק WPF Desktop (production host):
 ```powershell
-cd D:\repos2026\SiNetProjectManager_GitHub\SiNetProjectManagerV2
+cd D:\repos2026\SiNetProjectManager_GitHub\src\SiNet.App.Wpf
 powershell -ExecutionPolicy Bypass -File .\publish-desktop.ps1
 ```
 
@@ -70,13 +74,13 @@ powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
 
 ### דרך publish-all עם דילוג:
 ```powershell
-.\publish-all.ps1 -SkipService -SkipConsole    # רק desktop
-.\publish-all.ps1 -SkipDesktop                 # service + console
+.\publish-all.ps1 -SkipService -SkipConsole -SkipTool    # רק desktop (App.Wpf)
+.\publish-all.ps1 -SkipDesktop                           # service + console (+ tool unless skipped)
 ```
 
 ---
 
-## 🧪 דגלים שימושיים
+## דגלים שימושיים
 
 | דגל | משמעות | מתי להשתמש |
 |---|---|---|
@@ -84,7 +88,8 @@ powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
 | `-NoBump` | להריץ עם אותה גרסה | לעשות retry אחרי שגיאה זמנית בלי לעלות מספר גרסה |
 | `-SkipService` | לדלג על AccService | רק ב-`publish-all.ps1` |
 | `-SkipConsole` | לדלג על SyncEngine | רק ב-`publish-all.ps1` |
-| `-SkipDesktop` | לדלג על WPF | רק ב-`publish-all.ps1` |
+| `-SkipDesktop` | לדלג על WPF (App.Wpf) | רק ב-`publish-all.ps1` |
+| `-SkipTool` | לדלג על SecretImport | רק ב-`publish-all.ps1` |
 
 דוגמה: בנייה מלאה לבדיקה לוקלית בלי לדפדף שרתים:
 ```powershell
@@ -93,7 +98,7 @@ powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
 
 ---
 
-## ✅ תנאי מקדים על מחשב סביבת העבודה
+## תנאי מקדים על מחשב סביבת העבודה
 
 חד-פעמי, פעם אחת בלבד:
 
@@ -104,25 +109,25 @@ powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
    - אמור להחזיר תיקייה כמו `10.0.26100.0`. אם ריק → להתקין דרך VS Installer → Modify → Individual Components → "Windows 11 SDK".
 4. **WiX Toolset** מותקן (לצורך ה-service MSI).
 5. **תעודת Code-Signing** עם `Subject = CN=SI Office` ב-`Cert:\CurrentUser\My`.
-   - יש לך, אומת בריצה האחרונה: `F3C37720E61E69D6D20C786A6AE818E4FEF0C539`.
+   - יש לך, אומת ב-ריצה אחרונה: `F3C37720E61E69D6D20C786A6AE818E4FEF0C539`.
 6. **גישה ל-`\\SI-WIN-2K19\AppFolder\AppNet\`** עם הרשאות כתיבה.
 
 ---
 
-## 🔐 התעודה (חד-פעמי לכל הארגון)
+## התעודה (חד-פעמי לכל הארגון)
 
-הסקריפט `publish-desktop.ps1` בוחר אוטומטית את התעודה הראשונה ב-`Cert:\CurrentUser\My` עם code-signing EKU. אם רוצים תעודה ספציפית:
+הסקריפט `src\SiNet.App.Wpf\publish-desktop.ps1` בוחר אוטומטית את התעודה הראשונה ב-`Cert:\CurrentUser\My` עם code-signing EKU. אם רוצים תעודה ספציפית:
 ```powershell
 .\publish-desktop.ps1 -CertThumbprint "F3C37720E61E69D6D20C786A6AE818E4FEF0C539"
 ```
 
-ה-`Subject` של התעודה (`CN=SI Office`) חייב להיות **זהה בדיוק** ל-`Publisher` ב-`SiNetProjectManagerV2\Package.appxmanifest`.
+ה-`Subject` של התעודה (`CN=SI Office`) חייב להיות **זהה בדיוק** ל-`Publisher` במניפסט של `SiNet.App.Wpf`.
 
 תחנות הקצה במשרד מקבלות את ה-`.cer` אוטומטית דרך Group Policy שכבר מוגדר ב-Active Directory.
 
 ---
 
-## 🖥️ התקנה ראשונית על תחנת קצה
+## התקנה ראשונית על תחנת קצה
 
 פעם אחת בלבד לכל מחשב משתמש:
 
@@ -132,14 +137,16 @@ powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
 ```
 דאבל-קליק → Install. עדכוני שירות ב-`publish-all.ps1` הבאים יחליפו את השירות הקיים אוטומטית (WiX MajorUpgrade).
 
-### WPF Desktop (SiNetProjectManagerV2)
+### WPF Desktop (SiNet.App.Wpf -- production)
 ```
-\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNetProjectManagerV2.appinstaller
+\\SI-WIN-2K19\AppFolder\AppNet\SiNet.App.Wpf\SiNet.App.Wpf.appinstaller
 ```
 דאבל-קליק → Install. **מעכשיו עדכון אוטומטי בכל פתיחה של האפליקציה** - אין צורך לחזור על התהליך.
 
+> **היסטורי:** נתיב V2 `...\SiNetProjectManagerV2\SiNetProjectManagerV2.appinstaller` אינו ערוץ הפאבליש הנוכחי.
+
 ### Console SyncEngine
-לא מותקן על תחנות. רץ על השרת מ-Task Scheduler, ש-מצביע ישירות על:
+לא מותקן על תחנות. רץ על השרת מ-Task Scheduler, שמצביע ישירות על:
 ```
 \\SI-WIN-2K19\AppFolder\AppNet\MasterPlan.SyncEngine\MasterPlan.SyncEngine.exe
 ```
@@ -147,14 +154,14 @@ powershell -ExecutionPolicy Bypass -File .\publish-service.ps1
 
 ---
 
-## 🔄 מחזור חיים יומיומי
+## מחזור חיים יומיומי
 
 ```powershell
 # 1. עדכון מקומי לקוד אחרון
 cd D:\repos2026\SiNetProjectManager_GitHub
 git pull
 
-# 2. פריסה (בנייה + העלאה לרשת)
+# 2. פריסה (בנייה + העלאה לרשת) -- רק מתחנת PROD
 powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
 
 # 3. commit של מספרי הגרסה החדשים
@@ -164,13 +171,13 @@ git push
 ```
 
 המשתמשים לא עושים כלום:
-- WPF: יקבלו עדכון אוטומטי בפתיחה הבאה.
+- WPF (App.Wpf): יקבלו עדכון אוטומטי בפתיחה הבאה.
 - Service: כבר מותקן + רץ; עדכון בריצת MSI הבאה (אם צריך).
 - SyncEngine: ה-Task הבא ישתמש ב-exe החדש.
 
 ---
 
-## 🧯 פתרון בעיות נפוצות
+## פתרון בעיות נפוצות
 
 ### "Windows SDK not found"
 חסר Windows 11 SDK. ב-VS Installer → Modify → Individual Components → לחפש "Windows 11 SDK" ולסמן.
@@ -179,7 +186,7 @@ git push
 הסקריפטים כבר עוקפים את זה דרך `vswhere` + `MSBuild.exe` של Visual Studio. אם בכל זאת מופיע - לוודא ש-`vswhere.exe` קיים: `Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"`.
 
 ### "NETSDK1047: Assets file doesn't have a target for 'net10.0-windows/win-x64'"
-ב-csproj חסר `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>`. כבר תוקן ב-`SiNetProjectManagerV2.csproj`. אם זה חוזר - למחוק `obj\` ו-`bin\` של הפרויקט ולנסות שוב.
+ב-csproj חסר `<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>`. אם זה חוזר - למחוק `obj\` ו-`bin\` של הפרויקט ולנסות שוב.
 
 ### "robocopy failed with exit code 8+"
 אין הרשאות כתיבה ל-`\\SI-WIN-2K19\AppFolder\AppNet\` או שהשרת לא מגיב. לבדוק `Test-Path \\SI-WIN-2K19\AppFolder\AppNet\`.
@@ -188,32 +195,24 @@ git push
 ה-`.cer` לא הגיע ל-`Trusted Root` של תחנת הקצה. לאלץ רענון GPO על אותו מחשב: `gpupdate /force`.
 
 ### "Install failed: 0x80073CF3" (MSIX)
-המשתמש מנסה להתקין MSIX עם `Identity/Name` זהה אבל `Publisher` שונה משהותקן קודם. להסיר ידנית:
-```powershell
-Get-AppxPackage *SiNet.ProjectManagerV2* | Remove-AppxPackage
-```
+המשתמש מנסה להתקין MSIX עם `Identity/Name` זהה אבל `Publisher` שונה משהותקן קודם. להסיר ידנית את החבילה הישנה (App.Wpf או V2 היסטורי) ואז להתקין מחדש מה-`.appinstaller`.
 
-### שגיאות UTF-8 משונות (`Unexpected token`, `‚?`)
-הסקריפטים נשמרים כ-UTF-8 with BOM. אם מישהו שמר אותם ב-Notepad בלי BOM - להריץ:
-```powershell
-$utf8Bom = New-Object System.Text.UTF8Encoding($true)
-$f = "פאתח\של\הסקריפט.ps1"
-$c = Get-Content $f -Raw -Encoding UTF8
-[System.IO.File]::WriteAllText($f, $c, $utf8Bom)
-```
+### שגיאות UTF-8 משונות (`Unexpected token`)
+הסקריפטים נשמרים כ-UTF-8 with BOM. אם מישהו שמר אותם בלי BOM - לתקן את קידוד הקובץ ב-editor ולא דרך המרת encoding עיוורת על markdown.
 
 ---
 
-## 📂 מסמכי משנה
+## מסמכי משנה
 
-לפרטים מעמיקים על כל ערוץ - יש קובץ `DEPLOYMENT.md` בכל פרויקט:
+לפרטים מעמיקים על כל ערוץ - יש קובץ `DEPLOYMENT.md` / שחרור בכל פרויקט:
 - `SiOffice.AccService\DEPLOYMENT.md` - WiX MSI, MajorUpgrade, ServiceController.
 - `MasterPlan.SyncEngine\DEPLOYMENT.md` - הגדרת Task Scheduler, single-file exe.
-- `SiNetProjectManagerV2\DEPLOYMENT.md` - MSIX, .appinstaller, תעודה, GPO.
+- `src\SiNet.App.Wpf\` + [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) - ערוץ הדסקטופ הפעיל.
+- `SiNetProjectManagerV2\DEPLOYMENT.md` - **Superseded / Historical** (V2 MSIX; לא ערוץ פאבליש).
 
 ---
 
-## ⏱️ TL;DR
+## TL;DR
 
 ```powershell
 cd D:\repos2026\SiNetProjectManager_GitHub

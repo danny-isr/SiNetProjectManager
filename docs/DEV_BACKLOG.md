@@ -1,12 +1,29 @@
-# DEV backlog — open defects and implementation requests
+﻿# DEV backlog — open defects and implementation requests
 
-> **Title:** Development backlog index (App.Wpf pilot gaps)  
-> **Date:** 03.08.2026  
-> **Updated:** 03.08.2026  
-> **Status:** Active  
-> **Scope:** Single index of **open** product/engineering items for the `development` branch. Each item points to a focused doc (bug / planning). Implement on DEV; absorb into `release` only after PROD acceptance. Work the list top-down; mark Done / remove rows as slices land. Not a substitute for GitHub Issues — use both if desired.
+> **Title:** Development backlog index (App.Wpf pilot gaps)
+> **Date:** 03.08.2026
+> **Updated:** 07.08.2026 (docs reconciliation — merge≠install; release tip baseline)
+> **Status:** Active / Operational Checklist
+> **Classification:** Operational Checklist (engineering index; not rollout sign-off)
+> **Scope:** Single index of product/engineering items for the `development` / `release` lines. Each item points to a focused doc. Not a substitute for GitHub Issues.
+> **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
-Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`AGENTS.md`](../AGENTS.md).
+Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md), [`AGENTS.md`](../AGENTS.md).
+
+**Baseline (07.08.2026):** `origin/release` = `origin/development` = `3bfe152` · `SiNet.App.Wpf` **1.0.22**.
+Ship commits on `release` (e.g. `chore(release): ship SiNet.App.Wpf 1.0.xx`) indicate **intent to publish to the UNC share**. That is **not** the same as:
+
+- pilot machines confirmed on that MSIX, or
+- [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) phase sign-off.
+
+Status vocabulary:
+
+| Status | Meaning |
+| --- | --- |
+| **Open / Planning / Implementing** | Work still needed on `development` |
+| **On release tip — ops verify Needs Review** | Code is on `release` @ baseline; operator must confirm install + behavior |
+| **Done** | Code on release **and** PROD/ops verify recorded (move to §3) |
+| **Superseded** | Replaced by another ID |
 
 ---
 
@@ -15,48 +32,64 @@ Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEAS
 1. Add a row here when PROD/ops discovers a gap that needs code on **`development`**.
 2. Create a dedicated doc under `docs/` (or extend an existing Planning doc).
 3. DEV agent: read the item doc → docs-first risk note → implement → bump desktop version per [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) when shipping to the share.
-4. After ship + PROD verify: set Status to **Done** and move the row to §3.
+4. After ship + **recorded** PROD verify: set Status to **Done** and move the row to §3.
+5. Do **not** mark Done only because `release` and `development` share a commit tip.
 
-## 2. Open items
+## 2. Open / in-progress items
 
-| ID | Title | Status | Priority | Doc | Requested version bump |
+| ID | Title | Status | Priority | Doc | Version note |
 | --- | --- | --- | --- | --- | --- |
-| DEV-001 | Email body links navigate in-place; Jumbo/WeTransfer must open external download window → ACC | Fixed on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | Done — `SiNet.App.Wpf` 1.0.4 |
 | DEV-002 | Admin startup alerts (sync / AccService token / ops) | Planning | P2 | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | With that feature ship |
-| DEV-003 | ProjectWork tree: `.bak` exclude, hide stale recover, green newer recover, delete stale (not orphans), preserve expand, Collapse all (ignore-folders postponed) | Fixed on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md`](./DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md) | Done — `SiNet.App.Wpf` 1.0.6 |
-| DEV-006 | ProjectWork editable scan exclusions (extensions + `~$` locks) via System Settings | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md`](./DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md) §3 | Done — `SiNet.App.Wpf` 1.0.8 |
 | DEV-007 | Open-with by extension (ACC / Drive / Windows Shell) | Planning (direction approved) | P2 | [`DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md`](./DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md) §4 | With that feature ship |
-| DEV-004 | Mark email as read — trigger moved to handling completion (see DEV-016); body-open no longer marks | Superseded by DEV-016 | P1 (pilot) | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §3 · [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | Was 1.0.5; behavior revised on development |
-| DEV-005 | «פתח ב-Gmail» button — reply / forward handled by Gmail, no in-app composer | Fixed on `development` — awaiting PROD publish + verify | P2 | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §4 | Done — `SiNet.App.Wpf` 1.0.5 |
-| DEV-008 | Project edit dialog + verified rename (FS/ACC/Drive→DB); dashboard double-click; create parity (worker + bid) | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) | Layer A done; Layer B/C in progress |
-| DEV-009 | Gmail project label identity by `(Number)` + `Email.AutoSyncProjectLabelNames` (per mailbox); duplicate decision UI | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §4 · [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Layer B keep/delete dialog |
-| DEV-010 | «דוח קריסות תחנה» — local Event Log crash report (Civil 3D + machine), CSV + Markdown for AI, shared folder per machine | Implementing | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | With that feature ship |
-| DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader integrity checklist later |
-| DEV-012 | ProjectWork: show disk-only folders/files, purple/gray colors, delete empty user folders only | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) | With that feature ship |
-| DEV-013 | ProjectWork lazy scan: expand-on-demand, unload on collapse, probe colors, DOP-4 parallel IO | Implemented on `development` — awaiting PROD publish + verify | P1 | [`DEV_PLAN_PROJECTWORK_LAZY_SCAN.md`](./DEV_PLAN_PROJECTWORK_LAZY_SCAN.md) | With that feature ship |
-| DEV-014 | Crash report round 2: incident grouping (fix «incidents per day»), WHEA bank/address payload, BIOS+DIMM facts — then context form, plugin inventory, CER/WER/dump index | Ship 1 (C+B+A) implemented on `development` — Ship 2 pending | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Two ships, one bump each |
-| DEV-015 | Crash report accuracy (Ship 1.1): WHEA corrected flag, microcode LE, no WER-only incidents, clear labels, minidump→Bugcheck | Implemented on `development` — awaiting PROD publish + verify | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md) | With accuracy ship |
-| DEV-016 | Email two-stage triage: leaf group title; mark-read on Personal/Irrelevant/FYI/Workflow; no mark on open/file; «לידיעה בלבד» | Implemented on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | With that feature ship |
-| DEV-017 | Email UX: exclusive group order, project-switch detail refresh, CanRefresh/IsBusy, ProjectSelector dual widths in settings.json | Implemented on `development` — awaiting PROD publish + verify | P1 (pilot) | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | With that feature ship |
+| DEV-008 | Project edit dialog + verified rename (FS/ACC/Drive→DB); dashboard double-click; create parity (worker + bid) | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) | Layer A done; Layer B/C in progress — **Needs Review** vs tip |
+| DEV-009 | Gmail project label identity by `(Number)` + `Email.AutoSyncProjectLabelNames` (per mailbox); duplicate decision UI | Implementing | P1 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §4 · [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Layer B keep/delete dialog — **Needs Review** vs tip |
+| DEV-010 | «דוח קריסות תחנה» — local Event Log crash report | Implementing / partial on tip | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | Ships appear in 1.0.20+ line — **Needs Review** completeness |
+| DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader checklist later |
+| DEV-014 | Crash report round 2 Ship 2: context form, plugin inventory, CER/WER/dump index | Ship 1 on tip; Ship 2 pending | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Ship 1 via 1.0.21 line |
+
+## 2b. On `release` tip — ops verify (Needs Review)
+
+Code for these IDs is present on `origin/release` @ `3bfe152` (App.Wpf **1.0.22** and prior ship commits). **Do not** treat as Done until operator verify is recorded.
+
+| ID | Title | Evidence on tip | Doc | Earliest cited ship |
+| --- | --- | --- | --- | --- |
+| DEV-001 | Email body links → external download window → ACC | On tip | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | 1.0.4 |
+| DEV-003 | ProjectWork tree bak/recover UX | On tip | [`DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md`](./DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md) | 1.0.6 |
+| DEV-005 | «פתח ב-Gmail» | On tip | [`DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md`](./DEV_PLAN_EMAIL_READ_STATE_AND_GMAIL_OPEN.md) §4 | 1.0.5 |
+| DEV-006 | ProjectWork editable scan exclusions | On tip | [`DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md`](./DEV_PLAN_PROJECTWORK_SCAN_EXCLUSIONS_AND_OPEN.md) §3 | 1.0.8 |
+| DEV-012 | ProjectWork disk-only folders | On tip (`ship 1.0.17`) | [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) | 1.0.17 |
+| DEV-013 | ProjectWork lazy scan | On tip (`ship 1.0.18`) | [`DEV_PLAN_PROJECTWORK_LAZY_SCAN.md`](./DEV_PLAN_PROJECTWORK_LAZY_SCAN.md) | 1.0.18 |
+| DEV-015 | Crash report accuracy | On tip (`ship 1.0.22`) | [`DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md) | 1.0.22 |
+| DEV-016 | Email two-stage triage | On tip (`ship 1.0.22`) | [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | 1.0.22 |
+| DEV-017 | Email UX / ProjectSelector dual widths | On tip (`ship 1.0.22`); local WIP may add more selector polish | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | 1.0.22 |
+
+| ID | Title | Notes |
+| --- | --- | --- |
+| DEV-004 | Mark email as read trigger | **Superseded by DEV-016** — see triage plan |
 
 ## 3. Done / cancelled
 
 | ID | Title | Outcome | Date |
 | --- | --- | --- | --- |
-| — | — | — | — |
+| — | — | *(none recorded with operator verify yet — see §2b)* | — |
 
 ## 4. Out of Scope
 
 - Tracking every historical V2 parity gap (use domain docs / migration maps)
 - Editing `Docs/Archive` as active backlog
 - Auto-creating GitHub Issues from this file (manual optional)
+- Inferring "users have the feature" from git tip alone
 
 ## 5. Dropped / Cancelled / Postponed
 
 | Item | Status | Why |
 | --- | --- | --- |
 | Separate `docs/bugs/` folder tree | Postponed | Keep flat `docs/DEV_*.md` + this index for discoverability |
+| Status "awaiting PROD publish" while tip already includes ship commits | Dropped wording | Replaced by §2b + Needs Review verify |
 
 ## 6. Needs Review
 
-- Whether PROD wants GitHub Issues mirrored 1:1 with this index.
+1. Operator confirmation that pilot PCs actually received MSIX builds through 1.0.22.
+2. Whether DEV-008/009/010/011 partial layers are fully on tip or still diverging on a local DEV workspace.
+3. Whether PROD wants GitHub Issues mirrored 1:1 with this index.
+4. Local workspace note (07.08.2026): checkout may lag `origin/development` by the ship commit and may hold uncommitted ProjectSelector polish — do not confuse with remote tip.

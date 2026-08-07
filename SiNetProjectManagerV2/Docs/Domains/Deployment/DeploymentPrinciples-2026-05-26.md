@@ -1,13 +1,13 @@
 # Deployment Principles
 
-- **Decision date / Updated date:** 26.05.2026
-- **Status:** Active — source of truth for office installation, services,
-  and centralized authorization at deployment level.
+- **Decision date / Updated date:** 26.05.2026 / **07.08.2026** (desktop SoT retarget)
+- **Status:** **Superseded for desktop production SoT** -- keep for cross-cutting install/auth principles; desktop channel SoT is [`docs/RELEASE_PROCESS.md`](../../../../docs/RELEASE_PROCESS.md) + root [`DEPLOYMENT.md`](../../../../DEPLOYMENT.md) (`SiNet.App.Wpf`).
 - **Scope:** Office installation, Windows Service, scheduled tasks, WPF
-  client (MSIX + auto-update), prerequisites, shared folders, ACC
+  client (historical V2 MSIX + current App.Wpf), prerequisites, shared folders, ACC
   service, Google connection, WebView2 runtime / profile, configuration,
   diagnostics / `System Status`, and **centralized Autodesk / Google
   authorization**.
+- **Reconciliation:** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](../../../../docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
 ## Purpose
 Define how the application is installed, updated, and authorized in a
@@ -17,11 +17,13 @@ exist in this repository.
 ## Source of truth
 - Repository-level [`DEPLOYMENT.md`](../../../../DEPLOYMENT.md) is the
   TL;DR for the whole solution and the **master script entry point**.
+- [`docs/RELEASE_PROCESS.md`](../../../../docs/RELEASE_PROCESS.md) for
+  publish gates and the production desktop channel (`SiNet.App.Wpf`).
 - [`SiOffice.AccService\DEPLOYMENT.md`](../../../../SiOffice.AccService/DEPLOYMENT.md)
   for the `SiOffice.AccService` Windows Service (WiX MSI, MajorUpgrade,
   `Install-OnServer.ps1`).
 - [`SiNetProjectManagerV2\DEPLOYMENT.md`](../../../DEPLOYMENT.md) for
-  the WPF client (MSIX + `.appinstaller` + auto-update + code-signing).
+  the **historical** V2 WPF client (MSIX + `.appinstaller`) -- **Superseded** as desktop SoT.
 - [`MasterPlan.SyncEngine\DEPLOYMENT.md`](../../../../MasterPlan.SyncEngine/DEPLOYMENT.md)
   for the scheduled-task console.
 - This document for **cross-cutting** deployment, authorization,

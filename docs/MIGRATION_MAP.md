@@ -1,9 +1,11 @@
 # SiNet Migration Map
 
-> **Working branch:** `SiWorkNet10` · **Frozen reference (recover old code here):** `Before_refactoring`
+> **Classification:** Historical Snapshot / migration ledger (keep body; branch header retargeted 07.08.2026)
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
+> **Frozen reference (recover old code here):** `Before_refactoring`
 > Tracks the move from the legacy `SiNetProjectManager.sln` into the clean `SiNet.sln`.
 
-**Status legend:** ⬜ Not started · 🟡 In progress · ✅ Replaced (old path retired) · 🔒 Frozen reference
+**Status legend:** Not started / In progress / Replaced (old path retired) / Frozen reference
 
 A legacy path may be retired **only** when: the new path compiles, the UI flow works, tests
 exist/updated, and its row below is marked **✅ Replaced**.
@@ -1733,4 +1735,4 @@ MoveToProject belongs outside the screen, in ProjectFileFilingService or equival
 ## Recovery points
 
 - **Frozen reference:** `Before_refactoring` 🔒 — never modify; restore any old file from here.
-- **Working branch:** `SiWorkNet10`.
+- **Working branches:** `release` + `development` (`SiWorkNet10` deprecated -- Historical mentions elsewhere in this ledger may remain).

@@ -1,7 +1,8 @@
 # Google Boundary
 
 > **Status:** Active — ProjectWork Drive + MasterPlan Reports Sheets (S3, 2026-07-28)  
-> **Branch:** `SiWorkNet10`
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
+> **Updated:** 07.08.2026 (As-Is -- desktop host vs V2 reference)
 
 This document records the **current code truth** for Google/Gmail/Drive/Sheets across the clean stack
 and the legacy host. It exists to prevent doc/code drift while the refactor is split between:
@@ -26,9 +27,12 @@ decision for any behavior change.
   uses `IConnectorAuthService` only (reports may call Sheets helpers after that session is ready).
 - **Drive base folder (locked):** `GoogleDrive:SharedDriveId` + `GoogleDrive:ProjectsRootFolderId`
   (central projects root). All ProjectWork Drive paths are resolved under that root.
-- **Production today:** `SiNetProjectManagerV2` still uses the legacy Google path for Sheets/Reports
-  and for the legacy ProjectWork window; the New System graph registers the native module additively.
-- **Still legacy today:** V2 R01–R03 dialogs (GoogleConnector Reports), Inspection Drive consumers,
+- **Production desktop host (As-Is):** `SiNet.App.Wpf` uses the **native** Google module
+  (`SiNet.Infrastructure.Google`) for Gmail + approved Drive/Sheets surfaces in the pilot envelope.
+- **V2 reference (not published):** `SiNetProjectManagerV2` may still use the **legacy** Google path
+  (`SiOffice.GoogleConnector`) for Sheets/Reports and the legacy ProjectWork window when that host is
+  run from source. Do not read "V2 legacy Google" as the office production desktop path.
+- **Still legacy under V2 only:** V2 R01-R03 dialogs (GoogleConnector Reports), Inspection Drive consumers,
   legacy outbound send, and legacy Gmail throttle/full-body under `SiNetProjectManagerV2`.
 - **Not used at all:** Google Docs, Google Calendar, Google Tasks.
 - **Reports Sheets (approved S3):** native R01–R03 use **User OAuth** + `Spreadsheets` on the shared

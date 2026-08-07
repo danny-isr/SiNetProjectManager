@@ -192,7 +192,7 @@ Use it when a user reports repeated Civil 3D crashes or a machine that reboots o
 | Gap | Impact | Recommended follow-up |
 | --- | --- | --- |
 | Central default level Warning; lifecycle often Information | Quiet central share during “healthy” sessions | **Accepted for early pilot** (keep Warning). Later optional: lifecycle markers at Warning in code — not an ops level change now |
-| No version in shell UI | Hard to know which build a user runs | Code slice: show assembly/MSIX version in title or About |
+| OS title shows version (As-Is) | Operators can confirm build from window title; UNC/MSIX still useful | Version comes from `NewShellWindowTitle` / assembly informational version -- optional About polish only |
 | No `Environment` enricher | DEV noise on same share hard to filter | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) §6.1 |
 | No in-app log viewer | Operators need PowerShell / Explorer on UNC | Acceptable for pilot; optional later |
 | Standalone stalled-workflow background loop | Relies on human Ops Dashboard | Decide whether to host watchdog in App.Wpf or a service |

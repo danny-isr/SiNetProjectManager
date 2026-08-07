@@ -1,12 +1,13 @@
 # SiNet — Repository documentation index (`docs/`)
 
-> **Title:** docs/ README — New System & ops documentation index  
-> **Date:** 02.08.2026  
-> **Updated:** 06.08.2026  
-> **Status:** Active  
+> **Title:** docs/ README -- New System & ops documentation index
+> **Date:** 02.08.2026
+> **Updated:** 07.08.2026
+> **Status:** Active
 > **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops, DEV backlog). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
+As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
 
 ---
 
@@ -17,6 +18,7 @@ Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/A
 | **PROD machine (release + ops)** | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) → [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) → [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) → [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) |
 | **DEV machine** | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) → [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) → [`DEV_TOOLS.md`](./DEV_TOOLS.md) → [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md) |
 | **Architecture / cutover** | [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md) → [`APP_SHELL.md`](./APP_SHELL.md) → [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md) → [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) |
+| **Docs As-Is alignment** | [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md) |
 | **Email / ACC truth** | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) |
 
 Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md).
@@ -27,6 +29,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 
 | Document | Purpose |
 | --- | --- |
+| [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md) | As-Is docs reconciliation ledger (dimensions, contradictions, Needs Review) |
 | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) | PROD vs DEV machine roles, config placement, allowed ops, Google/ACC isolation target |
 | [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) | Publish gates, versioning, rollback; who may run `publish-all.ps1` |
 | [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) | Live log tails, System Status, Workflow Ops, pilot routines |

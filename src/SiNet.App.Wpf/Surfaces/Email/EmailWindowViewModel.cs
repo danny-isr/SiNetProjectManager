@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Collections.ObjectModel;
+using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inspection;
@@ -57,7 +58,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             new FakeProjectFilterOptionsService(),
             new InMemoryCurrentProjectContext(),
             new DesignEmailGateway(),
-            new DesignConnectorAuthService())
+            new DesignConnectorAuthService(),
+            NullAppSettingsService.Instance)
     {
     }
 
@@ -65,17 +67,13 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IProjectQueryService projectQuery,
         IProjectFilterOptionsService filterOptions,
         ICurrentProjectContext currentProject)
-        : this(projectQuery, filterOptions, currentProject, new DesignEmailGateway(), new DesignConnectorAuthService())
-    {
-    }
-
-    public EmailWindowViewModel(
-        IProjectQueryService projectQuery,
-        IProjectFilterOptionsService filterOptions,
-        ICurrentProjectContext currentProject,
-        IEmailGateway emailGateway,
-        IConnectorAuthService googleAuthService)
-        : this(projectQuery, filterOptions, currentProject, emailGateway, googleAuthService, emailInboxQuery: null, threadLinkQuery: null)
+        : this(
+            projectQuery,
+            filterOptions,
+            currentProject,
+            new DesignEmailGateway(),
+            new DesignConnectorAuthService(),
+            NullAppSettingsService.Instance)
     {
     }
 
@@ -85,36 +83,73 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         ICurrentProjectContext currentProject,
         IEmailGateway emailGateway,
         IConnectorAuthService googleAuthService,
-        IEmailInboxQueryService? emailInboxQuery,
-        IEmailThreadLinkQueryService? threadLinkQuery)
+        IAppSettingsService? appSettings = null)
         : this(
             projectQuery,
             filterOptions,
             currentProject,
             emailGateway,
             googleAuthService,
-            emailInboxQuery,
-            threadLinkQuery,
-            filingService: null,
-            statusService: null,
-            currentUser: null,
-            accStatusService: null,
-            accUploadCoordinator: null,
-            moveToProjectService: null,
-            moveEligibility: null,
-            workflowContextService: null,
-            suggestedActionService: null,
-            actionExecutionService: null,
-            taskCompletionService: null,
-            bodyRenderer: null,
-            externalDownloadCoordinator: null,
-            externalDownloadBrowserHost: null,
-            accIngestQueue: null,
-            ingestSessionEnsurer: null,
-            backgroundWorkTracker: null,
-            accClosePrompt: null,
-            threadMappingSync: null)
+            appSettings ?? NullAppSettingsService.Instance,
+            emailInboxQuery: null,
+            threadLinkQuery: null)
     {
+    }
+
+    /// <summary>DI factory — always wires <see cref="IAppSettingsService"/> for selector width persistence.</summary>
+    public static EmailWindowViewModel CreateFromServices(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return new EmailWindowViewModel(
+            services.GetRequiredService<IProjectQueryService>(),
+            services.GetRequiredService<IProjectFilterOptionsService>(),
+            services.GetRequiredService<ICurrentProjectContext>(),
+            TryGetService<IEmailGateway>(services) ?? new DesignEmailGateway(),
+            TryGetService<IConnectorAuthService>(services) ?? new DesignConnectorAuthService(),
+            TryGetService<IAppSettingsService>(services) ?? NullAppSettingsService.Instance,
+            TryGetService<IEmailInboxQueryService>(services),
+            TryGetService<IEmailThreadLinkQueryService>(services),
+            TryGetService<IEmailFilingService>(services),
+            TryGetService<IEmailStatusService>(services),
+            TryGetService<ICurrentUserContext>(services),
+            TryGetService<IEmailAccStatusService>(services),
+            TryGetService<IEmailAccUploadCoordinator>(services),
+            TryGetService<IEmailMoveToProjectService>(services),
+            TryGetService<IEmailMoveToProjectEligibilityService>(services),
+            TryGetService<IEmailWorkflowContextService>(services),
+            TryGetService<IEmailSuggestedActionService>(services),
+            TryGetService<IEmailSuggestedActionExecutionService>(services),
+            TryGetService<ITaskCompletionService>(services),
+            TryGetService<IEmailBodyRenderer>(services),
+            TryGetService<IEmailExternalDownloadCoordinator>(services),
+            TryGetService<AccBrowserHost>(services),
+            TryGetService<IEmailAccIngestQueue>(services),
+            TryGetService<IGoogleIngestSessionEnsurer>(services),
+            TryGetService<IEmailAccBackgroundWorkTracker>(services),
+            TryGetService<IEmailAccClosePrompt>(services),
+            TryGetService<IEmailThreadMappingSyncService>(services),
+            TryGetService<IEmailAttachmentTaggingService>(services),
+            TryGetService<IEmailAttachmentProjectFilePickerHost>(services),
+            TryGetService<IEmailFilingProjectPickerHost>(services),
+            TryGetService<IEmailAlternativeNamePromptHost>(services),
+            TryGetService<IShellContentHost>(services),
+            TryGetService<IAccResolvedDocsUrlLauncher>(services),
+            TryGetService<IProjectWorkSurfaceHost>(services),
+            TryGetService<IEmailGmailModifyService>(services),
+            TryGetService<IProjectGmailLabelSyncService>(services));
+    }
+
+    private static T? TryGetService<T>(IServiceProvider services) where T : class
+    {
+        try
+        {
+            return services.GetService<T>();
+        }
+        catch (InvalidOperationException)
+        {
+            // Incomplete test graphs may register a host whose deps are missing.
+            return null;
+        }
     }
 
     public EmailWindowViewModel(
@@ -123,11 +158,12 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         ICurrentProjectContext currentProject,
         IEmailGateway emailGateway,
         IConnectorAuthService googleAuthService,
-        IEmailInboxQueryService? emailInboxQuery,
-        IEmailThreadLinkQueryService? threadLinkQuery,
-        IEmailFilingService? filingService,
-        IEmailStatusService? statusService,
-        ICurrentUserContext? currentUser,
+        IAppSettingsService appSettings,
+        IEmailInboxQueryService? emailInboxQuery = null,
+        IEmailThreadLinkQueryService? threadLinkQuery = null,
+        IEmailFilingService? filingService = null,
+        IEmailStatusService? statusService = null,
+        ICurrentUserContext? currentUser = null,
         IEmailAccStatusService? accStatusService = null,
         IEmailAccUploadCoordinator? accUploadCoordinator = null,
         IEmailMoveToProjectService? moveToProjectService = null,
@@ -152,8 +188,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null,
         IProjectWorkSurfaceHost? projectWorkHost = null,
         IEmailGmailModifyService? gmailModify = null,
-        IProjectGmailLabelSyncService? projectLabelSync = null,
-        IAppSettingsService? appSettings = null)
+        IProjectGmailLabelSyncService? projectLabelSync = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -238,7 +273,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             filterOptions,
             _currentProject,
             appSettings: appSettings,
-            persistSelectorWidths: true);
+            persistSelectorWidths: appSettings is not NullAppSettingsService);
         _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
         _googleAuthService.AuthStateChanged += OnAuthStateChanged;
         UpdateActiveProjectDisplay(_currentProject.CurrentProject);
@@ -925,5 +960,25 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         ActiveProjectDisplay = project is null
             ? "לא נבחר פרויקט"
             : $"{project.ProjectNumber} — {project.ProjectName}";
+    }
+
+    /// <summary>Design/tests fallback — no disk writes. Production DI supplies JsonAppSettingsService.</summary>
+    internal sealed class NullAppSettingsService : IAppSettingsService
+    {
+        public static NullAppSettingsService Instance { get; } = new();
+
+        public string UserSettingsFilePath => string.Empty;
+
+        public Task<UserAppSettingsDto> GetUserAppSettingsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(UserAppSettingsDefaults.Create());
+
+        public Task SaveUserAppSettingsAsync(UserAppSettingsDto settings, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<UserLoggingSettingsDto> GetUserLoggingSettingsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(UserAppSettingsDefaults.Create().Logging);
+
+        public Task SaveUserLoggingSettingsAsync(UserLoggingSettingsDto settings, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

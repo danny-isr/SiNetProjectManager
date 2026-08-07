@@ -1,10 +1,14 @@
-﻿# 🔐 SiNetProjectManager - מדריך התקנה ופריסה
+﻿# SiNetProjectManager - מדריך התקנה ופריסה (Secrets)
+
+> **המסמך הזה הוא מקור האמת לסדר התקנת סודות.** פריסת דסקטופ: ערוץ 3 = **`SiNet.App.Wpf`** (לא V2).
+> Ledger: [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md).
+> **Needs Review:** האם `SiNet.secrets` על ה-share עדיין תחת `SiNetProjectManagerV2\` או הועבר.
 
 > **המסמך הזה הוא מקור האמת היחיד.** כל פעם שצריך לפרוס משהו או להחליף מפתחות - תפתח את זה ותעשה לפי הסדר.
 
 ---
 
-## ⚡ TL;DR - מה עושים ב-99% מהמקרים
+## TL;DR - מה עושים ב-99% מהמקרים
 
 **1. במחשב הפיתוח (PowerShell):**
 ```powershell
@@ -17,6 +21,8 @@ powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
 powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\Install-OnServer.ps1" -SecretsFile "\\SI-WIN-2K19\AppFolder\AppNet\SiNetProjectManagerV2\SiNet.secrets"
 ```
 
+> **Needs Review:** נתיב `SiNet.secrets` עדיין מצביע על תיקיית V2 ההיסטורית על ה-share. אם הועבר -- לעדכן כאן ואת `Install-OnServer` usage.
+
 זהו. שני שלבים. הסקריפט בשרת ישאל שתי סיסמאות ויעשה הכל.
 
 ---
@@ -25,9 +31,11 @@ powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffic
 
 | רכיב | רץ ב | משתמש Windows |
 |---|---|---|
-| `SiNetProjectManagerV2` (WPF) | מחשבי משתמשים | המשתמש המחובר |
+| **`SiNet.App.Wpf`** (WPF -- production desktop) | מחשבי משתמשים | המשתמש המחובר |
 | `SiOffice.AccService` (Service) | `SI-WIN-2K19` | **`SI-ENG\sieng`** |
 | `MasterPlan.SyncEngine` (Tasks) | `SI-WIN-2K19` | **`SI-ENG\sieng`** |
+
+> **היסטורי:** `SiNetProjectManagerV2` היה host הדסקטופ הקודם; אינו ערוץ הפאבליש הנוכחי.
 
 **הכלל:** Windows Credential Manager הוא **per-user** (DPAPI). השירות חייב לרוץ כאותו משתמש שהסודות נשמרו אצלו, אחרת הוא לא יראה אותם.
 
@@ -61,9 +69,9 @@ Thumbprint pins של AccService **אינם** ב-vault — הם ב-System Setting
 
 ### שלב 1: עדכון מפתחות במחשב הפיתוח
 
-1. הרץ את WPF `SiNetProjectManagerV2` → פתח `SecretSetupWindow`.
+1. הרץ את WPF **`SiNet.App.Wpf`** → פתח `SecretSetupWindow` (מנהלה → מפתחות וסודות).
 2. מלא/עדכן שדות → **שמור** (כל הנקודות ירוקות).
-3. **📦 ייצוא חבילה** → סיסמה חזקה → שמור כ-`SiNet.secrets`.
+3. **ייצוא חבילה** → סיסמה חזקה → שמור כ-`SiNet.secrets`.
 
 הקובץ מוצפן AES-256 + PBKDF2.
 
@@ -77,8 +85,10 @@ powershell -ExecutionPolicy Bypass -File .\publish-all.ps1
 זה ירוץ 4 ערוצים:
 1. **AccService** → MSI → `\\SI-WIN-2K19\AppFolder\AppNet\SiProjecNet2026-Full\SiOfficeAccService.msi`
 2. **SyncEngine** → robocopy → `\\SI-WIN-2K19\AppFolder\AppNet\MasterPlan.SyncEngine\`
-3. **WPF (MSIX)** → `\\...\SiNetProjectManagerV2\` + `.appinstaller`
+3. **WPF (`SiNet.App.Wpf` MSIX)** → `\\...\SiNet.App.Wpf\` + `.appinstaller`
 4. **SecretImport CLI + Install-OnServer.ps1** → `\\SI-WIN-2K19\AppFolder\AppNet\SiOffice.AccService\` + `\\...\SiNet.SecretImport\`
+
+> **Needs Review:** העתקת `SiNet.secrets` ל-`\\...\SiNetProjectManagerV2\SiNet.secrets` עדיין מופיעה למטה כנתיב ops היסטורי -- לאשר אם עדיין בתוקף.
 
 **סוויצ'ים שימושיים (תמיד באותו פורמט):**
 ```powershell

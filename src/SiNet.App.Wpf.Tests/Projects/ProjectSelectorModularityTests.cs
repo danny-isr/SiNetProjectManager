@@ -68,6 +68,21 @@ public sealed class ProjectSelectorModularityTests
     }
 
     [Fact]
+    public void Rtl_resize_mouse_left_increases_width_continuously()
+    {
+        // Grip is on the visual left under RTL — mouse moving left (negative screen ΔX) grows.
+        Assert.Equal(320d, ProjectSelectorView.ComputeWidthFromMouseDelta(280, -40, FlowDirection.RightToLeft));
+        Assert.Equal(240d, ProjectSelectorView.ComputeWidthFromMouseDelta(280, 40, FlowDirection.RightToLeft));
+    }
+
+    [Fact]
+    public void Ltr_resize_mouse_right_increases_width_continuously()
+    {
+        Assert.Equal(320d, ProjectSelectorView.ComputeWidthFromMouseDelta(280, 40, FlowDirection.LeftToRight));
+        Assert.Equal(240d, ProjectSelectorView.ComputeWidthFromMouseDelta(280, -40, FlowDirection.LeftToRight));
+    }
+
+    [Fact]
     public async Task Selection_still_publishes_to_current_project_context()
     {
         var project = new ProjectSummaryDto(

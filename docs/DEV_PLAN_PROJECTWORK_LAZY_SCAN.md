@@ -2,7 +2,7 @@
 
 > **Title:** Lazy expand / unload collapse / presence probe / scoped rescan / DOP-4 parallel IO  
 > **Date:** 05.08.2026  
-> **Status:** Implemented on `development` — awaiting PROD publish + verify  
+> **Status:** On `release` tip @ `3bfe152` (App.Wpf line through **1.0.22**) — **Needs Review:** operator/pilot verify (see [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
 > **Scope:** `SiNet.App.Wpf` ProjectWork tree performance for large projects (~20k+ files)  
 > **Backlog:** [`DEV_BACKLOG.md`](./DEV_BACKLOG.md)  
 > Related: [`DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md`](./DEV_PLAN_PROJECTWORK_DISK_FOLDERS.md) (DEV-012 colors/filing unchanged)

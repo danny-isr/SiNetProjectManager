@@ -58,6 +58,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
     private string _statusMessage = string.Empty;
     private double _controlWidth = UserAppSettingsDefaults.EmailProjectSelectorControlWidth;
     private double _popupWidth = UserAppSettingsDefaults.EmailProjectSelectorPopupWidth;
+    private bool _widthsDirty;
 
     public ProjectSelectorViewModel()
         : this(new FakeProjectQueryService(), new FakeProjectFilterOptionsService(), new InMemoryCurrentProjectContext())
@@ -110,6 +111,9 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             });
         ClearSelectionCommand = new RelayCommand(_ => ClearSelection(), _ => CanClearSelection);
 
+        // Load widths before first bind so Email reopen shows last sizes (JsonAppSettings is sync I/O).
+        TryLoadPersistedWidthsSync();
+
         _selectedProject = _currentProject.CurrentProject;
         if (_selectedProject is not null)
         {
@@ -134,6 +138,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             var clamped = Math.Clamp(value, 160, 900);
             if (SetField(ref _controlWidth, clamped))
             {
+                _widthsDirty = true;
                 QueuePersistWidths();
             }
         }
@@ -148,6 +153,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             var clamped = Math.Clamp(value, 160, 900);
             if (SetField(ref _popupWidth, clamped))
             {
+                _widthsDirty = true;
                 QueuePersistWidths();
             }
         }
@@ -307,6 +313,53 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         await LoadAsync(cancellationToken).ConfigureAwait(true);
     }
 
+    /// <summary>Writes current widths immediately (end of drag / dispose). Cancels any pending debounce.</summary>
+    public void FlushPersistWidths()
+    {
+        if (!_persistSelectorWidths || _appSettings is null)
+        {
+            return;
+        }
+
+        CancelPendingWidthSave();
+        try
+        {
+            var current = _appSettings.GetUserAppSettingsAsync(CancellationToken.None).GetAwaiter().GetResult();
+            _appSettings.SaveUserAppSettingsAsync(
+                    current with
+                    {
+                        EmailProjectSelectorControlWidth = ControlWidth,
+                        EmailProjectSelectorPopupWidth = PopupWidth,
+                    },
+                    CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+            _widthsDirty = false;
+        }
+        catch
+        {
+            // Persistence failures are non-fatal for the selector.
+        }
+    }
+
+    private void TryLoadPersistedWidthsSync()
+    {
+        if (!_persistSelectorWidths || _appSettings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var settings = _appSettings.GetUserAppSettingsAsync(CancellationToken.None).GetAwaiter().GetResult();
+            ApplyPersistedWidths(settings);
+        }
+        catch
+        {
+            // Keep defaults — layout persistence must not block selector construction.
+        }
+    }
+
     private async Task LoadPersistedWidthsAsync(CancellationToken cancellationToken)
     {
         if (!_persistSelectorWidths || _appSettings is null)
@@ -317,10 +370,7 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         try
         {
             var settings = await _appSettings.GetUserAppSettingsAsync(cancellationToken).ConfigureAwait(true);
-            _controlWidth = Math.Clamp(settings.EmailProjectSelectorControlWidth, 160, 900);
-            _popupWidth = Math.Clamp(settings.EmailProjectSelectorPopupWidth, 160, 900);
-            OnPropertyChanged(nameof(ControlWidth));
-            OnPropertyChanged(nameof(PopupWidth));
+            ApplyPersistedWidths(settings);
         }
         catch (OperationCanceledException)
         {
@@ -332,6 +382,14 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void ApplyPersistedWidths(UserAppSettingsDto settings)
+    {
+        _controlWidth = Math.Clamp(settings.EmailProjectSelectorControlWidth, 160, 900);
+        _popupWidth = Math.Clamp(settings.EmailProjectSelectorPopupWidth, 160, 900);
+        OnPropertyChanged(nameof(ControlWidth));
+        OnPropertyChanged(nameof(PopupWidth));
+    }
+
     private void QueuePersistWidths()
     {
         if (!_persistSelectorWidths || _appSettings is null)
@@ -339,11 +397,30 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _pendingWidthSaveCts?.Cancel();
-        _pendingWidthSaveCts?.Dispose();
+        CancelPendingWidthSave();
         var cts = new CancellationTokenSource();
         _pendingWidthSaveCts = cts;
         _ = PersistWidthsDebouncedAsync(cts.Token);
+    }
+
+    private void CancelPendingWidthSave()
+    {
+        var pending = Interlocked.Exchange(ref _pendingWidthSaveCts, null);
+        if (pending is null)
+        {
+            return;
+        }
+
+        try
+        {
+            pending.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // already disposed
+        }
+
+        pending.Dispose();
     }
 
     private async Task PersistWidthsDebouncedAsync(CancellationToken cancellationToken)
@@ -359,10 +436,11 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
                     EmailProjectSelectorPopupWidth = PopupWidth,
                 },
                 cancellationToken).ConfigureAwait(true);
+            _widthsDirty = false;
         }
         catch (OperationCanceledException)
         {
-            // superseded
+            // superseded by newer drag / FlushPersistWidths
         }
         catch
         {
@@ -710,8 +788,14 @@ public sealed class ProjectSelectorViewModel : ObservableObject, IDisposable
         pending?.Cancel();
         pending?.Dispose();
 
-        var widthPending = Interlocked.Exchange(ref _pendingWidthSaveCts, null);
-        widthPending?.Cancel();
-        widthPending?.Dispose();
+        // Flush before dispose so close-app after resize does not lose a pending debounce.
+        if (_widthsDirty)
+        {
+            FlushPersistWidths();
+        }
+        else
+        {
+            CancelPendingWidthSave();
+        }
     }
 }

@@ -227,7 +227,9 @@ implicit `Menu` / `MenuItem` / `ContextMenu` / `TreeView` (typography inheritanc
 
 XAML dictionaries: `SiNet.App.Wpf/Theme/TypographyResources.xaml`, `BrushResources.xaml`, `ThemeStyles.xaml`.
 
-**V2 host:** production runs under `SiNetProjectManagerV2` — theme XAML is **not** in V2 `App.xaml`. `ThemeResourceLoader.EnsureApplicationResourcesMerged()` merges dictionaries into `Application.Current.Resources` at New System startup and before shell/native windows open.
+**Production host (As-Is):** `SiNet.App.Wpf` merges theme dictionaries at startup (`ThemeResourceLoader.EnsureApplicationResourcesMerged()`). Per-user JSON may still live under `%LOCALAPPDATA%\SiNetProjectManagerV2\settings.json` for historical path compatibility -- that folder name does **not** mean V2 is the production host.
+
+**V2 hybrid (Historical / Not published):** theme XAML is **not** in V2 `App.xaml`; the same loader merges dictionaries when New System starts inside V2.
 
 ### Typography wiring policy (menus, trees, KPIs, Email)
 

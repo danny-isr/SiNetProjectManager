@@ -2,7 +2,8 @@
 
 > Status: **B4 done — SiNetSQL `ProjectReference` dropped from AccService (B5 goal reached early)**  
 > Date: 2026-07-28  
-> Branch: `SiWorkNet10`  
+> Working branches: `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
+
 > Related: [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md), [`LOGGING.md`](./LOGGING.md),
 > [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md), [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md)
 

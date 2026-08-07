@@ -2,7 +2,7 @@
 
 > **Title:** Workstation crash report — accuracy fixes after analyst review  
 > **Date:** 06.08.2026  
-> **Status:** Implemented on `development`  
+> **Status:** On `release` tip @ `3bfe152` (ship **1.0.22**) — **Needs Review:** operator/pilot verify ([`DEV_BACKLOG.md`](./DEV_BACKLOG.md) §2b)
 > **Scope:** Report-generation correctness only (labels, WHEA corrected flag, microcode decode, WER-only incidents, minidump → Bugcheck flag). No Ship 2 (CER copy, context form, plugins). No Settings/schema.
 
 Related: [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md), [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).

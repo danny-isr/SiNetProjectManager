@@ -1,7 +1,7 @@
 # ACC Boundary
 
 > **Status:** Wave 1 fast-finish implemented - clean ACC runtime boundary closed for inbox + file-tree privileged flows (2026-07-04)  
-> **Branch:** `SiWorkNet10`
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
 
 This document records the current ACC / Autodesk boundary across the clean stack and the still-live
 legacy runtime. It exists to separate:

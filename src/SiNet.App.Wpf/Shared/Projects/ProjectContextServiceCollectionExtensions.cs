@@ -5,6 +5,7 @@ using SiNet.App.Wpf.Surfaces.Email.Detail;
 using SiNet.App.Wpf.WorkSurfaces;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 
 namespace SiNet.App.Wpf.Shared.Projects;
 
@@ -87,9 +88,15 @@ public static class ProjectContextServiceCollectionExtensions
         // Shared runtime Current Project: exactly ONE instance app-wide.
         services.AddSingleton<ICurrentProjectContext, InMemoryCurrentProjectContext>();
 
+        // EmailWindowViewModel requires IAppSettingsService (selector widths). Production registers
+        // JsonAppSettingsService earlier via AddSiNetUserLoggingSettings; tests/fake get a no-op.
+        services.TryAddSingleton<IAppSettingsService>(_ => EmailWindowViewModel.NullAppSettingsService.Instance);
+
         // Each Email window gets its own view model, but they all resolve the singleton context above,
         // so selecting a project in one window is observed by the others.
-        services.AddTransient<EmailWindowViewModel>();
+        // Explicit factory: MS.DI was selecting a shorter ctor and leaving IAppSettingsService null
+        // (selector widths never persisted). Always inject settings + optional email ports via GetService.
+        services.AddTransient(EmailWindowViewModel.CreateFromServices);
 
         // Small factory so hosts open the window through DI instead of constructing an isolated context.
         services.AddSingleton<IEmailWindowFactory, EmailWindowFactory>();

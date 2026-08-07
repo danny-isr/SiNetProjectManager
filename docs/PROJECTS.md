@@ -1,10 +1,12 @@
 # SiNet Project Domain — Target State
 
 > **Status:** Active target documentation (source of truth) — 2026-06-27
-> **Working branch:** `SiWorkNet10`
+> **Updated:** 07.08.2026 (As-Is reconciliation -- branch SoT; live shell = NewShellWindow)
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
 > **Read together with:** [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md),
 > [`MIGRATION_MAP.md`](./MIGRATION_MAP.md), [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md),
-> [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md).
+> [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md),
+> [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
 >
 > **Migration plan:** [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md) implements this
 > document. **If the migration plan and this document disagree, this document wins** and the migration
@@ -429,23 +431,23 @@ CurrentProjectChanged
 > `ActiveProjectContext.ActiveProjectChanged` and updates its `Title` accordingly. The target keeps
 > this exact direction over `ICurrentProjectContext.CurrentProjectChanged`.
 
-> **Implementation status (as of the shell-title slice):** `ICurrentProjectContext` is registered as a
-> **singleton per running app instance** (one DI `ServiceProvider` per process — see §4 *Scope* and §12)
-> shared by all surfaces in that instance. The **live shell** `SiNetProjectManagerV2/MainWindow` is now
-> the single subscriber that renders the Current Project into the window `Title`: it resolves
-> `ICurrentProjectContext` from `App.ServiceProvider`, subscribes to `CurrentProjectChanged`, seeds the
-> title from any already-selected project, marshals updates to the WPF `Dispatcher`, and unsubscribes on
-> close. Title text is produced by the pure `SiNet.App.Wpf/Shared/Projects/ProjectTitleFormatter`
-> (`"{default} - {ProjectName}"`, or the default when the project/name is `null`), which is unit-tested.
-> Feature windows (`EmailWindowViewModel`, `ProjectSelectorViewModel`, `EmailWindowView`) do **not** set
-> the global title — they change the Current Project and the shell reacts.
+> **Implementation status (As-Is):** `ICurrentProjectContext` is registered as a
+> **singleton per running app instance** (one DI `ServiceProvider` per process -- see §4 *Scope* and §12)
+> shared by all surfaces in that instance. The **live shell** is **`NewShellWindow`** /
+> `NewShellViewModel` in `SiNet.App.Wpf`: it owns the OS window title via `NewShellWindowTitle`
+> (includes product version + Current Project when selected). `ProjectSelectorView` is **not** in the
+> shell header -- Email (and other surfaces that need it) embed the selector. Feature windows do **not**
+> set the global title -- they change the Current Project and the shell reacts.
 >
-> **Temporary coexistence (explicit):** the legacy `ActiveProjectContext.ActiveProjectChanged` handler is
-> **intentionally kept** and is not removed in this slice. Both the legacy and the new handler route
-> through the **same** `ProjectTitleFormatter` and the same `_defaultTitle`, so there is one title format
-> and no conflicting/duplicate rendering. `ActiveProjectContext` remains the legacy source; a later slice
-> may unify the two once the new context drives real project data. The clean-host
-> `src/SiNet.App.Wpf/MainWindow` remains a scaffold (its title is static) and is not the live shell.
+> **Historical / V2 reference:** `SiNetProjectManagerV2/MainWindow` previously subscribed to
+> `ActiveProjectContext` / `ICurrentProjectContext` for title updates. That path is **not** the
+> production desktop host. Title formatting helpers such as `ProjectTitleFormatter` may still exist
+> for tests/legacy coexistence; production title composition for App.Wpf is `NewShellWindowTitle`.
+>
+> **Temporary coexistence (explicit, V2 hybrid only):** the legacy `ActiveProjectContext` handler may
+> still exist in V2. Do not treat V2 `MainWindow` as the live production shell.
+>
+> Scaffold `src/SiNet.App.Wpf/MainWindow` (if present) is **not** the live shell -- `NewShellWindow` is.
 
 ---
 

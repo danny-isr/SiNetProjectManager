@@ -1,9 +1,11 @@
 # SiNet Target Architecture
 
-> **Status:** Draft — Foundation Round (2026-06-27)
-> **Working branch:** `SiWorkNet10`
+> **Status:** Planning / Target State (architecture rules) + Existing (production host = App.Wpf)
+> **Updated:** 07.08.2026 (As-Is reconciliation -- branch SoT; pre-production claim split)
+> **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
 > **Frozen reference (do not modify):** `Before_refactoring`
 > **New solution:** `SiNet.sln` · **Legacy/functional reference:** `SiNetProjectManager.sln`
+> **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
 This document describes the **target** clean architecture for the SiNet ecosystem and the
 rules every new project/file must follow. It is the source of truth for the refactoring;
@@ -17,12 +19,19 @@ when code and this document disagree, fix the document first, then the code.
 
 ## 1. Purpose
 
-The SiNet app is **pre-production**: no live users, no backward-compatibility constraint, and it is
-**not** the active production path during this refactor. We therefore optimize for a **fast, clean
-rebuild** (a *Workflow-first fast track*) rather than a long dual-maintenance strangler:
+### Existing (As-Is, 2026-08)
 
-- The existing solution (`SiNetProjectManager.sln`) is a **frozen reference** and behavior source —
-  kept for recovery, **not** a second active system to maintain indefinitely.
+- Production desktop host is **`SiNet.App.Wpf`** (pilot / cutover path). V2 is not published.
+- Live users may already run App.Wpf on pilot machines -- do **not** claim "no live users."
+- DB/schema changes remain operator-owned; ACC remains source of truth where applicable.
+
+### Target (architecture direction)
+
+Optimize for a **fast, clean rebuild** (a *Workflow-first fast track*) rather than a long
+dual-maintenance strangler forever:
+
+- The existing solution (`SiNetProjectManager.sln` / V2) is a **frozen reference** and behavior source --
+  kept for recovery, **not** a second shipped product.
 - New, clean code lives in `SiNet.sln` and grows **beside** the old code.
 - Functionality is moved behind ports, but in **fast vertical slices**: a screen opens, receives
   context, loads target data, performs one real action, completes a task or advances workflow
@@ -30,11 +39,16 @@ rebuild** (a *Workflow-first fast track*) rather than a long dual-maintenance st
 - Old code is removed once the new path compiles, the UI flow works, tests exist, and
   `MIGRATION_MAP.md` marks the old path as replaced.
 
+### Historical Snapshot
+
+Early foundation rounds (2026-06) described the app as **pre-production / no live users**. That
+framing is **Historical** -- it must not be read as the 2026-08 production/pilot As-Is.
+
 > One-line direction:
 > **Workflow first. Tasks second. Screens as Work Surfaces. Domain services behind screens.
 > Infrastructure at the bottom. Fast vertical slices. No direct workflow mutation from UI.**
 
-See the [`MIGRATION_MAP.md`](MIGRATION_MAP.md) _Refactor Strategy — Workflow-first Fast Track_
+See the [`MIGRATION_MAP.md`](MIGRATION_MAP.md) _Refactor Strategy -- Workflow-first Fast Track_
 section for the per-domain ledger and the _Next implementation order_.
 
 ---

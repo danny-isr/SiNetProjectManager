@@ -88,7 +88,7 @@ The workflow-first model is a fully wired engine with 14 registered DI services,
 | `WorkflowStageTaskProvisioningService` | Creates `ProjectAssignment` tasks from `WorkflowStageTask` templates via `TaskFactory.CreateAsync()`. |
 | `ProjectWorkflowPolicyService` | Resolves allowed workflows per project type. |
 | `WorkflowQueryService` | Read-only queries for dashboard and monitor. |
-| `WorkflowSeedService` | Idempotent seeding of all 5 workflows, mappings, stages, and disciplines. |
+| `WorkflowSeedService` | Idempotent seeding of all **6** workflows (`PlanningWorkflow`, `Review`, `MaterialIntake`, `Proposal`, `Opinion`, `Outsourcing`), mappings, stages, and disciplines. |
 | `TaskCompletionCoordinator` | Centralized task completion. Signals `WorkflowTaskOrchestrator.CheckAndAutoAdvanceAsync()`. |
 | `TaskFactory` | Canonical factory for creating `ProjectAssignment` entities with proper audit trail. |
 

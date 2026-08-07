@@ -1,12 +1,29 @@
 # Environments — Production vs Development
 
-> **Title:** Environments — Production vs Development  
-> **Date:** 02.08.2026  
-> **Updated:** 03.08.2026 (`release` / `development` branches now exist — see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3.2)  
-> **Status:** Active  
-> **Scope:** Machine roles, configuration placement, allowed/forbidden operations per environment, and the target state for Google/ACC isolation. Documentation only — no code changes in this round.
+> **Title:** Environments -- Production vs Development
+> **Date:** 02.08.2026
+> **Updated:** 07.08.2026 (As-Is reconciliation -- §0 dimension separation; Debug != Development runtime)
+> **Status:** Active / Current Source of Truth
+> **Scope:** Machine roles, configuration placement, allowed/forbidden operations per environment, and the target state for Google/ACC isolation. Documentation only -- no code changes in this round.
+> **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
 Related: [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`DEV_TOOLS.md`](./DEV_TOOLS.md), [`LOGGING.md`](./LOGGING.md), [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md).
+
+---
+
+## 0. Dimension separation (mandatory)
+
+Do **not** conflate these:
+
+| Dimension | Examples | Meaning |
+| --- | --- | --- |
+| **Git branch** | `development`, `release`, `SiWorkNet10` | Code flow. Working SoT = `release` + `development`. |
+| **Build configuration** | `Debug`, `Release` | Compile / `#if DEBUG` (role selector, DevTools menu). |
+| **Runtime environment** | Development, Production | Vault connection strings, DB `SystemSettings`, ACC place-name, Gmail/Drive targets. |
+| **Rollout stage** | Local -- Candidate -- Pilot -- Production -- Wide | Ops approval of who may install. |
+| **Product version** | e.g. `1.0.22` | Component `<Version>`. |
+
+**Important:** **`Debug` != Development runtime.** An operator can run a **Release** build on the DEV machine against the **DEV** vault/DB, or (mistakenly) a Debug build pointed at production SQL. Machine role + vault/DB target define the runtime environment -- not the MSBuild configuration alone.
 
 ---
 
@@ -28,7 +45,9 @@ Both sides must know which machine they are on, which database and external syst
 | Concern | PROD (this machine) | DEV (second machine) |
 | --- | --- | --- |
 | Role | Release station + ops monitoring | Development |
-| Git branch | **`release`** — see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3 | **`development`** (absorbs `release` after every ship) |
+| Git branch | **`release`** -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3 | **`development`** (absorbs `release` after every ship) |
+| Build configuration (typical) | Release / MSIX | Often Debug / F5 -- **not** the same as runtime env (§0) |
+| Runtime environment | Production vault + PROD SQL | Development vault + DEV SQL |
 | Desktop host | Installed / tested as **`SiNet.App.Wpf`** (MSIX channel) | Usually Debug / F5 under Visual Studio or Cursor |
 | SQL Server | **Production DB** (vault key `SiNet/ConnectionStrings/SiNetDatabase`) | **Development DB** (separate vault value on that machine) |
 | ACC projects | Place = real city / site (**no** `SI` prefix) | Place = **`SI`** only (§5.1) |

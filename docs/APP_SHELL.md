@@ -1,73 +1,77 @@
-# SiNet Application Shell (Legacy mode vs New system mode)
+# SiNet Application Shell (`SiNet.App.Wpf` / NewShellWindow)
 
-> **Status:** Cutover target — `SiNet.App.Wpf` replaces V2 as the only shipped desktop app (2026-08-02)
-> **Working branch:** `SiWorkNet10`
-> **New solution:** `SiNet.sln` · **Legacy/functional reference:** `SiNetProjectManager.sln`
+> **Title:** Application shell (production host = `SiNet.App.Wpf`)
+> **Date:** 02.08.2026
+> **Updated:** 07.08.2026 (As-Is reconciliation -- production path, ProjectSelector placement, branch SoT)
+> **Status:** Active / Current Source of Truth (shell As-Is + remaining isolation goals)
+> **Working branches:** `release` (ship) + `development` (DEV) -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` is deprecated (not the working SoT).
+> **New solution:** `SiNet.sln` · **Legacy/functional reference:** `SiNetProjectManager.sln` / `SiNetProjectManagerV2` (code reference; not the publish channel)
+> **Reconciliation ledger:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
-This is the **target** document for the SiNet application **shell** and **startup mode selection**.
+This document describes the **application shell** and how the production desktop host starts.
 It refines [`ARCHITECTURE_TARGET.md`](./ARCHITECTURE_TARGET.md) and
-[`MIGRATION_MAP.md`](./MIGRATION_MAP.md) for the specific problem of **isolating the refactored app
-from the legacy host at startup**. When code and this document disagree, fix the document first,
+[`MIGRATION_MAP.md`](./MIGRATION_MAP.md). When code and this document disagree, fix the document first,
 then the code (see [`README`](./README.md) documentation-driven workflow).
 
-> Related target docs: [`PROJECTS.md`](./PROJECTS.md) (Project Context, reused by the shell),
-> implemented by [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md).
-> Limited production pilot envelope (standalone host): [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
-> Standalone host target: [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md).
+> Related: [`PROJECTS.md`](./PROJECTS.md) (Project Context),
+> [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md) (Historical Snapshot),
+> [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) (pilot envelope),
+> [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md) (standalone composition).
 
-### Cutover decision (2026-08-02)
+### Cutover decision (2026-08-02) -- As-Is
 
-| Topic | Decision |
+| Topic | Decision / As-Is |
 | --- | --- |
-| Production desktop app | **`SiNet.App.Wpf.exe` only** |
+| Production desktop app | **`SiNet.App.Wpf.exe` only** (MSIX channel 3 in `publish-all.ps1`) |
 | `SiNetProjectManagerV2` | Remains in the repo and in hybrid builds as a **code reference**; **not** distributed via `publish-all.ps1` |
-| Coexistence on user machines | **Not required** — V2 was never production; the office still runs an older external system until cutover |
+| Coexistence on user machines | **Not required** -- V2 was never the office production install; safety net until cutover sign-off is an **external** legacy system |
 | Feature readiness bar | Daily work must be possible; not full parity with every V2 screen |
-| Workflow definitions | Closed-world seed (no visual editor in New System) — see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md) |
+| Workflow definitions | Closed-world seed (six codes; no visual editor in New System) -- see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md) |
 
 ---
 
 ## 1. Purpose of the application shell
 
-The **application shell** is the top-level window that hosts the refactored ("new system") surfaces
-without dragging in the legacy host. It exists to:
+The **application shell** is the top-level window (`NewShellWindow`) that hosts migrated New System
+surfaces without opening the legacy V2 `MainWindow`. It exists to:
 
-- Provide a **clean entry point** for the migrated stack (`SiNet.App.Wpf`) that does **not** open the
-  legacy `MainWindow`, its menu graph, or its window/services graph.
-- Make **startup performance measurable in isolation**: if the new shell is fast and the legacy host
-  is slow, the slowdown is in legacy startup; if both are slow, the cost is shared (DI/composition).
-- Give migrated Work Surfaces (Email, Inspection, Project Context, later Settings) a home as they are
-  ported, following the *Work Surfaces* model in `ARCHITECTURE_TARGET.md` §4.
+- Provide the **production entry point** for the migrated stack (`SiNet.App.Wpf`).
+- Keep startup and menu graph isolated from the legacy host (measurable without loading V2 menus).
+- Give migrated Work Surfaces (Email, Inspection, Project Context, Settings, admin) a home as they
+  are ported, following the *Work Surfaces* model in `ARCHITECTURE_TARGET.md` §4.
 
-**Production path:** `SiNet.App.Wpf` is the shipped shell. `SiNetProjectManagerV2` is kept for
-reference/build only and is not the distribution channel.
+**Production path (As-Is):** users run **`SiNet.App.Wpf`** (standalone host). `SiNetProjectManagerV2`
+is kept for reference/build only and is **not** the distribution channel.
 
 ---
 
-## 2. Legacy mode vs New system mode
+## 2. Production host vs V2 reference (Legacy mode is historical)
 
 ```plaintext
-Legacy mode      → current production behavior, unchanged
-				 → opens the legacy MainWindow (SiNetProjectManagerV2)
-				 → all legacy menus, services, windows load as today
+Production (As-Is)  → SiNet.App.Wpf.exe (standalone)
+                    → NewShellWindow + migrated menu only
+                    → does NOT open V2 MainWindow
+                    → surfaces load on demand via DI
 
-New system mode  → opens the new clean shell (NewShellWindow, SiNet.App.Wpf)
-				 → shows ONLY migrated/refactored menu items
-				 → does NOT open the legacy MainWindow
-				 → loads only new/refactored surfaces on demand
+V2 reference / hybrid (Historical / Not published)
+                    → SiNetProjectManagerV2 may still offer StartupModeSelectionWindow
+                      (New System vs Legacy) for developers
+                    → Legacy mode opens V2 MainWindow -- NOT office production
+                    → New System mode inside V2 is deprecated (logs deprecation; pilot fallback only)
 ```
 
-The mode is chosen at startup in **`StartupModeSelectionWindow`** — the **first visible UI**, before
-credential vault, database gate, schema validation, or splash. Default selection is **New System**.
+**As-Is framing:** do **not** describe Legacy mode as "current production." Office production is
+**`SiNet.App.Wpf` only**. Dual-mode (New System vs Legacy) was a migration aid inside V2; it is
+**not** the shipped dual-product model.
 
-Rules:
+Where V2 still shows **`StartupModeSelectionWindow`** (developer / hybrid builds):
 
-- **One prompt only** — `ShowSplashThenMainWindow()` does **not** ask for mode again (Legacy: splash →
+- **One prompt only** -- `ShowSplashThenMainWindow()` does **not** ask for mode again (Legacy: splash →
   `MainWindow` only).
 - **New System** builds `ServiceProvider` via `ConfigureServices()` **before** opening `NewShellWindow`
   (DI required for `INewShellFactory`, Project Context, Email/Inspection factories). It **skips**
   legacy DB retry loop, schema validation, debug role selector, and user authorization gates.
-- **No silent Legacy fallback** — if New System shell creation fails, show an error and **shutdown**;
+- **No silent Legacy fallback** -- if New System shell creation fails, show an error and **shutdown**;
   do not open `MainWindow` in the background.
 
 > **Non-goal / anti-pattern (explicit):** New system mode must **not** be implemented by opening the
@@ -78,39 +82,36 @@ Rules:
 
 ## 3. Startup flow
 
-**Production New System entry (slice 1):** `SiNet.App.Wpf.exe` — see
-[`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md). The V2 New System path is
-**deprecated** (still runnable for pilot fallback; logs a deprecation warning).
+**Production entry (As-Is):** `SiNet.App.Wpf.exe` -- see
+[`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md). Standalone host runs vault /
+schema / Windows-auth gates, then opens `NewShellWindow`. The V2 New System path is
+**deprecated** (still runnable for developer/hybrid fallback; logs a deprecation warning).
 
-**Branding (standalone):** User-facing brand is Hebrew **שיא חדש בע״מ** (not English “SiNet” /
-“SI”). Assets: `logo_si.jpg` (full company logo), `shia-chadash-mark.png` (road-in-circle mark),
+**Branding (standalone):** User-facing brand is Hebrew **שיא חדש בע״מ** (not English "SiNet" /
+"SI"). Assets: `logo_si.jpg` (full company logo), `shia-chadash-mark.png` (road-in-circle mark),
 `sinet.ico` (ApplicationIcon built from that mark). `StartupSplashWindow` shows the company logo
-during vault/schema/auth; `NewShellWindow` header uses the road circle + “שיא חדש בע״מ”.
-`StartupModeSelectionWindow` (V2 host) uses the same mark after
+during vault/schema/auth; `NewShellWindow` header uses the road circle + "שיא חדש בע״מ".
+`StartupModeSelectionWindow` (V2 host only) uses the same mark after
 `ThemeResourceLoader.EnsureApplicationResourcesMerged()`.
 
-The legacy host (`SiNetProjectManagerV2`) remains the process entry point for **Legacy mode**.
 Startup is **code-driven** (no XAML `StartupUri`) in each host's `App.xaml.cs`.
 
 ```plaintext
-App.OnStartup
-  → ShutdownMode = OnExplicitShutdown
-  → ConfigureGlobalHandlers
-  → Load AppSettings + ApplySettings
+Production -- SiNet.App.Wpf App.OnStartup
+  → vault / schema / Windows auth (standalone gates)
+  → AddSiNetStandaloneHost / NewShellWindow
+  → no V2 MainWindow; no StartupModeSelectionWindow
+
+V2 hybrid (Historical / Not published) -- App.OnStartup
   → StartupModeSelectionWindow (FIRST visible UI; default = New System)
         ├─ cancel / close → Shutdown
-        ├─ New System   → SetupCredentialVault (if needed for conn string)
-        │                 → ConfigureLoggingAndSettings
-        │                 → ConfigureServices + WireLegacyLocators
-        │                 → LaunchNewSystemShell() → NewShellWindow
-        │                 (no schema/auth gates; no MainWindow; no second prompt)
+        ├─ New System   → ConfigureServices → NewShellWindow (deprecated path)
         └─ Legacy       → credential vault → DB gate → schema → auth → splash → MainWindow
-                          (ShowSplashThenMainWindow: splash only, no mode prompt)
 ```
 
-The mode prompt is shown **before any legacy gate** so New system mode can skip credential/DB/schema
-dialogs entirely. The choice is captured as a `StartupMode` value and routed by a small, unit-testable
-helper (`StartupModeRouter`) so the decision can be tested without WPF.
+On the V2 hybrid path, the mode prompt is shown **before any legacy gate** so New system mode can
+skip credential/DB/schema dialogs. The choice is captured as a `StartupMode` value and routed by
+`StartupModeRouter` (unit-testable without WPF).
 
 > Current-user selection: in **both modes**, startup authorizes the current **Windows identity**
 > against `SIUser` (`AuthorizeCurrentUser`) after optional DEBUG role-selector when enabled.
@@ -234,7 +235,10 @@ Initial menu (P3 + P6 + native admin):
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
 
-Project Context (`ProjectSelectorView`) is embedded in the shell header — not a menu item.
+Project Context (`ProjectSelectorView`) is **not** embedded in the `NewShellWindow` header.
+Surfaces that need it (notably **Email**) host their own selector. The shell still owns
+`ICurrentProjectContext` and reflects the Current Project in the **OS window title** via
+`NewShellWindowTitle` (see §9) -- not via a header selector control.
 
 **User management / add user (native):** Administrators see **ניהול משתמשים** and **הוספת משתמש** when
 `Users.Manage` is authorized. Opens native `UserListWindow` / `AddUserDialogWindow` in `SiNet.App.Wpf.Admin.Users`
@@ -458,33 +462,62 @@ New system mode / shell work must **not**:
 It **must**:
 
 ```plaintext
-- keep Legacy mode behavior identical when the checkbox is unchecked
+- treat SiNet.App.Wpf / NewShellWindow as the production desktop path
 - open NewShellWindow as Current.MainWindow so OnMainWindowClose shutdown still works
 - resolve every migrated surface from the existing App.ServiceProvider / factories
 - register with modular AddSiNet* extensions
 - keep the menu data-driven and migrated-only
+- keep V2 Legacy path available only as in-repo reference (not publish)
 ```
 
 ---
 
-## 13. Migration sequence
+## 13. Migration sequence (Historical Snapshot -- slices already largely landed)
 
 ```plaintext
-Slice 1 (this round)
-  1. Add startup mode option to the first login/user-selection moment.
-  2. Legacy mode unchanged when unchecked.
+Slice 1 (Historical)
+  1. Startup mode option on V2 hybrid path.
+  2. Legacy mode unchanged when unchecked (V2 only).
   3. New system mode opens NewShellWindow (not MainWindow).
   4. Shell shows a minimal, migrated-only menu.
-  5. Menu opens Email visual clone via IEmailWindowFactory.
-  6. Menu opens Inspection shell (if available) via DI.
-  7. Do not migrate settings unless required for the shell to run (it is not).
+  5. Menu opens Email via IEmailWindowFactory / IEmailSurfaceHost.
+  6. Menu opens Inspection shell via DI.
+  7. Settings not required for shell boot.
 
-Slice 2 (Stage 5 — settings)
+Slice 2 (Stage 5 -- settings) -- Implemented
   - Native Settings UI with personal/admin split (see SETTINGS.md §5).
-  - Personal menu for authenticated users; system menu for System.Settings.Write.
 
-Slice 3+
+Slice 3+ (ongoing)
   - Add migrated surfaces to the shell one at a time (recorded in the migration map).
   - Split composition (AddSiNetClean vs AddSiNetWithLegacyBridge) to deepen isolation.
   - Grow the shell toward the Workflow-first Work Surface model once parity surfaces exist.
 ```
+
+---
+
+## 14. Out of Scope
+
+- Re-introducing `SiNetProjectManagerV2` as a publish channel
+- Putting `ProjectSelectorView` into the `NewShellWindow` header chrome
+- Deleting the V2 Legacy path from the repo without explicit approval
+- Code / XAML / DI changes in a documentation-only round
+
+---
+
+## 15. Dropped / Cancelled / Postponed
+
+| Item | Status | Why |
+| --- | --- | --- |
+| Dual-mode as office production model | Dropped as target | Production = App.Wpf only |
+| ProjectSelector in shell header | Dropped / Wrong As-Is | Email (and other surfaces) embed the selector |
+| Publishing V2 MSIX | Dropped | Cutover to App.Wpf |
+
+---
+
+## 16. Needs Review
+
+1. Whether pilot PCs actually run App.Wpf **1.0.22** from the UNC share (ops verify).
+2. Whether any operator still launches V2 hybrid by mistake (should not).
+3. Vault/DB `SecretSetupWindow` still on legacy type in New System startup -- open decision in §3.
+
+> Reconciliation: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).

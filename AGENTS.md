@@ -11,10 +11,13 @@ Two workstations use this repo. They are **not** interchangeable. Read [`docs/EN
 | **PROD** | Release + ops workstation | Small fixes; help with release gates; ops/log guidance | Run DevTools Reset/Seed against production SQL; treat Google/ACC as a sandbox |
 | **DEV** | Development workstation | Feature work, Debug, DevTools against **dev DB only** | Run `publish-all.ps1` to the production UNC share |
 
-- **Release protocol:** [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — only PROD publishes to `\\SI-WIN-2K19\AppFolder\AppNet\`. Branches: `release` (checked out on PROD, ships) and `development` (checked out on DEV, must absorb `release` after every ship). `SiWorkNet10` is deprecated but retained — see `docs/RELEASE_PROCESS.md` §3.2.
+- **Release protocol:** [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) -- only PROD publishes to `\\SI-WIN-2K19\AppFolder\AppNet\`. Branches: `release` (checked out on PROD, ships) and `development` (checked out on DEV, must absorb `release` after every ship). `SiWorkNet10` is deprecated but retained -- see `docs/RELEASE_PROCESS.md` §3.2. GitHub **default branch** may still be `SiWorkNet10` (ops setting; Needs Review).
 - **Pilot monitoring:** [`docs/PRODUCTION_MONITORING.md`](docs/PRODUCTION_MONITORING.md).
-- **ACC on DEV:** only projects with place name **`SI`** — see [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) §5.1.
+- **ACC on DEV:** only projects with place name **`SI`** -- see [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) §5.1.
 - **Docs index:** [`docs/README.md`](docs/README.md).
+- **Documentation As-Is reconciliation (2026-08-07):** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md) -- dimension glossary (branch vs build vs runtime vs rollout vs version); contradiction ledger.
+
+**Dimension note:** Do not conflate git branch, MSBuild `Debug`/`Release`, runtime Development/Production, rollout stage, and product `<Version>`. See `docs/ENVIRONMENTS.md` §0 and the reconciliation ledger.
 
 If it is unclear which machine/DB the session is on, **ask the operator** before destructive or publish actions.
 

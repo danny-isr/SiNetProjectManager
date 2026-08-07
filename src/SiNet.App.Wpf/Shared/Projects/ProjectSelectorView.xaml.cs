@@ -78,6 +78,11 @@ public partial class ProjectSelectorView : UserControl
             typeof(ProjectSelectorView),
             new PropertyMetadata(true));
 
+    private Point? _controlResizeMouseScreen;
+    private double _controlResizeStartWidth;
+    private Point? _popupResizeMouseScreen;
+    private double _popupResizeStartWidth;
+
     public ProjectSelectorView()
     {
         InitializeComponent();
@@ -229,17 +234,102 @@ public partial class ProjectSelectorView : UserControl
         viewModel.CloseResults();
     }
 
+    private void ControlWidthThumb_OnDragStarted(object sender, DragStartedEventArgs e)
+    {
+        _controlResizeMouseScreen = GetMouseScreenPosition((IInputElement)sender);
+        _controlResizeStartWidth = SearchBoxWidth;
+    }
+
     private void ControlWidthThumb_OnDragDelta(object sender, DragDeltaEventArgs e)
     {
-        // RTL: dragging toward outer edge increases width (HorizontalChange inverted).
-        var delta = FlowDirection == FlowDirection.RightToLeft ? -e.HorizontalChange : e.HorizontalChange;
-        SearchBoxWidth = Math.Clamp(SearchBoxWidth + delta, 160, 900);
+        // Do not use e.HorizontalChange under RTL: the grip sits on the edge that moves when
+        // Width changes, so layout feedback makes deltas jump to Clamp min/max.
+        if (_controlResizeMouseScreen is null || sender is not IInputElement thumb)
+        {
+            return;
+        }
+
+        var deltaX = GetMouseScreenPosition(thumb).X - _controlResizeMouseScreen.Value.X;
+        ApplyControlWidth(ComputeWidthFromMouseDelta(_controlResizeStartWidth, deltaX, FlowDirection));
+    }
+
+    private void ControlWidthThumb_OnDragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _controlResizeMouseScreen = null;
+        FlushSelectorWidths();
+    }
+
+    private void PopupWidthThumb_OnDragStarted(object sender, DragStartedEventArgs e)
+    {
+        _popupResizeMouseScreen = GetMouseScreenPosition((IInputElement)sender);
+        _popupResizeStartWidth = PopupWidth;
     }
 
     private void PopupWidthThumb_OnDragDelta(object sender, DragDeltaEventArgs e)
     {
-        var delta = FlowDirection == FlowDirection.RightToLeft ? -e.HorizontalChange : e.HorizontalChange;
-        PopupWidth = Math.Clamp(PopupWidth + delta, 160, 900);
+        if (_popupResizeMouseScreen is null || sender is not IInputElement thumb)
+        {
+            return;
+        }
+
+        var deltaX = GetMouseScreenPosition(thumb).X - _popupResizeMouseScreen.Value.X;
+        ApplyPopupWidth(ComputeWidthFromMouseDelta(_popupResizeStartWidth, deltaX, FlowDirection));
+    }
+
+    private void PopupWidthThumb_OnDragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _popupResizeMouseScreen = null;
+        FlushSelectorWidths();
+    }
+
+    private void ApplyControlWidth(double width)
+    {
+        SearchBoxWidth = width;
+        // Set VM directly — do not rely only on TwoWay DP binding for persistence.
+        if (DataContext is ProjectSelectorViewModel vm)
+        {
+            vm.ControlWidth = width;
+        }
+    }
+
+    private void ApplyPopupWidth(double width)
+    {
+        PopupWidth = width;
+        if (DataContext is ProjectSelectorViewModel vm)
+        {
+            vm.PopupWidth = width;
+        }
+    }
+
+    private void FlushSelectorWidths()
+    {
+        if (DataContext is ProjectSelectorViewModel vm)
+        {
+            vm.FlushPersistWidths();
+        }
+    }
+
+    /// <summary>
+    /// Grip is on the visual left in RTL (mirrored last column) and on the right in LTR.
+    /// Screen X always increases to the right — invert delta for RTL so drag follows the mouse.
+    /// </summary>
+    internal static double ComputeWidthFromMouseDelta(
+        double startWidth,
+        double mouseDeltaXScreen,
+        FlowDirection flowDirection,
+        double min = 160,
+        double max = 900)
+    {
+        var width = flowDirection == FlowDirection.RightToLeft
+            ? startWidth - mouseDeltaXScreen
+            : startWidth + mouseDeltaXScreen;
+        return Math.Clamp(width, min, max);
+    }
+
+    private static Point GetMouseScreenPosition(IInputElement relativeTo)
+    {
+        var visual = (Visual)relativeTo;
+        return visual.PointToScreen(Mouse.GetPosition(relativeTo));
     }
 
     private bool IsInsideSelectorOrPopup(DependencyObject element)

@@ -1,6 +1,7 @@
 # New System — Production cutover envelope (`SiNet.App.Wpf`)
 
-> **Status:** Active (2026-08-02) — **cutover host** (replaces V2 distribution)  
+> **Status:** Active (2026-08-02) -- **cutover host** (replaces V2 distribution)
+> **Updated:** 07.08.2026 (As-Is reconciliation -- evidence layers; §8.1 Historical; selector not in header)
 > **Scope:** Defines what **`SiNet.App.Wpf.exe`** may expose as the **only shipped desktop app**.
 > V2 remains in-repo for reference/build; it is **not** published. Office safety net until
 > cutover sign-off is the external legacy system (outside this repo).
@@ -8,7 +9,8 @@
 >
 > Locked host decision: Production desktop = `SiNet.App.Wpf.exe` only.
 > See [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
-> [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md).
+> [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md),
+> [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
 >
 > Related:
 > [`TEST_STRATEGY.md`](./TEST_STRATEGY.md),
@@ -26,6 +28,14 @@
 
 ---
 
+## 0. Evidence layers (do not conflate)
+
+| Layer | Meaning | Example |
+| --- | --- | --- |
+| Repo tip | What `origin/release` / `origin/development` contain | Ship commit `3bfe152`, App.Wpf **1.0.22** (verified 2026-08-07) |
+| Automated tests | What CI / local `dotnet test` proved on a given commit | §8.1 Historical Snapshot |
+| Interactive smoke | Operator checklist on a machine | §9 -- **Not Run** unless signed |
+| Ops install | What pilot PCs actually run from UNC | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) -- **Needs Review** |
 ## 1. Purpose & status
 
 `SiNet.App.Wpf` (`AddSiNetStandaloneHost` / `SiNetHostMode.StandaloneNew`) is the **production New
@@ -71,7 +81,7 @@ Implemented in `NewShellFactory.BuildMigratedOnlyMenuAsync`
 | דוחות | **R01 / R02 / R03** | MasterPlan → Google Sheets | `ReportsManagement` |
 | משתמשים והרשאות | **ניהול / הוספת משתמש / הרשאות פעולה** | Native admin | `UsersManage` / `ActionPermissionsManage` |
 | מנהלה | **הגדרות / מפתחות / מיפוי MasterPlan / סטטוס ACC / מצב מערכת / בריאות תהליכים** | Native admin / operator | Authenticated / `SystemSettingsWrite` / `Shell.OpenWorkflowOpsDashboard` |
-| (host) | **NewShellWindow** | Project selector + menu | — |
+| (host) | **NewShellWindow** | Menu + OS title (version via `NewShellWindowTitle`); **ProjectSelector is not in the shell header** -- Email embeds it | -- |
 
 ### Dev-only / harness (not production menu)
 
@@ -200,7 +210,12 @@ Useful classes (non-exhaustive): `StandaloneHostCompositionTests`,
 `EmailAccSelectionHandlerStatusTests`, `ProductionPilotBoundaryTests`,
 `StandaloneLocalAccInboxBootstrapTests`.
 
-### 8.1 Automated run snapshot (2026-08-02)
+### 8.1 Automated run snapshot (2026-08-02) -- Historical Snapshot
+
+> **Classification:** Historical Snapshot. Measured on branch `SiWorkNet10` on 2026-08-02 after the
+> cutover / Workflow Ops runtime slice (offline + Live skipped). **Do not** treat these counts as
+> evidence for current tip (`origin/release` / `development` @ `3bfe152`, App.Wpf 1.0.22). Re-run
+> tests on the branch under review.
 
 Measured on branch `SiWorkNet10` after the cutover / Workflow Ops runtime slice (offline + Live skipped):
 

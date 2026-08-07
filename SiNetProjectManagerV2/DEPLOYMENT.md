@@ -1,4 +1,9 @@
-# SiNetProjectManagerV2 — Deployment Guide (MSIX + Auto-Update)
+# SiNetProjectManagerV2 -- Deployment Guide (MSIX + Auto-Update)
+
+> **Classification:** **Superseded / Historical Snapshot** (07.08.2026)
+> **Desktop production SoT:** [`docs/RELEASE_PROCESS.md`](../docs/RELEASE_PROCESS.md), root [`DEPLOYMENT.md`](../DEPLOYMENT.md), `src/SiNet.App.Wpf/publish-desktop.ps1`
+> **Why superseded:** `publish-all.ps1` channel 3 is **`SiNet.App.Wpf`**, not V2. This file remains as reference for the historical V2 MSIX pipeline only.
+> **Reconciliation:** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](../docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
 הגישה כאן: **MSIX ללא `.wapproj`**. כל ה-pipeline הוא `dotnet publish` → `MakeAppx.exe` → `SignTool.exe` → `robocopy`. אין פרויקט עוטף, אין VS GUI, רק שני קבצים שב-Git: `Package.appxmanifest` והסקריפט `publish-desktop.ps1`. כל הכלים (`MakeAppx`, `SignTool`) כבר מותקנים אצלך כחלק מ-Windows SDK.
 
@@ -19,6 +24,10 @@ powershell -ExecutionPolicy Bypass -File .\publish-desktop.ps1
 3. לחיצה על Install.
 
 **מאותו רגע**: בכל פתיחה של האפליקציה, Windows בודק את ה-UNC ומעדכן אוטומטית.
+
+> **Note:** הערוץ הפעיל להתקנות חדשות הוא
+> `\\SI-WIN-2K19\AppFolder\AppNet\SiNet.App.Wpf\SiNet.App.Wpf.appinstaller`.
+
 
 ---
 

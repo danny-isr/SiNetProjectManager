@@ -126,7 +126,9 @@
 
             <primitives:Thumb Grid.Column="2"
                    Cursor="SizeWE"
+                   DragStarted="ControlWidthThumb_OnDragStarted"
                    DragDelta="ControlWidthThumb_OnDragDelta"
+                   DragCompleted="ControlWidthThumb_OnDragCompleted"
                    Background="Transparent"
                    ToolTip="&#x05D4;&#x05E8;&#x05D7;&#x05D1; &#x05E4;&#x05E7;&#x05D3; &#x05D1;&#x05D7;&#x05D9;&#x05E8;&#x05EA; &#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;" />
         </Grid>
@@ -186,7 +188,9 @@
                     </ListBox>
                     <primitives:Thumb Grid.Column="1"
                            Cursor="SizeWE"
+                           DragStarted="PopupWidthThumb_OnDragStarted"
                            DragDelta="PopupWidthThumb_OnDragDelta"
+                           DragCompleted="PopupWidthThumb_OnDragCompleted"
                            Background="Transparent"
                            ToolTip="&#x05D4;&#x05E8;&#x05D7;&#x05D1; &#x05E8;&#x05E9;&#x05D9;&#x05DE;&#x05EA; &#x05D4;&#x05E4;&#x05E8;&#x05D5;&#x05D9;&#x05E7;&#x05D8;&#x05D9;&#x05DD;" />
                 </Grid>
