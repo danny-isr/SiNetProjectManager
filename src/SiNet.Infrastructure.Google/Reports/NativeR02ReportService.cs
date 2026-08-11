@@ -107,9 +107,53 @@ public sealed class NativeR02ReportService(
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            // Headers at row 2, data rows 3..(2+count) → lastDataRow is 1-based inclusive.
+            const int headerRow = 2;
+            var lastDataRow = headerRow + rows.Count;
+            var lastColumnIndex = headers.Count - 1;
             var url = await drive.GetFileUrlAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
+
+            progress?.Report(("pivot", "יוצר טבלת ציר קצרה...", 88));
+            var summaryPivot = await sheets.CreatePivotTableAsync(
+                    spreadsheetId,
+                    R02PivotTableConfigs.SummarySheetName,
+                    sourceSheetName: "Data",
+                    headerRow,
+                    lastDataRow,
+                    lastColumnIndex,
+                    R02PivotTableConfigs.BuildSummary(request.IsClientExport),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (!summaryPivot.Success)
+            {
+                var detail = string.Join("; ", summaryPivot.Errors);
+                _logger.Error($"[R02] summary pivot failed: {detail}");
+                return MasterPlanReportGenerationResult.Fail(
+                    $"הנתונים נכתבו, אך יצירת טבלת הציר «{R02PivotTableConfigs.SummarySheetName}» נכשלה: {detail}\n{url}");
+            }
+
+            progress?.Report(("pivot", "יוצר טבלת ציר מפורטת...", 94));
+            var detailPivot = await sheets.CreatePivotTableAsync(
+                    spreadsheetId,
+                    R02PivotTableConfigs.DetailSheetName,
+                    sourceSheetName: "Data",
+                    headerRow,
+                    lastDataRow,
+                    lastColumnIndex,
+                    R02PivotTableConfigs.BuildDetail(request.IsClientExport),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (!detailPivot.Success)
+            {
+                var detail = string.Join("; ", detailPivot.Errors);
+                _logger.Error($"[R02] detail pivot failed: {detail}");
+                return MasterPlanReportGenerationResult.Fail(
+                    $"הנתונים וטבלת הסיכום נכתבו, אך יצירת טבלת הציר «{R02PivotTableConfigs.DetailSheetName}» נכשלה: {detail}\n{url}");
+            }
+
             _logger.Info(
-                $"[R02] completed rows={rows.Count} cols={headers.Count} client={request.IsClientExport} url={url}");
+                $"[R02] completed rows={rows.Count} cols={headers.Count} client={request.IsClientExport} " +
+                $"pivots=[{R02PivotTableConfigs.SummarySheetName},{R02PivotTableConfigs.DetailSheetName}] url={url}");
             return MasterPlanReportGenerationResult.Ok(spreadsheetId, fileName, url, rows.Count);
         }
         catch (OperationCanceledException)

@@ -1,3 +1,4 @@
+using System.Windows.Media;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -312,6 +313,7 @@ public partial class FileTreePickerWindow : Window
         public bool IsSelectable { get; init; }
         public bool ShowCheckBox { get; init; }
         public FontWeight TitleWeight { get; init; } = FontWeights.Normal;
+        public Brush TitleBrush { get; init; } = Brushes.Black;
         public object? Tag { get; init; }
         public ObservableCollection<PickerNode> Children { get; } = new();
 

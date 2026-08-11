@@ -14,6 +14,11 @@ public static class AccServiceContracts
     public const string ApiVersionPrefix = "/v1";
     public const string ApiKeyHeader = "X-AccService-Key";
     public const string ApiVersionHeader = "X-AccService-Version";
+
+    /// <summary>
+    /// Tip version URN returned with <c>GET …/items/{itemId}/download</c> (ASCII URN; no encoding).
+    /// </summary>
+    public const string DownloadedTipVersionIdHeader = "X-Acc-Tip-Version-Id";
 }
 
 /// <summary>One entry in the response of <c>GET /v1/acc/templates</c>.</summary>

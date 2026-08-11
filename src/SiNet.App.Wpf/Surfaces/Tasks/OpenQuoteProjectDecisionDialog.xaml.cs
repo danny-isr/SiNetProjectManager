@@ -263,36 +263,56 @@ public partial class OpenQuoteProjectDecisionDialog : Window, INotifyPropertyCha
                 return;
             }
 
-            var rawMessageId = inboxRow.InternetMessageId.Trim().Trim('<', '>');
+            var rfc822Term = EmailMailboxQueryComposer.BuildRfc822MessageIdSearchTerm(inboxRow.InternetMessageId);
             var page = await _emailGateway.GetMailboxPageAsync(
                 new EmailMailboxQuery
                 {
-                    FreeText = $"rfc822msgid:{rawMessageId}",
+                    FreeText = rfc822Term,
                     MailboxScope = EmailMailboxScope.AllMail,
                     PageSize = 1,
                 }).ConfigureAwait(true);
 
             var summary = page.Items.FirstOrDefault();
-            if (summary is null)
+            string? gmailMessageId = summary?.MessageId;
+            string? gmailThreadId = summary?.ThreadId;
+
+            // Fallback: MessageUniqueId may already be a Gmail API id (non-RFC822).
+            if (string.IsNullOrWhiteSpace(gmailMessageId))
+            {
+                var apiId = EmailMailboxQueryComposer.TryGetGmailApiMessageId(inboxRow.MessageUniqueId);
+                if (!string.IsNullOrWhiteSpace(apiId))
+                {
+                    var byId = await _emailGateway.GetByIdAsync(apiId).ConfigureAwait(true);
+                    if (byId is not null)
+                    {
+                        gmailMessageId = byId.MessageId;
+                        gmailThreadId = byId.ThreadId;
+                        WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
+                            $"locate fallback GetById gmailId={gmailMessageId} inbox={emailId}");
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(gmailMessageId))
             {
                 // TEMP WF-DEBUG
                 WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
-                    $"FAILED — Gmail message not found for rfc822msgid (inbox={emailId}) rawMessageId='{rawMessageId}' pageItems={page.Items.Count}");
+                    $"FAILED — Gmail message not found (inbox={emailId}) q={rfc822Term} pageItems={page.Items.Count} unique='{inboxRow.MessageUniqueId}'");
                 StatusMessage = "המייל לא אותר ב-Gmail — ניתן לשייך ידנית בשלב תיוק החומר.";
                 return;
             }
 
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Email.File.AutoOnCreate",
-                $"filing gmailId={summary.MessageId} inbox={emailId} project={createdProjectId}");
+                $"filing gmailId={gmailMessageId} inbox={emailId} project={createdProjectId}");
 
             var result = await _filingService.FileToProjectAsync(
                 new FileEmailToProjectCommand(
                     TargetProjectId: createdProjectId,
                     ActingUserId: _context.ActingUserId ?? 0,
-                    GmailMessageId: summary.MessageId,
+                    GmailMessageId: gmailMessageId,
                     InboxMessageId: emailId,
-                    GmailThreadId: summary.ThreadId,
+                    GmailThreadId: gmailThreadId,
                     InternetMessageId: inboxRow.InternetMessageId)).ConfigureAwait(true);
 
             // TEMP WF-DEBUG

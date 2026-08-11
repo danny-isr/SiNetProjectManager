@@ -60,10 +60,57 @@ public sealed class FollowQuoteEmailFilterTests
                 "WorkSurfaces",
                 "WorkSurfaceLauncher.cs"));
 
-        Assert.Contains("OpenFollowQuoteEmailAsync", source, StringComparison.Ordinal);
+        Assert.Contains("OpenEmailFirstFollowTaskAsync", source, StringComparison.Ordinal);
         Assert.Contains("IEmailSurfaceHost", source, StringComparison.Ordinal);
         Assert.Contains("FollowQuoteApproval", source, StringComparison.Ordinal);
+        Assert.Contains("FollowWorkOrder", source, StringComparison.Ordinal);
         Assert.Contains("OfferProjectWorkFallback: true", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailWindow_follow_work_order_banner_distinct_from_quote()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(
+                RepoRoot(),
+                "src",
+                "SiNet.App.Wpf",
+                "Surfaces",
+                "Email",
+                "EmailWindowViewModel.cs"));
+
+        Assert.Contains("ApplyFollowEmailHintsAsync", source, StringComparison.Ordinal);
+        Assert.Contains("IsFollowWorkOrderContext", source, StringComparison.Ordinal);
+        Assert.Contains("מעקב הזמנת עבודה", source, StringComparison.Ordinal);
+        Assert.Contains("FollowWorkOrder.FileFallback", source, StringComparison.Ordinal);
+        Assert.Contains("התקבלה הזמנת עבודה", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FollowQuote_tag_auto_completes_with_QuoteApprovedByClient()
+    {
+        var detail = File.ReadAllText(
+            Path.Combine(RepoRoot(), "src", "SiNet.App.Wpf", "Surfaces", "Email", "EmailDetailViewModel.cs"));
+        var doc = File.ReadAllText(
+            Path.Combine(RepoRoot(), "docs", "manual-tests", "FOLLOW_QUOTE_APPROVAL.md"));
+
+        Assert.Contains("TryAutoCompleteFollowQuoteWhenReadyAsync", detail, StringComparison.Ordinal);
+        Assert.Contains("AreAllTaggableAttachmentsTagged", detail, StringComparison.Ordinal);
+        Assert.Contains("ResolveMoveCompletionResultCode", detail, StringComparison.Ordinal);
+        Assert.Contains("QuoteApprovedByClient", detail, StringComparison.Ordinal);
+        Assert.Contains("every", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("QuoteApprovedByClient", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailWindow_ensure_bound_file_retry_on_task_select()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(RepoRoot(), "src", "SiNet.App.Wpf", "Surfaces", "Email", "EmailWindowViewModel.cs"));
+
+        Assert.Contains("EnsureTaskEmailFiledWhenBoundAsync", source, StringComparison.Ordinal);
+        Assert.Contains("Email.File.EnsureBound", source, StringComparison.Ordinal);
+        Assert.Contains("תייג את כל הצרופות", source, StringComparison.Ordinal);
     }
 
     private static EmailListRow CreateRow(string id, string threadId) =>

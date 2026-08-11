@@ -12,13 +12,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Border Grid.Row="0"
                 Background="#1976D2"
                 Padding="10,6"
                 Margin="0,0,0,8"
                 CornerRadius="4">
-            <TextBlock Text="{Binding Viewer.Subject, FallbackValue=פרטי מייל}"
+            <TextBlock Text="{Binding EmailDetail.Viewer.Subject, FallbackValue=פרטי מייל}"
                        Foreground="White"
                        FontWeight="Bold"
                        FontFamily="{DynamicResource SiFontFamily}"
@@ -26,5 +27,18 @@
                        TextWrapping="Wrap" />
         </Border>
         <detail:EmailDetailView x:Name="DetailHost" Grid.Row="1" />
+        <Border Grid.Row="2"
+                Margin="0,8,0,0"
+                Padding="8,6"
+                Background="{DynamicResource SiSurfaceBrush}"
+                BorderBrush="{DynamicResource SiSecondaryBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+            <TextBlock Text="{Binding StatusMessage, FallbackValue=''}"
+                       FontFamily="{DynamicResource SiFontFamily}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       TextWrapping="Wrap"
+                       ToolTip="{Binding StatusMessage}" />
+        </Border>
     </Grid>
 </Window>

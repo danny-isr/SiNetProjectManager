@@ -157,6 +157,17 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             {
                 _reloadPending = true;
                 WorkflowDebugTrace.Step("Tasks.Workbench", "notify while busy → reloadPending");
+                // One-shot nudge: if LoadAsync finishes without draining (edge races), retry soon.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                    DispatcherPriority.ApplicationIdle,
+                    () =>
+                    {
+                        if (_disposed || IsBusy || !_reloadPending)
+                            return;
+                        _reloadPending = false;
+                        WorkflowDebugTrace.Step("Tasks.Workbench", "idle nudge → drain reloadPending");
+                        _ = LoadAsync();
+                    });
                 return;
             }
 

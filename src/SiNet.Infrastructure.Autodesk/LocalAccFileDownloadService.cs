@@ -22,6 +22,9 @@ internal sealed class LocalAccFileDownloadService(IAccTransferConnector connecto
 
         return result is null
             ? null
-            : new AccFileDownloadResult(result.Value.TempFilePath, result.Value.FileName);
+            : new AccFileDownloadResult(
+                result.Value.TempFilePath,
+                result.Value.FileName,
+                result.Value.TipVersionId);
     }
 }

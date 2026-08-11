@@ -14,6 +14,14 @@ internal sealed class LocalAccItemService(IAccTransferConnector connector) : IAc
             ? Task.FromResult<string?>(null)
             : _connector.GetItemDisplayNameAsync(NormalizeProjectId(projectId), itemId.Trim(), cancellationToken);
 
+    public Task<string?> GetTipVersionIdAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(itemId)
+            ? Task.FromResult<string?>(null)
+            : _connector.GetItemTipVersionIdAsync(NormalizeProjectId(projectId), itemId.Trim(), cancellationToken);
+
     public Task<int?> GetVersionCountAsync(
         string projectId,
         string itemId,

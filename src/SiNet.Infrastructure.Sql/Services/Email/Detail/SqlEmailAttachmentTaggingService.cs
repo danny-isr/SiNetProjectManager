@@ -266,6 +266,8 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
                 TypeTitle = pf.TypeProj != null ? pf.TypeProj.Title : null,
                 FolderId = pf.Folder != null ? (int?)pf.Folder.Id : pf.Folderid,
                 pf.Number,
+                pf.IsRequired,
+                pf.Code,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -277,7 +279,9 @@ internal sealed class SqlEmailAttachmentTaggingService(IDbContextFactory<SiNetSQ
                 f.TypeProjId,
                 f.TypeTitle,
                 f.FolderId,
-                f.Number))
+                f.Number,
+                f.IsRequired,
+                f.Code))
             .ToList();
 
         var seedFolderIds = files

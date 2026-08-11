@@ -102,7 +102,9 @@ public sealed record EmailAttachmentTagPickerFile(
     int? TypeProjId,
     string? TypeTitle,
     int? FolderId,
-    float? Number);
+    float? Number,
+    bool IsRequired = false,
+    string? Code = null);
 
 public sealed record EmailAttachmentTagPickerFolder(
     int FolderId,

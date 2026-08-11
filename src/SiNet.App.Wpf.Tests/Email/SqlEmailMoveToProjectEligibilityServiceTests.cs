@@ -201,6 +201,8 @@ public sealed class EmailMoveEligibilityGuardContractTests
         Assert.Contains("await RefreshMoveEligibilityAsync()", source, StringComparison.Ordinal);
         Assert.Contains("ActionBar.MoveBlockReason", source, StringComparison.Ordinal);
         Assert.Contains("RefreshMoveEligibilityThenActionBarAsync", source, StringComparison.Ordinal);
+        Assert.Contains("TryAutoCompleteFollowQuoteWhenReadyAsync", source, StringComparison.Ordinal);
+        Assert.Contains("AreAllTaggableAttachmentsTagged", source, StringComparison.Ordinal);
     }
 
     [Fact]

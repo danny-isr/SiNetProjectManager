@@ -46,6 +46,20 @@ public partial class EmailAttachmentStripView : UserControl
             return;
         }
 
+        // CreateNew (-1) must always raise AlternativeChanged even when TwoWay binding already
+        // wrote SelectedAlternativeId=-1 — otherwise HandleCreateNewAlternativeAsync never runs.
+        if (selectedId == EmailProjectAlternativeOption.CreateNewId
+            || item.AvailableAlternatives.Any(a => a.IsCreateNew && a.Id == selectedId))
+        {
+            item.SelectedAlternativeId = selectedId;
+            if (item.AlternativeChangedCommand.CanExecute(null))
+            {
+                item.AlternativeChangedCommand.Execute(null);
+            }
+
+            return;
+        }
+
         if (item.SelectedAlternativeId == selectedId)
         {
             return;

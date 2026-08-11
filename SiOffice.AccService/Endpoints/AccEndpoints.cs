@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
+using Serilog;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Application.Settings;
@@ -374,6 +375,19 @@ internal static class AccEndpoints
                     result.AlreadySameSource
                 });
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Surface Autodesk/connector failures as 400 with detail (not opaque 500 HTML).
+                // Callers (Move ZIP folder JSON / remote upload) need a readable AccService message.
+                Log.Error(ex, "ACC file upload failed for project {ProjectId} displayName {DisplayName}", projectId, body.DisplayName);
+                return Results.Json(
+                    new { error = "upload_failed", detail = ex.Message },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             finally
             {
                 TryDeleteTempDirectory(tempDirectory);
@@ -410,6 +424,10 @@ internal static class AccEndpoints
             // RemoteAccFileDownloadService decodes with Uri.UnescapeDataString.
             var encodedFileName = Uri.EscapeDataString(result.DownloadedFileName ?? string.Empty);
             httpContext.Response.Headers["X-Acc-Downloaded-FileName"] = encodedFileName;
+            if (!string.IsNullOrWhiteSpace(result.TipVersionId))
+            {
+                httpContext.Response.Headers[AccServiceContracts.DownloadedTipVersionIdHeader] = result.TipVersionId;
+            }
             httpContext.Response.OnCompleted(async () =>
             {
                 await stream.DisposeAsync().ConfigureAwait(false);
@@ -417,6 +435,25 @@ internal static class AccEndpoints
             });
 
             return Results.File(stream, "application/octet-stream", result.DownloadedFileName);
+        });
+
+        v1.MapGet("/projects/{projectId}/items/{itemId}/tip-version", async (
+            string projectId,
+            string itemId,
+            ITokenProvider tokenProvider,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+                return Results.BadRequest(new { error = "projectId is required." });
+            if (string.IsNullOrWhiteSpace(itemId))
+                return Results.BadRequest(new { error = "itemId is required." });
+
+            var bim360 = new Bim360Service(tokenProvider);
+            var versionId = await bim360.GetItemTipVersionIdAsync(NormalizeProjectId(projectId), itemId.Trim(), ct);
+            if (string.IsNullOrWhiteSpace(versionId))
+                return Results.NotFound();
+
+            return Results.Ok(new { VersionId = versionId });
         });
 
         v1.MapGet("/projects/{projectId}/items/{itemId}/display-name", async (

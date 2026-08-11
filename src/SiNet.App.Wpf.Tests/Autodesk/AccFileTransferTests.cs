@@ -307,6 +307,7 @@ public sealed class AccFileTransferTests : IDisposable
                     FileName = "\"Downloaded.dwg\"",
                 };
                 response.Headers.Add("X-Acc-Downloaded-FileName", Uri.EscapeDataString("Downloaded.dwg"));
+                response.Headers.Add(AccServiceContracts.DownloadedTipVersionIdHeader, "urn:adsk.wipprod:fs.file:vf.tip-1");
                 return Task.FromResult(response);
             })),
             vault,
@@ -318,6 +319,7 @@ public sealed class AccFileTransferTests : IDisposable
         Assert.Equal("https://acc.example.com/v1/acc/projects/b.project-1/items/item-1/download", requestedUri?.AbsoluteUri);
         Assert.Equal("native-api-key", apiKeyHeader);
         Assert.Equal("Downloaded.dwg", result!.DownloadedFileName);
+        Assert.Equal("urn:adsk.wipprod:fs.file:vf.tip-1", result.TipVersionId);
         Assert.True(File.Exists(result.TempFilePath));
         Assert.Equal("downloaded payload", await File.ReadAllTextAsync(result.TempFilePath));
         File.Delete(result.TempFilePath);
@@ -405,8 +407,11 @@ public sealed class AccFileTransferTests : IDisposable
             return Task.FromResult(new UploadResult(itemId, $"VER-{UploadNewVersionCalls}"));
         }
 
-        public Task<(string TempFilePath, string FileName)?> DownloadFileToTempAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<(string TempFilePath, string FileName)?>(null);
+        public Task<(string TempFilePath, string FileName, string? TipVersionId)?> DownloadFileToTempAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<(string TempFilePath, string FileName, string? TipVersionId)?>(null);
+
+        public Task<string?> GetItemTipVersionIdAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
 
         public Task<string?> GetItemDisplayNameAsync(string projectId, string itemId, CancellationToken cancellationToken = default) =>
             Task.FromResult(DisplayNames.TryGetValue(itemId, out var value) ? value : null);

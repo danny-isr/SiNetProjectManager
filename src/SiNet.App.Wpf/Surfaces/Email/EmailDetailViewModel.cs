@@ -475,9 +475,25 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         var project = _currentProject.CurrentProject;
-        // Prefer explicit picker so filing never depends on (or mutates) the shell active project.
-        if (_filingProjectPicker is { IsAvailable: true })
+        if (_workSurfaceContext is { ProjectId: > 0 } taskProjectId)
         {
+            // FileMaterial / task-bound email: never open free project picker.
+            if (project is null || project.ProjectId != taskProjectId.ProjectId)
+            {
+                SetStatus($"שיוך למשימה דורש פרויקט {taskProjectId.ProjectId} (הקשר המשימה). רענן את חלון המשימה.");
+                WorkflowDebugTrace.Step(
+                    "Email.File",
+                    $"blocked: WorkSurface ProjectId={taskProjectId.ProjectId} current={project?.ProjectId.ToString() ?? "(null)"}");
+                return;
+            }
+
+            WorkflowDebugTrace.Step(
+                "Email.File",
+                $"using WorkSurfaceContext.ProjectId={taskProjectId.ProjectId} (no picker)");
+        }
+        else if (_filingProjectPicker is { IsAvailable: true })
+        {
+            // Prefer explicit picker so filing never depends on (or mutates) the shell active project.
             var picked = await _filingProjectPicker.PickProjectAsync().ConfigureAwait(true);
             if (picked is null)
             {
@@ -488,6 +504,12 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             project = picked;
         }
         else if (project is null)
+        {
+            SetStatus("בחר פרויקט לפני שיוך מייל.");
+            return;
+        }
+
+        if (project is null || project.ProjectId <= 0)
         {
             SetStatus("בחר פרויקט לפני שיוך מייל.");
             return;
@@ -569,6 +591,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         {
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Email.Move", "re-entry blocked — move already in progress");
+            SetStatus("העברה כבר רצה — ממתין לסיום. אם זה נמשך דקות, סגור את החלון והפעל מחדש את האפליקציה.");
             return;
         }
 
@@ -624,11 +647,26 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
                 && _taskCompletionService is not null
                 && TryResolveTaskCompletionParams(out var completionEventCode, out var actingUserId, out completionBlockReason))
             {
+                var taskResultCode = ResolveMoveCompletionResultCode();
+                if (string.Equals(_workSurfaceContext?.TaskTypeCode, "FollowQuoteApproval", StringComparison.Ordinal)
+                    && string.IsNullOrWhiteSpace(taskResultCode))
+                {
+                    var needResult =
+                        "הקבצים תויקו, אך למעקב אישור הצעה נדרשת תוצאה (אישור לקוח). תייג PDF כ־אישור_לקוח_להצעה או השלם מ־ProjectWork.";
+                    SetStatus(needResult);
+                    PresentMoveOutcomeDialog(needResult, succeeded: false);
+                    return;
+                }
+
+                WorkflowDebugTrace.Step(
+                    "Email.Move",
+                    $"Complete task={taskId} event={completionEventCode} result={taskResultCode ?? "(null)"}");
+
                 var completion = await _taskCompletionService.CompleteAsync(
                     new CompleteTaskCommand(
                         taskId,
                         completionEventCode,
-                        TaskResultCode: null,
+                        TaskResultCode: taskResultCode,
                         CompletedTaskLinkIds: null,
                         actingUserId),
                     CancellationToken.None).ConfigureAwait(true);
@@ -1396,6 +1434,13 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         var targets = await _attachmentTaggingService.LoadTagTargetsAsync(projectId).ConfigureAwait(true);
         var targetTitle = targets.FirstOrDefault(t => t.ProjectFileId == projectFileId)?.DisplayName;
 
+        if (item.SelectedAlternativeId == EmailProjectAlternativeOption.CreateNewId
+            || item.AvailableAlternatives.Any(a => a.IsCreateNew && a.Id == item.SelectedAlternativeId))
+        {
+            SetStatus("בחר או צור אלטרנטיבה לפני תיוג (אל תשאיר «+ חדש...»).");
+            return;
+        }
+
         var result = await _attachmentTaggingService.SetTagAsync(
             new EmailAttachmentTagCommand(
                 item.InboxAttachmentId,
@@ -1427,8 +1472,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         if (string.Equals(_workSurfaceContext?.TaskTypeCode, "FollowQuoteApproval", StringComparison.Ordinal)
             && IsQuoteClientApprovalTitle(targetTitle))
         {
-            SetStatus(
-                "הצרופה תויגה כ־אישור_לקוח_להצעה. להשלמת QuoteApprovedByClient נדרש גם PDF פיזי — השתמש ב«תיוק קובץ בלי מייל» או העלה ב-ProjectWork.");
             WorkflowDebugTrace.Step(
                 "FollowQuote.Tag",
                 $"task={_workSurfaceContext?.TaskId} tagged QuoteClientApproval att={item.InboxAttachmentId}");
@@ -1437,8 +1480,15 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         {
             SetStatus("הצרופה תויגה לקובץ הפרויקט.");
         }
+
         await RefreshMoveEligibilityAsync().ConfigureAwait(true);
         RefreshActionBarState();
+
+        if (string.Equals(_workSurfaceContext?.TaskTypeCode, "FollowQuoteApproval", StringComparison.Ordinal)
+            && HasTaggedQuoteClientApproval())
+        {
+            await TryAutoCompleteFollowQuoteWhenReadyAsync().ConfigureAwait(true);
+        }
     }
 
     private async Task AlternativeChangedAsync(EmailDetailAttachmentItem item)
@@ -1510,16 +1560,26 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var projectId = _currentProject.CurrentProject?.ProjectId ?? _selectedEmail?.ProjectId ?? 0;
+        var projectId = _workSurfaceContext is { ProjectId: > 0 } ctxPid
+            ? ctxPid.ProjectId
+            : _currentProject.CurrentProject?.ProjectId ?? _selectedEmail?.ProjectId ?? 0;
         if (projectId <= 0)
         {
             SetStatus("בחר פרויקט לפני יצירת אלטרנטיבה.");
             return;
         }
 
-        if (_alternativeNamePrompt?.IsAvailable != true)
+        if (_alternativeNamePrompt is null)
+        {
+            SetStatus("יצירת אלטרנטיבה אינה זמינה (חסר מארח פרומפט).");
+            WorkflowDebugTrace.Step("Email.TagUI", "create-alt blocked: alternativeNamePrompt null");
+            return;
+        }
+
+        if (!_alternativeNamePrompt.IsAvailable)
         {
             SetStatus("יצירת אלטרנטיבה אינה זמינה.");
+            WorkflowDebugTrace.Step("Email.TagUI", "create-alt blocked: prompt IsAvailable=false");
             return;
         }
 
@@ -1528,6 +1588,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             .Select(a => a.Name)
             .ToList();
 
+        WorkflowDebugTrace.Step("Email.TagUI", $"create-alt prompt project={projectId} existing={existingNames.Count}");
         var name = await _alternativeNamePrompt
             .PromptForNewAlternativeNameAsync(existingNames)
             .ConfigureAwait(true);
@@ -1619,6 +1680,76 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         completionEventCode = _workSurfaceContext.CompletionEventCode;
         actingUserId = userId;
         return true;
+    }
+
+    /// <summary>
+    /// FollowQuoteApproval: Move after tagging QuoteClientApproval completes as client approval.
+    /// Other multi-result tasks keep null (caller must not auto-complete without a picker).
+    /// </summary>
+    private string? ResolveMoveCompletionResultCode()
+    {
+        if (!string.Equals(_workSurfaceContext?.TaskTypeCode, "FollowQuoteApproval", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return HasTaggedQuoteClientApproval() ? "QuoteApprovedByClient" : null;
+    }
+
+    private bool HasTaggedQuoteClientApproval() =>
+        AttachmentStrip.Attachments.Any(a =>
+            a.IsTagged && IsQuoteClientApprovalTitle(a.TaggedProjectFileTitle));
+
+    private bool AreAllTaggableAttachmentsTagged()
+    {
+        var taggable = AttachmentStrip.Attachments
+            .Where(a => a.IsTaggable && a.InboxAttachmentId > 0)
+            .ToList();
+        return taggable.Count > 0 && taggable.All(a => a.IsTagged && a.ProjectFileId is > 0);
+    }
+
+    /// <summary>
+    /// FollowQuote: only after every taggable attachment has a target AND QuoteClientApproval is
+    /// among them — File (if needed) → Move → Complete Approved. Partial tagging never unlocks Move.
+    /// </summary>
+    private async Task TryAutoCompleteFollowQuoteWhenReadyAsync()
+    {
+        if (_selectedEmail is null || !HasTaggedQuoteClientApproval())
+        {
+            return;
+        }
+
+        if (!AreAllTaggableAttachmentsTagged())
+        {
+            var remaining = AttachmentStrip.Attachments.Count(a =>
+                a.IsTaggable && a.InboxAttachmentId > 0 && !a.IsTagged);
+            SetStatus(
+                $"אישור לקוח תויג. נותרו {remaining} צרופות בלי יעד — תייג את כולן, ואז ההעברה והשלמת המשימה ימשיכו.");
+            WorkflowDebugTrace.Step(
+                "FollowQuote.Auto",
+                $"waiting — untagged={remaining} task={_workSurfaceContext?.TaskId}");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
+        {
+            SetStatus(ActionBar.MoveBlockReason);
+            WorkflowDebugTrace.Step(
+                "FollowQuote.Auto",
+                $"blocked by eligibility: {ActionBar.MoveBlockReason}");
+            return;
+        }
+
+        SetStatus("כל הצרופות מתויגות — משייך ומעביר לפרויקט ומשלים את המשימה…");
+        if (!_selectedEmail.IsFiledToProject)
+        {
+            WorkflowDebugTrace.Step("FollowQuote.Auto", "all tagged — ensure Gmail File then Move");
+            await FileSelectedEmailAsync().ConfigureAwait(true);
+            return;
+        }
+
+        WorkflowDebugTrace.Step("FollowQuote.Auto", "all tagged — Move after QuoteClientApproval");
+        await MoveSelectedEmailToProjectAsync().ConfigureAwait(true);
     }
 
     /// <summary>

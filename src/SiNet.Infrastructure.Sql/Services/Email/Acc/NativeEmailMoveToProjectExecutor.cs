@@ -31,6 +31,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
     IAccFileUploadService accUploadService,
     IAccFolderBrowserService folderBrowserService,
     IAccItemMetadataService metadataService,
+    IAccItemService accItemService,
     ITaskCompletionService taskCompletionService,
     IEmailAccStatusService? accStatusService = null,
     IEmailAccRecoveryExecutor? recoveryExecutor = null) : IEmailMoveToProjectExecutor
@@ -41,6 +42,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
     private readonly IAccFileUploadService _accUploadService = accUploadService;
     private readonly IAccFolderBrowserService _folderBrowserService = folderBrowserService;
     private readonly IAccItemMetadataService _metadataService = metadataService;
+    private readonly IAccItemService _accItemService = accItemService;
     private readonly ITaskCompletionService _taskCompletionService = taskCompletionService;
     private readonly IEmailAccStatusService? _accStatusService = accStatusService;
     private readonly IEmailAccRecoveryExecutor? _recoveryExecutor = recoveryExecutor;
@@ -161,8 +163,12 @@ public sealed class NativeEmailMoveToProjectExecutor(
             string? tempLocalPath = null;
             try
             {
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "Email.Move",
+                    $"att={att.Id} begin '{att.OriginalFileName ?? att.SavedFileName}' pf={att.ProjectFileId} alt={att.ProjectAlternativeId?.ToString() ?? "null"} accItem={(string.IsNullOrEmpty(att.AccItemId) ? "(none)" : "present")}");
+
                 bool isZipFolder = string.IsNullOrEmpty(att.AccItemId)
-                    && !string.IsNullOrEmpty(att.AccVersionId)
+                    && IsAccFolderUrn(att.AccVersionId)
                     && att.OriginalFileName != null
                     && att.OriginalFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 
@@ -219,6 +225,9 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 }
 
                 var metadataRead = await ReadInboxMetadataAsync(message, att, cancellationToken).ConfigureAwait(false);
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "Email.Move",
+                    $"att={att.Id} metadata ok={metadataRead.Success} attrs={metadataRead.Attributes.Count}");
                 if (!metadataRead.Success)
                 {
                     Trace.TraceWarning(
@@ -300,6 +309,9 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     continue;
                 }
 
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "Email.Move",
+                    $"att={att.Id} download start accItemId={att.AccItemId}");
                 var dl = await _accDownloadService.DownloadToTempAsync(
                     message.InboxAccProjectId!, att.AccItemId!, cancellationToken).ConfigureAwait(false);
                 if (dl is null)
@@ -310,7 +322,11 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     RecordFailure(attachmentFailures, ref failedCount, att, "DownloadFailed");
                     continue;
                 }
+                SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                    "Email.Move",
+                    $"att={att.Id} download ok tip={dl.TipVersionId ?? "(none)"}");
                 tempLocalPath = dl.TempFilePath;
+                await EnsureAccVersionIdAsync(db, message, att, dl.TipVersionId, cancellationToken).ConfigureAwait(false);
 
                 long? sourceFileSize = TryGetFileSize(tempLocalPath);
 
@@ -335,6 +351,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 };
 
                 var result = await _filingService.FileAsync(request, cancellationToken).ConfigureAwait(false);
+
+                await EnsureAccVersionIdAsync(db, message, att, tipVersionHint: null, cancellationToken).ConfigureAwait(false);
 
                 var movedAtUtc = DateTime.UtcNow;
                 var moveMetadataResult = await WriteMoveLockMetadataAsync(
@@ -461,13 +479,14 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            // ZIP folders use AccVersionId without AccItemId — exclude those from "missing".
+            // ZIP folders: AccVersionId is an ACC folder URN (not a tip/version). Exclude from Gmail recover.
             var zipFolderIds = await db.EmailInboxAttachments
                 .AsNoTracking()
                 .Where(a => a.MessageId == message.Id
                             && a.ProjectFileId != null
                             && string.IsNullOrEmpty(a.AccItemId)
-                            && !string.IsNullOrEmpty(a.AccVersionId)
+                            && a.AccVersionId != null
+                            && a.AccVersionId.Contains("fs.folder")
                             && a.OriginalFileName != null
                             && a.OriginalFileName.EndsWith(".zip"))
                 .Select(a => a.Id)
@@ -911,13 +930,60 @@ public sealed class NativeEmailMoveToProjectExecutor(
             : null;
     }
 
+    private async Task EnsureAccVersionIdAsync(
+        SiNetSQLDbContext db,
+        EmailInboxMessage message,
+        EmailInboxAttachment attachment,
+        string? tipVersionHint,
+        CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(attachment.AccVersionId))
+        {
+            return;
+        }
+
+        var versionId = tipVersionHint?.Trim();
+        if (string.IsNullOrWhiteSpace(versionId)
+            && !string.IsNullOrWhiteSpace(message.InboxAccProjectId)
+            && !string.IsNullOrWhiteSpace(attachment.AccItemId))
+        {
+            versionId = await _accItemService
+                .GetTipVersionIdAsync(message.InboxAccProjectId!, attachment.AccItemId!, ct)
+                .ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(versionId))
+        {
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "Email.Move",
+                $"att={attachment.Id} AccVersionId still missing after tip resolve (accItemId={attachment.AccItemId ?? "(null)"})");
+            return;
+        }
+
+        attachment.AccVersionId = versionId;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "Email.Move",
+            $"att={attachment.Id} AccVersionId backfilled from tip");
+    }
+
     private static bool IsZipContainerAttachment(EmailInboxAttachment attachment)
     {
+        // Must stay aligned with the Move loop's `isZipFolder` gate: true ZIP *folder*
+        // rows have AccVersionId = ACC folder URN and no AccItemId. A normal .zip *file*
+        // (AccItemId set; AccVersionId = tip version) must use item Move/Lock attributes —
+        // never folder JSON upload (that yields Autodesk "object is not the correct type").
         var fileName = attachment.SavedFileName ?? attachment.OriginalFileName;
         return !attachment.IsExternalDownload
-               && !string.IsNullOrWhiteSpace(attachment.AccVersionId)
+               && string.IsNullOrWhiteSpace(attachment.AccItemId)
+               && IsAccFolderUrn(attachment.AccVersionId)
                && fileName?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true;
     }
+
+    /// <summary>ACC Docs folder URN (not a file tip/version).</summary>
+    internal static bool IsAccFolderUrn(string? urn) =>
+        !string.IsNullOrWhiteSpace(urn)
+        && urn.Contains(":fs.folder:", StringComparison.OrdinalIgnoreCase);
 
     private async Task<AccItemMetadataResult> WriteMoveLockMetadataAsync(
         EmailInboxMessage message,

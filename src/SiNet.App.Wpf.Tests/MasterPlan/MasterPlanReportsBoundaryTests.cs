@@ -119,6 +119,50 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.DoesNotContain("GROUP BY", sql, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void R02_native_service_creates_summary_and_detail_pivots()
+    {
+        var native = ReadRepoFile("src/SiNet.Infrastructure.Google/Reports/NativeR02ReportService.cs");
+        var writer = ReadRepoFile("src/SiNet.Infrastructure.Google/Reports/NativeGoogleSheetsWriter.cs");
+        var configs = ReadRepoFile("src/SiNet.Infrastructure.Google/Reports/R02PivotTableConfigs.cs");
+
+        Assert.Contains("CreatePivotTableAsync", writer, StringComparison.Ordinal);
+        Assert.Contains("CreatePivotTableAsync", native, StringComparison.Ordinal);
+        Assert.Contains("R02PivotTableConfigs.SummarySheetName", native, StringComparison.Ordinal);
+        Assert.Contains("R02PivotTableConfigs.DetailSheetName", native, StringComparison.Ordinal);
+        Assert.Contains("BuildSummary", native, StringComparison.Ordinal);
+        Assert.Contains("BuildDetail", native, StringComparison.Ordinal);
+
+        Assert.Contains("סיכום פרויקט-תת-חוזה", configs, StringComparison.Ordinal);
+        Assert.Contains("פירוט דיווחים", configs, StringComparison.Ordinal);
+        Assert.Contains("SummarizeFunction = \"SUM\"", configs, StringComparison.Ordinal);
+        Assert.Contains("SummarizeFunction = \"MIN\"", configs, StringComparison.Ordinal);
+        Assert.Contains("SummarizeFunction = \"MAX\"", configs, StringComparison.Ordinal);
+
+        // Column indices in R02PivotTableConfigs must stay aligned with R02HoursRow headers.
+        var internalHeaders = SiNet.Application.MasterPlan.Reports.R02HoursRow.GetHeaderRow(false);
+        Assert.Equal("מזהה דיווח", internalHeaders[0]);
+        Assert.Equal("תאריך", internalHeaders[1]);
+        Assert.Equal("שעות (עשרוני)", internalHeaders[4]);
+        Assert.Equal("תיאור", internalHeaders[5]);
+        Assert.Equal("שם עובד", internalHeaders[7]);
+        Assert.Equal("שם פרויקט", internalHeaders[10]);
+        Assert.Equal("שם תת-חוזה", internalHeaders[15]);
+
+        var clientHeaders = SiNet.Application.MasterPlan.Reports.R02HoursRow.GetHeaderRow(true);
+        Assert.Equal("שם פרויקט", clientHeaders[1]);
+        Assert.Equal("שם תת-חוזה", clientHeaders[3]);
+        Assert.Equal("שלב תת-חוזה", clientHeaders[4]);
+        Assert.Equal("תאריך", clientHeaders[5]);
+        Assert.Equal("שעות (עשרוני)", clientHeaders[6]);
+        Assert.Equal("תיאור", clientHeaders[7]);
+
+        Assert.Contains("InternalProjectName = 10", configs, StringComparison.Ordinal);
+        Assert.Contains("InternalSubContractName = 15", configs, StringComparison.Ordinal);
+        Assert.Contains("InternalHours = 4", configs, StringComparison.Ordinal);
+        Assert.Contains("ClientHours = 6", configs, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath)
         => File.ReadAllText(Path.Combine(FindRepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
 

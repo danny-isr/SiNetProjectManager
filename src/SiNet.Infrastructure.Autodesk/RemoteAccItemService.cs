@@ -33,6 +33,30 @@ internal sealed class RemoteAccItemService(
         return payload.DisplayName;
     }
 
+    public async Task<string?> GetTipVersionIdAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendAsync(HttpMethod.Get, projectId, itemId, "tip-version", cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content
+            .ReadFromJsonAsync<RemoteAccItemTipVersionResponse>(cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (payload is null)
+        {
+            throw new InvalidOperationException("ACC service returned an empty item tip-version response.");
+        }
+
+        return string.IsNullOrWhiteSpace(payload.VersionId) ? null : payload.VersionId;
+    }
+
     public async Task<int?> GetVersionCountAsync(
         string projectId,
         string itemId,

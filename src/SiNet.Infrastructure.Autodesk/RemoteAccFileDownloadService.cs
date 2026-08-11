@@ -53,6 +53,7 @@ internal sealed class RemoteAccFileDownloadService(
 
         response.EnsureSuccessStatusCode();
 
+        var tipVersionId = TryReadTipVersionId(response);
         var downloadedFileName = ResolveFileName(response, itemId);
         var tempPath = Path.Combine(
             Path.GetTempPath(),
@@ -70,7 +71,7 @@ internal sealed class RemoteAccFileDownloadService(
             await using var sourceStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             await sourceStream.CopyToAsync(targetStream, cancellationToken).ConfigureAwait(false);
 
-            return new AccFileDownloadResult(tempPath, downloadedFileName);
+            return new AccFileDownloadResult(tempPath, downloadedFileName, tipVersionId);
         }
         catch
         {
@@ -93,6 +94,17 @@ internal sealed class RemoteAccFileDownloadService(
     {
         var trimmedBaseUrl = baseUrl.TrimEnd('/');
         return $"{trimmedBaseUrl}{AccServiceContracts.ApiVersionPrefix}/acc/projects/{Uri.EscapeDataString(projectId)}/items/{Uri.EscapeDataString(itemId)}/download";
+    }
+
+    private static string? TryReadTipVersionId(HttpResponseMessage response)
+    {
+        if (!response.Headers.TryGetValues(AccServiceContracts.DownloadedTipVersionIdHeader, out var values))
+        {
+            return null;
+        }
+
+        var versionId = values.FirstOrDefault()?.Trim();
+        return string.IsNullOrWhiteSpace(versionId) ? null : versionId;
     }
 
     private static string ResolveFileName(HttpResponseMessage response, string itemId)

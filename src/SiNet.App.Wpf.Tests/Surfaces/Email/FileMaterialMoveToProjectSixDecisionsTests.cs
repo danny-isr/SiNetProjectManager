@@ -97,12 +97,33 @@ public sealed class FileMaterialMoveToProjectSixDecisionsTests
 
         var list = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs");
         Assert.Contains("GetByIdAsync", list, StringComparison.Ordinal);
-        Assert.Contains("rfc822msgid:", list, StringComparison.Ordinal);
+        Assert.Contains("BuildRfc822MessageIdSearchTerm", list, StringComparison.Ordinal);
+        Assert.Contains("TryGetGmailApiMessageId", list, StringComparison.Ordinal);
         Assert.Contains("InjectAndSelectTaskRow", list, StringComparison.Ordinal);
+
+        var composer = ReadRepoFile("src/SiNet.Application/Abstractions/Email/EmailMailboxQueryComposer.cs");
+        Assert.Contains("rfc822msgid:", composer, StringComparison.Ordinal);
+
+        var workItem = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailWorkItemWindow.xaml");
+        Assert.Contains("StatusMessage", workItem, StringComparison.Ordinal);
 
         var display = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListRowDisplayCoordinator.cs");
         Assert.Contains("never fall back to subject/from", display, StringComparison.Ordinal);
         Assert.Contains("Do not replace with the first row", display, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Executor_zip_container_requires_folder_urn_not_tip_version()
+    {
+        var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Acc/NativeEmailMoveToProjectExecutor.cs");
+        Assert.Contains("IsAccFolderUrn", source, StringComparison.Ordinal);
+        Assert.Contains(":fs.folder:", source, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrWhiteSpace(attachment.AccItemId)", source, StringComparison.Ordinal);
+        // Tip version must not qualify as ZIP folder container.
+        Assert.False(SiNet.Infrastructure.Sql.Services.Email.Acc.NativeEmailMoveToProjectExecutor.IsAccFolderUrn(
+            "urn:adsk.wipprod:fs.file:vf.abc?version=1"));
+        Assert.True(SiNet.Infrastructure.Sql.Services.Email.Acc.NativeEmailMoveToProjectExecutor.IsAccFolderUrn(
+            "urn:adsk.wipprod:fs.folder:co.abc"));
     }
 
     [Fact]

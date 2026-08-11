@@ -158,9 +158,10 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                     _services.GetService<ILoggerFactory>()?.CreateLogger("SendQuoteToClient")));
         }
 
-        if (string.Equals(context.TaskTypeCode, "FollowQuoteApproval", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(context.TaskTypeCode, "FollowQuoteApproval", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(context.TaskTypeCode, "FollowWorkOrder", StringComparison.OrdinalIgnoreCase))
         {
-            return await OpenFollowQuoteEmailAsync(context, cancellationToken).ConfigureAwait(true);
+            return await OpenEmailFirstFollowTaskAsync(context, cancellationToken).ConfigureAwait(true);
         }
 
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
@@ -169,7 +170,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to EMAIL surface");
 
             // Task-driven email opens require an exact primary work target — never browse fallback.
-            // Exception: EmailHints (FollowQuote) allow open without an inbox TaskLink.
+            // Exception: EmailHints (FollowQuote / FollowWorkOrder) allow open without an inbox TaskLink.
             if (context.TaskId is > 0)
             {
                 if (context.PrimaryWorkTargetEntityId is not > 0 && context.EmailHints is null)
@@ -269,18 +270,25 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         return false;
     }
 
-    private async Task<bool> OpenFollowQuoteEmailAsync(
+    private async Task<bool> OpenEmailFirstFollowTaskAsync(
         WorkSurfaceContext context,
         CancellationToken cancellationToken)
     {
+        var isWorkOrder = string.Equals(
+            context.TaskTypeCode,
+            "FollowWorkOrder",
+            StringComparison.OrdinalIgnoreCase);
+        var routeLabel = isWorkOrder ? "FollowWorkOrder" : "FollowQuoteApproval";
+
         WorkflowDebugTrace.Step(
             "Launcher.Open",
-            $"task={context.TaskId} → routing to FollowQuoteApproval Email-first");
+            $"task={context.TaskId} → routing to {routeLabel} Email-first");
 
         FollowQuoteOpenAnchor? anchor = null;
         if (context.TaskId is int followTaskId && followTaskId > 0
             && _services.GetService<IFollowQuoteAnchorResolver>() is { } resolver)
         {
+            // Soft anchor: latest QuoteSendProof on the task's project (same resolver as FollowQuote).
             anchor = await resolver.ResolveAsync(followTaskId, cancellationToken).ConfigureAwait(true);
         }
 
@@ -296,7 +304,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             EmailHints = hints,
         };
 
-        // Close any other task surface; FollowQuote uses the shell Email list (filter + empty state).
+        // Close any other task surface; Email-first uses the shell Email list (filter + empty state).
         _services.GetService<ITaskSurfaceWindowCoordinator>()
             ?.PrepareOpen(TaskSurfaceWindowKind.EmailWorkItem, context.TaskId);
 
@@ -304,14 +312,14 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         {
             shellEmail.Show(emailContext);
             WorkflowDebugTrace.Step(
-                "FollowQuote.Open",
+                $"{routeLabel}.Open",
                 $"task={context.TaskId} host=shellEmail thread={(hints.GmailThreadId ?? "-")} to={(hints.CounterpartAddress ?? "-")}");
             return true;
         }
 
         if (_services.GetService<EmailWorkItemTaskFloatingHost>() is not { } emailHost)
         {
-            Trace.TraceWarning("[WorkSurfaceLauncher] No Email host for FollowQuoteApproval.");
+            Trace.TraceWarning("[WorkSurfaceLauncher] No Email host for {0}.", routeLabel);
             return false;
         }
 

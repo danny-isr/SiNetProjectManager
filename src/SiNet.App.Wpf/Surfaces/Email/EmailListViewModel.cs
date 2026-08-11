@@ -9,6 +9,7 @@ using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email.Internal;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
+using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Identity;
@@ -786,50 +787,70 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         _display.TrySelectByInboxCorrelation(messageUniqueId, internetMessageId, subject, fromAddress);
 
     /// <summary>
-    /// Direct task email locate: GetByIdAsync / rfc822msgid AllMail, then inject+select.
-    /// Returns null when Gmail cannot resolve the message.
+    /// Direct task email locate: GetByIdAsync (real Gmail API id only) / rfc822msgid search, then inject+select.
+    /// Does not depend on the current mailbox page (top-N). Returns null when Gmail cannot resolve the message.
     /// </summary>
+    /// <param name="messageUniqueId">
+    /// SQL <c>MessageUniqueId</c> — often an RFC822 id (see <c>EmailMessageIdentity</c>), not a Gmail API id.
+    /// </param>
     internal async Task<EmailListRow?> TryLocateAndSelectTaskEmailAsync(
-        string? gmailMessageId,
+        string? messageUniqueId,
         string? internetMessageId,
         int inboxMessageId,
         CancellationToken cancellationToken = default)
     {
-        if (TrySelectByInboxCorrelation(gmailMessageId, internetMessageId, subject: null, fromAddress: null))
+        if (TrySelectByInboxCorrelation(messageUniqueId, internetMessageId, subject: null, fromAddress: null))
         {
             return PatchRowInboxMessageId(SelectedEmail?.Id ?? string.Empty, inboxMessageId) ?? SelectedEmail;
         }
 
         EmailSummary? summary = null;
+        var gmailApiId = EmailMailboxQueryComposer.TryGetGmailApiMessageId(messageUniqueId);
         try
         {
-            if (!string.IsNullOrWhiteSpace(gmailMessageId))
+            if (!string.IsNullOrWhiteSpace(gmailApiId))
             {
-                summary = await EmailGateway.GetByIdAsync(gmailMessageId.Trim(), cancellationToken)
+                summary = await EmailGateway.GetByIdAsync(gmailApiId, cancellationToken)
                     .ConfigureAwait(true);
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step(
+                    "Email.Locate",
+                    summary is null
+                        ? $"GetById miss gmailApiId={gmailApiId} inbox={inboxMessageId}"
+                        : $"GetById hit gmailApiId={gmailApiId} inbox={inboxMessageId}");
             }
 
             if (summary is null && !string.IsNullOrWhiteSpace(internetMessageId))
             {
-                var raw = internetMessageId.Trim().Trim('<', '>');
+                var rfc822Term = EmailMailboxQueryComposer.BuildRfc822MessageIdSearchTerm(internetMessageId);
                 var page = await EmailGateway.GetMailboxPageAsync(
                     new EmailMailboxQuery
                     {
                         MailboxScope = EmailMailboxScope.AllMail,
-                        FreeText = $"rfc822msgid:{raw}",
+                        FreeText = rfc822Term,
                         PageSize = 5,
                     },
                     pageToken: null,
                     cancellationToken).ConfigureAwait(true);
                 summary = page.Items.FirstOrDefault();
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step(
+                    "Email.Locate",
+                    summary is null
+                        ? $"rfc822msgid miss inbox={inboxMessageId} q={rfc822Term} pageItems={page.Items.Count}"
+                        : $"rfc822msgid hit inbox={inboxMessageId} gmailId={summary.MessageId} q={rfc822Term}");
             }
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.Locate",
+                $"EXCEPTION inbox={inboxMessageId} {ex.GetType().Name}: {ex.Message}");
             return null;
         }
 

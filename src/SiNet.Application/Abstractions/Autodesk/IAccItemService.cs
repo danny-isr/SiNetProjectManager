@@ -11,6 +11,14 @@ public interface IAccItemService
         string itemId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Tip version URN for an item lineage (Data Management <c>…/items/{itemId}/tip</c> → <c>data.id</c>).
+    /// </summary>
+    Task<string?> GetTipVersionIdAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default);
+
     Task<int?> GetVersionCountAsync(
         string projectId,
         string itemId,

@@ -107,7 +107,7 @@ dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --filter "Categor
 | --- | --- | --- | --- |
 | 5.1 | Menu **דוחות** R01 / R02 / R03 visible when permitted | Not Run | Menu gate automated |
 | 5.2 | R01 generate → Google Sheets opens/writes | Not Run | Always manual |
-| 5.3 | R02 / R03 smoke when credentials allow | Not Run | N/A if skipped |
+| 5.3 | R02 / R03 smoke when credentials allow | Not Run | R02: expect sheets **Data** + **סיכום פרויקט-תת-חוזה** + **פירוט דיווחים**; compare SUM hours for one project vs filtered Data; pivot filter employee on summary |
 | 5.4 | מנהלה → **מיפוי MasterPlan** opens | Not Run | |
 
 ---

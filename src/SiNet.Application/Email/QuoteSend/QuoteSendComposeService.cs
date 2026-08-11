@@ -183,14 +183,23 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
         string internetMessageId,
         CancellationToken cancellationToken)
     {
-        var rawMessageId = internetMessageId.Trim().Trim('<', '>');
-        if (string.IsNullOrWhiteSpace(rawMessageId))
+        if (string.IsNullOrWhiteSpace(internetMessageId))
             return null;
+
+        string rfc822Term;
+        try
+        {
+            rfc822Term = EmailMailboxQueryComposer.BuildRfc822MessageIdSearchTerm(internetMessageId);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
 
         var page = await _gateway.GetMailboxPageAsync(
             new EmailMailboxQuery
             {
-                FreeText = $"rfc822msgid:{rawMessageId}",
+                FreeText = rfc822Term,
                 MailboxScope = EmailMailboxScope.AllMail,
                 PageSize = 1,
             },

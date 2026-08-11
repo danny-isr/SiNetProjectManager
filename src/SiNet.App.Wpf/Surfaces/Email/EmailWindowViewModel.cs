@@ -593,6 +593,12 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         // catch below so unobserved exceptions surface as a status message instead of crashing.
         if (Interlocked.CompareExchange(ref _applyTaskContextGate, 1, 0) != 0)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.TaskContext",
+                $"ApplyTaskContext SKIPPED — already in flight task={context.TaskId} primary={context.PrimaryWorkTargetEntityId}");
+            StatusMessage =
+                $"טעינת הקשר למשימה #{context.TaskId} כבר רצה — סגור ופתח שוב אם החלון ריק.";
             return;
         }
 
@@ -602,6 +608,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.TaskContext",
+                $"ApplyTaskContext EXCEPTION task={context.TaskId}: {ex.GetType().Name}: {ex.Message}");
             StatusMessage = $"טעינת הקשר המשימה נכשלה: {ex.Message}";
         }
         finally
@@ -612,10 +622,11 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private async Task ApplyTaskContextCoreAsync(WorkSurfaceContext context)
     {
-        // FollowQuoteApproval Email-first: filter by SendQuote anchor (no inbox TaskLink required).
+        // FollowQuoteApproval / FollowWorkOrder Email-first: filter by soft SendQuote anchor
+        // (no inbox TaskLink required).
         if (context.EmailHints is { } hints)
         {
-            await ApplyFollowQuoteHintsAsync(context, hints).ConfigureAwait(true);
+            await ApplyFollowEmailHintsAsync(context, hints).ConfigureAwait(true);
             return;
         }
 
@@ -662,6 +673,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (!IsConnected)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.TaskContext",
+                $"not connected task={context.TaskId} inbox={context.PrimaryWorkTargetEntityId}");
             StatusMessage = $"נפתח מתוך משימה #{context.TaskId}. התחבר ל-Google כדי לטעון מיילים.";
             return;
         }
@@ -690,6 +705,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         // Row was already fetched (and the pending target registered) at the top of this method.
         if (inboxMessage is null)
         {
+            // TEMP WF-DEBUG
+            WorkflowDebugTrace.Step(
+                "Email.TaskContext",
+                $"SQL inbox miss task={context.TaskId} inbox={inboxMessageId}");
             StatusMessage = $"מייל #{inboxMessageId} לא נמצא במערכת.";
             return;
         }
@@ -712,6 +731,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step(
+                    "Email.TaskContext",
+                    $"locate EXCEPTION task={context.TaskId} inbox={inboxMessageId}: {ex.Message}");
                 StatusMessage =
                     $"מייל המשימה לא נטען מ-Gmail: {ex.Message}. המשימה נשארת פתוחה — אין בחירת מייל חלופי.";
                 return;
@@ -719,6 +742,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
             if (located is null)
             {
+                // TEMP WF-DEBUG
+                WorkflowDebugTrace.Step(
+                    "Email.TaskContext",
+                    $"locate miss task={context.TaskId} inbox={inboxMessageId} subject='{inboxMessage.Subject}'");
                 StatusMessage =
                     $"מייל \"{inboxMessage.Subject}\" לא נמצא ב-Gmail (לפי מזהה מדויק). " +
                     "המשימה נשארת פתוחה — אין בחירת מייל חלופי.";
@@ -749,6 +776,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             StatusMessage = context.TaskId is int openedTaskId
                 ? $"נפתח מתוך משימה #{openedTaskId} — נבחר מייל \"{inboxMessage.Subject}\"."
                 : $"נבחר מייל \"{inboxMessage.Subject}\".";
+
+            await EnsureTaskEmailFiledWhenBoundAsync(context).ConfigureAwait(true);
             return;
         }
 
@@ -756,8 +785,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             $"מייל \"{inboxMessage.Subject}\" לא נמצא ב-Gmail. המשימה נשארת פתוחה — אין בחירת מייל חלופי.";
     }
 
-    private async Task ApplyFollowQuoteHintsAsync(WorkSurfaceContext context, EmailOpenHints hints)
+    private async Task ApplyFollowEmailHintsAsync(WorkSurfaceContext context, EmailOpenHints hints)
     {
+        var isWorkOrder = IsFollowWorkOrderContext(context);
         IsFollowQuoteMode = true;
         OfferFollowQuoteProjectWorkFallback = hints.OfferProjectWorkFallback && _projectWorkHost is not null;
         IsFollowQuoteEmptyState = false;
@@ -783,9 +813,13 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (!IsConnected)
         {
-            StatusMessage = context.TaskId is int taskId
-                ? $"מעקב אישור הצעה (משימה #{taskId}). התחבר ל-Google כדי לטעון תשובות."
-                : "מעקב אישור הצעה. התחבר ל-Google כדי לטעון תשובות.";
+            StatusMessage = isWorkOrder
+                ? (context.TaskId is int woTask
+                    ? $"מעקב הזמנת עבודה (משימה #{woTask}). התחבר ל-Google כדי לטעון מיילים."
+                    : "מעקב הזמנת עבודה. התחבר ל-Google כדי לטעון מיילים.")
+                : (context.TaskId is int taskId
+                    ? $"מעקב אישור הצעה (משימה #{taskId}). התחבר ל-Google כדי לטעון תשובות."
+                    : "מעקב אישור הצעה. התחבר ל-Google כדי לטעון תשובות.");
             FollowQuoteBannerText = StatusMessage;
             OnPropertyChanged(nameof(ShowFollowQuoteBanner));
             return;
@@ -809,25 +843,35 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         if (IsFollowQuoteEmptyState)
         {
-            FollowQuoteBannerText = hasThread
-                ? "אין תשובות בשרשור עדיין. ניתן להמתין, לבחור מייל אחר, או לתיוק קובץ בלי מייל."
-                : hasAddress
-                    ? "לא נמצאו מיילים מהנמען אחרי השליחה. ניתן להמתין, להרחיב חיפוש, או לתיוק קובץ בלי מייל."
-                    : "אין עוגן שליחה (שרשור/נמען). בחר מייל ידנית או תיוק קובץ בלי מייל.";
+            FollowQuoteBannerText = isWorkOrder
+                ? (hasThread
+                    ? "אין מייל הזמנת עבודה בשרשור עדיין. ניתן להמתין, לבחור מייל אחר, או לתיוק קובץ בלי מייל."
+                    : hasAddress
+                        ? "לא נמצאו מיילי הזמנה מהנמען. ניתן להמתין, להרחיב חיפוש, או לתיוק קובץ בלי מייל."
+                        : "אין עוגן שליחה (שרשור/נמען). בחר מייל הזמנה ידנית או תיוק קובץ בלי מייל.")
+                : (hasThread
+                    ? "אין תשובות בשרשור עדיין. ניתן להמתין, לבחור מייל אחר, או לתיוק קובץ בלי מייל."
+                    : hasAddress
+                        ? "לא נמצאו מיילים מהנמען אחרי השליחה. ניתן להמתין, להרחיב חיפוש, או לתיוק קובץ בלי מייל."
+                        : "אין עוגן שליחה (שרשור/נמען). בחר מייל ידנית או תיוק קובץ בלי מייל.");
             StatusMessage = FollowQuoteBannerText;
         }
         else
         {
-            FollowQuoteBannerText = hasThread
-                ? $"מעקב אישור הצעה — מציג תשובות בשרשור ({count}). תייג PDF כ־אישור_לקוח_להצעה, או תיוק קובץ."
-                : $"מעקב אישור הצעה — מציג מיילים מסוננים ({count}). בחר תשובה ותייג PDF כ־אישור_לקוח_להצעה.";
+            FollowQuoteBannerText = isWorkOrder
+                ? (hasThread
+                    ? $"מעקב הזמנת עבודה — מציג מיילים בשרשור ({count}). בחר מייל הזמנה או תיוק קובץ, ואז השלם «התקבלה הזמנת עבודה»."
+                    : $"מעקב הזמנת עבודה — מציג מיילים מסוננים ({count}). בחר מייל או תיוק קובץ והשלם «התקבלה הזמנת עבודה».")
+                : (hasThread
+                    ? $"מעקב אישור הצעה — מציג תשובות בשרשור ({count}). תייג את כל הצרופות (כולל PDF כ־אישור_לקוח_להצעה) — ואז ההעברה משלימה את המשימה."
+                    : $"מעקב אישור הצעה — מציג מיילים מסוננים ({count}). בחר תשובה, תייג את כל הצרופות כולל אישור_לקוח_להצעה.");
             StatusMessage = context.TaskId is int openedTaskId
                 ? $"נפתח מתוך משימה #{openedTaskId}. {FollowQuoteBannerText}"
                 : FollowQuoteBannerText;
         }
 
         WorkflowDebugTrace.Step(
-            "FollowQuote.Filter",
+            isWorkOrder ? "FollowWorkOrder.Filter" : "FollowQuote.Filter",
             $"task={context.TaskId} empty={IsFollowQuoteEmptyState} count={count} thread={(hints.GmailThreadId ?? "-")} to={(hints.CounterpartAddress ?? "-")}");
 
         OnPropertyChanged(nameof(ShowFollowQuoteBanner));
@@ -837,15 +881,73 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private async Task ClearFollowQuoteFilterAsync()
     {
+        var isWorkOrder = IsFollowWorkOrderContext(_workSurfaceContext);
         EmailList.FollowQuoteThreadFilter = null;
         EmailList.AddressFilter = string.Empty;
         EmailList.SelectedMailboxScope = EmailMailboxScope.AllMail;
         IsFollowQuoteEmptyState = false;
-        FollowQuoteBannerText =
-            "סינון מעקב אישור הוסר — בחר מייל אחר בפרויקט, או תיוק קובץ בלי מייל.";
+        FollowQuoteBannerText = isWorkOrder
+            ? "סינון מעקב הזמנה הוסר — בחר מייל אחר בפרויקט, או תיוק קובץ בלי מייל."
+            : "סינון מעקב אישור הוסר — בחר מייל אחר בפרויקט, או תיוק קובץ בלי מייל.";
         StatusMessage = FollowQuoteBannerText;
         OnPropertyChanged(nameof(ShowFollowQuoteBanner));
         await EmailList.ApplyFiltersAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// FileMaterial / bound tasks: if SQL is on the task project but the list row is still
+    /// «לא משויך» (no Gmail label), retry File so the badge and Move gate match SoT.
+    /// </summary>
+    private async Task EnsureTaskEmailFiledWhenBoundAsync(WorkSurfaceContext context)
+    {
+        if (context.ProjectId <= 0)
+        {
+            return;
+        }
+
+        var row = EmailList.SelectedEmail;
+        if (row is null || row.IsFiledToProject)
+        {
+            return;
+        }
+
+        if (!EmailList.CanAttemptFileEmailToProject(row))
+        {
+            WorkflowDebugTrace.Step(
+                "Email.File.EnsureBound",
+                $"skip task={context.TaskId} canAttempt=false filed={row.IsFiledToProject}");
+            return;
+        }
+
+        var project = _currentProject.CurrentProject;
+        if (project is null || project.ProjectId != context.ProjectId)
+        {
+            WorkflowDebugTrace.Step(
+                "Email.File.EnsureBound",
+                $"skip task={context.TaskId} currentProject={project?.ProjectId.ToString() ?? "(null)"} expected={context.ProjectId}");
+            return;
+        }
+
+        WorkflowDebugTrace.Step(
+            "Email.File.EnsureBound",
+            $"retry FileToProject task={context.TaskId} gmail={row.Id} project={context.ProjectId}");
+
+        var filed = await EmailList.FileEmailToProjectAsync(row, project).ConfigureAwait(true);
+        if (filed is { IsFiledToProject: true })
+        {
+            StatusMessage = $"המייל שויך לפרויקט #{project.ProjectId} (תווית Gmail).";
+            await EmailDetail.ApplySelectionAsync(filed).ConfigureAwait(true);
+        }
+        else
+        {
+            var warn = EmailList.LoadWarning;
+            StatusMessage = string.IsNullOrWhiteSpace(warn)
+                ? "המייל עדיין לא משויך ב-Gmail — השתמש ב«שייך לפרויקט» לפני העברה."
+                : warn;
+            WorkflowDebugTrace.Step(
+                "Email.File.EnsureBound",
+                $"FAILED task={context.TaskId} warning={warn ?? "(none)"}");
+        }
     }
 
     private async Task OpenFollowQuoteProjectWorkAsync()
@@ -856,6 +958,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var isWorkOrder = IsFollowWorkOrderContext(_workSurfaceContext);
         var pwContext = _workSurfaceContext with
         {
             ComponentKey = WorkSurfaceComponentKeys.ProjectWork,
@@ -863,17 +966,24 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         };
 
         WorkflowDebugTrace.Step(
-            "FollowQuote.FileFallback",
-            $"task={pwContext.TaskId} → ProjectWork QuoteClientApproval");
+            isWorkOrder ? "FollowWorkOrder.FileFallback" : "FollowQuote.FileFallback",
+            isWorkOrder
+                ? $"task={pwContext.TaskId} → ProjectWork WorkOrderReceived"
+                : $"task={pwContext.TaskId} → ProjectWork QuoteClientApproval");
 
         var opened = await _projectWorkHost
             .TryOpenFromTaskAsync(pwContext, CancellationToken.None)
             .ConfigureAwait(true);
 
         StatusMessage = opened
-            ? "נפתח תיוק קבצים — העלה PDF ל־אישור_לקוח_להצעה והשלם את המשימה."
+            ? (isWorkOrder
+                ? "נפתח תיוק קבצים — השלם את המשימה עם «התקבלה הזמנת עבודה» (העלאת קובץ אופציונלית)."
+                : "נפתח תיוק קבצים — העלה PDF ל־אישור_לקוח_להצעה והשלם את המשימה.")
             : "פתיחת תיוק קבצים נכשלה.";
     }
+
+    private static bool IsFollowWorkOrderContext(WorkSurfaceContext? context) =>
+        string.Equals(context?.TaskTypeCode, "FollowWorkOrder", StringComparison.OrdinalIgnoreCase);
 
     private void ClearFollowQuoteUiState()
     {

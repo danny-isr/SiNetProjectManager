@@ -19,6 +19,14 @@ internal sealed class ModeSwitchingAccItemService(
             ? _remoteAccItemService.GetDisplayNameAsync(projectId, itemId, cancellationToken)
             : _localAccItemService.GetDisplayNameAsync(projectId, itemId, cancellationToken);
 
+    public Task<string?> GetTipVersionIdAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        _serviceModeProvider.Mode == AccServiceMode.Remote
+            ? _remoteAccItemService.GetTipVersionIdAsync(projectId, itemId, cancellationToken)
+            : _localAccItemService.GetTipVersionIdAsync(projectId, itemId, cancellationToken);
+
     public Task<int?> GetVersionCountAsync(
         string projectId,
         string itemId,

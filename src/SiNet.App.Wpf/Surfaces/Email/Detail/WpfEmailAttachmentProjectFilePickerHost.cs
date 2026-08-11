@@ -217,11 +217,32 @@ internal sealed class WpfEmailAttachmentProjectFilePickerHost(IEmailAttachmentTa
                 ShowCheckBox = true,
                 Tag = pf.ProjectFileId,
                 IsChecked = currentProjectFileId.HasValue && pf.ProjectFileId == currentProjectFileId.Value,
+                TitleBrush = pf.IsRequired
+                    ? ResolveRequiredBrush()
+                    : System.Windows.Media.Brushes.Black,
+                TitleWeight = pf.IsRequired ? FontWeights.SemiBold : FontWeights.Normal,
             });
         }
 
         SortRecursive(roots);
         return roots;
+    }
+
+    private static System.Windows.Media.Brush ResolveRequiredBrush()
+    {
+        try
+        {
+            if (System.Windows.Application.Current?.TryFindResource("SiTreeMissingBrush") is System.Windows.Media.Brush brush)
+            {
+                return brush;
+            }
+        }
+        catch
+        {
+            // Design-time / headless: fall through to solid orange.
+        }
+
+        return new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEA, 0x58, 0x0C));
     }
 
     private static void SortRecursive(List<FileTreePickerWindow.PickerNode> siblings)

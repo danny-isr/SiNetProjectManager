@@ -65,6 +65,7 @@
                                    FontFamily="{DynamicResource SiFontFamily}"
                                    FontSize="{DynamicResource SiTextNormalFontSize}"
                                    FontWeight="{Binding TitleWeight}"
+                                   Foreground="{Binding TitleBrush}"
                                    MouseDown="OnTitleMouseDown"/>
                     </StackPanel>
                 </HierarchicalDataTemplate>

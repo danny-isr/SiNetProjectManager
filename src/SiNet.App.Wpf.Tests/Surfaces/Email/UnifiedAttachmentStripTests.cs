@@ -49,6 +49,22 @@ public sealed class UnifiedAttachmentStripTests
         Assert.True(EmailProjectAlternativeOption.CreateNewSentinel.IsCreateNew);
     }
 
+    [Fact]
+    public void AlternativeSelectionChanged_always_invokes_create_for_CreateNewId()
+    {
+        var code = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailAttachmentStripView.xaml.cs");
+
+        Assert.Contains("CreateNewId", code, StringComparison.Ordinal);
+        Assert.Contains("AlternativeChangedCommand.Execute", code, StringComparison.Ordinal);
+        // Must not early-return before CreateNew handling when SelectedAlternativeId already equals -1.
+        var createIdx = code.IndexOf("CreateNewId", StringComparison.Ordinal);
+        var earlyReturnIdx = code.IndexOf(
+            "if (item.SelectedAlternativeId == selectedId)",
+            StringComparison.Ordinal);
+        Assert.True(createIdx > 0);
+        Assert.True(earlyReturnIdx > createIdx);
+    }
+
     private static string ReadRepoFile(string relativePath)
     {
         var dir = FindRepoRoot();

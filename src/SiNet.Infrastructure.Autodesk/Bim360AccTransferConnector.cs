@@ -42,11 +42,17 @@ internal sealed class Bim360AccTransferConnector(ITokenProvider? tokenProvider) 
         CancellationToken cancellationToken = default) =>
         CreateService().UploadNewVersionAsync(projectId, folderId, itemId, localSourcePath);
 
-    public Task<(string TempFilePath, string FileName)?> DownloadFileToTempAsync(
+    public Task<(string TempFilePath, string FileName, string? TipVersionId)?> DownloadFileToTempAsync(
         string projectId,
         string itemId,
         CancellationToken cancellationToken = default) =>
         CreateService().DownloadFileToTempAsync(projectId, itemId, cancellationToken);
+
+    public Task<string?> GetItemTipVersionIdAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        CreateService().GetItemTipVersionIdAsync(projectId, itemId, cancellationToken);
 
     public Task<string?> GetItemDisplayNameAsync(
         string projectId,

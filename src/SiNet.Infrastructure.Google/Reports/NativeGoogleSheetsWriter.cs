@@ -186,6 +186,205 @@ public sealed class NativeGoogleSheetsWriter
         }
     }
 
+    /// <summary>
+    /// Creates (or recreates) a pivot sheet sourced from an existing data sheet.
+    /// Ported from SiOffice.GoogleConnector <c>GoogleSheetsService.CreatePivotTableAsync</c>.
+    /// </summary>
+    /// <param name="spreadsheetId">Target spreadsheet.</param>
+    /// <param name="pivotSheetName">Title of the pivot sheet to create.</param>
+    /// <param name="sourceSheetName">Sheet that holds the source table (usually Data).</param>
+    /// <param name="headerRow">1-based header row in the source sheet.</param>
+    /// <param name="lastDataRow">1-based inclusive last data row (GridRange EndRowIndex exclusive).</param>
+    /// <param name="lastColumnIndex">0-based last column index in the source range.</param>
+    /// <param name="config">Rows / columns / values / filters.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<PivotTableResult> CreatePivotTableAsync(
+        string spreadsheetId,
+        string pivotSheetName,
+        string sourceSheetName,
+        int headerRow,
+        int lastDataRow,
+        int lastColumnIndex,
+        PivotTableConfig config,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(spreadsheetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(pivotSheetName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceSheetName);
+        ArgumentNullException.ThrowIfNull(config);
+
+        var result = new PivotTableResult();
+
+        try
+        {
+            var sourceSheetId = await GetSheetIdAsync(spreadsheetId, sourceSheetName, cancellationToken)
+                .ConfigureAwait(false);
+            if (sourceSheetId is null)
+            {
+                result.Errors.Add($"Source sheet '{sourceSheetName}' not found");
+                return result;
+            }
+
+            result.LogEntries.Add($"Source SheetId: {sourceSheetId}");
+            result.LogEntries.Add($"Source Sheet: '{sourceSheetName}'");
+
+            var requests = new List<Request>();
+
+            var existingPivotSheetId = await GetSheetIdAsync(spreadsheetId, pivotSheetName, cancellationToken)
+                .ConfigureAwait(false);
+            if (existingPivotSheetId is not null)
+            {
+                result.LogEntries.Add($"Deleting existing pivot sheet (SheetId: {existingPivotSheetId})");
+                requests.Add(new Request
+                {
+                    DeleteSheet = new DeleteSheetRequest { SheetId = existingPivotSheetId },
+                });
+            }
+
+            // Predictable sheet id (offset + hash) to anchor UpdateCells in the same batch.
+            var newPivotSheetId = 1000 + Math.Abs(pivotSheetName.GetHashCode(StringComparison.Ordinal) % 1000);
+            result.LogEntries.Add($"Creating pivot sheet: '{pivotSheetName}' (SheetId: {newPivotSheetId})");
+
+            requests.Add(new Request
+            {
+                AddSheet = new AddSheetRequest
+                {
+                    Properties = new SheetProperties
+                    {
+                        SheetId = newPivotSheetId,
+                        Title = pivotSheetName,
+                        GridProperties = new GridProperties
+                        {
+                            RowCount = 1000,
+                            ColumnCount = 50,
+                        },
+                    },
+                },
+            });
+
+            var sourceRange = new GridRange
+            {
+                SheetId = sourceSheetId,
+                StartRowIndex = headerRow - 1,
+                EndRowIndex = lastDataRow,
+                StartColumnIndex = 0,
+                EndColumnIndex = lastColumnIndex + 1,
+            };
+
+            result.LogEntries.Add(
+                $"Source Range: StartRow={sourceRange.StartRowIndex} (1-based: {headerRow}), " +
+                $"EndRow={sourceRange.EndRowIndex} (1-based: {lastDataRow}), " +
+                $"StartCol={sourceRange.StartColumnIndex}, EndCol={sourceRange.EndColumnIndex}");
+            result.LogEntries.Add(
+                $"Pivot Rows: [{string.Join(", ", config.Rows.Select(r => r.SourceColumnIndex))}]");
+            result.LogEntries.Add(
+                $"Pivot Values: [{string.Join(", ", config.Values.Select(v => $"{v.SourceColumnIndex}:{v.SummarizeFunction}"))}]");
+            result.LogEntries.Add(
+                $"Pivot Filters: [{string.Join(", ", config.Filters.Select(f => f.SourceColumnIndex))}]");
+
+            var pivotTable = new PivotTable
+            {
+                Source = sourceRange,
+                Rows = config.Rows.Select(r => new PivotGroup
+                {
+                    SourceColumnOffset = r.SourceColumnIndex,
+                    ShowTotals = r.ShowTotals,
+                    SortOrder = "ASCENDING",
+                }).ToList(),
+                Values = config.Values.Select(v => new PivotValue
+                {
+                    SourceColumnOffset = v.SourceColumnIndex,
+                    SummarizeFunction = v.SummarizeFunction,
+                    Name = v.DisplayName,
+                }).ToList(),
+                FilterSpecs = config.Filters.Count == 0
+                    ? null
+                    : config.Filters.Select(f => new PivotFilterSpec
+                    {
+                        FilterCriteria = new PivotFilterCriteria { VisibleByDefault = true },
+                        ColumnOffsetIndex = f.SourceColumnIndex,
+                    }).ToList(),
+            };
+
+            if (config.Columns.Count > 0)
+            {
+                pivotTable.Columns = config.Columns.Select(c => new PivotGroup
+                {
+                    SourceColumnOffset = c.SourceColumnIndex,
+                    ShowTotals = c.ShowTotals,
+                    SortOrder = "ASCENDING",
+                }).ToList();
+            }
+
+            requests.Add(new Request
+            {
+                UpdateCells = new UpdateCellsRequest
+                {
+                    Rows =
+                    [
+                        new RowData
+                        {
+                            Values =
+                            [
+                                new CellData { PivotTable = pivotTable },
+                            ],
+                        },
+                    ],
+                    Start = new GridCoordinate
+                    {
+                        SheetId = newPivotSheetId,
+                        RowIndex = 0,
+                        ColumnIndex = 0,
+                    },
+                    Fields = "pivotTable",
+                },
+            });
+
+            result.LogEntries.Add($"Executing BatchUpdate with {requests.Count} requests");
+            await _sheets.Spreadsheets.BatchUpdate(
+                    new BatchUpdateSpreadsheetRequest { Requests = requests },
+                    spreadsheetId)
+                .ExecuteAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            result.Success = true;
+            result.PivotSheetId = newPivotSheetId;
+            result.PivotSheetName = pivotSheetName;
+            result.SourceSheetId = sourceSheetId;
+        }
+        catch (global::Google.GoogleApiException ex)
+        {
+            result.Errors.Add($"Google API error: {ex.Message}");
+            result.LogEntries.Add($"EXCEPTION: {ex.Message}");
+            if (ex.Error?.Errors is { } apiErrors)
+            {
+                foreach (var error in apiErrors)
+                {
+                    result.Errors.Add($"  - {error.Message}");
+                    result.LogEntries.Add($"  API Error: {error.Message} (Reason: {error.Reason})");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            result.Errors.Add($"Error creating pivot table: {ex.Message}");
+            result.LogEntries.Add($"EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        return result;
+    }
+
+    public async Task<int?> GetSheetIdAsync(
+        string spreadsheetId,
+        string sheetName,
+        CancellationToken cancellationToken = default)
+    {
+        var info = await _sheets.Spreadsheets.Get(spreadsheetId).ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var sheet = info.Sheets?.FirstOrDefault(s =>
+            string.Equals(s.Properties?.Title, sheetName, StringComparison.Ordinal));
+        return sheet?.Properties?.SheetId;
+    }
+
     private static (string SheetName, int StartRow) ParseRange(string range)
     {
         var bang = range.IndexOf('!', StringComparison.Ordinal);

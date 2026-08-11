@@ -35,7 +35,12 @@ internal interface IAccTransferConnector
         string localSourcePath,
         CancellationToken cancellationToken = default);
 
-    Task<(string TempFilePath, string FileName)?> DownloadFileToTempAsync(
+    Task<(string TempFilePath, string FileName, string? TipVersionId)?> DownloadFileToTempAsync(
+        string projectId,
+        string itemId,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> GetItemTipVersionIdAsync(
         string projectId,
         string itemId,
         CancellationToken cancellationToken = default);

@@ -20,7 +20,8 @@ public partial class EmailWorkItemWindow : Window
         _shellViewModel = shellViewModel;
         InitializeComponent();
         ThemeWindowChrome.ApplyThemedWindowBackground(this);
-        DataContext = shellViewModel.EmailDetail;
+        // Shell VM owns StatusMessage (locate / connect failures). Detail pane keeps its own DC.
+        DataContext = shellViewModel;
         DetailHost.DataContext = shellViewModel.EmailDetail;
         DetailHost.SetBodyRenderer(bodyRenderer);
 
