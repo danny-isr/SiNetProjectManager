@@ -1,7 +1,7 @@
 {
   "$comment": "Pinned sibling repositories required to build SiNet.sln and SiNetProjectManager.sln. Paths are relative to the repository root. Update a pin by setting 'sha' to a commit that exists on the sibling repository's remote.",
   "schemaVersion": 1,
-  "pinnedAt": "2026-08-05",
+  "pinnedAt": "2026-08-11",
   "siblings": [
     {
       "name": "SiNetSQL",
@@ -15,7 +15,7 @@
       "url": "https://github.com/danny-isr/SiOffice.AutodeskConnector.git",
       "path": "../AutodeskIntegration/SiOffice.AutodeskConnector",
       "branch": "SiWorkNet10",
-      "sha": "36ee2ea876fce85a607c63855f9cbef810f4f815"
+      "sha": "27fba48ba723447e7a08ec3d9ec70886cde5507f"
     },
     {
       "name": "SiOffice.GoogleConnector",
