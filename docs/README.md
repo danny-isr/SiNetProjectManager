@@ -3,8 +3,6 @@
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
 > **Updated:** 12.08.2026
-> **Status:** Active
-> **Scope:** Entry point for markdown under `docs/` (migration, architecture, environments, ops, DEV backlog). Domain principles for the legacy tree remain under [`SiNetProjectManagerV2/Docs/README.md`](../SiNetProjectManagerV2/Docs/README.md).
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -44,6 +42,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | **DEV-016:** two-stage triage, FYI, mark-read on completion, leaf group title |
 | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | **DEV-017:** group order/membership, project-switch stuck, refresh, selector widths |
 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) | **DEV-018:** existing `--monthly` restore + pre-replace Replica mismatch log (Management+) |
+| [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) | **DEV-019:** safe orphan DELETE after full hours reconcile (caps / age / 2-sightings) |
 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | **DEV-010:** «דוח קריסות תחנה» — Event Log crash report + AI export |
 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | **DEV-014:** crash report round 2 — BIOS/WHEA/CER evidence, incident grouping |
 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT_ACCURACY.md) | **DEV-015:** Ship 1.1 report accuracy (WHEA corrected, microcode, labels, minidump) |
