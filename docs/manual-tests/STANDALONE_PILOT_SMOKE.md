@@ -107,7 +107,7 @@ dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --filter "Categor
 | --- | --- | --- | --- |
 | 5.1 | Menu **דוחות** R01 / R02 / R03 visible when permitted | Not Run | Menu gate automated |
 | 5.2 | R01 generate → Google Sheets opens/writes | Not Run | Always manual |
-| 5.3 | R02 / R03 smoke when credentials allow | Not Run | R02: **Data** + **סיכום** (rows: מספר חוזה → שם → תת-חוזה; filters: מספר/שם חוזה + עובד) + **פירוט** (rows: עובד → תאריך → מספר/שם חוזה…; filters: מספר/שם חוזה); compare SUM vs Data |
+| 5.3 | R02 / R03 smoke when credentials allow | Not Run | R02: **Data** + **סיכום** (rows: מספר חוזה → שם → תת-חוזה; filters: מספר/שם חוזה + עובד) + **פירוט** (rows: מספר/שם חוזה → תת-חוזה → עובד → תאריך…; filters: מספר/שם חוזה); compare SUM vs Data |
 | 5.4 | מנהלה → **מיפוי MasterPlan** opens | Not Run | |
 
 ---
