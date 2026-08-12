@@ -23,6 +23,45 @@ public sealed class NativeGoogleSheetsWriter
     public static string BuildRange(string sheetName, string cellRange)
         => $"{QuoteSheetName(sheetName)}!{cellRange}";
 
+    /// <summary>
+    /// Builds an <c>updateSheetProperties</c> request that sets sheet direction to RTL.
+    /// Uses numeric <paramref name="sheetId"/> from the Sheets API — never the sheet title.
+    /// </summary>
+    public static Request CreateRightToLeftRequest(int sheetId)
+    {
+        return new Request
+        {
+            UpdateSheetProperties = new UpdateSheetPropertiesRequest
+            {
+                Properties = new SheetProperties
+                {
+                    SheetId = sheetId,
+                    RightToLeft = true,
+                },
+                Fields = "rightToLeft",
+            },
+        };
+    }
+
+    /// <summary>
+    /// Builds <see cref="Request"/> list that sets RTL on every sheet currently in the spreadsheet
+    /// (report export only — caller must pass sheets from the report spreadsheet Get response).
+    /// </summary>
+    public static IList<Request> CreateRightToLeftRequestsForSheets(IEnumerable<Sheet> sheets)
+    {
+        ArgumentNullException.ThrowIfNull(sheets);
+        var requests = new List<Request>();
+        foreach (var sheet in sheets)
+        {
+            var sheetId = sheet.Properties?.SheetId;
+            if (sheetId is null)
+                continue;
+            requests.Add(CreateRightToLeftRequest(sheetId.Value));
+        }
+
+        return requests;
+    }
+
     public async Task ClearRangeAsync(string spreadsheetId, string range, CancellationToken cancellationToken = default)
     {
         var request = _sheets.Spreadsheets.Values.Clear(new ClearValuesRequest(), spreadsheetId, range);
@@ -101,8 +140,21 @@ public sealed class NativeGoogleSheetsWriter
         CancellationToken cancellationToken = default)
     {
         var info = await _sheets.Spreadsheets.Get(spreadsheetId).ExecuteAsync(cancellationToken).ConfigureAwait(false);
-        if (info.Sheets?.Any(s => string.Equals(s.Properties?.Title, sheetName, StringComparison.Ordinal)) == true)
+        var existing = info.Sheets?.FirstOrDefault(s =>
+            string.Equals(s.Properties?.Title, sheetName, StringComparison.Ordinal));
+        if (existing?.Properties?.SheetId is { } existingSheetId)
+        {
+            // Template / prior run: tab already exists — ensure RTL without a second AddSheet.
+            await _sheets.Spreadsheets.BatchUpdate(
+                    new BatchUpdateSpreadsheetRequest
+                    {
+                        Requests = [CreateRightToLeftRequest(existingSheetId)],
+                    },
+                    spreadsheetId)
+                .ExecuteAsync(cancellationToken)
+                .ConfigureAwait(false);
             return false;
+        }
 
         var request = new BatchUpdateSpreadsheetRequest
         {
@@ -115,6 +167,7 @@ public sealed class NativeGoogleSheetsWriter
                         Properties = new SheetProperties
                         {
                             Title = sheetName,
+                            RightToLeft = true,
                             // Keep the grid small: 50_000×30 ≈ 1.5M cells per tab and Google's
                             // spreadsheet cap is 10M cells — a handful of R03 employee tabs then fails
                             // addSheet with "exceeds 10000000 cells". Sheets grow automatically.
@@ -158,10 +211,17 @@ public sealed class NativeGoogleSheetsWriter
     {
         var info = await _sheets.Spreadsheets.Get(spreadsheetId).ExecuteAsync(cancellationToken).ConfigureAwait(false);
         var first = info.Sheets?.FirstOrDefault();
-        if (first?.Properties?.Title is { } title
-            && !string.Equals(title, "Data", StringComparison.Ordinal))
+        if (first?.Properties?.SheetId is not { } sheetId)
         {
-            var sheetId = first.Properties.SheetId;
+            await EnsureSheetExistsAsync(spreadsheetId, "Data", cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var title = first.Properties?.Title;
+        if (!string.Equals(title, "Data", StringComparison.Ordinal))
+        {
+            // Default Sheet1 (or any first tab): rename + RTL in one UpdateSheetProperties.
+            // Do not assume sheetId == 0 — use the numeric id from Spreadsheets.Get.
             var rename = new BatchUpdateSpreadsheetRequest
             {
                 Requests =
@@ -170,8 +230,13 @@ public sealed class NativeGoogleSheetsWriter
                     {
                         UpdateSheetProperties = new UpdateSheetPropertiesRequest
                         {
-                            Properties = new SheetProperties { SheetId = sheetId, Title = "Data" },
-                            Fields = "title",
+                            Properties = new SheetProperties
+                            {
+                                SheetId = sheetId,
+                                Title = "Data",
+                                RightToLeft = true,
+                            },
+                            Fields = "title,rightToLeft",
                         },
                     },
                 ],
@@ -179,11 +244,18 @@ public sealed class NativeGoogleSheetsWriter
             await _sheets.Spreadsheets.BatchUpdate(rename, spreadsheetId)
                 .ExecuteAsync(cancellationToken)
                 .ConfigureAwait(false);
+            return;
         }
-        else
-        {
-            await EnsureSheetExistsAsync(spreadsheetId, "Data", cancellationToken).ConfigureAwait(false);
-        }
+
+        // Already named Data (blank create or template): still force RTL.
+        await _sheets.Spreadsheets.BatchUpdate(
+                new BatchUpdateSpreadsheetRequest
+                {
+                    Requests = [CreateRightToLeftRequest(sheetId)],
+                },
+                spreadsheetId)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -253,6 +325,7 @@ public sealed class NativeGoogleSheetsWriter
                     {
                         SheetId = newPivotSheetId,
                         Title = pivotSheetName,
+                        RightToLeft = true,
                         GridProperties = new GridProperties
                         {
                             RowCount = 1000,

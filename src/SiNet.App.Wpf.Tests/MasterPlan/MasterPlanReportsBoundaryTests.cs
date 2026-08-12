@@ -133,6 +133,11 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.Contains("BuildSummary", native, StringComparison.Ordinal);
         Assert.Contains("BuildDetail", native, StringComparison.Ordinal);
 
+        // Hebrew report tabs: sheet direction RTL at AddSheet / UpdateSheetProperties (not cell alignment).
+        Assert.Contains("RightToLeft = true", writer, StringComparison.Ordinal);
+        Assert.Contains("CreateRightToLeftRequest", writer, StringComparison.Ordinal);
+        Assert.Contains("title,rightToLeft", writer, StringComparison.Ordinal);
+
         Assert.Contains("סיכום פרויקט-תת-חוזה", configs, StringComparison.Ordinal);
         Assert.Contains("פירוט דיווחים", configs, StringComparison.Ordinal);
         Assert.Contains("SummarizeFunction = \"SUM\"", configs, StringComparison.Ordinal);
