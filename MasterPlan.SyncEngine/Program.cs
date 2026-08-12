@@ -125,7 +125,7 @@ if (args.Contains("--monthly") || args.Contains("-m"))
     var backupPath = args.SkipWhile(a => a != "--backup" && a != "-b").Skip(1).FirstOrDefault()
         ?? @"C:\Backups\MasterPlan.bak";
 
-    // Validate backup file exists
+    // Validate backup file exists (client path — before staging move)
     if (!File.Exists(backupPath))
     {
         Console.ForegroundColor = ConsoleColor.Red;
@@ -134,12 +134,42 @@ if (args.Contains("--monthly") || args.Contains("-m"))
         Environment.Exit(1);
     }
 
+    // DEV-020: move into shared staging (client view) and RESTORE via server path.
+    // SQL Server cannot see workstation mappings such as N:\MasterPlanGS\...
+    MonthlyBackupStagingResult staging;
+    try
+    {
+        var stagingOptions = MonthlyBackupStagingOptions.FromConfiguration(configuration);
+        staging = MonthlyBackupStaging.PrepareForSqlRestore(backupPath, stagingOptions);
+        Log.Warning(
+            "Monthly bak staging — moved={Moved}, source={Source}, client={Client}, server={Server}, maxRetain={MaxRetain}",
+            staging.MovedIntoStaging,
+            staging.OriginalSourcePath,
+            staging.ClientStagingFilePath,
+            staging.ServerRestorePath,
+            stagingOptions.MaxRetainedBackups);
+    }
+    catch (Exception stagingEx)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"[ERROR] Staging backup for SQL Server failed: {stagingEx.Message}");
+        Console.ResetColor();
+        Log.Error(stagingEx, "Monthly bak staging failed for {Backup}", backupPath);
+        Environment.Exit(1);
+        return;
+    }
+
+    var sqlBackupPath = staging.ServerRestorePath;
+
     Console.WriteLine();
     Console.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
     Console.WriteLine("║       MASTERPLAN MONTHLY BACKUP/RESTORE - PHASE 1 ETL            ║");
     Console.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
     Console.WriteLine();
-    Console.WriteLine($"[CONFIG] Backup File:    {backupPath}");
+    Console.WriteLine($"[CONFIG] Selected bak:   {staging.OriginalSourcePath}");
+    Console.WriteLine($"[CONFIG] Client staging: {staging.ClientStagingFilePath}");
+    Console.WriteLine($"[CONFIG] SQL RESTORE:    {sqlBackupPath}");
+    Console.WriteLine($"[CONFIG] Moved to stage: {staging.MovedIntoStaging}");
     Console.WriteLine($"[CONFIG] Source DB:      Db_Mp_SiEng (restored from backup)");
     Console.WriteLine($"[CONFIG] Target DB:      Replica_DB (ETL destination)");
     Console.WriteLine();
@@ -156,9 +186,9 @@ if (args.Contains("--monthly") || args.Contains("-m"))
     try
     {
         // DB-update lifecycle markers — Warning so they reach the central share.
-        Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}, backup {Backup}.", "monthly", backupPath);
+        Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}, backup {Backup}.", "monthly", sqlBackupPath);
         var __monthlySw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await monthlyService.RunMonthlyBackupRestoreAsync(backupPath);
+        var result = await monthlyService.RunMonthlyBackupRestoreAsync(sqlBackupPath);
         __monthlySw.Stop();
         Log.Warning("MasterPlan.SyncEngine DB update finished — mode {Mode}, success {Success}, duration {Duration}.", "monthly", result.Success, __monthlySw.Elapsed);
 

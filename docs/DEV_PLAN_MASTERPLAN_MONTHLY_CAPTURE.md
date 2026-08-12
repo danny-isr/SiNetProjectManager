@@ -2,9 +2,9 @@
 
 > **Title:** Monthly `--monthly` restore + pre-replace Replica mismatch log (DEV-018)
 > **Date:** 12.08.2026
-> **Updated:** 12.08.2026 (operator lock: date gate, SyncEngine logs, Step 3b)
-> **Status:** Implementing (on `development`; code complete pending commit/review; not on PROD)
-> **Scope:** Extend the **existing** monthly backup/restore ETL (`MasterPlan.SyncEngine --monthly`) that already restores the configured `Db_Mp_SiEng` from a `.bak` and then rebuilds `Replica_DB` `MP_*` from that database. **New:** BackupFinishDate gate; compare replica vs restored `HoursReports` before DROP and again after ETL; log classified mismatches to **existing SyncEngine sinks**; App.Wpf **מנהלה** launcher for Management+.
+> **Updated:** 12.08.2026 (DEV-020: bak staging move + SQL server path map + retain 10)
+> **Status:** Implementing (DEV-018/019 shipped; DEV-020 staging on `development`)
+> **Scope:** Extend the **existing** monthly backup/restore ETL (`MasterPlan.SyncEngine --monthly`) that already restores the configured `Db_Mp_SiEng` from a `.bak` and then rebuilds `Replica_DB` `MP_*` from that database. **New:** BackupFinishDate gate; compare replica vs restored `HoursReports` before DROP and again after ETL; log classified mismatches to **existing SyncEngine sinks**; App.Wpf **מנהלה** launcher for Management+. **DEV-020:** before HEADERONLY/RESTORE, **move** (not copy) the chosen `.bak` into a shared staging folder visible to SQL Server.
 
 Related: [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md), [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md), [`APP_SHELL.md`](./APP_SHELL.md).
 
@@ -35,6 +35,7 @@ Operator intent (locked 12.08.2026):
 When a new monthly `.bak` arrives:
 
 1. Office manager / admin selects the backup (UI) or ops runs the existing CLI.
+1b. **DEV-020 staging:** SyncEngine **moves** the file into the client staging folder (`N:\MasterPlanBakup` by default), keeps at most **10** `.bak` files there (configurable `MaxRetainedBackups`), and passes the **server** path (`D:\SharedFolder\ProjectsData\MasterPlanBakup\…`) to SQL `RESTORE` / `HEADERONLY`. No copy — avoids accumulating duplicate bak files on the share.
 2. **Gate:** HEADERONLY `BackupFinishDate` must be later than `Sync_State.MonthlyRestore` (or first run).
 3. SyncEngine restores it onto the **configured** `Db_Mp_SiEng` (same as today).
 4. **Step 1b:** while replica still holds daily-sync data, compare it to the restored `HoursReports`, log classified mismatches.
@@ -42,6 +43,23 @@ When a new monthly `.bak` arrives:
 6. **Step 3b:** compare again after ETL; stamp `MonthlyRestore = BackupFinishDate`.
 
 If everything matches → log says aligned. If not → classified mismatches + evidence so we can fix daily sync later. Mismatches **do not block** the replace (except: compare **throw** before DROP fails closed). UI confirmation names `Db_Mp_SiEng` + `Replica_DB`.
+
+---
+
+## 1b. DEV-020 — SQL staging path map (operator lock 12.08.2026)
+
+| Role | Path |
+| --- | --- |
+| Client staging (SyncEngine / workstation) | `N:\MasterPlanBakup` |
+| SQL Server view of the same folder | `D:\SharedFolder\ProjectsData\MasterPlanBakup` |
+| Retention | `MaxRetainedBackups` (default **10**); delete oldest `.bak` beyond the limit; always keep the file about to be restored |
+| Transfer | **`File.Move`** from the chosen path into client staging — **not** copy |
+
+Config section: `MasterPlanMonthlyBackup` in SyncEngine `appsettings.json` / template.
+
+**Why:** `RESTORE HEADERONLY` / `RESTORE DATABASE` run on the SQL host. A workstation path such as `N:\MasterPlanGS\…` returns OS error 3 on the server even when `File.Exists` succeeds on the client.
+
+**Out of this slice:** App.Wpf Settings UI for these keys (appsettings is enough for SyncEngine publish); SystemSettings DB rows (optional later).
 
 ---
 
@@ -212,7 +230,8 @@ The monthly ETL would then have **replaced** replica hours from the bak (and tod
 | Mandatory API three-way in v1 | Postponed | Bak vs current replica is enough; API optional if vault key already in SyncEngine |
 | Rewriting restore/ETL | Dropped unless defect found | Verify existing process; extend it |
 | New `%ProgramData%\SiNet\mp-monthly\` report folder + CSV files | **Dropped** | Operator lock: existing SyncEngine central/local log sinks only |
-| `--report-dir` CLI | Dropped | Same — no extra artifact folder |
+| Copying bak into staging (duplicate files on share) | **Dropped** | Operator lock 12.08.2026: **move** only |
+| Unlimited bak retention in staging | **Dropped** | Cap at `MaxRetainedBackups` (default 10) |
 
 ---
 
