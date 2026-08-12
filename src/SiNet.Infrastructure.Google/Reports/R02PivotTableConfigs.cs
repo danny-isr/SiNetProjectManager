@@ -88,11 +88,11 @@ public static class R02PivotTableConfigs
     {
         Rows =
         [
-            new PivotFieldConfig { SourceColumnIndex = InternalEmployeeName, ShowTotals = true },
-            new PivotFieldConfig { SourceColumnIndex = InternalDate, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = InternalProjectNum, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = InternalProjectName, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = InternalSubContractName, ShowTotals = true },
+            new PivotFieldConfig { SourceColumnIndex = InternalEmployeeName, ShowTotals = true },
+            new PivotFieldConfig { SourceColumnIndex = InternalDate, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = InternalReportId, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = InternalDescription, ShowTotals = false },
         ],
@@ -164,9 +164,10 @@ public static class R02PivotTableConfigs
     {
         Rows =
         [
-            new PivotFieldConfig { SourceColumnIndex = ClientDate, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = ClientProjectNum, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = ClientProjectName, ShowTotals = true },
+            new PivotFieldConfig { SourceColumnIndex = ClientSubContractName, ShowTotals = true },
+            new PivotFieldConfig { SourceColumnIndex = ClientDate, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = ClientStepName, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = ClientDescription, ShowTotals = false },
         ],
