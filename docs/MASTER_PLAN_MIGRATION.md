@@ -11,7 +11,8 @@
 > [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md),
 > [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md),
 > [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md) — SyncEngine watermark
-> semantics, hours lookback window and weekly reconciliation
+> semantics, hours lookback window and weekly reconciliation  
+> [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) — **DEV-018** mismatch report **inside** existing `--monthly` (same `Db_Mp_SiEng` + Replica; SyncEngine not folded into WPF)
 
 ## Problem
 
@@ -153,7 +154,7 @@ scope** unless product explicitly re-opens that decision.
 
 ## Explicitly out of this migration program
 
-- Folding SyncEngine into App.Wpf
+- Folding SyncEngine into App.Wpf (DEV-018 launches `--capture` as a **separate process**)
 - Re-enabling V2 New System host for MasterPlan
 - ACC / Email N3 recovery (separate track)
 
