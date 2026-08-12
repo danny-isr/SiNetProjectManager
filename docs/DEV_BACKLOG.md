@@ -2,7 +2,7 @@
 
 > **Title:** Development backlog index (App.Wpf pilot gaps)
 > **Date:** 03.08.2026
-> **Updated:** 12.08.2026 (DEV-022 SQL ACL post-restore; DEV-021 hours; DEV-018/019/020)
+> **Updated:** 12.08.2026 (DEV-023 post-monthly API reconcile; DEV-022 SQL ACL; DEV-021 hours)
 > **Status:** Active / Operational Checklist
 > **Classification:** Operational Checklist (engineering index; not rollout sign-off)
 > **Scope:** Single index of product/engineering items for the `development` / `release` lines. Each item points to a focused doc. Not a substitute for GitHub Issues.
@@ -52,6 +52,7 @@ Status vocabulary:
 | DEV-020 | Monthly bak staging: move to `N:\MasterPlanBakup` ↔ SQL `D:\SharedFolder\ProjectsData\MasterPlanBakup`, retain 10 | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1b | SyncEngine **1.0.20** |
 | DEV-021 | HoursReports.Hours = **milliseconds** (ETL); PHE.LastUpdated not stamped from bak; daily MERGE repair null Duration/TotalHours | Implementing — unit tests green; DB verify pending | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1c · [`DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md`](./DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md) | SyncEngine on `development` |
 | DEV-022 | After monthly restore: ensure `SI-ENG\שרטטים` has db_datareader+db_datawriter on `Db_Mp_SiEng` and `Replica_DB` | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1d | SyncEngine on `development` |
+| DEV-023 | After successful `--monthly`, run existing API daily sync with **forced full reconcile** (internet) | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1e | SyncEngine on `development` |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.

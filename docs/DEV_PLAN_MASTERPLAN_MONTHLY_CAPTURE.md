@@ -90,6 +90,19 @@ Config section: `MasterPlanMonthlyBackup` in SyncEngine `appsettings.json` / tem
 
 ---
 
+## 1e. DEV-023 — forced API reconcile after monthly (locked 12.08.2026)
+
+After a **successful** monthly ETL, run the **existing** `ApiDailySyncService` with `ForceReconcile=true` (same as `--daily --reconcile`): unfiltered hours pull from the MasterPlan Web API, MERGE repair of replica rows. Not a second sync stack.
+
+| Topic | Decision |
+| --- | --- |
+| When | Only if monthly `result.Success`; if API step fails, process exit code is non-zero |
+| What | Existing daily API path, `ForceReconcile=true`. No orphan purge. No endpoint-validation GETs (the pull itself is the internet check). |
+| Opt-out | `--skip-post-reconcile` |
+| UI | Confirmation text states the API full pass will run; no extra checkbox (default on) |
+
+---
+
 ## 2. Existing mechanism (verify it still exists — it does)
 
 | Step | Code | What it does |
@@ -115,6 +128,7 @@ Step 2  DROP/CREATE MP_* on Replica_DB      (existing)
 Step 2a Ensure same principals on Replica_DB (DEV-022)
 Step 3  Full ETL from Db_Mp_SiEng           (existing)
 Step 3b Compare again after ETL; stamp Sync_State.MonthlyRestore            (NEW)
+Step 4  Existing API daily sync with ForceReconcile (DEV-023; skip with --skip-post-reconcile)
 ```
 
 After Step 1, replica still has “what daily updates accumulated”; MasterPlan DB already has “truth from backup”. That is the only window to see daily-sync drift. After Step 2 the old replica hours are gone. Step 3b is the extra check after replica refresh (July findings).

@@ -105,8 +105,9 @@ public sealed class MasterPlanMonthlyRestoreViewModel : ObservableObject
             "פעולה הרסנית:\n\n" +
             "• ישחזר את הגיבוי על Db_Mp_SiEng (ReplaceDatabase).\n" +
             "• ירשום אי-התאמות מול הרפליקה הנוכחית ללוג SyncEngine.\n" +
-            "• ימחק ויבנה מחדש את טבלאות MP_* ב־Replica_DB מהגיבוי.\n\n" +
-            "שרת ה-SQL חייב להיות מסוגל לקרוא את נתיב הקובץ.\n\n" +
+            "• ימחק ויבנה מחדש את טבלאות MP_* ב־Replica_DB מהגיבוי.\n" +
+            "• לאחר הצלחה: משיכה מלאה מה־API של MasterPlan (reconcile) לתיקון הרפליקה.\n\n" +
+            "שרת ה-SQL חייב להיות מסוגל לקרוא את נתיב הקובץ. נדרש חיבור לאינטרנט לשלב ה־API.\n\n" +
             $"קובץ: {BackupPath}\n";
 
         if (AllowOlderOrEqualBackup)
@@ -170,7 +171,7 @@ public sealed class MasterPlanMonthlyRestoreViewModel : ObservableObject
             }
 
             StatusMessage = exitCode == 0
-                ? "השחזור החודשי הסתיים בהצלחה. פירוט אי-התאמות בלוג SyncEngine (מרכזי/מקומי)."
+                ? "השחזור החודשי וה־reconcile מה־API הסתיימו בהצלחה. פירוט בלוג SyncEngine."
                 : $"השחזור נכשל (קוד יציאה {exitCode}). ראו את הפלט ואת לוג SyncEngine.";
         }
         catch (OperationCanceledException)

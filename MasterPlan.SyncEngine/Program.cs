@@ -228,7 +228,7 @@ if (args.Contains("--monthly") || args.Contains("-m"))
             Console.WriteLine("║  Step 2 – Initialize: ✓ COMPLETE                                ║");
             Console.WriteLine($"║  Step 3 – Full ETL:   {(result.Step3Completed ? "✓ COMPLETE" : "○ SKIPPED"),-44} ║");
             Console.WriteLine("╠══════════════════════════════════════════════════════════════════╣");
-            Console.WriteLine("║  [COMPLETE] Replica_DB ready. Run --daily for incremental sync.  ║");
+            Console.WriteLine("║  [COMPLETE] Replica_DB ready.                                    ║");
         }
         else
         {
@@ -242,6 +242,31 @@ if (args.Contains("--monthly") || args.Contains("-m"))
         if (!result.Success)
         {
             Environment.Exit(1);
+        }
+
+        // DEV-023: after a successful bak ETL, force a full API hours pass (existing --daily --reconcile).
+        if (args.Contains("--skip-post-reconcile"))
+        {
+            Console.WriteLine();
+            Console.WriteLine("[CONFIG] Step 4 API force reconcile skipped (--skip-post-reconcile).");
+            Log.Warning("Monthly post-reconcile skipped — --skip-post-reconcile.");
+        }
+        else
+        {
+            Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}.", "monthly-post-reconcile");
+            var postSw = System.Diagnostics.Stopwatch.StartNew();
+            await DailyApiSyncRunner.RunForcedReconcileAsync(
+                configuration,
+                replicaConnectionString,
+                siDataConnectionString,
+                apiClientLogger,
+                apiSyncLogger);
+            postSw.Stop();
+            Log.Warning(
+                "MasterPlan.SyncEngine DB update finished — mode {Mode}, duration {Duration}.",
+                "monthly-post-reconcile",
+                postSw.Elapsed);
+            Console.WriteLine("    [STEP 4] ✓ API force reconcile completed");
         }
     }
     catch (Exception ex)
@@ -720,7 +745,8 @@ else
     Console.WriteLine("      2a.[SQL ACL] Ensure same principals on Replica_DB");
     Console.WriteLine("      3. [ETL]     INSERT INTO...SELECT with JOINs and transforms");
     Console.WriteLine("      3b.[COMPARE] Post-ETL compare + stamp MonthlyRestore");
-    Console.WriteLine("      4. [STOP]    Wait for verification before daily sync");
+    Console.WriteLine("      4. [API]     Existing --daily --reconcile (full hours pull from internet)");
+    Console.WriteLine("    --skip-post-reconcile  Skip Step 4 API force reconcile");
     Console.WriteLine();
     Console.WriteLine("  PHASE 2 - Daily Delta Sync (API → Replica_DB)");
     Console.WriteLine("  ─────────────────────────────────────────────────────────────────");

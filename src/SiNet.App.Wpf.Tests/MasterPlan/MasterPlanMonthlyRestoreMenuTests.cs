@@ -95,6 +95,14 @@ public sealed class MasterPlanMonthlyRestoreMenuTests
         Assert.Contains("MonthlyHoursComparePhase.PostEtl", monthly, StringComparison.Ordinal);
         Assert.Contains("StampMonthlyRestoreAsync", monthly, StringComparison.Ordinal);
 
+        var program = ReadRepoFile("MasterPlan.SyncEngine/Program.cs");
+        Assert.Contains("DailyApiSyncRunner.RunForcedReconcileAsync", program, StringComparison.Ordinal);
+        Assert.Contains("--skip-post-reconcile", program, StringComparison.Ordinal);
+
+        var runner = ReadRepoFile("MasterPlan.SyncEngine/DailyApiSyncRunner.cs");
+        Assert.Contains("forceReconcile: true", runner, StringComparison.Ordinal);
+        Assert.Contains("RunDailySyncAsync", runner, StringComparison.Ordinal);
+
         var gateIndex = monthly.IndexOf("STEP 0 – BACKUP DATE GATE", StringComparison.Ordinal);
         var restoreIndex = monthly.IndexOf("STEP 1 – RESTORE", StringComparison.Ordinal);
         var aclMpIndex = monthly.IndexOf("STEP 1a – SQL ACCESS (MasterPlan)", StringComparison.Ordinal);

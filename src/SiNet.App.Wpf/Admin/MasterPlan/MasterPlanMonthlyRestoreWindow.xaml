@@ -19,7 +19,7 @@
     </StackPanel>
 
     <StackPanel>
-      <TextBlock Text="שחזור הגיבוי ל-Db_Mp_SiEng, דוח אי-התאמות מול הרפליקה בלוג SyncEngine, ואז עדכון הרפליקה מהגיבוי."
+      <TextBlock Text="שחזור הגיבוי ל-Db_Mp_SiEng, עדכון הרפליקה מהגיבוי, ואז משיכה מלאה מה-API (reconcile) לתיקון אי-התאמות."
                  TextWrapping="Wrap"
                  Margin="0,0,0,12"
                  FontFamily="{DynamicResource SiFontFamily}"
