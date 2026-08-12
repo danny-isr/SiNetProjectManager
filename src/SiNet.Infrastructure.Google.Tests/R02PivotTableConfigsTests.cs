@@ -34,17 +34,17 @@ public sealed class R02PivotTableConfigsTests
     }
 
     [Fact]
-    public void BuildDetail_internal_employee_then_date_then_contract_with_contract_filters()
+    public void BuildDetail_internal_contract_then_employee_then_date_with_contract_filters()
     {
         var config = R02PivotTableConfigs.BuildDetail(isClientExport: false);
 
         Assert.Equal(
             [
-                R02PivotTableConfigs.InternalEmployeeName,
-                R02PivotTableConfigs.InternalDate,
                 R02PivotTableConfigs.InternalProjectNum,
                 R02PivotTableConfigs.InternalProjectName,
                 R02PivotTableConfigs.InternalSubContractName,
+                R02PivotTableConfigs.InternalEmployeeName,
+                R02PivotTableConfigs.InternalDate,
                 R02PivotTableConfigs.InternalReportId,
                 R02PivotTableConfigs.InternalDescription,
             ],
@@ -61,15 +61,16 @@ public sealed class R02PivotTableConfigsTests
     }
 
     [Fact]
-    public void BuildDetail_client_date_then_contract_with_contract_filters()
+    public void BuildDetail_client_contract_then_date_with_contract_filters()
     {
         var config = R02PivotTableConfigs.BuildDetail(isClientExport: true);
 
         Assert.Equal(
             [
-                R02PivotTableConfigs.ClientDate,
                 R02PivotTableConfigs.ClientProjectNum,
                 R02PivotTableConfigs.ClientProjectName,
+                R02PivotTableConfigs.ClientSubContractName,
+                R02PivotTableConfigs.ClientDate,
                 R02PivotTableConfigs.ClientStepName,
                 R02PivotTableConfigs.ClientDescription,
             ],
