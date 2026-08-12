@@ -37,6 +37,7 @@ public class MonthlyBackupRestoreService
     private readonly ILogger<MonthlyBackupRestoreService> _logger;
     private readonly int _hoursLookbackDays;
     private readonly MonthlyHoursCompareRunner _hoursCompare;
+    private readonly MonthlySqlAccessOptions _sqlAccessOptions;
 
     // Available tables in source database (populated during validation)
     // Individual ETL methods can check this to handle missing tables gracefully
@@ -56,7 +57,8 @@ public class MonthlyBackupRestoreService
         string replicaConnectionString,
         string masterConnectionString,
         ILogger<MonthlyBackupRestoreService> logger,
-        int hoursLookbackDays = 14)
+        int hoursLookbackDays = 14,
+        MonthlySqlAccessOptions? sqlAccessOptions = null)
     {
         _sourceConnectionString = sourceConnectionString;
         _replicaConnectionString = replicaConnectionString;
@@ -64,6 +66,7 @@ public class MonthlyBackupRestoreService
         _logger = logger;
         _hoursLookbackDays = hoursLookbackDays > 0 ? hoursLookbackDays : 14;
         _hoursCompare = new MonthlyHoursCompareRunner(logger);
+        _sqlAccessOptions = sqlAccessOptions ?? new MonthlySqlAccessOptions();
     }
 
     /// <summary>
@@ -147,6 +150,19 @@ public class MonthlyBackupRestoreService
             Console.WriteLine($"    Backup finish date: {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}");
 
             // ═══════════════════════════════════════════════════════════════════════════════
+            // STEP 1a: SQL ACCESS on Db_Mp_SiEng (bak replace drops local users) — DEV-022
+            // ═══════════════════════════════════════════════════════════════════════════════
+            Console.WriteLine();
+            Console.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("║  STEP 1a – SQL ACCESS (MasterPlan)                               ║");
+            Console.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
+            await MonthlySqlAccessEnsurer.EnsureAsync(
+                _masterConnectionString,
+                _sqlAccessOptions,
+                _logger,
+                databaseFilter: [SourceDatabaseName]);
+
+            // ═══════════════════════════════════════════════════════════════════════════════
             // STEP 1b: COMPARE replica (still old) vs restored HoursReports — fail closed on throw
             // ═══════════════════════════════════════════════════════════════════════════════
             await CompareHoursAsync(MonthlyHoursComparePhase.PreDrop);
@@ -165,6 +181,19 @@ public class MonthlyBackupRestoreService
             await InitializeReplicaDatabaseAsync();
             result.Step2Completed = true;
             Console.WriteLine("    [STEP 2] ✓ Replica_DB schema initialized");
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // STEP 2a: SQL ACCESS on Replica_DB — DEV-022
+            // ═══════════════════════════════════════════════════════════════════════════════
+            Console.WriteLine();
+            Console.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("║  STEP 2a – SQL ACCESS (Replica)                                  ║");
+            Console.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
+            await MonthlySqlAccessEnsurer.EnsureAsync(
+                _masterConnectionString,
+                _sqlAccessOptions,
+                _logger,
+                databaseFilter: [ReplicaDatabaseName]);
 
             // ═══════════════════════════════════════════════════════════════════════════════
             // STEP 3: FULL ETL LOAD

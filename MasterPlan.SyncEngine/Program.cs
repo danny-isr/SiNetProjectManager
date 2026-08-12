@@ -176,12 +176,15 @@ if (args.Contains("--monthly") || args.Contains("-m"))
 
     // Create the new MonthlyBackupRestoreService with SMO support
     var hoursLookbackDays = HoursSyncOptions.FromConfiguration(configuration).LookbackDays;
+    var sqlAccessOptions = MonthlySqlAccessOptions.FromConfiguration(configuration);
+    Console.WriteLine($"[CONFIG] SQL access ACL: Enabled={sqlAccessOptions.Enabled}, principals={string.Join(", ", sqlAccessOptions.WindowsPrincipals)}");
     var monthlyService = new MonthlyBackupRestoreService(
         sourceConnectionString,
         replicaConnectionString,
         masterConnectionString,
         monthlyServiceLogger,
-        hoursLookbackDays);
+        hoursLookbackDays,
+        sqlAccessOptions);
 
     try
     {
@@ -711,8 +714,10 @@ else
     Console.WriteLine("      0. [GATE]    HEADERONLY BackupFinishDate > Sync_State.MonthlyRestore");
     Console.WriteLine("                  (date compare skipped with --allow-older-backup)");
     Console.WriteLine("      1. [RESTORE] SMO restore of .bak → Db_Mp_SiEng");
+    Console.WriteLine("      1a.[SQL ACL] Ensure Windows principals (default SI-ENG\\שרטטים) on Db_Mp_SiEng");
     Console.WriteLine("      1b.[COMPARE] Replica vs HoursReports → SyncEngine logs (fail closed on throw)");
     Console.WriteLine("      2. [INIT]    Create Replica_DB and Sync_* tables if needed");
+    Console.WriteLine("      2a.[SQL ACL] Ensure same principals on Replica_DB");
     Console.WriteLine("      3. [ETL]     INSERT INTO...SELECT with JOINs and transforms");
     Console.WriteLine("      3b.[COMPARE] Post-ETL compare + stamp MonthlyRestore");
     Console.WriteLine("      4. [STOP]    Wait for verification before daily sync");

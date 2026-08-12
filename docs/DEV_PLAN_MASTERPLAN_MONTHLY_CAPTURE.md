@@ -78,6 +78,18 @@ Config section: `MasterPlanMonthlyBackup` in SyncEngine `appsettings.json` / tem
 
 ---
 
+## 1d. DEV-022 — SQL access after restore (locked 12.08.2026)
+
+| Topic | Decision |
+| --- | --- |
+| Principal | Windows group `SI-ENG\שרטטים` (config list; default this one) |
+| Roles | `db_datareader` + `db_datawriter` (write access; not `db_owner`) |
+| Databases | `Db_Mp_SiEng` (Step 1a, right after RESTORE/`MULTI_USER`) and `Replica_DB` (Step 2a, after schema init) |
+| Behavior | Idempotent: `CREATE LOGIN FROM WINDOWS` if missing; `CREATE USER` / `ALTER USER … WITH LOGIN`; add role members if missing. Fail closed on SQL error. |
+| Config | `MonthlySqlAccess` in SyncEngine appsettings (`Enabled` default true). |
+
+---
+
 ## 2. Existing mechanism (verify it still exists — it does)
 
 | Step | Code | What it does |
@@ -97,8 +109,10 @@ Insertion point (locked):
 ```text
 Step 0  HEADERONLY BackupFinishDate > last MonthlyRestore  (NEW gate; no DB writes)
 Step 1  Restore .bak → Db_Mp_SiEng          (existing)
+Step 1a Ensure Windows principals on Db_Mp_SiEng (DEV-022: SI-ENG\שרטטים reader+writer)
 Step 1b Compare Replica (still old) vs HoursReports (new) → SyncEngine logs   (NEW)
 Step 2  DROP/CREATE MP_* on Replica_DB      (existing)
+Step 2a Ensure same principals on Replica_DB (DEV-022)
 Step 3  Full ETL from Db_Mp_SiEng           (existing)
 Step 3b Compare again after ETL; stamp Sync_State.MonthlyRestore            (NEW)
 ```

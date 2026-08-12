@@ -86,6 +86,9 @@ public sealed class MasterPlanMonthlyRestoreMenuTests
         var monthly = ReadRepoFile("MasterPlan.SyncEngine/MonthlyBackupRestoreService.cs");
         Assert.Contains("STEP 0 – BACKUP DATE GATE", monthly, StringComparison.Ordinal);
         Assert.Contains("RequireBackupFinishDateAsync", monthly, StringComparison.Ordinal);
+        Assert.Contains("STEP 1a – SQL ACCESS (MasterPlan)", monthly, StringComparison.Ordinal);
+        Assert.Contains("STEP 2a – SQL ACCESS (Replica)", monthly, StringComparison.Ordinal);
+        Assert.Contains("MonthlySqlAccessEnsurer.EnsureAsync", monthly, StringComparison.Ordinal);
         Assert.Contains("MonthlyHoursComparePhase.PreDrop", monthly, StringComparison.Ordinal);
         Assert.Contains("InitializeReplicaDatabaseAsync", monthly, StringComparison.Ordinal);
         Assert.Contains("RunEtlPipelineAsync", monthly, StringComparison.Ordinal);
@@ -94,14 +97,18 @@ public sealed class MasterPlanMonthlyRestoreMenuTests
 
         var gateIndex = monthly.IndexOf("STEP 0 – BACKUP DATE GATE", StringComparison.Ordinal);
         var restoreIndex = monthly.IndexOf("STEP 1 – RESTORE", StringComparison.Ordinal);
+        var aclMpIndex = monthly.IndexOf("STEP 1a – SQL ACCESS (MasterPlan)", StringComparison.Ordinal);
         var preCompareIndex = monthly.IndexOf("MonthlyHoursComparePhase.PreDrop", StringComparison.Ordinal);
         var initIndex = monthly.IndexOf("InitializeReplicaDatabaseAsync", StringComparison.Ordinal);
+        var aclReplicaIndex = monthly.IndexOf("STEP 2a – SQL ACCESS (Replica)", StringComparison.Ordinal);
         var etlIndex = monthly.IndexOf("RunEtlPipelineAsync", StringComparison.Ordinal);
         var postCompareIndex = monthly.IndexOf("MonthlyHoursComparePhase.PostEtl", StringComparison.Ordinal);
         Assert.True(gateIndex < restoreIndex);
-        Assert.True(restoreIndex < preCompareIndex);
+        Assert.True(restoreIndex < aclMpIndex);
+        Assert.True(aclMpIndex < preCompareIndex);
         Assert.True(preCompareIndex < initIndex);
-        Assert.True(initIndex < etlIndex);
+        Assert.True(initIndex < aclReplicaIndex);
+        Assert.True(aclReplicaIndex < etlIndex);
         Assert.True(etlIndex < postCompareIndex);
     }
 
