@@ -49,11 +49,24 @@ public static class MasterPlanSyncEngineLauncher
         return null;
     }
 
+    public static string BuildMonthlyArguments(string backupPath, bool allowOlderOrEqualBackup = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(backupPath);
+        var args = $"--monthly --backup \"{backupPath}\"";
+        if (allowOlderOrEqualBackup)
+        {
+            args += " --allow-older-backup";
+        }
+
+        return args;
+    }
+
     public static async Task<(int ExitCode, string CombinedOutput)> RunMonthlyAsync(
         string exePath,
         string backupPath,
         IProgress<string>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowOlderOrEqualBackup = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(exePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(backupPath);
@@ -71,7 +84,7 @@ public static class MasterPlanSyncEngineLauncher
         var psi = new ProcessStartInfo
         {
             FileName = exePath,
-            Arguments = $"--monthly --backup \"{backupPath}\"",
+            Arguments = BuildMonthlyArguments(backupPath, allowOlderOrEqualBackup),
             WorkingDirectory = Path.GetDirectoryName(exePath) ?? AppContext.BaseDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,

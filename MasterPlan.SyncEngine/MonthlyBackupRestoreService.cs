@@ -74,7 +74,9 @@ public class MonthlyBackupRestoreService
     /// - Step 2: Create/recreate Replica_DB schema
     /// - Step 3: Full ETL pipeline from Source DB to Replica_DB
     /// </summary>
-    public async Task<MonthlyBackupResult> RunMonthlyBackupRestoreAsync(string backupFilePath)
+    public async Task<MonthlyBackupResult> RunMonthlyBackupRestoreAsync(
+        string backupFilePath,
+        bool allowOlderOrEqualBackup = false)
     {
         var result = new MonthlyBackupResult
         {
@@ -96,14 +98,31 @@ public class MonthlyBackupRestoreService
             var lastMonthly = await TryGetLastMonthlyRestoreStampAsync();
             Console.WriteLine($"    BackupFinishDate: {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine($"    Last MonthlyRestore stamp: {(lastMonthly.HasValue ? lastMonthly.Value.ToString("yyyy-MM-dd HH:mm:ss") : "(none — first run)")}");
+            Console.WriteLine($"    Allow older/equal bak: {allowOlderOrEqualBackup}");
 
-            if (!MonthlyRestoreGate.IsNewerThanLastRestore(_backupFinishDate.Value, lastMonthly))
+            if (!MonthlyRestoreGate.ShouldAllowRestore(
+                    _backupFinishDate.Value,
+                    lastMonthly,
+                    allowOlderOrEqualBackup))
             {
                 var message =
                     $"הגיבוי אינו חדש יותר מהשחזור החודשי האחרון. BackupFinishDate={_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}, " +
                     $"שחזור אחרון={lastMonthly:yyyy-MM-dd HH:mm:ss}. לא בוצע שינוי בבסיסי הנתונים.";
                 _logger.LogWarning("Monthly restore gate refused bak: {Message}", message);
                 throw new InvalidOperationException(message);
+            }
+
+            if (allowOlderOrEqualBackup
+                && lastMonthly.HasValue
+                && !MonthlyRestoreGate.IsNewerThanLastRestore(_backupFinishDate.Value, lastMonthly))
+            {
+                _logger.LogWarning(
+                    "שחזור חודשי: עוקפים שער תאריך (allow-older-backup). BackupFinishDate={BackupFinishDate:yyyy-MM-dd HH:mm:ss}, LastMonthlyRestore={LastMonthly:yyyy-MM-dd HH:mm:ss}.",
+                    _backupFinishDate.Value,
+                    lastMonthly.Value);
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("    [GATE] Allow older/equal bak — continuing despite BackupFinishDate <= last MonthlyRestore");
+                Console.ResetColor();
             }
 
             _logger.LogWarning(

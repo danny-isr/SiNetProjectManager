@@ -17,6 +17,7 @@ public sealed class MasterPlanMonthlyRestoreViewModel : ObservableObject
         "בחר קובץ .bak והפעל שחזור חודשי. הפעולה משחזרת את Db_Mp_SiEng ומחליפה את טבלאות MP_* ברפליקה.";
     private string _outputLog = string.Empty;
     private bool _isBusy;
+    private bool _allowOlderOrEqualBackup;
 
     public MasterPlanMonthlyRestoreViewModel()
     {
@@ -37,6 +38,16 @@ public sealed class MasterPlanMonthlyRestoreViewModel : ObservableObject
                 _runCommand.RaiseCanExecuteChanged();
             }
         }
+    }
+
+    /// <summary>
+    /// When true, SyncEngine runs with <c>--allow-older-backup</c> so an equal/older bak may restore.
+    /// Default false — date gate remains enforced.
+    /// </summary>
+    public bool AllowOlderOrEqualBackup
+    {
+        get => _allowOlderOrEqualBackup;
+        set => SetField(ref _allowOlderOrEqualBackup, value);
     }
 
     public string StatusMessage
@@ -90,14 +101,25 @@ public sealed class MasterPlanMonthlyRestoreViewModel : ObservableObject
             return;
         }
 
-        var confirm = MessageBox.Show(
+        var confirmBody =
             "פעולה הרסנית:\n\n" +
             "• ישחזר את הגיבוי על Db_Mp_SiEng (ReplaceDatabase).\n" +
             "• ירשום אי-התאמות מול הרפליקה הנוכחית ללוג SyncEngine.\n" +
             "• ימחק ויבנה מחדש את טבלאות MP_* ב־Replica_DB מהגיבוי.\n\n" +
             "שרת ה-SQL חייב להיות מסוגל לקרוא את נתיב הקובץ.\n\n" +
-            $"קובץ: {BackupPath}\n\n" +
-            "להמשיך?",
+            $"קובץ: {BackupPath}\n";
+
+        if (AllowOlderOrEqualBackup)
+        {
+            confirmBody +=
+                "\n⚠ מסומן: לאפשר גיבוי ישן יותר או שווה לתאריך השחזור האחרון.\n" +
+                "השער הרגיל של תאריך הגיבוי ידולג (HEADERONLY עדיין חובה).\n";
+        }
+
+        confirmBody += "\nלהמשיך?";
+
+        var confirm = MessageBox.Show(
+            confirmBody,
             "שחזור חודשי MasterPlan — אישור",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
@@ -139,7 +161,7 @@ public sealed class MasterPlanMonthlyRestoreViewModel : ObservableObject
             });
 
             var (exitCode, combined) = await MasterPlanSyncEngineLauncher
-                .RunMonthlyAsync(exe, BackupPath, progress, _runCts.Token)
+                .RunMonthlyAsync(exe, BackupPath, progress, _runCts.Token, AllowOlderOrEqualBackup)
                 .ConfigureAwait(true);
 
             if (string.IsNullOrWhiteSpace(OutputLog) && !string.IsNullOrWhiteSpace(combined))

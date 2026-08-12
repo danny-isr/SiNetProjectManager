@@ -17,4 +17,17 @@ public static class MonthlyRestoreGate
 
         return backupFinishDate > lastSuccessfulRestore.Value;
     }
+
+    /// <summary>
+    /// Whether Step 0 should allow the restore to continue.
+    /// When <paramref name="allowOlderOrEqualBackup"/> is true, equal/older bak is permitted
+    /// (operator override from the monthly restore UI / <c>--allow-older-backup</c>).
+    /// HEADERONLY must still succeed before this is evaluated.
+    /// </summary>
+    public static bool ShouldAllowRestore(
+        DateTime backupFinishDate,
+        DateTime? lastSuccessfulRestore,
+        bool allowOlderOrEqualBackup)
+        => allowOlderOrEqualBackup
+           || IsNewerThanLastRestore(backupFinishDate, lastSuccessfulRestore);
 }

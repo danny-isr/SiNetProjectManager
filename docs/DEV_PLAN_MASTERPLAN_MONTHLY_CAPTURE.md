@@ -21,6 +21,7 @@ Operator intent (locked 12.08.2026):
 - There is already a MasterPlan DB (`Db_Mp_SiEng`) and a Replica (`Replica_DB`), both registered in the system.
 - The monthly process **already exists**: restore the `.bak` onto that same MasterPlan DB, then update replica from it so replica matches the backup.
 - **Gate (before any restore):** `RESTORE HEADERONLY` `BackupFinishDate` (not file mtime) must be **later than** the last successful monthly restore stamp in replica `Sync_State` entity `MonthlyRestore`. If not later → stop, **no DB changes**. First run with no stamp → allow. If HEADERONLY cannot be read → fail closed.
+- **Override (UI / CLI):** checkbox «לאפשר שחזור גם אם הגיבוי ישן יותר או שווה» (default **off**) → SyncEngine `--allow-older-backup`. Skips the date compare only; HEADERONLY still required.
 - **Step 1b (pre-DROP):** compare current `Replica_DB.MP_ProjectHoursExtended` vs restored `HoursReports` by `ID`. Log drift. If compare **throws** → **fail closed before DROP**.
 - **Logs** go to **existing SyncEngine sinks** (central `{Logging.CentralLogPath}\SyncEngine\...`, local `%ProgramData%\SiOffice\MasterPlanSync\logs\`). Hebrew summary + mismatch details there. **No** new `%ProgramData%\SiNet\mp-monthly\` folder.
 - Then existing DROP/CREATE `MP_*` + full ETL. Post-bak replica-only rows disappearing is **accepted**; next `--daily` should INSERT new IDs since backup.

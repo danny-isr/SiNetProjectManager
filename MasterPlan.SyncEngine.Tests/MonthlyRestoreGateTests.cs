@@ -35,4 +35,22 @@ public sealed class MonthlyRestoreGateTests
             new DateTime(2026, 7, 1),
             new DateTime(2026, 8, 1)));
     }
+
+    [Fact]
+    public void When_allow_older_then_equal_or_older_backup_is_allowed()
+    {
+        var stamp = new DateTime(2026, 8, 1, 10, 0, 0);
+        Assert.True(MonthlyRestoreGate.ShouldAllowRestore(stamp, stamp, allowOlderOrEqualBackup: true));
+        Assert.True(MonthlyRestoreGate.ShouldAllowRestore(
+            new DateTime(2026, 7, 1),
+            stamp,
+            allowOlderOrEqualBackup: true));
+    }
+
+    [Fact]
+    public void When_allow_older_false_then_equal_backup_still_refused()
+    {
+        var stamp = new DateTime(2026, 8, 1, 10, 0, 0);
+        Assert.False(MonthlyRestoreGate.ShouldAllowRestore(stamp, stamp, allowOlderOrEqualBackup: false));
+    }
 }

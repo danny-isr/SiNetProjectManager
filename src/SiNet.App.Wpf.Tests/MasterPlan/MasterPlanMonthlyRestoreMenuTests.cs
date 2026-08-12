@@ -50,8 +50,34 @@ public sealed class MasterPlanMonthlyRestoreMenuTests
         var source = ReadRepoFile(
             "src/SiNet.App.Wpf/Admin/MasterPlan/MasterPlanSyncEngineLauncher.cs");
         Assert.Contains(MasterPlanSyncEngineLauncher.PublishedExePath, source, StringComparison.Ordinal);
+        Assert.Contains("BuildMonthlyArguments", source, StringComparison.Ordinal);
+        Assert.Contains("--allow-older-backup", source, StringComparison.Ordinal);
         Assert.Contains("--monthly --backup", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Microsoft.SqlServer.Management.Smo", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Launcher_omits_allow_older_by_default_and_adds_flag_when_requested()
+    {
+        var without = MasterPlanSyncEngineLauncher.BuildMonthlyArguments(@"C:\b.bak");
+        Assert.Equal(@"--monthly --backup ""C:\b.bak""", without);
+        Assert.DoesNotContain("--allow-older-backup", without, StringComparison.Ordinal);
+
+        var with = MasterPlanSyncEngineLauncher.BuildMonthlyArguments(@"C:\b.bak", allowOlderOrEqualBackup: true);
+        Assert.Contains("--allow-older-backup", with, StringComparison.Ordinal);
+        Assert.StartsWith(@"--monthly --backup ""C:\b.bak""", with, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Monthly_restore_window_exposes_allow_older_checkbox_default_off()
+    {
+        var xaml = ReadRepoFile(
+            "src/SiNet.App.Wpf/Admin/MasterPlan/MasterPlanMonthlyRestoreWindow.xaml");
+        Assert.Contains("AllowOlderOrEqualBackup", xaml, StringComparison.Ordinal);
+        Assert.Contains("לאפשר שחזור גם אם הגיבוי ישן יותר או שווה", xaml, StringComparison.Ordinal);
+
+        var vm = new MasterPlanMonthlyRestoreViewModel();
+        Assert.False(vm.AllowOlderOrEqualBackup);
     }
 
     [Fact]

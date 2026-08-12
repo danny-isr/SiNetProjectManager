@@ -170,8 +170,8 @@ if (args.Contains("--monthly") || args.Contains("-m"))
     Console.WriteLine($"[CONFIG] Client staging: {staging.ClientStagingFilePath}");
     Console.WriteLine($"[CONFIG] SQL RESTORE:    {sqlBackupPath}");
     Console.WriteLine($"[CONFIG] Moved to stage: {staging.MovedIntoStaging}");
-    Console.WriteLine($"[CONFIG] Source DB:      Db_Mp_SiEng (restored from backup)");
-    Console.WriteLine($"[CONFIG] Target DB:      Replica_DB (ETL destination)");
+    var allowOlderBackup = args.Contains("--allow-older-backup");
+    Console.WriteLine($"[CONFIG] Allow older bak: {allowOlderBackup}");
     Console.WriteLine();
 
     // Create the new MonthlyBackupRestoreService with SMO support
@@ -188,7 +188,7 @@ if (args.Contains("--monthly") || args.Contains("-m"))
         // DB-update lifecycle markers — Warning so they reach the central share.
         Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}, backup {Backup}.", "monthly", sqlBackupPath);
         var __monthlySw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await monthlyService.RunMonthlyBackupRestoreAsync(sqlBackupPath);
+        var result = await monthlyService.RunMonthlyBackupRestoreAsync(sqlBackupPath, allowOlderBackup);
         __monthlySw.Stop();
         Log.Warning("MasterPlan.SyncEngine DB update finished — mode {Mode}, success {Success}, duration {Duration}.", "monthly", result.Success, __monthlySw.Elapsed);
 
@@ -704,9 +704,12 @@ else
     Console.WriteLine("  ─────────────────────────────────────────────────────────────────");
     Console.WriteLine("  --monthly, -m          Run Monthly Backup/Restore ETL Pipeline");
     Console.WriteLine("    --backup, -b <path>  Path to the MasterPlan .bak file");
+    Console.WriteLine("    --allow-older-backup Allow bak when BackupFinishDate <= last MonthlyRestore");
+    Console.WriteLine("                        (default off; HEADERONLY must still succeed)");
     Console.WriteLine();
     Console.WriteLine("    Steps performed:");
     Console.WriteLine("      0. [GATE]    HEADERONLY BackupFinishDate > Sync_State.MonthlyRestore");
+    Console.WriteLine("                  (date compare skipped with --allow-older-backup)");
     Console.WriteLine("      1. [RESTORE] SMO restore of .bak → Db_Mp_SiEng");
     Console.WriteLine("      1b.[COMPARE] Replica vs HoursReports → SyncEngine logs (fail closed on throw)");
     Console.WriteLine("      2. [INIT]    Create Replica_DB and Sync_* tables if needed");

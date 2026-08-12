@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="שחזור חודשי MasterPlan"
         Width="720"
-        Height="520"
+        Height="560"
         WindowStartupLocation="CenterOwner"
         FlowDirection="RightToLeft"
         Background="{DynamicResource SiBackgroundBrush}">
@@ -29,6 +29,12 @@
                  Margin="0,0,0,8"
                  FontFamily="{DynamicResource SiFontFamily}"
                  FontSize="{DynamicResource SiTextSmallFontSize}"/>
+      <CheckBox Content="לאפשר שחזור גם אם הגיבוי ישן יותר או שווה לשחזור האחרון"
+                IsChecked="{Binding AllowOlderOrEqualBackup}"
+                Margin="0,0,0,8"
+                FontFamily="{DynamicResource SiFontFamily}"
+                FontSize="{DynamicResource SiTextSmallFontSize}"
+                ToolTip="ברירת מחדל: כבוי (שער תאריך פעיל). סימון V מוסיף --allow-older-backup להרצת SyncEngine."/>
       <TextBlock Text="{Binding StatusMessage}"
                  TextWrapping="Wrap"
                  Margin="0,0,0,8"
