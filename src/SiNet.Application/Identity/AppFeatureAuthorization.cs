@@ -31,6 +31,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.WorkflowOpsCancel] = AppRole.Administrator,
             [AppFeatureCodes.WorkflowOpsRetry] = AppRole.Administrator,
             [AppFeatureCodes.WorkflowOpsStart] = AppRole.Administrator,
+            [AppFeatureCodes.ShellOpenMasterPlanMonthlyRestore] = AppRole.Management,
         };
 
     /// <summary>

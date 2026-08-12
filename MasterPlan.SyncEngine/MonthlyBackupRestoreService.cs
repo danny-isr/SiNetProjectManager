@@ -35,12 +35,14 @@ public class MonthlyBackupRestoreService
     private readonly string _replicaConnectionString;
     private readonly string _masterConnectionString;
     private readonly ILogger<MonthlyBackupRestoreService> _logger;
+    private readonly int _hoursLookbackDays;
+    private readonly MonthlyHoursCompareRunner _hoursCompare;
 
     // Available tables in source database (populated during validation)
     // Individual ETL methods can check this to handle missing tables gracefully
     private HashSet<string> _availableSourceTables = new(StringComparer.OrdinalIgnoreCase);
 
-    // Backup finish date extracted from backup header after restore.
+    // Backup finish date extracted from backup header (HEADERONLY, before restore).
     // Used as LastUpdated baseline for ALL ETL rows: "Data valid up to this backup time"
     private DateTime? _backupFinishDate;
 
@@ -53,12 +55,15 @@ public class MonthlyBackupRestoreService
         string sourceConnectionString,
         string replicaConnectionString,
         string masterConnectionString,
-        ILogger<MonthlyBackupRestoreService> logger)
+        ILogger<MonthlyBackupRestoreService> logger,
+        int hoursLookbackDays = 14)
     {
         _sourceConnectionString = sourceConnectionString;
         _replicaConnectionString = replicaConnectionString;
         _masterConnectionString = masterConnectionString;
         _logger = logger;
+        _hoursLookbackDays = hoursLookbackDays > 0 ? hoursLookbackDays : 14;
+        _hoursCompare = new MonthlyHoursCompareRunner(logger);
     }
 
     /// <summary>
@@ -79,6 +84,34 @@ public class MonthlyBackupRestoreService
         try
         {
             // ═══════════════════════════════════════════════════════════════════════════════
+            // STEP 0: DATE GATE (HEADERONLY — no database writes)
+            // ═══════════════════════════════════════════════════════════════════════════════
+            Console.WriteLine();
+            Console.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("║  STEP 0 – BACKUP DATE GATE                                       ║");
+            Console.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
+            Console.WriteLine($"    Backup file: {backupFilePath}");
+
+            _backupFinishDate = await RequireBackupFinishDateAsync(backupFilePath);
+            var lastMonthly = await TryGetLastMonthlyRestoreStampAsync();
+            Console.WriteLine($"    BackupFinishDate: {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"    Last MonthlyRestore stamp: {(lastMonthly.HasValue ? lastMonthly.Value.ToString("yyyy-MM-dd HH:mm:ss") : "(none — first run)")}");
+
+            if (!MonthlyRestoreGate.IsNewerThanLastRestore(_backupFinishDate.Value, lastMonthly))
+            {
+                var message =
+                    $"הגיבוי אינו חדש יותר מהשחזור החודשי האחרון. BackupFinishDate={_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}, " +
+                    $"שחזור אחרון={lastMonthly:yyyy-MM-dd HH:mm:ss}. לא בוצע שינוי בבסיסי הנתונים.";
+                _logger.LogWarning("Monthly restore gate refused bak: {Message}", message);
+                throw new InvalidOperationException(message);
+            }
+
+            _logger.LogWarning(
+                "שחזור חודשי שער תאריך עבר: BackupFinishDate={BackupFinishDate:yyyy-MM-dd HH:mm:ss}, LastMonthlyRestore={LastMonthly}.",
+                _backupFinishDate.Value,
+                lastMonthly);
+
+            // ═══════════════════════════════════════════════════════════════════════════════
             // STEP 1: RESTORE BACKUP
             // ═══════════════════════════════════════════════════════════════════════════════
             _logger.LogInformation("Step 1: Restoring backup from {BackupPath}", backupFilePath);
@@ -92,18 +125,12 @@ public class MonthlyBackupRestoreService
             await RestoreBackupAsync(backupFilePath);
             result.Step1Completed = true;
             Console.WriteLine("    [STEP 1] ✓ Backup restore completed");
+            Console.WriteLine($"    Backup finish date: {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}");
 
-            // Extract BackupFinishDate from backup header — serves as LastUpdated baseline
-            _backupFinishDate = await GetBackupFinishDateAsync(backupFilePath);
-            if (_backupFinishDate.HasValue)
-            {
-                Console.WriteLine($"    Backup finish date: {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss}");
-                _logger.LogInformation("Backup finish date extracted: {BackupFinishDate:yyyy-MM-dd HH:mm:ss}", _backupFinishDate.Value);
-            }
-            else
-            {
-                _logger.LogWarning("Could not extract BackupFinishDate from backup header — LastUpdated will be NULL");
-            }
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // STEP 1b: COMPARE replica (still old) vs restored HoursReports — fail closed on throw
+            // ═══════════════════════════════════════════════════════════════════════════════
+            await CompareHoursAsync(MonthlyHoursComparePhase.PreDrop);
 
             // ═══════════════════════════════════════════════════════════════════════════════
             // STEP 2: INITIALIZE REPLICA
@@ -138,6 +165,12 @@ public class MonthlyBackupRestoreService
 
             var totalRecords = result.EntityRecordCounts.Values.Sum();
             Console.WriteLine($"    [STEP 3] ✓ ETL completed - {totalRecords} total records loaded");
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // STEP 3b: COMPARE after ETL + stamp MonthlyRestore
+            // ═══════════════════════════════════════════════════════════════════════════════
+            await CompareHoursAsync(MonthlyHoursComparePhase.PostEtl);
+            await StampMonthlyRestoreAsync(_backupFinishDate.Value);
 
             result.Success = true;
             _logger.LogInformation("Monthly backup/restore completed successfully with {TotalRecords} records", totalRecords);
@@ -372,7 +405,7 @@ public class MonthlyBackupRestoreService
     /// Uses RESTORE HEADERONLY which reads the file header without affecting any database.
     /// Returns the timestamp when the backup completed — used as "data valid up to" marker.
     /// </summary>
-    private async Task<DateTime?> GetBackupFinishDateAsync(string backupFilePath)
+    private async Task<DateTime?> TryGetBackupFinishDateAsync(string backupFilePath)
     {
         try
         {
@@ -406,6 +439,132 @@ public class MonthlyBackupRestoreService
             _logger.LogWarning(ex, "Failed to extract BackupFinishDate from backup header");
             return null;
         }
+    }
+
+    private async Task<DateTime> RequireBackupFinishDateAsync(string backupFilePath)
+    {
+        var finishDate = await TryGetBackupFinishDateAsync(backupFilePath);
+        if (!finishDate.HasValue)
+        {
+            throw new InvalidOperationException(
+                "לא ניתן לקרוא BackupFinishDate מ־RESTORE HEADERONLY. השחזור נעצר לפני שינוי בבסיסי הנתונים.");
+        }
+
+        return finishDate.Value;
+    }
+
+    private async Task<DateTime?> TryGetLastMonthlyRestoreStampAsync()
+    {
+        try
+        {
+            await using var connection = new SqlConnection(_replicaConnectionString);
+            await connection.OpenAsync();
+
+            var tableId = await connection.ExecuteScalarAsync<int?>(
+                "SELECT OBJECT_ID(N'dbo.Sync_State', N'U')");
+            if (tableId is null)
+            {
+                return null;
+            }
+
+            return await connection.ExecuteScalarAsync<DateTime?>(
+                "SELECT LastWatermark FROM Sync_State WHERE EntityName = @EntityName",
+                new { EntityName = MonthlyRestoreGate.SyncStateEntityName });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not read Sync_State.MonthlyRestore — treating as first run");
+            return null;
+        }
+    }
+
+    private async Task CompareHoursAsync(MonthlyHoursComparePhase phase)
+    {
+        Console.WriteLine();
+        Console.WriteLine(phase == MonthlyHoursComparePhase.PreDrop
+            ? "╔══════════════════════════════════════════════════════════════════╗\n║  STEP 1b – COMPARE (pre-DROP)                                    ║\n╚══════════════════════════════════════════════════════════════════╝"
+            : "╔══════════════════════════════════════════════════════════════════╗\n║  STEP 3b – COMPARE (post-ETL)                                    ║\n╚══════════════════════════════════════════════════════════════════╝");
+
+        await using var source = new SqlConnection(_sourceConnectionString);
+        await using var replica = new SqlConnection(_replicaConnectionString);
+        await source.OpenAsync();
+        await replica.OpenAsync();
+
+        var dailyFromDate = await ResolveDailyFromDateAsync(replica, phase);
+
+        // Fail closed before DROP: let exceptions bubble to RunMonthlyBackupRestoreAsync catch.
+        await _hoursCompare.RunAsync(
+            source,
+            replica,
+            phase,
+            dailyFromDate,
+            _backupFinishDate);
+    }
+
+    private async Task<DateTime> ResolveDailyFromDateAsync(SqlConnection replica, MonthlyHoursComparePhase phase)
+    {
+        // Prefer the live ProjectHoursExtended watermark (what daily sync actually used) before DROP.
+        if (phase == MonthlyHoursComparePhase.PreDrop)
+        {
+            try
+            {
+                var tableId = await replica.ExecuteScalarAsync<int?>(
+                    "SELECT OBJECT_ID(N'dbo.Sync_State', N'U')");
+                if (tableId is not null)
+                {
+                    var watermark = await replica.ExecuteScalarAsync<DateTime?>(
+                        "SELECT LastWatermark FROM Sync_State WHERE EntityName = @EntityName",
+                        new { EntityName = "ProjectHoursExtended" });
+                    if (watermark.HasValue)
+                    {
+                        return watermark.Value.Date.AddDays(-_hoursLookbackDays);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not read ProjectHoursExtended watermark for FromDate — falling back to BackupFinishDate");
+            }
+        }
+
+        return _backupFinishDate!.Value.Date.AddDays(-_hoursLookbackDays);
+    }
+
+    private async Task StampMonthlyRestoreAsync(DateTime backupFinishDate)
+    {
+        await using var connection = new SqlConnection(_replicaConnectionString);
+        await connection.OpenAsync();
+
+        // Sync_State may have been recreated empty during schema init / ClearReplicaData.
+        await connection.ExecuteAsync(@"
+            IF OBJECT_ID(N'dbo.Sync_State', N'U') IS NULL
+            BEGIN
+                CREATE TABLE Sync_State (
+                    EntityName NVARCHAR(100) PRIMARY KEY,
+                    LastWatermark DATETIME2,
+                    LastSyncTime DATETIME2,
+                    UpdatedAt DATETIME2 DEFAULT GETUTCDATE()
+                )
+            END
+
+            MERGE Sync_State AS target
+            USING (SELECT @EntityName AS EntityName) AS source
+            ON target.EntityName = source.EntityName
+            WHEN MATCHED THEN
+                UPDATE SET LastWatermark = @Watermark, LastSyncTime = GETUTCDATE(), UpdatedAt = GETUTCDATE()
+            WHEN NOT MATCHED THEN
+                INSERT (EntityName, LastWatermark, LastSyncTime, UpdatedAt)
+                VALUES (@EntityName, @Watermark, GETUTCDATE(), GETUTCDATE());",
+            new
+            {
+                EntityName = MonthlyRestoreGate.SyncStateEntityName,
+                Watermark = backupFinishDate
+            });
+
+        _logger.LogWarning(
+            "שחזור חודשי: נשמרה חותמת Sync_State.MonthlyRestore={BackupFinishDate:yyyy-MM-dd HH:mm:ss}.",
+            backupFinishDate);
+        Console.WriteLine($"    [STEP 3b] MonthlyRestore stamp = {backupFinishDate:yyyy-MM-dd HH:mm:ss}");
     }
 
     #endregion
@@ -2787,3 +2946,4 @@ public class MonthlyBackupRestoreService
 
     #endregion
 }
+

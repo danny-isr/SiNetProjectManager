@@ -47,6 +47,9 @@ jobs:
       - name: Test SiNet.Infrastructure.Google.Tests
         run: dotnet test src/SiNet.Infrastructure.Google.Tests/SiNet.Infrastructure.Google.Tests.csproj --configuration Release --no-build --verbosity normal
 
+      - name: Test MasterPlan.SyncEngine.Tests
+        run: dotnet test MasterPlan.SyncEngine.Tests/MasterPlan.SyncEngine.Tests.csproj --configuration Release --no-build --verbosity normal
+
       - name: Test SiNet.LegacyBridge.Tests
         run: dotnet test src/SiNet.LegacyBridge.Tests/SiNet.LegacyBridge.Tests.csproj --configuration Release --no-build --verbosity normal
 

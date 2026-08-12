@@ -155,7 +155,7 @@ scope** unless product explicitly re-opens that decision.
 
 ## Explicitly out of this migration program
 
-- Folding SyncEngine into App.Wpf (DEV-018 launches `--capture` as a **separate process**)
+- Folding SyncEngine into App.Wpf (DEV-018 launches `--monthly` as a **separate process**)
 - Re-enabling V2 New System host for MasterPlan
 - ACC / Email N3 recovery (separate track)
 

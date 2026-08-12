@@ -380,6 +380,7 @@ public interface IAuthorizationQueryService
 | `WorkflowOps.Retry` | Administrator |
 | `WorkflowOps.Start` | Administrator |
 | `ShellOpenProjectsDashboard` | Management |
+| `ShellOpenMasterPlanMonthlyRestore` | Management |
 
 **Host adapter:** `SiNetProjectManagerV2/Services/LegacyAuthorizationQueryService.cs` → legacy `CurrentUserContext` (hierarchical `Role >= required`).
 

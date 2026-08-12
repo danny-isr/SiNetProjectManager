@@ -1,0 +1,48 @@
+<Window x:Class="SiNet.App.Wpf.Admin.MasterPlan.MasterPlanMonthlyRestoreWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="שחזור חודשי MasterPlan"
+        Width="720"
+        Height="520"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+      <Button Content="בחר קובץ .bak…"
+              Command="{Binding BrowseCommand}"
+              Padding="12,6"
+              Margin="0,0,8,0"/>
+      <Button Content="הפעל שחזור חודשי"
+              Command="{Binding RunCommand}"
+              Padding="12,6"/>
+    </StackPanel>
+
+    <StackPanel>
+      <TextBlock Text="שחזור הגיבוי ל-Db_Mp_SiEng, דוח אי-התאמות מול הרפליקה בלוג SyncEngine, ואז עדכון הרפליקה מהגיבוי."
+                 TextWrapping="Wrap"
+                 Margin="0,0,0,12"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextSmallFontSize}"/>
+      <TextBlock Text="{Binding BackupPath}"
+                 TextWrapping="Wrap"
+                 Margin="0,0,0,8"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextSmallFontSize}"/>
+      <TextBlock Text="{Binding StatusMessage}"
+                 TextWrapping="Wrap"
+                 Margin="0,0,0,8"
+                 FontFamily="{DynamicResource SiFontFamily}"
+                 FontSize="{DynamicResource SiTextSmallFontSize}"/>
+      <TextBox Text="{Binding OutputLog, Mode=OneWay}"
+               IsReadOnly="True"
+               AcceptsReturn="True"
+               VerticalScrollBarVisibility="Auto"
+               HorizontalScrollBarVisibility="Auto"
+               Height="280"
+               FontFamily="Consolas"
+               FontSize="{DynamicResource SiTextTinyFontSize}"
+               FlowDirection="LeftToRight"/>
+    </StackPanel>
+  </DockPanel>
+</Window>

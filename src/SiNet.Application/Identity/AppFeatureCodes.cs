@@ -45,4 +45,7 @@ public static class AppFeatureCodes
 
     /// <summary>Manually start a workflow instance from ops UI.</summary>
     public const string WorkflowOpsStart = "WorkflowOps.Start";
+
+    /// <summary>Monthly MasterPlan bak restore + replica mismatch log («שחזור חודשי MasterPlan»).</summary>
+    public const string ShellOpenMasterPlanMonthlyRestore = "Shell.OpenMasterPlanMonthlyRestore";
 }

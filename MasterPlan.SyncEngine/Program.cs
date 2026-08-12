@@ -145,11 +145,13 @@ if (args.Contains("--monthly") || args.Contains("-m"))
     Console.WriteLine();
 
     // Create the new MonthlyBackupRestoreService with SMO support
+    var hoursLookbackDays = HoursSyncOptions.FromConfiguration(configuration).LookbackDays;
     var monthlyService = new MonthlyBackupRestoreService(
         sourceConnectionString,
         replicaConnectionString,
         masterConnectionString,
-        monthlyServiceLogger);
+        monthlyServiceLogger,
+        hoursLookbackDays);
 
     try
     {
@@ -273,11 +275,19 @@ else if (args.Contains("--daily") || args.Contains("-d") || args.Contains("--dai
     var hoursOptions = HoursSyncOptions.FromConfiguration(
         configuration,
         forceReconcile: args.Contains("--reconcile"),
-        skipReconcile: args.Contains("--no-reconcile"));
+        skipReconcile: args.Contains("--no-reconcile"),
+        purgeOrphans: args.Contains("--purge-orphans"),
+        purgeOrphansDryRun: args.Contains("--purge-orphans-dry-run"),
+        purgeOrphansIncludeLegacy: args.Contains("--purge-orphans-include-legacy"));
     Console.WriteLine(
         $"[CONFIG] Hours sync: lookback {hoursOptions.LookbackDays}d, reconcile every {hoursOptions.ReconcileIntervalDays}d" +
         (hoursOptions.ForceReconcile ? " (forced this run)" : string.Empty) +
         (hoursOptions.SkipReconcile ? " (suppressed this run)" : string.Empty));
+    Console.WriteLine(
+        $"[CONFIG] Orphan purge: enabled={hoursOptions.OrphanPurge.Enabled}, " +
+        $"purgeFlag={hoursOptions.OrphanPurge.PurgeRequested}, dryRun={hoursOptions.OrphanPurge.DryRun}, " +
+        $"includeLegacy={hoursOptions.OrphanPurge.IncludeLegacy}, " +
+        $"shouldDelete={hoursOptions.OrphanPurge.ShouldDelete}");
 
     var apiSyncService = new ApiDailySyncService(apiClient, replicaConnectionString, apiSyncLogger, captureService, siDataConnectionString, hoursOptions);
 
@@ -666,9 +676,12 @@ else
     Console.WriteLine("    --backup, -b <path>  Path to the MasterPlan .bak file");
     Console.WriteLine();
     Console.WriteLine("    Steps performed:");
+    Console.WriteLine("      0. [GATE]    HEADERONLY BackupFinishDate > Sync_State.MonthlyRestore");
     Console.WriteLine("      1. [RESTORE] SMO restore of .bak → Db_Mp_SiEng");
+    Console.WriteLine("      1b.[COMPARE] Replica vs HoursReports → SyncEngine logs (fail closed on throw)");
     Console.WriteLine("      2. [INIT]    Create Replica_DB and Sync_* tables if needed");
     Console.WriteLine("      3. [ETL]     INSERT INTO...SELECT with JOINs and transforms");
+    Console.WriteLine("      3b.[COMPARE] Post-ETL compare + stamp MonthlyRestore");
     Console.WriteLine("      4. [STOP]    Wait for verification before daily sync");
     Console.WriteLine();
     Console.WriteLine("  PHASE 2 - Daily Delta Sync (API → Replica_DB)");
@@ -681,6 +694,9 @@ else
     Console.WriteLine("  --no-capture           Disable raw capture mode (skips saving API responses)");
     Console.WriteLine("  --reconcile            Force a full unfiltered pass over the hour entities");
     Console.WriteLine("  --no-reconcile         Suppress the weekly hour-entity reconciliation pass");
+    Console.WriteLine("  --purge-orphans        After full reconcile, DELETE gated orphans (requires OrphanPurge:Enabled)");
+    Console.WriteLine("  --purge-orphans-dry-run  Same gates + CSV; never DELETE");
+    Console.WriteLine("  --purge-orphans-include-legacy  Bypass ReportDate age window (G5) only");
     Console.WriteLine();
     Console.WriteLine("  OFFLINE SIMULATION MODE (no API calls)");
     Console.WriteLine("  ─────────────────────────────────────────────────────────────────");

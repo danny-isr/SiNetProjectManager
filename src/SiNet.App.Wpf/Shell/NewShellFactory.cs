@@ -277,6 +277,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "מצב ריצה / browse / reconciliation של ACC"));
         }
 
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenMasterPlanMonthlyRestore, cancellationToken).ConfigureAwait(true))
+        {
+            admin.Add(new NewShellMenuItem(
+                "שחזור חודשי MasterPlan",
+                OpenNativeMasterPlanMonthlyRestore,
+                "שחזור הגיבוי ל-Db_Mp_SiEng, דוח אי-התאמות מול הרפליקה בלוג SyncEngine, ואז עדכון הרפליקה מהגיבוי"));
+        }
+
         if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenFileCatalogAdmin, cancellationToken).ConfigureAwait(true))
         {
             admin.Add(new NewShellMenuItem(
@@ -456,6 +464,25 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             System.Diagnostics.Debug.WriteLine(ex);
             MessageBox.Show(
                 $"שגיאה בפתיחת מיפוי MasterPlan: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void OpenNativeMasterPlanMonthlyRestore()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<MasterPlanMonthlyRestoreWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת שחזור חודשי MasterPlan: {ex.Message}",
                 "שגיאה",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

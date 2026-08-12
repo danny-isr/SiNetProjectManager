@@ -36,8 +36,17 @@ public class EntitySyncResult
     /// <summary>True when this entity was fetched unfiltered as part of a reconciliation pass.</summary>
     public bool ReconciliationRun { get; set; }
 
-    /// <summary>Replica rows the API did not return during reconciliation. Reported, never deleted.</summary>
+    /// <summary>Replica rows the API did not return during reconciliation. Reported; may be purged under DEV-019 gates.</summary>
     public int OrphanCandidates { get; set; }
+
+    /// <summary>Orphans actually deleted this run (DEV-019).</summary>
+    public int OrphanPurged { get; set; }
+
+    /// <summary>Orphans deferred by age / first-sighting gates.</summary>
+    public int OrphanDeferred { get; set; }
+
+    /// <summary>Non-null when purge was blocked by a safety gate.</summary>
+    public string? OrphanPurgeBlockedReason { get; set; }
 }
 
 /// <summary>
@@ -757,6 +766,15 @@ public class ApiDailySyncService
             if (isReconciliation)
             {
                 result.OrphanCandidates = await CountOrphanCandidatesAsync("ProjectHours", hours.Select(h => h.ID));
+                await TryPurgeOrphansAsync(
+                    result,
+                    entityName: "ProjectHours",
+                    tableName: "MP_ProjectHours",
+                    reportDateColumn: "ReportDate",
+                    fromDate: fromDate,
+                    fetchedCount: hours.Count,
+                    apiIds: hours.Select(h => h.ID),
+                    ct).ConfigureAwait(false);
                 await MarkReconciliationCompleteAsync("ProjectHours");
             }
             await CompleteEntitySyncAsync(result, "ReportDate");
@@ -863,6 +881,15 @@ public class ApiDailySyncService
             if (isReconciliation)
             {
                 result.OrphanCandidates = await CountOrphanCandidatesAsync("ProjectHoursExtended", hours.Select(h => h.ID));
+                await TryPurgeOrphansAsync(
+                    result,
+                    entityName: "ProjectHoursExtended",
+                    tableName: "MP_ProjectHoursExtended",
+                    reportDateColumn: "ReportDate",
+                    fromDate: fromDate,
+                    fetchedCount: hours.Count,
+                    apiIds: hours.Select(h => h.ID),
+                    ct).ConfigureAwait(false);
                 await MarkReconciliationCompleteAsync("ProjectHoursExtended");
             }
             await CompleteEntitySyncAsync(result, "ReportDate");
@@ -1809,7 +1836,7 @@ public class ApiDailySyncService
 
     /// <summary>
     /// After an unfiltered pass, report replica rows the API no longer returns. The engine never
-    /// bulk-deletes, so these are surfaced for manual review only.
+    /// bulk-deletes here — DEV-019 gated purge runs separately via <see cref="TryPurgeOrphansAsync"/>.
     /// </summary>
     private async Task<int> CountOrphanCandidatesAsync(string entityName, IEnumerable<int> apiIds)
     {
@@ -1835,6 +1862,43 @@ public class ApiDailySyncService
         }
 
         return orphans.Count;
+    }
+
+    /// <summary>
+    /// DEV-019: evaluate safety gates and optionally dry-run / DELETE orphans for PH / PHE only.
+    /// </summary>
+    private async Task TryPurgeOrphansAsync(
+        EntitySyncResult result,
+        string entityName,
+        string tableName,
+        string reportDateColumn,
+        DateTime? fromDate,
+        int fetchedCount,
+        IEnumerable<int> apiIds,
+        CancellationToken cancellationToken)
+    {
+        var runner = new OrphanPurgeRunner(
+            _replicaConnectionString,
+            _hoursOptions.OrphanPurge,
+            _logger);
+
+        var purgeResult = await runner.RunAsync(
+            entityName,
+            tableName,
+            reportDateColumn,
+            isFullReconcile: true,
+            fromDate,
+            fetchedCount,
+            apiIds.ToList(),
+            cancellationToken).ConfigureAwait(false);
+
+        result.OrphanPurged = purgeResult.PurgedCount;
+        result.OrphanDeferred = purgeResult.DeferredCount;
+        result.OrphanPurgeBlockedReason = purgeResult.BlockReason;
+        if (purgeResult.OrphanCount > result.OrphanCandidates)
+        {
+            result.OrphanCandidates = purgeResult.OrphanCount;
+        }
     }
 
     /// <summary>

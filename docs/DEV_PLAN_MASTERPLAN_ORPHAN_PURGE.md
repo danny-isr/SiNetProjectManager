@@ -2,8 +2,9 @@
 
 > **Title:** Reconcile orphan purge with safety gates (DEV-019)
 > **Date:** 12.08.2026
-> **Status:** Planning (implement on `development`; not on PROD until shipped)
-> **Scope:** After a **full unfiltered** hours reconcile (`FromDate=null`), optionally **delete** replica rows (`MP_ProjectHours`, `MP_ProjectHoursExtended`; optionally `MP_TimeHourReports`) whose IDs were **not** returned by the API — under hard safety gates. Today orphans are only counted and logged (`CountOrphanCandidatesAsync` — never deleted).
+> **Updated:** 12.08.2026 (implementing on `development`; locked defaults below)
+> **Status:** Implementing (on `development`; not on PROD until shipped)
+> **Scope:** After a **full unfiltered** hours reconcile (`FromDate=null`), optionally **delete** replica rows (`MP_ProjectHours`, `MP_ProjectHoursExtended`) whose IDs were **not** returned by the API — under hard safety gates. Today orphans are only counted and logged (`CountOrphanCandidatesAsync` — never deleted) unless gates + CLI allow purge.
 
 Related: [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) (DEV-018), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).
 
@@ -118,10 +119,12 @@ CLI:
 
 ## 8. Needs Review
 
-1. Exact defaults after first successful PROD dry-run (enable auto-purge on weekly?).
-2. Age column: `ReportDate` vs `LastUpdated` vs `SyncedAt`.
-3. Whether `TimeHourReports` is in v1.
-4. Sightings store: JSON file vs small Replica table.
+1. Exact defaults after first successful PROD dry-run (enable auto-purge on weekly?) — **stay `Enabled=false` until ops verifies two dry-runs.**
+2. Age column: **locked `ReportDate`** (not `LastUpdated` / `SyncedAt` — monthly ETL stamps `LastUpdated`).
+3. `TimeHourReports` in v1: **no** (postponed).
+4. Sightings store: **locked JSON file** under `%ProgramData%\SiOffice\MasterPlanSync\orphan-candidates\` (no new SQL table).
+
+Locked CLI policy: real DELETE requires **both** `OrphanPurge:Enabled=true` **and** `--purge-orphans`. `--purge-orphans-dry-run` writes CSV without DELETE.
 
 ---
 

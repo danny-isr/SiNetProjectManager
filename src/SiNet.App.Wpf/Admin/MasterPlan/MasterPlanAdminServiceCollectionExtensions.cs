@@ -11,6 +11,8 @@ public static class MasterPlanAdminServiceCollectionExtensions
 
         services.AddTransient<MasterPlanMappingViewModel>();
         services.AddTransient<MasterPlanMappingWindow>();
+        services.AddTransient<MasterPlanMonthlyRestoreViewModel>();
+        services.AddTransient<MasterPlanMonthlyRestoreWindow>();
         services.AddTransient<R01ReportViewModel>();
         services.AddTransient<R01ReportWindow>();
         services.AddTransient<R02ReportViewModel>();

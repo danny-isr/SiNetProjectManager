@@ -196,7 +196,7 @@ Top groups (when they have children):
   פרויקטים ותבניות  → פתיחת פרויקט חדש, מיילים
   משימות             → לוח משימות, דוחות ביקורת, תהליכים, …
   משתמשים והרשאות    → ניהול משתמשים, הוספת משתמש, הרשאות פעולה
-  מנהלה              → הגדרות, מפתחות, ACC, מצב מערכת, כלי פיתוח (DEBUG)
+  מנהלה              → הגדרות, מפתחות, ACC, שחזור חודשי MasterPlan, מצב מערכת, כלי פיתוח (DEBUG)
 ```
 
 Rules:
@@ -235,7 +235,7 @@ Initial menu (P3 + P6 + native admin):
 | ProjectType↔Workflow policy | `Shell.OpenProjectTypeWorkflowPolicy` | Administrator | Focused mapping admin (JobType → WorkflowDefinition). B2 target: continuation tracks are per JobType (`Project + Definition + JobType`) — see [`PROJECT_TYPE_WORKFLOW_POLICY.md`](./manual-tests/PROJECT_TYPE_WORKFLOW_POLICY.md) |
 | Personal settings | Authenticated user | Any signed-in user | `ISettingsWindowFactory.CreatePersonal()` → native `SettingsWindow` (personal tabs) |
 | System settings | `System.Settings.Write` | Administrator | `ISettingsWindowFactory.CreateSystemAdmin()` → native `SettingsWindow` (admin/global tabs) |
-| MasterPlan monthly restore (planned DEV-018) | `Shell.OpenMasterPlanMonthlyRestore` | Management | Existing `--monthly`: restore `.bak` onto configured `Db_Mp_SiEng`, mismatch report vs current Replica, then replace `MP_*`. See [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md). **Not implemented until shipped from `development`.** |
+| MasterPlan monthly restore (DEV-018) | `Shell.OpenMasterPlanMonthlyRestore` | Management | Launches existing `MasterPlan.SyncEngine.exe --monthly --backup`: HEADERONLY date gate, restore `.bak` onto configured `Db_Mp_SiEng`, mismatch log vs current Replica (then again after ETL), replace `MP_*`. See [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md). |
 
 Project Context (`ProjectSelectorView`) is **not** embedded in the `NewShellWindow` header.
 Surfaces that need it (notably **Email**) host their own selector. The shell still owns
