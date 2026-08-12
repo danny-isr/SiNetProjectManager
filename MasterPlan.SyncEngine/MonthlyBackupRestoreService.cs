@@ -944,16 +944,17 @@ public class MonthlyBackupRestoreService
         counts["TimeHourReports"] = await EtlTimeHourReportsAsync(sourceConn, replicaConn);
         counts["ProjectHoursExtended"] = await EtlProjectHoursExtendedAsync(sourceConn, replicaConn);
 
-        // Set LastUpdated = BackupFinishDate for ALL entities that have LastUpdated column.
-        // This represents: "Data in this row is valid up to this backup time."
-        // Serves as the initial watermark baseline for daily incremental sync.
+        // Set LastUpdated = BackupFinishDate for dimension entities that have LastUpdated.
+        // DEV-021: do NOT stamp MP_ProjectHoursExtended — HoursReports has no business LastUpdated;
+        // bak finish lives in Sync_State watermarks / MonthlyRestore. PHE.LastUpdated stays NULL
+        // until the first successful API upsert (MERGE may also repair null Duration/TotalHours).
         if (_backupFinishDate.HasValue)
         {
-            Console.WriteLine($"    → Setting LastUpdated = {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss} for all entities...");
+            Console.WriteLine($"    → Setting LastUpdated = {_backupFinishDate.Value:yyyy-MM-dd HH:mm:ss} for dimension entities...");
             var tablesWithLastUpdated = new[]
             {
                 "MP_Projects", "MP_Companies", "MP_Contacts", "MP_Employees",
-                "MP_Bids", "MP_Bills", "MP_Intakes", "MP_Tasks", "MP_ProjectHoursExtended"
+                "MP_Bids", "MP_Bills", "MP_Intakes", "MP_Tasks"
             };
             foreach (var table in tablesWithLastUpdated)
             {
@@ -962,7 +963,7 @@ public class MonthlyBackupRestoreService
                     new { BackupFinishDate = _backupFinishDate.Value });
                 _logger.LogDebug("Set LastUpdated for {Table}: {Count} rows", table, affected);
             }
-            Console.WriteLine($"        LastUpdated baseline set for {tablesWithLastUpdated.Length} entity tables");
+            Console.WriteLine($"        LastUpdated baseline set for {tablesWithLastUpdated.Length} entity tables (PHE excluded)");
         }
 
         // Initialize watermarks based on loaded data
@@ -2483,17 +2484,18 @@ public class MonthlyBackupRestoreService
         else
             selectClauses.Add("CAST(NULL AS TIME(0)) AS EndTime");
 
-        // TotalHours (convert from milliseconds to TIME(0) using TIMEFROMPARTS)
-        // Hours is stored in milliseconds: divide by 60000 to get minutes
-        // Heuristic: if Hours < 10000, assume it's already in minutes; otherwise assume milliseconds
+        // TotalHours: HoursReports.Hours is always milliseconds → minutes = Hours/60000.
+        // Cap at 23:59 (TIME(0) cannot store 24:00). Same unit as MillisecondsToDecimalHours.
         if (hoursColumn != null)
         {
-            selectClauses.Add($@"CASE 
+            selectClauses.Add($@"CASE
                 WHEN hr.{hoursColumn} IS NULL THEN NULL
-                WHEN hr.{hoursColumn} < 10000 THEN 
-                    TIMEFROMPARTS(CAST(hr.{hoursColumn} AS INT) / 60, CAST(hr.{hoursColumn} AS INT) % 60, 0, 0, 0)
-                ELSE 
-                    TIMEFROMPARTS(CAST(ROUND(hr.{hoursColumn} / 60000.0, 0) AS INT) / 60, CAST(ROUND(hr.{hoursColumn} / 60000.0, 0) AS INT) % 60, 0, 0, 0)
+                WHEN hr.{hoursColumn} < 0 THEN NULL
+                WHEN hr.{hoursColumn} / 60000.0 >= 1440 THEN NULL
+                ELSE TIMEFROMPARTS(
+                    CAST(ROUND(hr.{hoursColumn} / 60000.0, 0) AS INT) / 60,
+                    CAST(ROUND(hr.{hoursColumn} / 60000.0, 0) AS INT) % 60,
+                    0, 0, 0)
             END AS TotalHours");
         }
         else
@@ -2749,10 +2751,10 @@ public class MonthlyBackupRestoreService
     ///   hr.[Description]                    → Description (NVARCHAR(MAX))
     ///   CAST(hr.StartTime AS TIME(0))       → StartTime (TIME(0), source is datetime)
     ///   CAST(hr.EndTime AS TIME(0))         → EndTime (TIME(0), source is datetime)
-    ///   hr.Hours (float, raw MINUTES)       → RawMinutes (fetched raw, normalized in C#)
-    ///     → Duration via HoursNormalization.MinutesToDecimalHours (DECIMAL(10,4), decimal hours)
+    ///   hr.Hours (float, raw MILLISECONDS)  → RawMilliseconds (fetched raw, normalized in C#)
+    ///     → Duration via HoursNormalization.MillisecondsToDecimalHours (DECIMAL(10,4), decimal hours)
     ///     → TotalHours via HoursNormalization.DecimalHoursToTimeSpan (TIME(0), derived from Duration)
-    ///   _backupFinishDate                   → LastUpdated (column does NOT exist in source HoursReports)
+    ///   LastUpdated                         → NULL after ETL (DEV-021; source has no business LastUpdated)
     ///   NOTE: Hours (float) contains out-of-range values — normalization returns NULL for those
     /// </summary>
     private async Task<int> EtlProjectHoursExtendedAsync(SqlConnection source, SqlConnection replica)
@@ -2762,9 +2764,9 @@ public class MonthlyBackupRestoreService
 
         // Explicit SQL — all column names verified against source schema (script.sql, Db_Mp_SiEng)
         // JOINs: Employees, Projects, SubContracts, SubContractSteps, HoursReportsSteps
-        // Hours (float) stores raw MINUTES — normalization to decimal hours is done in C# via HoursNormalization
+        // Hours (float) stores raw MILLISECONDS — normalization to decimal hours is done in C# via HoursNormalization
         // TotalHours and Duration are NOT computed in SQL — derived in C# from the same function (single source of truth)
-        // LastUpdated is set to _backupFinishDate in C# (not in SQL — source table doesn't have this column)
+        // LastUpdated left NULL (DEV-021) — bak finish is Sync_State only
         // StepName comes from HoursReportsSteps.Description (via HoursReportsStepID), NOT SubContractSteps
         const string sql = @"
             SELECT 
@@ -2784,7 +2786,7 @@ public class MonthlyBackupRestoreService
                 hr.[Description] AS [Description],
                 CAST(hr.StartTime AS TIME(0)) AS StartTime,
                 CAST(hr.EndTime AS TIME(0)) AS EndTime,
-                hr.Hours AS RawMinutes
+                hr.Hours AS RawMilliseconds
             FROM HoursReports hr WITH (NOLOCK)
             LEFT JOIN Employees e WITH (NOLOCK) ON e.ID = hr.EmployeeID
             LEFT JOIN Projects p WITH (NOLOCK) ON p.ID = hr.ProjectID
@@ -2836,11 +2838,11 @@ public class MonthlyBackupRestoreService
         foreach (var item in list)
         {
             // Normalize using shared C# function (same logic as API daily sync)
-            // MUST use explicit type — item.RawMinutes is dynamic, so 'var' would make duration dynamic too,
+            // MUST use explicit type — item.RawMilliseconds is dynamic, so 'var' would make duration dynamic too,
             // causing RuntimeBinderException on .HasValue when result is null
-            decimal? duration = HoursNormalization.MinutesToDecimalHours(item.RawMinutes);
+            decimal? duration = HoursNormalization.MillisecondsToDecimalHours(item.RawMilliseconds);
 
-            // FALLBACK: derive Duration from StartTime/EndTime when hr.Hours is NULL
+            // FALLBACK: derive Duration from StartTime/EndTime when hr.Hours is NULL / invalid
             if (!duration.HasValue)
             {
                 TimeSpan? startTs = item.StartTime is DBNull ? null : (TimeSpan?)item.StartTime;
@@ -2861,28 +2863,28 @@ public class MonthlyBackupRestoreService
             if (loggedSamples < 3)
             {
                 var diagId = (int)item.ID;
-                string diagRawMin = item.RawMinutes is DBNull ? "(DBNull)" : Convert.ToString(item.RawMinutes) ?? "(null)";
+                string diagRawMs = item.RawMilliseconds is DBNull ? "(DBNull)" : Convert.ToString(item.RawMilliseconds) ?? "(null)";
                 string diagStep = item.StepName is DBNull ? "(DBNull)" : (string?)item.StepName ?? "(null)";
                 string diagStepId = item.HoursReportsStepID is DBNull ? "(DBNull)" : Convert.ToString(item.HoursReportsStepID) ?? "(null)";
                 string diagStart = item.StartTime is DBNull ? "(DBNull)" : Convert.ToString(item.StartTime) ?? "(null)";
                 string diagEnd = item.EndTime is DBNull ? "(DBNull)" : Convert.ToString(item.EndTime) ?? "(null)";
 
                 _logger.LogInformation(
-                    "[DIAG ETL RAW] ID={ID} RawMinutes={RawMinutes} StepName={StepName} " +
+                    "[DIAG ETL RAW] ID={ID} RawMilliseconds={RawMilliseconds} StepName={StepName} " +
                     "HoursReportsStepID={StepID} StartTime={StartTime} EndTime={EndTime}",
-                    diagId, diagRawMin, diagStep, diagStepId, diagStart, diagEnd);
+                    diagId, diagRawMs, diagStep, diagStepId, diagStart, diagEnd);
                 _logger.LogInformation(
                     "[DIAG ETL INSERT] ID={ID} Duration={Duration} TotalHours={TotalHours} " +
-                    "StepName={StepName} HoursReportsStepID={StepID} LastUpdated={LastUpdated}",
+                    "StepName={StepName} HoursReportsStepID={StepID} LastUpdated=(null)",
                     diagId, (object?)duration ?? "(null)", (object?)totalHours ?? "(null)",
-                    diagStep, diagStepId, (object?)_backupFinishDate ?? "(null)");
+                    diagStep, diagStepId);
                 loggedSamples++;
             }
 
             var p = new DynamicParameters((object)item);
             p.Add("Duration", duration);
             p.Add("TotalHours", totalHours);
-            p.Add("LastUpdated", _backupFinishDate);
+            p.Add("LastUpdated", (DateTime?)null);
 
             await replica.ExecuteAsync(@"
                 INSERT INTO MP_ProjectHoursExtended (ID, EmployeeID, EmployeeName, ProjectID, ProjectName,

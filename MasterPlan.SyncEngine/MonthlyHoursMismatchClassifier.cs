@@ -15,7 +15,7 @@ public sealed class SourceHoursCompareRow
     public int? ProjectId { get; set; }
     public int? SubContractId { get; set; }
     public int? EmployeeId { get; set; }
-    public double? RawMinutes { get; set; }
+    public double? RawMilliseconds { get; set; }
 }
 
 public sealed class ReplicaHoursCompareRow
@@ -71,8 +71,8 @@ public static class MonthlyHoursMismatchClassifier
     public const string CauseEtlRowcountMismatch = "ETL_ROWCOUNT_MISMATCH";
     public const string CauseEtlLastUpdatedSkip = "ETL_LASTUPDATED_SKIP";
 
-    /// <summary>Minutes in a calendar day. Source Hours above this cannot be a valid daily duration.</summary>
-    public const double MaxDailyMinutes = 24d * 60d;
+    /// <summary>Milliseconds in a calendar day. Source Hours above this cannot be a valid daily duration.</summary>
+    public const double MaxDailyMilliseconds = 24d * 3_600_000d;
 
     public static MonthlyHoursCompareSummary Classify(
         IReadOnlyList<SourceHoursCompareRow> source,
@@ -200,18 +200,18 @@ public static class MonthlyHoursMismatchClassifier
         ReplicaHoursCompareRow replica,
         MonthlyHoursComparePhase phase)
     {
-        var expectedDuration = HoursNormalization.MinutesToDecimalHours(source.RawMinutes);
+        var expectedDuration = HoursNormalization.MillisecondsToDecimalHours(source.RawMilliseconds);
 
-        if (IsHoursUnitNull(source.RawMinutes, replica.Duration, expectedDuration))
+        if (IsHoursUnitNull(source.RawMilliseconds, replica.Duration, expectedDuration))
         {
             return (true, CauseHoursUnitNull,
-                $"Duration=null; RawMinutes={FormatDouble(source.RawMinutes)}; expected=null (>{MaxDailyMinutes:0} min/day)");
+                $"Duration=null; RawMilliseconds={FormatDouble(source.RawMilliseconds)}; expected=null (>{MaxDailyMilliseconds:0} ms/day)");
         }
 
         if (replica.Duration == 0m && expectedDuration != 0m)
         {
             return (true, CauseNullDurationZeroed,
-                $"Duration=0; expected={FormatDecimal(expectedDuration)}; RawMinutes={FormatDouble(source.RawMinutes)}");
+                $"Duration=0; expected={FormatDecimal(expectedDuration)}; RawMilliseconds={FormatDouble(source.RawMilliseconds)}");
         }
 
         var diffs = new List<string>();
@@ -249,19 +249,19 @@ public static class MonthlyHoursMismatchClassifier
         return (true, CauseFieldDiff, string.Join("; ", diffs));
     }
 
-    internal static bool IsHoursUnitNull(double? rawMinutes, decimal? replicaDuration, decimal? expectedDuration)
+    internal static bool IsHoursUnitNull(double? rawMilliseconds, decimal? replicaDuration, decimal? expectedDuration)
     {
         if (replicaDuration.HasValue)
         {
             return false;
         }
 
-        if (!rawMinutes.HasValue)
+        if (!rawMilliseconds.HasValue)
         {
             return false;
         }
 
-        return !expectedDuration.HasValue && rawMinutes.Value > MaxDailyMinutes;
+        return !expectedDuration.HasValue && rawMilliseconds.Value > MaxDailyMilliseconds;
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ public static class MonthlyHoursMismatchClassifier
         SourceHoursCompareRow source,
         DateTime? dailyFromDate,
         MonthlyHoursComparePhase phase)
-        => $"ReportDate={FormatDate(source.ReportDate)}; FromDate={FormatDate(dailyFromDate)}; RawMinutes={FormatDouble(source.RawMinutes)}; phase={phase}";
+        => $"ReportDate={FormatDate(source.ReportDate)}; FromDate={FormatDate(dailyFromDate)}; RawMilliseconds={FormatDouble(source.RawMilliseconds)}; phase={phase}";
 
     private static bool SameDate(DateTime? left, DateTime? right)
     {

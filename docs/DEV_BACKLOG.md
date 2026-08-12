@@ -2,7 +2,7 @@
 
 > **Title:** Development backlog index (App.Wpf pilot gaps)
 > **Date:** 03.08.2026
-> **Updated:** 12.08.2026 (DEV-018 monthly restore; DEV-019 orphan purge; DEV-020 bak staging)
+> **Updated:** 12.08.2026 (DEV-021 hours ms + MERGE repair; DEV-018/019/020)
 > **Status:** Active / Operational Checklist
 > **Classification:** Operational Checklist (engineering index; not rollout sign-off)
 > **Scope:** Single index of product/engineering items for the `development` / `release` lines. Each item points to a focused doc. Not a substitute for GitHub Issues.
@@ -50,6 +50,7 @@ Status vocabulary:
 | DEV-018 | Monthly MasterPlan restore: pre-ETL replica mismatch log (same `--monthly`, no extra DB) | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) | SyncEngine 1.0.19 / App.Wpf 1.0.26 |
 | DEV-019 | Reconcile orphan purge with safety gates (API full pull = SoT; max 10%, age, 2-sightings) | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) | SyncEngine 1.0.19 |
 | DEV-020 | Monthly bak staging: move to `N:\MasterPlanBakup` ↔ SQL `D:\SharedFolder\ProjectsData\MasterPlanBakup`, retain 10 | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1b | SyncEngine **1.0.20** |
+| DEV-021 | HoursReports.Hours = **milliseconds** (ETL); PHE.LastUpdated not stamped from bak; daily MERGE repair null Duration/TotalHours | Implementing — unit tests green; DB verify pending | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1c · [`DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md`](./DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md) | SyncEngine on `development` |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.

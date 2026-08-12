@@ -50,7 +50,7 @@ public sealed class MonthlyHoursCompareRunner
                 hr.ProjectID AS ProjectId,
                 hr.SubContractID AS SubContractId,
                 hr.EmployeeID AS EmployeeId,
-                CAST(hr.Hours AS FLOAT) AS RawMinutes
+                CAST(hr.Hours AS FLOAT) AS RawMilliseconds
             FROM HoursReports hr WITH (NOLOCK)
             WHERE hr.ID IS NOT NULL")).AsList();
 

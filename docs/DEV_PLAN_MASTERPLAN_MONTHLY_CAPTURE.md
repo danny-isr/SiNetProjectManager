@@ -2,9 +2,9 @@
 
 > **Title:** Monthly `--monthly` restore + pre-replace Replica mismatch log (DEV-018)
 > **Date:** 12.08.2026
-> **Updated:** 12.08.2026 (DEV-020: bak staging move + SQL server path map + retain 10)
-> **Status:** DEV-018/019/020 on release tip — ops verify Needs Review
-> **Scope:** Extend the **existing** monthly backup/restore ETL (`MasterPlan.SyncEngine --monthly`) that already restores the configured `Db_Mp_SiEng` from a `.bak` and then rebuilds `Replica_DB` `MP_*` from that database. **New:** BackupFinishDate gate; compare replica vs restored `HoursReports` before DROP and again after ETL; log classified mismatches to **existing SyncEngine sinks**; App.Wpf **מנהלה** launcher for Management+. **DEV-020:** before HEADERONLY/RESTORE, **move** (not copy) the chosen `.bak` into a shared staging folder visible to SQL Server.
+> **Updated:** 12.08.2026 (DEV-021: Hours ms unit + PHE LastUpdated + MERGE repair)
+> **Status:** DEV-018/019/020 on release tip — ops verify Needs Review; **DEV-021 Implementing on `development`**
+> **Scope:** Extend the **existing** monthly backup/restore ETL (`MasterPlan.SyncEngine --monthly`) that already restores the configured `Db_Mp_SiEng` from a `.bak` and then rebuilds `Replica_DB` `MP_*` from that database. **New:** BackupFinishDate gate; compare replica vs restored `HoursReports` before DROP and again after ETL; log classified mismatches to **existing SyncEngine sinks**; App.Wpf **מנהלה** launcher for Management+. **DEV-020:** before HEADERONLY/RESTORE, **move** (not copy) the chosen `.bak` into a shared staging folder visible to SQL Server. **DEV-021:** `HoursReports.Hours` = milliseconds; do not stamp `MP_ProjectHoursExtended.LastUpdated` from bak; daily MERGE may repair null Duration/TotalHours.
 
 Related: [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md), [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md), [`APP_SHELL.md`](./APP_SHELL.md).
 
@@ -63,15 +63,29 @@ Config section: `MasterPlanMonthlyBackup` in SyncEngine `appsettings.json` / tem
 
 ---
 
+## 1c. DEV-021 — Hours unit + MERGE repair (locked 12.08.2026)
+
+| Topic | Decision |
+| --- | --- |
+| `HoursReports.Hours` | Always **milliseconds**. `decimalHours = raw / 3_600_000`. Single helper `MillisecondsToDecimalHours`. Remove contradictory minutes/heuristic paths. |
+| API `Duration` | Unchanged: decimal hours via `ValidateDecimalHours`. |
+| `TotalHours` at 24.0000 | `Duration` may be 24.0000; `DecimalHoursToTimeSpan` returns **null** (`TIME(0)` cannot store 24:00). |
+| PHE `LastUpdated` after monthly | **Do not** set to `BackupFinishDate`. Leave NULL; bak finish stays in `Sync_State` / watermarks. Other `MP_*` tables keep the bak stamp in this slice. |
+| Daily MERGE | UPDATE when (API LastUpdated newer / target null) **or** repair `(t.Duration IS NULL AND s.Duration IS NOT NULL)` / same for TotalHours — repair **does not** require source LastUpdated. SET uses `COALESCE` for Duration, TotalHours, LastUpdated so API null never wipes good replica values. |
+| Branch | Implement on **`development` only**; no direct `release` edit. |
+| Verify | Unit tests + operator checklist on **test replica only** (not production without approval). |
+
+---
+
 ## 2. Existing mechanism (verify it still exists — it does)
 
 | Step | Code | What it does |
 | --- | --- | --- |
 | CLI | `MasterPlan.SyncEngine/Program.cs` `--monthly` / `-m` + `--backup` / `-b` | Entry. Default bak path `C:\Backups\MasterPlan.bak` if omitted. |
 | Restore MP | `MonthlyBackupRestoreService.RestoreBackupAsync` | SMO restore onto **`Db_Mp_SiEng`** (`SourceDatabaseName`), `ReplaceDatabase = true`, SINGLE_USER, MOVE to instance default data/log paths. |
-| Stamp | `GetBackupFinishDateAsync` | `LastUpdated` baseline for all ETL rows. |
+| Stamp | `GetBackupFinishDateAsync` | Watermark / Sync_State baseline. **DEV-021:** not written onto `MP_ProjectHoursExtended.LastUpdated` (source HoursReports has no business LastUpdated). |
 | Wipe replica hours/dims | `CreateReplicaSchemaAsync` | **DROP TABLE** `MP_ProjectHoursExtended`, `MP_ProjectHours`, `MP_TimeHourReports`, and the other `MP_*` listed there, then CREATE. |
-| Reload | `RunEtlPipelineAsync` / `EtlProjectHoursExtendedAsync` | Full load from restored `HoursReports` (+ joins). Duration via `HoursNormalization.MinutesToDecimalHours` (assumes **minutes**). `LastUpdated = _backupFinishDate`. |
+| Reload | `RunEtlPipelineAsync` / `EtlProjectHoursExtendedAsync` | Full load from restored `HoursReports` (+ joins). Duration via `HoursNormalization.MillisecondsToDecimalHours` (`Hours` = **milliseconds**). PHE `LastUpdated` left **NULL** until first API upsert. |
 
 There is **no** App.Wpf menu for this today — only the console. Daily/weekly API sync (`ApiDailySyncService`) is a **different** path that upserts into replica between monthlies.
 
@@ -205,7 +219,7 @@ The monthly ETL would then have **replaced** replica hours from the bak (and tod
 | Breaking | Monthly already overwrites MP DB + replica `MP_*`. New step must **not** skip ETL if mismatches are found. If compare **throws**, **fail closed before DROP**. |
 | Disk | Full-table compare in memory; log lines capped (not CSV dump). |
 | Path | `.bak` path as seen by SQL Server. |
-| Hours unit | Compare must not assume ETL Duration equals source Hours/60 without flagging `HOURS_UNIT_NULL` (July finding). |
+| Hours unit | **DEV-021:** ETL uses ms → decimal hours; compare flags `HOURS_UNIT_NULL` only when raw ms cannot convert (>24h) and replica Duration is null. |
 
 ---
 
@@ -213,7 +227,7 @@ The monthly ETL would then have **replaced** replica hours from the bak (and tod
 
 - Creating `Db_Mp_SiEng_Capture_*` or any extra database.
 - A `--capture` mode that avoids `--monthly`.
-- Changing daily lookback, MERGE skip, or `MinutesToDecimalHours` in this ID.
+- Changing daily lookback / MERGE / hours-unit in **DEV-018** (owned by **DEV-021**).
 - Deleting replica orphans outside the existing DROP/reload.
 - Folding SyncEngine into WPF.
 - EF migrations.

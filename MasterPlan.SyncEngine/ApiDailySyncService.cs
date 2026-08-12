@@ -1406,8 +1406,10 @@ public class ApiDailySyncService
     /// 1. Build StepName lookup from existing replica data
     /// 2. Normalize Duration/TotalHours/StepName in C# (before SQL)
     /// 3. SqlBulkCopy normalized records into #Incoming temp table
-    /// 4. MERGE: UPDATE only if Api.LastUpdated > Db.LastUpdated (or either is NULL), INSERT if new, else SKIP
-    /// No bulk DELETE. No N+1 queries. Safe after monthly restore (LastUpdated=BackupFinishDate).
+    /// 4. MERGE: UPDATE when API LastUpdated is newer (and non-null), OR repair null Duration/TotalHours
+    ///    when API has a value (repair does not require source LastUpdated). SET uses COALESCE so
+    ///    API null never wipes good replica Duration/TotalHours/LastUpdated.
+    /// No bulk DELETE. No N+1 queries.
     /// </summary>
     private async Task<(int Inserted, int Updated, int Skipped)> UpsertProjectHoursExtendedAsync(
         List<ProjectHoursExtendedEntity> hours)
@@ -1574,13 +1576,24 @@ public class ApiDailySyncService
             await bulkCopy.WriteToServerAsync(dt);
         }
 
-        // Step 3: Set-based MERGE with LastUpdated comparison
-        // UPDATE only when: target.LastUpdated IS NULL OR source.LastUpdated IS NULL OR source.LastUpdated > target.LastUpdated
-        // This means: skip only when both sides have a non-null LastUpdated AND source <= target
+        // Step 3: Set-based MERGE (logic mirrored by ProjectHoursExtendedMergeDecision)
+        // UPDATE when: (source LastUpdated non-null AND (target null OR source newer))
+        //           OR repair null Duration/TotalHours when source has a value (independent of LastUpdated).
+        // COALESCE protects good replica Duration/TotalHours/LastUpdated from API null.
         var actions = (await connection.QueryAsync<string>(@"
             MERGE MP_ProjectHoursExtended AS t
             USING #Incoming AS s ON t.ID = s.ID
-            WHEN MATCHED AND s.LastUpdated IS NOT NULL AND (t.LastUpdated IS NULL OR s.LastUpdated > t.LastUpdated) THEN
+            WHEN MATCHED AND (
+                    (
+                        s.LastUpdated IS NOT NULL
+                        AND (
+                            t.LastUpdated IS NULL
+                            OR s.LastUpdated > t.LastUpdated
+                        )
+                    )
+                    OR (t.Duration IS NULL AND s.Duration IS NOT NULL)
+                    OR (t.TotalHours IS NULL AND s.TotalHours IS NOT NULL)
+                ) THEN
                 UPDATE SET 
                     t.EmployeeID = s.EmployeeID, t.EmployeeName = s.EmployeeName,
                     t.ProjectID = s.ProjectID, t.ProjectName = s.ProjectName,
@@ -1589,7 +1602,9 @@ public class ApiDailySyncService
                     t.SubContractStepName = s.SubContractStepName, t.ReportDate = s.ReportDate,
                     t.StepName = s.StepName, t.HoursReportsStepID = s.HoursReportsStepID,
                     t.Description = s.Description, t.StartTime = s.StartTime, t.EndTime = s.EndTime,
-                    t.TotalHours = s.TotalHours, t.Duration = s.Duration, t.LastUpdated = s.LastUpdated
+                    t.TotalHours = COALESCE(s.TotalHours, t.TotalHours),
+                    t.Duration = COALESCE(s.Duration, t.Duration),
+                    t.LastUpdated = COALESCE(s.LastUpdated, t.LastUpdated)
             WHEN NOT MATCHED BY TARGET THEN
                 INSERT (ID, EmployeeID, EmployeeName, ProjectID, ProjectName, ProjectNumber,
                     SubContractID, SubContractName, SubContractStepID, SubContractStepName,

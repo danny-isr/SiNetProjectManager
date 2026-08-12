@@ -5,7 +5,8 @@ namespace MasterPlan.SyncEngine;
 /// to ensure Duration (decimal hours) and TotalHours (TimeSpan) are always consistent.
 ///
 /// Source data formats:
-///   DB ETL:  HoursReports.Hours (float) = raw MINUTES
+///   DB ETL:  HoursReports.Hours (float) = raw MILLISECONDS
+///            Example: 3,600,000 → 1.0 decimal hour; 1,800,000 → 0.5
 ///   Web API: Duration (decimal) = decimal HOURS (per API docs: "משך בשעות עשרוניות", 0.5 = 30 min)
 ///
 /// Replica schema:
@@ -19,23 +20,29 @@ public static class HoursNormalization
     /// <summary>Maximum valid daily hours. Anything above is treated as invalid/corrupt data.</summary>
     private const decimal MaxDailyHours = 24m;
 
+    /// <summary>Milliseconds in one hour (3,600,000).</summary>
+    private const double MillisecondsPerHour = 3_600_000.0;
+
     /// <summary>
-    /// Convert raw minutes (from DB source HoursReports.Hours float) to decimal hours.
+    /// Convert raw milliseconds (from DB source HoursReports.Hours float) to decimal hours.
     /// Used exclusively by monthly ETL pipeline.
     ///
-    /// Example: Hours = 2.0 (minutes) → 0.0333 (decimal hours)
+    /// Example: Hours = 3,600,000 → 1.0000 (decimal hours)
+    ///          Hours = 1,800,000 → 0.5000
     /// </summary>
-    /// <param name="rawMinutes">Value from dbo.HoursReports.Hours (float, stores minutes). May be null or DBNull.</param>
+    /// <param name="rawMilliseconds">Value from dbo.HoursReports.Hours (float, stores milliseconds). May be null or DBNull.</param>
     /// <returns>Decimal hours rounded to 4 places, or null if invalid/out-of-range.</returns>
-    public static decimal? MinutesToDecimalHours(object? rawMinutes)
+    public static decimal? MillisecondsToDecimalHours(object? rawMilliseconds)
     {
-        if (rawMinutes is null or DBNull) return null;
+        if (rawMilliseconds is null or DBNull) return null;
 
-        var minutes = Convert.ToDouble(rawMinutes);
-        if (minutes < 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return null;
+        var milliseconds = Convert.ToDouble(rawMilliseconds);
+        if (milliseconds < 0 || double.IsNaN(milliseconds) || double.IsInfinity(milliseconds))
+            return null;
 
-        var hours = (decimal)(minutes / 60.0);
-        if (hours > MaxDailyHours) return null;
+        var hours = (decimal)(milliseconds / MillisecondsPerHour);
+        if (hours > MaxDailyHours)
+            return null;
 
         return Math.Round(hours, 4);
     }
@@ -65,18 +72,23 @@ public static class HoursNormalization
     /// This is the SINGLE SOURCE OF TRUTH for TotalHours — used by both ETL and API sync.
     /// TotalHours must ALWAYS be derived from Duration, never stored independently.
     ///
-    /// Example: 0.0333 hours → 00:02:00 (2 minutes)
-    ///          0.5 hours    → 00:30:00 (30 minutes)
+    /// TIME(0) cannot represent 24:00:00. Therefore Duration = 24.0000 is allowed, but
+    /// DecimalHoursToTimeSpan returns null when total minutes &gt;= 1440 (including exactly 24.0).
+    ///
+    /// Example: 0.5 hours    → 00:30:00
+    ///          1.0 hours    → 01:00:00
+    ///          8.0 hours    → 08:00:00
+    ///          24.0 hours   → null (TIME(0) limit)
     ///          null         → null
     /// </summary>
-    /// <param name="decimalHours">Validated decimal hours (output of MinutesToDecimalHours or ValidateDecimalHours).</param>
+    /// <param name="decimalHours">Validated decimal hours (output of MillisecondsToDecimalHours or ValidateDecimalHours).</param>
     /// <returns>TimeSpan representing hours:minutes:00, or null if input is null or exceeds 23:59.</returns>
     public static TimeSpan? DecimalHoursToTimeSpan(decimal? decimalHours)
     {
         if (!decimalHours.HasValue) return null;
 
         var totalMinutes = (int)Math.Round(decimalHours.Value * 60);
-        if (totalMinutes < 0 || totalMinutes >= 1440) return null; // 1440 = 24 * 60
+        if (totalMinutes < 0 || totalMinutes >= 1440) return null; // 1440 = 24 * 60; TIME(0) max is 23:59:59
 
         return new TimeSpan(totalMinutes / 60, totalMinutes % 60, 0);
     }

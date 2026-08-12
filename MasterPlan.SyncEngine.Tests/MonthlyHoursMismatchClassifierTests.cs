@@ -5,6 +5,9 @@ namespace MasterPlan.SyncEngine.Tests;
 
 public sealed class MonthlyHoursMismatchClassifierTests
 {
+    private const double OneHourMs = 3_600_000d;
+    private const double HalfHourMs = 1_800_000d;
+
     [Fact]
     public void When_rows_match_then_identical()
     {
@@ -17,7 +20,7 @@ public sealed class MonthlyHoursMismatchClassifierTests
                 ProjectId = 10,
                 SubContractId = 20,
                 EmployeeId = 30,
-                RawMinutes = 60
+                RawMilliseconds = OneHourMs
             }
         };
         var replica = new List<ReplicaHoursCompareRow>
@@ -54,7 +57,7 @@ public sealed class MonthlyHoursMismatchClassifierTests
             {
                 Id = 39,
                 ReportDate = new DateTime(2026, 7, 2),
-                RawMinutes = 30
+                RawMilliseconds = HalfHourMs
             }
         };
 
@@ -80,7 +83,7 @@ public sealed class MonthlyHoursMismatchClassifierTests
             {
                 Id = 40,
                 ReportDate = new DateTime(2026, 7, 20),
-                RawMinutes = 30
+                RawMilliseconds = HalfHourMs
             }
         };
 
@@ -137,11 +140,11 @@ public sealed class MonthlyHoursMismatchClassifierTests
     }
 
     [Fact]
-    public void When_raw_minutes_exceed_day_and_duration_null_then_hours_unit_null()
+    public void When_raw_ms_exceed_day_and_duration_null_then_hours_unit_null()
     {
         var source = new List<SourceHoursCompareRow>
         {
-            new() { Id = 7, ReportDate = new DateTime(2026, 7, 10), RawMinutes = 200_000 }
+            new() { Id = 7, ReportDate = new DateTime(2026, 7, 10), RawMilliseconds = 100_000_000d }
         };
         var replica = new List<ReplicaHoursCompareRow>
         {
@@ -171,7 +174,7 @@ public sealed class MonthlyHoursMismatchClassifierTests
     {
         var source = new List<SourceHoursCompareRow>
         {
-            new() { Id = 8, ReportDate = new DateTime(2026, 7, 10), RawMinutes = 60 }
+            new() { Id = 8, ReportDate = new DateTime(2026, 7, 10), RawMilliseconds = OneHourMs }
         };
         var replica = new List<ReplicaHoursCompareRow>
         {
@@ -205,7 +208,7 @@ public sealed class MonthlyHoursMismatchClassifierTests
                 Id = 3,
                 ReportDate = new DateTime(2026, 7, 10),
                 ProjectId = 1,
-                RawMinutes = 60
+                RawMilliseconds = OneHourMs
             }
         };
         var replica = new List<ReplicaHoursCompareRow>
@@ -237,7 +240,7 @@ public sealed class MonthlyHoursMismatchClassifierTests
         var stamp = new DateTime(2026, 8, 1, 12, 0, 0);
         var source = new List<SourceHoursCompareRow>
         {
-            new() { Id = 1, ReportDate = stamp.Date, RawMinutes = 60 }
+            new() { Id = 1, ReportDate = stamp.Date, RawMilliseconds = OneHourMs }
         };
         var replica = new List<ReplicaHoursCompareRow>
         {

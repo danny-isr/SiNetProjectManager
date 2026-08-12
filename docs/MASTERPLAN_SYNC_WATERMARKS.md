@@ -175,6 +175,8 @@ chooses and can be back-dated — which is why only the hour entities lost rows.
 | `ProjectHours` | `ReportDate` | `ReportDate` | yes | Back-datable — covered by §3.2 |
 | `ProjectHoursExtended` | `ReportDate` (was `LastUpdated`) | `ReportDate` | fixed | Was §2.1 |
 
+**DEV-021 (replica row `LastUpdated` on PHE):** After monthly ETL, `MP_ProjectHoursExtended.LastUpdated` stays **NULL** (HoursReports has no business LastUpdated). Daily API MERGE may still UPDATE by newer API `LastUpdated`, or **repair** when target `Duration`/`TotalHours` is NULL and the API row has a value — repair does not require API `LastUpdated`. SET uses `COALESCE` so API NULL does not wipe good replica values. Bak finish time remains on `Sync_State` watermarks / `MonthlyRestore`, not on every PHE row.
+
 Deletes are not propagated for any entity; this is the standing "no bulk delete" rule.
 
 ---
