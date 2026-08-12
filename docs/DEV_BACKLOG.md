@@ -2,7 +2,7 @@
 
 > **Title:** Development backlog index (App.Wpf pilot gaps)
 > **Date:** 03.08.2026
-> **Updated:** 07.08.2026 (docs reconciliation — merge≠install; release tip baseline)
+> **Updated:** 12.08.2026 (DEV-018 monthly restore mismatch report)
 > **Status:** Active / Operational Checklist
 > **Classification:** Operational Checklist (engineering index; not rollout sign-off)
 > **Scope:** Single index of product/engineering items for the `development` / `release` lines. Each item points to a focused doc. Not a substitute for GitHub Issues.
@@ -47,6 +47,7 @@ Status vocabulary:
 | DEV-010 | «דוח קריסות תחנה» — local Event Log crash report | Implementing / partial on tip | P2 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | Ships appear in 1.0.20+ line — **Needs Review** completeness |
 | DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader checklist later |
 | DEV-014 | Crash report round 2 Ship 2: context form, plugin inventory, CER/WER/dump index | Ship 1 on tip; Ship 2 pending | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Ship 1 via 1.0.21 line |
+| DEV-018 | Monthly MasterPlan restore: pre-ETL replica mismatch report (same `--monthly`, no extra DB) | Planning | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) | Implement on `development` only |
 
 ## 2b. On `release` tip — ops verify (Needs Review)
 

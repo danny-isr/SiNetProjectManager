@@ -9,7 +9,8 @@
 
 > Related: [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md),
 > [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md),
-> [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md)
+> [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md),
+> [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) — **DEV-018** pre-ETL mismatch report inside existing `--monthly` (no extra DB)
 
 ---
 
@@ -206,6 +207,7 @@ SELECT EntityName, LastWatermark, LastSyncTime FROM Sync_State ORDER BY LastSync
   freshness stamp in §3.5 applies to all twelve but changes no watermark).
 - Deleting replica rows that no longer exist in MasterPlan (reported only).
 - The monthly backup/restore ETL (`--monthly`) and its watermark initialisation.
+- Productizing bak-vs-replica compare as a **pre-ETL report inside `--monthly`** — **DEV-018** ([`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md)). Not a watermark change.
 - Schema changes to `MP_*` tables, `Sync_State`, or any EF migration.
 - Making `TimeHourReports` incremental (the server-side filter would have to be fixed first).
 - Changing the Task Scheduler run times.
