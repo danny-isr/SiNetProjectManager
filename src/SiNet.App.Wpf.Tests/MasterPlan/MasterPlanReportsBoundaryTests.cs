@@ -146,10 +146,12 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.Equal("שעות (עשרוני)", internalHeaders[4]);
         Assert.Equal("תיאור", internalHeaders[5]);
         Assert.Equal("שם עובד", internalHeaders[7]);
+        Assert.Equal("מספר פרויקט", internalHeaders[9]);
         Assert.Equal("שם פרויקט", internalHeaders[10]);
         Assert.Equal("שם תת-חוזה", internalHeaders[15]);
 
         var clientHeaders = SiNet.Application.MasterPlan.Reports.R02HoursRow.GetHeaderRow(true);
+        Assert.Equal("מספר פרויקט", clientHeaders[0]);
         Assert.Equal("שם פרויקט", clientHeaders[1]);
         Assert.Equal("שם תת-חוזה", clientHeaders[3]);
         Assert.Equal("שלב תת-חוזה", clientHeaders[4]);
@@ -157,10 +159,13 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.Equal("שעות (עשרוני)", clientHeaders[6]);
         Assert.Equal("תיאור", clientHeaders[7]);
 
+        Assert.Contains("InternalProjectNum = 9", configs, StringComparison.Ordinal);
         Assert.Contains("InternalProjectName = 10", configs, StringComparison.Ordinal);
         Assert.Contains("InternalSubContractName = 15", configs, StringComparison.Ordinal);
         Assert.Contains("InternalHours = 4", configs, StringComparison.Ordinal);
+        Assert.Contains("ClientProjectNum = 0", configs, StringComparison.Ordinal);
         Assert.Contains("ClientHours = 6", configs, StringComparison.Ordinal);
+        Assert.Contains("InternalEmployeeName", configs, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(string relativePath)

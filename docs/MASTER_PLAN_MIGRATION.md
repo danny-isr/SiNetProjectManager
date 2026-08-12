@@ -100,14 +100,20 @@ V2 / SiNetSQL / GoogleConnector ProjectReference.
 - **S3b:** Native R01 (Replica/MasterPlan + template)
 - **S3c:** Native R02 — one row per hour report (not aggregated); MasterPlan
   `HoursReports` + Replica `MP_ProjectHoursExtended` (Description + SubContract /
-  תת-חוזה); fallback `MP_ProjectHours` when Extended missing. After writing sheet
+  תת-חוזה); fallback `MP_ProjectHours` when Extended missing. In R02, MasterPlan
+  **`Projects.ProjectNum` / `Name` = חוזה**; **`SubContracts` = תת-חוזה**. Data is all
+  MP hours in range (no SiNet project↔MP-contract mapping filter — that mapping does
+  not exist today; MasterPlan UI mapping is company/contact only). After writing sheet
   **`Data`**, create two real Google Sheets pivot tables sourced from `Data`:
-  **`סיכום פרויקט-תת-חוזה`** (rows: project → sub-contract; values: SUM/MIN/MAX hours,
-  MIN/MAX date; filter: employee when internal export) and **`פירוט דיווחים`**
-  (rows: project → sub-contract → date → employee → report id → description; value: SUM hours)
-  for verification. Client export uses the same two pivot sheets with column-index remap
-  (no report id / employee). Pivot failure after Data is written → fail the generation
-  result with the spreadsheet URL in the error. No static C# summary sheet.
+  **`סיכום פרויקט-תת-חוזה`** (rows: contract number → contract name → sub-contract;
+  values: SUM/MIN/MAX hours, MIN/MAX date; filters: contract number, contract name,
+  and employee when internal export) and **`פירוט דיווחים`** (rows: employee → date →
+  contract number → contract name → sub-contract → report id → description; value: SUM
+  hours; filters: contract number + contract name) for verification. Client export uses
+  the same two pivot sheets with column-index remap (detail client: date → number →
+  name → step → description; no report id / employee). Pivot failure after Data is
+  written → fail the generation result with the spreadsheet URL in the error. No static
+  C# summary sheet.
 - **S3d:** Native R03 in-app DataGrid preview (**הצג נתונים**) via `PreviewAsync` — same Replica
   build as Sheets, no Google required for preview. Non-management users see **self only**
   (`MasterPlanEmployeeId`); management gets checklist multi-select (select all / clear / partial).
