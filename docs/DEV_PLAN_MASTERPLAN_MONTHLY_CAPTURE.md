@@ -3,7 +3,7 @@
 > **Title:** Monthly `--monthly` restore + pre-replace Replica mismatch log (DEV-018)
 > **Date:** 12.08.2026
 > **Updated:** 12.08.2026 (DEV-020: bak staging move + SQL server path map + retain 10)
-> **Status:** Implementing (DEV-018/019 shipped; DEV-020 staging on `development`)
+> **Status:** DEV-018/019/020 on release tip — ops verify Needs Review
 > **Scope:** Extend the **existing** monthly backup/restore ETL (`MasterPlan.SyncEngine --monthly`) that already restores the configured `Db_Mp_SiEng` from a `.bak` and then rebuilds `Replica_DB` `MP_*` from that database. **New:** BackupFinishDate gate; compare replica vs restored `HoursReports` before DROP and again after ETL; log classified mismatches to **existing SyncEngine sinks**; App.Wpf **מנהלה** launcher for Management+. **DEV-020:** before HEADERONLY/RESTORE, **move** (not copy) the chosen `.bak` into a shared staging folder visible to SQL Server.
 
 Related: [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`MASTER_PLAN_MIGRATION.md`](./MASTER_PLAN_MIGRATION.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md), [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md), [`APP_SHELL.md`](./APP_SHELL.md).

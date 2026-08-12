@@ -49,7 +49,7 @@ Status vocabulary:
 | DEV-014 | Crash report round 2 Ship 2: context form, plugin inventory, CER/WER/dump index | Ship 1 on tip; Ship 2 pending | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Ship 1 via 1.0.21 line |
 | DEV-018 | Monthly MasterPlan restore: pre-ETL replica mismatch log (same `--monthly`, no extra DB) | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) | SyncEngine 1.0.19 / App.Wpf 1.0.26 |
 | DEV-019 | Reconcile orphan purge with safety gates (API full pull = SoT; max 10%, age, 2-sightings) | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) | SyncEngine 1.0.19 |
-| DEV-020 | Monthly bak staging: move to `N:\MasterPlanBakup` ↔ SQL `D:\SharedFolder\ProjectsData\MasterPlanBakup`, retain 10 | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1b | SyncEngine publish after merge |
+| DEV-020 | Monthly bak staging: move to `N:\MasterPlanBakup` ↔ SQL `D:\SharedFolder\ProjectsData\MasterPlanBakup`, retain 10 | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1b | SyncEngine **1.0.20** |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.
