@@ -123,8 +123,9 @@ move forward, so anything written behind it is lost permanently. Because every u
 4. **A full reconciliation runs weekly.** At most once every `ReconcileIntervalDays` (default 7) the
    hour entities are fetched **without any date filter**, compared against the replica, and any
    missing or changed row is written. This is the safety net for anything the window missed.
-5. **Reconciliation never deletes.** Rows present in the replica but absent from the API are
+5. **Reconciliation never deletes (today).** Rows present in the replica but absent from the API are
    reported as `OrphanCandidates` in the log and in `Sync_RunHistory`, and left in place.
+   Planned gated purge: **DEV-019** — [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md).
 
 ### 3.3 Reconciliation bookkeeping
 
@@ -218,7 +219,7 @@ SELECT EntityName, LastWatermark, LastSyncTime FROM Sync_State ORDER BY LastSync
 | --- | --- | --- |
 | Repairing history via a `--monthly` backup/restore | Postponed | The weekly reconciliation closes the same gap without restoring a database |
 | One-off manual watermark reset in `Sync_State` | Dropped | Superseded by the first reconciliation pass, which is automatic and repeatable |
-| Deleting replica rows absent from the API | Not implemented | The engine's "no bulk delete" rule stands; orphans are reported for manual review |
+| Deleting replica rows absent from the API | Planning **DEV-019** | Was report-only; gated purge (10% cap, age, 2 sightings, full-pull only) — see [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) |
 | Making the lookback window per-entity configurable | Postponed | One shared value for the hour entities is sufficient; revisit if reporting patterns diverge |
 | Adding `LastRecordsFetched` / `LastNonEmptySyncTime` columns to `Sync_State` | Dropped | Would need a schema change; the `[STALE]` warning in §3.5 covers the same alerting need |
 | Making `Tasks` genuinely incremental | Postponed | The server ignores `lastUpdated` on that endpoint; a full pull of 784 rows is cheap enough to leave alone |
