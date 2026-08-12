@@ -3,6 +3,7 @@ namespace SiNet.Infrastructure.Google.Reports;
 /// <summary>
 /// Pivot configs for R02 hours report (column indices must stay aligned with
 /// <c>R02HoursRow.GetHeaderRow</c> / <c>ToSheetRow</c>).
+/// In R02, MasterPlan ProjectNum/Name = חוזה; SubContract = תת-חוזה.
 /// </summary>
 public static class R02PivotTableConfigs
 {
@@ -15,10 +16,12 @@ public static class R02PivotTableConfigs
     internal const int InternalHours = 4;
     internal const int InternalDescription = 5;
     internal const int InternalEmployeeName = 7;
+    internal const int InternalProjectNum = 9;
     internal const int InternalProjectName = 10;
     internal const int InternalSubContractName = 15;
 
     // Client Data columns (0-based)
+    internal const int ClientProjectNum = 0;
     internal const int ClientProjectName = 1;
     internal const int ClientSubContractName = 3;
     internal const int ClientStepName = 4;
@@ -36,6 +39,7 @@ public static class R02PivotTableConfigs
     {
         Rows =
         [
+            new PivotFieldConfig { SourceColumnIndex = InternalProjectNum, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = InternalProjectName, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = InternalSubContractName, ShowTotals = true },
         ],
@@ -74,6 +78,8 @@ public static class R02PivotTableConfigs
         ],
         Filters =
         [
+            new PivotFieldConfig { SourceColumnIndex = InternalProjectNum, ShowTotals = false },
+            new PivotFieldConfig { SourceColumnIndex = InternalProjectName, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = InternalEmployeeName, ShowTotals = false },
         ],
     };
@@ -82,10 +88,11 @@ public static class R02PivotTableConfigs
     {
         Rows =
         [
+            new PivotFieldConfig { SourceColumnIndex = InternalEmployeeName, ShowTotals = true },
+            new PivotFieldConfig { SourceColumnIndex = InternalDate, ShowTotals = false },
+            new PivotFieldConfig { SourceColumnIndex = InternalProjectNum, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = InternalProjectName, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = InternalSubContractName, ShowTotals = true },
-            new PivotFieldConfig { SourceColumnIndex = InternalDate, ShowTotals = false },
-            new PivotFieldConfig { SourceColumnIndex = InternalEmployeeName, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = InternalReportId, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = InternalDescription, ShowTotals = false },
         ],
@@ -98,12 +105,18 @@ public static class R02PivotTableConfigs
                 DisplayName = "שעות",
             },
         ],
+        Filters =
+        [
+            new PivotFieldConfig { SourceColumnIndex = InternalProjectNum, ShowTotals = false },
+            new PivotFieldConfig { SourceColumnIndex = InternalProjectName, ShowTotals = false },
+        ],
     };
 
     private static PivotTableConfig BuildClientSummary() => new()
     {
         Rows =
         [
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectNum, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = ClientProjectName, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = ClientSubContractName, ShowTotals = true },
         ],
@@ -140,15 +153,20 @@ public static class R02PivotTableConfigs
                 DisplayName = "מקס׳ שעות",
             },
         ],
+        Filters =
+        [
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectNum, ShowTotals = false },
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectName, ShowTotals = false },
+        ],
     };
 
     private static PivotTableConfig BuildClientDetail() => new()
     {
         Rows =
         [
-            new PivotFieldConfig { SourceColumnIndex = ClientProjectName, ShowTotals = true },
-            new PivotFieldConfig { SourceColumnIndex = ClientSubContractName, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = ClientDate, ShowTotals = false },
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectNum, ShowTotals = true },
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectName, ShowTotals = true },
             new PivotFieldConfig { SourceColumnIndex = ClientStepName, ShowTotals = false },
             new PivotFieldConfig { SourceColumnIndex = ClientDescription, ShowTotals = false },
         ],
@@ -160,6 +178,11 @@ public static class R02PivotTableConfigs
                 SummarizeFunction = "SUM",
                 DisplayName = "שעות",
             },
+        ],
+        Filters =
+        [
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectNum, ShowTotals = false },
+            new PivotFieldConfig { SourceColumnIndex = ClientProjectName, ShowTotals = false },
         ],
     };
 }
